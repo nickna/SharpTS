@@ -1,0 +1,153 @@
+// =============================================================================
+// Program.cs - Entry point for the SharpTS TypeScript interpreter/compiler
+// =============================================================================
+//
+// Orchestrates the compiler pipeline: Lex → Parse → TypeCheck → (Interpret OR Compile)
+//
+// Usage modes:
+//   dotnet run                           - Start REPL (interactive mode)
+//   dotnet run -- <file.ts>              - Interpret a TypeScript file
+//   dotnet run -- --compile <file.ts>    - Compile to .NET IL assembly
+//   dotnet run -- -c <file.ts> -o out.dll - Compile with custom output path
+//
+// Pipeline stages:
+//   1. Lexer      - Tokenizes source code into Token stream
+//   2. Parser     - Builds AST from tokens (with desugaring)
+//   3. TypeChecker - Static type validation (runs before execution)
+//   4. Interpreter - Tree-walking execution (default)
+//      OR
+//   4. ILCompiler  - Ahead-of-time compilation to .NET assembly (--compile flag)
+//
+// See also: Lexer.cs, Parser.cs, TypeChecker.cs, Interpreter.cs, ILCompiler.cs
+// =============================================================================
+
+using SharpTS.Compilation;
+using SharpTS.Execution;
+using SharpTS.Parsing;
+using SharpTS.TypeSystem;
+
+if (args.Length == 0)
+{
+    RunPrompt();
+}
+else if (args[0] == "--compile" || args[0] == "-c")
+{
+    if (args.Length < 2)
+    {
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll]");
+        Environment.Exit(64);
+    }
+
+    string inputFile = args[1];
+    string outputFile;
+
+    if (args.Length >= 4 && args[2] == "-o")
+    {
+        outputFile = args[3];
+    }
+    else
+    {
+        outputFile = Path.ChangeExtension(inputFile, ".dll");
+    }
+
+    CompileFile(inputFile, outputFile);
+}
+else if (args.Length == 1)
+{
+    RunFile(args[0]);
+}
+else
+{
+    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll]");
+    Environment.Exit(64);
+}
+
+static void RunFile(string path)
+{
+    string source = File.ReadAllText(path);
+    Run(source);
+}
+
+static void RunPrompt()
+{
+    Interpreter interpreter = new();
+    Console.WriteLine("SharpTS REPL (v0.1)");
+    for (; ; )
+    {
+        Console.Write("> ");
+        string? line = Console.ReadLine();
+        if (line == null) break;
+        Run(line, interpreter);
+    }
+}
+
+static void Run(string source, Interpreter? interpreter = null)
+{
+    interpreter ??= new Interpreter();
+
+    Lexer lexer = new(source);
+    List<Token> tokens = lexer.ScanTokens();
+
+    Parser parser = new(tokens);
+    try
+    {
+        List<Stmt> statements = parser.Parse();
+
+        // Static Analysis Phase
+        TypeChecker checker = new();
+        checker.Check(statements);
+
+        // Interpretation Phase
+        interpreter.Interpret(statements);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
+}
+
+static void CompileFile(string inputPath, string outputPath)
+{
+    try
+    {
+        string source = File.ReadAllText(inputPath);
+
+        Lexer lexer = new(source);
+        List<Token> tokens = lexer.ScanTokens();
+
+        Parser parser = new(tokens);
+        List<Stmt> statements = parser.Parse();
+
+        // Static Analysis Phase
+        TypeChecker checker = new();
+        checker.Check(statements);
+
+        // Compilation Phase
+        string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+        ILCompiler compiler = new(assemblyName);
+        compiler.Compile(statements, checker);
+        compiler.Save(outputPath);
+
+        // Generate runtimeconfig.json for the compiled assembly
+        string runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
+        string runtimeConfig = """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                }
+              }
+            }
+            """;
+        File.WriteAllText(runtimeConfigPath, runtimeConfig);
+
+        Console.WriteLine($"Compiled to {outputPath}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(1);
+    }
+}

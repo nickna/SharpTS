@@ -1,0 +1,326 @@
+using SharpTS.Parsing;
+using SharpTS.Runtime;
+using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
+using SharpTS.Runtime.Types;
+using SharpTS.TypeSystem;
+
+namespace SharpTS.Execution;
+
+public partial class Interpreter
+{
+    /// <summary>
+    /// Executes an enum declaration, creating a runtime enum object with its members.
+    /// </summary>
+    /// <param name="enumStmt">The enum statement AST node.</param>
+    /// <remarks>
+    /// Supports numeric enums (auto-incrementing), string enums, and heterogeneous enums.
+    /// Numeric enums support reverse mapping (value to name lookup).
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/enums.html">TypeScript Enums</seealso>
+    private void ExecuteEnumDeclaration(Stmt.Enum enumStmt)
+    {
+        Dictionary<string, object> members = [];
+        double? currentNumericValue = null;
+        bool hasNumeric = false;
+        bool hasString = false;
+
+        foreach (var member in enumStmt.Members)
+        {
+            if (member.Value != null)
+            {
+                var value = Evaluate(member.Value);
+                if (value is double d)
+                {
+                    members[member.Name.Lexeme] = d;
+                    currentNumericValue = d + 1;
+                    hasNumeric = true;
+                }
+                else if (value is string s)
+                {
+                    members[member.Name.Lexeme] = s;
+                    hasString = true;
+                }
+            }
+            else
+            {
+                // Auto-increment for numeric
+                currentNumericValue ??= 0;
+                members[member.Name.Lexeme] = currentNumericValue.Value;
+                hasNumeric = true;
+                currentNumericValue++;
+            }
+        }
+
+        EnumKind kind = (hasNumeric, hasString) switch
+        {
+            (true, false) => EnumKind.Numeric,
+            (false, true) => EnumKind.String,
+            (true, true) => EnumKind.Heterogeneous,
+            _ => EnumKind.Numeric
+        };
+
+        _environment.Define(enumStmt.Name.Lexeme, new SharpTSEnum(enumStmt.Name.Lexeme, members, kind));
+    }
+
+    /// <summary>
+    /// Executes a block of statements within a given environment scope.
+    /// </summary>
+    /// <param name="statements">The list of statements to execute.</param>
+    /// <param name="environment">The runtime environment for this block's scope.</param>
+    /// <remarks>
+    /// Temporarily switches to the provided environment, executes all statements,
+    /// then restores the previous environment. Used for block scoping in control structures.
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html#block-scoping">TypeScript Block Scoping</seealso>
+    public void ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
+    {
+        RuntimeEnvironment previous = _environment;
+        try
+        {
+            _environment = environment;
+            foreach (Stmt statement in statements)
+            {
+                Execute(statement);
+            }
+        }
+        finally
+        {
+            _environment = previous;
+        }
+    }
+
+    /// <summary>
+    /// Executes a switch statement with case matching and fall-through semantics.
+    /// </summary>
+    /// <param name="switchStmt">The switch statement AST node.</param>
+    /// <remarks>
+    /// Implements JavaScript/TypeScript switch semantics including fall-through behavior
+    /// and default case handling. Uses <see cref="BreakException"/> for break statements.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
+    private void ExecuteSwitch(Stmt.Switch switchStmt)
+    {
+        object? subject = Evaluate(switchStmt.Subject);
+        bool fallen = false;
+        bool matched = false;
+
+        try
+        {
+            foreach (var caseItem in switchStmt.Cases)
+            {
+                if (fallen || IsEqual(subject, Evaluate(caseItem.Value)))
+                {
+                    matched = fallen = true;
+                    foreach (var stmt in caseItem.Body)
+                    {
+                        Execute(stmt);
+                    }
+                }
+            }
+
+            if (switchStmt.DefaultBody != null && (fallen || !matched))
+            {
+                foreach (var stmt in switchStmt.DefaultBody)
+                {
+                    Execute(stmt);
+                }
+            }
+        }
+        catch (BreakException)
+        {
+            // Exit switch
+        }
+    }
+
+    /// <summary>
+    /// Executes a try/catch/finally statement with proper exception handling.
+    /// </summary>
+    /// <param name="tryCatch">The try/catch statement AST node.</param>
+    /// <remarks>
+    /// Handles <see cref="ThrowException"/> from user throw statements. Ensures finally block
+    /// executes for all exit paths including return, break, and continue. The catch parameter
+    /// is bound in a new scope.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch">MDN try...catch</seealso>
+    private void ExecuteTryCatch(Stmt.TryCatch tryCatch)
+    {
+        Exception? pendingException = null;
+        bool exceptionHandled = false;
+
+        try
+        {
+            foreach (var stmt in tryCatch.TryBlock)
+            {
+                Execute(stmt);
+            }
+        }
+        catch (ThrowException ex)
+        {
+            pendingException = ex;
+
+            if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
+            {
+                exceptionHandled = true;
+                RuntimeEnvironment catchEnv = new(_environment);
+                catchEnv.Define(tryCatch.CatchParam.Lexeme, ex.Value);
+
+                RuntimeEnvironment previous = _environment;
+                _environment = catchEnv;
+                try
+                {
+                    foreach (var stmt in tryCatch.CatchBlock)
+                    {
+                        Execute(stmt);
+                    }
+                }
+                finally
+                {
+                    _environment = previous;
+                }
+            }
+        }
+        catch (ReturnException)
+        {
+            // Execute finally before propagating return
+            ExecuteFinally(tryCatch.FinallyBlock);
+            throw;
+        }
+        catch (BreakException)
+        {
+            ExecuteFinally(tryCatch.FinallyBlock);
+            throw;
+        }
+        catch (ContinueException)
+        {
+            ExecuteFinally(tryCatch.FinallyBlock);
+            throw;
+        }
+
+        // Always execute finally for normal completion
+        ExecuteFinally(tryCatch.FinallyBlock);
+
+        // Re-throw if exception wasn't handled
+        if (pendingException != null && !exceptionHandled)
+        {
+            throw pendingException;
+        }
+    }
+
+    /// <summary>
+    /// Executes a finally block if present.
+    /// </summary>
+    /// <param name="finallyBlock">The list of statements in the finally block, or null if none.</param>
+    /// <remarks>
+    /// Helper method called by <see cref="ExecuteTryCatch"/> to ensure finally block
+    /// runs regardless of how the try block exits.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch#the_finally_block">MDN finally Block</seealso>
+    private void ExecuteFinally(List<Stmt>? finallyBlock)
+    {
+        if (finallyBlock != null)
+        {
+            foreach (var stmt in finallyBlock)
+            {
+                Execute(stmt);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes a for...of loop, iterating over array elements.
+    /// </summary>
+    /// <param name="forOf">The for...of statement AST node.</param>
+    /// <remarks>
+    /// Creates a new scope for each iteration with the loop variable bound to the current element.
+    /// Supports break and continue via <see cref="BreakException"/> and <see cref="ContinueException"/>.
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/iterators-and-generators.html#forof-statements">TypeScript for...of</seealso>
+    private void ExecuteForOf(Stmt.ForOf forOf)
+    {
+        object? iterable = Evaluate(forOf.Iterable);
+
+        if (iterable is not SharpTSArray array)
+        {
+            throw new Exception("Runtime Error: for...of requires an iterable (array).");
+        }
+
+        foreach (var element in array.Elements)
+        {
+            RuntimeEnvironment loopEnv = new(_environment);
+            loopEnv.Define(forOf.Variable.Lexeme, element);
+
+            RuntimeEnvironment previous = _environment;
+            _environment = loopEnv;
+
+            try
+            {
+                Execute(forOf.Body);
+            }
+            catch (BreakException)
+            {
+                _environment = previous;
+                break;
+            }
+            catch (ContinueException)
+            {
+                _environment = previous;
+                continue;
+            }
+            finally
+            {
+                _environment = previous;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes a for...in loop, iterating over object property names.
+    /// </summary>
+    /// <param name="forIn">The for...in statement AST node.</param>
+    /// <remarks>
+    /// Iterates over enumerable property names (keys) of objects, instances, or array indices.
+    /// Creates a new scope for each iteration. Supports break and continue.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in">MDN for...in</seealso>
+    private void ExecuteForIn(Stmt.ForIn forIn)
+    {
+        object? obj = Evaluate(forIn.Object);
+
+        IEnumerable<string> keys = obj switch
+        {
+            SharpTSObject o => o.Fields.Keys,
+            SharpTSInstance i => i.GetFieldNames(),
+            SharpTSArray a => Enumerable.Range(0, a.Elements.Count).Select(i => i.ToString()),
+            _ => throw new Exception("Runtime Error: for...in requires an object.")
+        };
+
+        foreach (string key in keys)
+        {
+            RuntimeEnvironment loopEnv = new(_environment);
+            loopEnv.Define(forIn.Variable.Lexeme, key);
+
+            RuntimeEnvironment previous = _environment;
+            _environment = loopEnv;
+
+            try
+            {
+                Execute(forIn.Body);
+            }
+            catch (BreakException)
+            {
+                _environment = previous;
+                break;
+            }
+            catch (ContinueException)
+            {
+                _environment = previous;
+                continue;
+            }
+            finally
+            {
+                _environment = previous;
+            }
+        }
+    }
+}
