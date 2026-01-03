@@ -7,6 +7,7 @@ A TypeScript interpreter and ahead-of-time compiler written in C#.
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 
 ## Overview
+<img width="2816" height="1536" alt="Gemini_Generated_Image_go1ahqgo1ahqgo1a" src="https://github.com/user-attachments/assets/565d98dc-8268-4cd6-8b34-7cc24a0f7a4a" />
 
 SharpTS is an educational implementation of a TypeScript interpreter and compiler. It demonstrates how programming languages work by implementing the complete pipeline from source code to execution:
 
