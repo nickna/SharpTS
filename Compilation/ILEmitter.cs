@@ -22,10 +22,82 @@ public partial class ILEmitter
     private readonly CompilationContext _ctx;
     private ILGenerator IL => _ctx.IL;
 
+    /// <summary>
+    /// Current type on top of the IL evaluation stack.
+    /// Used for unboxed numeric optimization.
+    /// </summary>
+    private StackType _stackType = StackType.Unknown;
+
     public ILEmitter(CompilationContext ctx)
     {
         _ctx = ctx;
     }
+
+    #region Stack Type Tracking
+
+    /// <summary>
+    /// Returns the stack type that an expression will produce based on TypeMap.
+    /// </summary>
+    private StackType GetExpressionStackType(Expr expr)
+    {
+        var type = _ctx.TypeMap?.Get(expr);
+        return type switch
+        {
+            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => StackType.Double,
+            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => StackType.Boolean,
+            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING } => StackType.String,
+            TypeSystem.TypeInfo.Null => StackType.Null,
+            _ => StackType.Unknown
+        };
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is boxed as object.
+    /// Only emits boxing IL if current stack type is a value type.
+    /// </summary>
+    private void EnsureBoxed()
+    {
+        switch (_stackType)
+        {
+            case StackType.Double:
+                IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Unknown;
+                break;
+            case StackType.Boolean:
+                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Unknown;
+                break;
+            // String, Null, Unknown are already reference types - no boxing needed
+        }
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is an unboxed double.
+    /// Only emits unboxing IL if stack is not already a double.
+    /// </summary>
+    private void EnsureDouble()
+    {
+        if (_stackType != StackType.Double)
+        {
+            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _stackType = StackType.Double;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is an unboxed boolean (int32 0 or 1).
+    /// Only emits conversion IL if stack is not already a boolean.
+    /// </summary>
+    private void EnsureBoolean()
+    {
+        if (_stackType != StackType.Boolean)
+        {
+            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBoolean", [typeof(object)])!);
+            _stackType = StackType.Boolean;
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Finalize return handling for methods that had returns inside exception blocks.
@@ -290,6 +362,21 @@ public partial class ILEmitter
 
     public void EmitBoxIfNeeded(Expr expr)
     {
+        // First, check if we already have an unboxed value type on the stack
+        // This handles typed locals and other cases where _stackType is known
+        if (_stackType == StackType.Double)
+        {
+            IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
+            return;
+        }
+        if (_stackType == StackType.Boolean)
+        {
+            IL.Emit(OpCodes.Box, typeof(bool));
+            _stackType = StackType.Unknown;
+            return;
+        }
+
         // Optimization: Use TypeMap to skip boxing check for known reference types
         // This avoids the pattern match overhead for expressions that definitely don't need boxing
         TypeSystem.TypeInfo? type = _ctx.TypeMap?.Get(expr);
@@ -321,10 +408,12 @@ public partial class ILEmitter
             if (lit.Value is double)
             {
                 IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Unknown;
             }
             else if (lit.Value is bool)
             {
                 IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Unknown;
             }
         }
     }
@@ -336,16 +425,18 @@ public partial class ILEmitter
         {
             // Literal double - push directly
             IL.Emit(OpCodes.Ldc_R8, d);
+            _stackType = StackType.Double;
         }
         else if (expr is Expr.Literal intLit && intLit.Value is int i)
         {
             IL.Emit(OpCodes.Ldc_R8, (double)i);
+            _stackType = StackType.Double;
         }
         else
         {
-            // Other expressions - emit and convert
+            // Other expressions - emit and convert if needed
             EmitExpression(expr);
-            EmitUnboxToDouble();
+            EnsureDouble();
         }
     }
 
@@ -353,6 +444,7 @@ public partial class ILEmitter
     {
         // Convert object to double using Convert.ToDouble
         IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        _stackType = StackType.Double;
     }
 
     private bool IsStringExpression(Expr expr)

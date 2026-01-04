@@ -19,6 +19,7 @@ public partial class ILEmitter
             EmitExpression(b.Right);
             EmitBoxIfNeeded(b.Right);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
+            _stackType = StackType.Unknown; // Add returns boxed object
             return;
         }
 
@@ -39,6 +40,7 @@ public partial class ILEmitter
             }
             // Box result as bool
             IL.Emit(OpCodes.Box, typeof(bool));
+            _stackType = StackType.Unknown; // Boxed bool
             return;
         }
 
@@ -60,10 +62,11 @@ public partial class ILEmitter
             EmitBoxIfNeeded(b.Right);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.InstanceOf);
             IL.Emit(OpCodes.Box, typeof(bool));
+            _stackType = StackType.Unknown; // Boxed bool
             return;
         }
 
-        // Numeric operations
+        // Numeric operations - defer boxing until needed
         EmitExpressionAsDouble(b.Left);
         EmitExpressionAsDouble(b.Right);
 
@@ -71,39 +74,39 @@ public partial class ILEmitter
         {
             case TokenType.MINUS:
                 IL.Emit(OpCodes.Sub);
-                IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Double; // Unboxed - defer boxing
                 break;
             case TokenType.STAR:
                 IL.Emit(OpCodes.Mul);
-                IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Double;
                 break;
             case TokenType.SLASH:
                 IL.Emit(OpCodes.Div);
-                IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Double;
                 break;
             case TokenType.PERCENT:
                 IL.Emit(OpCodes.Rem);
-                IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Double;
                 break;
             case TokenType.LESS:
                 IL.Emit(OpCodes.Clt);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Boolean; // Unboxed bool
                 break;
             case TokenType.GREATER:
                 IL.Emit(OpCodes.Cgt);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Boolean;
                 break;
             case TokenType.LESS_EQUAL:
                 IL.Emit(OpCodes.Cgt);
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ceq);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Boolean;
                 break;
             case TokenType.GREATER_EQUAL:
                 IL.Emit(OpCodes.Clt);
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ceq);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Boolean;
                 break;
         }
     }
@@ -150,12 +153,14 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Conv_U8);
                 IL.Emit(OpCodes.Conv_R8);
                 IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Unknown; // Boxed double
                 return;
         }
 
         // Convert back to double (for signed operations)
         IL.Emit(OpCodes.Conv_R8);
         IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown; // Boxed double
     }
 
     private bool IsComparisonExpr(Expr expr)
@@ -188,6 +193,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(l.Right);
 
         IL.MarkLabel(endLabel);
+        _stackType = StackType.Unknown; // Logical operators return boxed object
     }
 
     private void EmitUnary(Expr.Unary u)
@@ -208,6 +214,7 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Neg);
                 IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Unknown; // Boxed double
                 break;
 
             case TokenType.BANG:
@@ -217,12 +224,14 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ceq);
                 IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Unknown; // Boxed bool
                 break;
 
             case TokenType.TYPEOF:
                 EmitExpression(u.Right);
                 EmitBoxIfNeeded(u.Right);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.TypeOf);
+                _stackType = StackType.String; // typeof returns string
                 break;
 
             case TokenType.TILDE:
@@ -232,6 +241,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Not);
                 IL.Emit(OpCodes.Conv_R8);
                 IL.Emit(OpCodes.Box, typeof(double));
+                _stackType = StackType.Unknown; // Boxed double
                 break;
         }
     }
@@ -259,6 +269,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Stloc, local);
             }
+            _stackType = StackType.String;
             return;
         }
 
@@ -331,6 +342,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Stloc, local);
         }
+        _stackType = StackType.Unknown; // Boxed double
     }
 
     private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
@@ -359,6 +371,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Stloc, local);
             }
+            _stackType = StackType.Unknown; // Boxed double
         }
     }
 
@@ -391,6 +404,7 @@ public partial class ILEmitter
 
             // Original value is still on stack, box it
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown; // Boxed double
         }
     }
 
@@ -422,6 +436,7 @@ public partial class ILEmitter
 
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
+        _stackType = StackType.Unknown; // Result is boxed object
     }
 
     private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
@@ -454,6 +469,7 @@ public partial class ILEmitter
 
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
+        _stackType = StackType.Unknown; // Result is boxed object
     }
 
     private void EmitCompoundOperation(TokenType opType, Expr value)

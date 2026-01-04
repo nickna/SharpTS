@@ -11,19 +11,59 @@ public partial class ILEmitter
 {
     private void EmitVarDeclaration(Stmt.Var v)
     {
-        var local = _ctx.Locals.DeclareLocal(v.Name.Lexeme, typeof(object));
+        // Determine if this local can use unboxed double type
+        Type localType = CanUseUnboxedLocal(v) ? typeof(double) : typeof(object);
+        var local = _ctx.Locals.DeclareLocal(v.Name.Lexeme, localType);
 
         if (v.Initializer != null)
         {
             EmitExpression(v.Initializer);
-            EmitBoxIfNeeded(v.Initializer);
+
+            if (localType == typeof(double))
+            {
+                // Ensure we have an unboxed double on stack
+                EnsureDouble();
+            }
+            else
+            {
+                // Ensure we have a boxed object on stack
+                EmitBoxIfNeeded(v.Initializer);
+            }
             IL.Emit(OpCodes.Stloc, local);
         }
         else
         {
-            IL.Emit(OpCodes.Ldnull);
+            if (localType == typeof(double))
+            {
+                // Initialize to 0.0 for uninitialized number variables
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
             IL.Emit(OpCodes.Stloc, local);
         }
+    }
+
+    /// <summary>
+    /// Conservative check: only use unboxed double for variables with explicit ': number' annotation.
+    /// </summary>
+    private bool CanUseUnboxedLocal(Stmt.Var v)
+    {
+        // Must have explicit 'number' type annotation
+        if (v.TypeAnnotation != "number")
+            return false;
+
+        // If there's an initializer, it must be a known number expression
+        if (v.Initializer != null)
+        {
+            var exprType = _ctx.TypeMap?.Get(v.Initializer);
+            if (exprType is not TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER })
+                return false;
+        }
+
+        return true;
     }
 
     private void EmitIf(Stmt.If i)
@@ -52,21 +92,24 @@ public partial class ILEmitter
         var endLabel = IL.DefineLabel();
 
         EmitExpression(i.Condition);
-        // For comparisons, unbox the bool result; for others, apply truthy check
-        if (IsComparisonExpr(i.Condition))
+        // Handle condition based on what's actually on the stack
+        if (_stackType == StackType.Boolean)
         {
+            // Already have unboxed boolean - ready for branch
+        }
+        else if (_stackType == StackType.Unknown && IsComparisonExpr(i.Condition))
+        {
+            // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, typeof(bool));
         }
         else if (i.Condition is Expr.Logical)
         {
             // Logical expressions already leave int on stack
         }
-        else if (i.Condition is Expr.Literal { Value: bool })
-        {
-            // Boolean literals push int directly, no boxing needed
-        }
         else
         {
+            // For other expressions, apply truthy check
+            EnsureBoxed();
             EmitTruthyCheck();
         }
         IL.Emit(OpCodes.Brfalse, elseLabel);
@@ -92,21 +135,24 @@ public partial class ILEmitter
 
         IL.MarkLabel(startLabel);
         EmitExpression(w.Condition);
-        // For comparisons, unbox the bool result; for others, apply truthy check
-        if (IsComparisonExpr(w.Condition))
+        // Handle condition based on what's actually on the stack
+        if (_stackType == StackType.Boolean)
         {
+            // Already have unboxed boolean - ready for branch
+        }
+        else if (_stackType == StackType.Unknown && IsComparisonExpr(w.Condition))
+        {
+            // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, typeof(bool));
         }
         else if (w.Condition is Expr.Logical)
         {
             // Logical expressions already leave int on stack
         }
-        else if (w.Condition is Expr.Literal { Value: bool })
-        {
-            // Boolean literals push int directly, no boxing needed
-        }
         else
         {
+            // For other expressions, apply truthy check
+            EnsureBoxed();
             EmitTruthyCheck();
         }
         IL.Emit(OpCodes.Brfalse, endLabel);

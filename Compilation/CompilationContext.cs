@@ -7,6 +7,24 @@ using static SharpTS.Parsing.Expr;
 namespace SharpTS.Compilation;
 
 /// <summary>
+/// Represents the type currently on top of the IL evaluation stack.
+/// Used for unboxed numeric optimization to avoid unnecessary boxing/unboxing.
+/// </summary>
+public enum StackType
+{
+    /// <summary>Object reference - could be any boxed type or reference type.</summary>
+    Unknown,
+    /// <summary>Native double (float64) - unboxed numeric value.</summary>
+    Double,
+    /// <summary>Native bool (int32 as 0/1) - unboxed boolean value.</summary>
+    Boolean,
+    /// <summary>String reference.</summary>
+    String,
+    /// <summary>Null reference.</summary>
+    Null
+}
+
+/// <summary>
 /// Holds compilation state passed between ILCompiler and ILEmitter.
 /// </summary>
 /// <remarks>

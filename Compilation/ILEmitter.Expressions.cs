@@ -15,18 +15,23 @@ public partial class ILEmitter
         {
             case double d:
                 IL.Emit(OpCodes.Ldc_R8, d);
+                _stackType = StackType.Double;
                 break;
             case string s:
                 IL.Emit(OpCodes.Ldstr, s);
+                _stackType = StackType.String;
                 break;
             case bool b:
                 IL.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                _stackType = StackType.Boolean;
                 break;
             case null:
                 IL.Emit(OpCodes.Ldnull);
+                _stackType = StackType.Null;
                 break;
             default:
                 IL.Emit(OpCodes.Ldnull);
+                _stackType = StackType.Null;
                 break;
         }
     }
@@ -39,6 +44,8 @@ public partial class ILEmitter
         if (_ctx.TryGetParameter(name, out var argIndex))
         {
             IL.Emit(OpCodes.Ldarg, argIndex);
+            // Parameters are currently always object type
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -47,6 +54,11 @@ public partial class ILEmitter
         if (local != null)
         {
             IL.Emit(OpCodes.Ldloc, local);
+            // Track stack type based on local's actual CLR type
+            var localType = _ctx.Locals.GetLocalType(name);
+            _stackType = localType == typeof(double) ? StackType.Double
+                       : localType == typeof(bool) ? StackType.Boolean
+                       : StackType.Unknown;
             return;
         }
 
@@ -55,6 +67,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldarg_0); // this (display class instance)
             IL.Emit(OpCodes.Ldfld, field);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -62,6 +75,7 @@ public partial class ILEmitter
         if (name == "Math")
         {
             IL.Emit(OpCodes.Ldnull); // Math is handled specially in property access
+            _stackType = StackType.Null;
             return;
         }
 
@@ -71,6 +85,7 @@ public partial class ILEmitter
             // Load the Type object using typeof(ClassName)
             IL.Emit(OpCodes.Ldtoken, classType);
             IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle", [typeof(RuntimeTypeHandle)])!);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -85,27 +100,54 @@ public partial class ILEmitter
                 [typeof(RuntimeMethodHandle)])!);
             IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
             IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+            _stackType = StackType.Unknown;
             return;
         }
 
         // Unknown variable - push null
         IL.Emit(OpCodes.Ldnull);
+        _stackType = StackType.Null;
     }
 
     private void EmitAssign(Expr.Assign a)
     {
         EmitExpression(a.Value);
-        EmitBoxIfNeeded(a.Value);
-        IL.Emit(OpCodes.Dup); // Keep value on stack for expression result
 
         var local = _ctx.Locals.GetLocal(a.Name.Lexeme);
         if (local != null)
         {
-            IL.Emit(OpCodes.Stloc, local);
+            var localType = _ctx.Locals.GetLocalType(a.Name.Lexeme);
+            if (localType == typeof(double))
+            {
+                // Typed local - ensure unboxed double
+                EnsureDouble();
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Stloc, local);
+                _stackType = StackType.Double;
+            }
+            else
+            {
+                // Object local - ensure boxed
+                EmitBoxIfNeeded(a.Value);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Stloc, local);
+                _stackType = StackType.Unknown;
+            }
         }
         else if (_ctx.TryGetParameter(a.Name.Lexeme, out var argIndex))
         {
+            // Parameters are always object type
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Starg, argIndex);
+            _stackType = StackType.Unknown;
+        }
+        else
+        {
+            // Unknown target - box for safety
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
+            _stackType = StackType.Unknown;
         }
     }
 
@@ -119,6 +161,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldnull);
         }
+        _stackType = StackType.Unknown;
     }
 
     private void EmitSuper(Expr.Super s)
@@ -128,6 +171,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldstr, s.Method?.Lexeme ?? "constructor");
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetSuperMethod);
+        _stackType = StackType.Unknown;
     }
 
     private void EmitTernary(Expr.Ternary t)
@@ -136,21 +180,24 @@ public partial class ILEmitter
         var endLabel = IL.DefineLabel();
 
         EmitExpression(t.Condition);
-        // For comparisons, unbox the bool result; for others, apply truthy check
-        if (IsComparisonExpr(t.Condition))
+        // Handle condition based on what's actually on the stack
+        if (_stackType == StackType.Boolean)
         {
+            // Already have unboxed boolean - ready for branch
+        }
+        else if (_stackType == StackType.Unknown && IsComparisonExpr(t.Condition))
+        {
+            // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, typeof(bool));
         }
         else if (t.Condition is Expr.Logical)
         {
             // Logical expressions already leave int on stack
         }
-        else if (t.Condition is Expr.Literal { Value: bool })
-        {
-            // Boolean literals push int directly, no boxing needed
-        }
         else
         {
+            // For other expressions, apply truthy check
+            EnsureBoxed(); // Ensure it's boxed first
             EmitTruthyCheck();
         }
         IL.Emit(OpCodes.Brfalse, elseLabel);
@@ -164,6 +211,8 @@ public partial class ILEmitter
         EmitBoxIfNeeded(t.ElseBranch);
 
         IL.MarkLabel(endLabel);
+        // Both branches box, so result is Unknown (boxed object)
+        _stackType = StackType.Unknown;
     }
 
     private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
@@ -180,6 +229,8 @@ public partial class ILEmitter
         EmitBoxIfNeeded(nc.Right);
 
         IL.MarkLabel(endLabel);
+        // Both branches box, so result is Unknown (boxed object)
+        _stackType = StackType.Unknown;
     }
 
     private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
@@ -208,5 +259,7 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatTemplate);
+        // Template literal produces a string
+        _stackType = StackType.String;
     }
 }

@@ -17,6 +17,7 @@ public class LocalsManager
 {
     private readonly ILGenerator _il;
     private readonly Dictionary<string, LocalBuilder> _locals = [];
+    private readonly Dictionary<string, Type> _localTypes = [];
     private readonly Stack<HashSet<string>> _scopes = new();
 
     public LocalsManager(ILGenerator il)
@@ -29,6 +30,7 @@ public class LocalsManager
     {
         var local = _il.DeclareLocal(type);
         _locals[name] = local;
+        _localTypes[name] = type;
         _scopes.Peek().Add(name);
         return local;
     }
@@ -36,6 +38,15 @@ public class LocalsManager
     public LocalBuilder? GetLocal(string name)
     {
         return _locals.TryGetValue(name, out var local) ? local : null;
+    }
+
+    /// <summary>
+    /// Gets the CLR type of a local variable.
+    /// Returns null if the local doesn't exist.
+    /// </summary>
+    public Type? GetLocalType(string name)
+    {
+        return _localTypes.GetValueOrDefault(name);
     }
 
     public bool HasLocal(string name) => _locals.ContainsKey(name);
@@ -51,6 +62,7 @@ public class LocalsManager
         foreach (var name in scope)
         {
             _locals.Remove(name);
+            _localTypes.Remove(name);
         }
     }
 }

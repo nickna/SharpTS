@@ -466,6 +466,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Random);
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -493,6 +494,7 @@ public partial class ILEmitter
                 }
             }
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -509,6 +511,7 @@ public partial class ILEmitter
             var roundMethod = typeof(Math).GetMethod("Round", [typeof(double), typeof(MidpointRounding)])!;
             IL.Emit(OpCodes.Call, roundMethod);
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -519,6 +522,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, signMethod);
             IL.Emit(OpCodes.Conv_R8); // Convert int to double
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -542,10 +546,12 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Call, mathMethod);
             IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown;
         }
         else
         {
             IL.Emit(OpCodes.Ldnull);
+            _stackType = StackType.Null;
         }
     }
 
