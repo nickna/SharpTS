@@ -65,10 +65,11 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
     private object? EvaluateVariable(Expr.Variable variable)
     {
-        // Special case for Math global object
-        if (variable.Name.Lexeme == "Math")
+        // Check for built-in singleton namespaces (e.g., Math)
+        var singleton = BuiltInRegistry.Instance.GetSingleton(variable.Name.Lexeme);
+        if (singleton != null)
         {
-            return SharpTSMath.Instance;
+            return singleton;
         }
         return _environment.Get(variable.Name);
     }

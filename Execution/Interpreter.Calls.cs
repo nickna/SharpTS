@@ -32,42 +32,15 @@ public partial class Interpreter
             return null;
         }
 
-        // Handle Object.keys(), Object.values(), etc.
+        // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable objVar &&
-            objVar.Name.Lexeme == "Object")
+            get.Object is Expr.Variable nsVar)
         {
-            var method = ObjectBuiltIns.GetStaticMethod(get.Name.Lexeme);
-            if (method is BuiltInMethod builtIn)
+            var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
+            if (method != null)
             {
                 List<object?> args = call.Arguments.Select(Evaluate).ToList();
-                return builtIn.Call(this, args);
-            }
-        }
-
-        // Handle Array.isArray()
-        if (call.Callee is Expr.Get arrGet &&
-            arrGet.Object is Expr.Variable arrVar &&
-            arrVar.Name.Lexeme == "Array")
-        {
-            var method = ArrayStaticBuiltIns.GetStaticMethod(arrGet.Name.Lexeme);
-            if (method is BuiltInMethod builtIn)
-            {
-                List<object?> args = call.Arguments.Select(Evaluate).ToList();
-                return builtIn.Call(this, args);
-            }
-        }
-
-        // Handle JSON.parse(), JSON.stringify()
-        if (call.Callee is Expr.Get jsonGet &&
-            jsonGet.Object is Expr.Variable jsonVar &&
-            jsonVar.Name.Lexeme == "JSON")
-        {
-            var method = JSONBuiltIns.GetStaticMethod(jsonGet.Name.Lexeme);
-            if (method is BuiltInMethod builtIn)
-            {
-                List<object?> args = call.Arguments.Select(Evaluate).ToList();
-                return builtIn.Call(this, args);
+                return method.Call(this, args);
             }
         }
 

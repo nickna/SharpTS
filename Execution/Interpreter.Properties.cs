@@ -103,28 +103,30 @@ public partial class Interpreter
         {
             return simpleObj.Get(get.Name.Lexeme);
         }
-        // Handle strings
-        if (obj is string str)
+
+        // Handle built-in instance members: strings, arrays, Math
+        if (obj != null)
         {
-            var member = StringBuiltIns.GetMember(str, get.Name.Lexeme);
-            if (member is BuiltInMethod m) return m.Bind(str);
-            if (member != null) return member;
-            throw new Exception($"Runtime Error: Property '{get.Name.Lexeme}' does not exist on string.");
-        }
-        // Handle arrays
-        if (obj is SharpTSArray array)
-        {
-            var member = ArrayBuiltIns.GetMember(array, get.Name.Lexeme);
-            if (member is BuiltInMethod m) return m.Bind(array);
-            if (member != null) return member;
-            throw new Exception($"Runtime Error: Property '{get.Name.Lexeme}' does not exist on array.");
-        }
-        // Handle Math object
-        if (obj is SharpTSMath)
-        {
-            var member = MathBuiltIns.GetMember(get.Name.Lexeme);
-            if (member != null) return member;
-            throw new Exception($"Runtime Error: Property '{get.Name.Lexeme}' does not exist on Math.");
+            var member = BuiltInRegistry.Instance.GetInstanceMember(obj, get.Name.Lexeme);
+            if (member != null)
+            {
+                // Bind methods to their receiver, return properties directly
+                if (member is BuiltInMethod m) return m.Bind(obj);
+                return member;
+            }
+
+            // If we have a built-in type but didn't find the member, throw a specific error
+            if (BuiltInRegistry.Instance.HasInstanceMembers(obj))
+            {
+                string typeName = obj switch
+                {
+                    string => "string",
+                    SharpTSArray => "array",
+                    SharpTSMath => "Math",
+                    _ => obj.GetType().Name
+                };
+                throw new Exception($"Runtime Error: Property '{get.Name.Lexeme}' does not exist on {typeName}.");
+            }
         }
 
         throw new Exception("Only instances and objects have properties.");
