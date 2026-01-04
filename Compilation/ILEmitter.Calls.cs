@@ -555,15 +555,17 @@ public partial class ILEmitter
 
         // Special case: String-only method calls
         if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
-            or "trim" or "replace" or "split" or "startsWith" or "endsWith")
+            or "trim" or "replace" or "split" or "startsWith" or "endsWith"
+            or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
+            or "trimStart" or "trimEnd" or "replaceAll" or "at" or "slice" or "concat")
         {
             EmitStringMethodCall(methodGet.Object, methodName, arguments);
             return;
         }
 
         // Special case: Array-only method calls
-        if (methodName is "pop" or "shift" or "unshift" or "slice" or "map" or "filter" or "forEach"
-            or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join" or "concat"
+        if (methodName is "pop" or "shift" or "unshift" or "map" or "filter" or "forEach"
+            or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join"
             or "reverse")
         {
             EmitArrayMethodCall(methodGet.Object, methodName, arguments);
@@ -737,6 +739,169 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringEndsWith);
                 IL.Emit(OpCodes.Box, typeof(bool));
+                return;
+
+            case "slice":
+                // str.slice(start, end?) - with negative index support
+                // StringSlice(string str, int argCount, object[] args)
+                // Stack already has: [string]
+                // Need to push: argCount, then args array
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSlice);
+                return;
+
+            case "repeat":
+                // str.repeat(count)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, 0.0);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringRepeat);
+                return;
+
+            case "padStart":
+                // str.padStart(targetLength, padString?)
+                // StringPadStart(string str, int argCount, object[] args)
+                // Stack already has: [string]
+                // Need to push: argCount, then args array
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringPadStart);
+                return;
+
+            case "padEnd":
+                // str.padEnd(targetLength, padString?)
+                // StringPadEnd(string str, int argCount, object[] args)
+                // Stack already has: [string]
+                // Need to push: argCount, then args array
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringPadEnd);
+                return;
+
+            case "charCodeAt":
+                // str.charCodeAt(index) -> number
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, 0.0);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            case "concat":
+                // str.concat(...strings)
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringConcat);
+                return;
+
+            case "lastIndexOf":
+                // str.lastIndexOf(search) -> number
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Castclass, typeof(string));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLastIndexOf);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            case "trimStart":
+                // str.trimStart() -> string
+                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("TrimStart", Type.EmptyTypes)!);
+                return;
+
+            case "trimEnd":
+                // str.trimEnd() -> string
+                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("TrimEnd", Type.EmptyTypes)!);
+                return;
+
+            case "replaceAll":
+                // str.replaceAll(search, replacement) -> string
+                if (arguments.Count >= 2)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                    IL.Emit(OpCodes.Castclass, typeof(string));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceAll);
+                return;
+
+            case "at":
+                // str.at(index) -> string | null
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, 0.0);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringAt);
                 return;
         }
     }
@@ -1029,6 +1194,36 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;
+
+            case "slice":
+                // str.slice(start, end?) - with negative index support
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSlice);
+                break;
+
+            case "concat":
+                // str.concat(...strings)
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringConcat);
+                break;
         }
         IL.Emit(OpCodes.Br, doneLabel);
 
@@ -1065,6 +1260,34 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
+                break;
+
+            case "slice":
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArraySlice);
+                break;
+
+            case "concat":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Castclass, typeof(List<object>));
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayConcat);
                 break;
         }
 

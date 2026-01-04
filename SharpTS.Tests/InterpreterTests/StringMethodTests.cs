@@ -209,4 +209,271 @@ public class StringMethodTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("HELLO\n", output);
     }
+
+    // New String Methods
+
+    [Fact]
+    public void String_Slice_BasicUsage()
+    {
+        var source = """
+            console.log("hello".slice(1, 4));
+            console.log("hello".slice(2));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("ell\nllo\n", output);
+    }
+
+    [Fact]
+    public void String_Slice_NegativeIndices()
+    {
+        var source = """
+            console.log("hello".slice(-3));
+            console.log("hello".slice(-4, -1));
+            console.log("hello".slice(1, -1));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("llo\nell\nell\n", output);
+    }
+
+    [Fact]
+    public void String_Slice_EdgeCases()
+    {
+        var source = """
+            console.log("hello".slice(10));
+            console.log("hello".slice(3, 1));
+            console.log("".slice(0));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("\n\n\n", output);
+    }
+
+    [Fact]
+    public void String_Repeat_BasicUsage()
+    {
+        var source = """
+            console.log("ab".repeat(3));
+            console.log("x".repeat(5));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("ababab\nxxxxx\n", output);
+    }
+
+    [Fact]
+    public void String_Repeat_EdgeCases()
+    {
+        var source = """
+            console.log("hello".repeat(0));
+            console.log("".repeat(5));
+            console.log("a".repeat(1));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("\n\na\n", output);
+    }
+
+    [Fact]
+    public void String_PadStart_BasicUsage()
+    {
+        var source = """
+            console.log("5".padStart(3, "0"));
+            console.log("abc".padStart(6, "123"));
+            console.log("hello".padStart(10));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("005\n123abc\n     hello\n", output);
+    }
+
+    [Fact]
+    public void String_PadStart_EdgeCases()
+    {
+        var source = """
+            console.log("hello".padStart(3));
+            console.log("hi".padStart(5, ""));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello\nhi\n", output);
+    }
+
+    [Fact]
+    public void String_PadEnd_BasicUsage()
+    {
+        var source = """
+            console.log("5".padEnd(3, "0"));
+            console.log("abc".padEnd(6, "123"));
+            console.log("hello".padEnd(10));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("500\nabc123\nhello     \n", output);
+    }
+
+    [Fact]
+    public void String_PadEnd_EdgeCases()
+    {
+        var source = """
+            console.log("hello".padEnd(3));
+            console.log("hi".padEnd(5, ""));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello\nhi\n", output);
+    }
+
+    [Fact]
+    public void String_CharCodeAt_BasicUsage()
+    {
+        var source = """
+            console.log("ABC".charCodeAt(0));
+            console.log("ABC".charCodeAt(1));
+            console.log("hello".charCodeAt(4));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("65\n66\n111\n", output);
+    }
+
+    [Fact]
+    public void String_CharCodeAt_OutOfRange()
+    {
+        var source = """
+            console.log("hello".charCodeAt(10));
+            console.log("hello".charCodeAt(-1));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("NaN\nNaN\n", output);
+    }
+
+    [Fact]
+    public void String_Concat_BasicUsage()
+    {
+        var source = """
+            console.log("hello".concat(" ", "world"));
+            console.log("a".concat("b", "c", "d"));
+            console.log("test".concat());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello world\nabcd\ntest\n", output);
+    }
+
+    [Fact]
+    public void String_LastIndexOf_BasicUsage()
+    {
+        var source = """
+            console.log("hello hello".lastIndexOf("hello"));
+            console.log("hello hello".lastIndexOf("l"));
+            console.log("hello".lastIndexOf("x"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("6\n9\n-1\n", output);
+    }
+
+    [Fact]
+    public void String_TrimStart_BasicUsage()
+    {
+        var source = """
+            console.log("  hello  ".trimStart());
+            console.log("hello".trimStart());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello  \nhello\n", output);
+    }
+
+    [Fact]
+    public void String_TrimEnd_BasicUsage()
+    {
+        var source = """
+            console.log("  hello  ".trimEnd());
+            console.log("hello".trimEnd());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("  hello\nhello\n", output);
+    }
+
+    [Fact]
+    public void String_ReplaceAll_BasicUsage()
+    {
+        var source = """
+            console.log("hello".replaceAll("l", "x"));
+            console.log("aaa".replaceAll("a", "b"));
+            console.log("hello world".replaceAll("o", "0"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hexxo\nbbb\nhell0 w0rld\n", output);
+    }
+
+    [Fact]
+    public void String_ReplaceAll_EdgeCases()
+    {
+        var source = """
+            console.log("hello".replaceAll("x", "y"));
+            console.log("hello".replaceAll("", "x"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello\nhello\n", output);
+    }
+
+    [Fact]
+    public void String_At_BasicUsage()
+    {
+        var source = """
+            console.log("hello".at(0));
+            console.log("hello".at(2));
+            console.log("hello".at(-1));
+            console.log("hello".at(-2));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("h\nl\no\nl\n", output);
+    }
+
+    [Fact]
+    public void String_At_OutOfRange()
+    {
+        var source = """
+            console.log("hello".at(10));
+            console.log("hello".at(-10));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("null\nnull\n", output);
+    }
+
+    [Fact]
+    public void String_NewMethods_OnVariable()
+    {
+        var source = """
+            let s: string = "Hello World";
+            console.log(s.slice(0, 5));
+            console.log(s.repeat(2));
+            console.log(s.lastIndexOf("o"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("Hello\nHello WorldHello World\n7\n", output);
+    }
+
+    [Fact]
+    public void String_NewMethods_Chained()
+    {
+        var source = """
+            console.log("  hello  ".trimStart().trimEnd().padStart(10, "-"));
+            console.log("abc".repeat(2).slice(1, 5));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("-----hello\nbcab\n", output);
+    }
 }

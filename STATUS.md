@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Added abstract classes and abstract methods/accessors support)
+**Last Updated:** 2026-01-04 (Complete string methods support)
 
 ## Legend
 - ✅ Implemented
@@ -174,7 +174,7 @@ This document tracks TypeScript language features and their implementation statu
 |---------|--------|-------|
 | `console.log` | ✅ | Multiple arguments |
 | `Math` object | ✅ | PI, E, abs, floor, ceil, round, sqrt, sin, cos, tan, log, exp, sign, trunc, pow, min, max, random |
-| String methods | ⚠️ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split. Missing: includes, startsWith, endsWith |
+| String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at |
 | Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, some, every, reduce, includes, indexOf, join |
 | `JSON.parse`/`stringify` | ❌ | |
 | `Object.keys`/`values`/`entries` | ⚠️ | `Object.keys()` implemented |
@@ -232,14 +232,11 @@ This document tracks TypeScript language features and their implementation statu
 | Object method shorthand | `{ fn() {} }` syntax in object literals fails |
 | `typeof null` | Returns incorrect value (should return "object") |
 | `Math.round()` | Edge case rounding issues |
-| `String.replace()` | First occurrence replacement has issues |
-| `String.split("")` | Empty delimiter edge case fails |
 
 ### IL Compiler Bugs
 
 Many features that work in the interpreter produce `InvalidProgramException` when compiled:
 - All Math methods (abs, ceil, floor, round, sqrt, sin, cos, tan, log, exp, pow, min, max, random, sign, trunc)
-- String methods (charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split)
 - Array methods (concat, every, find, findIndex, includes, indexOf, join, reduce, reverse, some)
 - `instanceof` and `typeof` operators
 - Protected field access in subclasses
@@ -431,3 +428,11 @@ All quick wins have been implemented:
 - ✅ Polymorphic behavior with abstract class as parameter type
 - ✅ No-op callable for super() when parent has no constructor
 - ✅ Full interpreter and IL compiler support with 20 test cases
+
+### Phase 16 Features (String Methods)
+- ✅ Complete string method support (23 methods total)
+- ✅ Fixed missing type signatures for `includes`, `startsWith`, `endsWith`
+- ✅ New methods: `slice`, `repeat`, `padStart`, `padEnd`, `charCodeAt`, `concat`, `lastIndexOf`, `trimStart`, `trimEnd`, `replaceAll`, `at`
+- ✅ Negative index support for `slice` and `at`
+- ✅ Optional parameter support for `slice`, `padStart`, `padEnd`
+- ✅ Full interpreter and IL compiler support with 74 test cases

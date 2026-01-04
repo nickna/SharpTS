@@ -82,6 +82,17 @@ public class EmittedRuntime
     public MethodBuilder StringIncludes { get; set; } = null!;
     public MethodBuilder StringStartsWith { get; set; } = null!;
     public MethodBuilder StringEndsWith { get; set; } = null!;
+    public MethodBuilder StringSlice { get; set; } = null!;
+    public MethodBuilder StringRepeat { get; set; } = null!;
+    public MethodBuilder StringPadStart { get; set; } = null!;
+    public MethodBuilder StringPadEnd { get; set; } = null!;
+    public MethodBuilder StringCharCodeAt { get; set; } = null!;
+    public MethodBuilder StringConcat { get; set; } = null!;
+    public MethodBuilder StringLastIndexOf { get; set; } = null!;
+    public MethodBuilder StringTrimStart { get; set; } = null!;
+    public MethodBuilder StringTrimEnd { get; set; } = null!;
+    public MethodBuilder StringReplaceAll { get; set; } = null!;
+    public MethodBuilder StringAt { get; set; } = null!;
 
     // Object methods
     public MethodBuilder CreateObject { get; set; } = null!;

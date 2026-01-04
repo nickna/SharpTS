@@ -24,6 +24,20 @@ public static class BuiltInTypes
             "trim" => new TypeInfo.Function([], StringType),
             "replace" => new TypeInfo.Function([StringType, StringType], StringType),
             "split" => new TypeInfo.Function([StringType], new TypeInfo.Array(StringType)),
+            "includes" => new TypeInfo.Function([StringType], BooleanType),
+            "startsWith" => new TypeInfo.Function([StringType], BooleanType),
+            "endsWith" => new TypeInfo.Function([StringType], BooleanType),
+            "slice" => new TypeInfo.Function([NumberType], StringType), // end is optional
+            "repeat" => new TypeInfo.Function([NumberType], StringType),
+            "padStart" => new TypeInfo.Function([NumberType], StringType), // padString is optional
+            "padEnd" => new TypeInfo.Function([NumberType], StringType), // padString is optional
+            "charCodeAt" => new TypeInfo.Function([NumberType], NumberType),
+            "concat" => new TypeInfo.Function([StringType], StringType), // variadic, simplified signature
+            "lastIndexOf" => new TypeInfo.Function([StringType], NumberType),
+            "trimStart" => new TypeInfo.Function([], StringType),
+            "trimEnd" => new TypeInfo.Function([], StringType),
+            "replaceAll" => new TypeInfo.Function([StringType, StringType], StringType),
+            "at" => new TypeInfo.Function([NumberType], StringType), // returns string | undefined in TS
             _ => null
         };
     }
