@@ -74,8 +74,11 @@ public static class TestHarness
             var checker = new TypeChecker();
             var typeMap = checker.Check(statements);
 
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
             var compiler = new ILCompiler("test");
-            compiler.Compile(statements, typeMap);
+            compiler.Compile(statements, typeMap, deadCodeInfo);
             compiler.Save(dllPath);
 
             // Write runtimeconfig.json

@@ -86,6 +86,9 @@ public class CompilationContext
     // Type information from static analysis
     public TypeMap? TypeMap { get; set; }
 
+    // Dead code analysis results
+    public DeadCodeInfo? DeadCode { get; set; }
+
     // Generic type parameter tracking
     // Current scope's generic type parameters (name -> GenericTypeParameterBuilder or Type)
     public Dictionary<string, Type> GenericTypeParameters { get; set; } = [];

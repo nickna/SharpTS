@@ -80,6 +80,10 @@ public partial class ILEmitter
 
     public void EmitStatement(Stmt stmt)
     {
+        // Skip dead statements (unreachable code)
+        if (_ctx.DeadCode?.IsDead(stmt) == true)
+            return;
+
         switch (stmt)
         {
             case Stmt.Expression e:

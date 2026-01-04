@@ -68,6 +68,9 @@ public class ILCompiler
     // Type information from static analysis
     private TypeMap _typeMap = null!;
 
+    // Dead code analysis results
+    private DeadCodeInfo? _deadCodeInfo;
+
     public ILCompiler(string assemblyName, bool preserveConstEnums = false)
     {
         _assemblyName = assemblyName;
@@ -80,10 +83,11 @@ public class ILCompiler
         _typeMapper = new TypeMapper(_moduleBuilder);
     }
 
-    public void Compile(List<Stmt> statements, TypeMap typeMap)
+    public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
-        // Store the type map for use by ILEmitter
+        // Store the type map and dead code info for use by ILEmitter
         _typeMap = typeMap;
+        _deadCodeInfo = deadCodeInfo;
 
         // Phase 1: Emit runtime support types into the generated assembly
         // This makes compiled DLLs standalone without requiring SharpTS.dll
@@ -439,6 +443,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -905,6 +910,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -989,6 +995,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -1039,6 +1046,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -1109,6 +1117,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -1225,6 +1234,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -1290,6 +1300,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
@@ -1365,6 +1376,7 @@ public class ILCompiler
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
             TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
             InstanceMethods = _instanceMethods,
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,

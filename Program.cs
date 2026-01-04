@@ -127,10 +127,14 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         TypeChecker checker = new();
         TypeMap typeMap = checker.Check(statements);
 
+        // Dead Code Analysis Phase
+        DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
+        DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
         // Compilation Phase
         string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
         ILCompiler compiler = new(assemblyName, preserveConstEnums);
-        compiler.Compile(statements, typeMap);
+        compiler.Compile(statements, typeMap, deadCodeInfo);
         compiler.Save(outputPath);
 
         // Generate runtimeconfig.json for the compiled assembly

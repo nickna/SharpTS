@@ -28,6 +28,26 @@ public partial class ILEmitter
 
     private void EmitIf(Stmt.If i)
     {
+        // Check for dead code elimination optimization
+        var branchResult = _ctx.DeadCode?.GetIfResult(i) ?? IfBranchResult.BothReachable;
+
+        switch (branchResult)
+        {
+            case IfBranchResult.OnlyThenReachable:
+                // Condition is always true - emit only then branch
+                EmitStatement(i.ThenBranch);
+                return;
+
+            case IfBranchResult.OnlyElseReachable:
+                // Condition is always false - emit only else branch (or nothing)
+                if (i.ElseBranch != null)
+                {
+                    EmitStatement(i.ElseBranch);
+                }
+                return;
+        }
+
+        // BothReachable: emit both branches with condition check
         var elseLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
 
@@ -268,6 +288,10 @@ public partial class ILEmitter
 
     private void EmitSwitch(Stmt.Switch s)
     {
+        // Check for exhaustive switch optimization
+        var switchAnalysis = _ctx.DeadCode?.GetSwitchResult(s);
+        bool skipDefault = switchAnalysis?.DefaultIsUnreachable == true;
+
         var endLabel = IL.DefineLabel();
         var defaultLabel = IL.DefineLabel();
         var caseLabels = s.Cases.Select(_ => IL.DefineLabel()).ToList();
@@ -288,8 +312,15 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brtrue, caseLabels[i]);
         }
 
-        // Jump to default or end
-        IL.Emit(OpCodes.Br, s.DefaultBody != null ? defaultLabel : endLabel);
+        // Jump to default or end (skip default if unreachable)
+        if (skipDefault || s.DefaultBody == null)
+        {
+            IL.Emit(OpCodes.Br, endLabel);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Br, defaultLabel);
+        }
 
         // Emit case bodies
         for (int i = 0; i < s.Cases.Count; i++)
@@ -309,8 +340,8 @@ public partial class ILEmitter
             // Fall through if no break
         }
 
-        // Default case
-        if (s.DefaultBody != null)
+        // Default case (skip if unreachable)
+        if (s.DefaultBody != null && !skipDefault)
         {
             IL.MarkLabel(defaultLabel);
             foreach (var stmt in s.DefaultBody)
