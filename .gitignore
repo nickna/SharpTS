@@ -73,3 +73,11 @@ TestResults/
 *.trx
 *.coverage
 
+# AI tools
+.claude/
+/.cursor/
+/.cursorrules/
+/.aider*
+/.copilot/
+/.chatgpt/
+/.openai/
