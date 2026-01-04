@@ -59,16 +59,13 @@ public class Parser(List<Token> tokens)
         Token name = Consume(TokenType.IDENTIFIER, "Expect type alias name.");
         Consume(TokenType.EQUAL, "Expect '=' after type alias name.");
 
-        string typeDef;
-        if (Check(TokenType.LEFT_PAREN))
-        {
-            // Function type: (params) => returnType
-            typeDef = ParseFunctionTypeDefinition();
-        }
-        else
-        {
-            typeDef = ParseTypeAnnotation();
-        }
+        // ParseTypeAnnotation handles all cases including:
+        // - Function types: (params) => returnType
+        // - Grouped types: (A & B) | C
+        // - Union types: A | B
+        // - Intersection types: A & B
+        // The disambiguation is done in ParsePrimaryType
+        string typeDef = ParseTypeAnnotation();
 
         Consume(TokenType.SEMICOLON, "Expect ';' after type alias.");
         return new Stmt.TypeAlias(name, typeDef);
@@ -217,14 +214,31 @@ public class Parser(List<Token> tokens)
 
     private string ParseUnionType()
     {
-        List<string> types = [ParsePrimaryType()];
+        // Union has lower precedence than intersection, so parse intersection first
+        List<string> types = [ParseIntersectionType()];
 
         while (Match(TokenType.PIPE))
+        {
+            types.Add(ParseIntersectionType());
+        }
+
+        return types.Count == 1 ? types[0] : string.Join(" | ", types);
+    }
+
+    /// <summary>
+    /// Parses intersection types (A &amp; B). Intersection binds tighter than union,
+    /// so A | B &amp; C is parsed as A | (B &amp; C).
+    /// </summary>
+    private string ParseIntersectionType()
+    {
+        List<string> types = [ParsePrimaryType()];
+
+        while (Match(TokenType.AMPERSAND))
         {
             types.Add(ParsePrimaryType());
         }
 
-        return types.Count == 1 ? types[0] : string.Join(" | ", types);
+        return types.Count == 1 ? types[0] : string.Join(" & ", types);
     }
 
     private string ParsePrimaryType()

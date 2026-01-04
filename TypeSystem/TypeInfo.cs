@@ -173,6 +173,50 @@ public abstract record TypeInfo
         public override string ToString() => string.Join(" | ", FlattenedTypes);
     }
 
+    /// <summary>
+    /// Represents an intersection type (A &amp; B). A value of this type must satisfy ALL constituent types.
+    /// </summary>
+    /// <remarks>
+    /// Intersection types combine multiple types into one:
+    /// - For objects: merges all properties from all types
+    /// - For primitives: conflicting primitives produce 'never' (e.g., string &amp; number = never)
+    /// - never &amp; T = never, any &amp; T = any, unknown &amp; T = T
+    /// </remarks>
+    public record Intersection(List<TypeInfo> Types) : TypeInfo
+    {
+        /// <summary>
+        /// Returns a flattened list of all intersected types, collapsing nested intersections.
+        /// Applies simplification: never absorbs all, any absorbs all, unknown is removed (identity).
+        /// </summary>
+        public List<TypeInfo> FlattenedTypes
+        {
+            get
+            {
+                var flattened = Types
+                    .SelectMany(t => t is Intersection i ? i.FlattenedTypes : [t])
+                    .Distinct(TypeInfoEqualityComparer.Instance)
+                    .ToList();
+
+                // never absorbs everything in intersection
+                if (flattened.Any(t => t is Never))
+                    return [new Never()];
+
+                // any absorbs in intersection
+                if (flattened.Any(t => t is Any))
+                    return [new Any()];
+
+                // unknown is identity element - remove it
+                flattened = flattened.Where(t => t is not Unknown).ToList();
+                if (flattened.Count == 0)
+                    return [new Unknown()];
+
+                return flattened;
+            }
+        }
+
+        public override string ToString() => string.Join(" & ", FlattenedTypes);
+    }
+
     // Type parameter placeholder (T in <T>)
     public record TypeParameter(string Name, TypeInfo? Constraint = null) : TypeInfo
     {

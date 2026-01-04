@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-02 (Added Known Bugs section, updated String methods status)
+**Last Updated:** 2026-01-03 (Added Intersection Types support)
 
 ## Legend
 - ✅ Implemented
@@ -24,7 +24,7 @@ This document tracks TypeScript language features and their implementation statu
 | Classes | ✅ | Nominal typing |
 | Generics (`<T>`) | ✅ | Full support with true .NET generics and constraints |
 | Union Types (`string \| number`) | ✅ | With type narrowing support |
-| Intersection Types (`A & B`) | ❌ | Used for mixins/combining types |
+| Intersection Types (`A & B`) | ✅ | For combining types with full TypeScript semantics |
 | Literal Types (`"success" \| "error"`) | ✅ | String, number, and boolean literals |
 | Type Aliases (`type Name = ...`) | ✅ | Including function types |
 | Tuple Types (`[string, number]`) | ✅ | Fixed-length typed arrays with optional and rest elements |
@@ -382,3 +382,13 @@ All quick wins have been implemented:
 - ✅ Constraint-aware type inference fallback (uses constraint type instead of object)
 - ✅ Generic type parameter tracking in `CompilationContext`
 - ✅ Output parity between interpreter and compiled modes verified
+
+### Phase 12 Features (Intersection Types)
+- ✅ Intersection Types (`A & B`) for combining multiple types
+- ✅ Primitive intersections produce `never` (`string & number = never`)
+- ✅ Object type merging with property combination
+- ✅ Property conflict detection (conflicting types become `never`)
+- ✅ Correct precedence: `&` binds tighter than `|` (`A | B & C` = `A | (B & C)`)
+- ✅ Special type rules: `never & T = never`, `any & T = any`, `unknown & T = T`
+- ✅ Type alias support for intersection types
+- ✅ Full interpreter and IL compiler support

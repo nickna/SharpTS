@@ -41,6 +41,7 @@ public class TypeMapper
         TypeInfo.Void => typeof(void),
         TypeInfo.Any => typeof(object),
         TypeInfo.Union => typeof(object), // Union types are dynamic at runtime
+        TypeInfo.Intersection => typeof(object), // Intersection types are dynamic at runtime
         TypeInfo.Null => typeof(object), // Null maps to object
         TypeInfo.Unknown => typeof(object), // Unknown is dynamic at runtime
         TypeInfo.Never => typeof(void), // Never represents no return

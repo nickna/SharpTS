@@ -2217,6 +2217,19 @@ public class TypeChecker
             return actUnion.FlattenedTypes.All(t => IsCompatible(expected, t));
         }
 
+        // Intersection as expected: actual must satisfy ALL member types
+        if (expected is TypeInfo.Intersection expIntersection)
+        {
+            return expIntersection.FlattenedTypes.All(t => IsCompatible(t, actual));
+        }
+
+        // Intersection as actual: satisfies expected if any member does
+        // (because intersection value has all the properties of all its constituents)
+        if (actual is TypeInfo.Intersection actIntersection)
+        {
+            return actIntersection.FlattenedTypes.Any(t => IsCompatible(expected, t));
+        }
+
         // Enum compatibility: primitive values are assignable to their enum type
         // (e.g., Direction.Up which is typed as 'number' can be assigned to Direction)
         if (expected is TypeInfo.Enum expectedEnum)
@@ -2694,6 +2707,7 @@ public class TypeChecker
         }
 
         // Handle union types: "string | number"
+        // Union has lower precedence than intersection, check it first at top level
         if (typeName.Contains(" | "))
         {
             var parts = SplitUnionParts(typeName);
@@ -2701,6 +2715,18 @@ public class TypeChecker
             {
                 var types = parts.Select(ToTypeInfo).ToList();
                 return new TypeInfo.Union(types);
+            }
+        }
+
+        // Handle intersection types: "A & B"
+        // Intersection has higher precedence than union
+        if (typeName.Contains(" & "))
+        {
+            var parts = SplitIntersectionParts(typeName);
+            if (parts.Count > 1)  // Only create intersection if we actually split at top level
+            {
+                var types = parts.Select(ToTypeInfo).ToList();
+                return SimplifyIntersection(types);
             }
         }
 
@@ -3042,6 +3068,177 @@ public class TypeChecker
         }
         parts.Add(typeName[start..].Trim());
         return parts;
+    }
+
+    /// <summary>
+    /// Splits an intersection type string into its component parts, respecting nesting.
+    /// E.g., "A &amp; B &amp; C" becomes ["A", "B", "C"]
+    /// </summary>
+    private List<string> SplitIntersectionParts(string typeName)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '(' || c == '<' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == '>' || c == ']' || c == '}') depth--;
+            else if (c == '&' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
+            {
+                parts.Add(typeName[start..(i - 1)].Trim());
+                start = i + 2;
+            }
+        }
+        parts.Add(typeName[start..].Trim());
+        return parts;
+    }
+
+    /// <summary>
+    /// Simplifies an intersection type according to TypeScript semantics:
+    /// - Conflicting primitives (string &amp; number) = never
+    /// - never &amp; T = never
+    /// - any &amp; T = any
+    /// - unknown &amp; T = T
+    /// - Object types are merged with property combination
+    /// </summary>
+    private TypeInfo SimplifyIntersection(List<TypeInfo> types)
+    {
+        // Handle empty or single type
+        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 1) return types[0];
+
+        // Check for never (absorbs everything)
+        if (types.Any(t => t is TypeInfo.Never))
+            return new TypeInfo.Never();
+
+        // Check for any (absorbs in intersection)
+        if (types.Any(t => t is TypeInfo.Any))
+            return new TypeInfo.Any();
+
+        // Remove unknown (identity element)
+        types = types.Where(t => t is not TypeInfo.Unknown).ToList();
+        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 1) return types[0];
+
+        // Check for conflicting primitives (e.g., string & number = never)
+        var primitives = types.OfType<TypeInfo.Primitive>().ToList();
+        if (primitives.Count > 1)
+        {
+            var distinctPrimitives = primitives.Select(p => p.Type).Distinct().ToList();
+            if (distinctPrimitives.Count > 1)
+                return new TypeInfo.Never();  // Conflicting primitives
+        }
+
+        // Collect object-like types for merging
+        var records = types.OfType<TypeInfo.Record>().ToList();
+        var interfaces = types.OfType<TypeInfo.Interface>().ToList();
+        var classes = types.OfType<TypeInfo.Class>().ToList();
+        var instances = types.OfType<TypeInfo.Instance>().ToList();
+
+        if (records.Count > 0 || interfaces.Count > 0 || classes.Count > 0 || instances.Count > 0)
+        {
+            // Merge all object-like types
+            var mergedFields = new Dictionary<string, TypeInfo>();
+            var optionalFields = new HashSet<string>();
+            var requiredInAny = new HashSet<string>(); // Track if property is required in any type
+            var nonObjectTypes = new List<TypeInfo>();
+
+            foreach (var type in types)
+            {
+                Dictionary<string, TypeInfo>? fields = type switch
+                {
+                    TypeInfo.Record r => r.Fields,
+                    TypeInfo.Interface i => i.Members,
+                    TypeInfo.Class c => c.DeclaredFieldTypes,
+                    TypeInfo.Instance inst => inst.ClassType switch
+                    {
+                        TypeInfo.Class c => c.DeclaredFieldTypes,
+                        _ => null
+                    },
+                    _ => null
+                };
+
+                HashSet<string>? optionals = type switch
+                {
+                    TypeInfo.Interface i => i.OptionalMemberSet,
+                    _ => null
+                };
+
+                if (fields == null || fields.Count == 0)
+                {
+                    // For classes/instances without explicit field types, keep as non-object type
+                    // so the intersection is preserved
+                    if (type is TypeInfo.Class || type is TypeInfo.Instance)
+                    {
+                        nonObjectTypes.Add(type);
+                    }
+                    else if (fields == null)
+                    {
+                        nonObjectTypes.Add(type);
+                    }
+                    continue;
+                }
+
+                foreach (var (name, fieldType) in fields)
+                {
+                    bool isOptionalInThisType = optionals?.Contains(name) ?? false;
+
+                    if (mergedFields.TryGetValue(name, out var existingType))
+                    {
+                        // Check for property type conflict
+                        if (!IsCompatible(existingType, fieldType) && !IsCompatible(fieldType, existingType))
+                        {
+                            // Conflicting types - property becomes never
+                            mergedFields[name] = new TypeInfo.Never();
+                        }
+                        // If compatible, keep the more specific type (or the first one)
+
+                        // If required in any type, mark as required
+                        if (!isOptionalInThisType)
+                        {
+                            requiredInAny.Add(name);
+                        }
+                    }
+                    else
+                    {
+                        mergedFields[name] = fieldType;
+                        // Initially mark optional if optional in this type
+                        if (isOptionalInThisType)
+                        {
+                            optionalFields.Add(name);
+                        }
+                        else
+                        {
+                            requiredInAny.Add(name);
+                        }
+                    }
+                }
+            }
+
+            // A property is optional in the intersection only if it's optional in ALL types that have it
+            // (or if it only appears in types where it's optional)
+            optionalFields.ExceptWith(requiredInAny);
+
+            // If all types were object-like, return merged interface (to preserve optional info)
+            if (nonObjectTypes.Count == 0)
+            {
+                // Use Interface if we have optional fields, otherwise Record
+                if (optionalFields.Count > 0)
+                {
+                    return new TypeInfo.Interface("", mergedFields, optionalFields);
+                }
+                return new TypeInfo.Record(mergedFields);
+            }
+
+            // Otherwise, return intersection with merged record/interface
+            var resultTypes = new List<TypeInfo>(nonObjectTypes) { new TypeInfo.Record(mergedFields) };
+            return new TypeInfo.Intersection(resultTypes);
+        }
+
+        // Return intersection for other cases (e.g., class instances)
+        return new TypeInfo.Intersection(types);
     }
 
     private TypeInfo ParseParenthesizedType(string typeName)
