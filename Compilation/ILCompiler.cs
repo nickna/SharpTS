@@ -61,6 +61,9 @@ public class ILCompiler
     // Emitted runtime (for standalone DLLs)
     private EmittedRuntime _runtime = null!;
 
+    // Type information from static analysis
+    private TypeMap _typeMap = null!;
+
     public ILCompiler(string assemblyName, bool preserveConstEnums = false)
     {
         _assemblyName = assemblyName;
@@ -73,8 +76,11 @@ public class ILCompiler
         _typeMapper = new TypeMapper(_moduleBuilder);
     }
 
-    public void Compile(List<Stmt> statements, TypeChecker typeChecker)
+    public void Compile(List<Stmt> statements, TypeMap typeMap)
     {
+        // Store the type map for use by ILEmitter
+        _typeMap = typeMap;
+
         // Phase 1: Emit runtime support types into the generated assembly
         // This makes compiled DLLs standalone without requiring SharpTS.dll
         _runtime = RuntimeEmitter.EmitAll(_moduleBuilder);
@@ -427,7 +433,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         if (displayClass != null)
@@ -864,7 +871,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         // Add class generic type parameters to context
@@ -943,7 +951,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         var emitter = new ILEmitter(ctx);
@@ -988,7 +997,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         // Define parameters (starting at index 0, not 1 since no 'this')
@@ -1053,7 +1063,8 @@ public class ILCompiler
             CurrentSuperclassName = classStmt.Superclass?.Lexeme,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         // Add class generic type parameters to context
@@ -1156,7 +1167,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         // Add class generic type parameters to context
@@ -1216,7 +1228,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -1286,7 +1299,8 @@ public class ILCompiler
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap
         };
         var emitter = new ILEmitter(ctx);
 

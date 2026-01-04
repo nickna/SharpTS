@@ -100,10 +100,10 @@ static void Run(string source, Interpreter? interpreter = null)
 
         // Static Analysis Phase
         TypeChecker checker = new();
-        checker.Check(statements);
+        TypeMap typeMap = checker.Check(statements);
 
         // Interpretation Phase
-        interpreter.Interpret(statements);
+        interpreter.Interpret(statements, typeMap);
     }
     catch (Exception ex)
     {
@@ -125,12 +125,12 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         // Static Analysis Phase
         TypeChecker checker = new();
-        checker.Check(statements);
+        TypeMap typeMap = checker.Check(statements);
 
         // Compilation Phase
         string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
         ILCompiler compiler = new(assemblyName, preserveConstEnums);
-        compiler.Compile(statements, checker);
+        compiler.Compile(statements, typeMap);
         compiler.Save(outputPath);
 
         // Generate runtimeconfig.json for the compiled assembly

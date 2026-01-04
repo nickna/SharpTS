@@ -553,11 +553,33 @@ public partial class ILEmitter
     {
         string methodName = methodGet.Name.Lexeme;
 
+        // Methods that exist on both strings and arrays - use TypeMap for static dispatch
+        if (methodName is "slice" or "concat" or "includes" or "indexOf")
+        {
+            // Try to use static type information if available
+            TypeSystem.TypeInfo? objType = _ctx.TypeMap?.Get(methodGet.Object);
+
+            if (objType is TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+            {
+                EmitStringMethodCall(methodGet.Object, methodName, arguments);
+                return;
+            }
+            if (objType is TypeSystem.TypeInfo.Array)
+            {
+                EmitArrayMethodCall(methodGet.Object, methodName, arguments);
+                return;
+            }
+
+            // Fallback: runtime dispatch for any/unknown/union types
+            EmitAmbiguousMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
         // Special case: String-only method calls
         if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
             or "trim" or "replace" or "split" or "startsWith" or "endsWith"
             or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
-            or "trimStart" or "trimEnd" or "replaceAll" or "at" or "slice" or "concat")
+            or "trimStart" or "trimEnd" or "replaceAll" or "at")
         {
             EmitStringMethodCall(methodGet.Object, methodName, arguments);
             return;
@@ -569,13 +591,6 @@ public partial class ILEmitter
             or "reverse")
         {
             EmitArrayMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Methods that exist on both strings and arrays - need runtime dispatch
-        if (methodName is "includes" or "indexOf")
-        {
-            EmitAmbiguousMethodCall(methodGet.Object, methodName, arguments);
             return;
         }
 
@@ -1197,6 +1212,8 @@ public partial class ILEmitter
 
             case "slice":
                 // str.slice(start, end?) - with negative index support
+                // StringSlice(string str, int argCount, object[] args)
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count); // argCount
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
                 IL.Emit(OpCodes.Newarr, typeof(object));
                 for (int i = 0; i < arguments.Count; i++)

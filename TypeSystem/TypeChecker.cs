@@ -20,6 +20,7 @@ namespace SharpTS.TypeSystem;
 public class TypeChecker
 {
     private TypeEnvironment _environment = new();
+    private TypeMap _typeMap = new();
 
     // We need to track the current function's expected return type to validate 'return' statements
     private TypeInfo? _currentFunctionReturnType = null;
@@ -28,7 +29,12 @@ public class TypeChecker
     private int _loopDepth = 0;
     private int _switchDepth = 0;
 
-    public void Check(List<Stmt> statements)
+    /// <summary>
+    /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.
+    /// </summary>
+    /// <param name="statements">The AST statements to check.</param>
+    /// <returns>A TypeMap containing the resolved type for each expression.</returns>
+    public TypeMap Check(List<Stmt> statements)
     {
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
@@ -37,6 +43,8 @@ public class TypeChecker
         {
             CheckStmt(statement);
         }
+
+        return _typeMap;
     }
 
     private void CheckStmt(Stmt stmt)
@@ -929,7 +937,7 @@ public class TypeChecker
 
     private TypeInfo CheckExpr(Expr expr)
     {
-        return expr switch
+        TypeInfo result = expr switch
         {
             Expr.Literal literal => GetLiteralType(literal.Value),
             Expr.Variable variable => LookupVariable(variable.Name),
@@ -961,6 +969,11 @@ public class TypeChecker
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
             _ => new TypeInfo.Any()
         };
+
+        // Store the resolved type in the TypeMap for use by ILCompiler/Interpreter
+        _typeMap.Set(expr, result);
+
+        return result;
     }
 
     private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)

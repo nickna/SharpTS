@@ -36,10 +36,10 @@ public static class TestHarness
                 var statements = parser.Parse();
 
                 var checker = new TypeChecker();
-                checker.Check(statements);
+                var typeMap = checker.Check(statements);
 
                 var interpreter = new Interpreter();
-                interpreter.Interpret(statements);
+                interpreter.Interpret(statements, typeMap);
 
                 // Normalize line endings for cross-platform test consistency
                 return sw.ToString().Replace("\r\n", "\n");
@@ -72,10 +72,10 @@ public static class TestHarness
             var statements = parser.Parse();
 
             var checker = new TypeChecker();
-            checker.Check(statements);
+            var typeMap = checker.Check(statements);
 
             var compiler = new ILCompiler("test");
-            compiler.Compile(statements, checker);
+            compiler.Compile(statements, typeMap);
             compiler.Save(dllPath);
 
             // Write runtimeconfig.json

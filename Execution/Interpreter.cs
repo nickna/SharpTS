@@ -3,6 +3,7 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
@@ -32,20 +33,24 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     private RuntimeEnvironment _environment = new();
+    private TypeMap? _typeMap;
 
     internal RuntimeEnvironment Environment => _environment;
+    internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
 
     /// <summary>
     /// Executes a list of statements as the main entry point for interpretation.
     /// </summary>
     /// <param name="statements">The list of parsed statements to execute.</param>
+    /// <param name="typeMap">Optional type map from static analysis for type-aware dispatch.</param>
     /// <remarks>
     /// Catches and reports runtime errors to the console. Each statement is executed
     /// sequentially via <see cref="Execute"/>.
     /// </remarks>
-    public void Interpret(List<Stmt> statements)
+    public void Interpret(List<Stmt> statements, TypeMap? typeMap = null)
     {
+        _typeMap = typeMap;
         try
         {
             foreach (Stmt statement in statements)

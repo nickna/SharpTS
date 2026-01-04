@@ -83,6 +83,9 @@ public class CompilationContext
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }
 
+    // Type information from static analysis
+    public TypeMap? TypeMap { get; set; }
+
     // Generic type parameter tracking
     // Current scope's generic type parameters (name -> GenericTypeParameterBuilder or Type)
     public Dictionary<string, Type> GenericTypeParameters { get; set; } = [];
