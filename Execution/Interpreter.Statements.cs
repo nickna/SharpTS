@@ -16,6 +16,7 @@ public partial class Interpreter
     /// <remarks>
     /// Supports numeric enums (auto-incrementing), string enums, and heterogeneous enums.
     /// Numeric enums support reverse mapping (value to name lookup).
+    /// Const enums use ConstEnumValues which does not support reverse mapping.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/enums.html">TypeScript Enums</seealso>
     private void ExecuteEnumDeclaration(Stmt.Enum enumStmt)
@@ -29,7 +30,23 @@ public partial class Interpreter
         {
             if (member.Value != null)
             {
-                var value = Evaluate(member.Value);
+                object? value;
+                if (member.Value is Expr.Literal)
+                {
+                    // Literal value - evaluate directly
+                    value = Evaluate(member.Value);
+                }
+                else if (enumStmt.IsConst)
+                {
+                    // Const enum computed expression - evaluate with resolved members
+                    value = EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
+                }
+                else
+                {
+                    // Regular enum - evaluate normally
+                    value = Evaluate(member.Value);
+                }
+
                 if (value is double d)
                 {
                     members[member.Name.Lexeme] = d;
@@ -52,15 +69,92 @@ public partial class Interpreter
             }
         }
 
-        EnumKind kind = (hasNumeric, hasString) switch
+        if (enumStmt.IsConst)
         {
-            (true, false) => EnumKind.Numeric,
-            (false, true) => EnumKind.String,
-            (true, true) => EnumKind.Heterogeneous,
-            _ => EnumKind.Numeric
-        };
+            // Const enums use a simpler wrapper without reverse mapping support
+            _environment.Define(enumStmt.Name.Lexeme, new ConstEnumValues(enumStmt.Name.Lexeme, members));
+        }
+        else
+        {
+            EnumKind kind = (hasNumeric, hasString) switch
+            {
+                (true, false) => EnumKind.Numeric,
+                (false, true) => EnumKind.String,
+                (true, true) => EnumKind.Heterogeneous,
+                _ => EnumKind.Numeric
+            };
 
-        _environment.Define(enumStmt.Name.Lexeme, new SharpTSEnum(enumStmt.Name.Lexeme, members, kind));
+            _environment.Define(enumStmt.Name.Lexeme, new SharpTSEnum(enumStmt.Name.Lexeme, members, kind));
+        }
+    }
+
+    /// <summary>
+    /// Evaluates a constant expression for const enum members.
+    /// </summary>
+    private object EvaluateConstEnumExpression(Expr expr, Dictionary<string, object> resolvedMembers, string enumName)
+    {
+        return expr switch
+        {
+            Expr.Literal lit => lit.Value ?? throw new Exception($"Runtime Error: Const enum expression cannot be null."),
+
+            Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
+                resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
+                    ? val
+                    : throw new Exception($"Runtime Error: Const enum member '{g.Name.Lexeme}' referenced before definition."),
+
+            Expr.Grouping gr => EvaluateConstEnumExpression(gr.Expression, resolvedMembers, enumName),
+
+            Expr.Unary u => EvaluateConstEnumUnary(u, resolvedMembers, enumName),
+
+            Expr.Binary b => EvaluateConstEnumBinary(b, resolvedMembers, enumName),
+
+            _ => throw new Exception($"Runtime Error: Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
+        };
+    }
+
+    private object EvaluateConstEnumUnary(Expr.Unary unary, Dictionary<string, object> resolvedMembers, string enumName)
+    {
+        var operand = EvaluateConstEnumExpression(unary.Right, resolvedMembers, enumName);
+
+        return unary.Operator.Type switch
+        {
+            TokenType.MINUS when operand is double d => -d,
+            TokenType.PLUS when operand is double d => d,
+            TokenType.TILDE when operand is double d => (double)(~(int)d),
+            _ => throw new Exception($"Runtime Error: Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
+        };
+    }
+
+    private object EvaluateConstEnumBinary(Expr.Binary binary, Dictionary<string, object> resolvedMembers, string enumName)
+    {
+        var left = EvaluateConstEnumExpression(binary.Left, resolvedMembers, enumName);
+        var right = EvaluateConstEnumExpression(binary.Right, resolvedMembers, enumName);
+
+        if (left is double l && right is double r)
+        {
+            return binary.Operator.Type switch
+            {
+                TokenType.PLUS => l + r,
+                TokenType.MINUS => l - r,
+                TokenType.STAR => l * r,
+                TokenType.SLASH => l / r,
+                TokenType.PERCENT => l % r,
+                TokenType.STAR_STAR => Math.Pow(l, r),
+                TokenType.AMPERSAND => (double)((int)l & (int)r),
+                TokenType.PIPE => (double)((int)l | (int)r),
+                TokenType.CARET => (double)((int)l ^ (int)r),
+                TokenType.LESS_LESS => (double)((int)l << (int)r),
+                TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
+                _ => throw new Exception($"Runtime Error: Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
+            };
+        }
+
+        if (left is string ls && right is string rs && binary.Operator.Type == TokenType.PLUS)
+        {
+            return ls + rs;
+        }
+
+        throw new Exception($"Runtime Error: Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
     }
 
     /// <summary>

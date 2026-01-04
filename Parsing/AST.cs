@@ -103,5 +103,5 @@ public abstract record Stmt
     public record Throw(Token Keyword, Expr Value) : Stmt;
     public record TypeAlias(Token Name, string TypeDefinition) : Stmt;
     public record EnumMember(Token Name, Expr? Value);
-    public record Enum(Token Name, List<EnumMember> Members) : Stmt;
+    public record Enum(Token Name, List<EnumMember> Members, bool IsConst = false) : Stmt;
 }

@@ -246,6 +246,12 @@ public partial class Interpreter
             return enumObj.GetReverse(enumIdx);
         }
 
+        // Const enums do not support reverse mapping
+        if (obj is ConstEnumValues constEnum)
+        {
+            throw new Exception($"Runtime Error: Cannot use index access on const enum '{constEnum.Name}'. Const enum members can only be accessed by name.");
+        }
+
         // Object with string key
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {

@@ -46,11 +46,18 @@ public class Parser(List<Token> tokens)
     private Stmt Declaration()
     {
         if (Match(TokenType.CLASS)) return ClassDeclaration();
-        if (Match(TokenType.ENUM)) return EnumDeclaration();
+        if (Match(TokenType.CONST))
+        {
+            // Check for const enum
+            if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: true);
+            // Otherwise it's a const variable declaration
+            return VarDeclaration();
+        }
+        if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: false);
         if (Match(TokenType.INTERFACE)) return InterfaceDeclaration();
         if (Match(TokenType.TYPE)) return TypeAliasDeclaration();
         if (Match(TokenType.FUNCTION)) return FunctionDeclaration("function");
-        if (Match(TokenType.LET, TokenType.CONST)) return VarDeclaration();
+        if (Match(TokenType.LET)) return VarDeclaration();
         return Statement();
     }
 
@@ -239,7 +246,7 @@ public class Parser(List<Token> tokens)
         return $"({string.Join(", ", paramTypes)}) => {returnType}";
     }
 
-    private Stmt EnumDeclaration()
+    private Stmt EnumDeclaration(bool isConst = false)
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect enum name.");
         Consume(TokenType.LEFT_BRACE, "Expect '{' before enum body.");
@@ -256,7 +263,7 @@ public class Parser(List<Token> tokens)
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after enum body.");
-        return new Stmt.Enum(name, members);
+        return new Stmt.Enum(name, members, isConst);
     }
 
     private Stmt VarDeclaration()

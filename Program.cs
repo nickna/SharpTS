@@ -34,23 +34,28 @@ else if (args[0] == "--compile" || args[0] == "-c")
 {
     if (args.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll]");
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums]");
         Environment.Exit(64);
     }
 
     string inputFile = args[1];
-    string outputFile;
+    string outputFile = Path.ChangeExtension(inputFile, ".dll");
+    bool preserveConstEnums = false;
 
-    if (args.Length >= 4 && args[2] == "-o")
+    // Parse remaining arguments
+    for (int i = 2; i < args.Length; i++)
     {
-        outputFile = args[3];
-    }
-    else
-    {
-        outputFile = Path.ChangeExtension(inputFile, ".dll");
+        if (args[i] == "-o" && i + 1 < args.Length)
+        {
+            outputFile = args[++i];
+        }
+        else if (args[i] == "--preserveConstEnums")
+        {
+            preserveConstEnums = true;
+        }
     }
 
-    CompileFile(inputFile, outputFile);
+    CompileFile(inputFile, outputFile, preserveConstEnums);
 }
 else if (args.Length == 1)
 {
@@ -58,7 +63,7 @@ else if (args.Length == 1)
 }
 else
 {
-    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll]");
+    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] [--preserveConstEnums]");
     Environment.Exit(64);
 }
 
@@ -106,7 +111,7 @@ static void Run(string source, Interpreter? interpreter = null)
     }
 }
 
-static void CompileFile(string inputPath, string outputPath)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums = false)
 {
     try
     {
@@ -124,7 +129,7 @@ static void CompileFile(string inputPath, string outputPath)
 
         // Compilation Phase
         string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-        ILCompiler compiler = new(assemblyName);
+        ILCompiler compiler = new(assemblyName, preserveConstEnums);
         compiler.Compile(statements, checker);
         compiler.Save(outputPath);
 

@@ -70,13 +70,13 @@ public abstract record TypeInfo
         public override string ToString() => $"interface {Name}";
     }
 
-    public record Enum(string Name, Dictionary<string, object> Members, EnumKind Kind) : TypeInfo
+    public record Enum(string Name, Dictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
     {
-        // Only create reverse mapping for numeric members
+        // Only create reverse mapping for numeric members (not available for const enums)
         public Dictionary<double, string> ReverseMembers =>
             Members.Where(kvp => kvp.Value is double)
                    .ToDictionary(kvp => (double)kvp.Value, kvp => kvp.Key);
-        public override string ToString() => $"enum {Name}";
+        public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
     }
 
     /// <summary>

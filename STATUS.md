@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Completed IL compiler support for symbols and class bracket notation)
+**Last Updated:** 2026-01-04 (Added const enum support with computed values and preserveConstEnums flag)
 
 ## Legend
 - ✅ Implemented
@@ -44,7 +44,7 @@ This document tracks TypeScript language features and their implementation statu
 |---------|--------|-------|
 | Numeric Enums | ✅ | `enum Color { Red, Green }` with auto-increment |
 | String Enums | ✅ | `enum Color { Red = "RED" }` |
-| Const Enums | ❌ | Compile-time inlined enums |
+| Const Enums | ✅ | Compile-time inlined enums with computed value support |
 | Heterogeneous Enums | ✅ | Mixed string/number values |
 
 ---
@@ -406,3 +406,14 @@ All quick wins have been implemented:
 - ✅ Symbols as object keys
 - ✅ Class instance bracket notation (`instance["fieldName"]`)
 - ✅ Full interpreter and IL compiler support for all index signature and symbol features
+
+### Phase 14 Features (Const Enums)
+- ✅ Const enum declaration syntax (`const enum Direction { Up, Down }`)
+- ✅ Compile-time inlining of const enum values
+- ✅ Computed const enum member values (`B = A * 2`)
+- ✅ Support for arithmetic, bitwise, and string concatenation in computed values
+- ✅ Auto-increment for const enum members without explicit values
+- ✅ String const enums (`const enum Status { Success = "success" }`)
+- ✅ Type error when attempting reverse mapping on const enums
+- ✅ `--preserveConstEnums` compiler flag for debugging
+- ✅ Full interpreter and IL compiler support

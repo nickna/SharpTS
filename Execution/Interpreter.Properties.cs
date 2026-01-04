@@ -94,6 +94,12 @@ public partial class Interpreter
             return enumObj.GetMember(get.Name.Lexeme);
         }
 
+        // Handle const enum member access
+        if (obj is ConstEnumValues constEnumObj)
+        {
+            return constEnumObj.GetMember(get.Name.Lexeme);
+        }
+
         if (obj is SharpTSInstance instance)
         {
             instance.SetInterpreter(this);
