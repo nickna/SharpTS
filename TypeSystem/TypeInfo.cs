@@ -45,7 +45,11 @@ public abstract record TypeInfo
         HashSet<string>? ReadonlyFields = null,
         Dictionary<string, TypeInfo>? Getters = null,
         Dictionary<string, TypeInfo>? Setters = null,
-        Dictionary<string, TypeInfo>? FieldTypes = null) : TypeInfo
+        Dictionary<string, TypeInfo>? FieldTypes = null,
+        bool IsAbstract = false,
+        HashSet<string>? AbstractMethods = null,
+        HashSet<string>? AbstractGetters = null,
+        HashSet<string>? AbstractSetters = null) : TypeInfo
     {
         public Dictionary<string, AccessModifier> MethodAccessModifiers => MethodAccess ?? [];
         public Dictionary<string, AccessModifier> FieldAccessModifiers => FieldAccess ?? [];
@@ -53,7 +57,10 @@ public abstract record TypeInfo
         public Dictionary<string, TypeInfo> GetterTypes => Getters ?? [];
         public Dictionary<string, TypeInfo> SetterTypes => Setters ?? [];
         public Dictionary<string, TypeInfo> DeclaredFieldTypes => FieldTypes ?? [];
-        public override string ToString() => $"class {Name}";
+        public HashSet<string> AbstractMethodSet => AbstractMethods ?? [];
+        public HashSet<string> AbstractGetterSet => AbstractGetters ?? [];
+        public HashSet<string> AbstractSetterSet => AbstractSetters ?? [];
+        public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
     public record Interface(
@@ -270,7 +277,11 @@ public abstract record TypeInfo
         HashSet<string>? ReadonlyFields = null,
         Dictionary<string, TypeInfo>? Getters = null,
         Dictionary<string, TypeInfo>? Setters = null,
-        Dictionary<string, TypeInfo>? FieldTypes = null
+        Dictionary<string, TypeInfo>? FieldTypes = null,
+        bool IsAbstract = false,
+        HashSet<string>? AbstractMethods = null,
+        HashSet<string>? AbstractGetters = null,
+        HashSet<string>? AbstractSetters = null
     ) : TypeInfo
     {
         public Dictionary<string, AccessModifier> MethodAccessModifiers => MethodAccess ?? [];
@@ -279,7 +290,12 @@ public abstract record TypeInfo
         public Dictionary<string, TypeInfo> GetterTypes => Getters ?? [];
         public Dictionary<string, TypeInfo> SetterTypes => Setters ?? [];
         public Dictionary<string, TypeInfo> DeclaredFieldTypes => FieldTypes ?? [];
-        public override string ToString() => $"class {Name}<{string.Join(", ", TypeParams)}>";
+        public HashSet<string> AbstractMethodSet => AbstractMethods ?? [];
+        public HashSet<string> AbstractGetterSet => AbstractGetters ?? [];
+        public HashSet<string> AbstractSetterSet => AbstractSetters ?? [];
+        public override string ToString() => IsAbstract
+            ? $"abstract class {Name}<{string.Join(", ", TypeParams)}>"
+            : $"class {Name}<{string.Join(", ", TypeParams)}>";
     }
 
     // Generic interface (not yet instantiated)

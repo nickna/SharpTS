@@ -20,10 +20,12 @@ public class SharpTSClass(
     Dictionary<string, SharpTSFunction> staticMethods,
     Dictionary<string, object?> staticProperties,
     Dictionary<string, SharpTSFunction>? getters = null,
-    Dictionary<string, SharpTSFunction>? setters = null) : ISharpTSCallable
+    Dictionary<string, SharpTSFunction>? setters = null,
+    bool isAbstract = false) : ISharpTSCallable
 {
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
+    public bool IsAbstract { get; } = isAbstract;
     private readonly Dictionary<string, SharpTSFunction> _methods = methods;
     private readonly Dictionary<string, SharpTSFunction> _staticMethods = staticMethods;
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;

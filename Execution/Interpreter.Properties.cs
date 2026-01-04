@@ -26,6 +26,12 @@ public partial class Interpreter
              throw new Exception("Type Error: Can only instantiate classes.");
         }
 
+        // Runtime check for abstract class instantiation (backup to type checker)
+        if (sharpClass.IsAbstract)
+        {
+            throw new Exception($"Type Error: Cannot create an instance of abstract class '{sharpClass.Name}'.");
+        }
+
         List<object?> arguments = [];
         foreach (Expr argument in newExpr.Arguments)
         {

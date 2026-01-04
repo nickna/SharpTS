@@ -45,7 +45,12 @@ public class Parser(List<Token> tokens)
 
     private Stmt Declaration()
     {
-        if (Match(TokenType.CLASS)) return ClassDeclaration();
+        if (Match(TokenType.ABSTRACT))
+        {
+            Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");
+            return ClassDeclaration(isAbstract: true);
+        }
+        if (Match(TokenType.CLASS)) return ClassDeclaration(isAbstract: false);
         if (Match(TokenType.CONST))
         {
             // Check for const enum
@@ -923,7 +928,7 @@ public class Parser(List<Token> tokens)
 
     // ============== CLASS DECLARATION ==============
 
-    private Stmt ClassDeclaration()
+    private Stmt ClassDeclaration(bool isAbstract)
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect class name.");
         List<TypeParam>? typeParams = ParseTypeParameters();
@@ -961,8 +966,9 @@ public class Parser(List<Token> tokens)
             AccessModifier access = AccessModifier.Public;
             bool isStatic = false;
             bool isReadonly = false;
+            bool isMemberAbstract = false;
 
-            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY))
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT))
             {
                 var modifier = Previous().Type;
                 switch (modifier)
@@ -972,7 +978,20 @@ public class Parser(List<Token> tokens)
                     case TokenType.PROTECTED: access = AccessModifier.Protected; break;
                     case TokenType.STATIC: isStatic = true; break;
                     case TokenType.READONLY: isReadonly = true; break;
+                    case TokenType.ABSTRACT: isMemberAbstract = true; break;
                 }
+            }
+
+            // Validate: abstract members can only be in abstract classes
+            if (isMemberAbstract && !isAbstract)
+            {
+                throw new Exception($"Parse Error: Abstract methods can only appear within an abstract class.");
+            }
+
+            // Validate: abstract and static are mutually exclusive
+            if (isMemberAbstract && isStatic)
+            {
+                throw new Exception($"Parse Error: A method cannot be both abstract and static.");
             }
 
             // Check for getter/setter
@@ -1003,10 +1022,20 @@ public class Parser(List<Token> tokens)
                     returnType = ParseTypeAnnotation();
                 }
 
-                Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-                List<Stmt> body = Block();
+                List<Stmt> body;
+                if (isMemberAbstract)
+                {
+                    // Abstract accessor: no body, just semicolon
+                    Consume(TokenType.SEMICOLON, "Expect ';' after abstract accessor declaration.");
+                    body = [];
+                }
+                else
+                {
+                    Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
+                    body = Block();
+                }
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access));
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract));
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
             {
@@ -1025,35 +1054,64 @@ public class Parser(List<Token> tokens)
             }
             else
             {
-                string kind = "method";
-                if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
-                var func = (Stmt.Function)FunctionDeclaration(kind);
-                func = func with { IsStatic = isStatic, Access = access };
-                methods.Add(func);
-
-                // Synthesize fields from constructor parameter properties
-                if (kind == "constructor")
+                // Abstract methods cannot be constructors
+                if (isMemberAbstract && Check(TokenType.CONSTRUCTOR))
                 {
-                    foreach (var param in func.Parameters)
-                    {
-                        if (param.IsParameterProperty)
-                        {
-                            // Check for conflicts with explicitly declared fields
-                            if (fields.Any(f => f.Name.Lexeme == param.Name.Lexeme))
-                            {
-                                throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
-                            }
+                    throw new Exception("Parse Error: A constructor cannot be abstract.");
+                }
 
-                            // Synthesize field declaration (no initializer - set in constructor)
-                            fields.Add(new Stmt.Field(
-                                param.Name,
-                                param.Type,
-                                null,  // No initializer
-                                false, // Not static
-                                param.Access ?? AccessModifier.Public,
-                                param.IsReadonly,
-                                false  // Not optional
-                            ));
+                if (isMemberAbstract)
+                {
+                    // Parse abstract method: signature only, no body
+                    Token methodName = Consume(TokenType.IDENTIFIER, "Expect method name.");
+                    List<TypeParam>? typeParams2 = ParseTypeParameters();
+                    Consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
+                    List<Stmt.Parameter> parameters = ParseMethodParameters();
+                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+                    string? returnType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        returnType = ParseTypeAnnotation();
+                    }
+
+                    Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
+
+                    var func = new Stmt.Function(methodName, typeParams2, parameters, [], returnType, isStatic, access, IsAbstract: true);
+                    methods.Add(func);
+                }
+                else
+                {
+                    string kind = "method";
+                    if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
+                    var func = (Stmt.Function)FunctionDeclaration(kind);
+                    func = func with { IsStatic = isStatic, Access = access };
+                    methods.Add(func);
+
+                    // Synthesize fields from constructor parameter properties
+                    if (kind == "constructor")
+                    {
+                        foreach (var param in func.Parameters)
+                        {
+                            if (param.IsParameterProperty)
+                            {
+                                // Check for conflicts with explicitly declared fields
+                                if (fields.Any(f => f.Name.Lexeme == param.Name.Lexeme))
+                                {
+                                    throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
+                                }
+
+                                // Synthesize field declaration (no initializer - set in constructor)
+                                fields.Add(new Stmt.Field(
+                                    param.Name,
+                                    param.Type,
+                                    null,  // No initializer
+                                    false, // Not static
+                                    param.Access ?? AccessModifier.Public,
+                                    param.IsReadonly,
+                                    false  // Not optional
+                                ));
+                            }
                         }
                     }
                 }
@@ -1061,7 +1119,7 @@ public class Parser(List<Token> tokens)
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs);
+        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract);
     }
 
     private Stmt FunctionDeclaration(string kind)
@@ -1226,6 +1284,46 @@ public class Parser(List<Token> tokens)
         }
 
         return new Stmt.Function(name, typeParams, parameters, body, returnType);
+    }
+
+    /// <summary>
+    /// Parse method parameters for abstract methods (no destructuring, no parameter properties).
+    /// </summary>
+    private List<Stmt.Parameter> ParseMethodParameters()
+    {
+        List<Stmt.Parameter> parameters = [];
+
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            do
+            {
+                // Check for rest parameter
+                bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+                string? paramType = null;
+                if (Match(TokenType.COLON))
+                {
+                    paramType = ParseTypeAnnotation();
+                }
+                // Abstract methods don't have a body, so no default values make sense
+                // But TypeScript does allow them in the signature, so let's parse them
+                Expr? defaultValue = null;
+                if (Match(TokenType.EQUAL))
+                {
+                    defaultValue = Expression();
+                }
+                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest));
+
+                // Rest parameter must be last
+                if (isRest && Check(TokenType.COMMA))
+                {
+                    throw new Exception("Parse Error: Rest parameter must be last.");
+                }
+            } while (Match(TokenType.COMMA));
+        }
+
+        return parameters;
     }
 
     private Stmt Statement()

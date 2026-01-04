@@ -243,7 +243,8 @@ public partial class Interpreter
                     staticMethods,
                     staticProperties,
                     getters,
-                    setters);
+                    setters,
+                    classStmt.IsAbstract);
 
                 if (classStmt.Superclass != null)
                 {

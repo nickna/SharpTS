@@ -204,6 +204,9 @@ public class TypeChecker
                 Dictionary<string, AccessModifier> methodAccess = [];
                 Dictionary<string, AccessModifier> fieldAccess = [];
                 HashSet<string> readonlyFields = [];
+                HashSet<string> abstractMethods = [];
+                HashSet<string> abstractGetters = [];
+                HashSet<string> abstractSetters = [];
 
                 // First pass: collect signatures
                 foreach (var method in classStmt.Methods)
@@ -249,6 +252,12 @@ public class TypeChecker
                         declaredMethods[methodName] = methodFuncType;
 
                     methodAccess[methodName] = method.Access;
+
+                    // Track abstract methods
+                    if (method.IsAbstract)
+                    {
+                        abstractMethods.Add(methodName);
+                    }
                 }
 
                 // Collect static property types, field access modifiers, and non-static field types
@@ -291,6 +300,12 @@ public class TypeChecker
                                 ? ToTypeInfo(accessor.ReturnType)
                                 : new TypeInfo.Any();
                             getters[propName] = getterRetType;
+
+                            // Track abstract getters
+                            if (accessor.IsAbstract)
+                            {
+                                abstractGetters.Add(propName);
+                            }
                         }
                         else // SET
                         {
@@ -298,6 +313,12 @@ public class TypeChecker
                                 ? ToTypeInfo(accessor.SetterParam.Type)
                                 : new TypeInfo.Any();
                             setters[propName] = paramType;
+
+                            // Track abstract setters
+                            if (accessor.IsAbstract)
+                            {
+                                abstractSetters.Add(propName);
+                            }
                         }
                     }
 
@@ -330,15 +351,27 @@ public class TypeChecker
                         readonlyFields,
                         getters,
                         setters,
-                        declaredFieldTypes
+                        declaredFieldTypes,
+                        classStmt.IsAbstract,
+                        abstractMethods.Count > 0 ? abstractMethods : null,
+                        abstractGetters.Count > 0 ? abstractGetters : null,
+                        abstractSetters.Count > 0 ? abstractSetters : null
                     );
                     _environment.Define(classStmt.Name.Lexeme, genericClassType);
                     // For body check, create a Class type (methods/fields have TypeParameter types)
-                    classTypeForBody = new TypeInfo.Class(classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties, methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes);
+                    classTypeForBody = new TypeInfo.Class(
+                        classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
+                        methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
+                        classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
+                        abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
                 }
                 else
                 {
-                    var classType = new TypeInfo.Class(classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties, methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes);
+                    var classType = new TypeInfo.Class(
+                        classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
+                        methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
+                        classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
+                        abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
                     _environment.Define(classStmt.Name.Lexeme, classType);
                     classTypeForBody = classType;
                 }
@@ -355,6 +388,12 @@ public class TypeChecker
                         }
                         ValidateInterfaceImplementation(classTypeForBody, interfaceType, classStmt.Name.Lexeme);
                     }
+                }
+
+                // Validate abstract member implementation (skip for generic classes - validated at instantiation)
+                if (!classStmt.IsAbstract && classTypeParams == null)
+                {
+                    ValidateAbstractMemberImplementation(classTypeForBody, classStmt.Name.Lexeme);
                 }
 
                 // Second pass: check static property initializers at class scope
@@ -1358,6 +1397,16 @@ public class TypeChecker
     private TypeInfo CheckNew(Expr.New newExpr)
     {
         TypeInfo type = LookupVariable(newExpr.ClassName);
+
+        // Check for abstract class instantiation
+        if (type is TypeInfo.GenericClass gc && gc.IsAbstract)
+        {
+            throw new Exception($"Type Error: Cannot create an instance of abstract class '{newExpr.ClassName.Lexeme}'.");
+        }
+        if (type is TypeInfo.Class c && c.IsAbstract)
+        {
+            throw new Exception($"Type Error: Cannot create an instance of abstract class '{newExpr.ClassName.Lexeme}'.");
+        }
 
         // Handle generic class instantiation
         if (type is TypeInfo.GenericClass genericClass)
@@ -2786,6 +2835,100 @@ public class TypeChecker
                 throw new Exception($"Type Error: '{className}.{memberName}' has incompatible type. Expected '{expectedType}', got '{actualType}'.");
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that a non-abstract class implements all abstract members from its superclass chain.
+    /// </summary>
+    private void ValidateAbstractMemberImplementation(TypeInfo.Class classType, string className)
+    {
+        // Collect all unimplemented abstract members from the superclass chain
+        List<string> missingMembers = [];
+
+        TypeInfo.Class? current = classType.Superclass;
+        while (current != null)
+        {
+            // Check abstract methods from this superclass
+            foreach (var abstractMethod in current.AbstractMethodSet)
+            {
+                // Check if this class or any class in between implements it
+                if (!IsMethodImplemented(classType, abstractMethod, current))
+                {
+                    missingMembers.Add(abstractMethod + "()");
+                }
+            }
+
+            // Check abstract getters
+            foreach (var abstractGetter in current.AbstractGetterSet)
+            {
+                if (!IsGetterImplemented(classType, abstractGetter, current))
+                {
+                    missingMembers.Add("get " + abstractGetter);
+                }
+            }
+
+            // Check abstract setters
+            foreach (var abstractSetter in current.AbstractSetterSet)
+            {
+                if (!IsSetterImplemented(classType, abstractSetter, current))
+                {
+                    missingMembers.Add("set " + abstractSetter);
+                }
+            }
+
+            current = current.Superclass;
+        }
+
+        if (missingMembers.Count > 0)
+        {
+            throw new Exception($"Type Error: Class '{className}' must implement the following abstract members: {string.Join(", ", missingMembers)}");
+        }
+    }
+
+    /// <summary>
+    /// Checks if a method is implemented in the class chain between classType and the abstract superclass.
+    /// </summary>
+    private bool IsMethodImplemented(TypeInfo.Class classType, string methodName, TypeInfo.Class abstractSuperclass)
+    {
+        TypeInfo.Class? current = classType;
+        while (current != null && current != abstractSuperclass)
+        {
+            // Check if this class has the method and it's NOT abstract
+            if (current.Methods.ContainsKey(methodName) && !current.AbstractMethodSet.Contains(methodName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
+    }
+
+    private bool IsGetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo.Class abstractSuperclass)
+    {
+        TypeInfo.Class? current = classType;
+        while (current != null && current != abstractSuperclass)
+        {
+            if (current.GetterTypes.ContainsKey(propertyName) && !current.AbstractGetterSet.Contains(propertyName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
+    }
+
+    private bool IsSetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo.Class abstractSuperclass)
+    {
+        TypeInfo.Class? current = classType;
+        while (current != null && current != abstractSuperclass)
+        {
+            if (current.SetterTypes.ContainsKey(propertyName) && !current.AbstractSetterSet.Contains(propertyName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
     }
 
     private TypeInfo? FindMemberInClass(TypeInfo.Class classType, string name)

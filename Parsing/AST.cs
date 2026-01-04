@@ -75,11 +75,11 @@ public abstract record Stmt
 {
     public record Expression(Expr Expr) : Stmt;
     public record Var(Token Name, string? TypeAnnotation, Expr? Initializer) : Stmt;
-    public record Function(Token Name, List<TypeParam>? TypeParams, List<Parameter> Parameters, List<Stmt> Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, List<Parameter> Parameters, List<Stmt> Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false);
     public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false) : Stmt;
-    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public) : Stmt;
-    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null) : Stmt;
+    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false) : Stmt;
+    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false) : Stmt;
     public record Interface(Token Name, List<TypeParam>? TypeParams, List<InterfaceMember> Members, List<IndexSignature>? IndexSignatures = null) : Stmt;
     public record InterfaceMember(Token Name, string Type, bool IsOptional = false);
     /// <summary>

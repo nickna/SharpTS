@@ -108,6 +108,8 @@ public partial class Interpreter
     /// <remarks>
     /// Retrieves the superclass from the environment and looks up the method,
     /// then binds it to the current instance for proper <c>this</c> context.
+    /// For constructor calls (super()), if no explicit constructor exists, returns a
+    /// no-op callable to match TypeScript's implicit default constructor behavior.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#super-calls">TypeScript super Calls</seealso>
     private object? EvaluateSuper(Expr.Super expr)
@@ -118,12 +120,29 @@ public partial class Interpreter
         // super() with null Method means constructor call
         string methodName = expr.Method?.Lexeme ?? "constructor";
         SharpTSFunction? method = superclass.FindMethod(methodName);
+
+        // If no constructor exists, return a no-op callable for super() calls
+        // This matches TypeScript's implicit default constructor behavior
+        if (method == null && methodName == "constructor")
+        {
+            return new NoOpCallable();
+        }
+
         if (method == null)
         {
             throw new Exception($"Undefined property '{methodName}'.");
         }
 
         return method.Bind(instance);
+    }
+
+    /// <summary>
+    /// A no-op callable used for super() calls when the parent class has no explicit constructor.
+    /// </summary>
+    private class NoOpCallable : ISharpTSCallable
+    {
+        public int Arity() => 0;
+        public object? Call(Interpreter interpreter, List<object?> arguments) => null;
     }
 
     /// <summary>

@@ -25,6 +25,7 @@ public class Lexer(string source)
 
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
+        { "abstract", TokenType.ABSTRACT },
         { "as", TokenType.AS },
         { "break", TokenType.BREAK },
         { "case", TokenType.CASE },

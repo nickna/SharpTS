@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Added const enum support with computed values and preserveConstEnums flag)
+**Last Updated:** 2026-01-04 (Added abstract classes and abstract methods/accessors support)
 
 ## Legend
 - ✅ Implemented
@@ -59,8 +59,8 @@ This document tracks TypeScript language features and their implementation statu
 | `this` keyword | ✅ | |
 | Access modifiers (`public`/`private`/`protected`) | ✅ | Compile-time enforcement |
 | `static` members | ✅ | Class-level properties/methods |
-| `abstract` classes | ❌ | Cannot be instantiated |
-| `abstract` methods | ❌ | Must be overridden |
+| `abstract` classes | ✅ | Cannot be instantiated |
+| `abstract` methods | ✅ | Must be overridden, includes abstract accessors |
 | Getters/Setters (`get`/`set`) | ✅ | Property accessors |
 | Parameter properties | ✅ | `constructor(public x: number)` |
 | `implements` keyword | ✅ | Class implementing interface |
@@ -265,7 +265,7 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 
 ### Tier 3: Nice-to-Have
 11. ~~Getters/Setters~~ ✅
-12. Abstract classes
+12. ~~Abstract classes~~ ✅
 13. ~~`instanceof` operator~~ ✅
 14. ~~Bitwise operators~~ ✅
 15. ~~`for...in` loops~~ ✅
@@ -417,3 +417,17 @@ All quick wins have been implemented:
 - ✅ Type error when attempting reverse mapping on const enums
 - ✅ `--preserveConstEnums` compiler flag for debugging
 - ✅ Full interpreter and IL compiler support
+
+### Phase 15 Features (Abstract Classes)
+- ✅ Abstract class declaration (`abstract class Shape { }`)
+- ✅ Abstract methods with semicolon-only syntax (`abstract area(): number;`)
+- ✅ Abstract getters (`abstract get name(): string;`)
+- ✅ Abstract setters (`abstract set value(v: number);`)
+- ✅ Type error when instantiating abstract class
+- ✅ Type error when non-abstract class fails to implement abstract members
+- ✅ Inheritance chain validation (all abstract members from all ancestors must be implemented)
+- ✅ Abstract class can extend another abstract class without implementing
+- ✅ Concrete methods in abstract classes
+- ✅ Polymorphic behavior with abstract class as parameter type
+- ✅ No-op callable for super() when parent has no constructor
+- ✅ Full interpreter and IL compiler support with 20 test cases

@@ -508,9 +508,16 @@ public class ILCompiler
             baseType = superBuilder;
         }
 
+        // Set TypeAttributes.Abstract if the class is abstract
+        TypeAttributes typeAttrs = TypeAttributes.Public | TypeAttributes.Class;
+        if (classStmt.IsAbstract)
+        {
+            typeAttrs |= TypeAttributes.Abstract;
+        }
+
         var typeBuilder = _moduleBuilder.DefineType(
             classStmt.Name.Lexeme,
-            TypeAttributes.Public | TypeAttributes.Class,
+            typeAttrs,
             baseType
         );
 
@@ -817,12 +824,25 @@ public class ILCompiler
             ? [typeof(object)]  // Setter takes one parameter
             : [];                // Getter takes no parameters
 
+        // For abstract accessors, use Abstract | Virtual attributes
+        MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
+        if (accessor.IsAbstract)
+        {
+            methodAttrs |= MethodAttributes.Abstract;
+        }
+
         var methodBuilder = typeBuilder.DefineMethod(
             methodName,
-            MethodAttributes.Public | MethodAttributes.Virtual,
+            methodAttrs,
             typeof(object),
             paramTypes
         );
+
+        // Abstract accessors have no body
+        if (accessor.IsAbstract)
+        {
+            return;
+        }
 
         var il = methodBuilder.GetILGenerator();
         var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
@@ -1095,12 +1115,26 @@ public class ILCompiler
     private void EmitMethod(TypeBuilder typeBuilder, Stmt.Function method, FieldInfo fieldsField)
     {
         var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+
+        // For abstract methods, use Abstract | Virtual attributes
+        MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
+        if (method.IsAbstract)
+        {
+            methodAttrs |= MethodAttributes.Abstract;
+        }
+
         var methodBuilder = typeBuilder.DefineMethod(
             method.Name.Lexeme,
-            MethodAttributes.Public | MethodAttributes.Virtual,
+            methodAttrs,
             typeof(object),
             paramTypes
         );
+
+        // Abstract methods have no body
+        if (method.IsAbstract)
+        {
+            return;
+        }
 
         var il = methodBuilder.GetILGenerator();
         var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
