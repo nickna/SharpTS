@@ -104,8 +104,21 @@ public class Parser(List<Token> tokens)
         Consume(TokenType.LEFT_BRACE, "Expect '{' before interface body.");
 
         List<Stmt.InterfaceMember> members = [];
+        List<Stmt.IndexSignature> indexSignatures = [];
+
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
+            // Check for index signature: [key: string]: valueType
+            if (Check(TokenType.LEFT_BRACKET))
+            {
+                var indexSig = TryParseIndexSignature();
+                if (indexSig != null)
+                {
+                    indexSignatures.Add(indexSig);
+                    continue;
+                }
+            }
+
             Token memberName = Consume(TokenType.IDENTIFIER, "Expect member name.");
             bool isOptional = Match(TokenType.QUESTION);
 
@@ -127,7 +140,73 @@ public class Parser(List<Token> tokens)
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");
-        return new Stmt.Interface(name, typeParams, members);
+        return new Stmt.Interface(name, typeParams, members, indexSignatures.Count > 0 ? indexSignatures : null);
+    }
+
+    /// <summary>
+    /// Tries to parse an index signature: [key: string]: valueType; or [key: number]: valueType; or [key: symbol]: valueType;
+    /// Returns null if it's not an index signature pattern.
+    /// </summary>
+    private Stmt.IndexSignature? TryParseIndexSignature()
+    {
+        if (!Check(TokenType.LEFT_BRACKET)) return null;
+
+        int savedPosition = _current;
+
+        Advance(); // consume [
+
+        if (!Check(TokenType.IDENTIFIER))
+        {
+            _current = savedPosition;
+            return null;
+        }
+        Token keyName = Advance();
+
+        if (!Match(TokenType.COLON))
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        // Check for string, number, or symbol key type
+        TokenType keyType;
+        if (Check(TokenType.TYPE_STRING))
+        {
+            keyType = TokenType.TYPE_STRING;
+            Advance();
+        }
+        else if (Check(TokenType.TYPE_NUMBER))
+        {
+            keyType = TokenType.TYPE_NUMBER;
+            Advance();
+        }
+        else if (Check(TokenType.TYPE_SYMBOL))
+        {
+            keyType = TokenType.TYPE_SYMBOL;
+            Advance();
+        }
+        else
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        if (!Match(TokenType.RIGHT_BRACKET))
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        if (!Match(TokenType.COLON))
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        string valueType = ParseTypeAnnotation();
+        Consume(TokenType.SEMICOLON, "Expect ';' after index signature.");
+
+        return new Stmt.IndexSignature(keyName, keyType, valueType);
     }
 
     /// <summary>
@@ -330,7 +409,8 @@ public class Parser(List<Token> tokens)
             typeName = "false";
         }
         else if (Check(TokenType.TYPE_STRING) || Check(TokenType.TYPE_NUMBER) ||
-                 Check(TokenType.TYPE_BOOLEAN) || Check(TokenType.IDENTIFIER) ||
+                 Check(TokenType.TYPE_BOOLEAN) || Check(TokenType.TYPE_SYMBOL) ||
+                 Check(TokenType.IDENTIFIER) ||
                  Check(TokenType.NULL) || Check(TokenType.UNKNOWN) || Check(TokenType.NEVER))
         {
             typeName = Advance().Lexeme;
@@ -407,33 +487,71 @@ public class Parser(List<Token> tokens)
     private string ParseInlineObjectType()
     {
         // Already consumed LEFT_BRACE
-        // Parses: { name: string; age?: number; greet(x: number): string }
+        // Parses: { name: string; age?: number; greet(x: number): string; [key: string]: number }
         List<string> members = [];
 
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
-            // Parse property/method name
-            Token propertyName = Consume(TokenType.IDENTIFIER, "Expect property name in object type.");
-
-            // Check for optional marker
-            bool isOptional = Match(TokenType.QUESTION);
-
-            string propertyType;
-            if (Check(TokenType.LEFT_PAREN))
+            // Check for index signature: [key: string]: type
+            if (Check(TokenType.LEFT_BRACKET))
             {
-                // Method signature: methodName(params): returnType
-                propertyType = ParseMethodSignature();
+                Advance(); // consume [
+                Consume(TokenType.IDENTIFIER, "Expect index signature key name.");
+                Consume(TokenType.COLON, "Expect ':' after index signature key name.");
+
+                // Get the key type (string, number, or symbol)
+                string keyType;
+                if (Check(TokenType.TYPE_STRING))
+                {
+                    keyType = "string";
+                    Advance();
+                }
+                else if (Check(TokenType.TYPE_NUMBER))
+                {
+                    keyType = "number";
+                    Advance();
+                }
+                else if (Check(TokenType.TYPE_SYMBOL))
+                {
+                    keyType = "symbol";
+                    Advance();
+                }
+                else
+                {
+                    throw new Exception("Expect 'string', 'number', or 'symbol' as index signature key type.");
+                }
+
+                Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index signature key type.");
+                Consume(TokenType.COLON, "Expect ':' after index signature.");
+                string valueType = ParseUnionType();
+
+                members.Add($"[{keyType}]: {valueType}");
             }
             else
             {
-                // Property: name: type
-                Consume(TokenType.COLON, "Expect ':' after property name in object type.");
-                propertyType = ParseUnionType();
-            }
+                // Parse property/method name
+                Token propertyName = Consume(TokenType.IDENTIFIER, "Expect property name in object type.");
 
-            // Build member string
-            string member = isOptional ? $"{propertyName.Lexeme}?: {propertyType}" : $"{propertyName.Lexeme}: {propertyType}";
-            members.Add(member);
+                // Check for optional marker
+                bool isOptional = Match(TokenType.QUESTION);
+
+                string propertyType;
+                if (Check(TokenType.LEFT_PAREN))
+                {
+                    // Method signature: methodName(params): returnType
+                    propertyType = ParseMethodSignature();
+                }
+                else
+                {
+                    // Property: name: type
+                    Consume(TokenType.COLON, "Expect ':' after property name in object type.");
+                    propertyType = ParseUnionType();
+                }
+
+                // Build member string
+                string member = isOptional ? $"{propertyName.Lexeme}?: {propertyType}" : $"{propertyName.Lexeme}: {propertyType}";
+                members.Add(member);
+            }
 
             // Handle separator - can be semicolon or comma, or nothing before closing brace
             if (!Check(TokenType.RIGHT_BRACE))
@@ -1796,6 +1914,9 @@ public class Parser(List<Token> tokens)
             return new Expr.Super(keyword, method);
         }
         if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
+
+        // Symbol is a special callable constructor
+        if (Match(TokenType.SYMBOL)) return new Expr.Variable(Previous());
 
         if (Match(TokenType.LEFT_BRACKET))
         {

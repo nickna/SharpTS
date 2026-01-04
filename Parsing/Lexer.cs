@@ -72,7 +72,9 @@ public class Lexer(string source)
         { "while", TokenType.WHILE },
         { "string", TokenType.TYPE_STRING },
         { "number", TokenType.TYPE_NUMBER },
-        { "boolean", TokenType.TYPE_BOOLEAN }
+        { "boolean", TokenType.TYPE_BOOLEAN },
+        { "symbol", TokenType.TYPE_SYMBOL },
+        { "Symbol", TokenType.SYMBOL }
     };
 
     public List<Token> ScanTokens()

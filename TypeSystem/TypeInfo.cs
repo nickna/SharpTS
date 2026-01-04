@@ -56,9 +56,17 @@ public abstract record TypeInfo
         public override string ToString() => $"class {Name}";
     }
 
-    public record Interface(string Name, Dictionary<string, TypeInfo> Members, HashSet<string>? OptionalMembers = null) : TypeInfo
+    public record Interface(
+        string Name,
+        Dictionary<string, TypeInfo> Members,
+        HashSet<string>? OptionalMembers = null,
+        TypeInfo? StringIndexType = null,
+        TypeInfo? NumberIndexType = null,
+        TypeInfo? SymbolIndexType = null
+    ) : TypeInfo
     {
         public HashSet<string> OptionalMemberSet => OptionalMembers ?? [];
+        public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
         public override string ToString() => $"interface {Name}";
     }
 
@@ -116,8 +124,14 @@ public abstract record TypeInfo
         }
     }
 
-    public record Record(Dictionary<string, TypeInfo> Fields) : TypeInfo
+    public record Record(
+        Dictionary<string, TypeInfo> Fields,
+        TypeInfo? StringIndexType = null,
+        TypeInfo? NumberIndexType = null,
+        TypeInfo? SymbolIndexType = null
+    ) : TypeInfo
     {
+        public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
         public override string ToString() => $"{{ {string.Join(", ", Fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
     }
     
@@ -144,6 +158,11 @@ public abstract record TypeInfo
     public record Never() : TypeInfo
     {
         public override string ToString() => "never";
+    }
+
+    public record Symbol() : TypeInfo
+    {
+        public override string ToString() => "symbol";
     }
 
     public record StringLiteral(string Value) : TypeInfo

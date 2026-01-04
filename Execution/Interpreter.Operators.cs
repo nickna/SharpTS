@@ -255,6 +255,7 @@ public partial class Interpreter
         bool => "boolean",
         double => "number",
         string => "string",
+        SharpTSSymbol => "symbol",
         SharpTSFunction or SharpTSArrowFunction or SharpTSClass => "function",
         _ => "object"
     };

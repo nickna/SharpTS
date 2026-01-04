@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace SharpTS.Compilation;
@@ -90,6 +91,14 @@ public static class RuntimeTypes
 {
     private static readonly Random _random = new();
     private static readonly Dictionary<string, Type> _compiledTypes = [];
+
+    // Symbol-keyed property storage: object -> (symbol -> value)
+    private static readonly ConditionalWeakTable<object, Dictionary<object, object?>> _symbolStorage = new();
+
+    private static Dictionary<object, object?> GetSymbolDict(object obj)
+    {
+        return _symbolStorage.GetOrCreateValue(obj);
+    }
 
     public static void RegisterType(string name, Type type)
     {
@@ -502,41 +511,84 @@ public static class RuntimeTypes
     {
         if (obj == null) return null;
 
-        int idx = (int)ToNumber(index);
-
-        if (obj is List<object?> list && idx >= 0 && idx < list.Count)
-        {
-            return list[idx];
-        }
-
-        if (obj is string s && idx >= 0 && idx < s.Length)
-        {
-            return s[idx].ToString();
-        }
-
-        // Object with string key
+        // Object/Dictionary with string key
         if (obj is Dictionary<string, object?> dict && index is string key)
         {
             return dict.TryGetValue(key, out var value) ? value : null;
         }
 
+        // Number key on dictionary (convert to string)
+        if (obj is Dictionary<string, object?> numDict && index is double numKey)
+        {
+            return numDict.TryGetValue(numKey.ToString(), out var numValue) ? numValue : null;
+        }
+
+        // Symbol key - use separate storage
+        if (index != null && IsSymbol(index))
+        {
+            var symbolDict = GetSymbolDict(obj);
+            return symbolDict.TryGetValue(index, out var symValue) ? symValue : null;
+        }
+
+        // Numeric index for arrays/strings
+        if (index is double or int or long)
+        {
+            int idx = (int)ToNumber(index);
+
+            if (obj is List<object?> list && idx >= 0 && idx < list.Count)
+            {
+                return list[idx];
+            }
+
+            if (obj is string s && idx >= 0 && idx < s.Length)
+            {
+                return s[idx].ToString();
+            }
+        }
+
         return null;
+    }
+
+    private static bool IsSymbol(object obj)
+    {
+        return obj.GetType().Name == "TSSymbol" || obj.GetType().Name == "$TSSymbol";
     }
 
     public static void SetIndex(object? obj, object? index, object? value)
     {
         if (obj == null) return;
 
-        int idx = (int)ToNumber(index);
-
-        if (obj is List<object?> list && idx >= 0 && idx < list.Count)
-        {
-            list[idx] = value;
-        }
-
+        // Object/Dictionary with string key
         if (obj is Dictionary<string, object?> dict && index is string key)
         {
             dict[key] = value;
+            return;
+        }
+
+        // Number key on dictionary (convert to string)
+        if (obj is Dictionary<string, object?> numDict && index is double numKey)
+        {
+            numDict[numKey.ToString()] = value;
+            return;
+        }
+
+        // Symbol key - use separate storage
+        if (index != null && IsSymbol(index))
+        {
+            var symbolDict = GetSymbolDict(obj);
+            symbolDict[index] = value;
+            return;
+        }
+
+        // Numeric index for arrays
+        if (index is double or int or long)
+        {
+            int idx = (int)ToNumber(index);
+
+            if (obj is List<object?> list && idx >= 0 && idx < list.Count)
+            {
+                list[idx] = value;
+            }
         }
     }
 

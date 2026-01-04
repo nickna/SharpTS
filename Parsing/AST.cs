@@ -80,8 +80,12 @@ public abstract record Stmt
     public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public) : Stmt;
     public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null) : Stmt;
-    public record Interface(Token Name, List<TypeParam>? TypeParams, List<InterfaceMember> Members) : Stmt;
+    public record Interface(Token Name, List<TypeParam>? TypeParams, List<InterfaceMember> Members, List<IndexSignature>? IndexSignatures = null) : Stmt;
     public record InterfaceMember(Token Name, string Type, bool IsOptional = false);
+    /// <summary>
+    /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
+    /// </summary>
+    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType);
     public record Block(List<Stmt> Statements) : Stmt;
     public record Sequence(List<Stmt> Statements) : Stmt;  // Like Block but without creating a new scope
     public record Return(Token Keyword, Expr? Value) : Stmt;

@@ -234,6 +234,7 @@ public partial class Interpreter
         object? obj = Evaluate(getIndex.Object);
         object? index = Evaluate(getIndex.Index);
 
+        // Array with numeric index
         if (obj is SharpTSArray array && index is double idx)
         {
             return array.Get((int)idx);
@@ -243,6 +244,36 @@ public partial class Interpreter
         if (obj is SharpTSEnum enumObj && index is double enumIdx)
         {
             return enumObj.GetReverse(enumIdx);
+        }
+
+        // Object with string key
+        if (obj is SharpTSObject sharpObj && index is string strKey)
+        {
+            return sharpObj.Get(strKey);
+        }
+
+        // Object with number key (convert to string)
+        if (obj is SharpTSObject numObj && index is double numKey)
+        {
+            return numObj.Get(numKey.ToString());
+        }
+
+        // Object with symbol key
+        if (obj is SharpTSObject symbolObj && index is SharpTSSymbol symbol)
+        {
+            return symbolObj.GetBySymbol(symbol);
+        }
+
+        // Class instance with string key
+        if (obj is SharpTSInstance instance && index is string instanceKey)
+        {
+            return instance.Get(new Token(TokenType.IDENTIFIER, instanceKey, null, 0));
+        }
+
+        // Class instance with symbol key (store in internal dictionary)
+        if (obj is SharpTSInstance symInstance && index is SharpTSSymbol symKey)
+        {
+            return symInstance.GetBySymbol(symKey);
         }
 
         throw new Exception("Index access not supported on this type.");
@@ -263,9 +294,45 @@ public partial class Interpreter
         object? index = Evaluate(setIndex.Index);
         object? value = Evaluate(setIndex.Value);
 
+        // Array with numeric index
         if (obj is SharpTSArray array && index is double idx)
         {
             array.Set((int)idx, value);
+            return value;
+        }
+
+        // Object with string key
+        if (obj is SharpTSObject sharpObj && index is string strKey)
+        {
+            sharpObj.Set(strKey, value);
+            return value;
+        }
+
+        // Object with number key (convert to string)
+        if (obj is SharpTSObject numObj && index is double numKey)
+        {
+            numObj.Set(numKey.ToString(), value);
+            return value;
+        }
+
+        // Object with symbol key
+        if (obj is SharpTSObject symbolObj && index is SharpTSSymbol symbol)
+        {
+            symbolObj.SetBySymbol(symbol, value);
+            return value;
+        }
+
+        // Class instance with string key
+        if (obj is SharpTSInstance instance && index is string instanceKey)
+        {
+            instance.SetFieldValue(instanceKey, value);
+            return value;
+        }
+
+        // Class instance with symbol key
+        if (obj is SharpTSInstance symInstance && index is SharpTSSymbol symKey)
+        {
+            symInstance.SetBySymbol(symKey, value);
             return value;
         }
 

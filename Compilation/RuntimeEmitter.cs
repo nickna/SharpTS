@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SharpTS.Compilation;
@@ -17,6 +18,9 @@ public static class RuntimeEmitter
 
         // Emit TSFunction class first (other methods depend on it)
         EmitTSFunctionClass(moduleBuilder, runtime);
+
+        // Emit TSSymbol class for symbol support
+        EmitTSSymbolClass(moduleBuilder, runtime);
 
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
@@ -152,6 +156,114 @@ public static class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
+    private static void EmitTSSymbolClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        // Define class: public sealed class $TSSymbol
+        var typeBuilder = moduleBuilder.DefineType(
+            "$TSSymbol",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(object)
+        );
+        runtime.TSSymbolType = typeBuilder;
+
+        // Static field for next ID
+        var nextIdField = typeBuilder.DefineField("_nextId", typeof(int), FieldAttributes.Private | FieldAttributes.Static);
+
+        // Instance fields
+        var idField = typeBuilder.DefineField("_id", typeof(int), FieldAttributes.Private);
+        var descriptionField = typeBuilder.DefineField("_description", typeof(string), FieldAttributes.Private);
+
+        // Constructor: public $TSSymbol(string? description)
+        var ctorBuilder = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [typeof(string)]
+        );
+        runtime.TSSymbolCtor = ctorBuilder;
+
+        var ctorIL = ctorBuilder.GetILGenerator();
+        // Call base constructor
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        // _id = Interlocked.Increment(ref _nextId)
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldsflda, nextIdField);
+        ctorIL.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Increment", [typeof(int).MakeByRefType()])!);
+        ctorIL.Emit(OpCodes.Stfld, idField);
+        // _description = description
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Stfld, descriptionField);
+        ctorIL.Emit(OpCodes.Ret);
+
+        // Equals method: public override bool Equals(object? obj)
+        var equalsBuilder = typeBuilder.DefineMethod(
+            "Equals",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            typeof(bool),
+            [typeof(object)]
+        );
+        var equalsIL = equalsBuilder.GetILGenerator();
+        var notSymbol = equalsIL.DefineLabel();
+        var returnFalse = equalsIL.DefineLabel();
+        // if (obj is not $TSSymbol other) return false
+        equalsIL.Emit(OpCodes.Ldarg_1);
+        equalsIL.Emit(OpCodes.Isinst, typeBuilder);
+        equalsIL.Emit(OpCodes.Brfalse, returnFalse);
+        // return this._id == other._id
+        equalsIL.Emit(OpCodes.Ldarg_0);
+        equalsIL.Emit(OpCodes.Ldfld, idField);
+        equalsIL.Emit(OpCodes.Ldarg_1);
+        equalsIL.Emit(OpCodes.Castclass, typeBuilder);
+        equalsIL.Emit(OpCodes.Ldfld, idField);
+        equalsIL.Emit(OpCodes.Ceq);
+        equalsIL.Emit(OpCodes.Ret);
+        equalsIL.MarkLabel(returnFalse);
+        equalsIL.Emit(OpCodes.Ldc_I4_0);
+        equalsIL.Emit(OpCodes.Ret);
+
+        // GetHashCode method: public override int GetHashCode()
+        var hashCodeBuilder = typeBuilder.DefineMethod(
+            "GetHashCode",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            typeof(int),
+            Type.EmptyTypes
+        );
+        var hashCodeIL = hashCodeBuilder.GetILGenerator();
+        hashCodeIL.Emit(OpCodes.Ldarg_0);
+        hashCodeIL.Emit(OpCodes.Ldfld, idField);
+        hashCodeIL.Emit(OpCodes.Ret);
+
+        // ToString method: public override string ToString()
+        var toStringBuilder = typeBuilder.DefineMethod(
+            "ToString",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            typeof(string),
+            Type.EmptyTypes
+        );
+        var toStringIL = toStringBuilder.GetILGenerator();
+        var hasDescription = toStringIL.DefineLabel();
+        var doneToString = toStringIL.DefineLabel();
+        // if (_description != null)
+        toStringIL.Emit(OpCodes.Ldarg_0);
+        toStringIL.Emit(OpCodes.Ldfld, descriptionField);
+        toStringIL.Emit(OpCodes.Brtrue, hasDescription);
+        // return "Symbol()"
+        toStringIL.Emit(OpCodes.Ldstr, "Symbol()");
+        toStringIL.Emit(OpCodes.Br, doneToString);
+        // return $"Symbol({_description})"
+        toStringIL.MarkLabel(hasDescription);
+        toStringIL.Emit(OpCodes.Ldstr, "Symbol(");
+        toStringIL.Emit(OpCodes.Ldarg_0);
+        toStringIL.Emit(OpCodes.Ldfld, descriptionField);
+        toStringIL.Emit(OpCodes.Ldstr, ")");
+        toStringIL.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
+        toStringIL.MarkLabel(doneToString);
+        toStringIL.Emit(OpCodes.Ret);
+
+        typeBuilder.CreateType();
+    }
+
     private static void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public static class $Runtime
@@ -165,15 +277,32 @@ public static class RuntimeEmitter
         // Static field for Random
         var randomField = typeBuilder.DefineField("_random", typeof(Random), FieldAttributes.Private | FieldAttributes.Static);
 
-        // Static constructor to initialize Random
+        // Static field for symbol storage: ConditionalWeakTable<object, Dictionary<object, object?>>
+        var symbolDictType = typeof(Dictionary<object, object?>);
+        var symbolStorageType = typeof(ConditionalWeakTable<,>).MakeGenericType(typeof(object), symbolDictType);
+        var symbolStorageField = typeBuilder.DefineField(
+            "_symbolStorage",
+            symbolStorageType,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+        );
+        runtime.SymbolStorageField = symbolStorageField;
+
+        // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             CallingConventions.Standard,
             Type.EmptyTypes
         );
         var cctorIL = cctorBuilder.GetILGenerator();
+
+        // Initialize _random = new Random()
         cctorIL.Emit(OpCodes.Newobj, typeof(Random).GetConstructor(Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, randomField);
+
+        // Initialize _symbolStorage = new ConditionalWeakTable<object, Dictionary<object, object?>>()
+        cctorIL.Emit(OpCodes.Newobj, symbolStorageType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Stsfld, symbolStorageField);
+
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods
@@ -207,6 +336,9 @@ public static class RuntimeEmitter
         EmitGetProperty(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
         EmitMergeIntoObject(typeBuilder, runtime);
+        // Symbol support helpers - must come before EmitGetIndex/EmitSetIndex which depend on them
+        EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
+        EmitIsSymbol(typeBuilder, runtime);
         EmitGetIndex(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitInvokeValue(typeBuilder, runtime);
@@ -517,6 +649,7 @@ public static class RuntimeEmitter
         var boolLabel = il.DefineLabel();
         var numberLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
+        var symbolLabel = il.DefineLabel();
         var functionLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
@@ -538,6 +671,11 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, typeof(string));
         il.Emit(OpCodes.Brtrue, stringLabel);
+
+        // TSSymbol => "symbol"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, symbolLabel);
 
         // TSFunction => "function"
         il.Emit(OpCodes.Ldarg_0);
@@ -567,6 +705,10 @@ public static class RuntimeEmitter
 
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldstr, "string");
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(symbolLabel);
+        il.Emit(OpCodes.Ldstr, "symbol");
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(functionLabel);
@@ -3088,11 +3230,20 @@ public static class RuntimeEmitter
         var listLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
-
-        // null check
-        il.Emit(OpCodes.Ldarg_0);
+        var dictStringKeyLabel = il.DefineLabel();
+        var dictNumericKeyLabel = il.DefineLabel();
+        var symbolKeyLabel = il.DefineLabel();
+        var classInstanceLabel = il.DefineLabel();
         var nullLabel = il.DefineLabel();
+
+        // null check on obj
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Check if index is a symbol first (symbols work on any object type)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // List
         il.Emit(OpCodes.Ldarg_0);
@@ -3109,8 +3260,43 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Brtrue, dictLabel);
 
+        // Class instance: check if index is string, then use GetFieldsProperty
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Brtrue, classInstanceLabel);
+
+        // Fallthrough: return null
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        // Symbol key handler: use GetSymbolDict(obj).TryGetValue(index, out value)
+        il.MarkLabel(symbolKeyLabel);
+        var symbolDictLocal = il.DeclareLocal(typeof(Dictionary<object, object?>));
+        var symbolValueLocal = il.DeclareLocal(typeof(object));
+        // var symbolDict = GetSymbolDict(obj);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symbolDictLocal);
+        // if (symbolDict.TryGetValue(index, out value)) return value; else return null;
+        il.Emit(OpCodes.Ldloc, symbolDictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, symbolValueLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object?>).GetMethod("TryGetValue")!);
+        var symbolFoundLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, symbolFoundLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(symbolFoundLabel);
+        il.Emit(OpCodes.Ldloc, symbolValueLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Class instance handler: use GetFieldsProperty(obj, index as string)
+        il.MarkLabel(classInstanceLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
@@ -3131,11 +3317,25 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
+        // Check if index is string
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
+        // Check if index is double (numeric key - convert to string)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
+        // Otherwise return null (non-string, non-numeric, non-symbol keys not supported)
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        var valueLocal = il.DeclareLocal(typeof(object));
+
+        il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, typeof(string));
-        var valueLocal = il.DeclareLocal(typeof(object));
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
         var foundLabel = il.DefineLabel();
@@ -3143,6 +3343,21 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(foundLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictNumericKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
+        var foundNumLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, foundNumLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(foundNumLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -3160,11 +3375,20 @@ public static class RuntimeEmitter
         var il = method.GetILGenerator();
         var listLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
-
-        // null check
-        il.Emit(OpCodes.Ldarg_0);
+        var dictStringKeyLabel = il.DefineLabel();
+        var dictNumericKeyLabel = il.DefineLabel();
+        var symbolKeyLabel = il.DefineLabel();
+        var classInstanceLabel = il.DefineLabel();
         var nullLabel = il.DefineLabel();
+
+        // null check on obj
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Check if index is a symbol first (symbols work on any object type)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
         // List
         il.Emit(OpCodes.Ldarg_0);
@@ -3176,7 +3400,32 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Brtrue, dictLabel);
 
+        // Class instance: check if index is string, then use SetFieldsProperty
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Brtrue, classInstanceLabel);
+
+        // Fallthrough: return (ignore)
         il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ret);
+
+        // Symbol key handler: GetSymbolDict(obj)[index] = value
+        il.MarkLabel(symbolKeyLabel);
+        // GetSymbolDict(obj)[index] = value
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object?>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Ret);
+
+        // Class instance handler: use SetFieldsProperty(obj, index as string, value)
+        il.MarkLabel(classInstanceLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.SetFieldsProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
@@ -3189,10 +3438,31 @@ public static class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
+        // Check if index is string
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
+        // Check if index is double (numeric key - convert to string)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
+        // Otherwise ignore (non-string, non-numeric, non-symbol keys not supported)
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictNumericKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
         il.Emit(OpCodes.Ret);
@@ -5178,6 +5448,69 @@ public static class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: private static Dictionary&lt;object, object?&gt; GetSymbolDict(object obj)
+    /// Returns the symbol dictionary for an object from the ConditionalWeakTable.
+    /// </summary>
+    private static void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder symbolStorageField)
+    {
+        var symbolDictType = typeof(Dictionary<object, object?>);
+        var symbolStorageType = typeof(ConditionalWeakTable<,>).MakeGenericType(typeof(object), symbolDictType);
+
+        var method = typeBuilder.DefineMethod(
+            "GetSymbolDict",
+            MethodAttributes.Private | MethodAttributes.Static,
+            symbolDictType,
+            [typeof(object)]
+        );
+        runtime.GetSymbolDictMethod = method;
+
+        var il = method.GetILGenerator();
+
+        // return _symbolStorage.GetOrCreateValue(obj);
+        il.Emit(OpCodes.Ldsfld, symbolStorageField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, symbolStorageType.GetMethod("GetOrCreateValue", [typeof(object)])!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: private static bool IsSymbol(object obj)
+    /// Returns true if the object is a TSSymbol.
+    /// </summary>
+    private static void EmitIsSymbol(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "IsSymbol",
+            MethodAttributes.Private | MethodAttributes.Static,
+            typeof(bool),
+            [typeof(object)]
+        );
+        runtime.IsSymbolMethod = method;
+
+        var il = method.GetILGenerator();
+        var falseLabel = il.DefineLabel();
+        var doneLabel = il.DefineLabel();
+
+        // if (obj == null) return false;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // return obj.GetType().Name == "$TSSymbol";
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "$TSSymbol");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Br, doneLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+
+        il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ret);
     }
 

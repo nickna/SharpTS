@@ -155,6 +155,26 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: Symbol() constructor - creates unique symbols
+        if (c.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
+        {
+            if (c.Arguments.Count == 0)
+            {
+                // Symbol() with no description
+                IL.Emit(OpCodes.Ldnull);
+            }
+            else
+            {
+                // Symbol(description) - emit the description argument
+                EmitExpression(c.Arguments[0]);
+                // Convert to string if needed
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+            }
+            // Create new $TSSymbol instance
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSSymbolCtor);
+            return;
+        }
+
         // Special case: Static method call on class (e.g., Counter.increment())
         if (c.Callee is Expr.Get staticGet &&
             staticGet.Object is Expr.Variable classVar &&

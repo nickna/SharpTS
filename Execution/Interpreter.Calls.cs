@@ -56,6 +56,18 @@ public partial class Interpreter
             throw new Exception("__objectRest requires 2 arguments");
         }
 
+        // Handle Symbol() constructor - creates unique symbols
+        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
+        {
+            string? description = null;
+            if (call.Arguments.Count > 0)
+            {
+                var arg = Evaluate(call.Arguments[0]);
+                description = arg?.ToString();
+            }
+            return new SharpTSSymbol(description);
+        }
+
         object? callee = Evaluate(call.Callee);
 
         List<object?> argumentsList = [];

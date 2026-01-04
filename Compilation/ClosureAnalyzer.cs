@@ -417,7 +417,7 @@ public class ClosureAnalyzer
         if (_currentFunction == null) return;
 
         // Skip built-ins
-        if (name is "console.log" or "Math" or "console" or "undefined" or "NaN" or "Infinity")
+        if (name is "console.log" or "Math" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Check if this is a local variable in the current function

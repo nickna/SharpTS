@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-03 (Added Intersection Types support)
+**Last Updated:** 2026-01-04 (Completed IL compiler support for symbols and class bracket notation)
 
 ## Legend
 - ✅ Implemented
@@ -34,7 +34,7 @@ This document tracks TypeScript language features and their implementation statu
 | Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing in if-statements |
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
-| Index Signatures (`[key: string]: T`) | ❌ | Dynamic property types |
+| Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
 
 ---
 
@@ -211,7 +211,7 @@ This document tracks TypeScript language features and their implementation statu
 | Decorators (`@decorator`) | ❌ | Class/method metadata |
 | Generators (`function*`) | ❌ | Iterable generators |
 | Iterators (Symbol.iterator) | ❌ | Custom iteration |
-| Symbols | ❌ | Unique identifiers |
+| Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
 | `bigint` type | ❌ | Arbitrary precision integers |
 | Mapped types | ❌ | `{ [K in keyof T]: ... }` |
 | Conditional types | ❌ | `T extends U ? X : Y` |
@@ -392,3 +392,17 @@ All quick wins have been implemented:
 - ✅ Special type rules: `never & T = never`, `any & T = any`, `unknown & T = T`
 - ✅ Type alias support for intersection types
 - ✅ Full interpreter and IL compiler support
+
+### Phase 13 Features (Index Signatures & Symbols)
+- ✅ Index Signatures with string key type (`[key: string]: T`)
+- ✅ Index Signatures with number key type (`[key: number]: T`)
+- ✅ Index Signatures with symbol key type (`[key: symbol]: T`)
+- ✅ Property compatibility validation with index signature types
+- ✅ Inline object type index signatures (`let obj: { [k: string]: number }`)
+- ✅ Symbol type (`symbol`) as a first-class type
+- ✅ Symbol constructor (`Symbol()` and `Symbol("description")`)
+- ✅ Symbol uniqueness (each `Symbol()` call creates a unique symbol)
+- ✅ `typeof` returns `"symbol"` for Symbol values
+- ✅ Symbols as object keys
+- ✅ Class instance bracket notation (`instance["fieldName"]`)
+- ✅ Full interpreter and IL compiler support for all index signature and symbol features

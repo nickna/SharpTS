@@ -18,6 +18,7 @@ public class SharpTSInstance(SharpTSClass klass)
 {
     private readonly SharpTSClass _klass = klass;
     private readonly Dictionary<string, object?> _fields = [];
+    private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Interpreter? _interpreter;
 
     public void SetInterpreter(Interpreter interpreter) => _interpreter = interpreter;
@@ -73,6 +74,27 @@ public class SharpTSInstance(SharpTSClass klass)
     /// Get a field value by name for object rest patterns
     /// </summary>
     public object? GetFieldValue(string name) => _fields.TryGetValue(name, out var value) ? value : null;
+
+    /// <summary>
+    /// Set a field value by name for bracket notation assignment
+    /// </summary>
+    public void SetFieldValue(string name, object? value) => _fields[name] = value;
+
+    /// <summary>
+    /// Gets a value by symbol key.
+    /// </summary>
+    public object? GetBySymbol(SharpTSSymbol symbol)
+    {
+        return _symbolFields.TryGetValue(symbol, out var value) ? value : null;
+    }
+
+    /// <summary>
+    /// Sets a value by symbol key.
+    /// </summary>
+    public void SetBySymbol(SharpTSSymbol symbol, object? value)
+    {
+        _symbolFields[symbol] = value;
+    }
 
     public override string ToString() => _klass.Name + " instance";
 }

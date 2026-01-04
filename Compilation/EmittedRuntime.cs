@@ -113,4 +113,14 @@ public class EmittedRuntime
     public MethodBuilder JsonParseWithReviver { get; set; } = null!;
     public MethodBuilder JsonStringify { get; set; } = null!;
     public MethodBuilder JsonStringifyFull { get; set; } = null!;
+
+    // Symbol support
+    public TypeBuilder TSSymbolType { get; set; } = null!;
+    public ConstructorBuilder TSSymbolCtor { get; set; } = null!;
+    public MethodBuilder CreateSymbol { get; set; } = null!;
+
+    // Symbol storage for compiled objects (symbol as object key)
+    public FieldBuilder SymbolStorageField { get; set; } = null!;
+    public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
+    public MethodBuilder IsSymbolMethod { get; set; } = null!;
 }

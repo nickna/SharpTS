@@ -14,6 +14,7 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields)
 {
     private readonly Dictionary<string, object?> _fields = fields;
+    private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
 
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
@@ -37,6 +38,30 @@ public class SharpTSObject(Dictionary<string, object?> fields)
     public bool HasProperty(string name)
     {
         return _fields.ContainsKey(name);
+    }
+
+    /// <summary>
+    /// Gets a value by symbol key.
+    /// </summary>
+    public object? GetBySymbol(SharpTSSymbol symbol)
+    {
+        return _symbolFields.TryGetValue(symbol, out var value) ? value : null;
+    }
+
+    /// <summary>
+    /// Sets a value by symbol key.
+    /// </summary>
+    public void SetBySymbol(SharpTSSymbol symbol, object? value)
+    {
+        _symbolFields[symbol] = value;
+    }
+
+    /// <summary>
+    /// Checks if the object has a property with the given symbol key.
+    /// </summary>
+    public bool HasSymbolProperty(SharpTSSymbol symbol)
+    {
+        return _symbolFields.ContainsKey(symbol);
     }
 
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
