@@ -286,7 +286,32 @@ public partial class ILEmitter
 
     public void EmitBoxIfNeeded(Expr expr)
     {
-        // Box value types
+        // Optimization: Use TypeMap to skip boxing check for known reference types
+        // This avoids the pattern match overhead for expressions that definitely don't need boxing
+        TypeSystem.TypeInfo? type = _ctx.TypeMap?.Get(expr);
+        if (type != null)
+        {
+            // Reference types never need boxing - skip the literal check entirely
+            if (type is TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING }
+                or TypeSystem.TypeInfo.Array
+                or TypeSystem.TypeInfo.Instance
+                or TypeSystem.TypeInfo.Record
+                or TypeSystem.TypeInfo.Class
+                or TypeSystem.TypeInfo.Interface
+                or TypeSystem.TypeInfo.Function
+                or TypeSystem.TypeInfo.Void
+                or TypeSystem.TypeInfo.Null)
+            {
+                return;
+            }
+            // For primitives (number/boolean) and other types (Any, Union, etc.),
+            // fall through to the literal check - only literals produce unboxed values
+        }
+
+        // Only Expr.Literal with double/bool produces unboxed value types on the stack.
+        // All other expressions (Variable, Call, Binary, etc.) already produce boxed objects.
+        // IMPORTANT: Never add boxing for non-literals - their results are already boxed,
+        // and Box(double) on an object reference causes garbage output.
         if (expr is Expr.Literal lit)
         {
             if (lit.Value is double)
@@ -298,8 +323,6 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, typeof(bool));
             }
         }
-        // Note: Binary expressions already box their result in EmitBinary
-        // Note: Comparison expressions already box in EmitBinary
     }
 
     private void EmitExpressionAsDouble(Expr expr)
