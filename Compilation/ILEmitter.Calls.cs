@@ -553,12 +553,15 @@ public partial class ILEmitter
     {
         string methodName = methodGet.Name.Lexeme;
 
+        // Try direct dispatch for known class instance methods
+        TypeSystem.TypeInfo? objType = _ctx.TypeMap?.Get(methodGet.Object);
+        if (TryEmitDirectMethodCall(methodGet.Object, objType, methodName, arguments))
+            return;
+
         // Methods that exist on both strings and arrays - use TypeMap for static dispatch
         if (methodName is "slice" or "concat" or "includes" or "indexOf")
         {
-            // Try to use static type information if available
-            TypeSystem.TypeInfo? objType = _ctx.TypeMap?.Get(methodGet.Object);
-
+            // Use static type information if available (already fetched above)
             if (objType is TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
             {
                 EmitStringMethodCall(methodGet.Object, methodName, arguments);
@@ -1591,5 +1594,51 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldnull);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Try to emit a direct method call for known class instance types.
+    /// Returns true if direct dispatch was emitted, false to fall back to runtime dispatch.
+    /// </summary>
+    private bool TryEmitDirectMethodCall(Expr receiver, TypeSystem.TypeInfo? receiverType,
+        string methodName, List<Expr> arguments)
+    {
+        // Only handle Instance types (e.g., let p: Person = ...)
+        if (receiverType is not TypeSystem.TypeInfo.Instance instance)
+            return false;
+
+        // Extract the class name from the instance's class type
+        string? className = instance.ClassType switch
+        {
+            TypeSystem.TypeInfo.Class c => c.Name,
+            _ => null
+        };
+        if (className == null)
+            return false;
+
+        // Look up the method in the class hierarchy
+        var methodBuilder = _ctx.ResolveInstanceMethod(className, methodName);
+        if (methodBuilder == null)
+            return false;
+
+        // Get the class type builder to cast the receiver
+        if (!_ctx.Classes.TryGetValue(className, out var classType))
+            return false;
+
+        // Emit: ((ClassName)receiver).method(args)
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+        IL.Emit(OpCodes.Castclass, classType);
+
+        // Emit all arguments
+        foreach (var arg in arguments)
+        {
+            EmitExpression(arg);
+            EmitBoxIfNeeded(arg);
+        }
+
+        // Emit the virtual call
+        IL.Emit(OpCodes.Callvirt, methodBuilder);
+        return true;
     }
 }

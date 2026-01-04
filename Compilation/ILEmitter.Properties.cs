@@ -60,6 +60,11 @@ public partial class ILEmitter
             // If we get here for a method reference (not call), we'll use the generic path
         }
 
+        // Try direct getter dispatch for known class instance types
+        TypeInfo? objType = _ctx.TypeMap?.Get(g.Object);
+        if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))
+            return;
+
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 
@@ -104,6 +109,11 @@ public partial class ILEmitter
                 return;
             }
         }
+
+        // Try direct setter dispatch for known class instance types
+        TypeInfo? objType = _ctx.TypeMap?.Get(s.Object);
+        if (TryEmitDirectSetterCall(s.Object, objType, s.Name.Lexeme, s.Value))
+            return;
 
         // Build stack for SetProperty(obj, name, value)
         EmitExpression(s.Object);
@@ -313,5 +323,92 @@ public partial class ILEmitter
 
             // Result is already Dictionary<string, object?>, no CreateObject needed
         }
+    }
+
+    /// <summary>
+    /// Try to emit a direct getter call for known class instance types.
+    /// Returns true if direct dispatch was emitted, false to fall back to runtime dispatch.
+    /// </summary>
+    private bool TryEmitDirectGetterCall(Expr receiver, TypeInfo? receiverType, string propertyName)
+    {
+        // Only handle Instance types (e.g., let p: Person = ...)
+        if (receiverType is not TypeInfo.Instance instance)
+            return false;
+
+        // Extract the class name from the instance's class type
+        string? className = instance.ClassType switch
+        {
+            TypeInfo.Class c => c.Name,
+            _ => null
+        };
+        if (className == null)
+            return false;
+
+        // Look up the getter in the class hierarchy
+        var getterBuilder = _ctx.ResolveInstanceGetter(className, propertyName);
+        if (getterBuilder == null)
+            return false;
+
+        // Get the class type builder to cast the receiver
+        if (!_ctx.Classes.TryGetValue(className, out var classType))
+            return false;
+
+        // Emit: ((ClassName)receiver).get_PropertyName()
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+        IL.Emit(OpCodes.Castclass, classType);
+        IL.Emit(OpCodes.Callvirt, getterBuilder);
+        return true;
+    }
+
+    /// <summary>
+    /// Try to emit a direct setter call for known class instance types.
+    /// Returns true if direct dispatch was emitted, false to fall back to runtime dispatch.
+    /// </summary>
+    private bool TryEmitDirectSetterCall(Expr receiver, TypeInfo? receiverType, string propertyName, Expr value)
+    {
+        // Only handle Instance types (e.g., let p: Person = ...)
+        if (receiverType is not TypeInfo.Instance instance)
+            return false;
+
+        // Extract the class name from the instance's class type
+        string? className = instance.ClassType switch
+        {
+            TypeInfo.Class c => c.Name,
+            _ => null
+        };
+        if (className == null)
+            return false;
+
+        // Look up the setter in the class hierarchy
+        var setterBuilder = _ctx.ResolveInstanceSetter(className, propertyName);
+        if (setterBuilder == null)
+            return false;
+
+        // Get the class type builder to cast the receiver
+        if (!_ctx.Classes.TryGetValue(className, out var classType))
+            return false;
+
+        // Emit: ((ClassName)receiver).set_PropertyName(value)
+        // Also need to keep the value on the stack as the expression result
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+        IL.Emit(OpCodes.Castclass, classType);
+
+        EmitExpression(value);
+        EmitBoxIfNeeded(value);
+
+        // Dup value for expression result before calling setter
+        IL.Emit(OpCodes.Dup);
+        var resultTemp = IL.DeclareLocal(typeof(object));
+        IL.Emit(OpCodes.Stloc, resultTemp);
+
+        // Call the setter (it returns a value we need to discard)
+        IL.Emit(OpCodes.Callvirt, setterBuilder);
+        IL.Emit(OpCodes.Pop);  // Discard setter's return value
+
+        // Put saved value back on stack as expression result
+        IL.Emit(OpCodes.Ldloc, resultTemp);
+        return true;
     }
 }

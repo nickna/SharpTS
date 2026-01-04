@@ -99,6 +99,18 @@ public class CompilationContext
     // Track which functions are generic definitions
     public Dictionary<string, bool>? IsGenericFunction { get; set; }
 
+    // Instance methods for direct dispatch (class name -> method name -> MethodBuilder)
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceMethods { get; set; }
+
+    // Instance getters for direct dispatch (class name -> property name -> MethodBuilder)
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceGetters { get; set; }
+
+    // Instance setters for direct dispatch (class name -> property name -> MethodBuilder)
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceSetters { get; set; }
+
+    // Class superclass mapping (class name -> superclass name or null)
+    public Dictionary<string, string?>? ClassSuperclass { get; set; }
+
     // Parameter tracking (name -> arg index)
     private readonly Dictionary<string, int> _parameters = [];
 
@@ -150,4 +162,52 @@ public class CompilationContext
 
     public (Label BreakLabel, Label ContinueLabel)? CurrentLoop =>
         LoopLabels.Count > 0 ? LoopLabels.Peek() : null;
+
+    /// <summary>
+    /// Resolve an instance method by walking up the inheritance chain.
+    /// </summary>
+    public MethodBuilder? ResolveInstanceMethod(string className, string methodName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (InstanceMethods?.TryGetValue(current, out var methods) == true &&
+                methods.TryGetValue(methodName, out var method))
+                return method;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolve an instance getter by walking up the inheritance chain.
+    /// </summary>
+    public MethodBuilder? ResolveInstanceGetter(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (InstanceGetters?.TryGetValue(current, out var getters) == true &&
+                getters.TryGetValue(propertyName, out var getter))
+                return getter;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolve an instance setter by walking up the inheritance chain.
+    /// </summary>
+    public MethodBuilder? ResolveInstanceSetter(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (InstanceSetters?.TryGetValue(current, out var setters) == true &&
+                setters.TryGetValue(propertyName, out var setter))
+                return setter;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
 }

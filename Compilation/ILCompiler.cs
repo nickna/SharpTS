@@ -34,6 +34,10 @@ public class ILCompiler
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticMethods = [];
     private readonly Dictionary<string, FieldBuilder> _instanceFieldsField = []; // _fields dict field per class
     private readonly Dictionary<string, ConstructorBuilder> _classConstructors = [];
+    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceMethods = [];
+    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceGetters = [];
+    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceSetters = [];
+    private readonly Dictionary<string, string?> _classSuperclass = [];
     private readonly Dictionary<string, (int RestParamIndex, int RegularParamCount)> _functionRestParams = [];
     private TypeBuilder _programType = null!;
 
@@ -434,7 +438,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         if (displayClass != null)
@@ -527,6 +535,9 @@ public class ILCompiler
             typeAttrs,
             baseType
         );
+
+        // Track superclass for inheritance-aware method resolution
+        _classSuperclass[classStmt.Name.Lexeme] = classStmt.Superclass?.Lexeme;
 
         // Handle generic type parameters
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
@@ -845,6 +856,27 @@ public class ILCompiler
             paramTypes
         );
 
+        // Track getter/setter for direct dispatch
+        string className = typeBuilder.Name;
+        if (accessor.Kind.Type == TokenType.GET)
+        {
+            if (!_instanceGetters.TryGetValue(className, out var classGetters))
+            {
+                classGetters = [];
+                _instanceGetters[className] = classGetters;
+            }
+            classGetters[accessor.Name.Lexeme] = methodBuilder;
+        }
+        else
+        {
+            if (!_instanceSetters.TryGetValue(className, out var classSetters))
+            {
+                classSetters = [];
+                _instanceSetters[className] = classSetters;
+            }
+            classSetters[accessor.Name.Lexeme] = methodBuilder;
+        }
+
         // Abstract accessors have no body
         if (accessor.IsAbstract)
         {
@@ -872,7 +904,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         // Add class generic type parameters to context
@@ -952,7 +988,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         var emitter = new ILEmitter(ctx);
@@ -998,7 +1038,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         // Define parameters (starting at index 0, not 1 since no 'this')
@@ -1064,7 +1108,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         // Add class generic type parameters to context
@@ -1141,6 +1189,14 @@ public class ILCompiler
             paramTypes
         );
 
+        // Track instance method for direct dispatch
+        if (!_instanceMethods.TryGetValue(typeBuilder.Name, out var classMethods))
+        {
+            classMethods = [];
+            _instanceMethods[typeBuilder.Name] = classMethods;
+        }
+        classMethods[method.Name.Lexeme] = methodBuilder;
+
         // Abstract methods have no body
         if (method.IsAbstract)
         {
@@ -1168,7 +1224,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         // Add class generic type parameters to context
@@ -1229,7 +1289,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -1300,7 +1364,11 @@ public class ILCompiler
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
             IsGenericFunction = _isGenericFunction,
-            TypeMap = _typeMap
+            TypeMap = _typeMap,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass
         };
         var emitter = new ILEmitter(ctx);
 
