@@ -112,6 +112,8 @@ public class ILCompiler
             }
             else if (stmt is Stmt.Function funcStmt)
             {
+                // Skip overload signatures (no body)
+                if (funcStmt.Body == null) continue;
                 DefineFunction(funcStmt);
             }
             else if (stmt is Stmt.Enum enumStmt)
@@ -135,6 +137,8 @@ public class ILCompiler
             }
             else if (stmt is Stmt.Function funcStmt)
             {
+                // Skip overload signatures (no body)
+                if (funcStmt.Body == null) continue;
                 EmitFunctionBody(funcStmt);
             }
         }
@@ -238,15 +242,23 @@ public class ILCompiler
                     CollectArrowsFromExpr(v.Initializer);
                 break;
             case Stmt.Function f:
-                foreach (var s in f.Body)
-                    CollectArrowsFromStmt(s);
+                // Skip overload signatures (no body)
+                if (f.Body != null)
+                {
+                    foreach (var s in f.Body)
+                        CollectArrowsFromStmt(s);
+                }
                 foreach (var p in f.Parameters)
                     if (p.DefaultValue != null)
                         CollectArrowsFromExpr(p.DefaultValue);
                 break;
             case Stmt.Class c:
                 foreach (var method in c.Methods)
-                    CollectArrowsFromStmt(method);
+                {
+                    // Skip overload signatures (no body)
+                    if (method.Body != null)
+                        CollectArrowsFromStmt(method);
+                }
                 break;
             case Stmt.If i:
                 CollectArrowsFromExpr(i.Condition);
@@ -796,7 +808,8 @@ public class ILCompiler
         }
 
         // Define static methods first (so we can reference them in the static constructor)
-        foreach (var method in classStmt.Methods)
+        // Skip overload signatures (no body)
+        foreach (var method in classStmt.Methods.Where(m => m.Body != null))
         {
             if (method.IsStatic && method.Name.Lexeme != "constructor")
             {
@@ -810,8 +823,8 @@ public class ILCompiler
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
 
-        // Emit method bodies
-        foreach (var method in classStmt.Methods)
+        // Emit method bodies (skip overload signatures with no body)
+        foreach (var method in classStmt.Methods.Where(m => m.Body != null))
         {
             if (method.Name.Lexeme != "constructor")
             {
@@ -1084,7 +1097,8 @@ public class ILCompiler
 
     private void EmitConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, FieldInfo fieldsField)
     {
-        var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor");
+        // Find constructor implementation (with body), not overload signatures
+        var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
         var paramTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray() ?? [];
 
         var ctorBuilder = typeBuilder.DefineConstructor(

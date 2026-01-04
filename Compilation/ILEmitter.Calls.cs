@@ -1343,11 +1343,20 @@ public partial class ILEmitter
                 targetCtor = TypeBuilder.GetConstructor(targetType, ctorBuilder);
             }
 
+            // Get expected parameter count from constructor definition
+            int expectedParamCount = ctorBuilder.GetParameters().Length;
+
             // Emit arguments directly onto the stack (all typed as object)
             foreach (var arg in n.Arguments)
             {
                 EmitExpression(arg);
                 EmitBoxIfNeeded(arg);
+            }
+
+            // Pad missing optional arguments with null
+            for (int i = n.Arguments.Count; i < expectedParamCount; i++)
+            {
+                IL.Emit(OpCodes.Ldnull);
             }
 
             // Call the constructor directly using newobj
@@ -1631,16 +1640,25 @@ public partial class ILEmitter
         if (!_ctx.Classes.TryGetValue(className, out var classType))
             return false;
 
+        // Get expected parameter count from method definition
+        int expectedParamCount = methodBuilder.GetParameters().Length;
+
         // Emit: ((ClassName)receiver).method(args)
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
         IL.Emit(OpCodes.Castclass, classType);
 
-        // Emit all arguments
+        // Emit all provided arguments
         foreach (var arg in arguments)
         {
             EmitExpression(arg);
             EmitBoxIfNeeded(arg);
+        }
+
+        // Pad missing optional arguments with null
+        for (int i = arguments.Count; i < expectedParamCount; i++)
+        {
+            IL.Emit(OpCodes.Ldnull);
         }
 
         // Emit the virtual call

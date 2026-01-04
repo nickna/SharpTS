@@ -81,7 +81,11 @@ public class DeadCodeAnalyzer
 
             case Stmt.Class classStmt:
                 foreach (var method in classStmt.Methods)
-                    AnalyzeBlock(method.Body);
+                {
+                    // Skip overload signatures (no body)
+                    if (method.Body != null)
+                        AnalyzeBlock(method.Body);
+                }
                 if (classStmt.Accessors != null)
                 {
                     foreach (var accessor in classStmt.Accessors)
@@ -90,7 +94,9 @@ public class DeadCodeAnalyzer
                 break;
 
             case Stmt.Function funcStmt:
-                AnalyzeBlock(funcStmt.Body);
+                // Skip overload signatures (no body)
+                if (funcStmt.Body != null)
+                    AnalyzeBlock(funcStmt.Body);
                 break;
 
             case Stmt.Expression exprStmt:

@@ -29,6 +29,9 @@ public class TypeChecker
     private int _loopDepth = 0;
     private int _switchDepth = 0;
 
+    // Track pending overload signatures for top-level functions
+    private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
+
     /// <summary>
     /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.
     /// </summary>
@@ -206,8 +209,8 @@ public class TypeChecker
                 TypeEnvironment savedEnvForClass = _environment;
                 _environment = classTypeEnv;
 
-                Dictionary<string, TypeInfo.Function> declaredMethods = [];
-                Dictionary<string, TypeInfo.Function> declaredStaticMethods = [];
+                Dictionary<string, TypeInfo> declaredMethods = [];
+                Dictionary<string, TypeInfo> declaredStaticMethods = [];
                 Dictionary<string, TypeInfo> declaredStaticProperties = [];
                 Dictionary<string, AccessModifier> methodAccess = [];
                 Dictionary<string, AccessModifier> fieldAccess = [];
@@ -216,8 +219,8 @@ public class TypeChecker
                 HashSet<string> abstractGetters = [];
                 HashSet<string> abstractSetters = [];
 
-                // First pass: collect signatures
-                foreach (var method in classStmt.Methods)
+                // Helper to build a TypeInfo.Function from a method declaration
+                TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
                 {
                     List<TypeInfo> methodParamTypes = [];
                     TypeInfo methodReturnType = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Void();
@@ -229,14 +232,9 @@ public class TypeChecker
                     {
                         methodParamTypes.Add(param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any());
 
-                        // Rest parameters are not counted toward required params
-                        if (param.IsRest)
-                        {
-                            // Rest param is always optional
-                            continue;
-                        }
+                        if (param.IsRest) continue;
 
-                        if (param.DefaultValue != null)
+                        if (param.DefaultValue != null || param.IsOptional)
                         {
                             methodSeenDefault = true;
                         }
@@ -250,21 +248,94 @@ public class TypeChecker
                         }
                     }
 
-                    string methodName = method.Name.Lexeme;
                     bool methodHasRest = method.Parameters.Any(p => p.IsRest);
-                    var methodFuncType = new TypeInfo.Function(methodParamTypes, methodReturnType, methodRequiredParams, methodHasRest);
+                    return new TypeInfo.Function(methodParamTypes, methodReturnType, methodRequiredParams, methodHasRest);
+                }
 
-                    if (method.IsStatic)
-                        declaredStaticMethods[methodName] = methodFuncType;
-                    else
-                        declaredMethods[methodName] = methodFuncType;
+                // First pass: collect signatures, grouping overloads
+                // Group methods by name to detect overloads
+                var methodGroups = classStmt.Methods.GroupBy(m => m.Name.Lexeme).ToList();
 
-                    methodAccess[methodName] = method.Access;
+                foreach (var group in methodGroups)
+                {
+                    string methodName = group.Key;
+                    var methods = group.ToList();
 
-                    // Track abstract methods
-                    if (method.IsAbstract)
+                    // Separate overload signatures (null body) from implementations
+                    var signatures = methods.Where(m => m.Body == null && !m.IsAbstract).ToList();
+                    var implementations = methods.Where(m => m.Body != null).ToList();
+                    var abstractDecls = methods.Where(m => m.IsAbstract).ToList();
+
+                    // Handle abstract methods (no body, but marked abstract)
+                    if (abstractDecls.Count > 0)
                     {
+                        if (abstractDecls.Count > 1)
+                        {
+                            throw new Exception($"Type Error: Cannot have multiple abstract declarations for method '{methodName}'.");
+                        }
+                        var abstractMethod = abstractDecls[0];
+                        var funcType = BuildMethodFuncType(abstractMethod);
+
+                        if (abstractMethod.IsStatic)
+                            declaredStaticMethods[methodName] = funcType;
+                        else
+                            declaredMethods[methodName] = funcType;
+
+                        methodAccess[methodName] = abstractMethod.Access;
                         abstractMethods.Add(methodName);
+                        continue;
+                    }
+
+                    // Handle overloaded methods
+                    if (signatures.Count > 0)
+                    {
+                        if (implementations.Count == 0)
+                        {
+                            throw new Exception($"Type Error: Overloaded method '{methodName}' has no implementation.");
+                        }
+                        if (implementations.Count > 1)
+                        {
+                            throw new Exception($"Type Error: Overloaded method '{methodName}' has multiple implementations.");
+                        }
+
+                        var implementation = implementations[0];
+                        var signatureTypes = signatures.Select(BuildMethodFuncType).ToList();
+                        var implType = BuildMethodFuncType(implementation);
+
+                        // Validate implementation is compatible with all signatures
+                        foreach (var sig in signatureTypes)
+                        {
+                            if (implType.MinArity > sig.MinArity)
+                            {
+                                throw new Exception($"Type Error: Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                            }
+                        }
+
+                        var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+
+                        if (implementation.IsStatic)
+                            declaredStaticMethods[methodName] = overloadedFunc;
+                        else
+                            declaredMethods[methodName] = overloadedFunc;
+
+                        methodAccess[methodName] = implementation.Access;
+                    }
+                    else if (implementations.Count == 1)
+                    {
+                        // Single non-overloaded method
+                        var method = implementations[0];
+                        var funcType = BuildMethodFuncType(method);
+
+                        if (method.IsStatic)
+                            declaredStaticMethods[methodName] = funcType;
+                        else
+                            declaredMethods[methodName] = funcType;
+
+                        methodAccess[methodName] = method.Access;
+                    }
+                    else if (implementations.Count > 1)
+                    {
+                        throw new Exception($"Type Error: Multiple implementations of method '{methodName}' without overload signatures.");
                     }
                 }
 
@@ -440,7 +511,8 @@ public class TypeChecker
 
                 try
                 {
-                    foreach (var method in classStmt.Methods)
+                    // Only check methods that have bodies (skip overload signatures)
+                    foreach (var method in classStmt.Methods.Where(m => m.Body != null))
                     {
                         // For static methods, use a different environment without this/super
                         TypeEnvironment methodEnv;
@@ -453,9 +525,18 @@ public class TypeChecker
                             methodEnv = new TypeEnvironment(_environment);
                         }
 
-                        var methodType = method.IsStatic
+                        // Get the method type (could be Function or OverloadedFunction)
+                        var declaredMethodType = method.IsStatic
                             ? declaredStaticMethods[method.Name.Lexeme]
                             : declaredMethods[method.Name.Lexeme];
+
+                        // Get the actual function type (implementation for overloads)
+                        TypeInfo.Function methodType = declaredMethodType switch
+                        {
+                            TypeInfo.OverloadedFunction of => of.Implementation,
+                            TypeInfo.Function f => f,
+                            _ => throw new Exception($"Type Error: Unexpected method type for '{method.Name.Lexeme}'.")
+                        };
 
                         for (int i = 0; i < method.Parameters.Count; i++)
                         {
@@ -567,104 +648,7 @@ public class TypeChecker
                 break;
                 
             case Stmt.Function funcStmt:
-                // Create environment for checking function body
-                TypeEnvironment funcEnv = new(_environment);
-
-                // Handle generic type parameters
-                List<TypeInfo.TypeParameter>? typeParams = null;
-                if (funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0)
-                {
-                    typeParams = [];
-                    foreach (var tp in funcStmt.TypeParams)
-                    {
-                        TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                        var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
-                        typeParams.Add(typeParam);
-                        funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
-                    }
-                }
-
-                // Now parse parameter types and return type in the context that includes type parameters
-                TypeEnvironment previousEnvForParsing = _environment;
-                _environment = funcEnv;
-
-                List<TypeInfo> paramTypes = [];
-                int requiredParams = 0;
-                bool seenDefault = false;
-                TypeInfo returnType = funcStmt.ReturnType != null
-                    ? ToTypeInfo(funcStmt.ReturnType)
-                    : new TypeInfo.Void();
-
-                foreach (var param in funcStmt.Parameters)
-                {
-                    TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
-                    paramTypes.Add(paramType);
-
-                    // Rest parameters are not counted toward required params
-                    if (param.IsRest)
-                    {
-                        continue;
-                    }
-
-                    if (param.DefaultValue != null)
-                    {
-                        seenDefault = true;
-                        TypeInfo defaultType = CheckExpr(param.DefaultValue);
-                        if (!IsCompatible(paramType, defaultType))
-                        {
-                            throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
-                        }
-                    }
-                    else
-                    {
-                        if (seenDefault)
-                        {
-                            throw new Exception($"Type Error: Required parameter cannot follow optional parameter.");
-                        }
-                        requiredParams++;
-                    }
-                }
-
-                _environment = previousEnvForParsing;
-
-                bool hasRest = funcStmt.Parameters.Any(p => p.IsRest);
-
-                // Create GenericFunction or regular Function type
-                TypeInfo funcType;
-                if (typeParams != null && typeParams.Count > 0)
-                {
-                    funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest);
-                }
-                else
-                {
-                    funcType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
-                }
-                _environment.Define(funcStmt.Name.Lexeme, funcType);
-
-                // Add parameters to function environment
-                for (int i = 0; i < funcStmt.Parameters.Count; i++)
-                {
-                    funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
-                }
-
-                TypeEnvironment previousEnv = _environment;
-                TypeInfo? previousReturn = _currentFunctionReturnType;
-
-                _environment = funcEnv;
-                _currentFunctionReturnType = returnType;
-
-                try
-                {
-                    foreach (var bodyStmt in funcStmt.Body)
-                    {
-                        CheckStmt(bodyStmt);
-                    }
-                }
-                finally
-                {
-                    _environment = previousEnv;
-                    _currentFunctionReturnType = previousReturn;
-                }
+                CheckFunctionDeclaration(funcStmt);
                 break;
 
             case Stmt.Return returnStmt:
@@ -846,6 +830,152 @@ public class TypeChecker
             case Stmt.Print printStmt:
                 CheckExpr(printStmt.Expr);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Handle function declarations including overloaded functions.
+    /// </summary>
+    private void CheckFunctionDeclaration(Stmt.Function funcStmt)
+    {
+        string funcName = funcStmt.Name.Lexeme;
+
+        // Build the function type for this declaration
+        TypeEnvironment funcEnv = new(_environment);
+
+        // Handle generic type parameters
+        List<TypeInfo.TypeParameter>? typeParams = null;
+        if (funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0)
+        {
+            typeParams = [];
+            foreach (var tp in funcStmt.TypeParams)
+            {
+                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                typeParams.Add(typeParam);
+                funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+        }
+
+        // Parse parameter types and return type
+        TypeEnvironment previousEnvForParsing = _environment;
+        _environment = funcEnv;
+
+        List<TypeInfo> paramTypes = [];
+        int requiredParams = 0;
+        bool seenDefault = false;
+        TypeInfo returnType = funcStmt.ReturnType != null
+            ? ToTypeInfo(funcStmt.ReturnType)
+            : new TypeInfo.Void();
+
+        foreach (var param in funcStmt.Parameters)
+        {
+            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
+            paramTypes.Add(paramType);
+
+            if (param.IsRest) continue;
+
+            // A parameter is optional if it has a default value OR is marked with ?
+            bool isOptional = param.DefaultValue != null || param.IsOptional;
+
+            if (param.DefaultValue != null)
+            {
+                seenDefault = true;
+                TypeInfo defaultType = CheckExpr(param.DefaultValue);
+                if (!IsCompatible(paramType, defaultType))
+                {
+                    throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
+                }
+            }
+            else if (param.IsOptional)
+            {
+                seenDefault = true; // Optional parameters are like having a default
+            }
+            else
+            {
+                if (seenDefault)
+                {
+                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter.");
+                }
+                requiredParams++;
+            }
+        }
+
+        _environment = previousEnvForParsing;
+
+        bool hasRest = funcStmt.Parameters.Any(p => p.IsRest);
+        var thisFuncType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+
+        // Check if this is an overload signature (no body)
+        if (funcStmt.Body == null)
+        {
+            // This is an overload signature - save for later
+            if (!_pendingOverloadSignatures.TryGetValue(funcName, out var signatures))
+            {
+                signatures = [];
+                _pendingOverloadSignatures[funcName] = signatures;
+            }
+            signatures.Add(thisFuncType);
+            return;
+        }
+
+        // This is an implementation (has a body)
+        TypeInfo funcType;
+
+        // Check if there are pending overload signatures for this function
+        if (_pendingOverloadSignatures.TryGetValue(funcName, out var pendingSignatures))
+        {
+            // Validate implementation is compatible with all signatures
+            foreach (var sig in pendingSignatures)
+            {
+                if (thisFuncType.MinArity > sig.MinArity)
+                {
+                    throw new Exception($"Type Error: Implementation of '{funcName}' requires {thisFuncType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                }
+            }
+
+            // Create overloaded function type
+            funcType = new TypeInfo.OverloadedFunction(pendingSignatures, thisFuncType);
+
+            // Clear pending signatures
+            _pendingOverloadSignatures.Remove(funcName);
+        }
+        else if (typeParams != null && typeParams.Count > 0)
+        {
+            // Generic function (no overloads)
+            funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest);
+        }
+        else
+        {
+            // Regular function (no overloads)
+            funcType = thisFuncType;
+        }
+
+        _environment.Define(funcName, funcType);
+
+        // Add parameters to function environment and check body
+        for (int i = 0; i < funcStmt.Parameters.Count; i++)
+        {
+            funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
+        }
+
+        TypeEnvironment previousEnv = _environment;
+        TypeInfo? previousReturn = _currentFunctionReturnType;
+
+        _environment = funcEnv;
+        _currentFunctionReturnType = returnType;
+
+        try
+        {
+            foreach (var bodyStmt in funcStmt.Body)
+            {
+                CheckStmt(bodyStmt);
+            }
+        }
+        finally
+        {
+            _environment = previousEnv;
+            _currentFunctionReturnType = previousReturn;
         }
     }
 
@@ -1438,25 +1568,48 @@ public class TypeChecker
                 subs[genericClass.TypeParams[i].Name] = typeArgs[i];
 
             // Check constructor with substituted parameter types
-            if (genericClass.Methods.TryGetValue("constructor", out var ctorType))
+            if (genericClass.Methods.TryGetValue("constructor", out var ctorTypeInfo))
             {
-                var substitutedParamTypes = ctorType.ParamTypes.Select(p => Substitute(p, subs)).ToList();
-
-                if (newExpr.Arguments.Count < ctorType.MinArity)
+                // Handle both Function and OverloadedFunction for constructor
+                if (ctorTypeInfo is TypeInfo.OverloadedFunction overloadedCtor)
                 {
-                    throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
-                }
-                if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
-                {
-                    throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
-                }
-
-                for (int i = 0; i < newExpr.Arguments.Count; i++)
-                {
-                    TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
-                    if (!IsCompatible(substitutedParamTypes[i], argType))
+                    // Resolve overloaded constructor call
+                    List<TypeInfo> argTypes = newExpr.Arguments.Select(CheckExpr).ToList();
+                    bool matched = false;
+                    foreach (var sig in overloadedCtor.Signatures)
                     {
-                        throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{substitutedParamTypes[i]}' but got '{argType}'.");
+                        var substitutedParamTypes = sig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+                        if (TryMatchConstructorArgs(argTypes, substitutedParamTypes, sig.MinArity, sig.HasRestParam))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched)
+                    {
+                        throw new Exception($"Type Error: No constructor overload matches the call for '{newExpr.ClassName.Lexeme}'.");
+                    }
+                }
+                else if (ctorTypeInfo is TypeInfo.Function ctorType)
+                {
+                    var substitutedParamTypes = ctorType.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+
+                    if (newExpr.Arguments.Count < ctorType.MinArity)
+                    {
+                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                    }
+                    if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
+                    {
+                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                    }
+
+                    for (int i = 0; i < newExpr.Arguments.Count; i++)
+                    {
+                        TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
+                        if (!IsCompatible(substitutedParamTypes[i], argType))
+                        {
+                            throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{substitutedParamTypes[i]}' but got '{argType}'.");
+                        }
                     }
                 }
             }
@@ -1470,24 +1623,46 @@ public class TypeChecker
 
         if (type is TypeInfo.Class classType)
         {
-            if (classType.Methods.TryGetValue("constructor", out var ctorType))
+            if (classType.Methods.TryGetValue("constructor", out var ctorTypeInfo))
             {
-                // Use MinArity to allow optional parameters
-                if (newExpr.Arguments.Count < ctorType.MinArity)
+                // Handle both Function and OverloadedFunction for constructor
+                if (ctorTypeInfo is TypeInfo.OverloadedFunction overloadedCtor)
                 {
-                    throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
-                }
-                if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
-                {
-                    throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
-                }
-
-                for (int i = 0; i < newExpr.Arguments.Count; i++)
-                {
-                    TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
-                    if (!IsCompatible(ctorType.ParamTypes[i], argType))
+                    // Resolve overloaded constructor call
+                    List<TypeInfo> argTypes = newExpr.Arguments.Select(CheckExpr).ToList();
+                    bool matched = false;
+                    foreach (var sig in overloadedCtor.Signatures)
                     {
-                        throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{ctorType.ParamTypes[i]}' but got '{argType}'.");
+                        if (TryMatchConstructorArgs(argTypes, sig.ParamTypes, sig.MinArity, sig.HasRestParam))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched)
+                    {
+                        throw new Exception($"Type Error: No constructor overload matches the call for '{newExpr.ClassName.Lexeme}'.");
+                    }
+                }
+                else if (ctorTypeInfo is TypeInfo.Function ctorType)
+                {
+                    // Use MinArity to allow optional parameters
+                    if (newExpr.Arguments.Count < ctorType.MinArity)
+                    {
+                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                    }
+                    if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
+                    {
+                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                    }
+
+                    for (int i = 0; i < newExpr.Arguments.Count; i++)
+                    {
+                        TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
+                        if (!IsCompatible(ctorType.ParamTypes[i], argType))
+                        {
+                            throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{ctorType.ParamTypes[i]}' but got '{argType}'.");
+                        }
                     }
                 }
             }
@@ -1583,9 +1758,29 @@ public class TypeChecker
                 if (gc.Methods.TryGetValue(memberName, out var methodType))
                 {
                     // Substitute type parameters in method signature
-                    var substitutedParams = methodType.ParamTypes.Select(p => Substitute(p, subs)).ToList();
-                    var substitutedReturn = Substitute(methodType.ReturnType, subs);
-                    return new TypeInfo.Function(substitutedParams, substitutedReturn, methodType.RequiredParams, methodType.HasRestParam);
+                    if (methodType is TypeInfo.Function funcType)
+                    {
+                        var substitutedParams = funcType.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+                        var substitutedReturn = Substitute(funcType.ReturnType, subs);
+                        return new TypeInfo.Function(substitutedParams, substitutedReturn, funcType.RequiredParams, funcType.HasRestParam);
+                    }
+                    else if (methodType is TypeInfo.OverloadedFunction overloadedFunc)
+                    {
+                        // Substitute type parameters in all overload signatures
+                        var substitutedSignatures = overloadedFunc.Signatures.Select(sig =>
+                        {
+                            var substitutedParams = sig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+                            var substitutedReturn = Substitute(sig.ReturnType, subs);
+                            return new TypeInfo.Function(substitutedParams, substitutedReturn, sig.RequiredParams, sig.HasRestParam);
+                        }).ToList();
+                        var substitutedImpl = new TypeInfo.Function(
+                            overloadedFunc.Implementation.ParamTypes.Select(p => Substitute(p, subs)).ToList(),
+                            Substitute(overloadedFunc.Implementation.ReturnType, subs),
+                            overloadedFunc.Implementation.RequiredParams,
+                            overloadedFunc.Implementation.HasRestParam);
+                        return new TypeInfo.OverloadedFunction(substitutedSignatures, substitutedImpl);
+                    }
+                    return methodType; // Fallback - shouldn't happen
                 }
 
                 // Check superclass if any
@@ -1956,6 +2151,12 @@ public class TypeChecker
             return new TypeInfo.Any();
         }
 
+        // Handle overloaded function calls
+        if (calleeType is TypeInfo.OverloadedFunction overloadedFunc)
+        {
+            return ResolveOverloadedCall(call, overloadedFunc);
+        }
+
         if (calleeType is TypeInfo.Function funcType)
         {
             // Count non-spread arguments and check for spreads
@@ -2049,6 +2250,229 @@ public class TypeChecker
         }
 
         throw new Exception($"Type Error: Can only call functions.");
+    }
+
+    /// <summary>
+    /// Extracts the callable function type from a TypeInfo that could be Function or OverloadedFunction.
+    /// For OverloadedFunction, returns the implementation's type.
+    /// </summary>
+    private TypeInfo.Function? GetCallableFunction(TypeInfo? methodType)
+    {
+        return methodType switch
+        {
+            TypeInfo.Function f => f,
+            TypeInfo.OverloadedFunction of => of.Implementation,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Checks if constructor arguments match a constructor signature.
+    /// </summary>
+    private bool TryMatchConstructorArgs(List<TypeInfo> argTypes, List<TypeInfo> paramTypes, int minArity, bool hasRestParam)
+    {
+        if (argTypes.Count < minArity)
+            return false;
+        if (!hasRestParam && argTypes.Count > paramTypes.Count)
+            return false;
+
+        int regularParamCount = hasRestParam ? paramTypes.Count - 1 : paramTypes.Count;
+
+        for (int i = 0; i < argTypes.Count && i < regularParamCount; i++)
+        {
+            if (!IsCompatible(paramTypes[i], argTypes[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolve an overloaded function call by finding the best matching signature.
+    /// </summary>
+    private TypeInfo ResolveOverloadedCall(Expr.Call call, TypeInfo.OverloadedFunction overloadedFunc)
+    {
+        // Collect argument types
+        List<TypeInfo> argTypes = [];
+        foreach (var arg in call.Arguments)
+        {
+            if (arg is Expr.Spread spread)
+            {
+                argTypes.Add(CheckExpr(spread.Expression));
+            }
+            else
+            {
+                argTypes.Add(CheckExpr(arg));
+            }
+        }
+
+        // Find matching signatures
+        List<TypeInfo.Function> matchingSignatures = [];
+
+        foreach (var signature in overloadedFunc.Signatures)
+        {
+            if (TryMatchSignature(signature, argTypes))
+            {
+                matchingSignatures.Add(signature);
+            }
+        }
+
+        if (matchingSignatures.Count == 0)
+        {
+            string argTypesStr = string.Join(", ", argTypes);
+            throw new Exception($"Type Error: No overload matches call with arguments ({argTypesStr}).");
+        }
+
+        // If multiple signatures match, select the most specific one
+        TypeInfo.Function bestMatch = SelectMostSpecificOverload(matchingSignatures, argTypes);
+
+        return bestMatch.ReturnType;
+    }
+
+    /// <summary>
+    /// Check if a signature matches the given argument types.
+    /// </summary>
+    private bool TryMatchSignature(TypeInfo.Function signature, List<TypeInfo> argTypes)
+    {
+        // Check argument count
+        if (argTypes.Count < signature.MinArity)
+            return false;
+
+        if (!signature.HasRestParam && argTypes.Count > signature.ParamTypes.Count)
+            return false;
+
+        // Check each argument type
+        int regularParamCount = signature.HasRestParam ? signature.ParamTypes.Count - 1 : signature.ParamTypes.Count;
+
+        for (int i = 0; i < argTypes.Count; i++)
+        {
+            TypeInfo expectedType;
+            if (i < regularParamCount)
+            {
+                expectedType = signature.ParamTypes[i];
+            }
+            else if (signature.HasRestParam && signature.ParamTypes.Count > 0)
+            {
+                // Rest parameter - check against element type
+                var restType = signature.ParamTypes[^1];
+                if (restType is TypeInfo.Array arrType)
+                {
+                    expectedType = arrType.ElementType;
+                }
+                else
+                {
+                    expectedType = new TypeInfo.Any();
+                }
+            }
+            else
+            {
+                break; // No more parameters to check
+            }
+
+            if (!IsCompatible(expectedType, argTypes[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Select the most specific signature from a list of matching signatures.
+    /// Uses "most specific match" rules: prefer more specific types over general ones.
+    /// </summary>
+    private TypeInfo.Function SelectMostSpecificOverload(List<TypeInfo.Function> candidates, List<TypeInfo> argTypes)
+    {
+        if (candidates.Count == 1)
+            return candidates[0];
+
+        TypeInfo.Function mostSpecific = candidates[0];
+
+        for (int i = 1; i < candidates.Count; i++)
+        {
+            int comparison = CompareSpecificity(mostSpecific, candidates[i], argTypes);
+            if (comparison < 0)
+            {
+                // candidates[i] is more specific
+                mostSpecific = candidates[i];
+            }
+            // If comparison == 0 (equally specific), keep the first one (declaration order)
+        }
+
+        return mostSpecific;
+    }
+
+    /// <summary>
+    /// Compare two signatures for specificity.
+    /// Returns: &gt;0 if sig1 is more specific, &lt;0 if sig2 is more specific, 0 if equally specific.
+    /// </summary>
+    private int CompareSpecificity(TypeInfo.Function sig1, TypeInfo.Function sig2, List<TypeInfo> argTypes)
+    {
+        int score = 0;
+        int paramCount = Math.Min(Math.Min(sig1.ParamTypes.Count, sig2.ParamTypes.Count), argTypes.Count);
+
+        for (int i = 0; i < paramCount; i++)
+        {
+            var p1 = sig1.ParamTypes[i];
+            var p2 = sig2.ParamTypes[i];
+
+            if (IsMoreSpecific(p1, p2))
+                score++;
+            else if (IsMoreSpecific(p2, p1))
+                score--;
+        }
+
+        return score;
+    }
+
+    /// <summary>
+    /// Returns true if 'specific' is a more specific type than 'general'.
+    /// Specificity rules:
+    /// - Literal types are more specific than primitives
+    /// - Primitives are more specific than unions containing them
+    /// - Derived classes are more specific than base classes
+    /// - Non-nullable types are more specific than nullable types
+    /// </summary>
+    private bool IsMoreSpecific(TypeInfo specific, TypeInfo general)
+    {
+        // Literal type > Primitive type
+        if (specific is TypeInfo.StringLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+            return true;
+        if (specific is TypeInfo.NumberLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER })
+            return true;
+        if (specific is TypeInfo.BooleanLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN })
+            return true;
+
+        // Primitive > Union containing it
+        if (general is TypeInfo.Union union)
+        {
+            if (specific is TypeInfo.Primitive || specific is TypeInfo.StringLiteral ||
+                specific is TypeInfo.NumberLiteral || specific is TypeInfo.BooleanLiteral)
+            {
+                // Check if the specific type is one of the union members
+                if (union.FlattenedTypes.Any(t => IsCompatible(t, specific)))
+                    return true;
+            }
+        }
+
+        // Non-nullable > Nullable (union with null)
+        if (general is TypeInfo.Union nullableUnion && nullableUnion.ContainsNull)
+        {
+            if (specific is not TypeInfo.Null && specific is not TypeInfo.Union)
+                return true;
+        }
+
+        // Derived class > Base class
+        if (specific is TypeInfo.Instance i1 && general is TypeInfo.Instance i2)
+        {
+            if (i1.ClassType is TypeInfo.Class specificClass && i2.ClassType is TypeInfo.Class generalClass)
+            {
+                return IsSubclassOf(specificClass, generalClass);
+            }
+        }
+
+        return false;
     }
 
     private TypeInfo CheckBinary(Expr.Binary binary)
@@ -2256,6 +2680,10 @@ public class TypeChecker
                 {
                     throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
                 }
+            }
+            else if (param.IsOptional)
+            {
+                seenDefault = true; // Optional parameters are like having a default
             }
             else
             {

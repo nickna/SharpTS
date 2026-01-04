@@ -1077,7 +1077,7 @@ public class Parser(List<Token> tokens)
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, parameters, [], returnType, isStatic, access, IsAbstract: true);
+                    var func = new Stmt.Function(methodName, typeParams2, parameters, null, returnType, isStatic, access, IsAbstract: true);
                     methods.Add(func);
                 }
                 else
@@ -1213,6 +1213,10 @@ public class Parser(List<Token> tokens)
                     }
 
                     Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+
+                    // Check for optional parameter marker (?)
+                    bool isOptional = Match(TokenType.QUESTION);
+
                     string? paramType = null;
                     if (Match(TokenType.COLON))
                     {
@@ -1223,7 +1227,7 @@ public class Parser(List<Token> tokens)
                     {
                         defaultValue = Expression();
                     }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly));
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))
@@ -1239,6 +1243,13 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.COLON))
         {
             returnType = ParseTypeAnnotation();
+        }
+
+        // Check for overload signature (semicolon instead of body)
+        if (Match(TokenType.SEMICOLON))
+        {
+            // Overload signature - no body, just declaration
+            return new Stmt.Function(name, typeParams, parameters, null, returnType);
         }
 
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");

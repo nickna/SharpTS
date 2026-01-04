@@ -34,11 +34,24 @@ public abstract record TypeInfo
             $"({string.Join(", ", ParamTypes)}) => {ReturnType}";
     }
 
+    /// <summary>
+    /// Represents an overloaded function with multiple callable signatures and a single implementation.
+    /// TypeScript-style overloading: multiple signatures (compile-time) with one implementation (runtime).
+    /// </summary>
+    public record OverloadedFunction(
+        List<TypeInfo.Function> Signatures,   // Callable overload signatures for type checking
+        TypeInfo.Function Implementation      // The actual implementation's signature
+    ) : TypeInfo
+    {
+        public override string ToString() =>
+            $"overloaded ({Signatures.Count} signatures) => {Implementation.ReturnType}";
+    }
+
     public record Class(
         string Name,
         TypeInfo.Class? Superclass,
-        Dictionary<string, TypeInfo.Function> Methods,
-        Dictionary<string, TypeInfo.Function> StaticMethods,
+        Dictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
+        Dictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
         Dictionary<string, TypeInfo> StaticProperties,
         Dictionary<string, AccessModifier>? MethodAccess = null,
         Dictionary<string, AccessModifier>? FieldAccess = null,
@@ -269,8 +282,8 @@ public abstract record TypeInfo
         string Name,
         List<TypeParameter> TypeParams,
         TypeInfo.Class? Superclass,
-        Dictionary<string, TypeInfo.Function> Methods,
-        Dictionary<string, TypeInfo.Function> StaticMethods,
+        Dictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
+        Dictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
         Dictionary<string, TypeInfo> StaticProperties,
         Dictionary<string, AccessModifier>? MethodAccess = null,
         Dictionary<string, AccessModifier>? FieldAccess = null,

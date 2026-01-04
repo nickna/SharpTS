@@ -160,6 +160,8 @@ public partial class Interpreter
                 _environment.Define(varStmt.Name.Lexeme, value);
                 break;
             case Stmt.Function functionStmt:
+                // Skip overload signatures (no body) - they're type-checking only
+                if (functionStmt.Body == null) break;
                 SharpTSFunction function = new(functionStmt, _environment);
                 _environment.Define(functionStmt.Name.Lexeme, function);
                 break;
@@ -198,8 +200,8 @@ public partial class Interpreter
                     }
                 }
 
-                // Separate static and instance methods
-                foreach (Stmt.Function method in classStmt.Methods)
+                // Separate static and instance methods (skip overload signatures with no body)
+                foreach (Stmt.Function method in classStmt.Methods.Where(m => m.Body != null))
                 {
                     SharpTSFunction func = new(method, _environment);
                     if (method.IsStatic)

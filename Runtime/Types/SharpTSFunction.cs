@@ -35,7 +35,7 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
     private readonly Stmt.Function _declaration = declaration;
     private readonly RuntimeEnvironment _closure = closure;
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest);
+    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -70,6 +70,11 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
                 {
                     interpreter.SetEnvironment(previous);
                 }
+            }
+            else if (param.IsOptional)
+            {
+                // Optional parameter with no argument and no default - use null
+                value = null;
             }
             else
             {
@@ -115,7 +120,7 @@ public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnviron
     private readonly Expr.ArrowFunction _declaration = declaration;
     private readonly RuntimeEnvironment _closure = closure;
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest);
+    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -150,6 +155,11 @@ public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnviron
                 {
                     interpreter.SetEnvironment(previous);
                 }
+            }
+            else if (param.IsOptional)
+            {
+                // Optional parameter with no argument and no default - use null
+                value = null;
             }
             else
             {

@@ -74,14 +74,18 @@ public class ClosureAnalyzer
 
             case Stmt.Function f:
                 DeclareVariable(f.Name.Lexeme);
-                AnalyzeFunction(f, f.Parameters, f.Body);
+                // Skip overload signatures (no body)
+                if (f.Body != null)
+                    AnalyzeFunction(f, f.Parameters, f.Body);
                 break;
 
             case Stmt.Class c:
                 DeclareVariable(c.Name.Lexeme);
                 foreach (var method in c.Methods)
                 {
-                    AnalyzeFunction(method, method.Parameters, method.Body);
+                    // Skip overload signatures (no body)
+                    if (method.Body != null)
+                        AnalyzeFunction(method, method.Parameters, method.Body);
                 }
                 break;
 
