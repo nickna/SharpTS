@@ -1077,9 +1077,13 @@ public class ILCompiler
         // Emit default parameter checks (static method)
         emitter.EmitDefaultParameters(method.Parameters, false);
 
-        foreach (var stmt in method.Body)
+        // Abstract methods have no body to emit
+        if (method.Body != null)
         {
-            emitter.EmitStatement(stmt);
+            foreach (var stmt in method.Body)
+            {
+                emitter.EmitStatement(stmt);
+            }
         }
 
         // Finalize any deferred returns from exception blocks
@@ -1185,9 +1189,12 @@ public class ILCompiler
             // Emit default parameter checks (instance method)
             emitter.EmitDefaultParameters(constructor.Parameters, true);
 
-            foreach (var stmt in constructor.Body)
+            if (constructor.Body != null)
             {
-                emitter.EmitStatement(stmt);
+                foreach (var stmt in constructor.Body)
+                {
+                    emitter.EmitStatement(stmt);
+                }
             }
         }
 
@@ -1273,9 +1280,13 @@ public class ILCompiler
         // Emit default parameter checks (instance method)
         emitter.EmitDefaultParameters(method.Parameters, true);
 
-        foreach (var stmt in method.Body)
+        // Abstract methods have no body to emit
+        if (method.Body != null)
         {
-            emitter.EmitStatement(stmt);
+            foreach (var stmt in method.Body)
+            {
+                emitter.EmitStatement(stmt);
+            }
         }
 
         // Finalize any deferred returns from exception blocks
@@ -1338,6 +1349,12 @@ public class ILCompiler
 
         // Emit default parameter checks (static function, not instance method)
         emitter.EmitDefaultParameters(funcStmt.Parameters, false);
+
+        // Top-level functions should always have a body
+        if (funcStmt.Body == null)
+        {
+            throw new InvalidOperationException($"Cannot compile function '{funcStmt.Name.Lexeme}' without a body.");
+        }
 
         foreach (var stmt in funcStmt.Body)
         {

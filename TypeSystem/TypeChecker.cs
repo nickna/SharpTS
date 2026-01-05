@@ -607,9 +607,13 @@ public class TypeChecker
 
                         try
                         {
-                            foreach (var bodyStmt in method.Body)
+                            // Abstract methods have no body to check
+                            if (method.Body != null)
                             {
-                                CheckStmt(bodyStmt);
+                                foreach (var bodyStmt in method.Body)
+                                {
+                                    CheckStmt(bodyStmt);
+                                }
                             }
                         }
                         finally

@@ -83,6 +83,11 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
             environment.Define(param.Name.Lexeme, value);
         }
 
+        if (_declaration.Body == null)
+        {
+            throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
+        }
+
         try
         {
             interpreter.ExecuteBlock(_declaration.Body, environment);
