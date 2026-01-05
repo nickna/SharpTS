@@ -249,38 +249,6 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 
 ---
 
-## Priority Recommendations
-
-### Tier 1: High-Impact, Common Features
-1. Modules (`import`/`export`)
-2. ~~Union Types~~ ✅
-3. ~~Generics~~ ✅
-4. ~~Async/Await~~ ✅
-5. ~~Destructuring~~ ✅
-
-### Tier 2: Medium-Impact, Useful Features
-6. ~~Access modifiers (`private`/`protected`)~~ ✅
-7. ~~Static members~~ ✅
-8. ~~Rest/Spread operators~~ ✅
-9. ~~Enums~~ ✅
-10. ~~Type aliases~~ ✅
-
-### Tier 3: Nice-to-Have
-11. ~~Getters/Setters~~ ✅
-12. ~~Abstract classes~~ ✅
-13. ~~`instanceof` operator~~ ✅
-14. ~~Bitwise operators~~ ✅
-15. ~~`for...in` loops~~ ✅
-
-### ~~Quick Wins~~ (Completed)
-All quick wins have been implemented:
-- ✅ Block comments (`/* */`)
-- ✅ Single-quoted strings
-- ✅ Strict equality (`===`/`!==`)
-- ✅ `do...while` loops
-- ✅ Exponentiation operator (`**`)
-- ✅ `in` operator
-
 ### Phase 1 Features (Completed)
 - ✅ Bitwise operators (`&`, `|`, `^`, `~`, `<<`, `>>`, `>>>`) with compound assignments
 - ✅ `instanceof` operator with inheritance support
