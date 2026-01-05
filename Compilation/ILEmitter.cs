@@ -160,11 +160,8 @@ public partial class ILEmitter
         {
             case Stmt.Expression e:
                 EmitExpression(e.Expr);
-                // Pop result if expression leaves a value on stack
-                if (!IsVoidExpression(e.Expr))
-                {
-                    IL.Emit(OpCodes.Pop);
-                }
+                // All expressions leave a value on the stack, so pop when used as a statement
+                IL.Emit(OpCodes.Pop);
                 break;
 
             case Stmt.Var v:
@@ -504,20 +501,9 @@ public partial class ILEmitter
         IL.MarkLabel(endLabel);
     }
 
-    private static bool IsNumericOp(TokenType op) =>
-        op is TokenType.MINUS or TokenType.STAR or TokenType.SLASH or TokenType.PERCENT;
-
     private static bool IsComparisonOp(TokenType op) =>
         op is TokenType.LESS or TokenType.GREATER or TokenType.LESS_EQUAL or TokenType.GREATER_EQUAL
             or TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL
             or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL_EQUAL;
 
-    private static bool IsVoidExpression(Expr expr)
-    {
-        // These expressions leave a value on the stack and should be popped
-        // when used as statements. So they're NOT void.
-        // Only Call expressions that don't return a value are void.
-        // For now, return false for most expressions to be safe.
-        return false;
-    }
 }
