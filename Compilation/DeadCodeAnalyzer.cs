@@ -114,6 +114,10 @@ public class DeadCodeAnalyzer
             case Stmt.TypeAlias:
             case Stmt.Enum:
                 break;
+
+            case Stmt.LabeledStatement labeledStmt:
+                AnalyzeStmt(labeledStmt.Statement);
+                break;
         }
     }
 
@@ -416,6 +420,12 @@ public class DeadCodeAnalyzer
                 var catchTerminates = tc.CatchBlock == null || tc.CatchBlock.Any(DefinitelyTerminates);
                 return tryTerminates && catchTerminates;
 
+            case Stmt.LabeledStatement labeled:
+                // A labeled statement does NOT terminate just because it contains a break/continue
+                // that targets this label - control continues after the labeled statement.
+                // Only consider it terminating if it has an unconditional return/throw.
+                return ContainsUnconditionalReturnOrThrow(labeled.Statement);
+
             default:
                 return false;
         }
@@ -441,6 +451,36 @@ public class DeadCodeAnalyzer
             case Stmt.If i:
                 return ContainsUnconditionalTerminator(i.ThenBranch) &&
                        (i.ElseBranch != null && ContainsUnconditionalTerminator(i.ElseBranch));
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Check if a statement contains an unconditional return or throw (ignoring break/continue).
+    /// Used for labeled statements where break/continue may exit the label but not terminate.
+    /// </summary>
+    private bool ContainsUnconditionalReturnOrThrow(Stmt stmt)
+    {
+        switch (stmt)
+        {
+            case Stmt.Throw:
+            case Stmt.Return:
+                return true;
+
+            case Stmt.Block b:
+                return b.Statements.Any(ContainsUnconditionalReturnOrThrow);
+
+            case Stmt.Sequence s:
+                return s.Statements.Any(ContainsUnconditionalReturnOrThrow);
+
+            case Stmt.If i:
+                return ContainsUnconditionalReturnOrThrow(i.ThenBranch) &&
+                       (i.ElseBranch != null && ContainsUnconditionalReturnOrThrow(i.ElseBranch));
+
+            case Stmt.LabeledStatement labeled:
+                return ContainsUnconditionalReturnOrThrow(labeled.Statement);
 
             default:
                 return false;

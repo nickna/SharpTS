@@ -135,8 +135,8 @@ public class CompilationContext
     // Parameter tracking (name -> arg index)
     private readonly Dictionary<string, int> _parameters = [];
 
-    // Loop control labels
-    public Stack<(Label BreakLabel, Label ContinueLabel)> LoopLabels { get; } = new();
+    // Loop control labels (with optional label name for labeled statements)
+    public Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> LoopLabels { get; } = new();
 
     // Exception block tracking for proper return handling
     public int ExceptionBlockDepth { get; set; } = 0;
@@ -171,9 +171,9 @@ public class CompilationContext
         _parameters.Clear();
     }
 
-    public void EnterLoop(Label breakLabel, Label continueLabel)
+    public void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)
     {
-        LoopLabels.Push((breakLabel, continueLabel));
+        LoopLabels.Push((breakLabel, continueLabel, labelName));
     }
 
     public void ExitLoop()
@@ -181,8 +181,21 @@ public class CompilationContext
         LoopLabels.Pop();
     }
 
-    public (Label BreakLabel, Label ContinueLabel)? CurrentLoop =>
+    public (Label BreakLabel, Label ContinueLabel, string? LabelName)? CurrentLoop =>
         LoopLabels.Count > 0 ? LoopLabels.Peek() : null;
+
+    /// <summary>
+    /// Find a loop label by name (for labeled break/continue).
+    /// </summary>
+    public (Label BreakLabel, Label ContinueLabel, string? LabelName)? FindLabeledLoop(string labelName)
+    {
+        foreach (var entry in LoopLabels)
+        {
+            if (entry.LabelName == labelName)
+                return entry;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Resolve an instance method by walking up the inheritance chain.

@@ -164,6 +164,49 @@ public partial class ILEmitter
         _ctx.ExitLoop();
     }
 
+    private void EmitDoWhile(Stmt.DoWhile dw)
+    {
+        var startLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        var continueLabel = IL.DefineLabel();
+
+        _ctx.EnterLoop(endLabel, continueLabel);
+
+        // Body executes at least once
+        IL.MarkLabel(startLabel);
+        EmitStatement(dw.Body);
+
+        // Continue target is after the body, before condition check
+        IL.MarkLabel(continueLabel);
+
+        // Evaluate condition
+        EmitExpression(dw.Condition);
+        // Handle condition based on what's actually on the stack
+        if (_stackType == StackType.Boolean)
+        {
+            // Already have unboxed boolean - ready for branch
+        }
+        else if (_stackType == StackType.Unknown && IsComparisonExpr(dw.Condition))
+        {
+            // Boxed boolean from comparison - unbox it
+            IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+        }
+        else if (dw.Condition is Expr.Logical)
+        {
+            // Logical expressions already leave int on stack
+        }
+        else
+        {
+            // For other expressions, apply truthy check
+            EnsureBoxed();
+            EmitTruthyCheck();
+        }
+        IL.Emit(OpCodes.Brtrue, startLabel);
+
+        IL.MarkLabel(endLabel);
+        _ctx.ExitLoop();
+    }
+
     private void EmitForOf(Stmt.ForOf f)
     {
         var startLabel = IL.DefineLabel();
@@ -314,22 +357,65 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitBreak()
+    private void EmitBreak(string? labelName = null)
     {
-        var loop = _ctx.CurrentLoop;
+        var loop = labelName != null
+            ? _ctx.FindLabeledLoop(labelName)
+            : _ctx.CurrentLoop;
+
         if (loop != null)
         {
-            IL.Emit(OpCodes.Br, loop.Value.BreakLabel);
+            // Use Leave instead of Br when inside exception blocks
+            if (_ctx.ExceptionBlockDepth > 0)
+                IL.Emit(OpCodes.Leave, loop.Value.BreakLabel);
+            else
+                IL.Emit(OpCodes.Br, loop.Value.BreakLabel);
         }
     }
 
-    private void EmitContinue()
+    private void EmitContinue(string? labelName = null)
     {
-        var loop = _ctx.CurrentLoop;
+        var loop = labelName != null
+            ? _ctx.FindLabeledLoop(labelName)
+            : _ctx.CurrentLoop;
+
         if (loop != null)
         {
-            IL.Emit(OpCodes.Br, loop.Value.ContinueLabel);
+            // Use Leave instead of Br when inside exception blocks
+            if (_ctx.ExceptionBlockDepth > 0)
+                IL.Emit(OpCodes.Leave, loop.Value.ContinueLabel);
+            else
+                IL.Emit(OpCodes.Br, loop.Value.ContinueLabel);
         }
+    }
+
+    private void EmitLabeledStatement(Stmt.LabeledStatement labeledStmt)
+    {
+        string labelName = labeledStmt.Label.Lexeme;
+        var breakLabel = IL.DefineLabel();
+        var continueLabel = IL.DefineLabel();
+
+        // For labeled statements, we need to handle both loops and non-loop statements.
+        // For loops, the inner loop will use its own labels for unlabeled break/continue,
+        // but labeled break/continue should use the labels registered here.
+
+        // Mark continue label at the start (for labeled continue, restart from here)
+        IL.MarkLabel(continueLabel);
+
+        _ctx.EnterLoop(breakLabel, continueLabel, labelName);
+        try
+        {
+            // If this is directly a loop, the loop itself will handle its own unlabeled labels
+            // But for labeled break/continue, it will use the labeled entry we just pushed
+            EmitStatement(labeledStmt.Statement);
+        }
+        finally
+        {
+            _ctx.ExitLoop();
+        }
+
+        // Mark the break label (after the statement, for labeled break)
+        IL.MarkLabel(breakLabel);
     }
 
     private void EmitSwitch(Stmt.Switch s)
@@ -374,9 +460,18 @@ public partial class ILEmitter
             IL.MarkLabel(caseLabels[i]);
             foreach (var stmt in s.Cases[i].Body)
             {
-                if (stmt is Stmt.Break)
+                if (stmt is Stmt.Break breakStmt)
                 {
-                    IL.Emit(OpCodes.Br, endLabel);
+                    if (breakStmt.Label != null)
+                    {
+                        // Labeled break - find and jump to the labeled target
+                        EmitBreak(breakStmt.Label.Lexeme);
+                    }
+                    else
+                    {
+                        // Unlabeled break - exits switch only
+                        IL.Emit(OpCodes.Br, endLabel);
+                    }
                 }
                 else
                 {
@@ -392,9 +487,18 @@ public partial class ILEmitter
             IL.MarkLabel(defaultLabel);
             foreach (var stmt in s.DefaultBody)
             {
-                if (stmt is Stmt.Break)
+                if (stmt is Stmt.Break breakStmt)
                 {
-                    IL.Emit(OpCodes.Br, endLabel);
+                    if (breakStmt.Label != null)
+                    {
+                        // Labeled break - find and jump to the labeled target
+                        EmitBreak(breakStmt.Label.Lexeme);
+                    }
+                    else
+                    {
+                        // Unlabeled break - exits switch only
+                        IL.Emit(OpCodes.Br, endLabel);
+                    }
                 }
                 else
                 {

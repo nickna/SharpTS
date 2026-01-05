@@ -98,8 +98,12 @@ public abstract record Stmt
     public record ForIn(Token Variable, string? TypeAnnotation, Expr Object, Stmt Body) : Stmt;
     public record If(Expr Condition, Stmt ThenBranch, Stmt? ElseBranch) : Stmt;
     public record Print(Expr Expr) : Stmt; // Temporary for console.log
-    public record Break(Token Keyword) : Stmt;
-    public record Continue(Token Keyword) : Stmt;
+    public record Break(Token Keyword, Token? Label = null) : Stmt;
+    public record Continue(Token Keyword, Token? Label = null) : Stmt;
+    /// <summary>
+    /// Labeled statement: label: statement (allows break/continue to target by name)
+    /// </summary>
+    public record LabeledStatement(Token Label, Stmt Statement) : Stmt;
     public record SwitchCase(Expr Value, List<Stmt> Body);
     public record Switch(Expr Subject, List<SwitchCase> Cases, List<Stmt>? DefaultBody) : Stmt;
     public record TryCatch(List<Stmt> TryBlock, Token? CatchParam, List<Stmt>? CatchBlock, List<Stmt>? FinallyBlock) : Stmt;

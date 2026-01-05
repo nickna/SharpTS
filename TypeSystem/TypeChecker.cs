@@ -29,6 +29,9 @@ public class TypeChecker
     private int _loopDepth = 0;
     private int _switchDepth = 0;
 
+    // Track active labels for labeled statements (label name -> isOnLoop)
+    private readonly Dictionary<string, bool> _activeLabels = [];
+
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
 
@@ -62,6 +65,44 @@ public class TypeChecker
                 foreach (var s in seq.Statements)
                     CheckStmt(s);
                 break;
+
+            case Stmt.LabeledStatement labeledStmt:
+                {
+                    string labelName = labeledStmt.Label.Lexeme;
+
+                    // Check for label shadowing
+                    if (_activeLabels.ContainsKey(labelName))
+                    {
+                        throw new Exception($"Type Error: Label '{labelName}' already declared in this scope.");
+                    }
+
+                    // Determine if this label is on a loop (for continue validation)
+                    bool isOnLoop = labeledStmt.Statement is Stmt.While
+                                 or Stmt.DoWhile
+                                 or Stmt.ForOf
+                                 or Stmt.ForIn
+                                 or Stmt.LabeledStatement; // Allow chained labels
+
+                    // If chained label, inherit loop status from inner
+                    if (labeledStmt.Statement is Stmt.LabeledStatement innerLabeled)
+                    {
+                        // We need to peek ahead - for now, mark as potentially a loop
+                        // The inner labeled statement will be checked recursively
+                        isOnLoop = true;
+                    }
+
+                    _activeLabels[labelName] = isOnLoop;
+                    try
+                    {
+                        CheckStmt(labeledStmt.Statement);
+                    }
+                    finally
+                    {
+                        _activeLabels.Remove(labelName);
+                    }
+                }
+                break;
+
             case Stmt.Interface interfaceStmt:
                 // Handle generic type parameters
                 List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
@@ -801,10 +842,23 @@ public class TypeChecker
                 }
                 break;
 
-            case Stmt.Break:
-                if (_loopDepth == 0 && _switchDepth == 0)
+            case Stmt.Break breakStmt:
+                if (breakStmt.Label != null)
                 {
-                    throw new Exception("Type Error: 'break' can only be used inside a loop or switch.");
+                    // Labeled break: must target a valid label
+                    string labelName = breakStmt.Label.Lexeme;
+                    if (!_activeLabels.ContainsKey(labelName))
+                    {
+                        throw new Exception($"Type Error: Label '{labelName}' not found.");
+                    }
+                }
+                else
+                {
+                    // Unlabeled break: must be inside a loop or switch
+                    if (_loopDepth == 0 && _switchDepth == 0)
+                    {
+                        throw new Exception("Type Error: 'break' can only be used inside a loop or switch.");
+                    }
                 }
                 break;
 
@@ -820,10 +874,27 @@ public class TypeChecker
                 CheckExpr(throwStmt.Value);
                 break;
 
-            case Stmt.Continue:
-                if (_loopDepth == 0)
+            case Stmt.Continue continueStmt:
+                if (continueStmt.Label != null)
                 {
-                    throw new Exception("Type Error: 'continue' can only be used inside a loop.");
+                    // Labeled continue: must target a valid label on a loop
+                    string labelName = continueStmt.Label.Lexeme;
+                    if (!_activeLabels.TryGetValue(labelName, out bool isOnLoop))
+                    {
+                        throw new Exception($"Type Error: Label '{labelName}' not found.");
+                    }
+                    if (!isOnLoop)
+                    {
+                        throw new Exception($"Type Error: Cannot continue to non-loop label '{labelName}'.");
+                    }
+                }
+                else
+                {
+                    // Unlabeled continue: must be inside a loop
+                    if (_loopDepth == 0)
+                    {
+                        throw new Exception("Type Error: 'continue' can only be used inside a loop.");
+                    }
                 }
                 break;
 

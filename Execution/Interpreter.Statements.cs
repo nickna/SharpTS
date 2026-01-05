@@ -185,6 +185,63 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Executes a labeled statement, catching break/continue exceptions that target this label.
+    /// </summary>
+    /// <param name="labeledStmt">The labeled statement AST node.</param>
+    /// <remarks>
+    /// Labeled statements allow break and continue to target specific enclosing statements.
+    /// For loops, both break and continue are handled. For non-loop statements (blocks),
+    /// only break is valid. Labeled exceptions targeting this label are caught; others propagate.
+    /// </remarks>
+    private void ExecuteLabeledStatement(Stmt.LabeledStatement labeledStmt)
+    {
+        string labelName = labeledStmt.Label.Lexeme;
+        bool isLoop = labeledStmt.Statement is Stmt.While
+                   or Stmt.DoWhile
+                   or Stmt.ForOf
+                   or Stmt.ForIn
+                   or Stmt.LabeledStatement; // Chained labels
+
+        if (isLoop)
+        {
+            // For loops, labeled continue means restart the loop
+            while (true)
+            {
+                try
+                {
+                    Execute(labeledStmt.Statement);
+                    return; // Statement completed normally
+                }
+                catch (BreakException ex) when (ex.TargetLabel == labelName)
+                {
+                    // Break targeting this label - exit
+                    return;
+                }
+                catch (ContinueException ex) when (ex.TargetLabel == labelName)
+                {
+                    // Continue targeting this label - restart the loop
+                    continue;
+                }
+                // Unlabeled or differently-labeled exceptions propagate up
+            }
+        }
+        else
+        {
+            // For non-loop statements, only handle break
+            try
+            {
+                Execute(labeledStmt.Statement);
+            }
+            catch (BreakException ex) when (ex.TargetLabel == labelName)
+            {
+                // Break targeting this label - exit
+                return;
+            }
+            // Unlabeled or differently-labeled exceptions propagate up
+        }
+    }
+
+    /// <summary>
     /// Executes a switch statement with case matching and fall-through semantics.
     /// </summary>
     /// <param name="switchStmt">The switch statement AST node.</param>
@@ -221,9 +278,9 @@ public partial class Interpreter
                 }
             }
         }
-        catch (BreakException)
+        catch (BreakException ex) when (ex.TargetLabel == null)
         {
-            // Exit switch
+            // Exit switch (only unlabeled breaks)
         }
     }
 
@@ -351,12 +408,12 @@ public partial class Interpreter
             {
                 Execute(forOf.Body);
             }
-            catch (BreakException)
+            catch (BreakException ex) when (ex.TargetLabel == null)
             {
                 _environment = previous;
                 break;
             }
-            catch (ContinueException)
+            catch (ContinueException ex) when (ex.TargetLabel == null)
             {
                 _environment = previous;
                 continue;
@@ -401,12 +458,12 @@ public partial class Interpreter
             {
                 Execute(forIn.Body);
             }
-            catch (BreakException)
+            catch (BreakException ex) when (ex.TargetLabel == null)
             {
                 _environment = previous;
                 break;
             }
-            catch (ContinueException)
+            catch (ContinueException ex) when (ex.TargetLabel == null)
             {
                 _environment = previous;
                 continue;

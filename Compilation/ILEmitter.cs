@@ -179,6 +179,10 @@ public partial class ILEmitter
                 EmitWhile(w);
                 break;
 
+            case Stmt.DoWhile dw:
+                EmitDoWhile(dw);
+                break;
+
             case Stmt.ForOf f:
                 EmitForOf(f);
                 break;
@@ -201,12 +205,16 @@ public partial class ILEmitter
                 EmitReturn(r);
                 break;
 
-            case Stmt.Break:
-                EmitBreak();
+            case Stmt.Break breakStmt:
+                EmitBreak(breakStmt.Label?.Lexeme);
                 break;
 
-            case Stmt.Continue:
-                EmitContinue();
+            case Stmt.Continue continueStmt:
+                EmitContinue(continueStmt.Label?.Lexeme);
+                break;
+
+            case Stmt.LabeledStatement labeledStmt:
+                EmitLabeledStatement(labeledStmt);
                 break;
 
             case Stmt.Switch s:

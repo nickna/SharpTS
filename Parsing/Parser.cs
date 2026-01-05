@@ -1351,21 +1351,51 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.RETURN)) return ReturnStatement();
         if (Match(TokenType.LEFT_BRACE)) return new Stmt.Block(Block());
 
+        // Check for labeled statement: identifier : statement
+        if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)
+        {
+            return LabeledStatement();
+        }
+
         return ExpressionStatement();
+    }
+
+    private Stmt LabeledStatement()
+    {
+        Token label = Advance();                              // Consume the label identifier
+        Consume(TokenType.COLON, "Expect ':' after label.");  // Consume the colon
+        Stmt statement = Statement();                         // Parse the labeled statement (recursive)
+        return new Stmt.LabeledStatement(label, statement);
     }
 
     private Stmt BreakStatement()
     {
         Token keyword = Previous();
+        Token? label = null;
+
+        // Check for optional label: break labelName;
+        if (Check(TokenType.IDENTIFIER))
+        {
+            label = Advance();
+        }
+
         Consume(TokenType.SEMICOLON, "Expect ';' after 'break'.");
-        return new Stmt.Break(keyword);
+        return new Stmt.Break(keyword, label);
     }
 
     private Stmt ContinueStatement()
     {
         Token keyword = Previous();
+        Token? label = null;
+
+        // Check for optional label: continue labelName;
+        if (Check(TokenType.IDENTIFIER))
+        {
+            label = Advance();
+        }
+
         Consume(TokenType.SEMICOLON, "Expect ';' after 'continue'.");
-        return new Stmt.Continue(keyword);
+        return new Stmt.Continue(keyword, label);
     }
 
     private Stmt ForStatement()

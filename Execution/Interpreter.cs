@@ -81,6 +81,9 @@ public partial class Interpreter
             case Stmt.Block block:
                 ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));
                 break;
+            case Stmt.LabeledStatement labeledStmt:
+                ExecuteLabeledStatement(labeledStmt);
+                break;
             case Stmt.Sequence seq:
                 // Execute in current scope (no new environment)
                 foreach (var s in seq.Statements)
@@ -106,11 +109,11 @@ public partial class Interpreter
                     {
                         Execute(whileStmt.Body);
                     }
-                    catch (BreakException)
+                    catch (BreakException ex) when (ex.TargetLabel == null)
                     {
                         break;
                     }
-                    catch (ContinueException)
+                    catch (ContinueException ex) when (ex.TargetLabel == null)
                     {
                         continue;
                     }
@@ -123,11 +126,11 @@ public partial class Interpreter
                     {
                         Execute(doWhileStmt.Body);
                     }
-                    catch (BreakException)
+                    catch (BreakException ex) when (ex.TargetLabel == null)
                     {
                         break;
                     }
-                    catch (ContinueException)
+                    catch (ContinueException ex) when (ex.TargetLabel == null)
                     {
                         continue;
                     }
@@ -139,10 +142,10 @@ public partial class Interpreter
             case Stmt.ForIn forIn:
                 ExecuteForIn(forIn);
                 break;
-            case Stmt.Break:
-                throw new BreakException();
-            case Stmt.Continue:
-                throw new ContinueException();
+            case Stmt.Break breakStmt:
+                throw new BreakException(breakStmt.Label?.Lexeme);
+            case Stmt.Continue continueStmt:
+                throw new ContinueException(continueStmt.Label?.Lexeme);
             case Stmt.Switch switchStmt:
                 ExecuteSwitch(switchStmt);
                 break;

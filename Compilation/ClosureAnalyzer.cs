@@ -174,6 +174,10 @@ public class ClosureAnalyzer
             case Stmt.Interface:
                 // No analysis needed
                 break;
+
+            case Stmt.LabeledStatement labeledStmt:
+                AnalyzeStmt(labeledStmt.Statement);
+                break;
         }
     }
 
