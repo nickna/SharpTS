@@ -234,7 +234,16 @@ public partial class ILEmitter
             case Stmt.Class:
             case Stmt.Interface:
             case Stmt.TypeAlias:
+            case Stmt.Enum:
                 // Handled at top level / compile-time only
+                break;
+
+            case Stmt.Import import:
+                EmitImport(import);
+                break;
+
+            case Stmt.Export export:
+                EmitExport(export);
                 break;
         }
     }
@@ -506,4 +515,336 @@ public partial class ILEmitter
             or TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL
             or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL_EQUAL;
 
+    #region Module Support
+
+    /// <summary>
+    /// Emits code for an import statement.
+    /// Imports bind local variables to module export fields.
+    /// </summary>
+    private void EmitImport(Stmt.Import import)
+    {
+        if (_ctx.CurrentModulePath == null || _ctx.ModuleResolver == null ||
+            _ctx.ModuleExportFields == null || _ctx.ModuleTypes == null)
+        {
+            // Not in module context - imports are no-ops for single-file compilation
+            return;
+        }
+
+        string importedPath = _ctx.ModuleResolver.ResolveModulePath(import.ModulePath, _ctx.CurrentModulePath);
+
+        if (!_ctx.ModuleExportFields.TryGetValue(importedPath, out var exportFields) ||
+            !_ctx.ModuleTypes.TryGetValue(importedPath, out var moduleType))
+        {
+            // Module not found - skip (type checker should have caught this)
+            return;
+        }
+
+        // Default import: bind local variable to $default field
+        if (import.DefaultImport != null)
+        {
+            string localName = import.DefaultImport.Lexeme;
+            if (exportFields.TryGetValue("$default", out var defaultField))
+            {
+                var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+                IL.Emit(OpCodes.Ldsfld, defaultField);
+                IL.Emit(OpCodes.Stloc, local);
+            }
+        }
+
+        // Named imports: bind local variables to named export fields
+        if (import.NamedImports != null)
+        {
+            foreach (var spec in import.NamedImports)
+            {
+                string importedName = spec.Imported.Lexeme;
+                string localName = spec.LocalName?.Lexeme ?? importedName;
+
+                if (exportFields.TryGetValue(importedName, out var field))
+                {
+                    var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+                    IL.Emit(OpCodes.Ldsfld, field);
+                    IL.Emit(OpCodes.Stloc, local);
+                }
+            }
+        }
+
+        // Namespace import: create a SharpTSObject with all exports
+        if (import.NamespaceImport != null)
+        {
+            string localName = import.NamespaceImport.Lexeme;
+            var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+
+            // Create new Dictionary<string, object?>
+            var dictType = typeof(Dictionary<string, object?>);
+            var dictCtor = dictType.GetConstructor(Type.EmptyTypes)!;
+            var addMethod = dictType.GetMethod("Add", [typeof(string), typeof(object)])!;
+
+            IL.Emit(OpCodes.Newobj, dictCtor);
+
+            // Add each export to the dictionary
+            foreach (var (exportName, field) in exportFields)
+            {
+                if (exportName == "$default") continue; // Skip default export in namespace import
+
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldstr, exportName);
+                IL.Emit(OpCodes.Ldsfld, field);
+                IL.Emit(OpCodes.Callvirt, addMethod);
+            }
+
+            // Call CreateObject to wrap the dictionary
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    /// <summary>
+    /// Emits code for an export statement.
+    /// Exports store values into module export fields.
+    /// </summary>
+    private void EmitExport(Stmt.Export export)
+    {
+        if (_ctx.CurrentModulePath == null || _ctx.ModuleExportFields == null)
+        {
+            // Not in module context
+            return;
+        }
+
+        if (!_ctx.ModuleExportFields.TryGetValue(_ctx.CurrentModulePath, out var exportFields))
+        {
+            return;
+        }
+
+        if (export.IsDefaultExport)
+        {
+            if (export.Declaration != null)
+            {
+                // export default class/function - execute declaration and store value
+                EmitStatement(export.Declaration);
+
+                string? name = GetDeclarationName(export.Declaration);
+                if (name != null && exportFields.TryGetValue("$default", out var defaultField))
+                {
+                    // Load the declared value and store in export field
+                    var local = _ctx.Locals.GetLocal(name);
+                    if (local != null)
+                    {
+                        EmitStoreLocalToExportField(local, defaultField);
+                    }
+                    else if (_ctx.Functions.TryGetValue(name, out var funcBuilder))
+                    {
+                        // Create TSFunction for function
+                        EmitFunctionReference(name, funcBuilder);
+                        IL.Emit(OpCodes.Stsfld, defaultField);
+                    }
+                    else if (_ctx.Classes.TryGetValue(name, out var classBuilder))
+                    {
+                        // Store class type token
+                        IL.Emit(OpCodes.Ldtoken, classBuilder);
+                        IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                        IL.Emit(OpCodes.Stsfld, defaultField);
+                    }
+                    else if (_ctx.EnumMembers?.TryGetValue(name, out var enumMembers) == true)
+                    {
+                        // Create SharpTSObject with enum members
+                        EmitEnumAsObject(enumMembers);
+                        IL.Emit(OpCodes.Stsfld, defaultField);
+                    }
+                }
+            }
+            else if (export.DefaultExpr != null)
+            {
+                // export default <expression>
+                if (exportFields.TryGetValue("$default", out var defaultField))
+                {
+                    EmitExpression(export.DefaultExpr);
+                    EnsureBoxed();
+                    IL.Emit(OpCodes.Stsfld, defaultField);
+                }
+            }
+        }
+        else if (export.Declaration != null)
+        {
+            // export const/let/function/class - execute declaration and store in named field
+            EmitStatement(export.Declaration);
+
+            string? name = GetDeclarationName(export.Declaration);
+            if (name != null && exportFields.TryGetValue(name, out var field))
+            {
+                var local = _ctx.Locals.GetLocal(name);
+                if (local != null)
+                {
+                    EmitStoreLocalToExportField(local, field);
+                }
+                else if (_ctx.Functions.TryGetValue(name, out var funcBuilder))
+                {
+                    EmitFunctionReference(name, funcBuilder);
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
+                else if (_ctx.Classes.TryGetValue(name, out var classBuilder))
+                {
+                    IL.Emit(OpCodes.Ldtoken, classBuilder);
+                    IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
+                else if (_ctx.EnumMembers?.TryGetValue(name, out var enumMembers) == true)
+                {
+                    // Create SharpTSObject with enum members
+                    EmitEnumAsObject(enumMembers);
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
+            }
+        }
+        else if (export.NamedExports != null && export.FromModulePath == null)
+        {
+            // export { x, y as z }
+            foreach (var spec in export.NamedExports)
+            {
+                string localName = spec.LocalName.Lexeme;
+                string exportedName = spec.ExportedName?.Lexeme ?? localName;
+
+                if (exportFields.TryGetValue(exportedName, out var field))
+                {
+                    var local = _ctx.Locals.GetLocal(localName);
+                    if (local != null)
+                    {
+                        EmitStoreLocalToExportField(local, field);
+                    }
+                    else if (_ctx.Functions.TryGetValue(localName, out var funcBuilder))
+                    {
+                        EmitFunctionReference(localName, funcBuilder);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.Classes.TryGetValue(localName, out var classBuilder))
+                    {
+                        IL.Emit(OpCodes.Ldtoken, classBuilder);
+                        IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                    else if (_ctx.EnumMembers?.TryGetValue(localName, out var enumMembers) == true)
+                    {
+                        // Create SharpTSObject with enum members
+                        EmitEnumAsObject(enumMembers);
+                        IL.Emit(OpCodes.Stsfld, field);
+                    }
+                }
+            }
+        }
+        else if (export.FromModulePath != null && _ctx.ModuleResolver != null)
+        {
+            // Re-export: export { x } from './module' or export * from './module'
+            string sourcePath = _ctx.ModuleResolver.ResolveModulePath(export.FromModulePath, _ctx.CurrentModulePath);
+
+            if (_ctx.ModuleExportFields.TryGetValue(sourcePath, out var sourceFields))
+            {
+                if (export.NamedExports != null)
+                {
+                    // Re-export specific names
+                    foreach (var spec in export.NamedExports)
+                    {
+                        string importedName = spec.LocalName.Lexeme;
+                        string exportedName = spec.ExportedName?.Lexeme ?? importedName;
+
+                        if (sourceFields.TryGetValue(importedName, out var sourceField) &&
+                            exportFields.TryGetValue(exportedName, out var targetField))
+                        {
+                            IL.Emit(OpCodes.Ldsfld, sourceField);
+                            IL.Emit(OpCodes.Stsfld, targetField);
+                        }
+                    }
+                }
+                else
+                {
+                    // Re-export all: export * from './module'
+                    foreach (var (name, sourceField) in sourceFields)
+                    {
+                        if (name == "$default") continue; // Don't re-export default
+                        if (exportFields.TryGetValue(name, out var targetField))
+                        {
+                            IL.Emit(OpCodes.Ldsfld, sourceField);
+                            IL.Emit(OpCodes.Stsfld, targetField);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the name declared by a statement.
+    /// </summary>
+    private static string? GetDeclarationName(Stmt decl) => decl switch
+    {
+        Stmt.Function f => f.Name.Lexeme,
+        Stmt.Class c => c.Name.Lexeme,
+        Stmt.Var v => v.Name.Lexeme,
+        Stmt.Enum e => e.Name.Lexeme,
+        _ => null
+    };
+
+    /// <summary>
+    /// Stores a value from a local variable to an export field, boxing if necessary.
+    /// </summary>
+    private void EmitStoreLocalToExportField(LocalBuilder local, FieldBuilder field)
+    {
+        IL.Emit(OpCodes.Ldloc, local);
+        if (local.LocalType.IsValueType)
+        {
+            IL.Emit(OpCodes.Box, local.LocalType);
+        }
+        IL.Emit(OpCodes.Stsfld, field);
+    }
+
+    /// <summary>
+    /// Emits a TSFunction reference for a method (used for function exports).
+    /// Creates: new TSFunction(null, methodInfo)
+    /// </summary>
+    private void EmitFunctionReference(string name, MethodBuilder method)
+    {
+        // Create TSFunction(null, methodInfo) - same pattern as arrow functions
+        IL.Emit(OpCodes.Ldnull);  // target (null for static methods)
+        IL.Emit(OpCodes.Ldtoken, method);
+        IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
+            "GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+    }
+
+    /// <summary>
+    /// Emits an enum as a SharpTSObject with its member values.
+    /// </summary>
+    private void EmitEnumAsObject(Dictionary<string, object> members)
+    {
+        // Create new Dictionary<string, object?>()
+        var dictType = typeof(Dictionary<string, object?>);
+        var dictCtor = dictType.GetConstructor(Type.EmptyTypes)!;
+        var addMethod = dictType.GetMethod("Add", [typeof(string), typeof(object)])!;
+
+        IL.Emit(OpCodes.Newobj, dictCtor);
+
+        foreach (var (memberName, value) in members)
+        {
+            IL.Emit(OpCodes.Dup);  // Keep dictionary on stack
+            IL.Emit(OpCodes.Ldstr, memberName);
+            if (value is double d)
+            {
+                IL.Emit(OpCodes.Ldc_R8, d);
+                IL.Emit(OpCodes.Box, typeof(double));
+            }
+            else if (value is string s)
+            {
+                IL.Emit(OpCodes.Ldstr, s);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+            IL.Emit(OpCodes.Call, addMethod);
+        }
+
+        // Wrap in SharpTSObject using the CreateObject helper
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+    }
+
+    #endregion
 }

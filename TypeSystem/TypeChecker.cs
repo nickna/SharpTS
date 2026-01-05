@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
 
@@ -37,6 +38,10 @@ public class TypeChecker
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
 
+    // Module support - track the current module being type-checked
+    private ParsedModule? _currentModule = null;
+    private ModuleResolver? _moduleResolver = null;
+
     /// <summary>
     /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.
     /// </summary>
@@ -53,6 +58,227 @@ public class TypeChecker
         }
 
         return _typeMap;
+    }
+
+    /// <summary>
+    /// Type-checks multiple modules in dependency order.
+    /// </summary>
+    /// <param name="modules">Modules in dependency order (dependencies first)</param>
+    /// <param name="resolver">Module resolver for path resolution</param>
+    /// <returns>A TypeMap containing resolved types for all expressions across all modules</returns>
+    public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
+    {
+        _moduleResolver = resolver;
+
+        // Pre-define built-ins in the global environment
+        _environment.Define("console", new TypeInfo.Any());
+
+        // First pass: collect all exports from each module
+        foreach (var module in modules)
+        {
+            _currentModule = module;
+            CollectModuleExports(module);
+        }
+
+        // Second pass: type-check each module with imports resolved
+        foreach (var module in modules)
+        {
+            if (module.IsTypeChecked)
+            {
+                continue;
+            }
+
+            _currentModule = module;
+            var moduleEnv = new TypeEnvironment(_environment);
+
+            // Bind imports from dependencies
+            BindModuleImports(module, moduleEnv);
+
+            // Type-check module body
+            var savedEnv = _environment;
+            _environment = moduleEnv;
+
+            foreach (var stmt in module.Statements)
+            {
+                CheckStmt(stmt);
+            }
+
+            _environment = savedEnv;
+            module.IsTypeChecked = true;
+        }
+
+        _currentModule = null;
+        return _typeMap;
+    }
+
+    /// <summary>
+    /// Collects exports from a module (first pass - just register export types).
+    /// </summary>
+    private void CollectModuleExports(ParsedModule module)
+    {
+        var moduleEnv = new TypeEnvironment(_environment);
+        var savedEnv = _environment;
+        _environment = moduleEnv;
+
+        // First, bind imports so we can reference imported types in our declarations
+        BindModuleImports(module, moduleEnv);
+
+        // Then, process all declarations to populate the environment
+        foreach (var stmt in module.Statements)
+        {
+            // Skip imports - already bound above
+            if (stmt is Stmt.Import)
+            {
+                continue;
+            }
+
+            // For exports, process the underlying declaration
+            if (stmt is Stmt.Export export)
+            {
+                if (export.Declaration != null)
+                {
+                    CheckStmt(export.Declaration);
+                }
+                else if (export.DefaultExpr != null)
+                {
+                    var type = CheckExpr(export.DefaultExpr);
+                    module.DefaultExportType = type;
+                }
+                else if (export.NamedExports != null && export.FromModulePath == null)
+                {
+                    // Named exports like `export { x, y }` need the declarations to be processed first
+                    // They'll be resolved in the second pass
+                }
+            }
+            else
+            {
+                // Regular declarations
+                CheckStmt(stmt);
+            }
+        }
+
+        // Now collect exports
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is Stmt.Export export)
+            {
+                if (export.IsDefaultExport)
+                {
+                    if (export.Declaration != null)
+                    {
+                        module.DefaultExportType = GetDeclaredType(export.Declaration);
+                    }
+                    // DefaultExpr already handled above
+                }
+                else if (export.Declaration != null)
+                {
+                    string name = GetDeclarationName(export.Declaration);
+                    var type = GetDeclaredType(export.Declaration);
+                    module.ExportedTypes[name] = type;
+                }
+                else if (export.NamedExports != null && export.FromModulePath == null)
+                {
+                    foreach (var spec in export.NamedExports)
+                    {
+                        var type = _environment.Get(spec.LocalName.Lexeme);
+                        if (type != null)
+                        {
+                            string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
+                            module.ExportedTypes[exportedName] = type;
+                        }
+                    }
+                }
+                else if (export.FromModulePath != null)
+                {
+                    // Re-export - resolve from the source module
+                    string sourcePath = _moduleResolver!.ResolveModulePath(export.FromModulePath, module.Path);
+                    var sourceModule = _moduleResolver.GetCachedModule(sourcePath);
+
+                    if (sourceModule != null)
+                    {
+                        if (export.NamedExports != null)
+                        {
+                            // Re-export specific names
+                            foreach (var spec in export.NamedExports)
+                            {
+                                if (sourceModule.ExportedTypes.TryGetValue(spec.LocalName.Lexeme, out var type))
+                                {
+                                    string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
+                                    module.ExportedTypes[exportedName] = type;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Re-export all: export * from './module'
+                            foreach (var (name, type) in sourceModule.ExportedTypes)
+                            {
+                                module.ExportedTypes[name] = type;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        _environment = savedEnv;
+    }
+
+    /// <summary>
+    /// Binds imported symbols from dependencies into the module's environment.
+    /// </summary>
+    private void BindModuleImports(ParsedModule module, TypeEnvironment env)
+    {
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is Stmt.Import import)
+            {
+                string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
+                var importedModule = _moduleResolver.GetCachedModule(importedPath);
+
+                if (importedModule == null)
+                {
+                    throw new Exception($"Type Error at line {import.Keyword.Line}: Cannot find module '{import.ModulePath}'.");
+                }
+
+                // Default import
+                if (import.DefaultImport != null)
+                {
+                    if (importedModule.DefaultExportType == null)
+                    {
+                        throw new Exception($"Type Error at line {import.Keyword.Line}: Module '{import.ModulePath}' has no default export.");
+                    }
+                    env.Define(import.DefaultImport.Lexeme, importedModule.DefaultExportType);
+                }
+
+                // Namespace import: import * as Module from './file'
+                if (import.NamespaceImport != null)
+                {
+                    // Create a record type with all exports
+                    var namespaceType = new TypeInfo.Record(
+                        new Dictionary<string, TypeInfo>(importedModule.ExportedTypes)
+                    );
+                    env.Define(import.NamespaceImport.Lexeme, namespaceType);
+                }
+
+                // Named imports: import { x, y as z } from './file'
+                if (import.NamedImports != null)
+                {
+                    foreach (var spec in import.NamedImports)
+                    {
+                        string importedName = spec.Imported.Lexeme;
+                        string localName = spec.LocalName?.Lexeme ?? importedName;
+
+                        if (!importedModule.ExportedTypes.TryGetValue(importedName, out var type))
+                        {
+                            throw new Exception($"Type Error at line {import.Keyword.Line}: Module '{import.ModulePath}' has no export named '{importedName}'.");
+                        }
+
+                        env.Define(localName, type);
+                    }
+                }
+            }
+        }
     }
 
     private void CheckStmt(Stmt stmt)
@@ -937,7 +1163,114 @@ public class TypeChecker
             case Stmt.Print printStmt:
                 CheckExpr(printStmt.Expr);
                 break;
+
+            case Stmt.Import importStmt:
+                // Imports are handled in CheckModules() during multi-module type checking.
+                // In single-file mode, imports are an error since there's no module to import from.
+                if (_currentModule == null)
+                {
+                    throw new Exception($"Type Error at line {importStmt.Keyword.Line}: Import statements require module mode. " +
+                                       "Use 'dotnet run -- --compile' with multi-file support.");
+                }
+                // When in module mode, imports are resolved and bound in BindModuleImports()
+                break;
+
+            case Stmt.Export exportStmt:
+                // Check the declaration or expression being exported
+                CheckExportStatement(exportStmt);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Type-checks an export statement and registers exports in the current module.
+    /// </summary>
+    private void CheckExportStatement(Stmt.Export exportStmt)
+    {
+        if (exportStmt.IsDefaultExport)
+        {
+            // export default expression or export default class/function
+            if (exportStmt.Declaration != null)
+            {
+                CheckStmt(exportStmt.Declaration);
+                if (_currentModule != null)
+                {
+                    _currentModule.DefaultExportType = GetDeclaredType(exportStmt.Declaration);
+                }
+            }
+            else if (exportStmt.DefaultExpr != null)
+            {
+                var type = CheckExpr(exportStmt.DefaultExpr);
+                if (_currentModule != null)
+                {
+                    _currentModule.DefaultExportType = type;
+                }
+            }
+        }
+        else if (exportStmt.Declaration != null)
+        {
+            // export class/function/const/let
+            CheckStmt(exportStmt.Declaration);
+            if (_currentModule != null)
+            {
+                string name = GetDeclarationName(exportStmt.Declaration);
+                var type = GetDeclaredType(exportStmt.Declaration);
+                _currentModule.ExportedTypes[name] = type;
+            }
+        }
+        else if (exportStmt.NamedExports != null && exportStmt.FromModulePath == null)
+        {
+            // export { x, y } - verify each exported name exists
+            foreach (var spec in exportStmt.NamedExports)
+            {
+                var type = LookupVariable(spec.LocalName);
+                if (_currentModule != null)
+                {
+                    string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
+                    _currentModule.ExportedTypes[exportedName] = type;
+                }
+            }
+        }
+        else if (exportStmt.FromModulePath != null)
+        {
+            // Re-export: export { x } from './module' or export * from './module'
+            // The actual binding happens during module resolution
+            // Here we just need to validate the syntax is correct
+        }
+    }
+
+    /// <summary>
+    /// Gets the name of a declaration (function, class, variable, etc.)
+    /// </summary>
+    private string GetDeclarationName(Stmt decl)
+    {
+        return decl switch
+        {
+            Stmt.Function f => f.Name.Lexeme,
+            Stmt.Class c => c.Name.Lexeme,
+            Stmt.Var v => v.Name.Lexeme,
+            Stmt.Interface i => i.Name.Lexeme,
+            Stmt.TypeAlias t => t.Name.Lexeme,
+            Stmt.Enum e => e.Name.Lexeme,
+            _ => throw new Exception($"Type Error: Cannot get name of declaration type {decl.GetType().Name}")
+        };
+    }
+
+    /// <summary>
+    /// Gets the type of a declaration.
+    /// </summary>
+    private TypeInfo GetDeclaredType(Stmt decl)
+    {
+        return decl switch
+        {
+            Stmt.Function f => _environment.Get(f.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.Class c => _environment.Get(c.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.Var v => _environment.Get(v.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.Interface i => _environment.Get(i.Name.Lexeme) ?? new TypeInfo.Any(),
+            Stmt.TypeAlias t => ToTypeInfo(t.TypeDefinition),
+            Stmt.Enum e => _environment.Get(e.Name.Lexeme) ?? new TypeInfo.Any(),
+            _ => new TypeInfo.Any()
+        };
     }
 
     /// <summary>

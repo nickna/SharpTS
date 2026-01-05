@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using static SharpTS.Parsing.Expr;
@@ -131,6 +132,19 @@ public class CompilationContext
 
     // Class superclass mapping (class name -> superclass name or null)
     public Dictionary<string, string?>? ClassSuperclass { get; set; }
+
+    // Module support
+    // Current module path being compiled
+    public string? CurrentModulePath { get; set; }
+
+    // Module export fields (module path -> export name -> FieldBuilder)
+    public Dictionary<string, Dictionary<string, FieldBuilder>>? ModuleExportFields { get; set; }
+
+    // Module types (module path -> TypeBuilder)
+    public Dictionary<string, TypeBuilder>? ModuleTypes { get; set; }
+
+    // Module resolver for import path resolution
+    public ModuleResolver? ModuleResolver { get; set; }
 
     // Parameter tracking (name -> arg index)
     private readonly Dictionary<string, int> _parameters = [];

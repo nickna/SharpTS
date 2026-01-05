@@ -116,4 +116,53 @@ public abstract record Stmt
     public record TypeAlias(Token Name, string TypeDefinition) : Stmt;
     public record EnumMember(Token Name, Expr? Value);
     public record Enum(Token Name, List<EnumMember> Members, bool IsConst = false) : Stmt;
+
+    // Module statements
+    /// <summary>
+    /// Import declaration: import { x, y } from './file', import Default from './file', etc.
+    /// </summary>
+    /// <param name="Keyword">The 'import' token for error reporting</param>
+    /// <param name="NamedImports">Named imports: { x, y as z }</param>
+    /// <param name="DefaultImport">Default import identifier</param>
+    /// <param name="NamespaceImport">Namespace import: * as Module</param>
+    /// <param name="ModulePath">Module path: './file' or 'lodash'</param>
+    public record Import(
+        Token Keyword,
+        List<ImportSpecifier>? NamedImports,
+        Token? DefaultImport,
+        Token? NamespaceImport,
+        string ModulePath
+    ) : Stmt;
+
+    /// <summary>
+    /// Individual import specifier: { x } or { x as y }
+    /// </summary>
+    /// <param name="Imported">Original name in source module</param>
+    /// <param name="LocalName">Renamed locally (null = same as imported)</param>
+    public record ImportSpecifier(Token Imported, Token? LocalName);
+
+    /// <summary>
+    /// Export declaration with various forms.
+    /// </summary>
+    /// <param name="Keyword">The 'export' token for error reporting</param>
+    /// <param name="Declaration">Exported declaration: export function/class/const/let</param>
+    /// <param name="NamedExports">Named exports: export { x, y as z }</param>
+    /// <param name="DefaultExpr">Default export expression: export default expr</param>
+    /// <param name="FromModulePath">Re-export source: export { x } from './file'</param>
+    /// <param name="IsDefaultExport">True for 'export default'</param>
+    public record Export(
+        Token Keyword,
+        Stmt? Declaration,
+        List<ExportSpecifier>? NamedExports,
+        Expr? DefaultExpr,
+        string? FromModulePath,
+        bool IsDefaultExport
+    ) : Stmt;
+
+    /// <summary>
+    /// Individual export specifier: { x } or { x as y }
+    /// </summary>
+    /// <param name="LocalName">Name in current module</param>
+    /// <param name="ExportedName">Exported as (null = same as local)</param>
+    public record ExportSpecifier(Token LocalName, Token? ExportedName);
 }

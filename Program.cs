@@ -23,6 +23,7 @@
 
 using SharpTS.Compilation;
 using SharpTS.Execution;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -69,8 +70,41 @@ else
 
 static void RunFile(string path)
 {
-    string source = File.ReadAllText(path);
-    Run(source);
+    string absolutePath = Path.GetFullPath(path);
+    string source = File.ReadAllText(absolutePath);
+
+    // Check if the file contains imports - if so, use module mode
+    if (source.Contains("import ") || source.Contains("export "))
+    {
+        RunModuleFile(absolutePath);
+    }
+    else
+    {
+        Run(source);
+    }
+}
+
+static void RunModuleFile(string absolutePath)
+{
+    try
+    {
+        // Load the entry module and all dependencies
+        var resolver = new ModuleResolver(absolutePath);
+        var entryModule = resolver.LoadModule(absolutePath);
+        var allModules = resolver.GetModulesInOrder(entryModule);
+
+        // Type checking across all modules
+        var checker = new TypeChecker();
+        var typeMap = checker.CheckModules(allModules, resolver);
+
+        // Interpretation
+        var interpreter = new Interpreter();
+        interpreter.InterpretModules(allModules, resolver, typeMap);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+    }
 }
 
 static void RunPrompt()

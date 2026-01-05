@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -35,6 +36,12 @@ public partial class Interpreter
     private RuntimeEnvironment _environment = new();
     private TypeMap? _typeMap;
 
+    // Module support
+    private readonly Dictionary<string, ModuleInstance> _loadedModules = [];
+    private ModuleResolver? _moduleResolver;
+    private ParsedModule? _currentModule;
+    private ModuleInstance? _currentModuleInstance;
+
     internal RuntimeEnvironment Environment => _environment;
     internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
@@ -62,6 +69,237 @@ public partial class Interpreter
         {
             Console.WriteLine($"Runtime Error: {error.Message}");
         }
+    }
+
+    /// <summary>
+    /// Interprets multiple modules in dependency order.
+    /// </summary>
+    /// <param name="modules">Modules in dependency order (dependencies first)</param>
+    /// <param name="resolver">Module resolver for path resolution</param>
+    /// <param name="typeMap">Optional type map from static analysis</param>
+    public void InterpretModules(List<ParsedModule> modules, ModuleResolver resolver, TypeMap? typeMap = null)
+    {
+        _typeMap = typeMap;
+        _moduleResolver = resolver;
+
+        try
+        {
+            foreach (var module in modules)
+            {
+                ExecuteModule(module);
+            }
+        }
+        catch (Exception error)
+        {
+            Console.WriteLine($"Runtime Error: {error.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Executes a single module, caching its exports.
+    /// </summary>
+    private void ExecuteModule(ParsedModule module)
+    {
+        // Skip if already executed
+        if (_loadedModules.ContainsKey(module.Path))
+        {
+            return;
+        }
+
+        // Create module instance to track exports
+        var moduleInstance = new ModuleInstance();
+        _loadedModules[module.Path] = moduleInstance;
+
+        // Create module-scoped environment
+        var moduleEnv = new RuntimeEnvironment(_environment);
+
+        // Bind imports from dependencies
+        BindModuleImports(module, moduleEnv);
+
+        // Save context
+        var savedEnv = _environment;
+        var savedModule = _currentModule;
+        var savedModuleInstance = _currentModuleInstance;
+
+        _environment = moduleEnv;
+        _currentModule = module;
+        _currentModuleInstance = moduleInstance;
+
+        try
+        {
+            foreach (var stmt in module.Statements)
+            {
+                Execute(stmt);
+            }
+            moduleInstance.IsExecuted = true;
+        }
+        finally
+        {
+            _environment = savedEnv;
+            _currentModule = savedModule;
+            _currentModuleInstance = savedModuleInstance;
+        }
+    }
+
+    /// <summary>
+    /// Binds imported values into the module's environment.
+    /// </summary>
+    private void BindModuleImports(ParsedModule module, RuntimeEnvironment env)
+    {
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is Stmt.Import import)
+            {
+                string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
+                var importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
+
+                if (importedModuleInstance == null)
+                {
+                    throw new Exception($"Runtime Error: Module '{import.ModulePath}' not loaded.");
+                }
+
+                // Default import
+                if (import.DefaultImport != null)
+                {
+                    env.Define(import.DefaultImport.Lexeme, importedModuleInstance.DefaultExport);
+                }
+
+                // Namespace import: import * as Module from './file'
+                if (import.NamespaceImport != null)
+                {
+                    env.Define(import.NamespaceImport.Lexeme, importedModuleInstance.ExportsAsObject());
+                }
+
+                // Named imports: import { x, y as z } from './file'
+                if (import.NamedImports != null)
+                {
+                    foreach (var spec in import.NamedImports)
+                    {
+                        string importedName = spec.Imported.Lexeme;
+                        string localName = spec.LocalName?.Lexeme ?? importedName;
+                        var value = importedModuleInstance.GetExport(importedName);
+                        env.Define(localName, value);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes an export statement, registering exports in the current module.
+    /// </summary>
+    private void ExecuteExport(Stmt.Export export)
+    {
+        if (export.IsDefaultExport)
+        {
+            if (export.Declaration != null)
+            {
+                Execute(export.Declaration);
+                if (_currentModuleInstance != null)
+                {
+                    _currentModuleInstance.DefaultExport = GetDeclaredValue(export.Declaration);
+                }
+            }
+            else if (export.DefaultExpr != null)
+            {
+                var value = Evaluate(export.DefaultExpr);
+                if (_currentModuleInstance != null)
+                {
+                    _currentModuleInstance.DefaultExport = value;
+                }
+            }
+        }
+        else if (export.Declaration != null)
+        {
+            Execute(export.Declaration);
+            // Skip type-only declarations (interface, type alias) - they have no runtime value
+            if (_currentModuleInstance != null && !IsTypeOnlyDeclaration(export.Declaration))
+            {
+                string name = GetDeclaredName(export.Declaration);
+                _currentModuleInstance.SetExport(name, GetDeclaredValue(export.Declaration));
+            }
+        }
+        else if (export.NamedExports != null && export.FromModulePath == null)
+        {
+            // export { x, y }
+            foreach (var spec in export.NamedExports)
+            {
+                string localName = spec.LocalName.Lexeme;
+                string exportedName = spec.ExportedName?.Lexeme ?? localName;
+                var value = _environment.Get(spec.LocalName);
+                if (_currentModuleInstance != null)
+                {
+                    _currentModuleInstance.SetExport(exportedName, value);
+                }
+            }
+        }
+        else if (export.FromModulePath != null)
+        {
+            // Re-export: export { x } from './module' or export * from './module'
+            string sourcePath = _moduleResolver!.ResolveModulePath(export.FromModulePath, _currentModule!.Path);
+            var sourceModuleInstance = _loadedModules.GetValueOrDefault(sourcePath);
+
+            if (sourceModuleInstance != null && _currentModuleInstance != null)
+            {
+                if (export.NamedExports != null)
+                {
+                    // Re-export specific names
+                    foreach (var spec in export.NamedExports)
+                    {
+                        string importedName = spec.LocalName.Lexeme;
+                        string exportedName = spec.ExportedName?.Lexeme ?? importedName;
+                        var value = sourceModuleInstance.GetExport(importedName);
+                        _currentModuleInstance.SetExport(exportedName, value);
+                    }
+                }
+                else
+                {
+                    // Re-export all: export * from './module'
+                    foreach (var (name, value) in sourceModuleInstance.Exports)
+                    {
+                        _currentModuleInstance.SetExport(name, value);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a declaration is type-only (interface or type alias) with no runtime value.
+    /// </summary>
+    private bool IsTypeOnlyDeclaration(Stmt decl) =>
+        decl is Stmt.Interface or Stmt.TypeAlias;
+
+    /// <summary>
+    /// Gets the name of a declaration.
+    /// </summary>
+    private string GetDeclaredName(Stmt decl)
+    {
+        return decl switch
+        {
+            Stmt.Function f => f.Name.Lexeme,
+            Stmt.Class c => c.Name.Lexeme,
+            Stmt.Var v => v.Name.Lexeme,
+            Stmt.Enum e => e.Name.Lexeme,
+            _ => throw new Exception($"Runtime Error: Cannot get name of declaration type {decl.GetType().Name}")
+        };
+    }
+
+    /// <summary>
+    /// Gets the value of a declaration from the environment.
+    /// </summary>
+    private object? GetDeclaredValue(Stmt decl)
+    {
+        string name = GetDeclaredName(decl);
+        var token = decl switch
+        {
+            Stmt.Function f => f.Name,
+            Stmt.Class c => c.Name,
+            Stmt.Var v => v.Name,
+            Stmt.Enum e => e.Name,
+            _ => throw new Exception($"Runtime Error: Cannot get value of declaration type {decl.GetType().Name}")
+        };
+        return _environment.Get(token);
     }
 
     /// <summary>
@@ -283,6 +521,13 @@ public partial class Interpreter
                 throw new ReturnException(returnValue);
             case Stmt.Print printStmt:
                 Console.WriteLine(Stringify(Evaluate(printStmt.Expr)));
+                break;
+            case Stmt.Import:
+                // Imports are handled in BindModuleImports before execution
+                // In single-file mode, imports are a no-op (type checker would have errored)
+                break;
+            case Stmt.Export exportStmt:
+                ExecuteExport(exportStmt);
                 break;
         }
     }
