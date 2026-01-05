@@ -68,6 +68,23 @@ public partial class Interpreter
             return new SharpTSSymbol(description);
         }
 
+        // Handle BigInt() constructor - converts number/string to bigint
+        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        {
+            if (call.Arguments.Count != 1)
+                throw new Exception("Runtime Error: BigInt() requires exactly one argument.");
+
+            var arg = Evaluate(call.Arguments[0]);
+            return arg switch
+            {
+                SharpTSBigInt bi => bi,
+                System.Numerics.BigInteger biVal => new SharpTSBigInt(biVal),
+                double d => new SharpTSBigInt(d),
+                string s => new SharpTSBigInt(s),
+                _ => throw new Exception($"Runtime Error: Cannot convert {arg?.GetType().Name ?? "null"} to bigint.")
+            };
+        }
+
         object? callee = Evaluate(call.Callee);
 
         List<object?> argumentsList = [];
@@ -119,6 +136,15 @@ public partial class Interpreter
         object? left = Evaluate(binary.Left);
         object? right = Evaluate(binary.Right);
 
+        // Check for bigint operations
+        var leftBigInt = GetBigIntValue(left);
+        var rightBigInt = GetBigIntValue(right);
+
+        if (leftBigInt.HasValue || rightBigInt.HasValue)
+        {
+            return EvaluateBigIntBinary(binary.Operator.Type, left, right, leftBigInt, rightBigInt);
+        }
+
         return binary.Operator.Type switch
         {
             TokenType.GREATER => (double)left! > (double)right!,
@@ -145,6 +171,63 @@ public partial class Interpreter
             TokenType.GREATER_GREATER => (double)(ToInt32(left) >> (ToInt32(right) & 0x1F)),
             TokenType.GREATER_GREATER_GREATER => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
             _ => null
+        };
+    }
+
+    private System.Numerics.BigInteger? GetBigIntValue(object? value) => value switch
+    {
+        SharpTSBigInt bi => bi.Value,
+        System.Numerics.BigInteger biVal => biVal,
+        _ => null
+    };
+
+    private object EvaluateBigIntBinary(TokenType op, object? left, object? right,
+        System.Numerics.BigInteger? leftBi, System.Numerics.BigInteger? rightBi)
+    {
+        // Equality operators allow mixed types (bigint with anything)
+        if (op == TokenType.EQUAL_EQUAL || op == TokenType.EQUAL_EQUAL_EQUAL)
+        {
+            if (!leftBi.HasValue || !rightBi.HasValue) return false;
+            return leftBi.Value == rightBi.Value;
+        }
+        if (op == TokenType.BANG_EQUAL || op == TokenType.BANG_EQUAL_EQUAL)
+        {
+            if (!leftBi.HasValue || !rightBi.HasValue) return true;
+            return leftBi.Value != rightBi.Value;
+        }
+
+        // All other operators require both to be bigint
+        if (!leftBi.HasValue || !rightBi.HasValue)
+            throw new Exception("Runtime Error: Cannot mix bigint and other types in operations.");
+
+        var l = leftBi.Value;
+        var r = rightBi.Value;
+
+        return op switch
+        {
+            // Arithmetic
+            TokenType.PLUS => new SharpTSBigInt(l + r),
+            TokenType.MINUS => new SharpTSBigInt(l - r),
+            TokenType.STAR => new SharpTSBigInt(l * r),
+            TokenType.SLASH => new SharpTSBigInt(System.Numerics.BigInteger.Divide(l, r)),
+            TokenType.PERCENT => new SharpTSBigInt(System.Numerics.BigInteger.Remainder(l, r)),
+            TokenType.STAR_STAR => SharpTSBigInt.Pow(new SharpTSBigInt(l), new SharpTSBigInt(r)),
+
+            // Comparison
+            TokenType.GREATER => l > r,
+            TokenType.GREATER_EQUAL => l >= r,
+            TokenType.LESS => l < r,
+            TokenType.LESS_EQUAL => l <= r,
+
+            // Bitwise
+            TokenType.AMPERSAND => new SharpTSBigInt(l & r),
+            TokenType.PIPE => new SharpTSBigInt(l | r),
+            TokenType.CARET => new SharpTSBigInt(l ^ r),
+            TokenType.LESS_LESS => new SharpTSBigInt(l << (int)r),
+            TokenType.GREATER_GREATER => new SharpTSBigInt(l >> (int)r),
+            TokenType.GREATER_GREATER_GREATER => throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint."),
+
+            _ => throw new Exception($"Runtime Error: Operator {op} not supported for bigint.")
         };
     }
 

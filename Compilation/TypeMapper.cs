@@ -28,6 +28,7 @@ public class TypeMapper
     public Type MapTypeInfo(TypeInfo typeInfo) => typeInfo switch
     {
         TypeInfo.Primitive p => MapPrimitive(p),
+        TypeInfo.BigInt => typeof(System.Numerics.BigInteger), // BigInt maps to BigInteger
         TypeInfo.Array => typeof(object), // Will be TSArray at runtime
         TypeInfo.Function => typeof(object), // Will be delegate at runtime
         TypeInfo.Class c => GetClassType(c.Name),
@@ -73,6 +74,7 @@ public class TypeMapper
         "number" => typeof(double),
         "string" => typeof(string),
         "boolean" => typeof(bool),
+        "bigint" => typeof(System.Numerics.BigInteger),
         "void" => typeof(void),
         "any" => typeof(object),
         "unknown" => typeof(object),

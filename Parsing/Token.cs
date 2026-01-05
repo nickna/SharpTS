@@ -44,8 +44,10 @@ public enum TokenType
     NEW, NULL, OF, OVERRIDE, PRIVATE, PROTECTED, PUBLIC, READONLY, RETURN, SET, STATIC, SUPER, SWITCH, THIS, THROW, TRUE, TRY, CATCH, FINALLY, TYPE, TYPEOF, UNKNOWN, VAR, WHILE,
 
     // TypeScript Specific
-    TYPE_STRING, TYPE_NUMBER, TYPE_BOOLEAN, TYPE_SYMBOL,
+    TYPE_STRING, TYPE_NUMBER, TYPE_BOOLEAN, TYPE_SYMBOL, TYPE_BIGINT,
     SYMBOL,  // Symbol() constructor
+    BIGINT,  // BigInt() constructor
+    BIGINT_LITERAL,  // 123n literal (stores BigInteger value)
 
     EOF
 }

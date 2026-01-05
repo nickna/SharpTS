@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace SharpTS.Parsing;
 
 /// <summary>
@@ -76,7 +78,9 @@ public class Lexer(string source)
         { "number", TokenType.TYPE_NUMBER },
         { "boolean", TokenType.TYPE_BOOLEAN },
         { "symbol", TokenType.TYPE_SYMBOL },
-        { "Symbol", TokenType.SYMBOL }
+        { "Symbol", TokenType.SYMBOL },
+        { "bigint", TokenType.TYPE_BIGINT },
+        { "BigInt", TokenType.BIGINT }
     };
 
     public List<Token> ScanTokens()
@@ -270,6 +274,15 @@ public class Lexer(string source)
     private void NumberLiteral()
     {
         while (char.IsDigit(Peek())) Advance();
+
+        // Check for bigint suffix BEFORE decimal point (123n is valid, 123.5n is not)
+        if (Peek() == 'n')
+        {
+            string numStr = _source[_start.._current];
+            Advance(); // consume 'n'
+            AddToken(TokenType.BIGINT_LITERAL, BigInteger.Parse(numStr));
+            return;
+        }
 
         if (Peek() == '.' && char.IsDigit(PeekNext()))
         {

@@ -2190,6 +2190,21 @@ public class TypeChecker
             return new TypeInfo.Symbol();
         }
 
+        // Handle BigInt() constructor - converts number or string to bigint
+        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        {
+            if (call.Arguments.Count != 1)
+            {
+                throw new Exception("Type Error: BigInt() requires exactly one argument.");
+            }
+            var argType = CheckExpr(call.Arguments[0]);
+            if (!IsNumber(argType) && !IsString(argType) && argType is not TypeInfo.BigInt && argType is not TypeInfo.Any)
+            {
+                throw new Exception($"Type Error: BigInt() argument must be a number, string, or bigint, got '{argType}'.");
+            }
+            return new TypeInfo.BigInt();
+        }
+
         // Handle Object.keys(), Object.values(), Object.entries()
         if (call.Callee is Expr.Get get &&
             get.Object is Expr.Variable objVar &&
@@ -2618,22 +2633,32 @@ public class TypeChecker
             case TokenType.STAR:
             case TokenType.STAR_STAR:
             case TokenType.PERCENT:
+                // Allow number+number OR bigint+bigint, NOT mixed
+                if (IsBigInt(left) && IsBigInt(right))
+                    return new TypeInfo.BigInt();
+                if (IsNumber(left) && IsNumber(right))
+                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
+                throw new Exception("Type Error: Operands must be numbers or bigints of the same type.");
+
             case TokenType.GREATER:
             case TokenType.GREATER_EQUAL:
             case TokenType.LESS:
             case TokenType.LESS_EQUAL:
-                if (!IsNumber(left) || !IsNumber(right))
-                    throw new Exception("Type Error: Operands must be numbers.");
-
-                return binary.Operator.Type switch
-                {
-                    TokenType.MINUS or TokenType.SLASH or TokenType.STAR or TokenType.STAR_STAR or TokenType.PERCENT => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-                    _ => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)
-                };
+                // Allow number vs number OR bigint vs bigint
+                if ((IsBigInt(left) && IsBigInt(right)) || (IsNumber(left) && IsNumber(right)))
+                    return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot compare bigint and number directly. Use explicit conversion.");
+                throw new Exception("Type Error: Comparison operands must be numbers or bigints of the same type.");
 
             case TokenType.PLUS:
+                if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
                 if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
                 if (IsString(left) || IsString(right)) return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
                 throw new Exception("Type Error: Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.");
 
             case TokenType.EQUAL_EQUAL:
@@ -2655,7 +2680,19 @@ public class TypeChecker
             case TokenType.CARET:
             case TokenType.LESS_LESS:
             case TokenType.GREATER_GREATER:
+                // Allow both number and bigint (separately)
+                if (IsBigInt(left) && IsBigInt(right))
+                    return new TypeInfo.BigInt();
+                if (IsNumber(left) && IsNumber(right))
+                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in bitwise operations.");
+                throw new Exception("Type Error: Bitwise operators require numeric operands.");
+
             case TokenType.GREATER_GREATER_GREATER:
+                // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
+                if (IsBigInt(left) || IsBigInt(right))
+                    throw new Exception("Type Error: Unsigned right shift (>>>) is not supported for bigint.");
                 if (!IsNumber(left) || !IsNumber(right))
                     throw new Exception("Type Error: Bitwise operators require numeric operands.");
                 return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
@@ -2910,15 +2947,19 @@ public class TypeChecker
         TypeInfo right = CheckExpr(unary.Right);
         if (unary.Operator.Type == TokenType.TYPEOF)
             return new TypeInfo.Primitive(TokenType.TYPE_STRING);
-        if (unary.Operator.Type == TokenType.MINUS && !IsNumber(right))
-             throw new Exception("Type Error: Unary '-' expects a number.");
+        if (unary.Operator.Type == TokenType.MINUS)
+        {
+            if (IsBigInt(right)) return new TypeInfo.BigInt();
+            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            throw new Exception("Type Error: Unary '-' expects a number or bigint.");
+        }
         if (unary.Operator.Type == TokenType.BANG)
              return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         if (unary.Operator.Type == TokenType.TILDE)
         {
-            if (!IsNumber(right))
-                throw new Exception("Type Error: Bitwise NOT requires a numeric operand.");
-            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            if (IsBigInt(right)) return new TypeInfo.BigInt();
+            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            throw new Exception("Type Error: Bitwise NOT requires a numeric operand.");
         }
 
         return right;
@@ -2959,6 +3000,7 @@ public class TypeChecker
         if (value is double d) return new TypeInfo.NumberLiteral(d);
         if (value is string s) return new TypeInfo.StringLiteral(s);
         if (value is bool b) return new TypeInfo.BooleanLiteral(b);
+        if (value is System.Numerics.BigInteger) return new TypeInfo.BigInt();
         return new TypeInfo.Void();
     }
 
@@ -3107,6 +3149,12 @@ public class TypeChecker
 
         // Symbol type compatibility
         if (expected is TypeInfo.Symbol && actual is TypeInfo.Symbol)
+        {
+            return true;
+        }
+
+        // BigInt type compatibility
+        if (expected is TypeInfo.BigInt && actual is TypeInfo.BigInt)
         {
             return true;
         }
@@ -3311,6 +3359,7 @@ public class TypeChecker
                     "string" => new TypeInfo.Primitive(TokenType.TYPE_STRING),
                     "number" => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
                     "boolean" => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+                    "bigint" => new TypeInfo.BigInt(),
                     _ => null
                 };
                 // Excluded type remains unknown (we don't know what else it could be)
@@ -3338,6 +3387,7 @@ public class TypeChecker
         "string" => type is TypeInfo.Primitive { Type: TokenType.TYPE_STRING },
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER },
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN },
+        "bigint" => type is TypeInfo.BigInt,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
         "function" => type is TypeInfo.Function,
         _ => false
@@ -3399,6 +3449,7 @@ public class TypeChecker
     
     private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any;
     private bool IsString(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING || t is TypeInfo.StringLiteral || t is TypeInfo.Any;
+    private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any;
 
     private bool IsSubclassOf(TypeInfo.Class? subclass, TypeInfo.Class target)
     {
@@ -3900,6 +3951,7 @@ public class TypeChecker
         if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         if (typeName == "symbol") return new TypeInfo.Symbol();
+        if (typeName == "bigint") return new TypeInfo.BigInt();
         if (typeName == "void") return new TypeInfo.Void();
         if (typeName == "null") return new TypeInfo.Null();
         if (typeName == "unknown") return new TypeInfo.Unknown();

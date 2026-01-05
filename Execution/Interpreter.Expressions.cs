@@ -1,3 +1,4 @@
+using System.Numerics;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -26,7 +27,7 @@ public partial class Interpreter
             Expr.NullishCoalescing nc => EvaluateNullishCoalescing(nc),
             Expr.Ternary ternary => EvaluateTernary(ternary),
             Expr.Grouping grouping => Evaluate(grouping.Expression),
-            Expr.Literal literal => literal.Value,
+            Expr.Literal literal => EvaluateLiteral(literal),
             Expr.Unary unary => EvaluateUnary(unary),
             Expr.Variable variable => EvaluateVariable(variable),
             Expr.Assign assign => EvaluateAssign(assign),
@@ -51,6 +52,21 @@ public partial class Interpreter
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             _ => throw new Exception("Unknown expression type.")
         };
+    }
+
+    /// <summary>
+    /// Evaluates a literal expression, wrapping BigInteger values in SharpTSBigInt.
+    /// </summary>
+    /// <param name="literal">The literal expression AST node.</param>
+    /// <returns>The literal value, with BigInteger wrapped in SharpTSBigInt.</returns>
+    private object? EvaluateLiteral(Expr.Literal literal)
+    {
+        // Wrap BigInteger in SharpTSBigInt for proper toString behavior
+        if (literal.Value is BigInteger bi)
+        {
+            return new SharpTSBigInt(bi);
+        }
+        return literal.Value;
     }
 
     /// <summary>

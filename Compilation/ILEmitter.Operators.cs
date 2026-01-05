@@ -11,6 +11,13 @@ public partial class ILEmitter
 {
     private void EmitBinary(Expr.Binary b)
     {
+        // Check for bigint operations
+        if (IsBigIntOperation(b))
+        {
+            EmitBigIntBinary(b);
+            return;
+        }
+
         // Addition: use runtime Add() which handles both string concat and numeric add
         if (b.Operator.Type == TokenType.PLUS)
         {
@@ -201,20 +208,31 @@ public partial class ILEmitter
         switch (u.Operator.Type)
         {
             case TokenType.MINUS:
-                EmitExpression(u.Right);
-                // If it's a literal number, it's already unboxed on the stack
-                if (u.Right is Expr.Literal { Value: double })
+                if (IsBigIntExpr(u.Right))
                 {
-                    // Already have unboxed double on stack
+                    // BigInt negation
+                    EmitExpression(u.Right);
+                    EmitBoxIfNeeded(u.Right);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntNegate);
+                    _stackType = StackType.Unknown;
                 }
                 else
                 {
-                    EmitBoxIfNeeded(u.Right);
-                    EmitUnboxToDouble();
+                    EmitExpression(u.Right);
+                    // If it's a literal number, it's already unboxed on the stack
+                    if (u.Right is Expr.Literal { Value: double })
+                    {
+                        // Already have unboxed double on stack
+                    }
+                    else
+                    {
+                        EmitBoxIfNeeded(u.Right);
+                        EmitUnboxToDouble();
+                    }
+                    IL.Emit(OpCodes.Neg);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                 }
-                IL.Emit(OpCodes.Neg);
-                IL.Emit(OpCodes.Box, typeof(double));
-                _stackType = StackType.Unknown; // Boxed double
                 break;
 
             case TokenType.BANG:
@@ -235,13 +253,24 @@ public partial class ILEmitter
                 break;
 
             case TokenType.TILDE:
-                EmitExpression(u.Right);
-                EmitBoxIfNeeded(u.Right);
-                IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-                IL.Emit(OpCodes.Not);
-                IL.Emit(OpCodes.Conv_R8);
-                IL.Emit(OpCodes.Box, typeof(double));
-                _stackType = StackType.Unknown; // Boxed double
+                if (IsBigIntExpr(u.Right))
+                {
+                    // BigInt bitwise not
+                    EmitExpression(u.Right);
+                    EmitBoxIfNeeded(u.Right);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseNot);
+                    _stackType = StackType.Unknown;
+                }
+                else
+                {
+                    EmitExpression(u.Right);
+                    EmitBoxIfNeeded(u.Right);
+                    IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
+                    IL.Emit(OpCodes.Not);
+                    IL.Emit(OpCodes.Conv_R8);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
+                }
                 break;
         }
     }
@@ -541,5 +570,109 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Box, typeof(double));
+    }
+
+    private bool IsBigIntOperation(Expr.Binary b)
+    {
+        // Check if either operand has bigint type from the type map
+        if (_ctx.TypeMap == null) return false;
+
+        var leftType = _ctx.TypeMap.Get(b.Left);
+        var rightType = _ctx.TypeMap.Get(b.Right);
+
+        return leftType is TypeInfo.BigInt || rightType is TypeInfo.BigInt;
+    }
+
+    private bool IsBigIntExpr(Expr expr)
+    {
+        if (_ctx.TypeMap == null) return false;
+        var type = _ctx.TypeMap.Get(expr);
+        return type is TypeInfo.BigInt;
+    }
+
+    private void EmitBigIntBinary(Expr.Binary b)
+    {
+        // Emit both operands as boxed objects
+        EmitExpression(b.Left);
+        EmitBoxIfNeeded(b.Left);
+        EmitExpression(b.Right);
+        EmitBoxIfNeeded(b.Right);
+
+        switch (b.Operator.Type)
+        {
+            // Arithmetic
+            case TokenType.PLUS:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntAdd);
+                break;
+            case TokenType.MINUS:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntSubtract);
+                break;
+            case TokenType.STAR:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntMultiply);
+                break;
+            case TokenType.SLASH:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntDivide);
+                break;
+            case TokenType.PERCENT:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntRemainder);
+                break;
+            case TokenType.STAR_STAR:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntPow);
+                break;
+
+            // Comparison
+            case TokenType.LESS:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThan);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case TokenType.LESS_EQUAL:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThanOrEqual);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case TokenType.GREATER:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThan);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case TokenType.GREATER_EQUAL:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThanOrEqual);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case TokenType.EQUAL_EQUAL:
+            case TokenType.EQUAL_EQUAL_EQUAL:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case TokenType.BANG_EQUAL:
+            case TokenType.BANG_EQUAL_EQUAL:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ceq);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+
+            // Bitwise
+            case TokenType.AMPERSAND:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseAnd);
+                break;
+            case TokenType.PIPE:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseOr);
+                break;
+            case TokenType.CARET:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseXor);
+                break;
+            case TokenType.LESS_LESS:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLeftShift);
+                break;
+            case TokenType.GREATER_GREATER:
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntRightShift);
+                break;
+            case TokenType.GREATER_GREATER_GREATER:
+                throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint.");
+
+            default:
+                throw new Exception($"Unsupported bigint operator: {b.Operator.Type}");
+        }
+
+        _stackType = StackType.Unknown; // Result is boxed object
     }
 }

@@ -25,6 +25,13 @@ public partial class ILEmitter
                 IL.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
                 _stackType = StackType.Boolean;
                 break;
+            case System.Numerics.BigInteger bi:
+                // Emit BigInteger by parsing from string at runtime
+                IL.Emit(OpCodes.Ldstr, bi.ToString());
+                IL.Emit(OpCodes.Call, typeof(System.Numerics.BigInteger).GetMethod("Parse", [typeof(string)])!);
+                IL.Emit(OpCodes.Box, typeof(System.Numerics.BigInteger));
+                _stackType = StackType.Unknown;
+                break;
             case null:
                 IL.Emit(OpCodes.Ldnull);
                 _stackType = StackType.Null;

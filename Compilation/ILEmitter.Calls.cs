@@ -175,6 +175,19 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: BigInt() constructor - converts number/string to bigint
+        if (c.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        {
+            if (c.Arguments.Count != 1)
+                throw new Exception("BigInt() requires exactly one argument.");
+
+            EmitExpression(c.Arguments[0]);
+            EmitBoxIfNeeded(c.Arguments[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateBigInt);
+            _stackType = StackType.Unknown;
+            return;
+        }
+
         // Special case: Static method call on class (e.g., Counter.increment())
         if (c.Callee is Expr.Get staticGet &&
             staticGet.Object is Expr.Variable classVar &&

@@ -461,6 +461,7 @@ public class Parser(List<Token> tokens)
         }
         else if (Check(TokenType.TYPE_STRING) || Check(TokenType.TYPE_NUMBER) ||
                  Check(TokenType.TYPE_BOOLEAN) || Check(TokenType.TYPE_SYMBOL) ||
+                 Check(TokenType.TYPE_BIGINT) ||
                  Check(TokenType.IDENTIFIER) ||
                  Check(TokenType.NULL) || Check(TokenType.UNKNOWN) || Check(TokenType.NEVER))
         {
@@ -2123,7 +2124,7 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.FALSE)) return new Expr.Literal(false);
         if (Match(TokenType.TRUE)) return new Expr.Literal(true);
         if (Match(TokenType.NULL)) return new Expr.Literal(null);
-        if (Match(TokenType.NUMBER, TokenType.STRING)) return new Expr.Literal(Previous().Literal);
+        if (Match(TokenType.NUMBER, TokenType.STRING, TokenType.BIGINT_LITERAL)) return new Expr.Literal(Previous().Literal);
         if (Match(TokenType.THIS)) return new Expr.This(Previous());
         if (Match(TokenType.SUPER))
         {
@@ -2148,8 +2149,8 @@ public class Parser(List<Token> tokens)
         }
         if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
 
-        // Symbol is a special callable constructor
-        if (Match(TokenType.SYMBOL)) return new Expr.Variable(Previous());
+        // Symbol and BigInt are special callable constructors
+        if (Match(TokenType.SYMBOL, TokenType.BIGINT)) return new Expr.Variable(Previous());
 
         if (Match(TokenType.LEFT_BRACKET))
         {

@@ -232,8 +232,12 @@ public partial class Interpreter
         return unary.Operator.Type switch
         {
             TokenType.BANG => !IsTruthy(right),
+            TokenType.MINUS when right is SharpTSBigInt bi => new SharpTSBigInt(-bi.Value),
+            TokenType.MINUS when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(-biVal),
             TokenType.MINUS => -(double)right!,
             TokenType.TYPEOF => GetTypeofString(right),
+            TokenType.TILDE when right is SharpTSBigInt bi => new SharpTSBigInt(~bi.Value),
+            TokenType.TILDE when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(~biVal),
             TokenType.TILDE => (double)(~ToInt32(right)),
             _ => null
         };
@@ -256,6 +260,7 @@ public partial class Interpreter
         double => "number",
         string => "string",
         SharpTSSymbol => "symbol",
+        SharpTSBigInt or System.Numerics.BigInteger => "bigint",
         SharpTSFunction or SharpTSArrowFunction or SharpTSClass => "function",
         _ => "object"
     };

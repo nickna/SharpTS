@@ -191,6 +191,11 @@ public abstract record TypeInfo
         public override string ToString() => "symbol";
     }
 
+    public record BigInt() : TypeInfo
+    {
+        public override string ToString() => "bigint";
+    }
+
     public record StringLiteral(string Value) : TypeInfo
     {
         public override string ToString() => $"\"{Value}\"";

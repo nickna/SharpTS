@@ -126,6 +126,7 @@ public static class RuntimeTypes
         null => "null",
         bool b => b ? "true" : "false",
         double d => FormatNumber(d),
+        System.Numerics.BigInteger bi => $"{bi}n",
         string s => s,
         object[] arr => "[" + string.Join(", ", arr.Select(Stringify)) + "]",
         List<object?> list => "[" + string.Join(", ", list.Select(Stringify)) + "]",
@@ -175,6 +176,7 @@ public static class RuntimeTypes
         null => "object", // typeof null === "object" in JS
         bool => "boolean",
         double or int or long => "number",
+        System.Numerics.BigInteger => "bigint",
         string => "string",
         TSFunction => "function",
         Delegate => "function",
@@ -999,6 +1001,86 @@ public static class RuntimeTypes
         // Runtime types are static methods in this class
         // No additional types need to be emitted - we use the existing RuntimeTypes class
     }
+
+    #endregion
+
+    #region BigInt Operations
+
+    public static object CreateBigInt(object? value) => value switch
+    {
+        System.Numerics.BigInteger bi => bi,
+        double d => new System.Numerics.BigInteger(d),
+        string s when s.StartsWith("0x", StringComparison.OrdinalIgnoreCase) =>
+            System.Numerics.BigInteger.Parse(s[2..], System.Globalization.NumberStyles.HexNumber),
+        string s when s.StartsWith("-0x", StringComparison.OrdinalIgnoreCase) =>
+            -System.Numerics.BigInteger.Parse(s[3..], System.Globalization.NumberStyles.HexNumber),
+        string s => System.Numerics.BigInteger.Parse(s),
+        _ => throw new Exception($"Cannot convert {value?.GetType().Name ?? "null"} to bigint")
+    };
+
+    public static object BigIntAdd(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! + (System.Numerics.BigInteger)right!;
+
+    public static object BigIntSubtract(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! - (System.Numerics.BigInteger)right!;
+
+    public static object BigIntMultiply(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! * (System.Numerics.BigInteger)right!;
+
+    public static object BigIntDivide(object? left, object? right) =>
+        System.Numerics.BigInteger.Divide((System.Numerics.BigInteger)left!, (System.Numerics.BigInteger)right!);
+
+    public static object BigIntRemainder(object? left, object? right) =>
+        System.Numerics.BigInteger.Remainder((System.Numerics.BigInteger)left!, (System.Numerics.BigInteger)right!);
+
+    public static object BigIntPow(object? baseValue, object? exponent)
+    {
+        var exp = (System.Numerics.BigInteger)exponent!;
+        if (exp < 0)
+            throw new Exception("Runtime Error: BigInt exponent must be non-negative.");
+        if (exp > int.MaxValue)
+            throw new Exception("Runtime Error: BigInt exponent too large.");
+        return System.Numerics.BigInteger.Pow((System.Numerics.BigInteger)baseValue!, (int)exp);
+    }
+
+    public static object BigIntNegate(object? value) =>
+        System.Numerics.BigInteger.Negate((System.Numerics.BigInteger)value!);
+
+    public static object BigIntBitwiseAnd(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! & (System.Numerics.BigInteger)right!;
+
+    public static object BigIntBitwiseOr(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! | (System.Numerics.BigInteger)right!;
+
+    public static object BigIntBitwiseXor(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! ^ (System.Numerics.BigInteger)right!;
+
+    public static object BigIntBitwiseNot(object? value) =>
+        ~(System.Numerics.BigInteger)value!;
+
+    public static object BigIntLeftShift(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! << (int)(System.Numerics.BigInteger)right!;
+
+    public static object BigIntRightShift(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! >> (int)(System.Numerics.BigInteger)right!;
+
+    public static bool BigIntEquals(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! == (System.Numerics.BigInteger)right!;
+
+    public static bool BigIntLessThan(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! < (System.Numerics.BigInteger)right!;
+
+    public static bool BigIntLessThanOrEqual(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! <= (System.Numerics.BigInteger)right!;
+
+    public static bool BigIntGreaterThan(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! > (System.Numerics.BigInteger)right!;
+
+    public static bool BigIntGreaterThanOrEqual(object? left, object? right) =>
+        (System.Numerics.BigInteger)left! >= (System.Numerics.BigInteger)right!;
+
+    public static bool IsBigInt(object? value) =>
+        value is System.Numerics.BigInteger;
 
     #endregion
 }

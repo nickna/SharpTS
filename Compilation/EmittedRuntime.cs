@@ -134,4 +134,25 @@ public class EmittedRuntime
     public FieldBuilder SymbolStorageField { get; set; } = null!;
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
+
+    // BigInt support
+    public MethodBuilder CreateBigInt { get; set; } = null!;
+    public MethodBuilder BigIntAdd { get; set; } = null!;
+    public MethodBuilder BigIntSubtract { get; set; } = null!;
+    public MethodBuilder BigIntMultiply { get; set; } = null!;
+    public MethodBuilder BigIntDivide { get; set; } = null!;
+    public MethodBuilder BigIntRemainder { get; set; } = null!;
+    public MethodBuilder BigIntPow { get; set; } = null!;
+    public MethodBuilder BigIntNegate { get; set; } = null!;
+    public MethodBuilder BigIntBitwiseAnd { get; set; } = null!;
+    public MethodBuilder BigIntBitwiseOr { get; set; } = null!;
+    public MethodBuilder BigIntBitwiseXor { get; set; } = null!;
+    public MethodBuilder BigIntBitwiseNot { get; set; } = null!;
+    public MethodBuilder BigIntLeftShift { get; set; } = null!;
+    public MethodBuilder BigIntRightShift { get; set; } = null!;
+    public MethodBuilder BigIntEquals { get; set; } = null!;
+    public MethodBuilder BigIntLessThan { get; set; } = null!;
+    public MethodBuilder BigIntLessThanOrEqual { get; set; } = null!;
+    public MethodBuilder BigIntGreaterThan { get; set; } = null!;
+    public MethodBuilder BigIntGreaterThanOrEqual { get; set; } = null!;
 }

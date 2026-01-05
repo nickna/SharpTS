@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Class field initializers & object method this binding)
+**Last Updated:** 2026-01-04 (BigInt type support)
 
 ## Legend
 - ✅ Implemented
@@ -212,7 +212,7 @@ This document tracks TypeScript language features and their implementation statu
 | Generators (`function*`) | ❌ | Iterable generators |
 | Iterators (Symbol.iterator) | ❌ | Custom iteration |
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
-| `bigint` type | ❌ | Arbitrary precision integers |
+| `bigint` type | ✅ | Arbitrary precision integers with full operation support |
 | Mapped types | ❌ | `{ [K in keyof T]: ... }` |
 | Conditional types | ❌ | `T extends U ? X : Y` |
 | Template literal types | ❌ | `` `${string}ID` `` |
@@ -482,3 +482,20 @@ All quick wins have been implemented:
 - ✅ Full interpreter support for both features
 - ✅ IL compiler support for class field initializers
 - ⚠️ IL compiler: object method `this` binding not yet implemented (documented limitation)
+
+### Phase 21 Features (BigInt Type)
+- ✅ `bigint` type with `123n` literal syntax
+- ✅ `BigInt()` constructor for converting numbers, strings, and bigints
+- ✅ Arbitrary precision using `System.Numerics.BigInteger` as CLR backing type
+- ✅ Arithmetic operators (`+`, `-`, `*`, `/`, `%`) with truncation division
+- ✅ Comparison operators (`<`, `>`, `<=`, `>=`, `===`, `!==`)
+- ✅ Bitwise operators (`&`, `|`, `^`, `~`, `<<`, `>>`)
+- ✅ Exponentiation operator (`**`) for bigint values
+- ✅ Unary negation (`-bigint`) and bitwise NOT (`~bigint`)
+- ✅ Strict type checking: no implicit mixing with `number` type
+- ✅ Type error for `>>>` operator on bigint (TypeScript restriction)
+- ✅ `typeof bigint` returns `"bigint"`
+- ✅ `toString()` outputs with `n` suffix (e.g., `123n`)
+- ✅ Hex string parsing in `BigInt("0xFF")` constructor
+- ✅ `SharpTSBigInt` runtime wrapper class
+- ✅ Full interpreter and IL compiler support with 62 test cases
