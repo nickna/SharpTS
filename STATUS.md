@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Complete string methods support)
+**Last Updated:** 2026-01-04 (Overloading and label statements support)
 
 ## Legend
 - ✅ Implemented
@@ -64,7 +64,7 @@ This document tracks TypeScript language features and their implementation statu
 | Getters/Setters (`get`/`set`) | ✅ | Property accessors |
 | Parameter properties | ✅ | `constructor(public x: number)` |
 | `implements` keyword | ✅ | Class implementing interface |
-| Method overloading | ❌ | Multiple signatures |
+| Method overloading | ✅ | Multiple signatures with implementation function |
 | `override` keyword | ❌ | Explicit override marker |
 
 ---
@@ -80,7 +80,7 @@ This document tracks TypeScript language features and their implementation statu
 | Type annotations | ✅ | Parameters and return types |
 | Rest parameters (`...args`) | ✅ | Variable arguments |
 | Spread in calls (`fn(...arr)`) | ✅ | Array expansion |
-| Overloads | ❌ | Multiple signatures |
+| Overloads | ✅ | Multiple signatures with implementation function |
 | `this` parameter typing | ❌ | Explicit `this` type |
 | Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
 
@@ -164,7 +164,7 @@ This document tracks TypeScript language features and their implementation statu
 | `throw` | ✅ | |
 | `for...in` loops | ✅ | Object key iteration |
 | `do...while` loops | ✅ | Post-condition loop |
-| Label statements | ❌ | `label: for (...)` |
+| Label statements | ✅ | `label: for (...)` with break/continue support |
 
 ---
 
@@ -436,3 +436,15 @@ All quick wins have been implemented:
 - ✅ Negative index support for `slice` and `at`
 - ✅ Optional parameter support for `slice`, `padStart`, `padEnd`
 - ✅ Full interpreter and IL compiler support with 74 test cases
+
+### Phase 17 Features (Overloading & Labels)
+- ✅ Function overloading with signature declarations and implementation function
+- ✅ Method overloading in classes (instance and static methods)
+- ✅ Constructor overloading
+- ✅ Type-based and arity-based overload resolution
+- ✅ Label statements (`label: for (...)`, `label: while (...)`, `label: { }`)
+- ✅ Labeled `break` and `continue` for targeting specific loops
+- ✅ Nested loop label targeting (break outer from inner loop)
+- ✅ Labeled block statements with break support
+- ✅ Label scoping and shadowing validation
+- ✅ Full interpreter and IL compiler support

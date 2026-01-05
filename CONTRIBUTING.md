@@ -222,10 +222,6 @@ We especially welcome contributions in these areas:
 - Add tests for error conditions
 - Improve existing test comprehensiveness
 
-## Code of Conduct
-
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
-
 ---
 
 Thank you for contributing to SharpTS!
