@@ -584,13 +584,20 @@ public class TypeChecker
                             methodEnv.Define(method.Parameters[i].Name.Lexeme, methodType.ParamTypes[i]);
                         }
 
+                        // Save and set context - method bodies are isolated from outer loop/switch/label context
                         TypeEnvironment previousEnvFunc = _environment;
                         TypeInfo? previousReturnFunc = _currentFunctionReturnType;
                         bool previousInStatic = _inStaticMethod;
+                        int previousLoopDepthFunc = _loopDepth;
+                        int previousSwitchDepthFunc = _switchDepth;
+                        var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
 
                         _environment = methodEnv;
                         _currentFunctionReturnType = methodType.ReturnType;
                         _inStaticMethod = method.IsStatic;
+                        _loopDepth = 0;
+                        _switchDepth = 0;
+                        _activeLabels.Clear();
 
                         try
                         {
@@ -604,6 +611,11 @@ public class TypeChecker
                             _environment = previousEnvFunc;
                             _currentFunctionReturnType = previousReturnFunc;
                             _inStaticMethod = previousInStatic;
+                            _loopDepth = previousLoopDepthFunc;
+                            _switchDepth = previousSwitchDepthFunc;
+                            _activeLabels.Clear();
+                            foreach (var kvp in previousActiveLabelsFunc)
+                                _activeLabels[kvp.Key] = kvp.Value;
                         }
                     }
 
@@ -631,11 +643,18 @@ public class TypeChecker
                                 }
                             }
 
+                            // Save and set context - accessor bodies are isolated from outer loop/switch/label context
                             TypeEnvironment previousEnvAcc = _environment;
                             TypeInfo? previousReturnAcc = _currentFunctionReturnType;
+                            int previousLoopDepthAcc = _loopDepth;
+                            int previousSwitchDepthAcc = _switchDepth;
+                            var previousActiveLabelsAcc = new Dictionary<string, bool>(_activeLabels);
 
                             _environment = accessorEnv;
                             _currentFunctionReturnType = accessorReturnType;
+                            _loopDepth = 0;
+                            _switchDepth = 0;
+                            _activeLabels.Clear();
 
                             try
                             {
@@ -648,6 +667,11 @@ public class TypeChecker
                             {
                                 _environment = previousEnvAcc;
                                 _currentFunctionReturnType = previousReturnAcc;
+                                _loopDepth = previousLoopDepthAcc;
+                                _switchDepth = previousSwitchDepthAcc;
+                                _activeLabels.Clear();
+                                foreach (var kvp in previousActiveLabelsAcc)
+                                    _activeLabels[kvp.Key] = kvp.Value;
                             }
                         }
                     }
@@ -1030,11 +1054,18 @@ public class TypeChecker
             funcEnv.Define(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
         }
 
+        // Save and set context - function bodies are isolated from outer loop/switch/label context
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
+        int previousLoopDepth = _loopDepth;
+        int previousSwitchDepth = _switchDepth;
+        var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
 
         _environment = funcEnv;
         _currentFunctionReturnType = returnType;
+        _loopDepth = 0;
+        _switchDepth = 0;
+        _activeLabels.Clear();
 
         try
         {
@@ -1047,6 +1078,11 @@ public class TypeChecker
         {
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
+            _loopDepth = previousLoopDepth;
+            _switchDepth = previousSwitchDepth;
+            _activeLabels.Clear();
+            foreach (var kvp in previousActiveLabels)
+                _activeLabels[kvp.Key] = kvp.Value;
         }
     }
 
@@ -2778,12 +2814,18 @@ public class TypeChecker
             arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, paramTypes[i]);
         }
 
-        // Save and set context
+        // Save and set context - function bodies are isolated from outer loop/switch/label context
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
+        int previousLoopDepth = _loopDepth;
+        int previousSwitchDepth = _switchDepth;
+        var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
 
         _environment = arrowEnv;
         _currentFunctionReturnType = returnType;
+        _loopDepth = 0;
+        _switchDepth = 0;
+        _activeLabels.Clear();
 
         try
         {
@@ -2813,6 +2855,11 @@ public class TypeChecker
         {
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
+            _loopDepth = previousLoopDepth;
+            _switchDepth = previousSwitchDepth;
+            _activeLabels.Clear();
+            foreach (var kvp in previousActiveLabels)
+                _activeLabels[kvp.Key] = kvp.Value;
         }
 
         bool hasRest = arrow.Parameters.Any(p => p.IsRest);
