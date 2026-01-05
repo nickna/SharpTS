@@ -1,0 +1,398 @@
+using SharpTS.Parsing;
+
+namespace SharpTS.TypeSystem;
+
+/// <summary>
+/// Expression type checking - CheckExpr dispatch and basic expression handlers.
+/// </summary>
+/// <remarks>
+/// Contains the main expression dispatch (CheckExpr) and handlers for:
+/// literals, arrays, objects, templates, spread, arrow functions, assign, type assertions,
+/// and basic helper methods (LookupVariable, GetLiteralType).
+/// </remarks>
+public partial class TypeChecker
+{
+    private TypeInfo CheckExpr(Expr expr)
+    {
+        TypeInfo result = expr switch
+        {
+            Expr.Literal literal => GetLiteralType(literal.Value),
+            Expr.Variable variable => LookupVariable(variable.Name),
+            Expr.Assign assign => CheckAssign(assign),
+            Expr.Binary binary => CheckBinary(binary),
+            Expr.Logical logical => CheckLogical(logical),
+            Expr.NullishCoalescing nc => CheckNullishCoalescing(nc),
+            Expr.Ternary ternary => CheckTernary(ternary),
+            Expr.Call call => CheckCall(call),
+            Expr.Grouping grouping => CheckExpr(grouping.Expression),
+            Expr.Unary unary => CheckUnary(unary),
+            Expr.Get get => CheckGet(get),
+            Expr.Set set => CheckSet(set),
+            Expr.This thisExpr => CheckThis(thisExpr),
+            Expr.New newExpr => CheckNew(newExpr),
+            Expr.ArrayLiteral array => CheckArray(array),
+            Expr.ObjectLiteral obj => CheckObject(obj),
+            Expr.GetIndex getIndex => CheckGetIndex(getIndex),
+            Expr.SetIndex setIndex => CheckSetIndex(setIndex),
+            Expr.Super super => CheckSuper(super),
+            Expr.CompoundAssign compound => CheckCompoundAssign(compound),
+            Expr.CompoundSet compoundSet => CheckCompoundSet(compoundSet),
+            Expr.CompoundSetIndex compoundSetIndex => CheckCompoundSetIndex(compoundSetIndex),
+            Expr.PrefixIncrement prefix => CheckPrefixIncrement(prefix),
+            Expr.PostfixIncrement postfix => CheckPostfixIncrement(postfix),
+            Expr.ArrowFunction arrow => CheckArrowFunction(arrow),
+            Expr.TemplateLiteral template => CheckTemplateLiteral(template),
+            Expr.Spread spread => CheckSpread(spread),
+            Expr.TypeAssertion ta => CheckTypeAssertion(ta),
+            _ => new TypeInfo.Any()
+        };
+
+        // Store the resolved type in the TypeMap for use by ILCompiler/Interpreter
+        _typeMap.Set(expr, result);
+
+        return result;
+    }
+
+    private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)
+    {
+        TypeInfo sourceType = CheckExpr(ta.Expression);
+        TypeInfo targetType = ToTypeInfo(ta.TargetType);
+
+        // Allow any <-> anything (escape hatch)
+        if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
+            return targetType;
+
+        // Check if types are related (either direction)
+        if (IsCompatible(targetType, sourceType) || IsCompatible(sourceType, targetType))
+            return targetType;
+
+        throw new Exception($"Type Error: Cannot assert type '{sourceType}' to '{targetType}'.");
+    }
+
+    private TypeInfo CheckTemplateLiteral(Expr.TemplateLiteral template)
+    {
+        // Type check all interpolated expressions (any type is allowed)
+        foreach (var expr in template.Expressions)
+        {
+            CheckExpr(expr);
+        }
+        // Template literals always result in string
+        return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+    }
+
+    private TypeInfo CheckObject(Expr.ObjectLiteral obj)
+    {
+        Dictionary<string, TypeInfo> fields = [];
+        foreach (var prop in obj.Properties)
+        {
+            if (prop.IsSpread)
+            {
+                // Spread property - merge fields from the spread object
+                TypeInfo spreadType = CheckExpr(prop.Value);
+                if (spreadType is TypeInfo.Record record)
+                {
+                    foreach (var kv in record.Fields)
+                    {
+                        fields[kv.Key] = kv.Value;
+                    }
+                }
+                else if (spreadType is TypeInfo.Instance inst)
+                {
+                    // Instance fields are dynamic, just accept
+                }
+                else if (spreadType is TypeInfo.Any)
+                {
+                    // Any is fine
+                }
+                else
+                {
+                    throw new Exception($"Type Error: Spread in object literal requires an object, got '{spreadType}'.");
+                }
+            }
+            else
+            {
+                fields[prop.Name!.Lexeme] = CheckExpr(prop.Value);
+            }
+        }
+        return new TypeInfo.Record(fields);
+    }
+
+    private TypeInfo CheckArray(Expr.ArrayLiteral array)
+    {
+        if (array.Elements.Count == 0) return new TypeInfo.Array(new TypeInfo.Any()); // Empty array is any[]? or generic?
+
+        List<TypeInfo> elementTypes = [];
+        foreach (var element in array.Elements)
+        {
+            TypeInfo elemType;
+            if (element is Expr.Spread spread)
+            {
+                // Spread element - get element type from array or tuple
+                TypeInfo spreadType = CheckExpr(spread.Expression);
+                if (spreadType is TypeInfo.Array arrType)
+                {
+                    elemType = arrType.ElementType;
+                }
+                else if (spreadType is TypeInfo.Tuple tupType)
+                {
+                    // Spread tuple - add all its element types
+                    elementTypes.AddRange(tupType.ElementTypes);
+                    if (tupType.RestElementType != null)
+                        elementTypes.Add(tupType.RestElementType);
+                    continue; // Don't add elemType again since we added multiple
+                }
+                else if (spreadType is TypeInfo.Any)
+                {
+                    elemType = new TypeInfo.Any();
+                }
+                else
+                {
+                    throw new Exception($"Type Error: Spread expression must be an array or tuple, got '{spreadType}'.");
+                }
+            }
+            else
+            {
+                elemType = CheckExpr(element);
+            }
+            elementTypes.Add(elemType);
+        }
+
+        // Find common type or create union
+        TypeInfo commonType = elementTypes[0];
+        bool allCompatible = true;
+        for (int i = 1; i < elementTypes.Count; i++)
+        {
+            if (!IsCompatible(commonType, elementTypes[i]) && !IsCompatible(elementTypes[i], commonType))
+            {
+                allCompatible = false;
+                break;
+            }
+        }
+
+        if (!allCompatible)
+        {
+            // Create union of all unique element types
+            var uniqueTypes = elementTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            commonType = uniqueTypes.Count == 1 ? uniqueTypes[0] : new TypeInfo.Union(uniqueTypes);
+        }
+
+        return new TypeInfo.Array(commonType);
+    }
+
+    private TypeInfo CheckSpread(Expr.Spread spread)
+    {
+        // Spread just passes through to the underlying expression type
+        // The actual spread logic is handled by the caller (array literal, call, etc.)
+        return CheckExpr(spread.Expression);
+    }
+
+    private void CheckArrayLiteralAgainstTuple(Expr.ArrayLiteral arrayLit, TypeInfo.Tuple tupleType, string varName)
+    {
+        int elemCount = arrayLit.Elements.Count;
+        int requiredCount = tupleType.RequiredCount;
+        int maxCount = tupleType.MaxLength ?? int.MaxValue;
+
+        // Check element count
+        if (elemCount < requiredCount)
+        {
+            throw new Exception($"Type Error: Tuple requires at least {requiredCount} elements, but got {elemCount} for variable '{varName}'.");
+        }
+        if (tupleType.RestElementType == null && elemCount > tupleType.ElementTypes.Count)
+        {
+            throw new Exception($"Type Error: Tuple expects at most {tupleType.ElementTypes.Count} elements, but got {elemCount} for variable '{varName}'.");
+        }
+
+        // Check each element type
+        for (int i = 0; i < elemCount; i++)
+        {
+            var element = arrayLit.Elements[i];
+            TypeInfo expectedType;
+
+            if (i < tupleType.ElementTypes.Count)
+            {
+                expectedType = tupleType.ElementTypes[i];
+            }
+            else if (tupleType.RestElementType != null)
+            {
+                expectedType = tupleType.RestElementType;
+            }
+            else
+            {
+                throw new Exception($"Type Error: Tuple index {i} is out of bounds for variable '{varName}'.");
+            }
+
+            // Recursively apply contextual typing for nested array literals with tuple types
+            if (expectedType is TypeInfo.Tuple nestedTuple && element is Expr.ArrayLiteral nestedArrayLit)
+            {
+                CheckArrayLiteralAgainstTuple(nestedArrayLit, nestedTuple, $"{varName}[{i}]");
+            }
+            else
+            {
+                TypeInfo elemType = CheckExpr(element);
+                if (!IsCompatible(expectedType, elemType))
+                {
+                    throw new Exception($"Type Error: Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
+                }
+            }
+        }
+    }
+
+    private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow)
+    {
+        // Parse explicit 'this' type if present (for object literal method shorthand)
+        // Note: Arrow function expressions shouldn't have 'this' parameter in standard TypeScript,
+        // but we support it for object literal method shorthand which is parsed as ArrowFunction.
+        TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
+
+        // For object method shorthand, allow 'this' even without explicit type annotation
+        // TypeScript infers 'this' as the containing object type, but we use 'any' for simplicity
+        if (arrow.IsObjectMethod && thisType == null)
+        {
+            thisType = new TypeInfo.Any();
+        }
+
+        // Build parameter types and check defaults
+        List<TypeInfo> paramTypes = [];
+        int requiredParams = 0;
+        bool seenDefault = false;
+
+        foreach (var param in arrow.Parameters)
+        {
+            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
+            paramTypes.Add(paramType);
+
+            // Rest parameters are not counted toward required params
+            if (param.IsRest)
+            {
+                continue;
+            }
+
+            if (param.DefaultValue != null)
+            {
+                seenDefault = true;
+                TypeInfo defaultType = CheckExpr(param.DefaultValue);
+                if (!IsCompatible(paramType, defaultType))
+                {
+                    throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
+                }
+            }
+            else if (param.IsOptional)
+            {
+                seenDefault = true; // Optional parameters are like having a default
+            }
+            else
+            {
+                if (seenDefault)
+                {
+                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter.");
+                }
+                requiredParams++;
+            }
+        }
+
+        // Determine return type
+        TypeInfo returnType = arrow.ReturnType != null
+            ? ToTypeInfo(arrow.ReturnType)
+            : new TypeInfo.Any();
+
+        // Create new environment with parameters
+        TypeEnvironment arrowEnv = new(_environment);
+        for (int i = 0; i < arrow.Parameters.Count; i++)
+        {
+            arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, paramTypes[i]);
+        }
+
+        // Save and set context - function bodies are isolated from outer loop/switch/label context
+        TypeEnvironment previousEnv = _environment;
+        TypeInfo? previousReturn = _currentFunctionReturnType;
+        TypeInfo? previousThisType = _currentFunctionThisType;
+        int previousLoopDepth = _loopDepth;
+        int previousSwitchDepth = _switchDepth;
+        var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
+
+        _environment = arrowEnv;
+        _currentFunctionReturnType = returnType;
+        _currentFunctionThisType = thisType;
+        _loopDepth = 0;
+        _switchDepth = 0;
+        _activeLabels.Clear();
+
+        try
+        {
+            if (arrow.ExpressionBody != null)
+            {
+                // Expression body - infer return type if not specified
+                TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
+                if (arrow.ReturnType == null)
+                {
+                    returnType = exprType;
+                }
+                else if (!IsCompatible(returnType, exprType))
+                {
+                    throw new Exception($"Type Error: Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
+                }
+            }
+            else if (arrow.BlockBody != null)
+            {
+                // Block body - check statements
+                foreach (var stmt in arrow.BlockBody)
+                {
+                    CheckStmt(stmt);
+                }
+            }
+        }
+        finally
+        {
+            _environment = previousEnv;
+            _currentFunctionReturnType = previousReturn;
+            _currentFunctionThisType = previousThisType;
+            _loopDepth = previousLoopDepth;
+            _switchDepth = previousSwitchDepth;
+            _activeLabels.Clear();
+            foreach (var kvp in previousActiveLabels)
+                _activeLabels[kvp.Key] = kvp.Value;
+        }
+
+        bool hasRest = arrow.Parameters.Any(p => p.IsRest);
+        return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
+    }
+
+    private TypeInfo CheckAssign(Expr.Assign assign)
+    {
+        TypeInfo varType = LookupVariable(assign.Name);
+        TypeInfo valueType = CheckExpr(assign.Value);
+
+        if (!IsCompatible(varType, valueType))
+        {
+            throw new Exception($"Type Error: Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{varType}'.");
+        }
+        return valueType;
+    }
+
+    private TypeInfo LookupVariable(Token name)
+    {
+        if (name.Lexeme == "console") return new TypeInfo.Any();
+        if (name.Lexeme == "Math") return new TypeInfo.Any(); // Math is a special global object
+        if (name.Lexeme == "Object") return new TypeInfo.Any(); // Object is a special global object
+        if (name.Lexeme == "Array") return new TypeInfo.Any(); // Array is a special global object
+        if (name.Lexeme == "JSON") return new TypeInfo.Any(); // JSON is a special global object
+
+        var type = _environment.Get(name.Lexeme);
+        if (type == null)
+        {
+             throw new Exception($"Type Error: Undefined variable '{name.Lexeme}'.");
+        }
+        return type;
+    }
+
+    private TypeInfo GetLiteralType(object? value)
+    {
+        if (value is null) return new TypeInfo.Null();
+        if (value is int i) return new TypeInfo.NumberLiteral((double)i);
+        if (value is double d) return new TypeInfo.NumberLiteral(d);
+        if (value is string s) return new TypeInfo.StringLiteral(s);
+        if (value is bool b) return new TypeInfo.BooleanLiteral(b);
+        if (value is System.Numerics.BigInteger) return new TypeInfo.BigInt();
+        return new TypeInfo.Void();
+    }
+}

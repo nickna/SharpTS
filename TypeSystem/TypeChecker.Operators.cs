@@ -1,0 +1,239 @@
+using SharpTS.Parsing;
+
+namespace SharpTS.TypeSystem;
+
+/// <summary>
+/// Operator type checking - binary, unary, logical, compound assignment.
+/// </summary>
+/// <remarks>
+/// Contains operator handlers:
+/// CheckBinary, CheckLogical, CheckNullishCoalescing, CheckTernary,
+/// CheckCompoundAssign, CheckCompoundSet, CheckCompoundSetIndex,
+/// CheckPrefixIncrement, CheckPostfixIncrement, CheckUnary.
+/// </remarks>
+public partial class TypeChecker
+{
+    private TypeInfo CheckBinary(Expr.Binary binary)
+    {
+        TypeInfo left = CheckExpr(binary.Left);
+        TypeInfo right = CheckExpr(binary.Right);
+
+        switch (binary.Operator.Type)
+        {
+            case TokenType.MINUS:
+            case TokenType.SLASH:
+            case TokenType.STAR:
+            case TokenType.STAR_STAR:
+            case TokenType.PERCENT:
+                // Allow number+number OR bigint+bigint, NOT mixed
+                if (IsBigInt(left) && IsBigInt(right))
+                    return new TypeInfo.BigInt();
+                if (IsNumber(left) && IsNumber(right))
+                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
+                throw new Exception("Type Error: Operands must be numbers or bigints of the same type.");
+
+            case TokenType.GREATER:
+            case TokenType.GREATER_EQUAL:
+            case TokenType.LESS:
+            case TokenType.LESS_EQUAL:
+                // Allow number vs number OR bigint vs bigint
+                if ((IsBigInt(left) && IsBigInt(right)) || (IsNumber(left) && IsNumber(right)))
+                    return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot compare bigint and number directly. Use explicit conversion.");
+                throw new Exception("Type Error: Comparison operands must be numbers or bigints of the same type.");
+
+            case TokenType.PLUS:
+                if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
+                if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                if (IsString(left) || IsString(right)) return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
+                throw new Exception("Type Error: Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.");
+
+            case TokenType.EQUAL_EQUAL:
+            case TokenType.EQUAL_EQUAL_EQUAL:
+            case TokenType.BANG_EQUAL:
+            case TokenType.BANG_EQUAL_EQUAL:
+                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+
+            case TokenType.IN:
+                // 'in' operator: left should be string/number, right should be object/array
+                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+
+            case TokenType.INSTANCEOF:
+                // 'instanceof' operator: returns boolean
+                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+
+            case TokenType.AMPERSAND:
+            case TokenType.PIPE:
+            case TokenType.CARET:
+            case TokenType.LESS_LESS:
+            case TokenType.GREATER_GREATER:
+                // Allow both number and bigint (separately)
+                if (IsBigInt(left) && IsBigInt(right))
+                    return new TypeInfo.BigInt();
+                if (IsNumber(left) && IsNumber(right))
+                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+                    throw new Exception("Type Error: Cannot mix bigint and number in bitwise operations.");
+                throw new Exception("Type Error: Bitwise operators require numeric operands.");
+
+            case TokenType.GREATER_GREATER_GREATER:
+                // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
+                if (IsBigInt(left) || IsBigInt(right))
+                    throw new Exception("Type Error: Unsigned right shift (>>>) is not supported for bigint.");
+                if (!IsNumber(left) || !IsNumber(right))
+                    throw new Exception("Type Error: Bitwise operators require numeric operands.");
+                return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        }
+
+        return new TypeInfo.Any();
+    }
+
+    private TypeInfo CheckLogical(Expr.Logical logical)
+    {
+        CheckExpr(logical.Left);
+        CheckExpr(logical.Right);
+        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    }
+
+    private TypeInfo CheckNullishCoalescing(Expr.NullishCoalescing nc)
+    {
+        TypeInfo leftType = CheckExpr(nc.Left);
+        TypeInfo rightType = CheckExpr(nc.Right);
+
+        // Remove null from left type since ?? handles the null case
+        TypeInfo nonNullLeft = leftType;
+        if (leftType is TypeInfo.Union u && u.ContainsNull)
+        {
+            var nonNullTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
+            nonNullLeft = nonNullTypes.Count == 0 ? rightType :
+                nonNullTypes.Count == 1 ? nonNullTypes[0] :
+                new TypeInfo.Union(nonNullTypes);
+        }
+        else if (leftType is TypeInfo.Null)
+        {
+            return rightType;  // null ?? right = right
+        }
+
+        // If left (non-null) and right are compatible, return non-null left
+        if (IsCompatible(nonNullLeft, rightType) || IsCompatible(rightType, nonNullLeft))
+        {
+            return nonNullLeft;
+        }
+
+        // Otherwise return union of non-null left and right
+        return new TypeInfo.Union([nonNullLeft, rightType]);
+    }
+
+    private TypeInfo CheckTernary(Expr.Ternary ternary)
+    {
+        CheckExpr(ternary.Condition);
+        TypeInfo thenType = CheckExpr(ternary.ThenBranch);
+        TypeInfo elseType = CheckExpr(ternary.ElseBranch);
+
+        // Return the more specific type, or thenType if both are compatible
+        if (IsCompatible(thenType, elseType) || IsCompatible(elseType, thenType))
+        {
+            return thenType;
+        }
+
+        // For now, allow different types and return Any
+        return new TypeInfo.Any();
+    }
+
+    private TypeInfo CheckCompoundAssign(Expr.CompoundAssign compound)
+    {
+        TypeInfo varType = LookupVariable(compound.Name);
+        TypeInfo valueType = CheckExpr(compound.Value);
+
+        // For += with strings, allow string concatenation
+        if (compound.Operator.Type == TokenType.PLUS_EQUAL)
+        {
+            if (IsString(varType)) return varType;
+            if (!IsNumber(varType) || !IsNumber(valueType))
+                throw new Exception("Type Error: Compound assignment requires numeric operands.");
+            return varType;
+        }
+
+        // All other compound operators require numbers
+        if (!IsNumber(varType) || !IsNumber(valueType))
+        {
+            throw new Exception("Type Error: Compound assignment requires numeric operands.");
+        }
+
+        return varType;
+    }
+
+    private TypeInfo CheckCompoundSet(Expr.CompoundSet compound)
+    {
+        CheckExpr(compound.Object);
+        CheckExpr(compound.Value);
+        return new TypeInfo.Any();
+    }
+
+    private TypeInfo CheckCompoundSetIndex(Expr.CompoundSetIndex compound)
+    {
+        TypeInfo objType = CheckExpr(compound.Object);
+        TypeInfo indexType = CheckExpr(compound.Index);
+        TypeInfo valueType = CheckExpr(compound.Value);
+
+        if (!IsNumber(indexType))
+            throw new Exception("Type Error: Array index must be a number.");
+
+        if (objType is TypeInfo.Array arrayType)
+        {
+            if (!IsNumber(arrayType.ElementType) || !IsNumber(valueType))
+                throw new Exception("Type Error: Compound assignment requires numeric operands.");
+            return arrayType.ElementType;
+        }
+
+        return new TypeInfo.Any();
+    }
+
+    private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
+    {
+        TypeInfo operandType = CheckExpr(prefix.Operand);
+        if (!IsNumber(operandType))
+        {
+            throw new Exception("Type Error: Increment/decrement operand must be a number.");
+        }
+        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+    }
+
+    private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
+    {
+        TypeInfo operandType = CheckExpr(postfix.Operand);
+        if (!IsNumber(operandType))
+        {
+            throw new Exception("Type Error: Increment/decrement operand must be a number.");
+        }
+        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+    }
+
+    private TypeInfo CheckUnary(Expr.Unary unary)
+    {
+        TypeInfo right = CheckExpr(unary.Right);
+        if (unary.Operator.Type == TokenType.TYPEOF)
+            return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+        if (unary.Operator.Type == TokenType.MINUS)
+        {
+            if (IsBigInt(right)) return new TypeInfo.BigInt();
+            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            throw new Exception("Type Error: Unary '-' expects a number or bigint.");
+        }
+        if (unary.Operator.Type == TokenType.BANG)
+             return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if (unary.Operator.Type == TokenType.TILDE)
+        {
+            if (IsBigInt(right)) return new TypeInfo.BigInt();
+            if (IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+            throw new Exception("Type Error: Bitwise NOT requires a numeric operand.");
+        }
+
+        return right;
+    }
+}

@@ -1,0 +1,578 @@
+using SharpTS.Parsing;
+
+namespace SharpTS.TypeSystem;
+
+/// <summary>
+/// Type string parsing - converting type annotations to TypeInfo.
+/// </summary>
+/// <remarks>
+/// Contains type parsing methods:
+/// ToTypeInfo(string), SplitUnionParts, SplitIntersectionParts, SimplifyIntersection,
+/// ParseParenthesizedType, ParseFunctionTypeInfo, SplitFunctionParams,
+/// ParseTupleTypeInfo, SplitTupleElements, ParseInlineObjectTypeInfo, SplitObjectMembers.
+/// </remarks>
+public partial class TypeChecker
+{
+    private TypeInfo ToTypeInfo(string typeName)
+    {
+        // Check for type parameter in current scope first
+        var typeParam = _environment.GetTypeParameter(typeName);
+        if (typeParam != null)
+        {
+            return typeParam;
+        }
+
+        // Check for type alias
+        var aliasExpansion = _environment.GetTypeAlias(typeName);
+        if (aliasExpansion != null)
+        {
+            return ToTypeInfo(aliasExpansion);
+        }
+
+        // Handle generic type syntax: Box<number>, Map<string, number>
+        if (typeName.Contains('<') && typeName.Contains('>'))
+        {
+            return ParseGenericTypeReference(typeName);
+        }
+
+        // Handle union types: "string | number"
+        // Union has lower precedence than intersection, check it first at top level
+        if (typeName.Contains(" | "))
+        {
+            var parts = SplitUnionParts(typeName);
+            if (parts.Count > 1)  // Only create union if we actually split at top level
+            {
+                var types = parts.Select(ToTypeInfo).ToList();
+                return new TypeInfo.Union(types);
+            }
+        }
+
+        // Handle intersection types: "A & B"
+        // Intersection has higher precedence than union
+        if (typeName.Contains(" & "))
+        {
+            var parts = SplitIntersectionParts(typeName);
+            if (parts.Count > 1)  // Only create intersection if we actually split at top level
+            {
+                var types = parts.Select(ToTypeInfo).ToList();
+                return SimplifyIntersection(types);
+            }
+        }
+
+        // Handle inline object types: "{ x: number; y?: string }"
+        // Must check BEFORE function types since objects can contain function-typed properties
+        if (typeName.StartsWith("{ ") && typeName.EndsWith(" }"))
+        {
+            return ParseInlineObjectTypeInfo(typeName);
+        }
+
+        // Check for function type syntax: "(params) => returnType"
+        // Must check BEFORE parenthesized types since both start with "("
+        if (typeName.Contains("=>"))
+        {
+            return ParseFunctionTypeInfo(typeName);
+        }
+
+        // Handle parenthesized types: "(string | number)[]"
+        if (typeName.StartsWith("("))
+        {
+            return ParseParenthesizedType(typeName);
+        }
+
+        // Handle tuple types: "[string, number, boolean?]"
+        if (typeName.StartsWith("[") && typeName.EndsWith("]"))
+        {
+            return ParseTupleTypeInfo(typeName);
+        }
+
+        if (typeName.EndsWith("[]"))
+        {
+            string elementTypeString = typeName.Substring(0, typeName.Length - 2);
+            TypeInfo elementType = ToTypeInfo(elementTypeString);
+            return new TypeInfo.Array(elementType);
+        }
+
+        // Handle string literal types: "value"
+        if (typeName.StartsWith("\"") && typeName.EndsWith("\""))
+        {
+            return new TypeInfo.StringLiteral(typeName[1..^1]);
+        }
+
+        // Handle boolean literal types
+        if (typeName == "true") return new TypeInfo.BooleanLiteral(true);
+        if (typeName == "false") return new TypeInfo.BooleanLiteral(false);
+
+        // Handle number literal types (check before primitives)
+        if (double.TryParse(typeName, out double numValue))
+        {
+            return new TypeInfo.NumberLiteral(numValue);
+        }
+
+        if (typeName == "string") return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+        if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if (typeName == "symbol") return new TypeInfo.Symbol();
+        if (typeName == "bigint") return new TypeInfo.BigInt();
+        if (typeName == "void") return new TypeInfo.Void();
+        if (typeName == "null") return new TypeInfo.Null();
+        if (typeName == "unknown") return new TypeInfo.Unknown();
+        if (typeName == "never") return new TypeInfo.Never();
+
+        TypeInfo? type = _environment.Get(typeName);
+        if (type is TypeInfo.Class classType)
+        {
+            return new TypeInfo.Instance(classType);
+        }
+        if (type is TypeInfo.Interface itfType)
+        {
+            return itfType;
+        }
+        if (type is TypeInfo.Enum enumType)
+        {
+            return enumType;
+        }
+
+        return new TypeInfo.Any();
+    }
+
+    private List<string> SplitUnionParts(string typeName)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == '|' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
+            {
+                parts.Add(typeName[start..(i - 1)].Trim());
+                start = i + 2;
+            }
+        }
+        parts.Add(typeName[start..].Trim());
+        return parts;
+    }
+
+    /// <summary>
+    /// Splits an intersection type string into its component parts, respecting nesting.
+    /// E.g., "A &amp; B &amp; C" becomes ["A", "B", "C"]
+    /// </summary>
+    private List<string> SplitIntersectionParts(string typeName)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '(' || c == '<' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == '>' || c == ']' || c == '}') depth--;
+            else if (c == '&' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
+            {
+                parts.Add(typeName[start..(i - 1)].Trim());
+                start = i + 2;
+            }
+        }
+        parts.Add(typeName[start..].Trim());
+        return parts;
+    }
+
+    /// <summary>
+    /// Simplifies an intersection type according to TypeScript semantics:
+    /// - Conflicting primitives (string &amp; number) = never
+    /// - never &amp; T = never
+    /// - any &amp; T = any
+    /// - unknown &amp; T = T
+    /// - Object types are merged with property combination
+    /// </summary>
+    private TypeInfo SimplifyIntersection(List<TypeInfo> types)
+    {
+        // Handle empty or single type
+        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 1) return types[0];
+
+        // Check for never (absorbs everything)
+        if (types.Any(t => t is TypeInfo.Never))
+            return new TypeInfo.Never();
+
+        // Check for any (absorbs in intersection)
+        if (types.Any(t => t is TypeInfo.Any))
+            return new TypeInfo.Any();
+
+        // Remove unknown (identity element)
+        types = types.Where(t => t is not TypeInfo.Unknown).ToList();
+        if (types.Count == 0) return new TypeInfo.Unknown();
+        if (types.Count == 1) return types[0];
+
+        // Check for conflicting primitives (e.g., string & number = never)
+        var primitives = types.OfType<TypeInfo.Primitive>().ToList();
+        if (primitives.Count > 1)
+        {
+            var distinctPrimitives = primitives.Select(p => p.Type).Distinct().ToList();
+            if (distinctPrimitives.Count > 1)
+                return new TypeInfo.Never();  // Conflicting primitives
+        }
+
+        // Collect object-like types for merging
+        var records = types.OfType<TypeInfo.Record>().ToList();
+        var interfaces = types.OfType<TypeInfo.Interface>().ToList();
+        var classes = types.OfType<TypeInfo.Class>().ToList();
+        var instances = types.OfType<TypeInfo.Instance>().ToList();
+
+        if (records.Count > 0 || interfaces.Count > 0 || classes.Count > 0 || instances.Count > 0)
+        {
+            // Merge all object-like types
+            var mergedFields = new Dictionary<string, TypeInfo>();
+            var optionalFields = new HashSet<string>();
+            var requiredInAny = new HashSet<string>(); // Track if property is required in any type
+            var nonObjectTypes = new List<TypeInfo>();
+
+            foreach (var type in types)
+            {
+                Dictionary<string, TypeInfo>? fields = type switch
+                {
+                    TypeInfo.Record r => r.Fields,
+                    TypeInfo.Interface i => i.Members,
+                    TypeInfo.Class c => c.DeclaredFieldTypes,
+                    TypeInfo.Instance inst => inst.ClassType switch
+                    {
+                        TypeInfo.Class c => c.DeclaredFieldTypes,
+                        _ => null
+                    },
+                    _ => null
+                };
+
+                HashSet<string>? optionals = type switch
+                {
+                    TypeInfo.Interface i => i.OptionalMemberSet,
+                    _ => null
+                };
+
+                if (fields == null || fields.Count == 0)
+                {
+                    // For classes/instances without explicit field types, keep as non-object type
+                    // so the intersection is preserved
+                    if (type is TypeInfo.Class || type is TypeInfo.Instance)
+                    {
+                        nonObjectTypes.Add(type);
+                    }
+                    else if (fields == null)
+                    {
+                        nonObjectTypes.Add(type);
+                    }
+                    continue;
+                }
+
+                foreach (var (name, fieldType) in fields)
+                {
+                    bool isOptionalInThisType = optionals?.Contains(name) ?? false;
+
+                    if (mergedFields.TryGetValue(name, out var existingType))
+                    {
+                        // Check for property type conflict
+                        if (!IsCompatible(existingType, fieldType) && !IsCompatible(fieldType, existingType))
+                        {
+                            // Conflicting types - property becomes never
+                            mergedFields[name] = new TypeInfo.Never();
+                        }
+                        // If compatible, keep the more specific type (or the first one)
+
+                        // If required in any type, mark as required
+                        if (!isOptionalInThisType)
+                        {
+                            requiredInAny.Add(name);
+                        }
+                    }
+                    else
+                    {
+                        mergedFields[name] = fieldType;
+                        // Initially mark optional if optional in this type
+                        if (isOptionalInThisType)
+                        {
+                            optionalFields.Add(name);
+                        }
+                        else
+                        {
+                            requiredInAny.Add(name);
+                        }
+                    }
+                }
+            }
+
+            // A property is optional in the intersection only if it's optional in ALL types that have it
+            // (or if it only appears in types where it's optional)
+            optionalFields.ExceptWith(requiredInAny);
+
+            // If all types were object-like, return merged interface (to preserve optional info)
+            if (nonObjectTypes.Count == 0)
+            {
+                // Use Interface if we have optional fields, otherwise Record
+                if (optionalFields.Count > 0)
+                {
+                    return new TypeInfo.Interface("", mergedFields, optionalFields);
+                }
+                return new TypeInfo.Record(mergedFields);
+            }
+
+            // Otherwise, return intersection with merged record/interface
+            var resultTypes = new List<TypeInfo>(nonObjectTypes) { new TypeInfo.Record(mergedFields) };
+            return new TypeInfo.Intersection(resultTypes);
+        }
+
+        // Return intersection for other cases (e.g., class instances)
+        return new TypeInfo.Intersection(types);
+    }
+
+    private TypeInfo ParseParenthesizedType(string typeName)
+    {
+        int depth = 0;
+        int closeIndex = -1;
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            if (typeName[i] == '(') depth++;
+            else if (typeName[i] == ')') { depth--; if (depth == 0) { closeIndex = i; break; } }
+        }
+
+        string inner = typeName[1..closeIndex];
+        string suffix = typeName[(closeIndex + 1)..];
+
+        TypeInfo result = ToTypeInfo(inner);
+        while (suffix.StartsWith("[]")) { result = new TypeInfo.Array(result); suffix = suffix[2..]; }
+        return result;
+    }
+
+    private TypeInfo ParseFunctionTypeInfo(string funcType)
+    {
+        // Parse "(param1, param2) => returnType" or "(this: Type, param1) => returnType"
+        var arrowIdx = funcType.IndexOf("=>");
+        var paramsSection = funcType.Substring(0, arrowIdx).Trim();
+        var returnTypeStr = funcType.Substring(arrowIdx + 2).Trim();
+
+        // Remove surrounding parentheses
+        if (paramsSection.StartsWith("(") && paramsSection.EndsWith(")"))
+        {
+            paramsSection = paramsSection.Substring(1, paramsSection.Length - 2);
+        }
+
+        TypeInfo? thisType = null;
+        List<TypeInfo> paramTypes = [];
+
+        if (!string.IsNullOrWhiteSpace(paramsSection))
+        {
+            var parts = SplitFunctionParams(paramsSection);
+            foreach (var part in parts)
+            {
+                var param = part.Trim();
+
+                // Check for 'this' parameter: "this: Type"
+                if (param.StartsWith("this:"))
+                {
+                    var thisTypeStr = param.Substring(5).Trim(); // Skip "this:"
+                    thisType = ToTypeInfo(thisTypeStr);
+                }
+                else
+                {
+                    paramTypes.Add(ToTypeInfo(param));
+                }
+            }
+        }
+
+        TypeInfo returnType = ToTypeInfo(returnTypeStr);
+        return new TypeInfo.Function(paramTypes, returnType, -1, false, thisType);
+    }
+
+    /// <summary>
+    /// Split function parameters respecting nested brackets and generics.
+    /// </summary>
+    private List<string> SplitFunctionParams(string paramsStr)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < paramsStr.Length; i++)
+        {
+            char c = paramsStr[i];
+            if (c == '(' || c == '<' || c == '[' || c == '{')
+                depth++;
+            else if (c == ')' || c == '>' || c == ']' || c == '}')
+                depth--;
+            else if (c == ',' && depth == 0)
+            {
+                parts.Add(paramsStr[start..i]);
+                start = i + 1;
+            }
+        }
+
+        if (start < paramsStr.Length)
+            parts.Add(paramsStr[start..]);
+
+        return parts;
+    }
+
+    private TypeInfo ParseTupleTypeInfo(string tupleStr)
+    {
+        string inner = tupleStr[1..^1].Trim(); // Remove [ and ]
+        if (string.IsNullOrEmpty(inner))
+            return new TypeInfo.Tuple([], 0, null);
+
+        var elements = SplitTupleElements(inner);
+        List<TypeInfo> elementTypes = [];
+        int requiredCount = 0;
+        bool seenOptional = false;
+        TypeInfo? restType = null;
+
+        for (int i = 0; i < elements.Count; i++)
+        {
+            string elem = elements[i].Trim();
+
+            // Rest element: ...type[]
+            if (elem.StartsWith("..."))
+            {
+                if (i != elements.Count - 1)
+                    throw new Exception("Type Error: Rest element must be last in tuple type.");
+                string arrayType = elem[3..];
+                if (!arrayType.EndsWith("[]"))
+                    throw new Exception("Type Error: Rest element must be an array type.");
+                restType = ToTypeInfo(arrayType[..^2]);
+                break;
+            }
+
+            // Optional element: type?
+            bool isOptional = elem.EndsWith("?");
+            if (isOptional)
+            {
+                elem = elem[..^1];
+                seenOptional = true;
+            }
+            else if (seenOptional)
+            {
+                throw new Exception("Type Error: Required element cannot follow optional element in tuple.");
+            }
+
+            elementTypes.Add(ToTypeInfo(elem));
+            if (!isOptional) requiredCount++;
+        }
+
+        return new TypeInfo.Tuple(elementTypes, requiredCount, restType);
+    }
+
+    private List<string> SplitTupleElements(string inner)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < inner.Length; i++)
+        {
+            char c = inner[i];
+            if (c == '(' || c == '[' || c == '<') depth++;
+            else if (c == ')' || c == ']' || c == '>') depth--;
+            else if (c == ',' && depth == 0)
+            {
+                parts.Add(inner[start..i]);
+                start = i + 1;
+            }
+        }
+        parts.Add(inner[start..]);
+        return parts;
+    }
+
+    /// <summary>
+    /// Parses inline object type strings like "{ x: number; y?: string }".
+    /// </summary>
+    private TypeInfo ParseInlineObjectTypeInfo(string objStr)
+    {
+        // Remove "{ " and " }" from the string
+        string inner = objStr[2..^2].Trim();
+        if (string.IsNullOrEmpty(inner))
+            return new TypeInfo.Record(new Dictionary<string, TypeInfo>());
+
+        var fields = new Dictionary<string, TypeInfo>();
+        TypeInfo? stringIndexType = null;
+        TypeInfo? numberIndexType = null;
+        TypeInfo? symbolIndexType = null;
+
+        // Split by semicolon (the separator used in ParseInlineObjectType)
+        var members = SplitObjectMembers(inner);
+
+        foreach (var member in members)
+        {
+            string m = member.Trim();
+            if (string.IsNullOrEmpty(m)) continue;
+
+            // Check for index signature: [string]: type, [number]: type, [symbol]: type
+            if (m.StartsWith("["))
+            {
+                int bracketEnd = m.IndexOf(']');
+                if (bracketEnd > 0)
+                {
+                    string keyType = m[1..bracketEnd].Trim();
+                    int colonIdx = m.IndexOf(':', bracketEnd);
+                    if (colonIdx > 0)
+                    {
+                        string valueType = m[(colonIdx + 1)..].Trim();
+                        TypeInfo valueTypeInfo = ToTypeInfo(valueType);
+
+                        switch (keyType)
+                        {
+                            case "string":
+                                stringIndexType = valueTypeInfo;
+                                break;
+                            case "number":
+                                numberIndexType = valueTypeInfo;
+                                break;
+                            case "symbol":
+                                symbolIndexType = valueTypeInfo;
+                                break;
+                        }
+                        continue;
+                    }
+                }
+            }
+
+            // Find the colon separator (property name: type)
+            int regularColonIdx = m.IndexOf(':');
+            if (regularColonIdx < 0) continue;
+
+            string propName = m[..regularColonIdx].Trim();
+            string propType = m[(regularColonIdx + 1)..].Trim();
+
+            // Check for optional marker (?) and remove it
+            if (propName.EndsWith("?"))
+            {
+                propName = propName[..^1].Trim();
+            }
+
+            fields[propName] = ToTypeInfo(propType);
+        }
+
+        return new TypeInfo.Record(fields, stringIndexType, numberIndexType, symbolIndexType);
+    }
+
+    private List<string> SplitObjectMembers(string inner)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < inner.Length; i++)
+        {
+            char c = inner[i];
+            if (c == '(' || c == '[' || c == '<' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '>' || c == '}') depth--;
+            else if (c == ';' && depth == 0)
+            {
+                parts.Add(inner[start..i]);
+                start = i + 1;
+            }
+        }
+        if (start < inner.Length)
+            parts.Add(inner[start..]);
+        return parts;
+    }
+}
