@@ -967,8 +967,9 @@ public class Parser(List<Token> tokens)
             bool isStatic = false;
             bool isReadonly = false;
             bool isMemberAbstract = false;
+            bool isOverride = false;
 
-            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT))
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT, TokenType.OVERRIDE))
             {
                 var modifier = Previous().Type;
                 switch (modifier)
@@ -979,6 +980,7 @@ public class Parser(List<Token> tokens)
                     case TokenType.STATIC: isStatic = true; break;
                     case TokenType.READONLY: isReadonly = true; break;
                     case TokenType.ABSTRACT: isMemberAbstract = true; break;
+                    case TokenType.OVERRIDE: isOverride = true; break;
                 }
             }
 
@@ -992,6 +994,18 @@ public class Parser(List<Token> tokens)
             if (isMemberAbstract && isStatic)
             {
                 throw new Exception($"Parse Error: A method cannot be both abstract and static.");
+            }
+
+            // Validate: override and static are mutually exclusive
+            if (isOverride && isStatic)
+            {
+                throw new Exception($"Parse Error: Static methods cannot use the 'override' modifier.");
+            }
+
+            // Validate: override requires the class to have a superclass
+            if (isOverride && superclass == null)
+            {
+                throw new Exception($"Parse Error: Cannot use 'override' modifier in a class that does not extend another class.");
             }
 
             // Check for getter/setter
@@ -1035,7 +1049,7 @@ public class Parser(List<Token> tokens)
                     body = Block();
                 }
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract));
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride));
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
             {
@@ -1060,6 +1074,12 @@ public class Parser(List<Token> tokens)
                     throw new Exception("Parse Error: A constructor cannot be abstract.");
                 }
 
+                // Override cannot be used on constructors
+                if (isOverride && Check(TokenType.CONSTRUCTOR))
+                {
+                    throw new Exception("Parse Error: A constructor cannot use the 'override' modifier.");
+                }
+
                 if (isMemberAbstract)
                 {
                     // Parse abstract method: signature only, no body
@@ -1077,7 +1097,7 @@ public class Parser(List<Token> tokens)
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, parameters, null, returnType, isStatic, access, IsAbstract: true);
+                    var func = new Stmt.Function(methodName, typeParams2, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride);
                     methods.Add(func);
                 }
                 else
@@ -1085,7 +1105,7 @@ public class Parser(List<Token> tokens)
                     string kind = "method";
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
                     var func = (Stmt.Function)FunctionDeclaration(kind);
-                    func = func with { IsStatic = isStatic, Access = access };
+                    func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride };
                     methods.Add(func);
 
                     // Synthesize fields from constructor parameter properties

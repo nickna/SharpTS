@@ -516,6 +516,12 @@ public class TypeChecker
                     ValidateAbstractMemberImplementation(classTypeForBody, classStmt.Name.Lexeme);
                 }
 
+                // Validate override members (skip for generic classes - validated at instantiation)
+                if (classTypeParams == null)
+                {
+                    ValidateOverrideMembers(classStmt, classTypeForBody);
+                }
+
                 // Second pass: check static property initializers at class scope
                 foreach (var field in classStmt.Fields)
                 {
@@ -3501,6 +3507,104 @@ public class TypeChecker
             current = current.Superclass;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Validates that methods/accessors marked with 'override' actually override a member in the superclass chain.
+    /// </summary>
+    private void ValidateOverrideMembers(Stmt.Class classStmt, TypeInfo.Class classType)
+    {
+        // Check methods marked with override
+        foreach (var method in classStmt.Methods)
+        {
+            if (method.IsOverride)
+            {
+                string methodName = method.Name.Lexeme;
+                if (!HasParentMethod(classType.Superclass, methodName))
+                {
+                    throw new Exception($"Type Error: Method '{methodName}' is marked as override but does not override any method in a base class.");
+                }
+            }
+        }
+
+        // Check accessors marked with override
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                if (accessor.IsOverride)
+                {
+                    string propertyName = accessor.Name.Lexeme;
+                    bool isGetter = accessor.Kind.Type == Parsing.TokenType.GET;
+
+                    if (isGetter)
+                    {
+                        if (!HasParentGetter(classType.Superclass, propertyName))
+                        {
+                            throw new Exception($"Type Error: Getter '{propertyName}' is marked as override but does not override any getter in a base class.");
+                        }
+                    }
+                    else
+                    {
+                        if (!HasParentSetter(classType.Superclass, propertyName))
+                        {
+                            throw new Exception($"Type Error: Setter '{propertyName}' is marked as override but does not override any setter in a base class.");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a method exists in the superclass chain.
+    /// </summary>
+    private bool HasParentMethod(TypeInfo.Class? superclass, string methodName)
+    {
+        TypeInfo.Class? current = superclass;
+        while (current != null)
+        {
+            if (current.Methods.ContainsKey(methodName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a getter exists in the superclass chain.
+    /// </summary>
+    private bool HasParentGetter(TypeInfo.Class? superclass, string propertyName)
+    {
+        TypeInfo.Class? current = superclass;
+        while (current != null)
+        {
+            if (current.GetterTypes.ContainsKey(propertyName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a setter exists in the superclass chain.
+    /// </summary>
+    private bool HasParentSetter(TypeInfo.Class? superclass, string propertyName)
+    {
+        TypeInfo.Class? current = superclass;
+        while (current != null)
+        {
+            if (current.SetterTypes.ContainsKey(propertyName))
+            {
+                return true;
+            }
+            current = current.Superclass;
+        }
+        return false;
     }
 
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Overloading and label statements support)
+**Last Updated:** 2026-01-04 (Override keyword support)
 
 ## Legend
 - ✅ Implemented
@@ -65,7 +65,7 @@ This document tracks TypeScript language features and their implementation statu
 | Parameter properties | ✅ | `constructor(public x: number)` |
 | `implements` keyword | ✅ | Class implementing interface |
 | Method overloading | ✅ | Multiple signatures with implementation function |
-| `override` keyword | ❌ | Explicit override marker |
+| `override` keyword | ✅ | Explicit override marker for methods/accessors |
 
 ---
 
@@ -448,3 +448,14 @@ All quick wins have been implemented:
 - ✅ Labeled block statements with break support
 - ✅ Label scoping and shadowing validation
 - ✅ Full interpreter and IL compiler support
+
+### Phase 18 Features (Override Keyword)
+- ✅ `override` keyword for methods (`override speak(): string`)
+- ✅ `override` keyword for getters and setters
+- ✅ Type checking validates override targets exist in parent class
+- ✅ Multi-level inheritance support (override grandparent methods)
+- ✅ Validation: `override` cannot be used with `static`
+- ✅ Validation: `override` cannot be used on constructors
+- ✅ Validation: `override` requires class to have a superclass
+- ✅ Override keyword is optional (implicit override still works)
+- ✅ Full interpreter and IL compiler support with 32 test cases
