@@ -190,8 +190,9 @@ public partial class Interpreter
                 Dictionary<string, SharpTSFunction> methods = [];
                 Dictionary<string, SharpTSFunction> staticMethods = [];
                 Dictionary<string, object?> staticProperties = [];
+                List<Stmt.Field> instanceFields = [];
 
-                // Evaluate static property initializers at class definition time
+                // Process fields: evaluate static initializers now, collect instance fields for later
                 foreach (Stmt.Field field in classStmt.Fields)
                 {
                     if (field.IsStatic)
@@ -200,6 +201,11 @@ public partial class Interpreter
                             ? Evaluate(field.Initializer)
                             : null;
                         staticProperties[field.Name.Lexeme] = fieldValue;
+                    }
+                    else
+                    {
+                        // Collect instance fields - they'll be initialized when instances are created
+                        instanceFields.Add(field);
                     }
                 }
 
@@ -229,6 +235,7 @@ public partial class Interpreter
                         var funcStmt = new Stmt.Function(
                             accessor.Name,
                             null,  // No type parameters for accessor
+                            null,  // No this type annotation
                             accessor.SetterParam != null ? [accessor.SetterParam] : [],
                             accessor.Body,
                             accessor.ReturnType);
@@ -254,7 +261,8 @@ public partial class Interpreter
                     staticProperties,
                     getters,
                     setters,
-                    classStmt.IsAbstract);
+                    classStmt.IsAbstract,
+                    instanceFields);
 
                 if (classStmt.Superclass != null)
                 {

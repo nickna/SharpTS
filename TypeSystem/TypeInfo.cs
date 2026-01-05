@@ -26,12 +26,18 @@ public abstract record TypeInfo
         public override string ToString() => Type.ToString().Replace("TYPE_", "").ToLower();
     }
     
-    public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false) : TypeInfo
+    /// <summary>
+    /// Function type with optional explicit this type annotation.
+    /// ThisType specifies the expected type of 'this' within the function body.
+    /// </summary>
+    public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false, TypeInfo? ThisType = null) : TypeInfo
     {
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
-            $"({string.Join(", ", ParamTypes)}) => {ReturnType}";
+            ThisType != null
+                ? $"(this: {ThisType}, {string.Join(", ", ParamTypes)}) => {ReturnType}"
+                : $"({string.Join(", ", ParamTypes)}) => {ReturnType}";
     }
 
     /// <summary>
@@ -263,18 +269,23 @@ public abstract record TypeInfo
             ? $"{Name} extends {Constraint}" : Name;
     }
 
-    // Generic function (not yet instantiated)
+    /// <summary>
+    /// Generic function type with optional explicit this type annotation.
+    /// </summary>
     public record GenericFunction(
         List<TypeParameter> TypeParams,
         List<TypeInfo> ParamTypes,
         TypeInfo ReturnType,
         int RequiredParams = -1,
-        bool HasRestParam = false
+        bool HasRestParam = false,
+        TypeInfo? ThisType = null
     ) : TypeInfo
     {
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
-            $"<{string.Join(", ", TypeParams)}>({string.Join(", ", ParamTypes)}) => {ReturnType}";
+            ThisType != null
+                ? $"<{string.Join(", ", TypeParams)}>(this: {ThisType}, {string.Join(", ", ParamTypes)}) => {ReturnType}"
+                : $"<{string.Join(", ", TypeParams)}>({string.Join(", ", ParamTypes)}) => {ReturnType}";
     }
 
     // Generic class (not yet instantiated)

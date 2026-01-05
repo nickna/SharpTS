@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (Override keyword support)
+**Last Updated:** 2026-01-04 (Class field initializers & object method this binding)
 
 ## Legend
 - ✅ Implemented
@@ -81,7 +81,7 @@ This document tracks TypeScript language features and their implementation statu
 | Rest parameters (`...args`) | ✅ | Variable arguments |
 | Spread in calls (`fn(...arr)`) | ✅ | Array expansion |
 | Overloads | ✅ | Multiple signatures with implementation function |
-| `this` parameter typing | ❌ | Explicit `this` type |
+| `this` parameter typing | ✅ | Explicit `this` type in function declarations |
 | Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
 
 ---
@@ -229,7 +229,6 @@ This document tracks TypeScript language features and their implementation statu
 | Enum variable typing | Assigning enum to typed variable (e.g., `let d: Direction = Direction.Up`) fails |
 | Enum in conditionals | Using enum in switch/if comparisons fails |
 | Interface polymorphism | Calling methods on interface-typed variables fails |
-| Object method shorthand | `{ fn() {} }` syntax in object literals fails |
 | `typeof null` | Returns incorrect value (should return "object") |
 | `Math.round()` | Edge case rounding issues |
 
@@ -241,6 +240,7 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 - `instanceof` and `typeof` operators
 - Protected field access in subclasses
 - Object.keys() and object rest patterns
+- Object method `this` binding (`{ fn() { return this.x; } }` - `this` is not bound in compiled code)
 
 ---
 
@@ -459,3 +459,26 @@ All quick wins have been implemented:
 - ✅ Validation: `override` requires class to have a superclass
 - ✅ Override keyword is optional (implicit override still works)
 - ✅ Full interpreter and IL compiler support with 32 test cases
+
+### Phase 19 Features (This Parameter Typing)
+- ✅ `this` parameter syntax in function declarations (`function f(this: MyType)`)
+- ✅ `this` parameter in class methods (`method(this: ClassName)`)
+- ✅ `this` parameter in abstract methods
+- ✅ `this` parameter in interface method signatures
+- ✅ `this` parameter in object literal method shorthand
+- ✅ `this` parameter in function type annotations (`type Fn = (this: Ctx) => void`)
+- ✅ `this` parameter in overloaded functions
+- ✅ `this` parameter with generic types
+- ✅ Type checking uses declared `this` type for `this` expressions
+- ✅ Full interpreter and IL compiler support with 23 test cases
+
+### Phase 20 Features (Class Field Initializers & Object Method This)
+- ✅ Class field initializers (`class Foo { count: number = 10; }`)
+- ✅ Instance field initializers evaluated at object creation time
+- ✅ Proper field initialization order (superclass fields first)
+- ✅ Object method shorthand `this` binding in interpreter (`{ fn() { return this.x; } }`)
+- ✅ `IsObjectMethod` flag for arrow functions to distinguish object methods
+- ✅ Type checker allows `this` in object methods (infers `any` type)
+- ✅ Full interpreter support for both features
+- ✅ IL compiler support for class field initializers
+- ⚠️ IL compiler: object method `this` binding not yet implemented (documented limitation)

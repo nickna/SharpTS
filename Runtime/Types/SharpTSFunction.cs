@@ -118,12 +118,19 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
 /// Supports both expression bodies (<c>x =&gt; x + 1</c>) and block bodies (<c>x =&gt; { return x + 1; }</c>).
 /// Unlike <see cref="SharpTSFunction"/>, arrow functions do not have their own <c>this</c> binding;
 /// they capture <c>this</c> from the enclosing scope via the closure.
+/// Object method arrow functions (IsObjectMethod=true) support binding <c>this</c> when accessed as object properties.
 /// </remarks>
 /// <seealso cref="SharpTSFunction"/>
-public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure) : ISharpTSCallable
+public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false) : ISharpTSCallable
 {
     private readonly Expr.ArrowFunction _declaration = declaration;
     private readonly RuntimeEnvironment _closure = closure;
+
+    /// <summary>
+    /// Indicates whether this arrow function was created from object method shorthand
+    /// and should bind 'this' when accessed as a property.
+    /// </summary>
+    public bool IsObjectMethod { get; } = isObjectMethod;
 
     public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
 
@@ -201,6 +208,18 @@ public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnviron
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Binds 'this' to the given object. Only applicable for object method arrow functions.
+    /// </summary>
+    /// <param name="thisObject">The object to bind as 'this'.</param>
+    /// <returns>A new SharpTSArrowFunction with 'this' bound in its closure.</returns>
+    public SharpTSArrowFunction Bind(object thisObject)
+    {
+        RuntimeEnvironment environment = new(_closure);
+        environment.Define("this", thisObject);
+        return new SharpTSArrowFunction(_declaration, environment, isObjectMethod: true);
     }
 
     public override string ToString() => "<arrow fn>";

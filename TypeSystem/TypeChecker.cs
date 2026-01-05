@@ -26,6 +26,8 @@ public class TypeChecker
     private TypeInfo? _currentFunctionReturnType = null;
     private TypeInfo.Class? _currentClass = null;
     private bool _inStaticMethod = false;
+    // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
+    private TypeInfo? _currentFunctionThisType = null;
     private int _loopDepth = 0;
     private int _switchDepth = 0;
 
@@ -973,6 +975,9 @@ public class TypeChecker
             ? ToTypeInfo(funcStmt.ReturnType)
             : new TypeInfo.Void();
 
+        // Parse explicit 'this' type if present
+        TypeInfo? thisType = funcStmt.ThisType != null ? ToTypeInfo(funcStmt.ThisType) : null;
+
         foreach (var param in funcStmt.Parameters)
         {
             TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
@@ -1009,7 +1014,7 @@ public class TypeChecker
         _environment = previousEnvForParsing;
 
         bool hasRest = funcStmt.Parameters.Any(p => p.IsRest);
-        var thisFuncType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+        var thisFuncType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
 
         // Check if this is an overload signature (no body)
         if (funcStmt.Body == null)
@@ -1048,7 +1053,7 @@ public class TypeChecker
         else if (typeParams != null && typeParams.Count > 0)
         {
             // Generic function (no overloads)
-            funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest);
+            funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType);
         }
         else
         {
@@ -1067,12 +1072,14 @@ public class TypeChecker
         // Save and set context - function bodies are isolated from outer loop/switch/label context
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
+        TypeInfo? previousThisType = _currentFunctionThisType;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
 
         _environment = funcEnv;
         _currentFunctionReturnType = returnType;
+        _currentFunctionThisType = thisType;
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
@@ -1088,6 +1095,7 @@ public class TypeChecker
         {
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
+            _currentFunctionThisType = previousThisType;
             _loopDepth = previousLoopDepth;
             _switchDepth = previousSwitchDepth;
             _activeLabels.Clear();
@@ -1795,6 +1803,12 @@ public class TypeChecker
 
     private TypeInfo CheckThis(Expr.This expr)
     {
+        // If there's an explicit 'this' type from a this parameter, use it
+        if (_currentFunctionThisType != null)
+        {
+            return _currentFunctionThisType;
+        }
+
         if (_currentClass == null)
         {
             throw new Exception("Type Error: Cannot use 'this' outside of a class.");
@@ -2773,6 +2787,18 @@ public class TypeChecker
 
     private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow)
     {
+        // Parse explicit 'this' type if present (for object literal method shorthand)
+        // Note: Arrow function expressions shouldn't have 'this' parameter in standard TypeScript,
+        // but we support it for object literal method shorthand which is parsed as ArrowFunction.
+        TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
+
+        // For object method shorthand, allow 'this' even without explicit type annotation
+        // TypeScript infers 'this' as the containing object type, but we use 'any' for simplicity
+        if (arrow.IsObjectMethod && thisType == null)
+        {
+            thisType = new TypeInfo.Any();
+        }
+
         // Build parameter types and check defaults
         List<TypeInfo> paramTypes = [];
         int requiredParams = 0;
@@ -2827,12 +2853,14 @@ public class TypeChecker
         // Save and set context - function bodies are isolated from outer loop/switch/label context
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
+        TypeInfo? previousThisType = _currentFunctionThisType;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
 
         _environment = arrowEnv;
         _currentFunctionReturnType = returnType;
+        _currentFunctionThisType = thisType;
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
@@ -2865,6 +2893,7 @@ public class TypeChecker
         {
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
+            _currentFunctionThisType = previousThisType;
             _loopDepth = previousLoopDepth;
             _switchDepth = previousSwitchDepth;
             _activeLabels.Clear();
@@ -2873,7 +2902,7 @@ public class TypeChecker
         }
 
         bool hasRest = arrow.Parameters.Any(p => p.IsRest);
-        return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+        return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
     }
 
     private TypeInfo CheckUnary(Expr.Unary unary)
@@ -4350,7 +4379,7 @@ public class TypeChecker
 
     private TypeInfo ParseFunctionTypeInfo(string funcType)
     {
-        // Parse "(param1, param2) => returnType"
+        // Parse "(param1, param2) => returnType" or "(this: Type, param1) => returnType"
         var arrowIdx = funcType.IndexOf("=>");
         var paramsSection = funcType.Substring(0, arrowIdx).Trim();
         var returnTypeStr = funcType.Substring(arrowIdx + 2).Trim();
@@ -4361,17 +4390,60 @@ public class TypeChecker
             paramsSection = paramsSection.Substring(1, paramsSection.Length - 2);
         }
 
+        TypeInfo? thisType = null;
         List<TypeInfo> paramTypes = [];
+
         if (!string.IsNullOrWhiteSpace(paramsSection))
         {
-            foreach (var param in paramsSection.Split(','))
+            var parts = SplitFunctionParams(paramsSection);
+            foreach (var part in parts)
             {
-                paramTypes.Add(ToTypeInfo(param.Trim()));
+                var param = part.Trim();
+
+                // Check for 'this' parameter: "this: Type"
+                if (param.StartsWith("this:"))
+                {
+                    var thisTypeStr = param.Substring(5).Trim(); // Skip "this:"
+                    thisType = ToTypeInfo(thisTypeStr);
+                }
+                else
+                {
+                    paramTypes.Add(ToTypeInfo(param));
+                }
             }
         }
 
         TypeInfo returnType = ToTypeInfo(returnTypeStr);
-        return new TypeInfo.Function(paramTypes, returnType);
+        return new TypeInfo.Function(paramTypes, returnType, -1, false, thisType);
+    }
+
+    /// <summary>
+    /// Split function parameters respecting nested brackets and generics.
+    /// </summary>
+    private List<string> SplitFunctionParams(string paramsStr)
+    {
+        List<string> parts = [];
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < paramsStr.Length; i++)
+        {
+            char c = paramsStr[i];
+            if (c == '(' || c == '<' || c == '[' || c == '{')
+                depth++;
+            else if (c == ')' || c == '>' || c == ']' || c == '}')
+                depth--;
+            else if (c == ',' && depth == 0)
+            {
+                parts.Add(paramsStr[start..i]);
+                start = i + 1;
+            }
+        }
+
+        if (start < paramsStr.Length)
+            parts.Add(paramsStr[start..]);
+
+        return parts;
     }
 
     private TypeInfo ParseTupleTypeInfo(string tupleStr)

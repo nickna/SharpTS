@@ -157,7 +157,7 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html#arrow-functions">TypeScript Arrow Functions</seealso>
     private object? EvaluateArrowFunction(Expr.ArrowFunction arrow)
     {
-        return new SharpTSArrowFunction(arrow, _environment);
+        return new SharpTSArrowFunction(arrow, _environment, arrow.IsObjectMethod);
     }
 
     /// <summary>

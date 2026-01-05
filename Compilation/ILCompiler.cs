@@ -1172,6 +1172,32 @@ public class ILCompiler
             il.Emit(OpCodes.Call, typeof(object).GetConstructor([])!);
         }
 
+        // Emit instance field initializers (before constructor body)
+        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && f.Initializer != null).ToList();
+        if (instanceFieldsWithInit.Count > 0)
+        {
+            ctx.FieldsField = fieldsField;
+            ctx.IsInstanceMethod = true;
+            var initEmitter = new ILEmitter(ctx);
+
+            foreach (var field in instanceFieldsWithInit)
+            {
+                // Load this._fields dictionary
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, fieldsField);
+
+                // Load field name
+                il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
+
+                // Emit initializer expression
+                initEmitter.EmitExpression(field.Initializer!);
+                initEmitter.EmitBoxIfNeeded(field.Initializer!);
+
+                // Store in dictionary
+                il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+            }
+        }
+
         // Emit constructor body
         if (constructor != null)
         {

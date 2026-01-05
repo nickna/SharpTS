@@ -113,7 +113,13 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject simpleObj)
         {
-            return simpleObj.Get(get.Name.Lexeme);
+            var value = simpleObj.Get(get.Name.Lexeme);
+            // Bind 'this' for object method shorthand functions
+            if (value is SharpTSArrowFunction arrowFunc && arrowFunc.IsObjectMethod)
+            {
+                return arrowFunc.Bind(simpleObj);
+            }
+            return value;
         }
 
         // Handle built-in instance members: strings, arrays, Math

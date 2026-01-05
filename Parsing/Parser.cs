@@ -223,11 +223,25 @@ public class Parser(List<Token> tokens)
 
     /// <summary>
     /// Parses a method signature like "(a: number, b: string): returnType" and returns it as a function type string.
+    /// Supports 'this' parameter: "(this: Type, a: number): returnType".
     /// </summary>
     private string ParseMethodSignature()
     {
         Consume(TokenType.LEFT_PAREN, "Expect '(' for method parameters.");
+        string? thisType = null;
         List<string> paramTypes = [];
+
+        // Check for 'this' parameter in interface method
+        if (Check(TokenType.THIS))
+        {
+            Advance(); // consume 'this'
+            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+            thisType = ParseTypeAnnotation();
+            if (Check(TokenType.COMMA))
+            {
+                Advance(); // consume ','
+            }
+        }
 
         if (!Check(TokenType.RIGHT_PAREN))
         {
@@ -248,6 +262,10 @@ public class Parser(List<Token> tokens)
         Consume(TokenType.COLON, "Expect ':' before return type.");
         string returnType = ParseTypeAnnotation();
 
+        if (thisType != null)
+        {
+            return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+        }
         return $"({string.Join(", ", paramTypes)}) => {returnType}";
     }
 
@@ -366,16 +384,30 @@ public class Parser(List<Token> tokens)
                 }
                 _current = saved; // backtrack
             }
-            else if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.COLON)
+            else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)) && PeekNext().Type == TokenType.COLON)
             {
-                // (identifier: - this is a function parameter
+                // (identifier: or (this: - this is a function parameter
                 isFunctionType = true;
             }
 
             if (isFunctionType)
             {
-                // Parse as function type: (params) => returnType
+                // Parse as function type: (params) => returnType or (this: Type, params) => returnType
+                string? thisType = null;
                 List<string> paramTypes = [];
+
+                // Check for 'this' parameter
+                if (Check(TokenType.THIS) && PeekNext().Type == TokenType.COLON)
+                {
+                    Advance(); // consume 'this'
+                    Consume(TokenType.COLON, "");
+                    thisType = ParseTypeAnnotation();
+                    if (Check(TokenType.COMMA))
+                    {
+                        Advance(); // consume ','
+                    }
+                }
+
                 if (!Check(TokenType.RIGHT_PAREN))
                 {
                     do
@@ -392,7 +424,14 @@ public class Parser(List<Token> tokens)
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
                 Consume(TokenType.ARROW, "Expect '=>' after function type parameters.");
                 string returnType = ParseTypeAnnotation();
-                typeName = $"({string.Join(", ", paramTypes)}) => {returnType}";
+                if (thisType != null)
+                {
+                    typeName = $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+                }
+                else
+                {
+                    typeName = $"({string.Join(", ", paramTypes)}) => {returnType}";
+                }
             }
             else
             {
@@ -1086,6 +1125,20 @@ public class Parser(List<Token> tokens)
                     Token methodName = Consume(TokenType.IDENTIFIER, "Expect method name.");
                     List<TypeParam>? typeParams2 = ParseTypeParameters();
                     Consume(TokenType.LEFT_PAREN, "Expect '(' after method name.");
+
+                    // Check for 'this' parameter in abstract method
+                    string? thisType = null;
+                    if (Check(TokenType.THIS))
+                    {
+                        Advance(); // consume 'this'
+                        Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+                        thisType = ParseTypeAnnotation();
+                        if (Check(TokenType.COMMA))
+                        {
+                            Advance(); // consume ','
+                        }
+                    }
+
                     List<Stmt.Parameter> parameters = ParseMethodParameters();
                     Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
 
@@ -1097,7 +1150,7 @@ public class Parser(List<Token> tokens)
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride);
+                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride);
                     methods.Add(func);
                 }
                 else
@@ -1160,6 +1213,20 @@ public class Parser(List<Token> tokens)
         Consume(TokenType.LEFT_PAREN, $"Expect '(' after {kind} name.");
         List<Stmt.Parameter> parameters = [];
         List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
+
+        // Check for 'this' parameter (explicit this type annotation)
+        string? thisType = null;
+        if (Check(TokenType.THIS))
+        {
+            Advance(); // consume 'this'
+            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+            thisType = ParseTypeAnnotation();
+            // If there are more parameters, consume the comma
+            if (Check(TokenType.COMMA))
+            {
+                Advance();
+            }
+        }
 
         if (!Check(TokenType.RIGHT_PAREN))
         {
@@ -1269,7 +1336,7 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.SEMICOLON))
         {
             // Overload signature - no body, just declaration
-            return new Stmt.Function(name, typeParams, parameters, null, returnType);
+            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType);
         }
 
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
@@ -1314,7 +1381,7 @@ public class Parser(List<Token> tokens)
             }
         }
 
-        return new Stmt.Function(name, typeParams, parameters, body, returnType);
+        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType);
     }
 
     /// <summary>
@@ -2126,7 +2193,21 @@ public class Parser(List<Token> tokens)
                     if (Match(TokenType.LEFT_PAREN))
                     {
                         // Method shorthand: { fn() {} }
+                        string? thisType = null;
                         List<Stmt.Parameter> parameters = [];
+
+                        // Check for 'this' parameter in object method
+                        if (Check(TokenType.THIS))
+                        {
+                            Advance(); // consume 'this'
+                            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+                            thisType = ParseTypeAnnotation();
+                            if (Check(TokenType.COMMA))
+                            {
+                                Advance(); // consume ','
+                            }
+                        }
+
                         if (!Check(TokenType.RIGHT_PAREN))
                         {
                             do
@@ -2155,7 +2236,7 @@ public class Parser(List<Token> tokens)
 
                         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
                         List<Stmt> body = Block();
-                        value = new Expr.ArrowFunction(null, parameters, null, body, returnType);
+                        value = new Expr.ArrowFunction(null, thisType, parameters, null, body, returnType, IsObjectMethod: true);
                     }
                     else if (Match(TokenType.COLON))
                     {
@@ -2372,17 +2453,31 @@ public class Parser(List<Token> tokens)
             }
         }
 
-        return new Expr.ArrowFunction(null, parameters, exprBody, body, returnType);  // TODO: Parse type params
+        return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType);  // TODO: Parse type params
     }
 
-    // Parse function type annotation like "(number) => number" for return types
+    // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"
     private string ParseFunctionTypeAnnotation()
     {
         // Check if it's a function type: (params) => returnType
         if (Check(TokenType.LEFT_PAREN))
         {
             Advance(); // consume '('
+            string? thisType = null;
             List<string> paramTypes = [];
+
+            // Check for 'this' parameter in function type
+            if (Check(TokenType.THIS))
+            {
+                Advance(); // consume 'this'
+                Consume(TokenType.COLON, "Expect ':' after 'this' in function type.");
+                thisType = ParseTypeAnnotation();
+                if (Check(TokenType.COMMA))
+                {
+                    Advance(); // consume ','
+                }
+            }
+
             if (!Check(TokenType.RIGHT_PAREN))
             {
                 do
@@ -2393,6 +2488,12 @@ public class Parser(List<Token> tokens)
             Consume(TokenType.RIGHT_PAREN, "Expect ')' in function type.");
             Consume(TokenType.ARROW, "Expect '=>' in function type.");
             string returnType = ParseTypeAnnotation();
+
+            // Include this type in the string representation
+            if (thisType != null)
+            {
+                return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+            }
             return $"({string.Join(", ", paramTypes)}) => {returnType}";
         }
 

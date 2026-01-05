@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Parsing;
 
 namespace SharpTS.Runtime.Types;
 
@@ -21,7 +22,8 @@ public class SharpTSClass(
     Dictionary<string, object?> staticProperties,
     Dictionary<string, SharpTSFunction>? getters = null,
     Dictionary<string, SharpTSFunction>? setters = null,
-    bool isAbstract = false) : ISharpTSCallable
+    bool isAbstract = false,
+    List<Stmt.Field>? instanceFields = null) : ISharpTSCallable
 {
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
@@ -31,6 +33,7 @@ public class SharpTSClass(
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
     private readonly Dictionary<string, SharpTSFunction> _getters = getters ?? [];
     private readonly Dictionary<string, SharpTSFunction> _setters = setters ?? [];
+    private readonly List<Stmt.Field> _instanceFields = instanceFields ?? [];
 
     public int Arity()
     {
@@ -42,6 +45,11 @@ public class SharpTSClass(
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         SharpTSInstance instance = new(this);
+
+        // Initialize instance fields with their initializers (before constructor runs)
+        // Superclass fields are initialized first via inheritance chain
+        InitializeInstanceFields(interpreter, instance);
+
         SharpTSFunction? constructor = FindMethod("constructor");
         if (constructor != null)
         {
@@ -54,6 +62,27 @@ public class SharpTSClass(
         }
 
         return instance;
+    }
+
+    private void InitializeInstanceFields(Interpreter interpreter, SharpTSInstance instance)
+    {
+        // First initialize superclass fields
+        Superclass?.InitializeInstanceFields(interpreter, instance);
+
+        // Then initialize this class's fields
+        foreach (var field in _instanceFields)
+        {
+            if (field.Initializer != null)
+            {
+                object? value = interpreter.Evaluate(field.Initializer);
+                instance.SetFieldValue(field.Name.Lexeme, value);
+            }
+            else
+            {
+                // Fields without initializers are set to null/undefined
+                instance.SetFieldValue(field.Name.Lexeme, null);
+            }
+        }
     }
 
     public SharpTSFunction? FindMethod(string name)
