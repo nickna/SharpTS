@@ -31,6 +31,7 @@ public class TypeMapper
         TypeInfo.BigInt => typeof(System.Numerics.BigInteger), // BigInt maps to BigInteger
         TypeInfo.Array => typeof(object), // Will be TSArray at runtime
         TypeInfo.Function => typeof(object), // Will be delegate at runtime
+        TypeInfo.Promise p => MapPromiseType(p), // Promise<T> maps to Task<T>
         TypeInfo.Class c => GetClassType(c.Name),
         TypeInfo.Instance i => i.ClassType switch
         {
@@ -54,6 +55,14 @@ public class TypeMapper
         TypeInfo.InstantiatedGeneric => typeof(object),
         _ => typeof(object)
     };
+
+    private Type MapPromiseType(TypeInfo.Promise promise)
+    {
+        Type innerType = MapTypeInfo(promise.ValueType);
+        if (innerType == typeof(void))
+            return typeof(Task);
+        return typeof(Task<>).MakeGenericType(innerType);
+    }
 
     private static Type MapPrimitive(TypeInfo.Primitive p) => p.Type switch
     {
@@ -80,6 +89,19 @@ public class TypeMapper
         "unknown" => typeof(object),
         "never" => typeof(void),
         _ when typeAnnotation.EndsWith("[]") => typeof(object), // Array type
+        _ when typeAnnotation.StartsWith("Promise<") => GetPromiseClrType(typeAnnotation),
         _ => typeof(object) // Class or interface type
     };
+
+    private static Type GetPromiseClrType(string typeAnnotation)
+    {
+        // Extract inner type from Promise<T>
+        string inner = typeAnnotation.Substring(8, typeAnnotation.Length - 9);
+        if (inner == "void")
+            return typeof(Task);
+        Type innerType = GetClrType(inner);
+        if (innerType == typeof(void))
+            return typeof(Task);
+        return typeof(Task<>).MakeGenericType(innerType);
+    }
 }

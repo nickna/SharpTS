@@ -228,8 +228,15 @@ public partial class Interpreter
     private object? EvaluateUnary(Expr.Unary unary)
     {
         object? right = Evaluate(unary.Right);
+        return EvaluateUnaryOperation(unary.Operator, right);
+    }
 
-        return unary.Operator.Type switch
+    /// <summary>
+    /// Core unary operation logic, shared between sync and async evaluation.
+    /// </summary>
+    private object? EvaluateUnaryOperation(Token op, object? right)
+    {
+        return op.Type switch
         {
             TokenType.BANG => !IsTruthy(right),
             TokenType.MINUS when right is SharpTSBigInt bi => new SharpTSBigInt(-bi.Value),

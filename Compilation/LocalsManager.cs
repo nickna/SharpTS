@@ -40,6 +40,22 @@ public class LocalsManager
         return _locals.TryGetValue(name, out var local) ? local : null;
     }
 
+    public bool TryGetLocal(string name, out LocalBuilder local)
+    {
+        return _locals.TryGetValue(name, out local!);
+    }
+
+    /// <summary>
+    /// Registers an already-declared local variable (for async state machine emission).
+    /// </summary>
+    public void RegisterLocal(string name, LocalBuilder local)
+    {
+        _locals[name] = local;
+        _localTypes[name] = local.LocalType;
+        if (_scopes.Count > 0)
+            _scopes.Peek().Add(name);
+    }
+
     /// <summary>
     /// Gets the CLR type of a local variable.
     /// Returns null if the local doesn't exist.

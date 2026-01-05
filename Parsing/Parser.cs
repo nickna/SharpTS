@@ -65,7 +65,12 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: false);
         if (Match(TokenType.INTERFACE)) return InterfaceDeclaration();
         if (Match(TokenType.TYPE)) return TypeAliasDeclaration();
-        if (Match(TokenType.FUNCTION)) return FunctionDeclaration("function");
+        if (Match(TokenType.ASYNC))
+        {
+            Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
+            return FunctionDeclaration("function", isAsync: true);
+        }
+        if (Match(TokenType.FUNCTION)) return FunctionDeclaration("function", isAsync: false);
         if (Match(TokenType.LET)) return VarDeclaration();
         return Statement();
     }
@@ -1012,8 +1017,9 @@ public class Parser(List<Token> tokens)
             bool isReadonly = false;
             bool isMemberAbstract = false;
             bool isOverride = false;
+            bool isMemberAsync = false;
 
-            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT, TokenType.OVERRIDE))
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT, TokenType.OVERRIDE, TokenType.ASYNC))
             {
                 var modifier = Previous().Type;
                 switch (modifier)
@@ -1025,6 +1031,7 @@ public class Parser(List<Token> tokens)
                     case TokenType.READONLY: isReadonly = true; break;
                     case TokenType.ABSTRACT: isMemberAbstract = true; break;
                     case TokenType.OVERRIDE: isOverride = true; break;
+                    case TokenType.ASYNC: isMemberAsync = true; break;
                 }
             }
 
@@ -1155,14 +1162,14 @@ public class Parser(List<Token> tokens)
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride);
+                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync);
                     methods.Add(func);
                 }
                 else
                 {
                     string kind = "method";
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
-                    var func = (Stmt.Function)FunctionDeclaration(kind);
+                    var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
                     func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride };
                     methods.Add(func);
 
@@ -1200,7 +1207,7 @@ public class Parser(List<Token> tokens)
         return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract);
     }
 
-    private Stmt FunctionDeclaration(string kind)
+    private Stmt FunctionDeclaration(string kind, bool isAsync = false)
     {
         Token name;
         if (kind == "constructor" && Match(TokenType.CONSTRUCTOR))
@@ -1341,7 +1348,7 @@ public class Parser(List<Token> tokens)
         if (Match(TokenType.SEMICOLON))
         {
             // Overload signature - no body, just declaration
-            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType);
+            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync);
         }
 
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
@@ -1386,7 +1393,7 @@ public class Parser(List<Token> tokens)
             }
         }
 
-        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType);
+        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync);
     }
 
     /// <summary>
@@ -2016,6 +2023,14 @@ public class Parser(List<Token> tokens)
             return new Expr.Unary(op, right);
         }
 
+        // await expression: await expr
+        if (Match(TokenType.AWAIT))
+        {
+            Token keyword = Previous();
+            Expr expression = Unary();
+            return new Expr.Await(keyword, expression);
+        }
+
         if (Match(TokenType.NEW))
         {
             Token className = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
@@ -2055,7 +2070,7 @@ public class Parser(List<Token> tokens)
             }
             else if (Match(TokenType.DOT))
             {
-                Token name = Consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
+                Token name = ConsumePropertyName("Expect property name after '.'.");
                 if (expr is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log")
                 {
                     expr = new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line));
@@ -2067,7 +2082,7 @@ public class Parser(List<Token> tokens)
             }
             else if (Match(TokenType.QUESTION_DOT))
             {
-                Token name = Consume(TokenType.IDENTIFIER, "Expect property name after '?.'.");
+                Token name = ConsumePropertyName("Expect property name after '?.'.");
                 expr = new Expr.Get(expr, name, Optional: true);
             }
             else if (Match(TokenType.LEFT_BRACKET))
@@ -2261,10 +2276,19 @@ public class Parser(List<Token> tokens)
             return new Expr.ObjectLiteral(properties);
         }
         
+        // async arrow function: async () => {} or async (x) => x
+        if (Match(TokenType.ASYNC))
+        {
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'async' in async arrow function.");
+            Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
+            if (arrowFunc != null) return arrowFunc;
+            throw new Exception("Parse Error: Expected arrow function after 'async ('.");
+        }
+
         if (Match(TokenType.LEFT_PAREN))
         {
             // Try to parse as arrow function first
-            Expr? arrowFunc = TryParseArrowFunction();
+            Expr? arrowFunc = TryParseArrowFunction(isAsync: false);
             if (arrowFunc != null) return arrowFunc;
 
             // Otherwise, parse as grouping
@@ -2310,7 +2334,7 @@ public class Parser(List<Token> tokens)
 
     // Try to parse arrow function after seeing '('
     // Returns null if not an arrow function (caller should parse as grouping)
-    private Expr? TryParseArrowFunction()
+    private Expr? TryParseArrowFunction(bool isAsync = false)
     {
         int savedPosition = _current;
 
@@ -2458,7 +2482,7 @@ public class Parser(List<Token> tokens)
             }
         }
 
-        return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType);  // TODO: Parse type params
+        return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType, IsAsync: isAsync);  // TODO: Parse type params
     }
 
     // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"
@@ -2525,6 +2549,55 @@ public class Parser(List<Token> tokens)
         throw new Exception(message);
     }
 
+    /// <summary>
+    /// Consumes a token that can be used as a property name after '.'.
+    /// This includes identifiers and reserved keywords (JavaScript allows keywords as property names).
+    /// </summary>
+    private Token ConsumePropertyName(string message)
+    {
+        Token current = Peek();
+
+        // Accept any identifier
+        if (current.Type == TokenType.IDENTIFIER)
+            return Advance();
+
+        // Accept keywords that can be used as property names
+        // In JavaScript/TypeScript, all keywords are valid property names
+        if (IsKeyword(current.Type))
+        {
+            Advance();
+            // Convert keyword token to identifier token for AST consistency
+            return new Token(TokenType.IDENTIFIER, current.Lexeme, null, current.Line);
+        }
+
+        throw new Exception(message);
+    }
+
+    /// <summary>
+    /// Checks if a token type is a keyword that can be used as a property name.
+    /// </summary>
+    private static bool IsKeyword(TokenType type)
+    {
+        return type switch
+        {
+            TokenType.ABSTRACT or TokenType.AS or TokenType.ASYNC or TokenType.AWAIT or
+            TokenType.BREAK or TokenType.CASE or TokenType.CATCH or TokenType.CLASS or
+            TokenType.CONST or TokenType.CONSTRUCTOR or TokenType.CONTINUE or
+            TokenType.DEFAULT or TokenType.DO or TokenType.ELSE or
+            TokenType.ENUM or TokenType.EXPORT or TokenType.EXTENDS or TokenType.FALSE or
+            TokenType.FINALLY or TokenType.FOR or TokenType.FROM or TokenType.FUNCTION or
+            TokenType.GET or TokenType.IF or TokenType.IMPLEMENTS or TokenType.IMPORT or
+            TokenType.IN or TokenType.INSTANCEOF or TokenType.INTERFACE or TokenType.LET or
+            TokenType.NEVER or TokenType.NEW or TokenType.NULL or TokenType.OF or TokenType.OVERRIDE or
+            TokenType.PRIVATE or TokenType.PROTECTED or TokenType.PUBLIC or TokenType.READONLY or
+            TokenType.RETURN or TokenType.SET or TokenType.STATIC or TokenType.SUPER or
+            TokenType.SWITCH or TokenType.THIS or TokenType.THROW or TokenType.TRUE or
+            TokenType.TRY or TokenType.TYPE or TokenType.TYPEOF or TokenType.UNKNOWN or
+            TokenType.VAR or TokenType.WHILE => true,
+            _ => false
+        };
+    }
+
     private bool Check(TokenType type) => !IsAtEnd() && Peek().Type == type;
 
     private Token Advance()
@@ -2571,7 +2644,9 @@ public class Parser(List<Token> tokens)
         Check(TokenType.UNKNOWN) ||
         Check(TokenType.NEVER) ||
         Check(TokenType.NULL) ||
-        Check(TokenType.LEFT_PAREN);
+        Check(TokenType.LEFT_PAREN) ||
+        Check(TokenType.LEFT_BRACE) ||  // for inline object types: { x: number }
+        Check(TokenType.LEFT_BRACKET);  // for tuple types: [string, number]
 
     // ============== MODULE PARSING ==============
 

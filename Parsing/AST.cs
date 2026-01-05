@@ -54,14 +54,17 @@ public abstract record Expr
     /// <summary>
     /// Arrow function expression. ThisType is for type annotations only (arrow expressions cannot have this parameter).
     /// IsObjectMethod indicates this is an object literal method shorthand, which binds 'this' to the object.
+    /// IsAsync indicates this is an async arrow function that returns a Promise.
     /// </summary>
-    public record ArrowFunction(List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool IsObjectMethod = false) : Expr;
+    public record ArrowFunction(List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool IsObjectMethod = false, bool IsAsync = false) : Expr;
     // Template literal
     public record TemplateLiteral(List<string> Strings, List<Expr> Expressions) : Expr;
     // Spread expression for calls and array literals
     public record Spread(Expr Expression) : Expr;
     // Type assertion: value as Type
     public record TypeAssertion(Expr Expression, string TargetType) : Expr;
+    // Await expression: await expr (only valid inside async functions)
+    public record Await(Token Keyword, Expr Expression) : Expr;
 }
 
 /// <summary>
@@ -82,8 +85,9 @@ public abstract record Stmt
     /// <summary>
     /// Function or method declaration. Body is null for overload signatures (declaration only).
     /// ThisType is the explicit this parameter type annotation (e.g., this: MyClass).
+    /// IsAsync indicates this is an async function that returns a Promise.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false);
     public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false) : Stmt;

@@ -155,4 +155,15 @@ public class EmittedRuntime
     public MethodBuilder BigIntLessThanOrEqual { get; set; } = null!;
     public MethodBuilder BigIntGreaterThan { get; set; } = null!;
     public MethodBuilder BigIntGreaterThanOrEqual { get; set; } = null!;
+
+    // Promise support
+    public MethodBuilder PromiseResolve { get; set; } = null!;
+    public MethodBuilder PromiseReject { get; set; } = null!;
+    public MethodBuilder PromiseAll { get; set; } = null!;
+    public MethodBuilder PromiseRace { get; set; } = null!;
+    public MethodBuilder PromiseThen { get; set; } = null!;
+    public MethodBuilder PromiseCatch { get; set; } = null!;
+    public MethodBuilder PromiseFinally { get; set; } = null!;
+    public MethodBuilder PromiseAllSettled { get; set; } = null!;
+    public MethodBuilder PromiseAny { get; set; } = null!;
 }

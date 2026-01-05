@@ -43,6 +43,8 @@ public partial class TypeChecker
     private TypeInfo? _currentFunctionThisType = null;
     private int _loopDepth = 0;
     private int _switchDepth = 0;
+    // Track if we're inside an async function (for validating 'await' usage)
+    private bool _inAsyncFunction = false;
 
     // Track active labels for labeled statements (label name -> isOnLoop)
     private readonly Dictionary<string, bool> _activeLabels = [];

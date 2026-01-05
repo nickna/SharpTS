@@ -553,6 +553,7 @@ public partial class TypeChecker
                         TypeEnvironment previousEnvFunc = _environment;
                         TypeInfo? previousReturnFunc = _currentFunctionReturnType;
                         bool previousInStatic = _inStaticMethod;
+                        bool previousInAsyncFunc = _inAsyncFunction;
                         int previousLoopDepthFunc = _loopDepth;
                         int previousSwitchDepthFunc = _switchDepth;
                         var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
@@ -560,6 +561,7 @@ public partial class TypeChecker
                         _environment = methodEnv;
                         _currentFunctionReturnType = methodType.ReturnType;
                         _inStaticMethod = method.IsStatic;
+                        _inAsyncFunction = method.IsAsync;
                         _loopDepth = 0;
                         _switchDepth = 0;
                         _activeLabels.Clear();
@@ -580,6 +582,7 @@ public partial class TypeChecker
                             _environment = previousEnvFunc;
                             _currentFunctionReturnType = previousReturnFunc;
                             _inStaticMethod = previousInStatic;
+                            _inAsyncFunction = previousInAsyncFunc;
                             _loopDepth = previousLoopDepthFunc;
                             _switchDepth = previousSwitchDepthFunc;
                             _activeLabels.Clear();
@@ -700,7 +703,15 @@ public partial class TypeChecker
                             ? CheckExpr(returnStmt.Value)
                             : new TypeInfo.Void();
 
-                        if (!IsCompatible(_currentFunctionReturnType, actualReturnType))
+                        // For async functions, the return type is Promise<T> but we can return T directly
+                        // (the runtime automatically wraps it in a Promise)
+                        TypeInfo expectedReturnType = _currentFunctionReturnType;
+                        if (_inAsyncFunction && expectedReturnType is TypeInfo.Promise promiseType)
+                        {
+                            expectedReturnType = promiseType.ValueType;
+                        }
+
+                        if (!IsCompatible(expectedReturnType, actualReturnType))
                         {
                              throw new Exception($"Type Error: Function declared to return '{_currentFunctionReturnType}' but returned '{actualReturnType}'.");
                         }
@@ -1103,6 +1114,7 @@ public partial class TypeChecker
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
         TypeInfo? previousThisType = _currentFunctionThisType;
+        bool previousInAsync = _inAsyncFunction;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
@@ -1110,6 +1122,7 @@ public partial class TypeChecker
         _environment = funcEnv;
         _currentFunctionReturnType = returnType;
         _currentFunctionThisType = thisType;
+        _inAsyncFunction = funcStmt.IsAsync;
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
@@ -1126,6 +1139,7 @@ public partial class TypeChecker
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _currentFunctionThisType = previousThisType;
+            _inAsyncFunction = previousInAsync;
             _loopDepth = previousLoopDepth;
             _switchDepth = previousSwitchDepth;
             _activeLabels.Clear();

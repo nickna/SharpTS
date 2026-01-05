@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-04 (BigInt type support)
+**Last Updated:** 2026-01-05 (Async/Await support)
 
 ## Legend
 - ✅ Implemented
@@ -90,10 +90,14 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Promises | ❌ | `Promise<T>` |
-| `async` functions | ❌ | `async function` |
-| `await` keyword | ❌ | Pause for promise |
-| `Promise.all/race/any` | ❌ | Combinators |
+| Promises | ✅ | `Promise<T>` type with await support |
+| `async` functions | ✅ | Full state machine compilation |
+| `await` keyword | ✅ | Pause and resume via .NET Task infrastructure |
+| Async arrow functions | ✅ | Including nested async arrows |
+| Async class methods | ✅ | Full `this` capture support |
+| Try/catch in async | ✅ | Await inside try/catch/finally blocks |
+| Nested await in args | ✅ | `await fn(await getValue())` |
+| `Promise.all/race/any` | ❌ | Combinators not yet implemented |
 
 ---
 
@@ -101,11 +105,12 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `import` statements | ❌ | `import { x } from './file'` |
-| `export` statements | ❌ | `export function/class/const` |
-| Default exports | ❌ | `export default` |
-| Namespaces | ❌ | `namespace X { }` |
-| Re-exports | ❌ | `export { x } from './file'` |
+| `import` statements | ✅ | `import { x } from './file'` |
+| `export` statements | ✅ | `export function/class/const` |
+| Default exports | ✅ | `export default` |
+| Namespace imports | ✅ | `import * as X from './file'` |
+| Re-exports | ✅ | `export { x } from './file'`, `export * from './file'` |
+| TypeScript namespaces | ❌ | `namespace X { }` |
 | Dynamic imports | ❌ | `await import('./file')` |
 
 ---
@@ -250,7 +255,7 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 1. Modules (`import`/`export`)
 2. ~~Union Types~~ ✅
 3. ~~Generics~~ ✅
-4. Async/Await
+4. ~~Async/Await~~ ✅
 5. ~~Destructuring~~ ✅
 
 ### Tier 2: Medium-Impact, Useful Features
@@ -499,3 +504,19 @@ All quick wins have been implemented:
 - ✅ Hex string parsing in `BigInt("0xFF")` constructor
 - ✅ `SharpTSBigInt` runtime wrapper class
 - ✅ Full interpreter and IL compiler support with 62 test cases
+
+### Phase 22 Features (Async/Await)
+- ✅ `async` function declarations with `Promise<T>` return type
+- ✅ `await` expressions with automatic state machine compilation
+- ✅ Async arrow functions (both expression and block body)
+- ✅ Nested async arrow functions with by-reference capture
+- ✅ Async class methods with full `this` capture
+- ✅ `this.property` assignment in async methods
+- ✅ Try/catch inside async functions (segmented exception handling)
+- ✅ Finally blocks with awaits (flag-based execution)
+- ✅ Nested await in call arguments (`await fn(await getValue())`)
+- ✅ Non-async arrows inside async arrows (display class capture)
+- ✅ Return inside try with await in finally (pending return tracking)
+- ✅ Multiple await points with correct state machine transitions
+- ✅ Super method calls in async methods
+- ✅ Full interpreter and IL compiler support with 108 async-related test cases

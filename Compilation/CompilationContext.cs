@@ -133,6 +133,20 @@ public class CompilationContext
     // Class superclass mapping (class name -> superclass name or null)
     public Dictionary<string, string?>? ClassSuperclass { get; set; }
 
+    // Async method support (uses native IL state machine generation)
+    // Async function name -> compiled MethodInfo
+    public Dictionary<string, MethodInfo>? AsyncMethods { get; set; }
+
+    // Async arrow function state machines
+    // Arrow function -> its state machine builder
+    public Dictionary<ArrowFunction, AsyncArrowStateMachineBuilder>? AsyncArrowBuilders { get; set; }
+
+    // Arrow function -> its outer async function's state machine builder
+    public Dictionary<ArrowFunction, AsyncStateMachineBuilder>? AsyncArrowOuterBuilders { get; set; }
+
+    // For nested arrows: arrow function -> its parent arrow's state machine builder
+    public Dictionary<ArrowFunction, AsyncArrowStateMachineBuilder>? AsyncArrowParentBuilders { get; set; }
+
     // Module support
     // Current module path being compiled
     public string? CurrentModulePath { get; set; }

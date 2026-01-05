@@ -29,6 +29,8 @@ public class Lexer(string source)
     {
         { "abstract", TokenType.ABSTRACT },
         { "as", TokenType.AS },
+        { "async", TokenType.ASYNC },
+        { "await", TokenType.AWAIT },
         { "break", TokenType.BREAK },
         { "case", TokenType.CASE },
         { "class", TokenType.CLASS },

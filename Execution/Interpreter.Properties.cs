@@ -71,7 +71,14 @@ public partial class Interpreter
     private object? EvaluateGet(Expr.Get get)
     {
         object? obj = Evaluate(get.Object);
+        return EvaluateGetOnObject(get, obj);
+    }
 
+    /// <summary>
+    /// Core property access logic, shared between sync and async evaluation.
+    /// </summary>
+    private object? EvaluateGetOnObject(Expr.Get get, object? obj)
+    {
         // Handle optional chaining - return null if object is null
         if (get.Optional && obj == null)
         {
@@ -122,7 +129,7 @@ public partial class Interpreter
             return value;
         }
 
-        // Handle built-in instance members: strings, arrays, Math
+        // Handle built-in instance members: strings, arrays, Math, Promise
         if (obj != null)
         {
             var member = BuiltInRegistry.Instance.GetInstanceMember(obj, get.Name.Lexeme);
@@ -130,6 +137,7 @@ public partial class Interpreter
             {
                 // Bind methods to their receiver, return properties directly
                 if (member is BuiltInMethod m) return m.Bind(obj);
+                if (member is BuiltInAsyncMethod am) return am.Bind(obj);
                 return member;
             }
 
@@ -163,11 +171,18 @@ public partial class Interpreter
     private object? EvaluateSet(Expr.Set set)
     {
         object? obj = Evaluate(set.Object);
+        object? value = Evaluate(set.Value);
+        return EvaluateSetOnObject(set, obj, value);
+    }
 
+    /// <summary>
+    /// Core property assignment logic, shared between sync and async evaluation.
+    /// </summary>
+    private object? EvaluateSetOnObject(Expr.Set set, object? obj, object? value)
+    {
         // Handle static property assignment
         if (obj is SharpTSClass klass)
         {
-            object? value = Evaluate(set.Value);
             klass.SetStaticProperty(set.Name.Lexeme, value);
             return value;
         }
@@ -175,13 +190,11 @@ public partial class Interpreter
         if (obj is SharpTSInstance instance)
         {
             instance.SetInterpreter(this);
-            object? value = Evaluate(set.Value);
             instance.Set(set.Name, value);
             return value;
         }
         if (obj is SharpTSObject simpleObj)
         {
-            object? value = Evaluate(set.Value);
             simpleObj.Set(set.Name.Lexeme, value);
             return value;
         }

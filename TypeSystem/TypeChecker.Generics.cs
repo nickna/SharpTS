@@ -24,6 +24,22 @@ public partial class TypeChecker
         var typeArgStrings = SplitTypeArguments(argsStr);
         var typeArgs = typeArgStrings.Select(ToTypeInfo).ToList();
 
+        // Handle built-in generic types
+        if (baseName == "Promise")
+        {
+            if (typeArgs.Count != 1)
+            {
+                throw new Exception($"Type Error: Promise requires exactly 1 type argument, got {typeArgs.Count}.");
+            }
+            // Flatten nested Promises: Promise<Promise<T>> -> Promise<T>
+            TypeInfo valueType = typeArgs[0];
+            while (valueType is TypeInfo.Promise nested)
+            {
+                valueType = nested.ValueType;
+            }
+            return new TypeInfo.Promise(valueType);
+        }
+
         // Look up the generic definition
         TypeInfo? genericDef = _environment.Get(baseName);
 
@@ -156,6 +172,8 @@ public partial class TypeChecker
                 substitutions.TryGetValue(tp.Name, out var sub) ? sub : type,
             TypeInfo.Array arr =>
                 new TypeInfo.Array(Substitute(arr.ElementType, substitutions)),
+            TypeInfo.Promise promise =>
+                new TypeInfo.Promise(Substitute(promise.ValueType, substitutions)),
             TypeInfo.Function func =>
                 new TypeInfo.Function(
                     func.ParamTypes.Select(p => Substitute(p, substitutions)).ToList(),

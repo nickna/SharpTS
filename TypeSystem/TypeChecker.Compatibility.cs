@@ -168,6 +168,12 @@ public partial class TypeChecker
             return true;
         }
 
+        // Promise type compatibility - Promise<A> is compatible with Promise<B> if A is compatible with B
+        if (expected is TypeInfo.Promise expPromise && actual is TypeInfo.Promise actPromise)
+        {
+            return IsCompatible(expPromise.ValueType, actPromise.ValueType);
+        }
+
         if (expected is TypeInfo.Instance i1 && actual is TypeInfo.Instance i2)
         {
             // Handle InstantiatedGeneric comparison

@@ -196,6 +196,15 @@ public abstract record TypeInfo
         public override string ToString() => "bigint";
     }
 
+    /// <summary>
+    /// Represents a Promise type (Promise&lt;T&gt;).
+    /// Promise types automatically flatten - Promise&lt;Promise&lt;T&gt;&gt; becomes Promise&lt;T&gt;.
+    /// </summary>
+    public record Promise(TypeInfo ValueType) : TypeInfo
+    {
+        public override string ToString() => $"Promise<{ValueType}>";
+    }
+
     public record StringLiteral(string Value) : TypeInfo
     {
         public override string ToString() => $"\"{Value}\"";

@@ -75,8 +75,12 @@ public static class RuntimeEmitter
 
         var invokeIL = invokeBuilder.GetILGenerator();
 
-        // Get parameter count: int paramCount = _method.GetParameters().Length
+        // Local variables
         var paramCountLocal = invokeIL.DeclareLocal(typeof(int));
+        var effectiveArgsLocal = invokeIL.DeclareLocal(typeof(object[]));
+        var invokeTargetLocal = invokeIL.DeclareLocal(typeof(object));
+
+        // Get parameter count: int paramCount = _method.GetParameters().Length
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
         invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("GetParameters")!);
@@ -84,60 +88,116 @@ public static class RuntimeEmitter
         invokeIL.Emit(OpCodes.Conv_I4);
         invokeIL.Emit(OpCodes.Stloc, paramCountLocal);
 
-        // Get args length
-        var argsLengthLocal = invokeIL.DeclareLocal(typeof(int));
+        // Check if this is a static method with a bound target
+        // if (_method.IsStatic && _target != null)
+        var notStaticWithTarget = invokeIL.DefineLabel();
+        var afterArgPrep = invokeIL.DefineLabel();
+
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, methodField);
+        invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetProperty("IsStatic")!.GetGetMethod()!);
+        invokeIL.Emit(OpCodes.Brfalse, notStaticWithTarget);
+
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, targetField);
+        invokeIL.Emit(OpCodes.Brfalse, notStaticWithTarget);
+
+        // Static method with bound target: prepend target to args
+        // effectiveArgs = new object[args.Length + 1];
+        // effectiveArgs[0] = _target;
+        // Array.Copy(args, 0, effectiveArgs, 1, args.Length);
+        // invokeTarget = null;
         invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Ldlen);
+        invokeIL.Emit(OpCodes.Conv_I4);
+        invokeIL.Emit(OpCodes.Ldc_I4_1);
+        invokeIL.Emit(OpCodes.Add);
+        invokeIL.Emit(OpCodes.Newarr, typeof(object));
+        invokeIL.Emit(OpCodes.Stloc, effectiveArgsLocal);
+
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
+        invokeIL.Emit(OpCodes.Ldc_I4_0);
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, targetField);
+        invokeIL.Emit(OpCodes.Stelem_Ref);
+
+        invokeIL.Emit(OpCodes.Ldarg_1);  // source
+        invokeIL.Emit(OpCodes.Ldc_I4_0); // sourceIndex
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // dest
+        invokeIL.Emit(OpCodes.Ldc_I4_1); // destIndex
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Ldlen);
+        invokeIL.Emit(OpCodes.Conv_I4);  // length
+        invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+
+        invokeIL.Emit(OpCodes.Ldnull);
+        invokeIL.Emit(OpCodes.Stloc, invokeTargetLocal);
+        invokeIL.Emit(OpCodes.Br, afterArgPrep);
+
+        // Not a static with target: use args directly, target is _target
+        invokeIL.MarkLabel(notStaticWithTarget);
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Stloc, effectiveArgsLocal);
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, targetField);
+        invokeIL.Emit(OpCodes.Stloc, invokeTargetLocal);
+
+        invokeIL.MarkLabel(afterArgPrep);
+
+        // Now handle padding/trimming based on paramCount
+        var argsLengthLocal = invokeIL.DeclareLocal(typeof(int));
+        var adjustedArgsLocal = invokeIL.DeclareLocal(typeof(object[]));
+
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
         invokeIL.Emit(OpCodes.Ldlen);
         invokeIL.Emit(OpCodes.Conv_I4);
         invokeIL.Emit(OpCodes.Stloc, argsLengthLocal);
 
         var exactMatch = invokeIL.DefineLabel();
         var doInvoke = invokeIL.DefineLabel();
-        var adjustedArgsLocal = invokeIL.DeclareLocal(typeof(object[]));
 
-        // If args.Length == paramCount, use args directly
+        // If effectiveArgs.Length == paramCount, use effectiveArgs directly
         invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal);
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
         invokeIL.Emit(OpCodes.Beq, exactMatch);
 
-        // If args.Length < paramCount, pad with nulls
+        // If effectiveArgs.Length < paramCount, pad with nulls
         var tooManyArgs = invokeIL.DefineLabel();
         invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal);
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
         invokeIL.Emit(OpCodes.Bge, tooManyArgs);
 
-        // Pad with nulls: adjustedArgs = new object[paramCount]; Array.Copy(args, adjustedArgs, args.Length)
+        // Pad with nulls
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
         invokeIL.Emit(OpCodes.Newarr, typeof(object));
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Ldarg_1); // source
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
         invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal); // length
         invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(Array), typeof(int)])!);
         invokeIL.Emit(OpCodes.Br, doInvoke);
 
-        // Too many args: trim to paramCount
+        // Too many args: trim
         invokeIL.MarkLabel(tooManyArgs);
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
         invokeIL.Emit(OpCodes.Newarr, typeof(object));
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Ldarg_1); // source
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal); // length
         invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(Array), typeof(int)])!);
         invokeIL.Emit(OpCodes.Br, doInvoke);
 
-        // Exact match - use args directly
+        // Exact match - use effectiveArgs directly
         invokeIL.MarkLabel(exactMatch);
-        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
 
         // Do invoke
         invokeIL.MarkLabel(doInvoke);
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, targetField);
+        invokeIL.Emit(OpCodes.Ldloc, invokeTargetLocal);
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
         invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
         invokeIL.Emit(OpCodes.Ret);
@@ -391,6 +451,9 @@ public static class RuntimeEmitter
         EmitBigIntArithmetic(typeBuilder, runtime);
         EmitBigIntComparison(typeBuilder, runtime);
         EmitBigIntBitwise(typeBuilder, runtime);
+
+        // Promise methods
+        EmitPromiseMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -4146,18 +4209,38 @@ public static class RuntimeEmitter
         runtime.GetSuperMethod = method;
 
         var il = method.GetILGenerator();
-        // Get base type and find method
-        il.Emit(OpCodes.Ldarg_0);
+        var methodInfoLocal = il.DeclareLocal(typeof(MethodInfo));
+        var baseTypeLocal = il.DeclareLocal(typeof(Type));
         var nullLabel = il.DefineLabel();
+
+        // Check if instance is null
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
+        // Get base type and store it
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
         il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("BaseType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, baseTypeLocal);
+
+        // Check if baseType is null
+        il.Emit(OpCodes.Ldloc, baseTypeLocal);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Get method from base type
+        il.Emit(OpCodes.Ldloc, baseTypeLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Stloc, methodInfoLocal);
+
+        // Check if method was found
+        il.Emit(OpCodes.Ldloc, methodInfoLocal);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Create $TSFunction(instance, methodInfo) - a callable wrapper
+        il.Emit(OpCodes.Ldarg_0);  // instance (target)
+        il.Emit(OpCodes.Ldloc, methodInfoLocal);  // methodInfo
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);
@@ -6429,6 +6512,203 @@ public static class RuntimeEmitter
             il.Emit(OpCodes.Call, explicitToInt);
             il.Emit(OpCodes.Call, bigIntType.GetMethod("op_RightShift", [bigIntType, typeof(int)])!);
             il.Emit(OpCodes.Box, bigIntType);
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
+    #endregion
+
+    #region Promise Methods
+
+    /// <summary>
+    /// Emits Promise static methods that delegate to RuntimeTypes.
+    /// These methods return Task&lt;object?&gt; and are awaited by the compiled code.
+    /// </summary>
+    private static void EmitPromiseMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var taskType = typeof(Task<object?>);
+
+        // Promise.resolve(value?) - simply wraps value in completed Task
+        // IL equivalent: Task.FromResult<object?>(value)
+        var resolve = typeBuilder.DefineMethod(
+            "PromiseResolve",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseResolve = resolve;
+        {
+            var il = resolve.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            // Call Task.FromResult<object?>(value)
+            var fromResult = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object));
+            il.Emit(OpCodes.Call, fromResult);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Promise.reject(reason) - creates a faulted Task
+        // IL equivalent: Task.FromException<object?>(new Exception(reason?.ToString()))
+        var reject = typeBuilder.DefineMethod(
+            "PromiseReject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseReject = reject;
+        {
+            var il = reject.GetILGenerator();
+            // Create Exception from reason
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, typeof(object).GetMethod("ToString")!);
+            var exceptionCtor = typeof(Exception).GetConstructor([typeof(string)])!;
+            il.Emit(OpCodes.Newobj, exceptionCtor);
+            // Call Task.FromException<object?>(exception)
+            var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(typeof(object));
+            il.Emit(OpCodes.Call, fromException);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Promise.all(iterable) - complex async operation, emit helper that uses Task.WhenAll
+        var all = typeBuilder.DefineMethod(
+            "PromiseAll",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseAll = all;
+        EmitPromiseAllBody(all.GetILGenerator(), runtime);
+
+        // Promise.race(iterable) - complex async operation
+        var race = typeBuilder.DefineMethod(
+            "PromiseRace",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseRace = race;
+        EmitPromiseRaceBody(race.GetILGenerator());
+
+        // Promise.allSettled(iterable) - complex async operation
+        var allSettled = typeBuilder.DefineMethod(
+            "PromiseAllSettled",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseAllSettled = allSettled;
+        EmitPromiseAllSettledBody(allSettled.GetILGenerator(), runtime);
+
+        // Promise.any(iterable) - complex async operation
+        var any = typeBuilder.DefineMethod(
+            "PromiseAny",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [typeof(object)]
+        );
+        runtime.PromiseAny = any;
+        EmitPromiseAnyBody(any.GetILGenerator());
+
+        // Promise.prototype.then/catch/finally - stub methods (not fully supported in compiled mode)
+        EmitPromiseInstanceStubs(typeBuilder, runtime, taskType);
+    }
+
+    /// <summary>
+    /// Emits Promise.all body - since we can't easily emit proper async IL,
+    /// we defer to the RuntimeTypes implementation which handles this correctly.
+    /// The RuntimeTypes assembly will be available at runtime for this method.
+    ///
+    /// NOTE: This approach requires RuntimeTypes.PromiseAll to be available at runtime,
+    /// which means compiled assemblies need SharpTS.dll to be present for Promise.all to work.
+    /// For a fully standalone assembly, a more complex IL emission approach would be needed.
+    /// </summary>
+    private static void EmitPromiseAllBody(ILGenerator il, EmittedRuntime runtime)
+    {
+        // Just call RuntimeTypes.PromiseAll directly - this requires SharpTS.dll at runtime
+        // but is the only way to get proper async behavior without emitting complex state machines
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseAll")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Promise.race body - defers to RuntimeTypes for proper async behavior.
+    /// NOTE: Requires SharpTS.dll at runtime.
+    /// </summary>
+    private static void EmitPromiseRaceBody(ILGenerator il)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseRace")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Promise.allSettled body - defers to RuntimeTypes for proper async behavior.
+    /// NOTE: Requires SharpTS.dll at runtime.
+    /// </summary>
+    private static void EmitPromiseAllSettledBody(ILGenerator il, EmittedRuntime runtime)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseAllSettled")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Promise.any body - defers to RuntimeTypes for proper async behavior.
+    /// NOTE: Requires SharpTS.dll at runtime.
+    /// </summary>
+    private static void EmitPromiseAnyBody(ILGenerator il)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseAny")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits stub methods for Promise instance methods (then, catch, finally).
+    /// These are not fully supported in compiled mode without more complex implementation.
+    /// </summary>
+    private static void EmitPromiseInstanceStubs(TypeBuilder typeBuilder, EmittedRuntime runtime, Type taskType)
+    {
+        // then - just returns the input task (no transformation)
+        var then = typeBuilder.DefineMethod(
+            "PromiseThen",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [taskType, typeof(object), typeof(object)]
+        );
+        runtime.PromiseThen = then;
+        {
+            var il = then.GetILGenerator();
+            // Just return the input task - callbacks not implemented in compiled mode
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // catch - just returns the input task
+        var catchMethod = typeBuilder.DefineMethod(
+            "PromiseCatch",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [taskType, typeof(object)]
+        );
+        runtime.PromiseCatch = catchMethod;
+        {
+            var il = catchMethod.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // finally - just returns the input task
+        var finallyMethod = typeBuilder.DefineMethod(
+            "PromiseFinally",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [taskType, typeof(object)]
+        );
+        runtime.PromiseFinally = finallyMethod;
+        {
+            var il = finallyMethod.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ret);
         }
     }

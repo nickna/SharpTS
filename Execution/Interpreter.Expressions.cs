@@ -17,6 +17,7 @@ public partial class Interpreter
     /// <remarks>
     /// Central dispatch point for all expression types. Handles literals, operators,
     /// function calls, property access, and control flow expressions.
+    /// For async expressions (await), this will block synchronously. Use EvaluateAsync for fully async evaluation.
     /// </remarks>
     internal object? Evaluate(Expr expr)
     {
@@ -50,8 +51,72 @@ public partial class Interpreter
             Expr.TemplateLiteral template => EvaluateTemplateLiteral(template),
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
+            Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(), // Sync wrapper for await
             _ => throw new Exception("Unknown expression type.")
         };
+    }
+
+    /// <summary>
+    /// Asynchronously dispatches an expression to the appropriate evaluator.
+    /// </summary>
+    /// <param name="expr">The expression AST node to evaluate.</param>
+    /// <returns>A task that resolves to the runtime value produced by evaluating the expression.</returns>
+    /// <remarks>
+    /// Async version of Evaluate that properly handles await expressions without blocking.
+    /// Used by async functions and arrow functions.
+    /// </remarks>
+    internal async Task<object?> EvaluateAsync(Expr expr)
+    {
+        return expr switch
+        {
+            Expr.Binary binary => await EvaluateBinaryAsync(binary),
+            Expr.Logical logical => await EvaluateLogicalAsync(logical),
+            Expr.NullishCoalescing nc => await EvaluateNullishCoalescingAsync(nc),
+            Expr.Ternary ternary => await EvaluateTernaryAsync(ternary),
+            Expr.Grouping grouping => await EvaluateAsync(grouping.Expression),
+            Expr.Literal literal => EvaluateLiteral(literal),
+            Expr.Unary unary => await EvaluateUnaryAsync(unary),
+            Expr.Variable variable => EvaluateVariable(variable),
+            Expr.Assign assign => await EvaluateAssignAsync(assign),
+            Expr.Call call => await EvaluateCallAsync(call),
+            Expr.Get get => await EvaluateGetAsync(get),
+            Expr.Set set => await EvaluateSetAsync(set),
+            Expr.This thisExpr => EvaluateThis(thisExpr),
+            Expr.New newExpr => await EvaluateNewAsync(newExpr),
+            Expr.ArrayLiteral array => await EvaluateArrayAsync(array),
+            Expr.ObjectLiteral obj => await EvaluateObjectAsync(obj),
+            Expr.GetIndex getIndex => await EvaluateGetIndexAsync(getIndex),
+            Expr.SetIndex setIndex => await EvaluateSetIndexAsync(setIndex),
+            Expr.Super super => EvaluateSuper(super),
+            Expr.CompoundAssign compound => await EvaluateCompoundAssignAsync(compound),
+            Expr.CompoundSet compoundSet => await EvaluateCompoundSetAsync(compoundSet),
+            Expr.CompoundSetIndex compoundSetIndex => await EvaluateCompoundSetIndexAsync(compoundSetIndex),
+            Expr.PrefixIncrement prefix => await EvaluatePrefixIncrementAsync(prefix),
+            Expr.PostfixIncrement postfix => await EvaluatePostfixIncrementAsync(postfix),
+            Expr.ArrowFunction arrow => EvaluateArrowFunction(arrow),
+            Expr.TemplateLiteral template => await EvaluateTemplateLiteralAsync(template),
+            Expr.Spread spread => await EvaluateAsync(spread.Expression),
+            Expr.TypeAssertion ta => await EvaluateAsync(ta.Expression),
+            Expr.Await awaitExpr => await EvaluateAwaitAsync(awaitExpr),
+            _ => throw new Exception("Unknown expression type.")
+        };
+    }
+
+    /// <summary>
+    /// Evaluates an await expression, unwrapping the Promise value.
+    /// </summary>
+    private async Task<object?> EvaluateAwaitAsync(Expr.Await awaitExpr)
+    {
+        object? value = await EvaluateAsync(awaitExpr.Expression);
+
+        // Unwrap Promise
+        if (value is SharpTSPromise promise)
+        {
+            return await promise.GetValueAsync();
+        }
+
+        // Await on non-Promise returns the value (TypeScript behavior)
+        return value;
     }
 
     /// <summary>
@@ -165,14 +230,18 @@ public partial class Interpreter
     /// Evaluates an arrow function expression, creating a callable closure.
     /// </summary>
     /// <param name="arrow">The arrow function expression AST node.</param>
-    /// <returns>A <see cref="SharpTSArrowFunction"/> that captures the current environment.</returns>
+    /// <returns>A <see cref="SharpTSArrowFunction"/> or <see cref="SharpTSAsyncArrowFunction"/> that captures the current environment.</returns>
     /// <remarks>
     /// Arrow functions capture their lexical environment at creation time,
-    /// enabling closures over outer variables.
+    /// enabling closures over outer variables. Async arrow functions return a Promise.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html#arrow-functions">TypeScript Arrow Functions</seealso>
     private object? EvaluateArrowFunction(Expr.ArrowFunction arrow)
     {
+        if (arrow.IsAsync)
+        {
+            return new SharpTSAsyncArrowFunction(arrow, _environment, arrow.IsObjectMethod);
+        }
         return new SharpTSArrowFunction(arrow, _environment, arrow.IsObjectMethod);
     }
 

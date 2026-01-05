@@ -44,6 +44,7 @@ public partial class TypeChecker
             Expr.TemplateLiteral template => CheckTemplateLiteral(template),
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
+            Expr.Await awaitExpr => CheckAwait(awaitExpr),
             _ => new TypeInfo.Any()
         };
 
@@ -52,6 +53,29 @@ public partial class TypeChecker
 
         return result;
     }
+
+    private TypeInfo CheckAwait(Expr.Await awaitExpr)
+    {
+        if (!_inAsyncFunction)
+        {
+            throw new Exception("Type Error: 'await' is only valid inside an async function.");
+        }
+
+        TypeInfo exprType = CheckExpr(awaitExpr.Expression);
+        return ResolveAwaitedType(exprType);
+    }
+
+    /// <summary>
+    /// Resolves the Awaited&lt;T&gt; type - recursively unwraps Promise types.
+    /// Handles Promise<T> → T, Promise<Promise<T>> → T, and distributes over unions.
+    /// </summary>
+    private TypeInfo ResolveAwaitedType(TypeInfo type) => type switch
+    {
+        TypeInfo.Promise p => ResolveAwaitedType(p.ValueType),
+        TypeInfo.Union u => new TypeInfo.Union(
+            u.FlattenedTypes.Select(ResolveAwaitedType).ToList()),
+        _ => type
+    };
 
     private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)
     {
@@ -306,6 +330,7 @@ public partial class TypeChecker
         TypeEnvironment previousEnv = _environment;
         TypeInfo? previousReturn = _currentFunctionReturnType;
         TypeInfo? previousThisType = _currentFunctionThisType;
+        bool previousInAsync = _inAsyncFunction;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
@@ -313,6 +338,7 @@ public partial class TypeChecker
         _environment = arrowEnv;
         _currentFunctionReturnType = returnType;
         _currentFunctionThisType = thisType;
+        _inAsyncFunction = arrow.IsAsync;
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
@@ -325,11 +351,29 @@ public partial class TypeChecker
                 TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
                 if (arrow.ReturnType == null)
                 {
-                    returnType = exprType;
+                    // For async arrow functions, wrap return type in Promise if not already
+                    if (arrow.IsAsync && exprType is not TypeInfo.Promise)
+                    {
+                        returnType = new TypeInfo.Promise(exprType);
+                    }
+                    else
+                    {
+                        returnType = exprType;
+                    }
                 }
-                else if (!IsCompatible(returnType, exprType))
+                else
                 {
-                    throw new Exception($"Type Error: Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
+                    // For async arrow functions, the return type is Promise<T> but we can return T directly
+                    TypeInfo expectedType = returnType;
+                    if (arrow.IsAsync && returnType is TypeInfo.Promise promiseType)
+                    {
+                        expectedType = promiseType.ValueType;
+                    }
+
+                    if (!IsCompatible(expectedType, exprType))
+                    {
+                        throw new Exception($"Type Error: Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
+                    }
                 }
             }
             else if (arrow.BlockBody != null)
@@ -346,6 +390,7 @@ public partial class TypeChecker
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _currentFunctionThisType = previousThisType;
+            _inAsyncFunction = previousInAsync;
             _loopDepth = previousLoopDepth;
             _switchDepth = previousSwitchDepth;
             _activeLabels.Clear();
@@ -376,6 +421,7 @@ public partial class TypeChecker
         if (name.Lexeme == "Object") return new TypeInfo.Any(); // Object is a special global object
         if (name.Lexeme == "Array") return new TypeInfo.Any(); // Array is a special global object
         if (name.Lexeme == "JSON") return new TypeInfo.Any(); // JSON is a special global object
+        if (name.Lexeme == "Promise") return new TypeInfo.Any(); // Promise is a special global object
 
         var type = _environment.Get(name.Lexeme);
         if (type == null)

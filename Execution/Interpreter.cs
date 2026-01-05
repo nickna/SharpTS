@@ -62,7 +62,21 @@ public partial class Interpreter
         {
             foreach (Stmt statement in statements)
             {
-                Execute(statement);
+                // For expression statements, we may get a Promise that needs to be awaited
+                // This provides "top-level await" behavior for the interpreter
+                if (statement is Stmt.Expression exprStmt)
+                {
+                    object? result = Evaluate(exprStmt.Expr);
+                    // Wait for top-level Promises to complete before continuing
+                    if (result is SharpTSPromise promise)
+                    {
+                        promise.Task.GetAwaiter().GetResult();
+                    }
+                }
+                else
+                {
+                    Execute(statement);
+                }
             }
         }
         catch (Exception error)
@@ -129,7 +143,21 @@ public partial class Interpreter
         {
             foreach (var stmt in module.Statements)
             {
-                Execute(stmt);
+                // For expression statements, we may get a Promise that needs to be awaited
+                // This provides "top-level await" behavior for modules
+                if (stmt is Stmt.Expression exprStmt)
+                {
+                    object? result = Evaluate(exprStmt.Expr);
+                    // Wait for top-level Promises to complete before continuing
+                    if (result is SharpTSPromise promise)
+                    {
+                        promise.Task.GetAwaiter().GetResult();
+                    }
+                }
+                else
+                {
+                    Execute(stmt);
+                }
             }
             moduleInstance.IsExecuted = true;
         }
@@ -403,8 +431,16 @@ public partial class Interpreter
             case Stmt.Function functionStmt:
                 // Skip overload signatures (no body) - they're type-checking only
                 if (functionStmt.Body == null) break;
-                SharpTSFunction function = new(functionStmt, _environment);
-                _environment.Define(functionStmt.Name.Lexeme, function);
+                if (functionStmt.IsAsync)
+                {
+                    SharpTSAsyncFunction asyncFunction = new(functionStmt, _environment);
+                    _environment.Define(functionStmt.Name.Lexeme, asyncFunction);
+                }
+                else
+                {
+                    SharpTSFunction function = new(functionStmt, _environment);
+                    _environment.Define(functionStmt.Name.Lexeme, function);
+                }
                 break;
             case Stmt.Class classStmt:
                 object? superclass = null;

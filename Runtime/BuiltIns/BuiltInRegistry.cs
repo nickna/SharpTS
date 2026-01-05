@@ -1,3 +1,4 @@
+using SharpTS.Execution;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -44,12 +45,12 @@ public sealed class BuiltInRegistry
     }
 
     /// <summary>
-    /// Gets a static method from a namespace (e.g., Object.keys, JSON.parse).
+    /// Gets a static method from a namespace (e.g., Object.keys, JSON.parse, Promise.all).
     /// </summary>
     /// <param name="namespaceName">The namespace name</param>
     /// <param name="methodName">The method name</param>
-    /// <returns>The BuiltInMethod, or null if not found</returns>
-    public BuiltInMethod? GetStaticMethod(string namespaceName, string methodName)
+    /// <returns>The callable method (BuiltInMethod or BuiltInAsyncMethod), or null if not found</returns>
+    public ISharpTSCallable? GetStaticMethod(string namespaceName, string methodName)
     {
         if (_namespaces.TryGetValue(namespaceName, out var ns))
         {
@@ -127,11 +128,13 @@ public sealed class BuiltInRegistry
         RegisterArrayNamespace(registry);
         RegisterJSONNamespace(registry);
         RegisterConsoleNamespace(registry);
+        RegisterPromiseNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
         RegisterArrayType(registry);
         RegisterMathType(registry);
+        RegisterPromiseType(registry);
 
         return registry;
     }
@@ -214,6 +217,22 @@ public sealed class BuiltInRegistry
         // Math members accessed via property access (Math.PI, Math.abs)
         registry.RegisterInstanceType(typeof(SharpTSMath), (_, name) =>
             MathBuiltIns.GetMember(name));
+    }
+
+    private static void RegisterPromiseNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Promise",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => PromiseBuiltIns.GetStaticMethod(name)
+        ));
+    }
+
+    private static void RegisterPromiseType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSPromise), (instance, name) =>
+            PromiseBuiltIns.GetMember((SharpTSPromise)instance, name));
     }
 
     private static string Stringify(object? obj)

@@ -135,6 +135,15 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Promise.resolve(), Promise.reject(), Promise.all(), Promise.race()
+        if (c.Callee is Expr.Get promiseGet &&
+            promiseGet.Object is Expr.Variable promiseVar &&
+            promiseVar.Name.Lexeme == "Promise")
+        {
+            EmitPromiseStaticCall(promiseGet.Name.Lexeme, c.Arguments);
+            return;
+        }
+
         // Special case: __objectRest (internal helper for object rest patterns)
         if (c.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
         {
@@ -225,6 +234,13 @@ public partial class ILEmitter
         }
 
         // Regular function call (named top-level function)
+        // First check for async functions
+        if (c.Callee is Expr.Variable asyncVar && _ctx.AsyncMethods?.TryGetValue(asyncVar.Name.Lexeme, out var asyncMethod) == true)
+        {
+            EmitAsyncFunctionCall(asyncMethod, c.Arguments);
+            return;
+        }
+
         if (c.Callee is Expr.Variable funcVar && _ctx.Functions.TryGetValue(funcVar.Name.Lexeme, out var methodBuilder))
         {
             // Determine target method (may be generic instantiation)
@@ -1460,7 +1476,19 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Dup); // Keep display class on stack
 
             // Load the captured variable's current value
-            if (_ctx.TryGetParameter(capturedVar, out var argIndex))
+            if (capturedVar == "this")
+            {
+                // 'this' is captured - load the enclosing instance
+                if (_ctx.IsInstanceMethod)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);  // Load 'this' from enclosing method
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+            }
+            else if (_ctx.TryGetParameter(capturedVar, out var argIndex))
             {
                 IL.Emit(OpCodes.Ldarg, argIndex);
             }
@@ -1622,6 +1650,215 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldnull);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Emits a call to an async function.
+    /// The async method returns Task&lt;object?&gt; which we synchronously await.
+    /// </summary>
+    private void EmitAsyncFunctionCall(MethodInfo asyncMethod, List<Expr> arguments)
+    {
+        var paramCount = asyncMethod.GetParameters().Length;
+
+        // Emit provided arguments
+        foreach (var arg in arguments)
+        {
+            EmitExpression(arg);
+            EmitBoxIfNeeded(arg);
+        }
+
+        // Pad with nulls for missing arguments (for default parameters)
+        for (int i = arguments.Count; i < paramCount; i++)
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        // Call the async method (returns Task<object?> or Task)
+        IL.Emit(OpCodes.Call, asyncMethod);
+
+        // Synchronously wait for the result: task.GetAwaiter().GetResult()
+        Type returnType = asyncMethod.ReturnType;
+
+        if (returnType == typeof(Task))
+        {
+            // Task (no return value) - just wait for completion
+            var getAwaiter = typeof(Task).GetMethod("GetAwaiter")!;
+            var awaiterType = getAwaiter.ReturnType;
+            var getResult = awaiterType.GetMethod("GetResult")!;
+
+            // Store task in local to call methods on it
+            var taskLocal = IL.DeclareLocal(typeof(Task));
+            IL.Emit(OpCodes.Stloc, taskLocal);
+            IL.Emit(OpCodes.Ldloca, taskLocal);
+            IL.Emit(OpCodes.Call, getAwaiter);
+
+            var awaiterLocal = IL.DeclareLocal(awaiterType);
+            IL.Emit(OpCodes.Stloc, awaiterLocal);
+            IL.Emit(OpCodes.Ldloca, awaiterLocal);
+            IL.Emit(OpCodes.Call, getResult);
+
+            // void async functions return null
+            IL.Emit(OpCodes.Ldnull);
+        }
+        else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+        {
+            // Task<T> - wait and get result
+            var getAwaiter = returnType.GetMethod("GetAwaiter")!;
+            var awaiterType = getAwaiter.ReturnType;
+            var getResult = awaiterType.GetMethod("GetResult")!;
+
+            // Store task in local to call methods on it
+            var taskLocal = IL.DeclareLocal(returnType);
+            IL.Emit(OpCodes.Stloc, taskLocal);
+            IL.Emit(OpCodes.Ldloca, taskLocal);
+            IL.Emit(OpCodes.Call, getAwaiter);
+
+            var awaiterLocal = IL.DeclareLocal(awaiterType);
+            IL.Emit(OpCodes.Stloc, awaiterLocal);
+            IL.Emit(OpCodes.Ldloca, awaiterLocal);
+            IL.Emit(OpCodes.Call, getResult);
+
+            // Box if necessary (result might be value type)
+            Type resultType = returnType.GetGenericArguments()[0];
+            if (resultType.IsValueType)
+            {
+                IL.Emit(OpCodes.Box, resultType);
+            }
+        }
+        else
+        {
+            // Non-task return type (shouldn't happen for async methods)
+            // Just leave the result on the stack
+        }
+    }
+
+    private void EmitPromiseStaticCall(string methodName, List<Expr> arguments)
+    {
+        switch (methodName)
+        {
+            case "resolve":
+                // Promise.resolve(value?)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseResolve);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            case "reject":
+                // Promise.reject(reason)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseReject);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            case "all":
+                // Promise.all(iterable)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAll);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            case "race":
+                // Promise.race(iterable)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseRace);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            case "allSettled":
+                // Promise.allSettled(iterable)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAllSettled);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            case "any":
+                // Promise.any(iterable)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAny);
+                // Result is Task<object?>, need to await it
+                EmitAwaitTask();
+                return;
+
+            default:
+                IL.Emit(OpCodes.Ldnull);
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Emits code to await a Task<object?> and get its result.
+    /// </summary>
+    private void EmitAwaitTask()
+    {
+        // Store task in local
+        var taskLocal = IL.DeclareLocal(typeof(Task<object?>));
+        IL.Emit(OpCodes.Stloc, taskLocal);
+        IL.Emit(OpCodes.Ldloca, taskLocal);
+
+        // Call GetAwaiter()
+        var getAwaiter = typeof(Task<object?>).GetMethod("GetAwaiter")!;
+        IL.Emit(OpCodes.Call, getAwaiter);
+
+        // Store awaiter and call GetResult()
+        var awaiterType = getAwaiter.ReturnType;
+        var awaiterLocal = IL.DeclareLocal(awaiterType);
+        IL.Emit(OpCodes.Stloc, awaiterLocal);
+        IL.Emit(OpCodes.Ldloca, awaiterLocal);
+        var getResult = awaiterType.GetMethod("GetResult")!;
+        IL.Emit(OpCodes.Call, getResult);
     }
 
     /// <summary>

@@ -298,6 +298,14 @@ public class ClosureAnalyzer
                 break;
 
             case Expr.This:
+                // Arrow functions capture 'this' from their lexical scope
+                // Track this as a captured variable so display classes include a field for it
+                if (_currentFunction != null && _currentFunction is Expr.ArrowFunction)
+                {
+                    _captures[_currentFunction].Add("this");
+                }
+                break;
+
             case Expr.Super:
             case Expr.Literal:
                 // No analysis needed

@@ -160,7 +160,15 @@ public partial class ILEmitter
 
     private void EmitThis()
     {
-        if (_ctx.IsInstanceMethod)
+        // If we're inside a capturing arrow function, 'this' is stored in a captured field
+        if (_ctx.CapturedFields != null && _ctx.CapturedFields.TryGetValue("this", out var thisField))
+        {
+            // Load 'this' from the display class field
+            // arg_0 is the display class instance
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, thisField);
+        }
+        else if (_ctx.IsInstanceMethod)
         {
             IL.Emit(OpCodes.Ldarg_0);
         }

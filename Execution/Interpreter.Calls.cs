@@ -135,17 +135,24 @@ public partial class Interpreter
     {
         object? left = Evaluate(binary.Left);
         object? right = Evaluate(binary.Right);
+        return EvaluateBinaryOperation(binary.Operator, left, right);
+    }
 
+    /// <summary>
+    /// Core binary operation logic, shared between sync and async evaluation.
+    /// </summary>
+    private object? EvaluateBinaryOperation(Token op, object? left, object? right)
+    {
         // Check for bigint operations
         var leftBigInt = GetBigIntValue(left);
         var rightBigInt = GetBigIntValue(right);
 
         if (leftBigInt.HasValue || rightBigInt.HasValue)
         {
-            return EvaluateBigIntBinary(binary.Operator.Type, left, right, leftBigInt, rightBigInt);
+            return EvaluateBigIntBinary(op.Type, left, right, leftBigInt, rightBigInt);
         }
 
-        return binary.Operator.Type switch
+        return op.Type switch
         {
             TokenType.GREATER => (double)left! > (double)right!,
             TokenType.GREATER_EQUAL => (double)left! >= (double)right!,
