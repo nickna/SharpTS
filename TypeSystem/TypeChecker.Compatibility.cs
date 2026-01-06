@@ -106,6 +106,42 @@ public partial class TypeChecker
             return actIntersection.FlattenedTypes.Any(t => IsCompatible(expected, t));
         }
 
+        // KeyOf type compatibility - must evaluate to compare
+        if (expected is TypeInfo.KeyOf expectedKeyOf)
+        {
+            TypeInfo expandedExpected = EvaluateKeyOf(expectedKeyOf.SourceType);
+            return IsCompatible(expandedExpected, actual);
+        }
+        if (actual is TypeInfo.KeyOf actualKeyOf)
+        {
+            TypeInfo expandedActual = EvaluateKeyOf(actualKeyOf.SourceType);
+            return IsCompatible(expected, expandedActual);
+        }
+
+        // Mapped type compatibility - expand lazily then compare
+        if (expected is TypeInfo.MappedType expectedMapped)
+        {
+            TypeInfo expandedExpected = ExpandMappedType(expectedMapped);
+            return IsCompatible(expandedExpected, actual);
+        }
+        if (actual is TypeInfo.MappedType actualMapped)
+        {
+            TypeInfo expandedActual = ExpandMappedType(actualMapped);
+            return IsCompatible(expected, expandedActual);
+        }
+
+        // Indexed access type compatibility - resolve then compare
+        if (expected is TypeInfo.IndexedAccess expectedIA)
+        {
+            TypeInfo expandedExpected = ResolveIndexedAccess(expectedIA, new Dictionary<string, TypeInfo>());
+            return IsCompatible(expandedExpected, actual);
+        }
+        if (actual is TypeInfo.IndexedAccess actualIA)
+        {
+            TypeInfo expandedActual = ResolveIndexedAccess(actualIA, new Dictionary<string, TypeInfo>());
+            return IsCompatible(expected, expandedActual);
+        }
+
         // Enum compatibility: primitive values are assignable to their enum type
         // (e.g., Direction.Up which is typed as 'number' can be assigned to Direction)
         if (expected is TypeInfo.Enum expectedEnum)

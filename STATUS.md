@@ -218,7 +218,7 @@ This document tracks TypeScript language features and their implementation statu
 | Iterators (Symbol.iterator) | ❌ | Custom iteration |
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
 | `bigint` type | ✅ | Arbitrary precision integers with full operation support |
-| Mapped types | ❌ | `{ [K in keyof T]: ... }` |
+| Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
 | Conditional types | ❌ | `T extends U ? X : Y` |
 | Template literal types | ❌ | `` `${string}ID` `` |
 | Utility types | ❌ | `Partial<T>`, `Required<T>`, etc. |

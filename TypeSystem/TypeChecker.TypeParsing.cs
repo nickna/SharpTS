@@ -29,6 +29,14 @@ public partial class TypeChecker
             return ToTypeInfo(aliasExpansion);
         }
 
+        // Handle keyof type operator: "keyof T"
+        if (typeName.StartsWith("keyof "))
+        {
+            string innerTypeStr = typeName[6..].Trim();
+            TypeInfo innerType = ToTypeInfo(innerTypeStr);
+            return new TypeInfo.KeyOf(innerType);
+        }
+
         // Handle generic type syntax: Box<number>, Map<string, number>
         if (typeName.Contains('<') && typeName.Contains('>'))
         {
@@ -83,6 +91,17 @@ public partial class TypeChecker
         if (typeName.StartsWith("[") && typeName.EndsWith("]"))
         {
             return ParseTupleTypeInfo(typeName);
+        }
+
+        // Handle indexed access types: T[K] or T["key"] (but not array T[])
+        // Check for brackets that have content (not just [])
+        if (typeName.Contains('[') && !typeName.EndsWith("[]"))
+        {
+            var indexedAccess = TryParseIndexedAccessType(typeName);
+            if (indexedAccess != null)
+            {
+                return indexedAccess;
+            }
         }
 
         if (typeName.EndsWith("[]"))
@@ -484,6 +503,7 @@ public partial class TypeChecker
 
     /// <summary>
     /// Parses inline object type strings like "{ x: number; y?: string }".
+    /// Also handles mapped types like "{ [K in keyof T]: T[K] }".
     /// </summary>
     private TypeInfo ParseInlineObjectTypeInfo(string objStr)
     {
@@ -491,6 +511,12 @@ public partial class TypeChecker
         string inner = objStr[2..^2].Trim();
         if (string.IsNullOrEmpty(inner))
             return new TypeInfo.Record(new Dictionary<string, TypeInfo>());
+
+        // Check if this is a mapped type
+        if (IsMappedTypeString(inner))
+        {
+            return ParseMappedTypeInfo(inner);
+        }
 
         var fields = new Dictionary<string, TypeInfo>();
         TypeInfo? stringIndexType = null;
@@ -574,5 +600,226 @@ public partial class TypeChecker
         if (start < inner.Length)
             parts.Add(inner[start..]);
         return parts;
+    }
+
+    /// <summary>
+    /// Tries to parse an indexed access type like T[K] or T["key"].
+    /// Returns null if not a valid indexed access pattern.
+    /// </summary>
+    private TypeInfo? TryParseIndexedAccessType(string typeName)
+    {
+        // Find the outermost [ that's followed by content and then ]
+        int depth = 0;
+        int bracketStart = -1;
+
+        for (int i = 0; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '<' || c == '(' || c == '{') depth++;
+            else if (c == '>' || c == ')' || c == '}') depth--;
+            else if (c == '[' && depth == 0)
+            {
+                bracketStart = i;
+                break;
+            }
+        }
+
+        if (bracketStart < 0) return null;
+
+        // Find the matching ]
+        depth = 0;
+        int bracketEnd = -1;
+        for (int i = bracketStart; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '[') depth++;
+            else if (c == ']')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    bracketEnd = i;
+                    break;
+                }
+            }
+        }
+
+        if (bracketEnd < 0 || bracketEnd == bracketStart + 1) return null; // Empty brackets []
+
+        string baseType = typeName[..bracketStart];
+        string indexType = typeName[(bracketStart + 1)..bracketEnd];
+        string remaining = typeName[(bracketEnd + 1)..];
+
+        // Parse the base and index types
+        TypeInfo baseTypeInfo = ToTypeInfo(baseType);
+        TypeInfo indexTypeInfo = ToTypeInfo(indexType);
+        TypeInfo result = new TypeInfo.IndexedAccess(baseTypeInfo, indexTypeInfo);
+
+        // Handle chained indexed access: T[K][J]
+        if (!string.IsNullOrEmpty(remaining) && remaining.StartsWith("["))
+        {
+            // Recurse with the remaining part
+            return TryParseIndexedAccessType($"{result}{remaining}");
+        }
+
+        // Handle array suffix after indexed access: T[K][]
+        while (remaining.StartsWith("[]"))
+        {
+            result = new TypeInfo.Array(result);
+            remaining = remaining[2..];
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Checks if an inline object type string represents a mapped type.
+    /// Mapped types have the pattern: { [K in ...]: ... }
+    /// </summary>
+    private bool IsMappedTypeString(string inner)
+    {
+        // Must contain " in " to be a mapped type
+        // Index signatures use ": " after the bracket, mapped types use " in "
+        return inner.Contains(" in ") && inner.TrimStart().StartsWith("[") ||
+               inner.TrimStart().StartsWith("+readonly ") ||
+               inner.TrimStart().StartsWith("-readonly ") ||
+               inner.TrimStart().StartsWith("readonly ");
+    }
+
+    /// <summary>
+    /// Parses a mapped type string into a MappedType TypeInfo.
+    /// Format: { [+/-readonly] [K in Constraint [as RemapType]][+/-?]: ValueType }
+    /// </summary>
+    private TypeInfo ParseMappedTypeInfo(string inner)
+    {
+        MappedTypeModifiers modifiers = MappedTypeModifiers.None;
+
+        // Parse leading modifiers
+        if (inner.StartsWith("+readonly "))
+        {
+            modifiers |= MappedTypeModifiers.AddReadonly;
+            inner = inner[10..].Trim();
+        }
+        else if (inner.StartsWith("-readonly "))
+        {
+            modifiers |= MappedTypeModifiers.RemoveReadonly;
+            inner = inner[10..].Trim();
+        }
+        else if (inner.StartsWith("readonly "))
+        {
+            modifiers |= MappedTypeModifiers.AddReadonly;
+            inner = inner[9..].Trim();
+        }
+
+        // Find the [ and ] brackets for the parameter
+        int openBracket = inner.IndexOf('[');
+        int closeBracket = FindMatchingBracket(inner, openBracket);
+
+        if (openBracket < 0 || closeBracket < 0)
+            throw new Exception("Type Error: Invalid mapped type syntax.");
+
+        string bracketContent = inner[(openBracket + 1)..closeBracket];
+        string afterBracket = inner[(closeBracket + 1)..].Trim();
+
+        // Parse [K in Constraint as RemapType]
+        int inIndex = bracketContent.IndexOf(" in ");
+        if (inIndex < 0)
+            throw new Exception("Type Error: Mapped type must contain 'in' keyword.");
+
+        string paramName = bracketContent[..inIndex].Trim();
+        string afterIn = bracketContent[(inIndex + 4)..].Trim();
+
+        // Check for 'as' clause
+        TypeInfo? asClause = null;
+        string constraintStr;
+        int asIndex = FindTopLevelAs(afterIn);
+        if (asIndex >= 0)
+        {
+            constraintStr = afterIn[..asIndex].Trim();
+            string asTypeStr = afterIn[(asIndex + 3)..].Trim();
+            asClause = ToTypeInfo(asTypeStr);
+        }
+        else
+        {
+            constraintStr = afterIn;
+        }
+        TypeInfo constraint = ToTypeInfo(constraintStr);
+
+        // Parse trailing modifiers: +?, -?, ?
+        if (afterBracket.StartsWith("+?"))
+        {
+            modifiers |= MappedTypeModifiers.AddOptional;
+            afterBracket = afterBracket[2..].Trim();
+        }
+        else if (afterBracket.StartsWith("-?"))
+        {
+            modifiers |= MappedTypeModifiers.RemoveOptional;
+            afterBracket = afterBracket[2..].Trim();
+        }
+        else if (afterBracket.StartsWith("?"))
+        {
+            modifiers |= MappedTypeModifiers.AddOptional;
+            afterBracket = afterBracket[1..].Trim();
+        }
+
+        // Parse : ValueType
+        if (!afterBracket.StartsWith(":"))
+            throw new Exception("Type Error: Expected ':' after mapped type parameter.");
+
+        string valueTypeStr = afterBracket[1..].Trim();
+        TypeInfo valueType = ToTypeInfo(valueTypeStr);
+
+        return new TypeInfo.MappedType(paramName, constraint, valueType, modifiers, asClause);
+    }
+
+    /// <summary>
+    /// Finds the matching closing bracket for an opening bracket at the given index.
+    /// </summary>
+    private static int FindMatchingBracket(string str, int openIndex)
+    {
+        if (openIndex < 0 || openIndex >= str.Length) return -1;
+        char openChar = str[openIndex];
+        char closeChar = openChar switch
+        {
+            '[' => ']',
+            '(' => ')',
+            '{' => '}',
+            '<' => '>',
+            _ => '\0'
+        };
+        if (closeChar == '\0') return -1;
+
+        int depth = 1;
+        for (int i = openIndex + 1; i < str.Length; i++)
+        {
+            if (str[i] == openChar) depth++;
+            else if (str[i] == closeChar)
+            {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Finds the index of ' as ' at the top level (not inside any brackets).
+    /// Returns -1 if not found.
+    /// </summary>
+    private static int FindTopLevelAs(string str)
+    {
+        int depth = 0;
+        for (int i = 0; i < str.Length - 3; i++)
+        {
+            char c = str[i];
+            if (c == '<' || c == '(' || c == '[' || c == '{') depth++;
+            else if (c == '>' || c == ')' || c == ']' || c == '}') depth--;
+            else if (depth == 0 && str.Substring(i, 4) == " as " &&
+                     (i + 4 >= str.Length || !char.IsLetterOrDigit(str[i + 4])))
+            {
+                return i + 1; // Return index after the space, at 'as'
+            }
+        }
+        return -1;
     }
 }

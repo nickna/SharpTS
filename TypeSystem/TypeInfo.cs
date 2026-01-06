@@ -23,6 +23,19 @@ public enum DecoratorTarget
 }
 
 /// <summary>
+/// Modifiers for mapped type properties (+/-readonly, +/-optional).
+/// </summary>
+[Flags]
+public enum MappedTypeModifiers
+{
+    None = 0,
+    AddReadonly = 1,       // +readonly
+    RemoveReadonly = 2,    // -readonly
+    AddOptional = 4,       // +? or just ?
+    RemoveOptional = 8     // -?
+}
+
+/// <summary>
 /// Base record for compile-time type representations.
 /// </summary>
 /// <remarks>
@@ -447,6 +460,54 @@ public abstract record TypeInfo
             };
             return $"{baseName}<{string.Join(", ", TypeArguments)}>";
         }
+    }
+
+    /// <summary>
+    /// Represents the keyof T type operator, which extracts property keys as a union of string literals.
+    /// For example: keyof { name: string; age: number } = "name" | "age"
+    /// </summary>
+    public record KeyOf(TypeInfo SourceType) : TypeInfo
+    {
+        public override string ToString() => $"keyof {SourceType}";
+    }
+
+    /// <summary>
+    /// Represents a mapped type: { [K in Constraint]: ValueType } with optional modifiers and key remapping.
+    /// Lazy evaluation: this type is not expanded until needed for compatibility checks or property access.
+    /// </summary>
+    /// <param name="ParameterName">The iteration variable name (e.g., K in [K in keyof T])</param>
+    /// <param name="Constraint">The type to iterate over (e.g., keyof T or a union of string literals)</param>
+    /// <param name="ValueType">The value type for each property (can reference K via indexed access)</param>
+    /// <param name="Modifiers">+/- readonly and +/- optional modifiers</param>
+    /// <param name="AsClause">Optional key remapping clause (e.g., K as Uppercase&lt;K&gt;)</param>
+    public record MappedType(
+        string ParameterName,
+        TypeInfo Constraint,
+        TypeInfo ValueType,
+        MappedTypeModifiers Modifiers = MappedTypeModifiers.None,
+        TypeInfo? AsClause = null
+    ) : TypeInfo
+    {
+        public override string ToString()
+        {
+            var readonlyMod = Modifiers.HasFlag(MappedTypeModifiers.AddReadonly) ? "+readonly "
+                            : Modifiers.HasFlag(MappedTypeModifiers.RemoveReadonly) ? "-readonly "
+                            : "";
+            var optionalMod = Modifiers.HasFlag(MappedTypeModifiers.AddOptional) ? "+?"
+                            : Modifiers.HasFlag(MappedTypeModifiers.RemoveOptional) ? "-?"
+                            : "";
+            var asStr = AsClause != null ? $" as {AsClause}" : "";
+            return $"{{ {readonlyMod}[{ParameterName} in {Constraint}{asStr}]{optionalMod}: {ValueType} }}";
+        }
+    }
+
+    /// <summary>
+    /// Represents an indexed access type: T[K] where T is an object type and K is a key type.
+    /// For example: Person["name"] = string (if Person has name: string)
+    /// </summary>
+    public record IndexedAccess(TypeInfo ObjectType, TypeInfo IndexType) : TypeInfo
+    {
+        public override string ToString() => $"{ObjectType}[{IndexType}]";
     }
 }
 

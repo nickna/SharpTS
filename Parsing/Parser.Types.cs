@@ -40,6 +40,13 @@ public partial class Parser
     {
         string typeName;
 
+        // Handle keyof prefix operator: keyof T
+        if (Match(TokenType.KEYOF))
+        {
+            string innerType = ParsePrimaryType();
+            return $"keyof {innerType}";
+        }
+
         // Handle tuple type syntax: [string, number, boolean?]
         if (Match(TokenType.LEFT_BRACKET))
         {
@@ -179,11 +186,25 @@ public partial class Parser
             }
         }
 
-        // Handle array suffix
-        while (Match(TokenType.LEFT_BRACKET))
+        // Handle array suffix T[] and indexed access types T[K]
+        while (Check(TokenType.LEFT_BRACKET))
         {
-            Consume(TokenType.RIGHT_BRACKET, "Expect ']' after '[' in array type.");
-            typeName += "[]";
+            int saved = _current;
+            Advance(); // consume [
+
+            if (Check(TokenType.RIGHT_BRACKET))
+            {
+                // Array suffix: T[]
+                Advance(); // consume ]
+                typeName += "[]";
+            }
+            else
+            {
+                // Indexed access type: T[K] or T["key"]
+                string indexType = ParseTypeAnnotation();
+                Consume(TokenType.RIGHT_BRACKET, "Expect ']' after indexed access type.");
+                typeName = $"{typeName}[{indexType}]";
+            }
         }
 
         return typeName;
@@ -226,7 +247,15 @@ public partial class Parser
     {
         // Already consumed LEFT_BRACE
         // Parses: { name: string; age?: number; greet(x: number): string; [key: string]: number }
+        // Also handles mapped types: { [K in keyof T]: T[K] }, { +readonly [K in keyof T]-?: T[K] }
         List<string> members = [];
+
+        // Check for mapped type syntax: { [+/-readonly] [K in ...]: ... }
+        // Mapped types have a single member that uses 'in' instead of ':'
+        if (IsMappedTypeStart())
+        {
+            return ParseMappedType();
+        }
 
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
@@ -303,6 +332,158 @@ public partial class Parser
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after object type.");
         return "{ " + string.Join("; ", members) + " }";
+    }
+
+    /// <summary>
+    /// Checks if the current position starts a mapped type.
+    /// Mapped types look like: { [K in ...]: ... } or { +readonly [K in ...]: ... }
+    /// </summary>
+    private bool IsMappedTypeStart()
+    {
+        int saved = _current;
+        try
+        {
+            // Skip optional modifiers: +readonly, -readonly, readonly
+            if (Check(TokenType.PLUS) || Check(TokenType.MINUS))
+            {
+                Advance();
+                if (!Check(TokenType.READONLY))
+                {
+                    _current = saved;
+                    return false;
+                }
+                Advance();
+            }
+            else if (Check(TokenType.READONLY))
+            {
+                Advance();
+            }
+
+            // Must have [ next
+            if (!Check(TokenType.LEFT_BRACKET))
+            {
+                _current = saved;
+                return false;
+            }
+            Advance(); // consume [
+
+            // Must have identifier
+            if (!Check(TokenType.IDENTIFIER))
+            {
+                _current = saved;
+                return false;
+            }
+            Advance();
+
+            // Must have 'in' keyword (distinguishes from index signature which has ':')
+            bool isMapped = Check(TokenType.IN);
+            _current = saved;
+            return isMapped;
+        }
+        catch
+        {
+            _current = saved;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses a mapped type: { [+/-readonly] [K in Constraint [as RemapType]][+/-?]: ValueType }
+    /// Already consumed LEFT_BRACE.
+    /// </summary>
+    private string ParseMappedType()
+    {
+        // Parse optional leading modifiers: +readonly, -readonly, readonly
+        string readonlyMod = "";
+        if (Match(TokenType.PLUS))
+        {
+            if (Check(TokenType.READONLY))
+            {
+                Advance();
+                readonlyMod = "+readonly ";
+            }
+            else
+            {
+                throw new Exception("Parse Error: Expected 'readonly' after '+' in mapped type.");
+            }
+        }
+        else if (Match(TokenType.MINUS))
+        {
+            if (Check(TokenType.READONLY))
+            {
+                Advance();
+                readonlyMod = "-readonly ";
+            }
+            else
+            {
+                throw new Exception("Parse Error: Expected 'readonly' after '-' in mapped type.");
+            }
+        }
+        else if (Match(TokenType.READONLY))
+        {
+            readonlyMod = "readonly ";
+        }
+
+        // Parse [K in Constraint]
+        Consume(TokenType.LEFT_BRACKET, "Expect '[' in mapped type.");
+
+        // Parse type parameter name
+        Token paramName = Consume(TokenType.IDENTIFIER, "Expect type parameter name in mapped type.");
+
+        // Expect 'in'
+        Consume(TokenType.IN, "Expect 'in' after type parameter in mapped type.");
+
+        // Parse constraint (e.g., keyof T, or a union of string literals)
+        string constraint = ParseTypeAnnotation();
+
+        // Parse optional 'as' clause for key remapping
+        string asClause = "";
+        if (Match(TokenType.AS))
+        {
+            string remapType = ParseTypeAnnotation();
+            asClause = $" as {remapType}";
+        }
+
+        Consume(TokenType.RIGHT_BRACKET, "Expect ']' after mapped type parameter.");
+
+        // Parse optional trailing modifiers: +?, -?, ?
+        string optionalMod = "";
+        if (Match(TokenType.PLUS))
+        {
+            if (Match(TokenType.QUESTION))
+            {
+                optionalMod = "+?";
+            }
+            else
+            {
+                throw new Exception("Parse Error: Expected '?' after '+' in mapped type.");
+            }
+        }
+        else if (Match(TokenType.MINUS))
+        {
+            if (Match(TokenType.QUESTION))
+            {
+                optionalMod = "-?";
+            }
+            else
+            {
+                throw new Exception("Parse Error: Expected '?' after '-' in mapped type.");
+            }
+        }
+        else if (Match(TokenType.QUESTION))
+        {
+            optionalMod = "?";
+        }
+
+        // Parse : ValueType
+        Consume(TokenType.COLON, "Expect ':' after mapped type parameter.");
+        string valueType = ParseTypeAnnotation();
+
+        // Handle optional separator and closing brace
+        Match(TokenType.SEMICOLON);
+        Consume(TokenType.RIGHT_BRACE, "Expect '}' after mapped type.");
+
+        return $"{{ {readonlyMod}[{paramName.Lexeme} in {constraint}{asClause}]{optionalMod}: {valueType} }}";
     }
 
     // ============== GENERIC TYPE PARAMETER PARSING ==============

@@ -57,6 +57,7 @@ public class Lexer(string source)
         { "in", TokenType.IN },
         { "instanceof", TokenType.INSTANCEOF },
         { "interface", TokenType.INTERFACE },
+        { "keyof", TokenType.KEYOF },
         { "let", TokenType.LET },
         { "namespace", TokenType.NAMESPACE },
         { "never", TokenType.NEVER },
