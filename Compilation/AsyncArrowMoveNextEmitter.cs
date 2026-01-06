@@ -109,7 +109,7 @@ public class AsyncArrowMoveNextEmitter
                 // Pop unused value
                 if (_stackType != StackType.Unknown || true) // Always pop expression results
                     _il.Emit(OpCodes.Pop);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
 
             case Stmt.Var v:
@@ -223,7 +223,7 @@ public class AsyncArrowMoveNextEmitter
             default:
                 // For unhandled expressions, push null
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -233,29 +233,29 @@ public class AsyncArrowMoveNextEmitter
         if (lit.Value == null)
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Null;
+            SetStackType(StackType.Null);
         }
         else if (lit.Value is double d)
         {
             _il.Emit(OpCodes.Ldc_R8, d);
             _il.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
         }
         else if (lit.Value is string s)
         {
             _il.Emit(OpCodes.Ldstr, s);
-            _stackType = StackType.String;
+            SetStackType(StackType.String);
         }
         else if (lit.Value is bool b)
         {
             _il.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             _il.Emit(OpCodes.Box, typeof(bool));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
         }
         else
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Null;
+            SetStackType(StackType.Null);
         }
     }
 
@@ -266,7 +266,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, paramField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -275,7 +275,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, localField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -303,7 +303,7 @@ public class AsyncArrowMoveNextEmitter
             }
 
             _il.Emit(OpCodes.Ldfld, outerField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -311,7 +311,7 @@ public class AsyncArrowMoveNextEmitter
         if (_locals.TryGetValue(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -324,13 +324,13 @@ public class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
         // Fallback: null
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Null;
+        SetStackType(StackType.Null);
     }
 
     private void StoreVariable(string name)
@@ -452,7 +452,7 @@ public class AsyncArrowMoveNextEmitter
                 _il.Emit(OpCodes.Ldnull);
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitNumericOp(OpCode opcode)
@@ -519,7 +519,7 @@ public class AsyncArrowMoveNextEmitter
 
         // Call InvokeValue (object callee, object[] args) -> object
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeValue);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitAwait(Expr.Await aw)
@@ -590,7 +590,7 @@ public class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Call, _builder.GetAwaiterGetResultMethod());
 
         // Result is now on stack
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitGet(Expr.Get g)
@@ -599,7 +599,7 @@ public class AsyncArrowMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Ldstr, g.Name.Lexeme);
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetProperty);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitTernary(Expr.Ternary t)
@@ -621,7 +621,7 @@ public class AsyncArrowMoveNextEmitter
         EnsureBoxed();
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitThis()
@@ -637,13 +637,13 @@ public class AsyncArrowMoveNextEmitter
                 _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
                 _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
                 _il.Emit(OpCodes.Ldfld, outerBuilder.ThisField);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 return;
             }
         }
 
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Null;
+        SetStackType(StackType.Null);
     }
 
     private void EmitIf(Stmt.If i)
@@ -736,8 +736,263 @@ public class AsyncArrowMoveNextEmitter
                 _il.Emit(OpCodes.Box, typeof(bool));
                 break;
         }
+        SetStackUnknown();
+    }
+
+    #region Literal/Constant Helpers
+
+    private void EmitDoubleConstant(double value)
+    {
+        _il.Emit(OpCodes.Ldc_R8, value);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitBoxedDoubleConstant(double value)
+    {
+        _il.Emit(OpCodes.Ldc_R8, value);
+        _il.Emit(OpCodes.Box, typeof(double));
+        SetStackUnknown();
+    }
+
+    private void EmitBoolConstant(bool value)
+    {
+        _il.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitBoxedBoolConstant(bool value)
+    {
+        _il.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Box, typeof(bool));
+        SetStackUnknown();
+    }
+
+    private void EmitStringConstant(string value)
+    {
+        _il.Emit(OpCodes.Ldstr, value);
+        _stackType = StackType.String;
+    }
+
+    private void EmitNullConstant()
+    {
+        _il.Emit(OpCodes.Ldnull);
+        _stackType = StackType.Null;
+    }
+
+    #endregion
+
+    #region Boxing Helpers
+
+    private void EmitBoxDouble()
+    {
+        _il.Emit(OpCodes.Box, typeof(double));
+        SetStackUnknown();
+    }
+
+    private void EmitBoxBool()
+    {
+        _il.Emit(OpCodes.Box, typeof(bool));
+        SetStackUnknown();
+    }
+
+    private void SetStackUnknown()
+    {
         _stackType = StackType.Unknown;
     }
+
+    private void SetStackType(StackType type)
+    {
+        _stackType = type;
+    }
+
+    #endregion
+
+    #region Arithmetic Helpers
+
+    private void EmitAdd_Double()
+    {
+        _il.Emit(OpCodes.Add);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitSub_Double()
+    {
+        _il.Emit(OpCodes.Sub);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitMul_Double()
+    {
+        _il.Emit(OpCodes.Mul);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitDiv_Double()
+    {
+        _il.Emit(OpCodes.Div);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitRem_Double()
+    {
+        _il.Emit(OpCodes.Rem);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitNeg_Double()
+    {
+        _il.Emit(OpCodes.Neg);
+        _stackType = StackType.Double;
+    }
+
+    #endregion
+
+    #region Comparison Helpers
+
+    private void EmitClt_Boolean()
+    {
+        _il.Emit(OpCodes.Clt);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitCgt_Boolean()
+    {
+        _il.Emit(OpCodes.Cgt);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitCeq_Boolean()
+    {
+        _il.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitLessOrEqual_Boolean()
+    {
+        _il.Emit(OpCodes.Cgt);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitGreaterOrEqual_Boolean()
+    {
+        _il.Emit(OpCodes.Clt);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    #endregion
+
+    #region Method Call Helpers
+
+    private void EmitCallUnknown(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        SetStackUnknown();
+    }
+
+    private void EmitCallvirtUnknown(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Callvirt, method);
+        SetStackUnknown();
+    }
+
+    private void EmitCallString(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        _stackType = StackType.String;
+    }
+
+    private void EmitCallBoolean(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        _stackType = StackType.Boolean;
+    }
+
+    private void EmitCallDouble(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitCallAndBoxDouble(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        _il.Emit(OpCodes.Box, typeof(double));
+        SetStackUnknown();
+    }
+
+    private void EmitCallAndBoxBool(MethodInfo method)
+    {
+        _il.Emit(OpCodes.Call, method);
+        _il.Emit(OpCodes.Box, typeof(bool));
+        SetStackUnknown();
+    }
+
+    #endregion
+
+    #region Variable Load Helpers
+
+    private void EmitLdlocUnknown(LocalBuilder local)
+    {
+        _il.Emit(OpCodes.Ldloc, local);
+        SetStackUnknown();
+    }
+
+    private void EmitLdargUnknown(int argIndex)
+    {
+        _il.Emit(OpCodes.Ldarg, argIndex);
+        SetStackUnknown();
+    }
+
+    private void EmitLdfldUnknown(FieldInfo field)
+    {
+        _il.Emit(OpCodes.Ldfld, field);
+        SetStackUnknown();
+    }
+
+    #endregion
+
+    #region Specialized Helpers
+
+    private void EmitNewobjUnknown(ConstructorInfo ctor)
+    {
+        _il.Emit(OpCodes.Newobj, ctor);
+        SetStackUnknown();
+    }
+
+    private void EmitConvertToDouble()
+    {
+        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        _stackType = StackType.Double;
+    }
+
+    private void EmitConvR8AndBox()
+    {
+        _il.Emit(OpCodes.Conv_R8);
+        _il.Emit(OpCodes.Box, typeof(double));
+        SetStackUnknown();
+    }
+
+    private void EmitObjectEqualsBoxed()
+    {
+        _il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        _il.Emit(OpCodes.Box, typeof(bool));
+        SetStackUnknown();
+    }
+
+    private void EmitObjectNotEqualsBoxed()
+    {
+        _il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Ceq);
+        _il.Emit(OpCodes.Box, typeof(bool));
+        SetStackUnknown();
+    }
+
+    #endregion
 
     private void EmitArrowFunction(Expr.ArrowFunction af)
     {
@@ -753,7 +1008,7 @@ public class AsyncArrowMoveNextEmitter
         {
             // Fallback if not found
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -774,7 +1029,7 @@ public class AsyncArrowMoveNextEmitter
         if (_ctx!.DisplayClassConstructors == null || !_ctx.DisplayClassConstructors.TryGetValue(af, out var displayCtor))
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -789,7 +1044,7 @@ public class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -810,7 +1065,7 @@ public class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitNonCapturingArrowInAsyncArrow(Expr.ArrowFunction af, MethodBuilder method)
@@ -821,7 +1076,7 @@ public class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -835,7 +1090,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, paramField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -844,7 +1099,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, localField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -869,7 +1124,7 @@ public class AsyncArrowMoveNextEmitter
             }
 
             _il.Emit(OpCodes.Ldfld, outerField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -877,7 +1132,7 @@ public class AsyncArrowMoveNextEmitter
         if (_locals.TryGetValue(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -888,13 +1143,13 @@ public class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
             _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
             _il.Emit(OpCodes.Ldfld, thisField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
         // Fallback: null
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Null;
+        SetStackType(StackType.Null);
     }
 
     private void EmitNestedAsyncArrow(Expr.ArrowFunction af)
@@ -932,7 +1187,7 @@ public class AsyncArrowMoveNextEmitter
         // Create TSFunction(target: self boxed, method: stub)
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitDynamicImport(Expr.DynamicImport di)
@@ -953,6 +1208,6 @@ public class AsyncArrowMoveNextEmitter
         // Wrap Task<object?> in SharpTSPromise
         _il.Emit(OpCodes.Call, _ctx.Runtime.WrapTaskAsPromise);
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 }

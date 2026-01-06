@@ -136,7 +136,7 @@ public partial class AsyncMoveNextEmitter
             default:
                 // Unsupported expression - push null
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -238,7 +238,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // Result is now on stack
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitLiteral(Expr.Literal l)
@@ -246,24 +246,20 @@ public partial class AsyncMoveNextEmitter
         switch (l.Value)
         {
             case null:
-                _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Null;
+                EmitNullConstant();
                 break;
             case double d:
-                _il.Emit(OpCodes.Ldc_R8, d);
-                _stackType = StackType.Double;
+                EmitDoubleConstant(d);
                 break;
             case bool b:
-                _il.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                _stackType = StackType.Boolean;
+                EmitBoolConstant(b);
                 break;
             case string s:
-                _il.Emit(OpCodes.Ldstr, s);
-                _stackType = StackType.String;
+                EmitStringConstant(s);
                 break;
             default:
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -278,7 +274,7 @@ public partial class AsyncMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, field);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -286,7 +282,7 @@ public partial class AsyncMoveNextEmitter
         if (_ctx!.Locals.TryGetLocal(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -298,13 +294,13 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldtoken, funcMethod);
             _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitAssign(Expr.Assign a)
@@ -332,7 +328,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Stloc, local);
         }
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitSuper(Expr.Super s)
@@ -355,7 +351,7 @@ public partial class AsyncMoveNextEmitter
 
         // Call GetSuperMethod(instance, methodName) to get a callable wrapper (TSFunction)
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetSuperMethod);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitBinary(Expr.Binary b)
@@ -429,7 +425,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Ldnull);
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitToDouble()
@@ -509,7 +505,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitUnary(Expr.Unary u)
@@ -546,7 +542,7 @@ public partial class AsyncMoveNextEmitter
                 EnsureBoxed();
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCall(Expr.Call c)
@@ -561,7 +557,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
             }
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -575,7 +571,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
             }
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -674,7 +670,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Ldloc, temp);
             }
             _il.Emit(OpCodes.Call, funcMethod);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -714,7 +710,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeValue);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitGet(Expr.Get g)
@@ -723,7 +719,7 @@ public partial class AsyncMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Ldstr, g.Name.Lexeme);
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetProperty);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitTernary(Expr.Ternary t)
@@ -745,7 +741,7 @@ public partial class AsyncMoveNextEmitter
         EnsureBoxed();
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCompoundAssign(Expr.CompoundAssign ca)
@@ -815,7 +811,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Stloc, local);
         }
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
@@ -848,7 +844,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, local);
             }
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitPostfixIncrement(Expr.PostfixIncrement poi)
@@ -885,7 +881,7 @@ public partial class AsyncMoveNextEmitter
 
             // Original value is on stack
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitDynamicImport(Expr.DynamicImport di)
@@ -906,6 +902,6 @@ public partial class AsyncMoveNextEmitter
         // Wrap Task<object?> in SharpTSPromise
         _il.Emit(OpCodes.Call, _ctx.Runtime.WrapTaskAsPromise);
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 }

@@ -19,12 +19,12 @@ public partial class ILEmitter
                 case "PI":
                     IL.Emit(OpCodes.Ldc_R8, Math.PI);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "E":
                     IL.Emit(OpCodes.Ldc_R8, Math.E);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
             }
         }
@@ -37,42 +37,42 @@ public partial class ILEmitter
                 case "MAX_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.MaxValue);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "MIN_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.Epsilon); // JS MIN_VALUE = smallest positive
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "NaN":
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "POSITIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "NEGATIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "MAX_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, 9007199254740991.0); // 2^53 - 1
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "MIN_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, -9007199254740991.0); // -(2^53 - 1)
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
                 case "EPSILON":
                     IL.Emit(OpCodes.Ldc_R8, 2.220446049250313e-16); // 2^-52
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
             }
         }
@@ -86,12 +86,12 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldc_R8, d);
                 IL.Emit(OpCodes.Box, typeof(double));
-                _stackType = StackType.Unknown; // Boxed double
+                SetStackUnknown();
             }
             else if (value is string s)
             {
                 IL.Emit(OpCodes.Ldstr, s);
-                _stackType = StackType.String;
+                SetStackType(StackType.String);
             }
             return;
         }
@@ -105,7 +105,7 @@ public partial class ILEmitter
                 classFields.TryGetValue(g.Name.Lexeme, out var staticField))
             {
                 IL.Emit(OpCodes.Ldsfld, staticField);
-                _stackType = StackType.Unknown; // Static fields are boxed objects
+                SetStackUnknown();
                 return;
             }
 
@@ -125,7 +125,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(g.Object);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown; // Boxed double
+            SetStackUnknown();
             return;
         }
 
@@ -136,7 +136,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(g.Object);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown; // Boxed double
+            SetStackUnknown();
             return;
         }
 
@@ -149,31 +149,31 @@ public partial class ILEmitter
             {
                 case "source":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetSource);
-                    _stackType = StackType.String;
+                    SetStackType(StackType.String);
                     return;
                 case "flags":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetFlags);
-                    _stackType = StackType.String;
+                    SetStackType(StackType.String);
                     return;
                 case "global":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
                     IL.Emit(OpCodes.Box, typeof(bool));
-                    _stackType = StackType.Unknown; // Boxed bool
+                    SetStackUnknown();
                     return;
                 case "ignoreCase":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
                     IL.Emit(OpCodes.Box, typeof(bool));
-                    _stackType = StackType.Unknown; // Boxed bool
+                    SetStackUnknown();
                     return;
                 case "multiline":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
                     IL.Emit(OpCodes.Box, typeof(bool));
-                    _stackType = StackType.Unknown; // Boxed bool
+                    SetStackUnknown();
                     return;
                 case "lastIndex":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
                     IL.Emit(OpCodes.Box, typeof(double));
-                    _stackType = StackType.Unknown; // Boxed double
+                    SetStackUnknown();
                     return;
             }
         }
@@ -276,7 +276,7 @@ public partial class ILEmitter
             if (gi.Index is Expr.Literal lit && lit.Value is double d && reverse.TryGetValue(d, out var memberName))
             {
                 IL.Emit(OpCodes.Ldstr, memberName);
-                _stackType = StackType.String;
+                SetStackType(StackType.String);
                 return;
             }
 
@@ -315,7 +315,7 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetEnumMemberName);
-            _stackType = StackType.String;
+            SetStackType(StackType.String);
             return;
         }
 

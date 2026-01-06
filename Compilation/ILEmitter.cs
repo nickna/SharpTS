@@ -118,6 +118,419 @@ public partial class ILEmitter
         _stackType = StackType.String;
     }
 
+    #region Literal/Constant Helpers
+
+    /// <summary>
+    /// Emits an unboxed double constant.
+    /// </summary>
+    private void EmitDoubleConstant(double value)
+    {
+        IL.Emit(OpCodes.Ldc_R8, value);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits an unboxed boolean constant.
+    /// </summary>
+    private void EmitBoolConstant(bool value)
+    {
+        IL.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits a boxed boolean constant.
+    /// </summary>
+    private void EmitBoxedBoolConstant(bool value)
+    {
+        IL.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Box, typeof(bool));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a null constant.
+    /// </summary>
+    private void EmitNullConstant()
+    {
+        IL.Emit(OpCodes.Ldnull);
+        _stackType = StackType.Null;
+    }
+
+    #endregion
+
+    #region Boxing Helpers
+
+    /// <summary>
+    /// Boxes the current double on stack.
+    /// </summary>
+    private void EmitBoxDouble()
+    {
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Boxes the current boolean on stack.
+    /// </summary>
+    private void EmitBoxBool()
+    {
+        IL.Emit(OpCodes.Box, typeof(bool));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Sets stack type to Unknown (for cases where boxing already happened).
+    /// </summary>
+    private void SetStackUnknown()
+    {
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Sets stack type explicitly.
+    /// </summary>
+    private void SetStackType(StackType type)
+    {
+        _stackType = type;
+    }
+
+    #endregion
+
+    #region Arithmetic Helpers
+
+    /// <summary>
+    /// Emits Add and sets stack type to Double.
+    /// </summary>
+    private void EmitAdd_Double()
+    {
+        IL.Emit(OpCodes.Add);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Sub and sets stack type to Double.
+    /// </summary>
+    private void EmitSub_Double()
+    {
+        IL.Emit(OpCodes.Sub);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Mul and sets stack type to Double.
+    /// </summary>
+    private void EmitMul_Double()
+    {
+        IL.Emit(OpCodes.Mul);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Div and sets stack type to Double.
+    /// </summary>
+    private void EmitDiv_Double()
+    {
+        IL.Emit(OpCodes.Div);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Rem and sets stack type to Double.
+    /// </summary>
+    private void EmitRem_Double()
+    {
+        IL.Emit(OpCodes.Rem);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Neg and sets stack type to Double.
+    /// </summary>
+    private void EmitNeg_Double()
+    {
+        IL.Emit(OpCodes.Neg);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Add and boxes result.
+    /// </summary>
+    private void EmitAddAndBox()
+    {
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits Sub and boxes result.
+    /// </summary>
+    private void EmitSubAndBox()
+    {
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits Mul and boxes result.
+    /// </summary>
+    private void EmitMulAndBox()
+    {
+        IL.Emit(OpCodes.Mul);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits Div and boxes result.
+    /// </summary>
+    private void EmitDivAndBox()
+    {
+        IL.Emit(OpCodes.Div);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    #endregion
+
+    #region Comparison Helpers
+
+    /// <summary>
+    /// Emits Clt and sets stack type to Boolean.
+    /// </summary>
+    private void EmitClt_Boolean()
+    {
+        IL.Emit(OpCodes.Clt);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits Cgt and sets stack type to Boolean.
+    /// </summary>
+    private void EmitCgt_Boolean()
+    {
+        IL.Emit(OpCodes.Cgt);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits Ceq and sets stack type to Boolean.
+    /// </summary>
+    private void EmitCeq_Boolean()
+    {
+        IL.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits less-or-equal comparison (cgt; ldc.i4.0; ceq) and sets stack type to Boolean.
+    /// </summary>
+    private void EmitLessOrEqual_Boolean()
+    {
+        IL.Emit(OpCodes.Cgt);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits greater-or-equal comparison (clt; ldc.i4.0; ceq) and sets stack type to Boolean.
+    /// </summary>
+    private void EmitGreaterOrEqual_Boolean()
+    {
+        IL.Emit(OpCodes.Clt);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Ceq);
+        _stackType = StackType.Boolean;
+    }
+
+    #endregion
+
+    #region Variable Load Helpers
+
+    /// <summary>
+    /// Loads a local variable and sets stack type based on local type.
+    /// </summary>
+    private void EmitLdloc(LocalBuilder local, Type localType)
+    {
+        IL.Emit(OpCodes.Ldloc, local);
+        _stackType = localType == typeof(double) ? StackType.Double
+                   : localType == typeof(bool) ? StackType.Boolean
+                   : StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Loads a local variable with Unknown stack type.
+    /// </summary>
+    private void EmitLdlocUnknown(LocalBuilder local)
+    {
+        IL.Emit(OpCodes.Ldloc, local);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Loads an argument with Unknown stack type.
+    /// </summary>
+    private void EmitLdargUnknown(int argIndex)
+    {
+        IL.Emit(OpCodes.Ldarg, argIndex);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Loads argument 0 (this) with Unknown stack type.
+    /// </summary>
+    private void EmitLdarg0Unknown()
+    {
+        IL.Emit(OpCodes.Ldarg_0);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Loads a field with Unknown stack type.
+    /// </summary>
+    private void EmitLdfldUnknown(FieldInfo field)
+    {
+        IL.Emit(OpCodes.Ldfld, field);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Loads a static field with Unknown stack type.
+    /// </summary>
+    private void EmitLdsfldUnknown(FieldInfo field)
+    {
+        IL.Emit(OpCodes.Ldsfld, field);
+        _stackType = StackType.Unknown;
+    }
+
+    #endregion
+
+    #region Method Call Helpers
+
+    /// <summary>
+    /// Emits a method call with Unknown result type.
+    /// </summary>
+    private void EmitCallUnknown(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a virtual method call with Unknown result type.
+    /// </summary>
+    private void EmitCallvirtUnknown(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Callvirt, method);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a method call that returns a string.
+    /// </summary>
+    private void EmitCallString(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        _stackType = StackType.String;
+    }
+
+    /// <summary>
+    /// Emits a method call that returns an unboxed boolean.
+    /// </summary>
+    private void EmitCallBoolean(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        _stackType = StackType.Boolean;
+    }
+
+    /// <summary>
+    /// Emits a method call that returns an unboxed double.
+    /// </summary>
+    private void EmitCallDouble(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits a method call and boxes the double result.
+    /// </summary>
+    private void EmitCallAndBoxDouble(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a method call and boxes the bool result.
+    /// </summary>
+    private void EmitCallAndBoxBool(MethodInfo method)
+    {
+        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Box, typeof(bool));
+        _stackType = StackType.Unknown;
+    }
+
+    #endregion
+
+    #region Specialized Helpers
+
+    /// <summary>
+    /// Emits newobj with Unknown result.
+    /// </summary>
+    private void EmitNewobjUnknown(ConstructorInfo ctor)
+    {
+        IL.Emit(OpCodes.Newobj, ctor);
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits conversion to double.
+    /// </summary>
+    private void EmitConvertToDouble()
+    {
+        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits Conv_R8 and boxes result.
+    /// </summary>
+    private void EmitConvR8AndBox()
+    {
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits object.Equals and boxes the result.
+    /// </summary>
+    private void EmitObjectEqualsBoxed()
+    {
+        IL.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        IL.Emit(OpCodes.Box, typeof(bool));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits object.Equals, negates, and boxes the result.
+    /// </summary>
+    private void EmitObjectNotEqualsBoxed()
+    {
+        IL.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Ceq);
+        IL.Emit(OpCodes.Box, typeof(bool));
+        _stackType = StackType.Unknown;
+    }
+
+    #endregion
+
     #endregion
 
     /// <summary>
@@ -413,14 +826,12 @@ public partial class ILEmitter
         // This handles typed locals and other cases where _stackType is known
         if (_stackType == StackType.Double)
         {
-            IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            EmitBoxDouble();
             return;
         }
         if (_stackType == StackType.Boolean)
         {
-            IL.Emit(OpCodes.Box, typeof(bool));
-            _stackType = StackType.Unknown;
+            EmitBoxBool();
             return;
         }
 
@@ -454,13 +865,11 @@ public partial class ILEmitter
         {
             if (lit.Value is double)
             {
-                IL.Emit(OpCodes.Box, typeof(double));
-                _stackType = StackType.Unknown;
+                EmitBoxDouble();
             }
             else if (lit.Value is bool)
             {
-                IL.Emit(OpCodes.Box, typeof(bool));
-                _stackType = StackType.Unknown;
+                EmitBoxBool();
             }
         }
     }
@@ -471,13 +880,11 @@ public partial class ILEmitter
         if (expr is Expr.Literal lit && lit.Value is double d)
         {
             // Literal double - push directly
-            IL.Emit(OpCodes.Ldc_R8, d);
-            _stackType = StackType.Double;
+            EmitDoubleConstant(d);
         }
         else if (expr is Expr.Literal intLit && intLit.Value is int i)
         {
-            IL.Emit(OpCodes.Ldc_R8, (double)i);
-            _stackType = StackType.Double;
+            EmitDoubleConstant((double)i);
         }
         else
         {
@@ -490,8 +897,7 @@ public partial class ILEmitter
     private void EmitUnboxToDouble()
     {
         // Convert object to double using Convert.ToDouble
-        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-        _stackType = StackType.Double;
+        EmitConvertToDouble();
     }
 
     private bool IsStringExpression(Expr expr)
@@ -899,9 +1305,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicImportModule);
 
         // Wrap Task<object?> in SharpTSPromise
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapTaskAsPromise);
-
-        _stackType = StackType.Unknown;
+        EmitCallUnknown(_ctx.Runtime!.WrapTaskAsPromise);
     }
 
     #endregion

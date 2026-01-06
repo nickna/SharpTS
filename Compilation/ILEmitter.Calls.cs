@@ -201,7 +201,7 @@ public partial class ILEmitter
             EmitExpression(c.Arguments[0]);
             EmitBoxIfNeeded(c.Arguments[0]);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateBigInt);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -452,7 +452,7 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Call, targetMethod);
-            _stackType = StackType.Unknown; // Function returns boxed object
+            SetStackUnknown(); // Function returns boxed object
             return;
         }
 
@@ -552,7 +552,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Random);
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -580,7 +580,7 @@ public partial class ILEmitter
                 }
             }
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -597,7 +597,7 @@ public partial class ILEmitter
             var roundMethod = typeof(Math).GetMethod("Round", [typeof(double), typeof(MidpointRounding)])!;
             IL.Emit(OpCodes.Call, roundMethod);
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -608,7 +608,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, signMethod);
             IL.Emit(OpCodes.Conv_R8); // Convert int to double
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -632,7 +632,7 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Call, mathMethod);
             IL.Emit(OpCodes.Box, typeof(double));
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
         }
         else
         {
@@ -1637,7 +1637,7 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpTest);
                 IL.Emit(OpCodes.Box, typeof(bool));
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
 
             case "exec":
@@ -1653,7 +1653,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpExec);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -2397,7 +2397,7 @@ public partial class ILEmitter
 
         // Emit the virtual call
         IL.Emit(OpCodes.Callvirt, methodBuilder);
-        _stackType = StackType.Unknown; // Method returns boxed object
+        SetStackUnknown();
         return true;
     }
 
@@ -2439,7 +2439,7 @@ public partial class ILEmitter
                 break;
         }
         // All Date constructors return an object, reset stack type
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -2459,7 +2459,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(arguments[0]);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateMapFromEntries);
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -2479,7 +2479,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(arguments[0]);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateSetFromArray);
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -2515,7 +2515,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     /// <summary>

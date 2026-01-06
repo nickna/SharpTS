@@ -124,7 +124,7 @@ public partial class GeneratorMoveNextEmitter
 
             default:
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -173,7 +173,7 @@ public partial class GeneratorMoveNextEmitter
 
         // 6. yield expression evaluates to undefined (null) when resumed
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitYieldStar(Expr.Yield y, int stateNumber, Label resumeLabel)
@@ -186,7 +186,7 @@ public partial class GeneratorMoveNextEmitter
         {
             // Fallback: no field defined, just push null
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -251,7 +251,7 @@ public partial class GeneratorMoveNextEmitter
 
         // yield* evaluates to undefined
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitLiteral(Expr.Literal l)
@@ -260,23 +260,23 @@ public partial class GeneratorMoveNextEmitter
         {
             case null:
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Null;
+                SetStackType(StackType.Null);
                 break;
             case double d:
                 _il.Emit(OpCodes.Ldc_R8, d);
-                _stackType = StackType.Double;
+                SetStackType(StackType.Double);
                 break;
             case bool b:
                 _il.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                _stackType = StackType.Boolean;
+                SetStackType(StackType.Boolean);
                 break;
             case string s:
                 _il.Emit(OpCodes.Ldstr, s);
-                _stackType = StackType.String;
+                SetStackType(StackType.String);
                 break;
             default:
                 _il.Emit(OpCodes.Ldnull);
-                _stackType = StackType.Unknown;
+                SetStackUnknown();
                 break;
         }
     }
@@ -291,7 +291,7 @@ public partial class GeneratorMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, field);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -299,7 +299,7 @@ public partial class GeneratorMoveNextEmitter
         if (_ctx!.Locals.TryGetLocal(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -310,12 +310,12 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldtoken, funcMethod);
             _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
         _il.Emit(OpCodes.Ldnull);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitAssign(Expr.Assign a)
@@ -340,7 +340,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, local);
         }
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitBinary(Expr.Binary b)
@@ -409,7 +409,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Ldnull);
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitToDouble()
@@ -482,7 +482,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitUnary(Expr.Unary u)
@@ -519,7 +519,7 @@ public partial class GeneratorMoveNextEmitter
                 EnsureBoxed();
                 break;
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCall(Expr.Call c)
@@ -534,7 +534,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
             }
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -547,7 +547,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
             }
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -568,7 +568,7 @@ public partial class GeneratorMoveNextEmitter
                 }
             }
             _il.Emit(OpCodes.Call, funcMethod);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -588,7 +588,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeValue);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitGet(Expr.Get g)
@@ -597,7 +597,7 @@ public partial class GeneratorMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Ldstr, g.Name.Lexeme);
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetProperty);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitTernary(Expr.Ternary t)
@@ -619,7 +619,7 @@ public partial class GeneratorMoveNextEmitter
         EnsureBoxed();
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCompoundAssign(Expr.CompoundAssign ca)
@@ -677,7 +677,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, local);
         }
 
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
@@ -709,7 +709,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, local);
             }
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitPostfixIncrement(Expr.PostfixIncrement poi)
@@ -742,7 +742,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, local);
             }
         }
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitArrayLiteral(Expr.ArrayLiteral a)
@@ -760,7 +760,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateArray);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitObjectLiteral(Expr.ObjectLiteral o)
@@ -777,7 +777,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitStaticPropertyKey(Expr.PropertyKey key)
@@ -806,7 +806,7 @@ public partial class GeneratorMoveNextEmitter
         EmitExpression(gi.Index);
         EnsureBoxed();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIndex);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitSetIndex(Expr.SetIndex si)
@@ -818,7 +818,7 @@ public partial class GeneratorMoveNextEmitter
         EmitExpression(si.Value);
         EnsureBoxed();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetIndex);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitNew(Expr.New n)
@@ -841,12 +841,12 @@ public partial class GeneratorMoveNextEmitter
             }
 
             _il.Emit(OpCodes.Newobj, ctorBuilder);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
         }
         else
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Null;
+            SetStackType(StackType.Null);
         }
     }
 
@@ -856,12 +856,12 @@ public partial class GeneratorMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, _builder.ThisField);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
         }
         else
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Null;
+            SetStackType(StackType.Null);
         }
     }
 
@@ -882,7 +882,7 @@ public partial class GeneratorMoveNextEmitter
         EnsureBoxed();
 
         _il.MarkLabel(endLabel);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
@@ -890,7 +890,7 @@ public partial class GeneratorMoveNextEmitter
         if (tl.Strings.Count == 0 && tl.Expressions.Count == 0)
         {
             _il.Emit(OpCodes.Ldstr, "");
-            _stackType = StackType.String;
+            SetStackType(StackType.String);
             return;
         }
 
@@ -909,7 +909,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
             }
         }
-        _stackType = StackType.String;
+        SetStackType(StackType.String);
     }
 
     private void EmitSet(Expr.Set s)
@@ -926,7 +926,7 @@ public partial class GeneratorMoveNextEmitter
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetProperty);
         _il.Emit(OpCodes.Ldloc, resultTemp);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCompoundSet(Expr.CompoundSet cs)
@@ -953,7 +953,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetProperty);
 
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
@@ -985,7 +985,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetIndex);
 
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 
     private void EmitCompoundOperation(TokenType opType)
@@ -1029,7 +1029,7 @@ public partial class GeneratorMoveNextEmitter
         if (_ctx!.ArrowMethods == null || !_ctx.ArrowMethods.TryGetValue(af, out var method))
         {
             _il.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Unknown;
+            SetStackUnknown();
             return;
         }
 
@@ -1037,6 +1037,6 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldtoken, method);
         _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-        _stackType = StackType.Unknown;
+        SetStackUnknown();
     }
 }
