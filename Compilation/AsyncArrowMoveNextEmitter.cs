@@ -727,8 +727,16 @@ public class AsyncArrowMoveNextEmitter
 
     private void EnsureBoxed()
     {
-        // Most values are already boxed in our runtime
-        // This is a placeholder for any necessary boxing
+        switch (_stackType)
+        {
+            case StackType.Double:
+                _il.Emit(OpCodes.Box, typeof(double));
+                break;
+            case StackType.Boolean:
+                _il.Emit(OpCodes.Box, typeof(bool));
+                break;
+        }
+        _stackType = StackType.Unknown;
     }
 
     private void EmitArrowFunction(Expr.ArrowFunction af)
@@ -827,6 +835,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, paramField);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -835,6 +844,7 @@ public class AsyncArrowMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, localField);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -859,6 +869,7 @@ public class AsyncArrowMoveNextEmitter
             }
 
             _il.Emit(OpCodes.Ldfld, outerField);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -866,6 +877,7 @@ public class AsyncArrowMoveNextEmitter
         if (_locals.TryGetValue(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
+            _stackType = StackType.Unknown;
             return;
         }
 
@@ -876,11 +888,13 @@ public class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
             _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
             _il.Emit(OpCodes.Ldfld, thisField);
+            _stackType = StackType.Unknown;
             return;
         }
 
         // Fallback: null
         _il.Emit(OpCodes.Ldnull);
+        _stackType = StackType.Null;
     }
 
     private void EmitNestedAsyncArrow(Expr.ArrowFunction af)

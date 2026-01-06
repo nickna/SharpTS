@@ -97,6 +97,27 @@ public partial class ILEmitter
         }
     }
 
+    /// <summary>
+    /// Emits a boxed double constant and sets _stackType.
+    /// Use this helper to avoid forgetting to set _stackType after boxing.
+    /// </summary>
+    private void EmitBoxedDoubleConstant(double value)
+    {
+        IL.Emit(OpCodes.Ldc_R8, value);
+        IL.Emit(OpCodes.Box, typeof(double));
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a string constant and sets _stackType.
+    /// Use this helper to avoid forgetting to set _stackType after loading a string.
+    /// </summary>
+    private void EmitStringConstant(string value)
+    {
+        IL.Emit(OpCodes.Ldstr, value);
+        _stackType = StackType.String;
+    }
+
     #endregion
 
     /// <summary>

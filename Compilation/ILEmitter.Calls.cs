@@ -452,6 +452,7 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Call, targetMethod);
+            _stackType = StackType.Unknown; // Function returns boxed object
             return;
         }
 
@@ -2396,6 +2397,7 @@ public partial class ILEmitter
 
         // Emit the virtual call
         IL.Emit(OpCodes.Callvirt, methodBuilder);
+        _stackType = StackType.Unknown; // Method returns boxed object
         return true;
     }
 
