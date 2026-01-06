@@ -129,6 +129,10 @@ public partial class AsyncMoveNextEmitter
                 EmitSuper(s);
                 break;
 
+            case Expr.DynamicImport di:
+                EmitDynamicImport(di);
+                break;
+
             default:
                 // Unsupported expression - push null
                 _il.Emit(OpCodes.Ldnull);
@@ -881,6 +885,27 @@ public partial class AsyncMoveNextEmitter
 
             // Original value is on stack
         }
+        _stackType = StackType.Unknown;
+    }
+
+    private void EmitDynamicImport(Expr.DynamicImport di)
+    {
+        // Emit the path expression
+        EmitExpression(di.PathExpression);
+        EnsureBoxed();
+
+        // Convert to string
+        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+
+        // Push current module path (or empty string if not in module context)
+        _il.Emit(OpCodes.Ldstr, _ctx?.CurrentModulePath ?? "");
+
+        // Call DynamicImportModule(path, currentModulePath) -> Task<object?>
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.DynamicImportModule);
+
+        // Wrap Task<object?> in SharpTSPromise
+        _il.Emit(OpCodes.Call, _ctx.Runtime.WrapTaskAsPromise);
+
         _stackType = StackType.Unknown;
     }
 }

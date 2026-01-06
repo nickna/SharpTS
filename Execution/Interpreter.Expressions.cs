@@ -1,4 +1,5 @@
 using System.Numerics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -52,6 +53,7 @@ public partial class Interpreter
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(), // Sync wrapper for await
+            Expr.DynamicImport di => EvaluateDynamicImport(di),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
@@ -100,6 +102,7 @@ public partial class Interpreter
             Expr.Spread spread => await EvaluateAsync(spread.Expression),
             Expr.TypeAssertion ta => await EvaluateAsync(ta.Expression),
             Expr.Await awaitExpr => await EvaluateAwaitAsync(awaitExpr),
+            Expr.DynamicImport di => EvaluateDynamicImport(di),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
@@ -499,5 +502,56 @@ public partial class Interpreter
         }
 
         throw new Exception("Index assignment not supported on this type.");
+    }
+
+    /// <summary>
+    /// Evaluates a dynamic import expression, returning a Promise of the module namespace.
+    /// </summary>
+    /// <param name="di">The dynamic import expression AST node.</param>
+    /// <returns>A <see cref="SharpTSPromise"/> that resolves to the module namespace object.</returns>
+    /// <remarks>
+    /// Dynamic imports allow runtime module loading with expression paths.
+    /// The returned Promise resolves to an object containing all module exports.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import">MDN Dynamic Import</seealso>
+    private object? EvaluateDynamicImport(Expr.DynamicImport di)
+    {
+        return new SharpTSPromise(DynamicImportAsync(di));
+    }
+
+    /// <summary>
+    /// Asynchronously loads a module dynamically.
+    /// </summary>
+    private async Task<object?> DynamicImportAsync(Expr.DynamicImport di)
+    {
+        // Evaluate the path expression
+        object? pathValue = Evaluate(di.PathExpression);
+        string specifier = pathValue?.ToString()
+            ?? throw new Exception("Runtime Error: Dynamic import path cannot be null.");
+
+        // Create resolver if needed (single-file mode without module context)
+        _moduleResolver ??= new ModuleResolver(
+            _currentModule?.Path ?? Directory.GetCurrentDirectory());
+
+        string currentPath = _currentModule?.Path ?? Directory.GetCurrentDirectory();
+        string absolutePath = _moduleResolver.ResolveModulePath(specifier, currentPath);
+
+        // Check if module is already loaded
+        if (_loadedModules.TryGetValue(absolutePath, out var cached))
+        {
+            return cached.ExportsAsObject();
+        }
+
+        // Load and execute the module
+        ParsedModule module = _moduleResolver.LoadModule(absolutePath);
+
+        // Type check the new module (optional - errors become Promise rejections)
+        // Note: Skipping type checking for dynamic imports for flexibility
+
+        // Execute the module
+        ExecuteModule(module);
+
+        // Return the module namespace
+        return _loadedModules[absolutePath].ExportsAsObject();
     }
 }

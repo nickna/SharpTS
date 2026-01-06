@@ -70,6 +70,8 @@ public abstract record Expr
     public record TypeAssertion(Expr Expression, string TargetType) : Expr;
     // Await expression: await expr (only valid inside async functions)
     public record Await(Token Keyword, Expr Expression) : Expr;
+    // Dynamic import: import(pathExpr) - returns Promise of module namespace
+    public record DynamicImport(Token Keyword, Expr PathExpression) : Expr;
     // Yield expression: yield expr or yield* expr (only valid inside generator functions)
     public record Yield(Token Keyword, Expr? Value, bool IsDelegating) : Expr;
     // Regex literal: /pattern/flags

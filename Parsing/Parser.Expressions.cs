@@ -434,6 +434,17 @@ public partial class Parser
             }
             return new Expr.Super(keyword, method);
         }
+
+        // Dynamic import: import(pathExpr)
+        if (Match(TokenType.IMPORT))
+        {
+            Token keyword = Previous();
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'import' for dynamic import.");
+            Expr pathExpr = Expression();
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after import path.");
+            return new Expr.DynamicImport(keyword, pathExpr);
+        }
+
         if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
 
         // Symbol and BigInt are special callable constructors

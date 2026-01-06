@@ -5,7 +5,12 @@ public partial class Parser
     private Stmt Declaration()
     {
         // Module declarations - must be at top level
-        if (Match(TokenType.IMPORT)) return ImportDeclaration();
+        // Note: import followed by ( is dynamic import (expression), not static import (statement)
+        if (Check(TokenType.IMPORT) && PeekNext().Type != TokenType.LEFT_PAREN)
+        {
+            Advance(); // consume IMPORT
+            return ImportDeclaration();
+        }
         if (Match(TokenType.EXPORT)) return ExportDeclaration();
 
         // Parse decorators before class declarations

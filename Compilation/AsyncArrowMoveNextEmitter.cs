@@ -216,6 +216,10 @@ public class AsyncArrowMoveNextEmitter
                 EmitArrowFunction(af);
                 break;
 
+            case Expr.DynamicImport di:
+                EmitDynamicImport(di);
+                break;
+
             default:
                 // For unhandled expressions, push null
                 _il.Emit(OpCodes.Ldnull);
@@ -913,6 +917,27 @@ public class AsyncArrowMoveNextEmitter
 
         // Create TSFunction(target: self boxed, method: stub)
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
+
+        _stackType = StackType.Unknown;
+    }
+
+    private void EmitDynamicImport(Expr.DynamicImport di)
+    {
+        // Emit the path expression
+        EmitExpression(di.PathExpression);
+        EnsureBoxed();
+
+        // Convert to string
+        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+
+        // Push current module path (or empty string if not in module context)
+        _il.Emit(OpCodes.Ldstr, _ctx?.CurrentModulePath ?? "");
+
+        // Call DynamicImportModule(path, currentModulePath) -> Task<object?>
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.DynamicImportModule);
+
+        // Wrap Task<object?> in SharpTSPromise
+        _il.Emit(OpCodes.Call, _ctx.Runtime.WrapTaskAsPromise);
 
         _stackType = StackType.Unknown;
     }

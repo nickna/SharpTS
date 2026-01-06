@@ -264,6 +264,9 @@ public partial class ILCompiler
             case Expr.Await aw:
                 CollectArrowsFromExpr(aw.Expression);
                 break;
+            case Expr.DynamicImport di:
+                CollectArrowsFromExpr(di.PathExpression);
+                break;
         }
     }
 

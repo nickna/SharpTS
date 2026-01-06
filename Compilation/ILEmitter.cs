@@ -371,6 +371,10 @@ public partial class ILEmitter
                 EmitRegexLiteral(re);
                 break;
 
+            case Expr.DynamicImport di:
+                EmitDynamicImport(di);
+                break;
+
             default:
                 // Fallback: push null
                 IL.Emit(OpCodes.Ldnull);
@@ -848,6 +852,31 @@ public partial class ILEmitter
 
         // Wrap in SharpTSObject using the CreateObject helper
         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+    }
+
+    /// <summary>
+    /// Emits a dynamic import expression.
+    /// Dynamic import returns a Promise that resolves to the module namespace.
+    /// </summary>
+    private void EmitDynamicImport(Expr.DynamicImport di)
+    {
+        // Emit the path expression
+        EmitExpression(di.PathExpression);
+        EmitBoxIfNeeded(di.PathExpression);
+
+        // Convert to string
+        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+
+        // Push current module path (or empty string if not in module context)
+        IL.Emit(OpCodes.Ldstr, _ctx.CurrentModulePath ?? "");
+
+        // Call DynamicImportModule(path, currentModulePath) -> Task<object?>
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicImportModule);
+
+        // Wrap Task<object?> in SharpTSPromise
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapTaskAsPromise);
+
+        _stackType = StackType.Unknown;
     }
 
     #endregion

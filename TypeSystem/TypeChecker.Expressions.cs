@@ -45,6 +45,7 @@ public partial class TypeChecker
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
+            Expr.DynamicImport di => CheckDynamicImport(di),
             Expr.Yield yieldExpr => CheckYield(yieldExpr),
             Expr.RegexLiteral => new TypeInfo.RegExp(),
             _ => new TypeInfo.Any()
@@ -65,6 +66,24 @@ public partial class TypeChecker
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
         return ResolveAwaitedType(exprType);
+    }
+
+    private TypeInfo CheckDynamicImport(Expr.DynamicImport di)
+    {
+        TypeInfo pathType = CheckExpr(di.PathExpression);
+
+        // Path must be string, string literal, or any
+        bool isValidPath = pathType is TypeInfo.Primitive { Type: TokenType.TYPE_STRING }
+                        || pathType is TypeInfo.StringLiteral
+                        || pathType is TypeInfo.Any;
+
+        if (!isValidPath)
+        {
+            throw new Exception($"Type Error: Dynamic import path must be a string, got '{pathType}'.");
+        }
+
+        // Dynamic import returns Promise<any> since module type is unknown at compile time
+        return new TypeInfo.Promise(new TypeInfo.Any());
     }
 
     private TypeInfo CheckYield(Expr.Yield yieldExpr)

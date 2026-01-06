@@ -262,4 +262,8 @@ public class EmittedRuntime
     public MethodBuilder StringReplaceRegExp { get; set; } = null!;
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
     public MethodBuilder StringSplitRegExp { get; set; } = null!;
+
+    // Dynamic import support
+    public MethodBuilder DynamicImportModule { get; set; } = null!;
+    public MethodBuilder WrapTaskAsPromise { get; set; } = null!;
 }

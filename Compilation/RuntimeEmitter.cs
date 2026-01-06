@@ -513,6 +513,8 @@ public static partial class RuntimeEmitter
         EmitMapMethods(typeBuilder, runtime);
         // Set methods
         EmitSetMethods(typeBuilder, runtime);
+        // Dynamic import methods
+        EmitDynamicImportMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

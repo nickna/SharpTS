@@ -532,6 +532,10 @@ public class AsyncStateAnalyzer
 
             case Expr.Literal:
                 break;
+
+            case Expr.DynamicImport di:
+                AnalyzeExpr(di.PathExpression);
+                break;
         }
     }
 
@@ -876,6 +880,9 @@ public class AsyncStateAnalyzer
             case Expr.PostfixIncrement poi:
                 CollectArrowCaptures(poi.Operand, locals, captures);
                 break;
+            case Expr.DynamicImport di:
+                CollectArrowCaptures(di.PathExpression, locals, captures);
+                break;
         }
     }
 
@@ -1070,6 +1077,9 @@ public class AsyncStateAnalyzer
                 break;
             case Expr.PostfixIncrement poi:
                 AnalyzeAsyncArrowBodyExpr(poi.Operand);
+                break;
+            case Expr.DynamicImport di:
+                AnalyzeAsyncArrowBodyExpr(di.PathExpression);
                 break;
         }
     }
