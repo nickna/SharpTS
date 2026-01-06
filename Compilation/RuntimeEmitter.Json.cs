@@ -495,11 +495,9 @@ public static partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Call the stringify helper
+        // Delegate to RuntimeTypes.JsonStringify
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldc_I4_0); // indent = 0
-        il.Emit(OpCodes.Ldc_I4_0); // depth = 0
-        il.Emit(OpCodes.Call, EmitJsonStringifyHelper(typeBuilder));
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("JsonStringify", [typeof(object)])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -843,9 +841,6 @@ public static partial class RuntimeEmitter
 
     private static void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // First emit the helper that supports allowedKeys
-        var stringifyWithKeys = EmitJsonStringifyWithKeysHelper(typeBuilder);
-
         var method = typeBuilder.DefineMethod(
             "JsonStringifyFull",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -856,120 +851,11 @@ public static partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Declare ALL locals upfront
-        var indentLocal = il.DeclareLocal(typeof(int));
-        var allowedKeysLocal = il.DeclareLocal(typeof(HashSet<string>));
-        var listLocal = il.DeclareLocal(typeof(List<object>));
-        var listIdxLocal = il.DeclareLocal(typeof(int));
-
-        // Define labels
-        var notDoubleLabel = il.DefineLabel();
-        var notStringLabel = il.DefineLabel();
-        var doneIndentLabel = il.DefineLabel();
-        var notListLabel = il.DefineLabel();
-        var doneKeysLabel = il.DefineLabel();
-        var listLoopStart = il.DefineLabel();
-        var listLoopEnd = il.DefineLabel();
-        var notStringItem = il.DefineLabel();
-
-        // Parse space argument to get indent value
-        // if (space is double d)
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, typeof(double));
-        il.Emit(OpCodes.Brfalse, notDoubleLabel);
-
-        // indent = (int)Math.Min(d, 10)
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Unbox_Any, typeof(double));
-        il.Emit(OpCodes.Ldc_R8, 10.0);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(double), typeof(double)])!);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, indentLocal);
-        il.Emit(OpCodes.Br, doneIndentLabel);
-
-        // else if (space is string s)
-        il.MarkLabel(notDoubleLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, typeof(string));
-        il.Emit(OpCodes.Brfalse, notStringLabel);
-
-        // indent = Math.Min(s.Length, 10)
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, typeof(string));
-        il.Emit(OpCodes.Callvirt, typeof(string).GetProperty("Length")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4, 10);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Stloc, indentLocal);
-        il.Emit(OpCodes.Br, doneIndentLabel);
-
-        // else indent = 0
-        il.MarkLabel(notStringLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indentLocal);
-
-        il.MarkLabel(doneIndentLabel);
-
-        // Parse replacer argument to get allowedKeys
-        // if (replacer is List<object?> list)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
-        il.Emit(OpCodes.Brfalse, notListLabel);
-
-        // allowedKeys = new HashSet<string>()
-        il.Emit(OpCodes.Newobj, typeof(HashSet<string>).GetConstructor(Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, allowedKeysLocal);
-
-        // Loop through list and add strings
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, listIdxLocal);
-
-        il.MarkLabel(listLoopStart);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
-        il.Emit(OpCodes.Bge, listLoopEnd);
-
-        // if (list[i] is string s) allowedKeys.Add(s)
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("get_Item", [typeof(int)])!);
-        il.Emit(OpCodes.Isinst, typeof(string));
-        il.Emit(OpCodes.Brfalse, notStringItem);
-
-        il.Emit(OpCodes.Ldloc, allowedKeysLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("get_Item", [typeof(int)])!);
-        il.Emit(OpCodes.Castclass, typeof(string));
-        il.Emit(OpCodes.Callvirt, typeof(HashSet<string>).GetMethod("Add", [typeof(string)])!);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(notStringItem);
-        il.Emit(OpCodes.Ldloc, listIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, listIdxLocal);
-        il.Emit(OpCodes.Br, listLoopStart);
-
-        il.MarkLabel(listLoopEnd);
-        il.Emit(OpCodes.Br, doneKeysLabel);
-
-        // else allowedKeys = null
-        il.MarkLabel(notListLabel);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stloc, allowedKeysLocal);
-
-        il.MarkLabel(doneKeysLabel);
-
-        // Call StringifyWithKeys(value, allowedKeys, indent, depth=0)
+        // Delegate to RuntimeTypes.JsonStringifyFull
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, allowedKeysLocal);
-        il.Emit(OpCodes.Ldloc, indentLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, stringifyWithKeys);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("JsonStringifyFull", [typeof(object), typeof(object), typeof(object)])!);
         il.Emit(OpCodes.Ret);
     }
 

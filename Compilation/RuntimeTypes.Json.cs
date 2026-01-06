@@ -81,17 +81,23 @@ public static partial class RuntimeTypes
 
     public static object? JsonStringify(object? value)
     {
-        return StringifyJsonValue(value, null, null, 0, 0);
+        return StringifyJsonValue(value, null, null, "", 0);
     }
 
     public static object? JsonStringifyFull(object? value, object? replacer, object? space)
     {
-        int indent = space switch
+        // Handle space parameter: number = spaces, string = literal indent string
+        string indentStr = "";
+        switch (space)
         {
-            double d => (int)Math.Min(d, 10),
-            string s => Math.Min(s.Length, 10),
-            _ => 0
-        };
+            case double d:
+                var count = (int)Math.Min(Math.Max(d, 0), 10);
+                indentStr = new string(' ', count);
+                break;
+            case string s:
+                indentStr = s.Length > 10 ? s[..10] : s;
+                break;
+        }
 
         TSFunction? replacerFunc = replacer as TSFunction;
         HashSet<string>? allowedKeys = null;
@@ -101,21 +107,135 @@ public static partial class RuntimeTypes
             allowedKeys = list.OfType<string>().ToHashSet();
         }
 
-        return StringifyJsonValue(value, replacerFunc, allowedKeys, indent, 0);
+        return StringifyJsonValue(value, replacerFunc, allowedKeys, indentStr, 0);
     }
 
-    private static string? StringifyJsonValue(object? value, TSFunction? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+    private static string? StringifyJsonValue(object? value, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
+        // Check for toJSON() method before serializing
+        value = CallToJsonIfExists(value);
+
+        // Check for BigInt - must throw TypeError
+        // Handle both SharpTSBigInt (interpreter) and BigInteger (compiled)
+        if (value != null)
+        {
+            var typeName = value.GetType().Name;
+            if (typeName == "SharpTSBigInt" || typeName == "BigInteger")
+            {
+                throw new Exception("TypeError: BigInt value can't be serialized in JSON");
+            }
+        }
+
+        // Check for class instances (dynamically emitted types with _fields)
+        if (value != null && IsClassInstance(value))
+        {
+            return StringifyClassInstance(value, replacer, allowedKeys, indentStr, depth);
+        }
+
         return value switch
         {
             null => "null",
             bool b => b ? "true" : "false",
             double d => FormatJsonNumber(d),
             string s => JsonSerializer.Serialize(s),
-            List<object?> arr => StringifyJsonArray(arr, replacer, allowedKeys, indent, depth),
-            Dictionary<string, object?> obj => StringifyJsonObject(obj, replacer, allowedKeys, indent, depth),
+            List<object?> arr => StringifyJsonArray(arr, replacer, allowedKeys, indentStr, depth),
+            Dictionary<string, object?> obj => StringifyJsonObject(obj, replacer, allowedKeys, indentStr, depth),
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Checks if the value has a toJSON() method and calls it if present.
+    /// </summary>
+    private static object? CallToJsonIfExists(object? value)
+    {
+        if (value == null) return value;
+
+        var type = value.GetType();
+
+        // Check for toJSON method on the object's type
+        var toJsonMethod = type.GetMethod("toJSON", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (toJsonMethod != null)
+        {
+            return toJsonMethod.Invoke(value, null);
+        }
+
+        // Check for toJSON in _fields dictionary (for objects with callable toJSON property)
+        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (fieldsField?.GetValue(value) is Dictionary<string, object?> fields)
+        {
+            if (fields.TryGetValue("toJSON", out var toJsonFunc) && toJsonFunc is TSFunction func)
+            {
+                return func.Invoke();
+            }
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Checks if an object is a class instance (dynamically emitted type with _fields).
+    /// </summary>
+    private static bool IsClassInstance(object value)
+    {
+        var type = value.GetType();
+        // Exclude built-in types
+        if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal))
+            return false;
+        if (type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(List<>) ||
+                                   type.GetGenericTypeDefinition() == typeof(Dictionary<,>)))
+            return false;
+
+        // Check for _fields field (indicates a compiled class instance)
+        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        return fieldsField != null;
+    }
+
+    /// <summary>
+    /// Stringifies a class instance by serializing its _fields dictionary.
+    /// </summary>
+    private static string StringifyClassInstance(object value, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
+    {
+        var type = value.GetType();
+        var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (fieldsField?.GetValue(value) is not Dictionary<string, object?> fields)
+        {
+            return "{}";
+        }
+
+        if (allowedKeys != null)
+        {
+            fields = fields.Where(kv => allowedKeys.Contains(kv.Key))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+        }
+
+        if (fields.Count == 0) return "{}";
+
+        var parts = new List<string>();
+        foreach (var kv in fields)
+        {
+            var val = kv.Value;
+            if (replacer != null)
+            {
+                val = replacer.Invoke(kv.Key, val);
+            }
+            var str = StringifyJsonValue(val, replacer, allowedKeys, indentStr, depth + 1);
+            if (str != null)
+            {
+                var escapedKey = JsonSerializer.Serialize(kv.Key);
+                parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
+            }
+        }
+
+        if (parts.Count == 0) return "{}";
+
+        if (indentStr.Length > 0)
+        {
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
+            return "{" + newline + string.Join("," + newline, parts) + close + "}";
+        }
+        return "{" + string.Join(",", parts) + "}";
     }
 
     private static string FormatJsonNumber(double d)
@@ -126,7 +246,7 @@ public static partial class RuntimeTypes
         return d.ToString("G15");
     }
 
-    private static string StringifyJsonArray(List<object?> arr, TSFunction? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+    private static string StringifyJsonArray(List<object?> arr, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         if (arr.Count == 0) return "[]";
 
@@ -138,20 +258,20 @@ public static partial class RuntimeTypes
             {
                 val = replacer.Invoke((double)i, val);
             }
-            var str = StringifyJsonValue(val, replacer, allowedKeys, indent, depth + 1);
+            var str = StringifyJsonValue(val, replacer, allowedKeys, indentStr, depth + 1);
             parts.Add(str ?? "null");
         }
 
-        if (indent > 0)
+        if (indentStr.Length > 0)
         {
-            var newline = "\n" + new string(' ', indent * (depth + 1));
-            var close = "\n" + new string(' ', indent * depth);
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
             return "[" + newline + string.Join("," + newline, parts) + close + "]";
         }
         return "[" + string.Join(",", parts) + "]";
     }
 
-    private static string StringifyJsonObject(Dictionary<string, object?> obj, TSFunction? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+    private static string StringifyJsonObject(Dictionary<string, object?> obj, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         var fields = obj;
         if (allowedKeys != null)
@@ -170,21 +290,26 @@ public static partial class RuntimeTypes
             {
                 val = replacer.Invoke(kv.Key, val);
             }
-            var str = StringifyJsonValue(val, replacer, allowedKeys, indent, depth + 1);
+            var str = StringifyJsonValue(val, replacer, allowedKeys, indentStr, depth + 1);
             if (str != null)
             {
                 var escapedKey = JsonSerializer.Serialize(kv.Key);
-                parts.Add($"{escapedKey}:{(indent > 0 ? " " : "")}{str}");
+                parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
             }
         }
 
-        if (indent > 0)
+        if (indentStr.Length > 0)
         {
-            var newline = "\n" + new string(' ', indent * (depth + 1));
-            var close = "\n" + new string(' ', indent * depth);
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
             return "{" + newline + string.Join("," + newline, parts) + close + "}";
         }
         return "{" + string.Join(",", parts) + "}";
+    }
+
+    private static string GetIndent(string indentStr, int depth)
+    {
+        return string.Concat(Enumerable.Repeat(indentStr, depth));
     }
 
     #endregion

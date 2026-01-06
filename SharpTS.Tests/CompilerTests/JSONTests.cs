@@ -253,4 +253,137 @@ public class JSONTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("Alice\n30\n", output);
     }
+
+    // Enhanced JSON.stringify tests
+
+    [Fact]
+    public void JSON_Stringify_ClassInstance()
+    {
+        var source = """
+            class Person {
+                name: string;
+                age: number;
+                constructor(name: string, age: number) {
+                    this.name = name;
+                    this.age = age;
+                }
+            }
+            let p: Person = new Person("Bob", 25);
+            let result: string = JSON.stringify(p);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\"name\":\"Bob\",\"age\":25}\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_ClassInstance_ToJSON()
+    {
+        var source = """
+            class Data {
+                value: number;
+                constructor(v: number) {
+                    this.value = v;
+                }
+                toJSON(): { custom: number } {
+                    return { custom: this.value * 10 };
+                }
+            }
+            let d: Data = new Data(5);
+            let result: string = JSON.stringify(d);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\"custom\":50}\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_BigInt_Throws()
+    {
+        var source = """
+            try {
+                let result: string = JSON.stringify(123n);
+                console.log("should not reach here");
+            } catch (e) {
+                console.log("caught error");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("caught error\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_StringIndent_Tab()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let result: string = JSON.stringify(obj, null, "\t");
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\n\t\"a\": 1\n}\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_StringIndent_Custom()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let result: string = JSON.stringify(obj, null, ">>>");
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\n>>>\"a\": 1\n}\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_NestedClassInstance()
+    {
+        var source = """
+            class Inner {
+                value: number;
+                constructor(v: number) {
+                    this.value = v;
+                }
+            }
+            class Outer {
+                inner: Inner;
+                constructor(i: Inner) {
+                    this.inner = i;
+                }
+            }
+            let o: Outer = new Outer(new Inner(42));
+            let result: string = JSON.stringify(o);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\"inner\":{\"value\":42}}\n", output);
+    }
+
+    [Fact]
+    public void JSON_Stringify_ClassInstanceWithIndent()
+    {
+        var source = """
+            class Point {
+                x: number;
+                y: number;
+                constructor(x: number, y: number) {
+                    this.x = x;
+                    this.y = y;
+                }
+            }
+            let p: Point = new Point(10, 20);
+            let result: string = JSON.stringify(p, null, 2);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("{\n  \"x\": 10,\n  \"y\": 20\n}\n", output);
+    }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SharpTS.Execution;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -99,12 +100,18 @@ public static class JSONBuiltIns
         var replacer = args.Count > 1 ? args[1] : null;
         var space = args.Count > 2 ? args[2] : null;
 
-        int indent = space switch
+        // Handle space parameter: number = spaces, string = literal indent string
+        string indentStr = "";
+        switch (space)
         {
-            double d => (int)Math.Min(d, 10),
-            string s => Math.Min(s.Length, 10),
-            _ => 0
-        };
+            case double d:
+                var count = (int)Math.Min(Math.Max(d, 0), 10);
+                indentStr = new string(' ', count);
+                break;
+            case string s:
+                indentStr = s.Length > 10 ? s[..10] : s;
+                break;
+        }
 
         var replacerFunc = replacer as ISharpTSCallable;
         var replacerArray = replacer as SharpTSArray;
@@ -117,16 +124,19 @@ public static class JSONBuiltIns
                 .ToHashSet();
         }
 
-        return StringifyValue(interp, value, "", replacerFunc, allowedKeys, indent, 0);
+        return StringifyValue(interp, value, "", replacerFunc, allowedKeys, indentStr, 0);
     }
 
     private static string? StringifyValue(Interpreter interp, object? value, object? key,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         if (replacer != null)
         {
             value = replacer.Call(interp, [key, value]);
         }
+
+        // Check for toJSON() method before serializing
+        value = CallToJsonIfExists(interp, value);
 
         return value switch
         {
@@ -134,10 +144,31 @@ public static class JSONBuiltIns
             bool b => b ? "true" : "false",
             double d => FormatJsonNumber(d),
             string s => JsonSerializer.Serialize(s),
-            SharpTSArray arr => StringifyArray(interp, arr, replacer, allowedKeys, indent, depth),
-            SharpTSObject obj => StringifyObject(interp, obj, replacer, allowedKeys, indent, depth),
+            SharpTSBigInt => throw new ThrowException("TypeError: BigInt value can't be serialized in JSON"),
+            SharpTSArray arr => StringifyArray(interp, arr, replacer, allowedKeys, indentStr, depth),
+            SharpTSObject obj => StringifyObject(interp, obj, replacer, allowedKeys, indentStr, depth),
+            SharpTSInstance inst => StringifyInstance(interp, inst, replacer, allowedKeys, indentStr, depth),
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Checks if the value has a toJSON() method and calls it if present.
+    /// </summary>
+    private static object? CallToJsonIfExists(Interpreter interp, object? value)
+    {
+        if (value is SharpTSInstance inst)
+        {
+            var toJson = inst.GetClass().FindMethod("toJSON");
+            if (toJson != null)
+                return toJson.Bind(inst).Call(interp, []);
+        }
+        else if (value is SharpTSObject obj && obj.Fields.TryGetValue("toJSON", out var fn))
+        {
+            if (fn is ISharpTSCallable callable)
+                return callable.Call(interp, []);
+        }
+        return value;
     }
 
     private static string FormatJsonNumber(double d)
@@ -149,28 +180,28 @@ public static class JSONBuiltIns
     }
 
     private static string StringifyArray(Interpreter interp, SharpTSArray arr,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         if (arr.Elements.Count == 0) return "[]";
 
         var parts = new List<string>();
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var str = StringifyValue(interp, arr.Elements[i], (double)i, replacer, allowedKeys, indent, depth + 1);
+            var str = StringifyValue(interp, arr.Elements[i], (double)i, replacer, allowedKeys, indentStr, depth + 1);
             parts.Add(str ?? "null");
         }
 
-        if (indent > 0)
+        if (indentStr.Length > 0)
         {
-            var newline = "\n" + new string(' ', indent * (depth + 1));
-            var close = "\n" + new string(' ', indent * depth);
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
             return "[" + newline + string.Join("," + newline, parts) + close + "]";
         }
         return "[" + string.Join(",", parts) + "]";
     }
 
     private static string StringifyObject(Interpreter interp, SharpTSObject obj,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, int indent, int depth)
+        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         var fields = obj.Fields;
         if (allowedKeys != null)
@@ -184,20 +215,57 @@ public static class JSONBuiltIns
         var parts = new List<string>();
         foreach (var kv in fields)
         {
-            var str = StringifyValue(interp, kv.Value, kv.Key, replacer, allowedKeys, indent, depth + 1);
+            var str = StringifyValue(interp, kv.Value, kv.Key, replacer, allowedKeys, indentStr, depth + 1);
             if (str != null)
             {
                 var escapedKey = JsonSerializer.Serialize(kv.Key);
-                parts.Add($"{escapedKey}:{(indent > 0 ? " " : "")}{str}");
+                parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
             }
         }
 
-        if (indent > 0)
+        if (indentStr.Length > 0)
         {
-            var newline = "\n" + new string(' ', indent * (depth + 1));
-            var close = "\n" + new string(' ', indent * depth);
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
             return "{" + newline + string.Join("," + newline, parts) + close + "}";
         }
         return "{" + string.Join(",", parts) + "}";
+    }
+
+    private static string StringifyInstance(Interpreter interp, SharpTSInstance inst,
+        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
+    {
+        IEnumerable<string> fieldNames = inst.GetFieldNames();
+        if (allowedKeys != null)
+        {
+            fieldNames = fieldNames.Where(k => allowedKeys.Contains(k));
+        }
+
+        var parts = new List<string>();
+        foreach (var name in fieldNames)
+        {
+            var fieldValue = inst.GetFieldValue(name);
+            var str = StringifyValue(interp, fieldValue, name, replacer, allowedKeys, indentStr, depth + 1);
+            if (str != null)
+            {
+                var escapedKey = JsonSerializer.Serialize(name);
+                parts.Add($"{escapedKey}:{(indentStr.Length > 0 ? " " : "")}{str}");
+            }
+        }
+
+        if (parts.Count == 0) return "{}";
+
+        if (indentStr.Length > 0)
+        {
+            var newline = "\n" + GetIndent(indentStr, depth + 1);
+            var close = "\n" + GetIndent(indentStr, depth);
+            return "{" + newline + string.Join("," + newline, parts) + close + "}";
+        }
+        return "{" + string.Join(",", parts) + "}";
+    }
+
+    private static string GetIndent(string indentStr, int depth)
+    {
+        return string.Concat(Enumerable.Repeat(indentStr, depth));
     }
 }

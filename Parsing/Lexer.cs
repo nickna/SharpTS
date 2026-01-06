@@ -300,17 +300,42 @@ public class Lexer(string source)
 
     private void StringLiteral(char delimiter)
     {
+        var sb = new System.Text.StringBuilder();
         while (Peek() != delimiter && !IsAtEnd())
         {
             if (Peek() == '\n') _line++;
-            Advance();
+            if (Peek() == '\\' && !IsAtEnd())
+            {
+                Advance(); // consume backslash
+                if (!IsAtEnd())
+                {
+                    char escaped = Advance();
+                    sb.Append(escaped switch
+                    {
+                        'n' => '\n',
+                        't' => '\t',
+                        'r' => '\r',
+                        '\\' => '\\',
+                        '"' => '"',
+                        '\'' => '\'',
+                        '0' => '\0',
+                        'b' => '\b',
+                        'f' => '\f',
+                        'v' => '\v',
+                        _ => escaped // unrecognized escape, keep as-is
+                    });
+                }
+            }
+            else
+            {
+                sb.Append(Advance());
+            }
         }
 
         if (IsAtEnd()) return;
 
         Advance(); // The closing delimiter
-        string value = _source[(_start + 1)..(_current - 1)];
-        AddToken(TokenType.STRING, value);
+        AddToken(TokenType.STRING, sb.ToString());
     }
 
     private void BlockComment()
