@@ -505,6 +505,8 @@ public static partial class RuntimeEmitter
         EmitPromiseMethods(typeBuilder, runtime);
         // Number methods
         EmitNumberMethods(typeBuilder, runtime);
+        // Date methods
+        EmitDateMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

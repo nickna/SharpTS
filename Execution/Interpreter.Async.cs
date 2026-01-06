@@ -424,6 +424,30 @@ public partial class Interpreter
             return new SharpTSSymbol(description);
         }
 
+        // Handle BigInt() constructor - converts number/string to bigint
+        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        {
+            if (call.Arguments.Count != 1)
+                throw new Exception("Runtime Error: BigInt() requires exactly one argument.");
+
+            var arg = await EvaluateAsync(call.Arguments[0]);
+            return arg switch
+            {
+                SharpTSBigInt bi => bi,
+                System.Numerics.BigInteger biVal => new SharpTSBigInt(biVal),
+                double d => new SharpTSBigInt(d),
+                string s => new SharpTSBigInt(s),
+                _ => throw new Exception($"Runtime Error: Cannot convert {arg?.GetType().Name ?? "null"} to bigint.")
+            };
+        }
+
+        // Handle Date() function call - returns current date as string (without 'new')
+        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        {
+            // Date() called without 'new' ignores all arguments and returns current date as string
+            return new SharpTSDate().ToString();
+        }
+
         object? callee = await EvaluateAsync(call.Callee);
 
         List<object?> arguments = [];

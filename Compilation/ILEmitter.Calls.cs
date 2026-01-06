@@ -205,6 +205,26 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Date() function call - returns current date as string
+        if (c.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        {
+            // Date() without 'new' returns current date as string
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateNoArgs);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.DateToString);
+            return;
+        }
+
+        // Special case: Date.now() static method
+        if (c.Callee is Expr.Get dateGet &&
+            dateGet.Object is Expr.Variable dateStaticVar &&
+            dateStaticVar.Name.Lexeme == "Date" &&
+            dateGet.Name.Lexeme == "now")
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.DateNow);
+            IL.Emit(OpCodes.Box, typeof(double));
+            return;
+        }
+
         // Special case: Global parseInt()
         if (c.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
         {
@@ -664,6 +684,18 @@ public partial class ILEmitter
             or "reverse")
         {
             EmitArrayMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
+        // Special case: Date instance method calls
+        if (methodName is "getTime" or "getFullYear" or "getMonth" or "getDate" or "getDay"
+            or "getHours" or "getMinutes" or "getSeconds" or "getMilliseconds" or "getTimezoneOffset"
+            or "setTime" or "setFullYear" or "setMonth" or "setDate"
+            or "setHours" or "setMinutes" or "setSeconds" or "setMilliseconds"
+            or "toISOString" or "toDateString" or "toTimeString" or "valueOf"
+            or "toString")
+        {
+            EmitDateMethodCall(methodGet.Object, methodName, arguments);
             return;
         }
 
@@ -1384,8 +1416,158 @@ public partial class ILEmitter
         IL.MarkLabel(doneLabel);
     }
 
+    private void EmitDateMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the Date object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            // Getters (no arguments, return double)
+            case "getTime":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetTime);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getFullYear":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetFullYear);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getMonth":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMonth);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getDate":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetDate);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getDay":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetDay);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getHours":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetHours);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getMinutes":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMinutes);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getSeconds":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetSeconds);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getMilliseconds":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMilliseconds);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "getTimezoneOffset":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetTimezoneOffset);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            // Simple setters (single argument, return double)
+            case "setTime":
+                if (arguments.Count > 0)
+                {
+                    EmitExpressionAsDouble(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, double.NaN);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetTime);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "setDate":
+                if (arguments.Count > 0)
+                {
+                    EmitExpressionAsDouble(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, double.NaN);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetDate);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+            case "setMilliseconds":
+                if (arguments.Count > 0)
+                {
+                    EmitExpressionAsDouble(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_R8, double.NaN);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetMilliseconds);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            // Multi-argument setters (variadic, packaged as object[])
+            case "setFullYear":
+            case "setMonth":
+            case "setHours":
+            case "setMinutes":
+            case "setSeconds":
+                // Create args array
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                // Call appropriate runtime method
+                var setMethod = methodName switch
+                {
+                    "setFullYear" => _ctx.Runtime!.DateSetFullYear,
+                    "setMonth" => _ctx.Runtime!.DateSetMonth,
+                    "setHours" => _ctx.Runtime!.DateSetHours,
+                    "setMinutes" => _ctx.Runtime!.DateSetMinutes,
+                    "setSeconds" => _ctx.Runtime!.DateSetSeconds,
+                    _ => throw new Exception($"Unknown Date method: {methodName}")
+                };
+                IL.Emit(OpCodes.Call, setMethod);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            // Conversion methods (no arguments, return string)
+            case "toISOString":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateToISOString);
+                return;
+            case "toDateString":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateToDateString);
+                return;
+            case "toTimeString":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateToTimeString);
+                return;
+
+            // valueOf (no arguments, returns double)
+            case "valueOf":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateValueOf);
+                IL.Emit(OpCodes.Box, typeof(double));
+                return;
+
+            // toString (no arguments, returns string)
+            case "toString":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.DateToString);
+                return;
+        }
+    }
+
     private void EmitNew(Expr.New n)
     {
+        // Special case: new Date(...) constructor
+        if (n.ClassName.Lexeme == "Date")
+        {
+            EmitNewDate(n.Arguments);
+            return;
+        }
+
         if (_ctx.Classes.TryGetValue(n.ClassName.Lexeme, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
             _ctx.ClassConstructors.TryGetValue(n.ClassName.Lexeme, out var ctorBuilder))
@@ -2096,5 +2278,46 @@ public partial class ILEmitter
         // Emit the virtual call
         IL.Emit(OpCodes.Callvirt, methodBuilder);
         return true;
+    }
+
+    /// <summary>
+    /// Emits code for new Date(...) construction with various argument forms.
+    /// </summary>
+    private void EmitNewDate(List<Expr> arguments)
+    {
+        switch (arguments.Count)
+        {
+            case 0:
+                // new Date() - current date/time
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateNoArgs);
+                break;
+
+            case 1:
+                // new Date(value) - milliseconds or ISO string
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateFromValue);
+                break;
+
+            default:
+                // new Date(year, month, day?, hours?, minutes?, seconds?, ms?)
+                // Emit all 7 arguments, using 0 for missing ones
+                for (int i = 0; i < 7; i++)
+                {
+                    if (i < arguments.Count)
+                    {
+                        EmitExpressionAsDouble(arguments[i]);
+                    }
+                    else
+                    {
+                        // Default values: day=1, others=0
+                        IL.Emit(OpCodes.Ldc_R8, i == 2 ? 1.0 : 0.0);
+                    }
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateFromComponents);
+                break;
+        }
+        // All Date constructors return an object, reset stack type
+        _stackType = StackType.Unknown;
     }
 }

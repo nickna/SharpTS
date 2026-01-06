@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (IL compiler: Fixed increment/decrement on properties and array indices - obj.prop++, this.prop++, arr[i]++ now work correctly)
+**Last Updated:** 2026-01-05 (Date object: Full constructor support, getters, setters, conversion methods, Date.now(), local timezone handling)
 
 ## Legend
 - ✅ Implemented
@@ -185,7 +185,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Object.keys`/`values`/`entries` | ✅ | Full support for object literals and class instances |
 | `Array.isArray` | ✅ | Type guard for array detection |
 | `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
-| `Date` object | ❌ | |
+| `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
 | `RegExp` | ❌ | |
 | `Map`/`Set` | ❌ | |
 
@@ -438,7 +438,7 @@ _No known bugs at this time._
 - ✅ Type checker allows `this` in object methods (infers `any` type)
 - ✅ Full interpreter support for both features
 - ✅ IL compiler support for class field initializers
-- ⚠️ IL compiler: object method `this` binding not yet implemented (documented limitation)
+- ✅ IL compiler support for object method `this` binding
 
 ### Phase 21 Features (BigInt Type)
 - ✅ `bigint` type with `123n` literal syntax
@@ -488,3 +488,18 @@ _No known bugs at this time._
 - ✅ Global `parseInt()` and `parseFloat()` functions
 - ✅ Global `isNaN()` and `isFinite()` with coercion behavior
 - ✅ Full interpreter and IL compiler support
+
+### Phase 24 Features (Date Object)
+- ✅ `new Date()` - creates current date/time
+- ✅ `new Date(milliseconds)` - creates from epoch milliseconds
+- ✅ `new Date(isoString)` - parses ISO 8601 format strings
+- ✅ `new Date(year, month, day?, hours?, minutes?, seconds?, ms?)` - component constructor
+- ✅ `Date()` function call returns current date as string
+- ✅ `Date.now()` returns current timestamp in milliseconds
+- ✅ Getter methods: `getTime`, `getFullYear`, `getMonth` (0-indexed), `getDate`, `getDay`, `getHours`, `getMinutes`, `getSeconds`, `getMilliseconds`, `getTimezoneOffset`
+- ✅ Setter methods: `setTime`, `setFullYear`, `setMonth`, `setDate`, `setHours`, `setMinutes`, `setSeconds`, `setMilliseconds` (all mutate and return timestamp)
+- ✅ Conversion methods: `toString`, `toISOString`, `toDateString`, `toTimeString`, `valueOf`
+- ✅ JavaScript Date quirks: 0-indexed months, 2-digit year mapping (0-99 → 1900-1999), overflow handling
+- ✅ Invalid date handling (returns NaN from getTime, "Invalid Date" from toString)
+- ✅ Local timezone support (no UTC variants)
+- ✅ Full interpreter and IL compiler support with 42 test cases

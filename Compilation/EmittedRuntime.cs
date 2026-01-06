@@ -188,4 +188,33 @@ public class EmittedRuntime
     public MethodBuilder NumberToPrecision { get; set; } = null!;
     public MethodBuilder NumberToExponential { get; set; } = null!;
     public MethodBuilder NumberToStringRadix { get; set; } = null!;
+
+    // Date support
+    public MethodBuilder DateNow { get; set; } = null!;
+    public MethodBuilder CreateDateNoArgs { get; set; } = null!;
+    public MethodBuilder CreateDateFromValue { get; set; } = null!;
+    public MethodBuilder CreateDateFromComponents { get; set; } = null!;
+    public MethodBuilder DateToString { get; set; } = null!;
+    public MethodBuilder DateGetTime { get; set; } = null!;
+    public MethodBuilder DateGetFullYear { get; set; } = null!;
+    public MethodBuilder DateGetMonth { get; set; } = null!;
+    public MethodBuilder DateGetDate { get; set; } = null!;
+    public MethodBuilder DateGetDay { get; set; } = null!;
+    public MethodBuilder DateGetHours { get; set; } = null!;
+    public MethodBuilder DateGetMinutes { get; set; } = null!;
+    public MethodBuilder DateGetSeconds { get; set; } = null!;
+    public MethodBuilder DateGetMilliseconds { get; set; } = null!;
+    public MethodBuilder DateGetTimezoneOffset { get; set; } = null!;
+    public MethodBuilder DateSetTime { get; set; } = null!;
+    public MethodBuilder DateSetFullYear { get; set; } = null!;
+    public MethodBuilder DateSetMonth { get; set; } = null!;
+    public MethodBuilder DateSetDate { get; set; } = null!;
+    public MethodBuilder DateSetHours { get; set; } = null!;
+    public MethodBuilder DateSetMinutes { get; set; } = null!;
+    public MethodBuilder DateSetSeconds { get; set; } = null!;
+    public MethodBuilder DateSetMilliseconds { get; set; } = null!;
+    public MethodBuilder DateToISOString { get; set; } = null!;
+    public MethodBuilder DateToDateString { get; set; } = null!;
+    public MethodBuilder DateToTimeString { get; set; } = null!;
+    public MethodBuilder DateValueOf { get; set; } = null!;
 }

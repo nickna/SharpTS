@@ -261,6 +261,37 @@ public partial class TypeChecker
 
     private TypeInfo CheckNew(Expr.New newExpr)
     {
+        // Handle new Date() constructor
+        if (newExpr.ClassName.Lexeme == "Date")
+        {
+            // Date() accepts 0-7 arguments
+            if (newExpr.Arguments.Count > 7)
+            {
+                throw new Exception("Type Error: Date constructor accepts at most 7 arguments.");
+            }
+
+            // Validate argument types
+            foreach (var arg in newExpr.Arguments)
+            {
+                var argType = CheckExpr(arg);
+                // First argument can be number (milliseconds) or string (ISO string)
+                // Remaining arguments must be numbers (year, month, day, hours, minutes, seconds, ms)
+                if (newExpr.Arguments.Count == 1)
+                {
+                    if (!IsNumber(argType) && !IsString(argType) && argType is not TypeInfo.Any)
+                    {
+                        throw new Exception($"Type Error: Date constructor single argument must be a number or string, got '{argType}'.");
+                    }
+                }
+                else if (!IsNumber(argType) && argType is not TypeInfo.Any)
+                {
+                    throw new Exception($"Type Error: Date constructor arguments must be numbers, got '{argType}'.");
+                }
+            }
+
+            return new TypeInfo.Date();
+        }
+
         TypeInfo type = LookupVariable(newExpr.ClassName);
 
         // Check for abstract class instantiation
@@ -619,6 +650,13 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetArrayMemberType(get.Name.Lexeme, unionElem);
             if (memberType != null) return memberType;
             throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on tuple type.");
+        }
+        // Handle Date instance methods
+        if (objType is TypeInfo.Date)
+        {
+            var memberType = BuiltInTypes.GetDateInstanceMemberType(get.Name.Lexeme);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
         }
         return new TypeInfo.Any();
     }

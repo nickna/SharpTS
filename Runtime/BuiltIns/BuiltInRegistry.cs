@@ -130,6 +130,7 @@ public sealed class BuiltInRegistry
         RegisterConsoleNamespace(registry);
         RegisterPromiseNamespace(registry);
         RegisterNumberNamespace(registry);
+        RegisterDateNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
@@ -137,6 +138,7 @@ public sealed class BuiltInRegistry
         RegisterMathType(registry);
         RegisterPromiseType(registry);
         RegisterDoubleType(registry);
+        RegisterDateType(registry);
 
         return registry;
     }
@@ -252,6 +254,22 @@ public sealed class BuiltInRegistry
         // Handle instance methods on boxed doubles: (123).toFixed(2)
         registry.RegisterInstanceType(typeof(double), (instance, name) =>
             NumberBuiltIns.GetInstanceMember((double)instance, name));
+    }
+
+    private static void RegisterDateNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Date",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => DateBuiltIns.GetStaticMethod(name)
+        ));
+    }
+
+    private static void RegisterDateType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSDate), (instance, name) =>
+            DateBuiltIns.GetMember((SharpTSDate)instance, name));
     }
 
     private static string Stringify(object? obj)

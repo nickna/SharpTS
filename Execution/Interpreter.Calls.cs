@@ -85,6 +85,13 @@ public partial class Interpreter
             };
         }
 
+        // Handle Date() function call - returns current date as string (without 'new')
+        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        {
+            // Date() called without 'new' ignores all arguments and returns current date as string
+            return new SharpTSDate().ToString();
+        }
+
         // Handle global parseInt()
         if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
         {

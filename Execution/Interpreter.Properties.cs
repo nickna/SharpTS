@@ -20,6 +20,13 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
     private object? EvaluateNew(Expr.New newExpr)
     {
+        // Handle new Date(...) constructor
+        if (newExpr.ClassName.Lexeme == "Date")
+        {
+            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            return CreateDate(args);
+        }
+
         object? klass = _environment.Get(newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {
@@ -39,6 +46,27 @@ public partial class Interpreter
         }
 
         return sharpClass.Call(this, arguments);
+    }
+
+    /// <summary>
+    /// Creates a Date object from constructor arguments.
+    /// </summary>
+    private static SharpTSDate CreateDate(List<object?> args)
+    {
+        return args.Count switch
+        {
+            0 => new SharpTSDate(),
+            1 when args[0] is double ms => new SharpTSDate(ms),
+            1 when args[0] is string str => new SharpTSDate(str),
+            _ => new SharpTSDate(
+                (int)(double)args[0]!,
+                (int)(double)args[1]!,
+                args.Count > 2 ? (int)(double)args[2]! : 1,
+                args.Count > 3 ? (int)(double)args[3]! : 0,
+                args.Count > 4 ? (int)(double)args[4]! : 0,
+                args.Count > 5 ? (int)(double)args[5]! : 0,
+                args.Count > 6 ? (int)(double)args[6]! : 0)
+        };
     }
 
     /// <summary>

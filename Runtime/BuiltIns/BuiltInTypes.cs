@@ -168,4 +168,56 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for static methods on the Date namespace
+    /// </summary>
+    public static TypeInfo? GetDateStaticMemberType(string name)
+    {
+        return name switch
+        {
+            "now" => new TypeInfo.Function([], NumberType),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance methods on Date objects
+    /// </summary>
+    public static TypeInfo? GetDateInstanceMemberType(string name)
+    {
+        return name switch
+        {
+            // Getters - all return number
+            "getTime" => new TypeInfo.Function([], NumberType),
+            "getFullYear" => new TypeInfo.Function([], NumberType),
+            "getMonth" => new TypeInfo.Function([], NumberType),
+            "getDate" => new TypeInfo.Function([], NumberType),
+            "getDay" => new TypeInfo.Function([], NumberType),
+            "getHours" => new TypeInfo.Function([], NumberType),
+            "getMinutes" => new TypeInfo.Function([], NumberType),
+            "getSeconds" => new TypeInfo.Function([], NumberType),
+            "getMilliseconds" => new TypeInfo.Function([], NumberType),
+            "getTimezoneOffset" => new TypeInfo.Function([], NumberType),
+
+            // Setters - all return number (the new timestamp)
+            "setTime" => new TypeInfo.Function([NumberType], NumberType),
+            "setFullYear" => new TypeInfo.Function([NumberType], NumberType),  // month, date optional
+            "setMonth" => new TypeInfo.Function([NumberType], NumberType),     // date optional
+            "setDate" => new TypeInfo.Function([NumberType], NumberType),
+            "setHours" => new TypeInfo.Function([NumberType], NumberType),     // min, sec, ms optional
+            "setMinutes" => new TypeInfo.Function([NumberType], NumberType),   // sec, ms optional
+            "setSeconds" => new TypeInfo.Function([NumberType], NumberType),   // ms optional
+            "setMilliseconds" => new TypeInfo.Function([NumberType], NumberType),
+
+            // Conversion methods
+            "toString" => new TypeInfo.Function([], StringType),
+            "toISOString" => new TypeInfo.Function([], StringType),
+            "toDateString" => new TypeInfo.Function([], StringType),
+            "toTimeString" => new TypeInfo.Function([], StringType),
+            "valueOf" => new TypeInfo.Function([], NumberType),
+
+            _ => null
+        };
+    }
 }

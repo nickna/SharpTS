@@ -54,6 +54,14 @@ public partial class TypeChecker
             return new TypeInfo.BigInt();
         }
 
+        // Handle Date() function call - returns current date as string (without 'new')
+        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        {
+            // Date() called as a function (not with new) ignores arguments and returns a string
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING);
+        }
+
         // Handle Object.keys(), Object.values(), Object.entries()
         if (call.Callee is Expr.Get get &&
             get.Object is Expr.Variable objVar &&
@@ -103,6 +111,19 @@ public partial class TypeChecker
             {
                 foreach (var arg in call.Arguments) CheckExpr(arg);
                 return numMethodType.ReturnType;
+            }
+        }
+
+        // Handle Date.now()
+        if (call.Callee is Expr.Get dateGet &&
+            dateGet.Object is Expr.Variable dateStaticVar &&
+            dateStaticVar.Name.Lexeme == "Date")
+        {
+            var methodType = BuiltInTypes.GetDateStaticMemberType(dateGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function dateMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                return dateMethodType.ReturnType;
             }
         }
 
