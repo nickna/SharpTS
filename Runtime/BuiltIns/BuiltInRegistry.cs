@@ -131,6 +131,7 @@ public sealed class BuiltInRegistry
         RegisterPromiseNamespace(registry);
         RegisterNumberNamespace(registry);
         RegisterDateNamespace(registry);
+        RegisterReflectNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
@@ -268,6 +269,16 @@ public sealed class BuiltInRegistry
             IsSingleton: false,
             SingletonFactory: null,
             GetMethod: name => DateBuiltIns.GetStaticMethod(name)
+        ));
+    }
+
+    private static void RegisterReflectNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Reflect",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => ReflectBuiltIns.GetStaticMethod(name)
         ));
     }
 

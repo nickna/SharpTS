@@ -16,6 +16,7 @@ public enum TokenType
     LEFT_BRACKET, RIGHT_BRACKET,
     COMMA, DOT, MINUS, PLUS, SEMICOLON, SLASH, STAR, PERCENT,
     COLON, QUESTION,
+    AT,  // @ for decorators
 
     // One or two character tokens
     BANG, BANG_EQUAL, BANG_EQUAL_EQUAL,

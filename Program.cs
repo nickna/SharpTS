@@ -10,6 +10,11 @@
 //   dotnet run -- --compile <file.ts>    - Compile to .NET IL assembly
 //   dotnet run -- -c <file.ts> -o out.dll - Compile with custom output path
 //
+// Decorator flags:
+//   --experimentalDecorators             - Enable Legacy (Stage 2) decorators
+//   --decorators                         - Enable TC39 Stage 3 decorators
+//   --emitDecoratorMetadata              - Emit design-time type metadata
+//
 // Pipeline stages:
 //   1. Lexer      - Tokenizes source code into Token stream
 //   2. Parser     - Builds AST from tokens (with desugaring)
@@ -27,48 +32,80 @@ using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
-if (args.Length == 0)
+// Parse global options that apply to all modes
+var options = ParseGlobalOptions(args);
+var remainingArgs = options.RemainingArgs;
+
+if (remainingArgs.Length == 0)
 {
-    RunPrompt();
+    RunPrompt(options.DecoratorMode);
 }
-else if (args[0] == "--compile" || args[0] == "-c")
+else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
 {
-    if (args.Length < 2)
+    if (remainingArgs.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums]");
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--experimentalDecorators] [--decorators]");
         Environment.Exit(64);
     }
 
-    string inputFile = args[1];
+    string inputFile = remainingArgs[1];
     string outputFile = Path.ChangeExtension(inputFile, ".dll");
     bool preserveConstEnums = false;
 
     // Parse remaining arguments
-    for (int i = 2; i < args.Length; i++)
+    for (int i = 2; i < remainingArgs.Length; i++)
     {
-        if (args[i] == "-o" && i + 1 < args.Length)
+        if (remainingArgs[i] == "-o" && i + 1 < remainingArgs.Length)
         {
-            outputFile = args[++i];
+            outputFile = remainingArgs[++i];
         }
-        else if (args[i] == "--preserveConstEnums")
+        else if (remainingArgs[i] == "--preserveConstEnums")
         {
             preserveConstEnums = true;
         }
     }
 
-    CompileFile(inputFile, outputFile, preserveConstEnums);
+    CompileFile(inputFile, outputFile, preserveConstEnums, options.DecoratorMode, options.EmitDecoratorMetadata);
 }
-else if (args.Length == 1)
+else if (remainingArgs.Length == 1)
 {
-    RunFile(args[0]);
+    RunFile(remainingArgs[0], options.DecoratorMode, options.EmitDecoratorMetadata);
 }
 else
 {
-    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] [--preserveConstEnums]");
+    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] [--preserveConstEnums] [--experimentalDecorators] [--decorators]");
     Environment.Exit(64);
 }
 
-static void RunFile(string path)
+static GlobalOptions ParseGlobalOptions(string[] args)
+{
+    var decoratorMode = DecoratorMode.None;
+    var emitDecoratorMetadata = false;
+    var remaining = new List<string>();
+
+    foreach (var arg in args)
+    {
+        switch (arg)
+        {
+            case "--experimentalDecorators":
+                decoratorMode = DecoratorMode.Legacy;
+                break;
+            case "--decorators":
+                decoratorMode = DecoratorMode.Stage3;
+                break;
+            case "--emitDecoratorMetadata":
+                emitDecoratorMetadata = true;
+                break;
+            default:
+                remaining.Add(arg);
+                break;
+        }
+    }
+
+    return new GlobalOptions(decoratorMode, emitDecoratorMetadata, remaining.ToArray());
+}
+
+static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
 {
     string absolutePath = Path.GetFullPath(path);
     string source = File.ReadAllText(absolutePath);
@@ -76,29 +113,31 @@ static void RunFile(string path)
     // Check if the file contains imports - if so, use module mode
     if (source.Contains("import ") || source.Contains("export "))
     {
-        RunModuleFile(absolutePath);
+        RunModuleFile(absolutePath, decoratorMode, emitDecoratorMetadata);
     }
     else
     {
-        Run(source);
+        Run(source, decoratorMode, emitDecoratorMetadata);
     }
 }
 
-static void RunModuleFile(string absolutePath)
+static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
 {
     try
     {
         // Load the entry module and all dependencies
         var resolver = new ModuleResolver(absolutePath);
-        var entryModule = resolver.LoadModule(absolutePath);
+        var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
         var allModules = resolver.GetModulesInOrder(entryModule);
 
         // Type checking across all modules
         var checker = new TypeChecker();
+        checker.SetDecoratorMode(decoratorMode);
         var typeMap = checker.CheckModules(allModules, resolver);
 
         // Interpretation
         var interpreter = new Interpreter();
+        interpreter.SetDecoratorMode(decoratorMode);
         interpreter.InterpretModules(allModules, resolver, typeMap);
     }
     catch (Exception ex)
@@ -107,33 +146,40 @@ static void RunModuleFile(string absolutePath)
     }
 }
 
-static void RunPrompt()
+static void RunPrompt(DecoratorMode decoratorMode)
 {
     Interpreter interpreter = new();
+    interpreter.SetDecoratorMode(decoratorMode);
     Console.WriteLine("SharpTS REPL (v0.1)");
+    if (decoratorMode != DecoratorMode.None)
+    {
+        Console.WriteLine($"Decorator mode: {decoratorMode}");
+    }
     for (; ; )
     {
         Console.Write("> ");
         string? line = Console.ReadLine();
         if (line == null) break;
-        Run(line, interpreter);
+        Run(line, decoratorMode, false, interpreter);
     }
 }
 
-static void Run(string source, Interpreter? interpreter = null)
+static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMetadata = false, Interpreter? interpreter = null)
 {
     interpreter ??= new Interpreter();
+    interpreter.SetDecoratorMode(decoratorMode);
 
     Lexer lexer = new(source);
     List<Token> tokens = lexer.ScanTokens();
 
-    Parser parser = new(tokens);
+    Parser parser = new(tokens, decoratorMode);
     try
     {
         List<Stmt> statements = parser.Parse();
 
         // Static Analysis Phase
         TypeChecker checker = new();
+        checker.SetDecoratorMode(decoratorMode);
         TypeMap typeMap = checker.Check(statements);
 
         // Interpretation Phase
@@ -145,7 +191,7 @@ static void Run(string source, Interpreter? interpreter = null)
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums = false)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
 {
     try
     {
@@ -154,11 +200,12 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         Lexer lexer = new(source);
         List<Token> tokens = lexer.ScanTokens();
 
-        Parser parser = new(tokens);
+        Parser parser = new(tokens, decoratorMode);
         List<Stmt> statements = parser.Parse();
 
         // Static Analysis Phase
         TypeChecker checker = new();
+        checker.SetDecoratorMode(decoratorMode);
         TypeMap typeMap = checker.Check(statements);
 
         // Dead Code Analysis Phase
@@ -168,6 +215,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         // Compilation Phase
         string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
         ILCompiler compiler = new(assemblyName, preserveConstEnums);
+        compiler.SetDecoratorMode(decoratorMode);
         compiler.Compile(statements, typeMap, deadCodeInfo);
         compiler.Save(outputPath);
 
@@ -194,3 +242,5 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         Environment.Exit(1);
     }
 }
+
+record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);

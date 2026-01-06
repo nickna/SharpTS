@@ -81,6 +81,12 @@ public partial class ILCompiler
 
         _classBuilders[classStmt.Name.Lexeme] = typeBuilder;
         _staticFields[classStmt.Name.Lexeme] = staticFieldBuilders;
+
+        // Apply class-level decorators as .NET attributes
+        if (_decoratorMode != DecoratorMode.None)
+        {
+            ApplyClassDecorators(classStmt, typeBuilder);
+        }
     }
 
     /// <summary>

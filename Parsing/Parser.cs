@@ -1,6 +1,19 @@
 namespace SharpTS.Parsing;
 
 /// <summary>
+/// Decorator specification mode - determines how decorators are parsed and validated.
+/// </summary>
+public enum DecoratorMode
+{
+    /// <summary>No decorator support (default for backwards compatibility)</summary>
+    None,
+    /// <summary>Legacy/Experimental TypeScript decorators (Stage 2)</summary>
+    Legacy,
+    /// <summary>TC39 Stage 3 decorators (ES2023+)</summary>
+    Stage3
+}
+
+/// <summary>
 /// Recursive descent parser that builds an AST from tokens.
 /// </summary>
 /// <remarks>
@@ -14,9 +27,10 @@ namespace SharpTS.Parsing;
 /// <seealso cref="Lexer"/>
 /// <seealso cref="Stmt"/>
 /// <seealso cref="Expr"/>
-public partial class Parser(List<Token> tokens)
+public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = DecoratorMode.None)
 {
     private readonly List<Token> _tokens = tokens;
+    private readonly DecoratorMode _decoratorMode = decoratorMode;
     private int _current = 0;
     private int _tempVarCounter = 0;
 

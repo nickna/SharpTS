@@ -8,12 +8,21 @@ public partial class Parser
         if (Match(TokenType.IMPORT)) return ImportDeclaration();
         if (Match(TokenType.EXPORT)) return ExportDeclaration();
 
+        // Parse decorators before class declarations
+        List<Decorator>? decorators = ParseDecorators();
+
         if (Match(TokenType.ABSTRACT))
         {
             Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");
-            return ClassDeclaration(isAbstract: true);
+            return ClassDeclaration(isAbstract: true, classDecorators: decorators);
         }
-        if (Match(TokenType.CLASS)) return ClassDeclaration(isAbstract: false);
+        if (Match(TokenType.CLASS)) return ClassDeclaration(isAbstract: false, classDecorators: decorators);
+
+        // If decorators were found but next token is not a class, report error
+        if (decorators != null && decorators.Count > 0)
+        {
+            throw new Exception($"Parse Error at line {decorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
+        }
         if (Match(TokenType.CONST))
         {
             // Check for const enum

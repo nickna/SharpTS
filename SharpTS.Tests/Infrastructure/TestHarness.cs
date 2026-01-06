@@ -23,6 +23,17 @@ public static class TestHarness
     /// <returns>Captured console output</returns>
     public static string RunInterpreted(string source)
     {
+        return RunInterpreted(source, DecoratorMode.None);
+    }
+
+    /// <summary>
+    /// Runs TypeScript source through the interpreter with decorator support and captures console output.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <returns>Captured console output</returns>
+    public static string RunInterpreted(string source, DecoratorMode decoratorMode)
+    {
         lock (ConsoleLock)
         {
             var sw = new StringWriter();
@@ -33,13 +44,15 @@ public static class TestHarness
             {
                 var lexer = new Lexer(source);
                 var tokens = lexer.ScanTokens();
-                var parser = new Parser(tokens);
+                var parser = new Parser(tokens, decoratorMode);
                 var statements = parser.Parse();
 
                 var checker = new TypeChecker();
+                checker.SetDecoratorMode(decoratorMode);
                 var typeMap = checker.Check(statements);
 
                 var interpreter = new Interpreter();
+                interpreter.SetDecoratorMode(decoratorMode);
                 interpreter.Interpret(statements, typeMap);
 
                 // Normalize line endings for cross-platform test consistency

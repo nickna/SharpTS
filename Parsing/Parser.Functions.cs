@@ -39,6 +39,9 @@ public partial class Parser
         {
             do
             {
+                // Parse parameter decorators
+                List<Decorator>? paramDecorators = ParseDecorators();
+
                 // Check for destructuring pattern parameter
                 if (Check(TokenType.LEFT_BRACKET))
                 {
@@ -49,7 +52,7 @@ public partial class Parser
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else if (Check(TokenType.LEFT_BRACE))
@@ -61,7 +64,7 @@ public partial class Parser
                     Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
                     string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
                     Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue, Decorators: paramDecorators));
                     destructuredParams.Add((synthName, pattern));
                 }
                 else
@@ -121,7 +124,7 @@ public partial class Parser
                     {
                         defaultValue = Expression();
                     }
-                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional));
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, isParameterProperty, access, isReadonly, isOptional, paramDecorators));
 
                     // Rest parameter must be last
                     if (isRest && Check(TokenType.COMMA))

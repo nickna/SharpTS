@@ -129,9 +129,10 @@ public class ModuleResolver
     /// Loads a module and all its dependencies, detecting circular dependencies.
     /// </summary>
     /// <param name="absolutePath">Absolute path to the module file</param>
+    /// <param name="decoratorMode">Decorator mode to use for parsing</param>
     /// <returns>The parsed module with dependencies populated</returns>
     /// <exception cref="Exception">If a circular dependency is detected</exception>
-    public ParsedModule LoadModule(string absolutePath)
+    public ParsedModule LoadModule(string absolutePath, DecoratorMode decoratorMode = DecoratorMode.None)
     {
         absolutePath = Path.GetFullPath(absolutePath);
 
@@ -155,7 +156,7 @@ public class ModuleResolver
 
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
-            var parser = new Parser(tokens);
+            var parser = new Parser(tokens, decoratorMode);
             var statements = parser.Parse();
 
             var module = new ParsedModule(absolutePath, statements);
@@ -167,7 +168,7 @@ public class ModuleResolver
                 if (stmt is Stmt.Import import)
                 {
                     string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
-                    var importedModule = LoadModule(importedPath);
+                    var importedModule = LoadModule(importedPath, decoratorMode);
                     if (!module.Dependencies.Contains(importedModule))
                     {
                         module.Dependencies.Add(importedModule);
@@ -177,7 +178,7 @@ public class ModuleResolver
                 {
                     // Re-export: export { x } from './foo' or export * from './foo'
                     string reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
-                    var reexportedModule = LoadModule(reexportPath);
+                    var reexportedModule = LoadModule(reexportPath, decoratorMode);
                     if (!module.Dependencies.Contains(reexportedModule))
                     {
                         module.Dependencies.Add(reexportedModule);

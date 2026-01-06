@@ -54,6 +54,14 @@ public partial class TypeChecker
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
 
+    // Decorator mode configuration
+    private DecoratorMode _decoratorMode = DecoratorMode.None;
+
+    /// <summary>
+    /// Sets the decorator mode for type checking decorators.
+    /// </summary>
+    public void SetDecoratorMode(DecoratorMode mode) => _decoratorMode = mode;
+
     // Module support - track the current module being type-checked
     private ParsedModule? _currentModule = null;
     private ModuleResolver? _moduleResolver = null;
@@ -67,6 +75,7 @@ public partial class TypeChecker
     {
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
+        _environment.Define("Reflect", new TypeInfo.Any());
 
         foreach (Stmt statement in statements)
         {
@@ -88,6 +97,7 @@ public partial class TypeChecker
 
         // Pre-define built-ins in the global environment
         _environment.Define("console", new TypeInfo.Any());
+        _environment.Define("Reflect", new TypeInfo.Any());
 
         // First pass: collect all exports from each module
         foreach (var module in modules)

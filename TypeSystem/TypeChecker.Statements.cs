@@ -178,6 +178,9 @@ public partial class TypeChecker
                 CheckEnumDeclaration(enumStmt);
                 break;
             case Stmt.Class classStmt:
+                // Check class decorators
+                CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
+
                 TypeInfo.Class? superclass = null;
                 if (classStmt.Superclass != null)
                 {
@@ -343,6 +346,10 @@ public partial class TypeChecker
                 Dictionary<string, TypeInfo> declaredFieldTypes = [];
                 foreach (var field in classStmt.Fields)
                 {
+                    // Check field decorators
+                    DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
+                    CheckDecorators(field.Decorators, fieldTarget);
+
                     string fieldName = field.Name.Lexeme;
                     TypeInfo fieldType = field.TypeAnnotation != null
                         ? ToTypeInfo(field.TypeAnnotation)
@@ -371,6 +378,12 @@ public partial class TypeChecker
                 {
                     foreach (var accessor in classStmt.Accessors)
                     {
+                        // Check accessor decorators
+                        DecoratorTarget accessorTarget = accessor.Kind.Type == TokenType.GET
+                            ? DecoratorTarget.Getter
+                            : DecoratorTarget.Setter;
+                        CheckDecorators(accessor.Decorators, accessorTarget);
+
                         string propName = accessor.Name.Lexeme;
 
                         if (accessor.Kind.Type == TokenType.GET)
@@ -520,6 +533,16 @@ public partial class TypeChecker
                     // Only check methods that have bodies (skip overload signatures)
                     foreach (var method in classStmt.Methods.Where(m => m.Body != null))
                     {
+                        // Check method decorators
+                        DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
+                        CheckDecorators(method.Decorators, methodTarget);
+
+                        // Check parameter decorators
+                        foreach (var param in method.Parameters)
+                        {
+                            CheckDecorators(param.Decorators, DecoratorTarget.Parameter);
+                        }
+
                         // For static methods, use a different environment without this/super
                         TypeEnvironment methodEnv;
                         if (method.IsStatic)

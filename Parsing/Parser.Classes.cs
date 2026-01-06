@@ -4,7 +4,7 @@ public partial class Parser
 {
     // ============== CLASS DECLARATION ==============
 
-    private Stmt ClassDeclaration(bool isAbstract)
+    private Stmt ClassDeclaration(bool isAbstract, List<Decorator>? classDecorators = null)
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect class name.");
         List<TypeParam>? typeParams = ParseTypeParameters();
@@ -38,6 +38,9 @@ public partial class Parser
         List<Stmt.Accessor> accessors = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
+            // Parse member decorators before modifiers
+            List<Decorator>? memberDecorators = ParseDecorators();
+
             // Parse modifiers
             AccessModifier access = AccessModifier.Public;
             bool isStatic = false;
@@ -127,7 +130,7 @@ public partial class Parser
                     body = Block();
                 }
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride));
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators));
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
             {
@@ -142,7 +145,7 @@ public partial class Parser
                     initializer = Expression();
                 }
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional));
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, memberDecorators));
             }
             else
             {
@@ -189,7 +192,7 @@ public partial class Parser
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync);
+                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: false, Decorators: memberDecorators);
                     methods.Add(func);
                 }
                 else
@@ -197,7 +200,7 @@ public partial class Parser
                     string kind = "method";
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
                     var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
-                    func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride };
+                    func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
                     methods.Add(func);
 
                     // Synthesize fields from constructor parameter properties
@@ -231,6 +234,6 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract);
+        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators);
     }
 }

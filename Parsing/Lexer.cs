@@ -186,6 +186,9 @@ public class Lexer(string source)
             case '~':
                 AddToken(TokenType.TILDE);
                 break;
+            case '@':
+                AddToken(TokenType.AT);
+                break;
             case '!':
                 if (Match('='))
                 {

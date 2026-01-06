@@ -8,6 +8,21 @@ namespace SharpTS.TypeSystem;
 public enum EnumKind { Numeric, String, Heterogeneous }
 
 /// <summary>
+/// The target of a decorator application.
+/// </summary>
+public enum DecoratorTarget
+{
+    Class,
+    Method,
+    StaticMethod,
+    Getter,
+    Setter,
+    Field,
+    StaticField,
+    Parameter
+}
+
+/// <summary>
 /// Base record for compile-time type representations.
 /// </summary>
 /// <remarks>

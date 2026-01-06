@@ -77,6 +77,12 @@ public abstract record Expr
 }
 
 /// <summary>
+/// Decorator applied to a class, method, accessor, property, or parameter.
+/// Expression is the decorator expression (Variable, Get, or Call for factories).
+/// </summary>
+public record Decorator(Token AtToken, Expr Expression);
+
+/// <summary>
 /// Base record for all statement AST nodes.
 /// </summary>
 /// <remarks>
@@ -96,12 +102,13 @@ public abstract record Stmt
     /// ThisType is the explicit this parameter type annotation (e.g., this: MyClass).
     /// IsAsync indicates this is an async function that returns a Promise.
     /// IsGenerator indicates this is a generator function (function*) that can yield values.
+    /// Decorators contains any @decorator annotations applied to this function/method.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false) : Stmt;
-    public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false);
-    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false) : Stmt;
-    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false) : Stmt;
-    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null);
+    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null) : Stmt;
     public record Interface(Token Name, List<TypeParam>? TypeParams, List<InterfaceMember> Members, List<IndexSignature>? IndexSignatures = null) : Stmt;
     public record InterfaceMember(Token Name, string Type, bool IsOptional = false);
     /// <summary>

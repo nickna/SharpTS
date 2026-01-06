@@ -543,6 +543,9 @@ public partial class Interpreter
                     classStmt.IsAbstract,
                     instanceFields);
 
+                // Apply decorators in the correct order
+                klass = ApplyAllDecorators(classStmt, klass, methods, staticMethods, getters, setters);
+
                 if (classStmt.Superclass != null)
                 {
                     _environment = _environment.Enclosing!;
