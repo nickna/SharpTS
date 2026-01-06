@@ -18,6 +18,13 @@ public partial class ILCompiler
             return;
         }
 
+        // Check if this is a generator function - use generator state machine
+        if (funcStmt.IsGenerator)
+        {
+            DefineGeneratorFunction(funcStmt);
+            return;
+        }
+
         var paramTypes = funcStmt.Parameters.Select(_ => typeof(object)).ToArray();
         var methodBuilder = _programType.DefineMethod(
             funcStmt.Name.Lexeme,
@@ -68,6 +75,10 @@ public partial class ILCompiler
     {
         // Skip async functions - they use native state machine emission
         if (funcStmt.IsAsync || _asyncStateMachines.ContainsKey(funcStmt.Name.Lexeme))
+            return;
+
+        // Skip generator functions - they use generator state machine emission
+        if (funcStmt.IsGenerator || _generatorStateMachines.ContainsKey(funcStmt.Name.Lexeme))
             return;
 
         var methodBuilder = _functionBuilders[funcStmt.Name.Lexeme];

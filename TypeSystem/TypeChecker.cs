@@ -45,6 +45,8 @@ public partial class TypeChecker
     private int _switchDepth = 0;
     // Track if we're inside an async function (for validating 'await' usage)
     private bool _inAsyncFunction = false;
+    // Track if we're inside a generator function (for validating 'yield' usage)
+    private bool _inGeneratorFunction = false;
 
     // Track active labels for labeled statements (label name -> isOnLoop)
     private readonly Dictionary<string, bool> _activeLabels = [];

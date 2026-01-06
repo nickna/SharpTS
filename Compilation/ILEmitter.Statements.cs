@@ -232,6 +232,13 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
         }
 
+        // For generators, use enumerator-based iteration
+        if (iterableType is TypeInfo.Generator)
+        {
+            EmitForOfEnumerator(f, startLabel, endLabel, continueLabel);
+            return;
+        }
+
         var iterableLocal = IL.DeclareLocal(typeof(object));
         IL.Emit(OpCodes.Stloc, iterableLocal);
 
@@ -269,6 +276,46 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Stloc, indexLocal);
 
+        IL.Emit(OpCodes.Br, startLabel);
+
+        IL.MarkLabel(endLabel);
+        _ctx.Locals.ExitScope();
+        _ctx.ExitLoop();
+    }
+
+    private void EmitForOfEnumerator(Stmt.ForOf f, Label startLabel, Label endLabel, Label continueLabel)
+    {
+        // Use IEnumerable.GetEnumerator()/MoveNext()/Current pattern for generators
+        var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
+        var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
+        var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
+
+        // Stack has the iterable (generator)
+        IL.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
+        IL.Emit(OpCodes.Callvirt, getEnumerator);
+
+        var enumLocal = IL.DeclareLocal(typeof(System.Collections.IEnumerator));
+        IL.Emit(OpCodes.Stloc, enumLocal);
+
+        // Loop variable
+        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, typeof(object));
+
+        IL.MarkLabel(startLabel);
+
+        // Call MoveNext
+        IL.Emit(OpCodes.Ldloc, enumLocal);
+        IL.Emit(OpCodes.Callvirt, moveNext);
+        IL.Emit(OpCodes.Brfalse, endLabel);
+
+        // Get Current
+        IL.Emit(OpCodes.Ldloc, enumLocal);
+        IL.Emit(OpCodes.Callvirt, current);
+        IL.Emit(OpCodes.Stloc, loopVar);
+
+        // Emit body
+        EmitStatement(f.Body);
+
+        IL.MarkLabel(continueLabel);
         IL.Emit(OpCodes.Br, startLabel);
 
         IL.MarkLabel(endLabel);

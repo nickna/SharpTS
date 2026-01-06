@@ -2,7 +2,7 @@ namespace SharpTS.Parsing;
 
 public partial class Parser
 {
-    private Stmt FunctionDeclaration(string kind, bool isAsync = false)
+    private Stmt FunctionDeclaration(string kind, bool isAsync = false, bool isGenerator = false)
     {
         Token name;
         if (kind == "constructor" && Match(TokenType.CONSTRUCTOR))
@@ -143,7 +143,7 @@ public partial class Parser
         if (Match(TokenType.SEMICOLON))
         {
             // Overload signature - no body, just declaration
-            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync);
+            return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator);
         }
 
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
@@ -188,7 +188,7 @@ public partial class Parser
             }
         }
 
-        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync);
+        return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator);
     }
 
     /// <summary>

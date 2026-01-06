@@ -70,6 +70,8 @@ public abstract record Expr
     public record TypeAssertion(Expr Expression, string TargetType) : Expr;
     // Await expression: await expr (only valid inside async functions)
     public record Await(Token Keyword, Expr Expression) : Expr;
+    // Yield expression: yield expr or yield* expr (only valid inside generator functions)
+    public record Yield(Token Keyword, Expr? Value, bool IsDelegating) : Expr;
     // Regex literal: /pattern/flags
     public record RegexLiteral(string Pattern, string Flags) : Expr;
 }
@@ -93,8 +95,9 @@ public abstract record Stmt
     /// Function or method declaration. Body is null for overload signatures (declaration only).
     /// ThisType is the explicit this parameter type annotation (e.g., this: MyClass).
     /// IsAsync indicates this is an async function that returns a Promise.
+    /// IsGenerator indicates this is a generator function (function*) that can yield values.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false);
     public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false) : Stmt;

@@ -239,6 +239,15 @@ public abstract record TypeInfo
         public override string ToString() => $"Promise<{ValueType}>";
     }
 
+    /// <summary>
+    /// Represents a Generator type (Generator&lt;T&gt;).
+    /// Generator functions return Generator objects that yield values of type T.
+    /// </summary>
+    public record Generator(TypeInfo YieldType) : TypeInfo
+    {
+        public override string ToString() => $"Generator<{YieldType}>";
+    }
+
     public record StringLiteral(string Value) : TypeInfo
     {
         public override string ToString() => $"\"{Value}\"";

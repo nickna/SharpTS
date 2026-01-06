@@ -81,6 +81,12 @@ public partial class ILCompiler
     private int _asyncStateMachineCounter = 0;
     private int _asyncArrowCounter = 0;
 
+    // Generator method compilation (generator state machine generation)
+    private readonly GeneratorStateAnalyzer _generatorAnalyzer = new();
+    private readonly Dictionary<string, GeneratorStateMachineBuilder> _generatorStateMachines = [];
+    private readonly Dictionary<string, Stmt.Function> _generatorFunctions = [];
+    private int _generatorStateMachineCounter = 0;
+
     // Async arrow function state machines (one per async arrow in async methods)
     private readonly Dictionary<Expr.ArrowFunction, AsyncArrowStateMachineBuilder> _asyncArrowBuilders = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, AsyncStateMachineBuilder> _asyncArrowOuterBuilders = new(ReferenceEqualityComparer.Instance);
@@ -159,6 +165,9 @@ public partial class ILCompiler
 
         // Phase 6.5: Emit async state machine bodies
         EmitAsyncStateMachineBodies();
+
+        // Phase 6.6: Emit generator state machine bodies
+        EmitGeneratorStateMachineBodies();
 
         // Phase 7: Emit method bodies for all classes and functions
         foreach (var stmt in statements)

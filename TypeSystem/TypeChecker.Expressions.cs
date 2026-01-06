@@ -45,6 +45,7 @@ public partial class TypeChecker
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
+            Expr.Yield yieldExpr => CheckYield(yieldExpr),
             Expr.RegexLiteral => new TypeInfo.RegExp(),
             _ => new TypeInfo.Any()
         };
@@ -65,6 +66,47 @@ public partial class TypeChecker
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
         return ResolveAwaitedType(exprType);
     }
+
+    private TypeInfo CheckYield(Expr.Yield yieldExpr)
+    {
+        if (!_inGeneratorFunction)
+        {
+            throw new Exception("Type Error: 'yield' is only valid inside a generator function.");
+        }
+
+        if (yieldExpr.Value != null)
+        {
+            TypeInfo valueType = CheckExpr(yieldExpr.Value);
+
+            // For yield*, the expression must be iterable and we yield each element
+            if (yieldExpr.IsDelegating)
+            {
+                // yield* requires an iterable (array, generator, etc.)
+                return GetIterableElementType(valueType);
+            }
+
+            return valueType;
+        }
+
+        // Bare yield returns undefined (void type for simplicity)
+        return new TypeInfo.Void();
+    }
+
+    /// <summary>
+    /// Gets the element type from an iterable type (for yield* delegation).
+    /// </summary>
+    private TypeInfo GetIterableElementType(TypeInfo type) => type switch
+    {
+        TypeInfo.Array arr => arr.ElementType,
+        TypeInfo.Generator gen => gen.YieldType,
+        TypeInfo.Iterator iter => iter.ElementType,
+        TypeInfo.Set set => set.ElementType,
+        TypeInfo.Map map => new TypeInfo.Tuple([map.KeyType, map.ValueType], 2),  // [K, V] tuples
+        TypeInfo.Primitive p when p.Type == Parsing.TokenType.TYPE_STRING => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String yields characters
+        TypeInfo.StringLiteral => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String literal also yields characters
+        TypeInfo.Any => new TypeInfo.Any(),
+        _ => throw new Exception($"Type Error: Type '{type}' is not iterable for yield*.")
+    };
 
     /// <summary>
     /// Resolves the Awaited&lt;T&gt; type - recursively unwraps Promise types.

@@ -277,6 +277,23 @@ public partial class Parser
             return new Expr.Await(keyword, expression);
         }
 
+        // yield expression: yield expr or yield* expr
+        if (Match(TokenType.YIELD))
+        {
+            Token keyword = Previous();
+            bool isDelegating = Match(TokenType.STAR);  // yield* delegates to another iterable
+
+            // yield can be bare (yields undefined) or have an expression
+            Expr? value = null;
+            if (!Check(TokenType.SEMICOLON) && !Check(TokenType.RIGHT_BRACE) &&
+                !Check(TokenType.RIGHT_PAREN) && !Check(TokenType.COMMA) && !IsAtEnd())
+            {
+                value = Assignment();  // Use Assignment to handle full expressions
+            }
+
+            return new Expr.Yield(keyword, value, isDelegating);
+        }
+
         if (Match(TokenType.NEW))
         {
             Token className = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");

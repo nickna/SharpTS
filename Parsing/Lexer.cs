@@ -82,6 +82,7 @@ public class Lexer(string source)
         { "typeof", TokenType.TYPEOF },
         { "unknown", TokenType.UNKNOWN },
         { "while", TokenType.WHILE },
+        { "yield", TokenType.YIELD },
         { "string", TokenType.TYPE_STRING },
         { "number", TokenType.TYPE_NUMBER },
         { "boolean", TokenType.TYPE_BOOLEAN },

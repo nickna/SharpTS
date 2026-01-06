@@ -52,6 +52,7 @@ public partial class Interpreter
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(), // Sync wrapper for await
+            Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
         };
@@ -99,9 +100,26 @@ public partial class Interpreter
             Expr.Spread spread => await EvaluateAsync(spread.Expression),
             Expr.TypeAssertion ta => await EvaluateAsync(ta.Expression),
             Expr.Await awaitExpr => await EvaluateAwaitAsync(awaitExpr),
+            Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
         };
+    }
+
+    /// <summary>
+    /// Evaluates a yield expression, throwing YieldException for control flow.
+    /// </summary>
+    /// <param name="yieldExpr">The yield expression AST node.</param>
+    /// <returns>Never returns normally - always throws YieldException.</returns>
+    /// <remarks>
+    /// Yield expressions suspend generator execution by throwing YieldException,
+    /// which is caught by SharpTSGenerator.Next() to extract the yielded value.
+    /// For yield*, the IsDelegating flag indicates delegation to another iterable.
+    /// </remarks>
+    private object? EvaluateYield(Expr.Yield yieldExpr)
+    {
+        object? value = yieldExpr.Value != null ? Evaluate(yieldExpr.Value) : null;
+        throw new YieldException(value, yieldExpr.IsDelegating);
     }
 
     /// <summary>

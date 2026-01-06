@@ -40,6 +40,15 @@ public partial class TypeChecker
             return new TypeInfo.Promise(valueType);
         }
 
+        if (baseName == "Generator")
+        {
+            if (typeArgs.Count != 1)
+            {
+                throw new Exception($"Type Error: Generator requires exactly 1 type argument, got {typeArgs.Count}.");
+            }
+            return new TypeInfo.Generator(typeArgs[0]);
+        }
+
         // Look up the generic definition
         TypeInfo? genericDef = _environment.Get(baseName);
 

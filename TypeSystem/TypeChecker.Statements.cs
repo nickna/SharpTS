@@ -554,6 +554,7 @@ public partial class TypeChecker
                         TypeInfo? previousReturnFunc = _currentFunctionReturnType;
                         bool previousInStatic = _inStaticMethod;
                         bool previousInAsyncFunc = _inAsyncFunction;
+                        bool previousInGeneratorFunc = _inGeneratorFunction;
                         int previousLoopDepthFunc = _loopDepth;
                         int previousSwitchDepthFunc = _switchDepth;
                         var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
@@ -562,6 +563,7 @@ public partial class TypeChecker
                         _currentFunctionReturnType = methodType.ReturnType;
                         _inStaticMethod = method.IsStatic;
                         _inAsyncFunction = method.IsAsync;
+                        _inGeneratorFunction = method.IsGenerator;
                         _loopDepth = 0;
                         _switchDepth = 0;
                         _activeLabels.Clear();
@@ -583,6 +585,7 @@ public partial class TypeChecker
                             _currentFunctionReturnType = previousReturnFunc;
                             _inStaticMethod = previousInStatic;
                             _inAsyncFunction = previousInAsyncFunc;
+                            _inGeneratorFunction = previousInGeneratorFunc;
                             _loopDepth = previousLoopDepthFunc;
                             _switchDepth = previousSwitchDepthFunc;
                             _activeLabels.Clear();
@@ -1070,7 +1073,15 @@ public partial class TypeChecker
         _environment = previousEnvForParsing;
 
         bool hasRest = funcStmt.Parameters.Any(p => p.IsRest);
-        var thisFuncType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
+
+        // For generator functions, wrap the return type in Generator<> if not already
+        TypeInfo funcReturnType = returnType;
+        if (funcStmt.IsGenerator && returnType is not TypeInfo.Generator)
+        {
+            funcReturnType = new TypeInfo.Generator(returnType);
+        }
+
+        var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType);
 
         // Check if this is an overload signature (no body)
         if (funcStmt.Body == null)
@@ -1130,6 +1141,7 @@ public partial class TypeChecker
         TypeInfo? previousReturn = _currentFunctionReturnType;
         TypeInfo? previousThisType = _currentFunctionThisType;
         bool previousInAsync = _inAsyncFunction;
+        bool previousInGenerator = _inGeneratorFunction;
         int previousLoopDepth = _loopDepth;
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, bool>(_activeLabels);
@@ -1138,6 +1150,7 @@ public partial class TypeChecker
         _currentFunctionReturnType = returnType;
         _currentFunctionThisType = thisType;
         _inAsyncFunction = funcStmt.IsAsync;
+        _inGeneratorFunction = funcStmt.IsGenerator;
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
@@ -1155,6 +1168,7 @@ public partial class TypeChecker
             _currentFunctionReturnType = previousReturn;
             _currentFunctionThisType = previousThisType;
             _inAsyncFunction = previousInAsync;
+            _inGeneratorFunction = previousInGenerator;
             _loopDepth = previousLoopDepth;
             _switchDepth = previousSwitchDepth;
             _activeLabels.Clear();

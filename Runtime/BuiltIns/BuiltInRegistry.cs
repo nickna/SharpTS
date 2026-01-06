@@ -143,6 +143,7 @@ public sealed class BuiltInRegistry
         RegisterMapType(registry);
         RegisterSetType(registry);
         RegisterIteratorType(registry);
+        RegisterGeneratorType(registry);
 
         return registry;
     }
@@ -299,6 +300,12 @@ public sealed class BuiltInRegistry
         // Iterator doesn't have instance methods beyond iteration itself
         // It's consumed by for...of loops directly
         registry.RegisterInstanceType(typeof(SharpTSIterator), (_, _) => null);
+    }
+
+    private static void RegisterGeneratorType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSGenerator), (instance, name) =>
+            GeneratorBuiltIns.GetMember((SharpTSGenerator)instance, name));
     }
 
     private static string Stringify(object? obj)
