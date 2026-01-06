@@ -93,6 +93,47 @@ public partial class TypeChecker
             }
         }
 
+        // Handle Number.parseInt(), Number.parseFloat(), Number.isNaN(), etc.
+        if (call.Callee is Expr.Get numGet &&
+            numGet.Object is Expr.Variable numVar &&
+            numVar.Name.Lexeme == "Number")
+        {
+            var methodType = BuiltInTypes.GetNumberStaticMemberType(numGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function numMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                return numMethodType.ReturnType;
+            }
+        }
+
+        // Handle global parseInt()
+        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+        }
+
+        // Handle global parseFloat()
+        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+        }
+
+        // Handle global isNaN()
+        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN);
+        }
+
+        // Handle global isFinite()
+        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
+        {
+            foreach (var arg in call.Arguments) CheckExpr(arg);
+            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN);
+        }
+
         // Handle __objectRest (internal helper for object rest patterns)
         if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
         {

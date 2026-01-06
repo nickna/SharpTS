@@ -125,4 +125,47 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for static members (properties and methods) on the Number namespace
+    /// </summary>
+    public static TypeInfo? GetNumberStaticMemberType(string name)
+    {
+        return name switch
+        {
+            // Static properties (constants)
+            "MAX_VALUE" => NumberType,
+            "MIN_VALUE" => NumberType,
+            "NaN" => NumberType,
+            "POSITIVE_INFINITY" => NumberType,
+            "NEGATIVE_INFINITY" => NumberType,
+            "MAX_SAFE_INTEGER" => NumberType,
+            "MIN_SAFE_INTEGER" => NumberType,
+            "EPSILON" => NumberType,
+
+            // Static methods
+            "parseInt" => new TypeInfo.Function([StringType], NumberType),    // radix is optional
+            "parseFloat" => new TypeInfo.Function([StringType], NumberType),
+            "isNaN" => new TypeInfo.Function([AnyType], BooleanType),
+            "isFinite" => new TypeInfo.Function([AnyType], BooleanType),
+            "isInteger" => new TypeInfo.Function([AnyType], BooleanType),
+            "isSafeInteger" => new TypeInfo.Function([AnyType], BooleanType),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance methods on number primitives (e.g., (123).toFixed(2))
+    /// </summary>
+    public static TypeInfo? GetNumberInstanceMemberType(string name)
+    {
+        return name switch
+        {
+            "toFixed" => new TypeInfo.Function([], StringType),       // digits is optional
+            "toPrecision" => new TypeInfo.Function([], StringType),   // precision is optional
+            "toExponential" => new TypeInfo.Function([], StringType), // fractionDigits is optional
+            "toString" => new TypeInfo.Function([], StringType),      // radix is optional
+            _ => null
+        };
+    }
 }

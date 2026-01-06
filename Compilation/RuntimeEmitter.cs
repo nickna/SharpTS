@@ -458,6 +458,8 @@ public static partial class RuntimeEmitter
         EmitBigIntBitwise(typeBuilder, runtime);
         // Promise methods
         EmitPromiseMethods(typeBuilder, runtime);
+        // Number methods
+        EmitNumberMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

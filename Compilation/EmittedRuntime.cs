@@ -166,4 +166,18 @@ public class EmittedRuntime
     public MethodBuilder PromiseFinally { get; set; } = null!;
     public MethodBuilder PromiseAllSettled { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
+
+    // Number methods
+    public MethodBuilder NumberParseInt { get; set; } = null!;
+    public MethodBuilder NumberParseFloat { get; set; } = null!;
+    public MethodBuilder NumberIsNaN { get; set; } = null!;
+    public MethodBuilder NumberIsFinite { get; set; } = null!;
+    public MethodBuilder NumberIsInteger { get; set; } = null!;
+    public MethodBuilder NumberIsSafeInteger { get; set; } = null!;
+    public MethodBuilder GlobalIsNaN { get; set; } = null!;
+    public MethodBuilder GlobalIsFinite { get; set; } = null!;
+    public MethodBuilder NumberToFixed { get; set; } = null!;
+    public MethodBuilder NumberToPrecision { get; set; } = null!;
+    public MethodBuilder NumberToExponential { get; set; } = null!;
+    public MethodBuilder NumberToStringRadix { get; set; } = null!;
 }

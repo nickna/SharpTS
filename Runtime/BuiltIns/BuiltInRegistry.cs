@@ -129,12 +129,14 @@ public sealed class BuiltInRegistry
         RegisterJSONNamespace(registry);
         RegisterConsoleNamespace(registry);
         RegisterPromiseNamespace(registry);
+        RegisterNumberNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
         RegisterArrayType(registry);
         RegisterMathType(registry);
         RegisterPromiseType(registry);
+        RegisterDoubleType(registry);
 
         return registry;
     }
@@ -233,6 +235,23 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSPromise), (instance, name) =>
             PromiseBuiltIns.GetMember((SharpTSPromise)instance, name));
+    }
+
+    private static void RegisterNumberNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Number",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => NumberBuiltIns.GetStaticMember(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterDoubleType(BuiltInRegistry registry)
+    {
+        // Handle instance methods on boxed doubles: (123).toFixed(2)
+        registry.RegisterInstanceType(typeof(double), (instance, name) =>
+            NumberBuiltIns.GetInstanceMember((double)instance, name));
     }
 
     private static string Stringify(object? obj)

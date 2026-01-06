@@ -27,6 +27,46 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: Number properties (constants)
+        if (g.Object is Expr.Variable numV && numV.Name.Lexeme == "Number")
+        {
+            switch (g.Name.Lexeme)
+            {
+                case "MAX_VALUE":
+                    IL.Emit(OpCodes.Ldc_R8, double.MaxValue);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "MIN_VALUE":
+                    IL.Emit(OpCodes.Ldc_R8, double.Epsilon); // JS MIN_VALUE = smallest positive
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "NaN":
+                    IL.Emit(OpCodes.Ldc_R8, double.NaN);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "POSITIVE_INFINITY":
+                    IL.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "NEGATIVE_INFINITY":
+                    IL.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "MAX_SAFE_INTEGER":
+                    IL.Emit(OpCodes.Ldc_R8, 9007199254740991.0); // 2^53 - 1
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "MIN_SAFE_INTEGER":
+                    IL.Emit(OpCodes.Ldc_R8, -9007199254740991.0); // -(2^53 - 1)
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+                case "EPSILON":
+                    IL.Emit(OpCodes.Ldc_R8, 2.220446049250313e-16); // 2^-52
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+            }
+        }
+
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
         if (g.Object is Expr.Variable enumVar &&
             _ctx.EnumMembers?.TryGetValue(enumVar.Name.Lexeme, out var members) == true &&

@@ -23,6 +23,16 @@ public class BuiltInMethod : ISharpTSCallable
     private readonly Func<Interpreter, object?, List<object?>, object?> _implementation;
     private object? _receiver;
 
+    /// <summary>
+    /// The minimum number of arguments this method accepts.
+    /// </summary>
+    public int MinArity => _minArity;
+
+    /// <summary>
+    /// The maximum number of arguments this method accepts.
+    /// </summary>
+    public int MaxArity => _maxArity;
+
     public BuiltInMethod(string name, int arity, Func<Interpreter, object?, List<object?>, object?> implementation)
         : this(name, arity, arity, implementation) { }
 

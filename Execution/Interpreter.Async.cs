@@ -459,6 +459,24 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateGetAsync(Expr.Get get)
     {
+        // Handle namespace static property access (e.g., Number.MAX_VALUE, Number.NaN)
+        // These namespaces don't have runtime values, but have static properties
+        if (get.Object is Expr.Variable nsVar)
+        {
+            var member = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
+            if (member != null)
+            {
+                // If it's a constant (like Number.MAX_VALUE), it's wrapped in a BuiltInMethod
+                // that returns the value when invoked with no args
+                if (member is BuiltInMethod bm && bm.MinArity == 0 && bm.MaxArity == 0)
+                {
+                    // It's a constant property, invoke it to get the value
+                    return bm.Call(this, []);
+                }
+                return member;
+            }
+        }
+
         object? obj = await EvaluateAsync(get.Object);
         return EvaluateGetOnObject(get, obj);
     }

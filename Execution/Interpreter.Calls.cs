@@ -85,6 +85,53 @@ public partial class Interpreter
             };
         }
 
+        // Handle global parseInt()
+        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
+        {
+            if (call.Arguments.Count < 1)
+                throw new Exception("Runtime Error: parseInt() requires at least one argument.");
+            var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
+            var radix = call.Arguments.Count > 1 && Evaluate(call.Arguments[1]) != null
+                ? (int)(double)Evaluate(call.Arguments[1])!
+                : 10;
+            return NumberBuiltIns.ParseInt(str, radix);
+        }
+
+        // Handle global parseFloat()
+        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
+        {
+            if (call.Arguments.Count < 1)
+                throw new Exception("Runtime Error: parseFloat() requires at least one argument.");
+            var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
+            return NumberBuiltIns.ParseFloat(str);
+        }
+
+        // Handle global isNaN()
+        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
+        {
+            if (call.Arguments.Count < 1) return true; // isNaN() with no args returns true
+            var arg = Evaluate(call.Arguments[0]);
+            // Global isNaN coerces to number first (different from Number.isNaN)
+            if (arg is double d) return double.IsNaN(d);
+            if (arg is string s) return !double.TryParse(s, out _);
+            if (arg is null) return true;
+            if (arg is bool) return false;
+            return true;
+        }
+
+        // Handle global isFinite()
+        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
+        {
+            if (call.Arguments.Count < 1) return false; // isFinite() with no args returns false
+            var arg = Evaluate(call.Arguments[0]);
+            // Global isFinite coerces to number first (different from Number.isFinite)
+            if (arg is double d) return double.IsFinite(d);
+            if (arg is string s && double.TryParse(s, out double parsed)) return double.IsFinite(parsed);
+            if (arg is null) return true; // null coerces to 0 which is finite
+            if (arg is bool) return true; // true=1, false=0, both finite
+            return false;
+        }
+
         object? callee = Evaluate(call.Callee);
 
         List<object?> argumentsList = [];

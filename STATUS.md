@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (Async/Await support)
+**Last Updated:** 2026-01-05 (Number methods support)
 
 ## Legend
 - ✅ Implemented
@@ -183,8 +183,8 @@ This document tracks TypeScript language features and their implementation statu
 | Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, some, every, reduce, includes, indexOf, join |
 | `JSON.parse`/`stringify` | ❌ | |
 | `Object.keys`/`values`/`entries` | ✅ | Full support for object literals and class instances |
-| `Array.isArray` | ❌ | |
-| `Number` methods | ❌ | parseInt, parseFloat, isNaN, etc. |
+| `Array.isArray` | ✅ | Type guard for array detection |
+| `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
 | `Date` object | ❌ | |
 | `RegExp` | ❌ | |
 | `Map`/`Set` | ❌ | |
@@ -488,3 +488,19 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 - ✅ Multiple await points with correct state machine transitions
 - ✅ Super method calls in async methods
 - ✅ Full interpreter and IL compiler support with 108 async-related test cases
+
+### Phase 23 Features (Number Methods)
+- ✅ `Number.parseInt(string, radix?)` with radix support (2-36)
+- ✅ `Number.parseFloat(string)` with JavaScript parsing semantics
+- ✅ `Number.isNaN(value)` - strict NaN check (no coercion)
+- ✅ `Number.isFinite(value)` - strict finite check (no coercion)
+- ✅ `Number.isInteger(value)` - integer detection
+- ✅ `Number.isSafeInteger(value)` - safe integer range check (±2^53-1)
+- ✅ Static constants: `MAX_VALUE`, `MIN_VALUE`, `NaN`, `POSITIVE_INFINITY`, `NEGATIVE_INFINITY`, `MAX_SAFE_INTEGER`, `MIN_SAFE_INTEGER`, `EPSILON`
+- ✅ Instance method `toFixed(digits)` - fixed-point notation
+- ✅ Instance method `toPrecision(precision)` - precision notation
+- ✅ Instance method `toExponential(digits)` - exponential notation
+- ✅ Instance method `toString(radix)` - base conversion (2-36)
+- ✅ Global `parseInt()` and `parseFloat()` functions
+- ✅ Global `isNaN()` and `isFinite()` with coercion behavior
+- ✅ Full interpreter and IL compiler support

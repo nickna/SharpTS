@@ -135,6 +135,15 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Number.parseInt(), Number.parseFloat(), Number.isNaN(), etc.
+        if (c.Callee is Expr.Get numGet &&
+            numGet.Object is Expr.Variable numVar &&
+            numVar.Name.Lexeme == "Number")
+        {
+            EmitNumberStaticCall(numGet.Name.Lexeme, c.Arguments);
+            return;
+        }
+
         // Special case: Promise.resolve(), Promise.reject(), Promise.all(), Promise.race()
         if (c.Callee is Expr.Get promiseGet &&
             promiseGet.Object is Expr.Variable promiseVar &&
@@ -194,6 +203,34 @@ public partial class ILEmitter
             EmitBoxIfNeeded(c.Arguments[0]);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateBigInt);
             _stackType = StackType.Unknown;
+            return;
+        }
+
+        // Special case: Global parseInt()
+        if (c.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
+        {
+            EmitGlobalParseInt(c.Arguments);
+            return;
+        }
+
+        // Special case: Global parseFloat()
+        if (c.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
+        {
+            EmitGlobalParseFloat(c.Arguments);
+            return;
+        }
+
+        // Special case: Global isNaN()
+        if (c.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
+        {
+            EmitGlobalIsNaN(c.Arguments);
+            return;
+        }
+
+        // Special case: Global isFinite()
+        if (c.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
+        {
+            EmitGlobalIsFinite(c.Arguments);
             return;
         }
 
@@ -1650,6 +1687,153 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldnull);
                 break;
         }
+    }
+
+    private void EmitNumberStaticCall(string methodName, List<Expr> arguments)
+    {
+        switch (methodName)
+        {
+            case "parseInt":
+                EmitGlobalParseInt(arguments);
+                break;
+            case "parseFloat":
+                EmitGlobalParseFloat(arguments);
+                break;
+            case "isNaN":
+                // Number.isNaN is stricter than global isNaN - only returns true for actual NaN
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsNaN);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case "isFinite":
+                // Number.isFinite is stricter than global isFinite
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsFinite);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case "isInteger":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsInteger);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            case "isSafeInteger":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsSafeInteger);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                break;
+            default:
+                IL.Emit(OpCodes.Ldnull);
+                break;
+        }
+    }
+
+    private void EmitGlobalParseInt(List<Expr> arguments)
+    {
+        // Emit string argument
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit radix (default 10)
+        if (arguments.Count > 1)
+        {
+            EmitExpression(arguments[1]);
+            EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldc_I4, 10);
+            IL.Emit(OpCodes.Box, typeof(int));
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberParseInt);
+        IL.Emit(OpCodes.Box, typeof(double));
+    }
+
+    private void EmitGlobalParseFloat(List<Expr> arguments)
+    {
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberParseFloat);
+        IL.Emit(OpCodes.Box, typeof(double));
+    }
+
+    private void EmitGlobalIsNaN(List<Expr> arguments)
+    {
+        // Global isNaN coerces to number first
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalIsNaN);
+        IL.Emit(OpCodes.Box, typeof(bool));
+    }
+
+    private void EmitGlobalIsFinite(List<Expr> arguments)
+    {
+        // Global isFinite coerces to number first
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalIsFinite);
+        IL.Emit(OpCodes.Box, typeof(bool));
     }
 
     /// <summary>
