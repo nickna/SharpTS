@@ -146,6 +146,40 @@ public class PromiseMethodTests
         Assert.Equal("fulfilled\n1\nfulfilled\n2\n", output);
     }
 
+    [Fact]
+    public void AllSettled_EmptyArray()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let results = await Promise.allSettled([]);
+                console.log(results.length);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n", output);
+    }
+
+    [Fact]
+    public void AllSettled_NonTaskValues()
+    {
+        // Test that non-Promise values are handled as immediately fulfilled
+        var source = """
+            async function main(): Promise<void> {
+                let results = await Promise.allSettled([42, "hello"]);
+                console.log(results[0].status);
+                console.log(results[0].value);
+                console.log(results[1].status);
+                console.log(results[1].value);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("fulfilled\n42\nfulfilled\nhello\n", output);
+    }
+
     #endregion
 
     #region Promise.any() Tests

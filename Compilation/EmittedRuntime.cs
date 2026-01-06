@@ -168,6 +168,13 @@ public class EmittedRuntime
     public MethodBuilder PromiseAllSettled { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
 
+    // Promise callback helpers (direct $TSFunction.Invoke without reflection)
+    public MethodBuilder InvokeCallback { get; set; } = null!;
+    public MethodBuilder InvokeCallbackNoArgs { get; set; } = null!;
+
+    // PromiseAllSettled helper
+    public MethodBuilder ProcessElementSettled { get; set; } = null!;
+
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;
     public MethodBuilder NumberParseFloat { get; set; } = null!;
