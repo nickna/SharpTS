@@ -149,12 +149,12 @@ public static partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits stub methods for Promise instance methods (then, catch, finally).
-    /// These are not fully supported in compiled mode without more complex implementation.
+    /// Emits Promise instance methods (then, catch, finally) that delegate to RuntimeTypes.
+    /// This approach requires SharpTS.dll at runtime for proper async callback handling.
     /// </summary>
     private static void EmitPromiseInstanceStubs(TypeBuilder typeBuilder, EmittedRuntime runtime, Type taskType)
     {
-        // then - just returns the input task (no transformation)
+        // then - delegate to RuntimeTypes.PromiseThen
         var then = typeBuilder.DefineMethod(
             "PromiseThen",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -164,12 +164,14 @@ public static partial class RuntimeEmitter
         runtime.PromiseThen = then;
         {
             var il = then.GetILGenerator();
-            // Just return the input task - callbacks not implemented in compiled mode
-            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);  // task
+            il.Emit(OpCodes.Ldarg_1);  // onFulfilled
+            il.Emit(OpCodes.Ldarg_2);  // onRejected
+            il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseThen")!);
             il.Emit(OpCodes.Ret);
         }
 
-        // catch - just returns the input task
+        // catch - delegate to RuntimeTypes.PromiseCatch
         var catchMethod = typeBuilder.DefineMethod(
             "PromiseCatch",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -179,11 +181,13 @@ public static partial class RuntimeEmitter
         runtime.PromiseCatch = catchMethod;
         {
             var il = catchMethod.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);  // task
+            il.Emit(OpCodes.Ldarg_1);  // onRejected
+            il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseCatch")!);
             il.Emit(OpCodes.Ret);
         }
 
-        // finally - just returns the input task
+        // finally - delegate to RuntimeTypes.PromiseFinally
         var finallyMethod = typeBuilder.DefineMethod(
             "PromiseFinally",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -193,7 +197,9 @@ public static partial class RuntimeEmitter
         runtime.PromiseFinally = finallyMethod;
         {
             var il = finallyMethod.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);  // task
+            il.Emit(OpCodes.Ldarg_1);  // onFinally
+            il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseFinally")!);
             il.Emit(OpCodes.Ret);
         }
     }

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (Fixed: interface polymorphism type checking, object method `this` binding in IL compiler, object rest patterns with class instances)
+**Last Updated:** 2026-01-05 (Fixed: Promise instance methods in IL compiler now delegate to RuntimeTypes; Promise.all/race/any/allSettled marked as implemented)
 
 ## Legend
 - ✅ Implemented
@@ -97,7 +97,7 @@ This document tracks TypeScript language features and their implementation statu
 | Async class methods | ✅ | Full `this` capture support |
 | Try/catch in async | ✅ | Await inside try/catch/finally blocks |
 | Nested await in args | ✅ | `await fn(await getValue())` |
-| `Promise.all/race/any` | ❌ | Combinators not yet implemented |
+| `Promise.all/race/any/allSettled` | ✅ | Full interpreter support; IL compiler delegates to runtime |
 
 ---
 

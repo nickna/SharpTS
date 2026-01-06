@@ -118,9 +118,8 @@ public static partial class RuntimeTypes
         {
             var value = await promise;
 
-            if (onFulfilled is TSFunction func)
+            if (TryInvokeFunction(onFulfilled, value, out var result))
             {
-                var result = func.Invoke(value);
                 // Flatten nested tasks/promises
                 while (result is Task<object?> innerTask)
                 {
@@ -133,9 +132,8 @@ public static partial class RuntimeTypes
         }
         catch (Exception ex)
         {
-            if (onRejected is TSFunction rejectFunc)
+            if (TryInvokeFunction(onRejected, ex.Message, out var result))
             {
-                var result = rejectFunc.Invoke(ex.Message);
                 while (result is Task<object?> innerTask)
                 {
                     result = await innerTask;
@@ -144,6 +142,85 @@ public static partial class RuntimeTypes
             }
             throw;
         }
+    }
+
+    /// <summary>
+    /// Invokes a function-like object (TSFunction or emitted $TSFunction).
+    /// Uses duck typing to support both the SharpTS TSFunction class and the emitted type.
+    /// </summary>
+    private static bool TryInvokeFunction(object? func, object? arg, out object? result)
+    {
+        result = null;
+
+        if (func == null)
+            return false;
+
+        // Check for SharpTS.Compilation.TSFunction
+        if (func is TSFunction tsFunc)
+        {
+            result = tsFunc.Invoke(arg);
+            return true;
+        }
+
+        // Check for emitted $TSFunction or any type with an Invoke method
+        var invokeMethod = func.GetType().GetMethod("Invoke");
+        if (invokeMethod != null)
+        {
+            var parameters = invokeMethod.GetParameters();
+            // Handle params array signature: Invoke(params object?[] args)
+            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(object[]))
+            {
+                result = invokeMethod.Invoke(func, [new object?[] { arg }]);
+            }
+            else
+            {
+                result = invokeMethod.Invoke(func, [arg]);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Invokes a function-like object with no arguments (for finally callbacks).
+    /// </summary>
+    private static bool TryInvokeFunctionNoArgs(object? func, out object? result)
+    {
+        result = null;
+
+        if (func == null)
+            return false;
+
+        // Check for SharpTS.Compilation.TSFunction
+        if (func is TSFunction tsFunc)
+        {
+            result = tsFunc.Invoke();
+            return true;
+        }
+
+        // Check for emitted $TSFunction or any type with an Invoke method
+        var invokeMethod = func.GetType().GetMethod("Invoke");
+        if (invokeMethod != null)
+        {
+            try
+            {
+                var parameters = invokeMethod.GetParameters();
+                // The emitted $TSFunction.Invoke has signature: Invoke(params object?[] args)
+                // We need to pass an empty array
+                result = invokeMethod.Invoke(func, [Array.Empty<object?>()]);
+                return true;
+            }
+            catch (System.Reflection.TargetInvocationException ex)
+            {
+                // Re-throw the inner exception for cleaner stack traces
+                if (ex.InnerException != null)
+                    throw ex.InnerException;
+                throw;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -157,9 +234,8 @@ public static partial class RuntimeTypes
         }
         catch (Exception ex)
         {
-            if (onRejected is TSFunction rejectFunc)
+            if (TryInvokeFunction(onRejected, ex.Message, out var result))
             {
-                var result = rejectFunc.Invoke(ex.Message);
                 while (result is Task<object?> innerTask)
                 {
                     result = await innerTask;
@@ -188,11 +264,10 @@ public static partial class RuntimeTypes
         }
 
         // Call the finally callback (with no arguments)
-        if (onFinally is TSFunction func)
+        if (TryInvokeFunctionNoArgs(onFinally, out var result))
         {
             try
             {
-                var result = func.Invoke();
                 // If callback returns a Task, wait for it
                 if (result is Task<object?> resultTask)
                 {

@@ -168,4 +168,122 @@ public class PromiseMethodTests
     }
 
     #endregion
+
+    #region Promise.then() Tests
+
+    [Fact]
+    public void Then_BasicChaining()
+    {
+        var source = """
+            async function getValue(): Promise<number> {
+                return 10;
+            }
+            async function main(): Promise<void> {
+                let p = getValue();
+                let result = await p.then((x: number): number => x * 2);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("20\n", output);
+    }
+
+    [Fact]
+    public void Then_MultipleChains()
+    {
+        var source = """
+            async function getValue(): Promise<number> {
+                return 5;
+            }
+            async function main(): Promise<void> {
+                let result = await getValue()
+                    .then((x: number): number => x + 1)
+                    .then((x: number): number => x * 2)
+                    .then((x: number): number => x + 3);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("15\n", output);
+    }
+
+    [Fact]
+    public void Then_PassesValueThrough()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let result = await Promise.resolve(42).then((x: number): number => x);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    #endregion
+
+    #region Promise.catch() Tests
+
+    [Fact]
+    public void Catch_PassesThroughResolved()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = Promise.resolve(42);
+                let result = await p.catch((err: string): number => -1);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    #endregion
+
+    #region Promise.finally() Tests
+
+    [Fact]
+    public void Finally_RunsOnResolved()
+    {
+        // Note: Avoids capturing variable in zero-param arrow due to display class IL bug
+        var source = """
+            async function main(): Promise<void> {
+                let result = await Promise.resolve(42).finally((): void => {
+                    console.log("finally ran");
+                });
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("finally ran\n42\n", output);
+    }
+
+    [Fact]
+    public void Finally_DoesNotAlterValue()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let result = await Promise.resolve(42).finally((): number => {
+                    return 999;
+                });
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    #endregion
 }

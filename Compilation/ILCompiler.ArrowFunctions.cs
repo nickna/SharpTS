@@ -261,6 +261,9 @@ public partial class ILCompiler
             case Expr.PostfixIncrement poi:
                 CollectArrowsFromExpr(poi.Operand);
                 break;
+            case Expr.Await aw:
+                CollectArrowsFromExpr(aw.Expression);
+                break;
         }
     }
 
