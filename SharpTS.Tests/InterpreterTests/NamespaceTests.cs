@@ -1,31 +1,10 @@
-using SharpTS.Execution;
-using SharpTS.Parsing;
-using SharpTS.TypeSystem;
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.InterpreterTests;
 
 public class NamespaceTests
 {
-    private static string Run(string code)
-    {
-        var output = new StringWriter();
-        Console.SetOut(output);
-
-        var lexer = new Lexer(code);
-        var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        var statements = parser.Parse();
-
-        var typeChecker = new TypeChecker();
-        typeChecker.Check(statements);
-
-        var interpreter = new Interpreter();
-        interpreter.Interpret(statements);
-
-        return output.ToString().Trim();
-    }
-
     [Fact]
     public void BasicNamespaceWithFunction()
     {
@@ -35,7 +14,7 @@ public class NamespaceTests
             }
             console.log(Foo.bar());
         ";
-        Assert.Equal("42", Run(code));
+        Assert.Equal("42\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -47,7 +26,7 @@ public class NamespaceTests
             }
             console.log(Constants.PI);
         ";
-        Assert.Equal("3.14159", Run(code));
+        Assert.Equal("3.14159\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -61,7 +40,7 @@ public class NamespaceTests
             }
             console.log(Outer.Inner.greet());
         ";
-        Assert.Equal("Hello", Run(code));
+        Assert.Equal("Hello\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -73,7 +52,7 @@ public class NamespaceTests
             }
             console.log(A.B.C.value);
         ";
-        Assert.Equal("123", Run(code));
+        Assert.Equal("123\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -88,7 +67,7 @@ public class NamespaceTests
             }
             console.log(Merged.foo() + Merged.bar());
         ";
-        Assert.Equal("3", Run(code));
+        Assert.Equal("3\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -100,7 +79,7 @@ public class NamespaceTests
             }
             console.log(Config.LogLevel.Error);
         ";
-        Assert.Equal("3", Run(code));
+        Assert.Equal("3\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact(Skip = "Requires parser support for 'new Namespace.ClassName()' syntax")]
@@ -120,7 +99,7 @@ public class NamespaceTests
             console.log(c.area());
         ";
         // PI * 2 * 2 = 12.56636
-        Assert.StartsWith("12.566", Run(code));
+        Assert.StartsWith("12.566", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -134,8 +113,7 @@ public class NamespaceTests
             console.log(Utils.add(2, 3));
             console.log(Utils.multiply(4, 5));
         ";
-        var result = Run(code).Replace("\r\n", "\n");
-        Assert.Equal("5\n20", result);
+        Assert.Equal("5\n20\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]
@@ -147,7 +125,7 @@ public class NamespaceTests
             }
             console.log(Company.Product.Feature.SubFeature.version);
         ";
-        Assert.Equal("1.0.0", Run(code));
+        Assert.Equal("1.0.0\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact(Skip = "Dotted namespace merging requires enhanced type checker support")]
@@ -162,6 +140,6 @@ public class NamespaceTests
             }
             console.log(A.B.x + A.B.y);
         ";
-        Assert.Equal("30", Run(code));
+        Assert.Equal("30\n", TestHarness.RunInterpreted(code));
     }
 }

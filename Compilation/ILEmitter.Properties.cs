@@ -19,10 +19,12 @@ public partial class ILEmitter
                 case "PI":
                     IL.Emit(OpCodes.Ldc_R8, Math.PI);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "E":
                     IL.Emit(OpCodes.Ldc_R8, Math.E);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
             }
         }
@@ -35,34 +37,42 @@ public partial class ILEmitter
                 case "MAX_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.MaxValue);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "MIN_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.Epsilon); // JS MIN_VALUE = smallest positive
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "NaN":
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "POSITIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "NEGATIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "MAX_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, 9007199254740991.0); // 2^53 - 1
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "MIN_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, -9007199254740991.0); // -(2^53 - 1)
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
                 case "EPSILON":
                     IL.Emit(OpCodes.Ldc_R8, 2.220446049250313e-16); // 2^-52
                     IL.Emit(OpCodes.Box, typeof(double));
+                    _stackType = StackType.Unknown; // Boxed double
                     return;
             }
         }
