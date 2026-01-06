@@ -1,0 +1,778 @@
+namespace SharpTS.Parsing;
+
+public partial class Parser
+{
+    private Expr Expression() => Assignment();
+
+    private Expr Assignment()
+    {
+        Expr expr = Ternary();
+
+        if (Match(TokenType.EQUAL))
+        {
+            Token equals = Previous();
+            Expr value = Assignment();
+
+            if (expr is Expr.Variable variable)
+            {
+                return new Expr.Assign(variable.Name, value);
+            }
+            else if (expr is Expr.Get get)
+            {
+                return new Expr.Set(get.Object, get.Name, value);
+            }
+            else if (expr is Expr.GetIndex getIndex)
+            {
+                return new Expr.SetIndex(getIndex.Object, getIndex.Index, value);
+            }
+
+            throw new Exception("Invalid assignment target.");
+        }
+
+        // Compound assignment operators
+        if (Match(TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL, TokenType.STAR_EQUAL,
+                  TokenType.SLASH_EQUAL, TokenType.PERCENT_EQUAL,
+                  TokenType.AMPERSAND_EQUAL, TokenType.PIPE_EQUAL, TokenType.CARET_EQUAL,
+                  TokenType.LESS_LESS_EQUAL, TokenType.GREATER_GREATER_EQUAL, TokenType.GREATER_GREATER_GREATER_EQUAL))
+        {
+            Token op = Previous();
+            Expr value = Assignment();
+
+            if (expr is Expr.Variable variable)
+            {
+                return new Expr.CompoundAssign(variable.Name, op, value);
+            }
+            else if (expr is Expr.Get get)
+            {
+                return new Expr.CompoundSet(get.Object, get.Name, op, value);
+            }
+            else if (expr is Expr.GetIndex getIndex)
+            {
+                return new Expr.CompoundSetIndex(getIndex.Object, getIndex.Index, op, value);
+            }
+
+            throw new Exception("Invalid compound assignment target.");
+        }
+
+        return expr;
+    }
+
+    private Expr Ternary()
+    {
+        Expr expr = NullishCoalescing();
+
+        if (Match(TokenType.QUESTION))
+        {
+            Expr thenBranch = Ternary();
+            Consume(TokenType.COLON, "Expect ':' in ternary expression.");
+            Expr elseBranch = Ternary();
+            expr = new Expr.Ternary(expr, thenBranch, elseBranch);
+        }
+
+        return expr;
+    }
+
+    private Expr NullishCoalescing()
+    {
+        Expr expr = Or();
+
+        while (Match(TokenType.QUESTION_QUESTION))
+        {
+            Expr right = Or();
+            expr = new Expr.NullishCoalescing(expr, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Or()
+    {
+        Expr expr = And();
+
+        while (Match(TokenType.OR_OR))
+        {
+            Token op = Previous();
+            Expr right = And();
+            expr = new Expr.Logical(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr And()
+    {
+        Expr expr = BitwiseOr();
+
+        while (Match(TokenType.AND_AND))
+        {
+            Token op = Previous();
+            Expr right = BitwiseOr();
+            expr = new Expr.Logical(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr BitwiseOr()
+    {
+        Expr expr = BitwiseXor();
+
+        while (Match(TokenType.PIPE))
+        {
+            Token op = Previous();
+            Expr right = BitwiseXor();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr BitwiseXor()
+    {
+        Expr expr = BitwiseAnd();
+
+        while (Match(TokenType.CARET))
+        {
+            Token op = Previous();
+            Expr right = BitwiseAnd();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr BitwiseAnd()
+    {
+        Expr expr = Equality();
+
+        while (Match(TokenType.AMPERSAND))
+        {
+            Token op = Previous();
+            Expr right = Equality();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Equality()
+    {
+        Expr expr = Comparison();
+
+        while (Match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL,
+                     TokenType.BANG_EQUAL_EQUAL, TokenType.EQUAL_EQUAL_EQUAL))
+        {
+            Token op = Previous();
+            Expr right = Comparison();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Comparison()
+    {
+        Expr expr = Shift();
+
+        while (Match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL, TokenType.IN, TokenType.INSTANCEOF))
+        {
+            Token op = Previous();
+            Expr right = Shift();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Shift()
+    {
+        Expr expr = Term();
+
+        while (Match(TokenType.LESS_LESS, TokenType.GREATER_GREATER, TokenType.GREATER_GREATER_GREATER))
+        {
+            Token op = Previous();
+            Expr right = Term();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Term()
+    {
+        Expr expr = Factor();
+
+        while (Match(TokenType.MINUS, TokenType.PLUS))
+        {
+            Token op = Previous();
+            Expr right = Factor();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Factor()
+    {
+        Expr expr = Exponentiation();
+
+        while (Match(TokenType.SLASH, TokenType.STAR, TokenType.PERCENT))
+        {
+            Token op = Previous();
+            Expr right = Exponentiation();
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Exponentiation()
+    {
+        Expr expr = Unary();
+
+        // ** is right-associative, so we use recursion instead of a loop
+        if (Match(TokenType.STAR_STAR))
+        {
+            Token op = Previous();
+            Expr right = Exponentiation(); // Right-associative
+            expr = new Expr.Binary(expr, op, right);
+        }
+
+        return expr;
+    }
+
+    private Expr Unary()
+    {
+        // Check for angle-bracket type assertion: <Type>expr
+        if (Check(TokenType.LESS))
+        {
+            var assertion = TryParseAngleBracketAssertion();
+            if (assertion != null) return assertion;
+        }
+
+        // Prefix increment/decrement
+        if (Match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS))
+        {
+            Token op = Previous();
+            Expr operand = Unary();
+            if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+            {
+                throw new Exception("Invalid operand for prefix increment/decrement.");
+            }
+            return new Expr.PrefixIncrement(op, operand);
+        }
+
+        if (Match(TokenType.BANG, TokenType.MINUS, TokenType.TYPEOF, TokenType.TILDE))
+        {
+            Token op = Previous();
+            Expr right = Unary();
+            return new Expr.Unary(op, right);
+        }
+
+        // await expression: await expr
+        if (Match(TokenType.AWAIT))
+        {
+            Token keyword = Previous();
+            Expr expression = Unary();
+            return new Expr.Await(keyword, expression);
+        }
+
+        if (Match(TokenType.NEW))
+        {
+            Token className = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
+            List<string>? typeArgs = TryParseTypeArguments();
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after class name.");
+            List<Expr> arguments = [];
+            if (!Check(TokenType.RIGHT_PAREN))
+            {
+                do
+                {
+                    arguments.Add(Expression());
+                } while (Match(TokenType.COMMA));
+            }
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+            return new Expr.New(className, typeArgs, arguments);
+        }
+
+        return Call();
+    }
+
+    private Expr Call()
+    {
+        Expr expr = Primary();
+
+        while (true)
+        {
+            // Check for type arguments before call: func<T>(args)
+            List<string>? typeArgs = null;
+            if (Check(TokenType.LESS))
+            {
+                typeArgs = TryParseTypeArgumentsForCall();
+            }
+
+            if (typeArgs != null || Match(TokenType.LEFT_PAREN))
+            {
+                expr = FinishCall(expr, typeArgs);
+            }
+            else if (Match(TokenType.DOT))
+            {
+                Token name = ConsumePropertyName("Expect property name after '.'.");
+                if (expr is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log")
+                {
+                    expr = new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line));
+                }
+                else
+                {
+                    expr = new Expr.Get(expr, name);
+                }
+            }
+            else if (Match(TokenType.QUESTION_DOT))
+            {
+                Token name = ConsumePropertyName("Expect property name after '?.'.");
+                expr = new Expr.Get(expr, name, Optional: true);
+            }
+            else if (Match(TokenType.LEFT_BRACKET))
+            {
+                Expr index = Expression();
+                Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
+                expr = new Expr.GetIndex(expr, index);
+            }
+            else if (Match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS))
+            {
+                // Postfix increment/decrement
+                Token op = Previous();
+                if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+                {
+                    throw new Exception("Invalid operand for postfix increment/decrement.");
+                }
+                expr = new Expr.PostfixIncrement(expr, op);
+            }
+            else if (Match(TokenType.AS))
+            {
+                // Type assertion: expr as Type
+                string targetType = ParseTypeAnnotation();
+                expr = new Expr.TypeAssertion(expr, targetType);
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
+    private Expr FinishCall(Expr callee, List<string>? typeArgs = null)
+    {
+        List<Expr> arguments = [];
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            do
+            {
+                if (Match(TokenType.DOT_DOT_DOT))
+                {
+                    arguments.Add(new Expr.Spread(Expression()));
+                }
+                else
+                {
+                    arguments.Add(Expression());
+                }
+            } while (Match(TokenType.COMMA));
+        }
+
+        Token paren = Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+        return new Expr.Call(callee, paren, typeArgs, arguments);
+    }
+
+    private Expr Primary()
+    {
+        if (Match(TokenType.FALSE)) return new Expr.Literal(false);
+        if (Match(TokenType.TRUE)) return new Expr.Literal(true);
+        if (Match(TokenType.NULL)) return new Expr.Literal(null);
+        if (Match(TokenType.NUMBER, TokenType.STRING, TokenType.BIGINT_LITERAL)) return new Expr.Literal(Previous().Literal);
+        if (Match(TokenType.THIS)) return new Expr.This(Previous());
+        if (Match(TokenType.SUPER))
+        {
+            Token keyword = Previous();
+            // super() for constructor calls, super.method() for method calls
+            if (Check(TokenType.LEFT_PAREN))
+            {
+                // super() - constructor call, Method is null
+                return new Expr.Super(keyword, null);
+            }
+            Consume(TokenType.DOT, "Expect '.' or '(' after 'super'.");
+            Token method;
+            if (Match(TokenType.IDENTIFIER, TokenType.CONSTRUCTOR))
+            {
+                method = Previous();
+            }
+            else
+            {
+                throw new Exception("Expect superclass method name.");
+            }
+            return new Expr.Super(keyword, method);
+        }
+        if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
+
+        // Symbol and BigInt are special callable constructors
+        if (Match(TokenType.SYMBOL, TokenType.BIGINT)) return new Expr.Variable(Previous());
+
+        if (Match(TokenType.LEFT_BRACKET))
+        {
+            List<Expr> elements = [];
+            if (!Check(TokenType.RIGHT_BRACKET))
+            {
+                do
+                {
+                    if (Match(TokenType.DOT_DOT_DOT))
+                    {
+                        elements.Add(new Expr.Spread(Expression()));
+                    }
+                    else
+                    {
+                        elements.Add(Expression());
+                    }
+                } while (Match(TokenType.COMMA));
+            }
+            Consume(TokenType.RIGHT_BRACKET, "Expect ']' after array elements.");
+            return new Expr.ArrayLiteral(elements);
+        }
+
+        if (Match(TokenType.LEFT_BRACE))
+        {
+            List<Expr.Property> properties = [];
+            if (!Check(TokenType.RIGHT_BRACE))
+            {
+                do
+                {
+                    // Check for spread: { ...obj }
+                    if (Match(TokenType.DOT_DOT_DOT))
+                    {
+                        Expr spreadExpr = Expression();
+                        properties.Add(new Expr.Property(null, spreadExpr, IsSpread: true));
+                        continue;
+                    }
+
+                    Token name = Consume(TokenType.IDENTIFIER, "Expect property name.");
+                    Expr value;
+
+                    if (Match(TokenType.LEFT_PAREN))
+                    {
+                        // Method shorthand: { fn() {} }
+                        string? thisType = null;
+                        List<Stmt.Parameter> parameters = [];
+
+                        // Check for 'this' parameter in object method
+                        if (Check(TokenType.THIS))
+                        {
+                            Advance(); // consume 'this'
+                            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+                            thisType = ParseTypeAnnotation();
+                            if (Check(TokenType.COMMA))
+                            {
+                                Advance(); // consume ','
+                            }
+                        }
+
+                        if (!Check(TokenType.RIGHT_PAREN))
+                        {
+                            do
+                            {
+                                Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+                                string? paramType = null;
+                                if (Match(TokenType.COLON))
+                                {
+                                    paramType = ParseTypeAnnotation();
+                                }
+                                Expr? defaultValue = null;
+                                if (Match(TokenType.EQUAL))
+                                {
+                                    defaultValue = Expression();
+                                }
+                                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue));
+                            } while (Match(TokenType.COMMA));
+                        }
+                        Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");
+
+                        string? returnType = null;
+                        if (Match(TokenType.COLON))
+                        {
+                            returnType = ParseTypeAnnotation();
+                        }
+
+                        Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
+                        List<Stmt> body = Block();
+                        value = new Expr.ArrowFunction(null, thisType, parameters, null, body, returnType, IsObjectMethod: true);
+                    }
+                    else if (Match(TokenType.COLON))
+                    {
+                        // Explicit property: { x: value }
+                        value = Expression();
+                    }
+                    else
+                    {
+                        // Shorthand property: { x } -> { x: x }
+                        value = new Expr.Variable(name);
+                    }
+
+                    properties.Add(new Expr.Property(name, value));
+                } while (Match(TokenType.COMMA));
+            }
+            Consume(TokenType.RIGHT_BRACE, "Expect '}' after object literal.");
+            return new Expr.ObjectLiteral(properties);
+        }
+
+        // async arrow function: async () => {} or async (x) => x
+        if (Match(TokenType.ASYNC))
+        {
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'async' in async arrow function.");
+            Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
+            if (arrowFunc != null) return arrowFunc;
+            throw new Exception("Parse Error: Expected arrow function after 'async ('.");
+        }
+
+        if (Match(TokenType.LEFT_PAREN))
+        {
+            // Try to parse as arrow function first
+            Expr? arrowFunc = TryParseArrowFunction(isAsync: false);
+            if (arrowFunc != null) return arrowFunc;
+
+            // Otherwise, parse as grouping
+            Expr expr = Expression();
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
+            return new Expr.Grouping(expr);
+        }
+
+        // Template literals
+        if (Match(TokenType.TEMPLATE_FULL))
+        {
+            return new Expr.TemplateLiteral([(string)Previous().Literal!], []);
+        }
+        if (Match(TokenType.TEMPLATE_HEAD))
+        {
+            return ParseTemplateLiteral();
+        }
+
+        throw new Exception("Expect expression.");
+    }
+
+    private Expr ParseTemplateLiteral()
+    {
+        List<string> strings = [(string)Previous().Literal!];
+        List<Expr> expressions = [];
+
+        // Parse first expression
+        expressions.Add(Expression());
+
+        // Parse middle parts
+        while (Match(TokenType.TEMPLATE_MIDDLE))
+        {
+            strings.Add((string)Previous().Literal!);
+            expressions.Add(Expression());
+        }
+
+        // Expect tail
+        Consume(TokenType.TEMPLATE_TAIL, "Expect end of template literal.");
+        strings.Add((string)Previous().Literal!);
+
+        return new Expr.TemplateLiteral(strings, expressions);
+    }
+
+    // Try to parse arrow function after seeing '('
+    // Returns null if not an arrow function (caller should parse as grouping)
+    private Expr? TryParseArrowFunction(bool isAsync = false)
+    {
+        int savedPosition = _current;
+
+        // Try to parse parameter list
+        List<Stmt.Parameter> parameters = [];
+        List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
+
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            // Must start with identifier, [, {, or ... for it to be arrow function params
+            if (!Check(TokenType.IDENTIFIER) && !Check(TokenType.LEFT_BRACKET) && !Check(TokenType.LEFT_BRACE) && !Check(TokenType.DOT_DOT_DOT))
+            {
+                _current = savedPosition;
+                return null;
+            }
+
+            do
+            {
+                if (Check(TokenType.LEFT_BRACKET))
+                {
+                    // Array destructure parameter: ([a, b]) => ...
+                    int line = Peek().Line;
+                    Consume(TokenType.LEFT_BRACKET, "");
+                    var pattern = ParseArrayPattern();
+                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    destructuredParams.Add((synthName, pattern));
+                }
+                else if (Check(TokenType.LEFT_BRACE))
+                {
+                    // Object destructure parameter: ({ x, y }) => ...
+                    int line = Peek().Line;
+                    Consume(TokenType.LEFT_BRACE, "");
+                    var pattern = ParseObjectPattern();
+                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    destructuredParams.Add((synthName, pattern));
+                }
+                else
+                {
+                    // Check for rest parameter
+                    bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                    if (!Check(TokenType.IDENTIFIER))
+                    {
+                        _current = savedPosition;
+                        return null;
+                    }
+
+                    Token paramName = Advance();
+                    string? paramType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        paramType = ParseTypeAnnotation();
+                    }
+                    Expr? defaultValue = null;
+                    if (Match(TokenType.EQUAL))
+                    {
+                        defaultValue = Expression();
+                    }
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest));
+
+                    // Rest parameter must be last
+                    if (isRest && Check(TokenType.COMMA))
+                    {
+                        _current = savedPosition;
+                        return null; // Invalid: rest must be last
+                    }
+                }
+            } while (Match(TokenType.COMMA));
+        }
+
+        if (!Match(TokenType.RIGHT_PAREN))
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        // Check for optional return type
+        string? returnType = null;
+        if (Match(TokenType.COLON))
+        {
+            // This could be return type OR ternary colon - need to check for arrow after
+            int beforeType = _current;
+            try
+            {
+                returnType = ParseFunctionTypeAnnotation();
+            }
+            catch
+            {
+                _current = savedPosition;
+                return null;
+            }
+        }
+
+        // Must see '=>' for it to be an arrow function
+        if (!Match(TokenType.ARROW))
+        {
+            _current = savedPosition;
+            return null;
+        }
+
+        // Parse body - either block or expression
+        List<Stmt>? body = null;
+        Expr? exprBody = null;
+
+        if (Match(TokenType.LEFT_BRACE))
+        {
+            body = Block();
+        }
+        else
+        {
+            exprBody = Expression();
+        }
+
+        // If we have destructured parameters, prepend desugaring to body
+        if (destructuredParams.Count > 0)
+        {
+            List<Stmt> prologue = [];
+            foreach (var (synthName, pattern) in destructuredParams)
+            {
+                var paramVar = new Expr.Variable(synthName);
+                Stmt desugar = pattern switch
+                {
+                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
+                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
+                    _ => throw new Exception("Unknown pattern type")
+                };
+                prologue.Add(desugar);
+            }
+
+            if (body != null)
+            {
+                body = prologue.Concat(body).ToList();
+            }
+            else if (exprBody != null)
+            {
+                // For expression body, wrap in a block with prologue + return
+                body = prologue.Concat([new Stmt.Return(new Token(TokenType.RETURN, "return", null, 0), exprBody)]).ToList();
+                exprBody = null;
+            }
+        }
+
+        return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType, IsAsync: isAsync);  // TODO: Parse type params
+    }
+
+    // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"
+    private string ParseFunctionTypeAnnotation()
+    {
+        // Check if it's a function type: (params) => returnType
+        if (Check(TokenType.LEFT_PAREN))
+        {
+            Advance(); // consume '('
+            string? thisType = null;
+            List<string> paramTypes = [];
+
+            // Check for 'this' parameter in function type
+            if (Check(TokenType.THIS))
+            {
+                Advance(); // consume 'this'
+                Consume(TokenType.COLON, "Expect ':' after 'this' in function type.");
+                thisType = ParseTypeAnnotation();
+                if (Check(TokenType.COMMA))
+                {
+                    Advance(); // consume ','
+                }
+            }
+
+            if (!Check(TokenType.RIGHT_PAREN))
+            {
+                do
+                {
+                    paramTypes.Add(ParseTypeAnnotation());
+                } while (Match(TokenType.COMMA));
+            }
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' in function type.");
+            Consume(TokenType.ARROW, "Expect '=>' in function type.");
+            string returnType = ParseTypeAnnotation();
+
+            // Include this type in the string representation
+            if (thisType != null)
+            {
+                return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+            }
+            return $"({string.Join(", ", paramTypes)}) => {returnType}";
+        }
+
+        // Otherwise regular type
+        return ParseTypeAnnotation();
+    }
+}
