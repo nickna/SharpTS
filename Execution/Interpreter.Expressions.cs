@@ -52,6 +52,7 @@ public partial class Interpreter
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(), // Sync wrapper for await
+            Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
         };
     }
@@ -98,6 +99,7 @@ public partial class Interpreter
             Expr.Spread spread => await EvaluateAsync(spread.Expression),
             Expr.TypeAssertion ta => await EvaluateAsync(ta.Expression),
             Expr.Await awaitExpr => await EvaluateAwaitAsync(awaitExpr),
+            Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             _ => throw new Exception("Unknown expression type.")
         };
     }

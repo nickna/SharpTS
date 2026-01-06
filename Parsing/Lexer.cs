@@ -24,6 +24,9 @@ public class Lexer(string source)
     private int _line = 1;
     // Stack to track brace depth when inside template interpolations
     private readonly Stack<int> _templateBraceDepth = new();
+    // Tracks whether we're expecting an expression (true) or operator (false)
+    // Used to disambiguate regex literals from division operator
+    private bool _expectExpr = true;
 
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
@@ -232,6 +235,11 @@ public class Lexer(string source)
                 {
                     AddToken(TokenType.SLASH_EQUAL);
                 }
+                else if (_expectExpr)
+                {
+                    // Regex literal
+                    RegexLiteral();
+                }
                 else
                 {
                     AddToken(TokenType.SLASH);
@@ -354,6 +362,67 @@ public class Lexer(string source)
         // Unterminated block comment - we'll just ignore for now
     }
 
+    /// <summary>
+    /// Scans a regex literal /pattern/flags starting after the opening /.
+    /// </summary>
+    private void RegexLiteral()
+    {
+        var pattern = new System.Text.StringBuilder();
+        bool inCharClass = false;
+
+        while (!IsAtEnd())
+        {
+            char c = Peek();
+
+            // Handle escape sequences
+            if (c == '\\' && !IsAtEnd())
+            {
+                pattern.Append(Advance()); // the backslash
+                if (!IsAtEnd())
+                {
+                    pattern.Append(Advance()); // the escaped character
+                }
+                continue;
+            }
+
+            // Track character class brackets (regex inside [...] has different rules)
+            if (c == '[') inCharClass = true;
+            if (c == ']') inCharClass = false;
+
+            // End of pattern (only if not inside character class)
+            if (c == '/' && !inCharClass)
+            {
+                break;
+            }
+
+            // Newlines are not allowed in regex literals
+            if (c == '\n')
+            {
+                throw new Exception($"Unterminated regex literal at line {_line}");
+            }
+
+            pattern.Append(Advance());
+        }
+
+        if (IsAtEnd())
+        {
+            throw new Exception($"Unterminated regex literal at line {_line}");
+        }
+
+        Advance(); // Consume closing /
+
+        // Scan flags (g, i, m, s, u, y)
+        var flags = new System.Text.StringBuilder();
+        while (!IsAtEnd() && IsRegexFlag(Peek()))
+        {
+            flags.Append(Advance());
+        }
+
+        AddToken(TokenType.REGEX, new RegexLiteralValue(pattern.ToString(), flags.ToString()));
+    }
+
+    private static bool IsRegexFlag(char c) => c is 'g' or 'i' or 'm' or 's' or 'u' or 'y';
+
     private void TemplateLiteral()
     {
         int stringStart = _current;
@@ -442,5 +511,43 @@ public class Lexer(string source)
     {
         string text = _source[_start.._current];
         _tokens.Add(new Token(type, text, literal, _line));
+        // Update expression state for regex literal disambiguation
+        _expectExpr = !IsExpressionEnd(type);
+    }
+
+    /// <summary>
+    /// Determines if a token type ends an expression (meaning the next / should be division).
+    /// Returns true for tokens after which an operator is expected, false otherwise.
+    /// </summary>
+    private static bool IsExpressionEnd(TokenType type)
+    {
+        return type switch
+        {
+            // Literals and identifiers - can be followed by operators
+            TokenType.IDENTIFIER or
+            TokenType.NUMBER or
+            TokenType.STRING or
+            TokenType.TRUE or
+            TokenType.FALSE or
+            TokenType.NULL or
+            TokenType.THIS or
+            TokenType.SUPER or
+            TokenType.BIGINT_LITERAL or
+            TokenType.REGEX or
+            TokenType.TEMPLATE_FULL or
+            TokenType.TEMPLATE_TAIL => true,
+
+            // Closing brackets - expression ended
+            TokenType.RIGHT_PAREN or
+            TokenType.RIGHT_BRACKET or
+            TokenType.RIGHT_BRACE => true,
+
+            // Postfix operators - expression ended
+            TokenType.PLUS_PLUS or
+            TokenType.MINUS_MINUS => true,
+
+            // Everything else (operators, keywords, opening brackets) expects an expression
+            _ => false
+        };
     }
 }

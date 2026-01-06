@@ -27,6 +27,15 @@ public partial class Interpreter
             return CreateDate(args);
         }
 
+        // Handle new RegExp(...) constructor
+        if (newExpr.ClassName.Lexeme == "RegExp")
+        {
+            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            var pattern = args.Count > 0 ? args[0]?.ToString() ?? "" : "";
+            var flags = args.Count > 1 ? args[1]?.ToString() ?? "" : "";
+            return new SharpTSRegExp(pattern, flags);
+        }
+
         // Handle new Map(...) constructor
         if (newExpr.ClassName.Lexeme == "Map")
         {
@@ -275,6 +284,17 @@ public partial class Interpreter
         {
             simpleObj.Set(set.Name.Lexeme, value);
             return value;
+        }
+
+        // Handle RegExp.lastIndex assignment
+        if (obj is SharpTSRegExp regex)
+        {
+            if (set.Name.Lexeme == "lastIndex")
+            {
+                regex.LastIndex = (int)(double)value!;
+                return value;
+            }
+            throw new Exception($"Runtime Error: Cannot set property '{set.Name.Lexeme}' on RegExp.");
         }
 
         throw new Exception("Only instances and objects have fields.");

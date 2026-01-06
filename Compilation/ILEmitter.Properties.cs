@@ -125,6 +125,38 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: RegExp properties
+        if (objType is TypeInfo.RegExp)
+        {
+            EmitExpression(g.Object);
+            EmitBoxIfNeeded(g.Object);
+            switch (g.Name.Lexeme)
+            {
+                case "source":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetSource);
+                    return;
+                case "flags":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetFlags);
+                    return;
+                case "global":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
+                    IL.Emit(OpCodes.Box, typeof(bool));
+                    return;
+                case "ignoreCase":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
+                    IL.Emit(OpCodes.Box, typeof(bool));
+                    return;
+                case "multiline":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
+                    IL.Emit(OpCodes.Box, typeof(bool));
+                    return;
+                case "lastIndex":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
+                    IL.Emit(OpCodes.Box, typeof(double));
+                    return;
+            }
+        }
+
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 
@@ -174,6 +206,24 @@ public partial class ILEmitter
         TypeInfo? objType = _ctx.TypeMap?.Get(s.Object);
         if (TryEmitDirectSetterCall(s.Object, objType, s.Name.Lexeme, s.Value))
             return;
+
+        // Special case: RegExp.lastIndex setter
+        if (objType is TypeInfo.RegExp && s.Name.Lexeme == "lastIndex")
+        {
+            EmitExpression(s.Object);
+            EmitBoxIfNeeded(s.Object);
+            EmitExpression(s.Value);
+            EmitUnboxToDouble();
+            // Dup value for expression result
+            IL.Emit(OpCodes.Dup);
+            var valueTemp = IL.DeclareLocal(typeof(double));
+            IL.Emit(OpCodes.Stloc, valueTemp);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpSetLastIndex);
+            // Put value back on stack as boxed result
+            IL.Emit(OpCodes.Ldloc, valueTemp);
+            IL.Emit(OpCodes.Box, typeof(double));
+            return;
+        }
 
         // Build stack for SetProperty(obj, name, value)
         EmitExpression(s.Object);

@@ -139,6 +139,7 @@ public sealed class BuiltInRegistry
         RegisterPromiseType(registry);
         RegisterDoubleType(registry);
         RegisterDateType(registry);
+        RegisterRegExpType(registry);
         RegisterMapType(registry);
         RegisterSetType(registry);
         RegisterIteratorType(registry);
@@ -273,6 +274,12 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSDate), (instance, name) =>
             DateBuiltIns.GetMember((SharpTSDate)instance, name));
+    }
+
+    private static void RegisterRegExpType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSRegExp), (instance, name) =>
+            RegExpBuiltIns.GetMember((SharpTSRegExp)instance, name));
     }
 
     private static void RegisterMapType(BuiltInRegistry registry)

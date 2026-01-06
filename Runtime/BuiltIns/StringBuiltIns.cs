@@ -55,9 +55,16 @@ public static class StringBuiltIns
             "replace" => new BuiltInMethod("replace", 2, (_, recv, args) =>
             {
                 var str = (string)recv!;
-                var search = (string)args[0]!;
-                var replacement = (string)args[1]!;
-                // JavaScript replace() only replaces the first occurrence
+                var replacement = args[1]?.ToString() ?? "";
+
+                // Handle RegExp pattern
+                if (args[0] is SharpTSRegExp regex)
+                {
+                    return regex.Replace(str, replacement);
+                }
+
+                // String pattern: JavaScript replace() only replaces the first occurrence
+                var search = args[0]?.ToString() ?? "";
                 var index = str.IndexOf(search);
                 if (index < 0) return str;
                 return str.Substring(0, index) + replacement + str.Substring(index + search.Length);
@@ -66,19 +73,71 @@ public static class StringBuiltIns
             "split" => new BuiltInMethod("split", 1, (_, recv, args) =>
             {
                 var str = (string)recv!;
-                var separator = (string)args[0]!;
-                string[] parts;
+
+                // Handle RegExp separator
+                if (args[0] is SharpTSRegExp regex)
+                {
+                    var parts = regex.Split(str);
+                    return new SharpTSArray(parts.Select(p => (object?)p).ToList());
+                }
+
+                // String separator
+                var separator = args[0]?.ToString() ?? "";
+                string[] stringParts;
                 if (separator == "")
                 {
                     // Empty separator splits into individual characters
-                    parts = str.Select(c => c.ToString()).ToArray();
+                    stringParts = str.Select(c => c.ToString()).ToArray();
                 }
                 else
                 {
-                    parts = str.Split(separator);
+                    stringParts = str.Split(separator);
                 }
-                var elements = parts.Select(p => (object?)p).ToList();
+                var elements = stringParts.Select(p => (object?)p).ToList();
                 return new SharpTSArray(elements);
+            }),
+
+            "match" => new BuiltInMethod("match", 1, (_, recv, args) =>
+            {
+                var str = (string)recv!;
+
+                // Handle RegExp pattern
+                if (args[0] is SharpTSRegExp regex)
+                {
+                    if (regex.Global)
+                    {
+                        // Global match: return array of all matches
+                        var matches = regex.MatchAll(str);
+                        if (matches.Count == 0) return null;
+                        return new SharpTSArray(matches.Select(m => (object?)m).ToList());
+                    }
+                    else
+                    {
+                        // Non-global: same as exec()
+                        return regex.Exec(str);
+                    }
+                }
+
+                // String pattern: find first occurrence
+                var search = args[0]?.ToString() ?? "";
+                var index = str.IndexOf(search);
+                if (index < 0) return null;
+                return new SharpTSArray([(object?)search]);
+            }),
+
+            "search" => new BuiltInMethod("search", 1, (_, recv, args) =>
+            {
+                var str = (string)recv!;
+
+                // Handle RegExp pattern
+                if (args[0] is SharpTSRegExp regex)
+                {
+                    return (double)regex.Search(str);
+                }
+
+                // String pattern
+                var search = args[0]?.ToString() ?? "";
+                return (double)str.IndexOf(search);
             }),
 
             "includes" => new BuiltInMethod("includes", 1, (_, recv, args) =>

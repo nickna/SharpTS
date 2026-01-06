@@ -222,6 +222,36 @@ public static class BuiltInTypes
     }
 
     /// <summary>
+    /// Type signatures for instance members on RegExp objects
+    /// </summary>
+    public static TypeInfo? GetRegExpMemberType(string name)
+    {
+        // exec() returns array with index/input properties, or null
+        var execResultType = new TypeInfo.Union([
+            new TypeInfo.Array(StringType),
+            new TypeInfo.Null()
+        ]);
+
+        return name switch
+        {
+            // Properties (read-only except lastIndex)
+            "source" => StringType,
+            "flags" => StringType,
+            "global" => BooleanType,
+            "ignoreCase" => BooleanType,
+            "multiline" => BooleanType,
+            "lastIndex" => NumberType,
+
+            // Methods
+            "test" => new TypeInfo.Function([StringType], BooleanType),
+            "exec" => new TypeInfo.Function([StringType], execResultType),
+            "toString" => new TypeInfo.Function([], StringType),
+
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Type signatures for instance methods on Map objects
     /// </summary>
     public static TypeInfo? GetMapMemberType(string name, TypeInfo keyType, TypeInfo valueType)

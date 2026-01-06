@@ -367,6 +367,10 @@ public partial class ILEmitter
                 EmitExpression(ta.Expression);
                 break;
 
+            case Expr.RegexLiteral re:
+                EmitRegexLiteral(re);
+                break;
+
             default:
                 // Fallback: push null
                 IL.Emit(OpCodes.Ldnull);

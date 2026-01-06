@@ -672,7 +672,7 @@ public partial class ILEmitter
         if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
             or "trim" or "replace" or "split" or "startsWith" or "endsWith"
             or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
-            or "trimStart" or "trimEnd" or "replaceAll" or "at")
+            or "trimStart" or "trimEnd" or "replaceAll" or "at" or "match" or "search")
         {
             EmitStringMethodCall(methodGet.Object, methodName, arguments);
             return;
@@ -710,6 +710,13 @@ public partial class ILEmitter
         if (objType is TypeSystem.TypeInfo.Set)
         {
             EmitSetMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
+        // Special case: RegExp method calls
+        if (methodName is "test" or "exec")
+        {
+            EmitRegExpMethodCall(methodGet.Object, methodName, arguments);
             return;
         }
 
@@ -799,35 +806,66 @@ public partial class ILEmitter
                 return;
 
             case "replace":
+                // str.replace(searchValue, replacement) - searchValue can be string or RegExp
                 if (arguments.Count >= 2)
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    // Don't cast - let runtime handle string or RegExp
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // replacement is always string
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                     IL.Emit(OpCodes.Ldstr, "");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplace);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceRegExp);
                 return;
 
             case "split":
+                // str.split(separator) - separator can be string or RegExp
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    // Don't cast - let runtime handle string or RegExp
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSplit);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSplitRegExp);
+                return;
+
+            case "match":
+                // str.match(pattern) - pattern can be string or RegExp
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringMatchRegExp);
+                return;
+
+            case "search":
+                // str.search(pattern) - pattern can be string or RegExp
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSearchRegExp);
+                IL.Emit(OpCodes.Box, typeof(double));
                 return;
 
             case "includes":
@@ -1573,6 +1611,52 @@ public partial class ILEmitter
         }
     }
 
+    /// <summary>
+    /// Emits code for RegExp method calls (test, exec).
+    /// </summary>
+    private void EmitRegExpMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the RegExp object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            case "test":
+                // regex.test(str) -> bool
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpTest);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                _stackType = StackType.Unknown;
+                break;
+
+            case "exec":
+                // regex.exec(str) -> array|null
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpExec);
+                _stackType = StackType.Unknown;
+                break;
+        }
+    }
+
     private void EmitNew(Expr.New n)
     {
         // Special case: new Date(...) constructor
@@ -1593,6 +1677,13 @@ public partial class ILEmitter
         if (n.ClassName.Lexeme == "Set")
         {
             EmitNewSet(n.Arguments);
+            return;
+        }
+
+        // Special case: new RegExp(...) constructor
+        if (n.ClassName.Lexeme == "RegExp")
+        {
+            EmitNewRegExp(n.Arguments);
             return;
         }
 
@@ -2385,6 +2476,42 @@ public partial class ILEmitter
             EmitExpression(arguments[0]);
             EmitBoxIfNeeded(arguments[0]);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateSetFromArray);
+        }
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits code for new RegExp(...) construction.
+    /// </summary>
+    private void EmitNewRegExp(List<Expr> arguments)
+    {
+        switch (arguments.Count)
+        {
+            case 0:
+                // new RegExp() - empty pattern
+                IL.Emit(OpCodes.Ldstr, "");
+                IL.Emit(OpCodes.Ldstr, "");
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
+                break;
+
+            case 1:
+                // new RegExp(pattern) - pattern only
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure pattern is a string
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExp);
+                break;
+
+            default:
+                // new RegExp(pattern, flags) - pattern and flags
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure pattern is a string
+                EmitExpression(arguments[1]);
+                EmitBoxIfNeeded(arguments[1]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure flags is a string
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
+                break;
         }
         _stackType = StackType.Unknown;
     }

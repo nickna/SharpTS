@@ -45,6 +45,7 @@ public partial class TypeChecker
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
+            Expr.RegexLiteral => new TypeInfo.RegExp(),
             _ => new TypeInfo.Any()
         };
 

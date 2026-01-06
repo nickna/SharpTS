@@ -507,6 +507,8 @@ public static partial class RuntimeEmitter
         EmitNumberMethods(typeBuilder, runtime);
         // Date methods
         EmitDateMethods(typeBuilder, runtime);
+        // RegExp methods
+        EmitRegExpMethods(typeBuilder, runtime);
         // Map methods
         EmitMapMethods(typeBuilder, runtime);
         // Set methods

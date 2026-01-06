@@ -70,6 +70,8 @@ public abstract record Expr
     public record TypeAssertion(Expr Expression, string TargetType) : Expr;
     // Await expression: await expr (only valid inside async functions)
     public record Await(Token Keyword, Expr Expression) : Expr;
+    // Regex literal: /pattern/flags
+    public record RegexLiteral(string Pattern, string Flags) : Expr;
 }
 
 /// <summary>

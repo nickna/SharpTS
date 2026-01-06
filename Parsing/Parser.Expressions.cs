@@ -390,6 +390,11 @@ public partial class Parser
         if (Match(TokenType.TRUE)) return new Expr.Literal(true);
         if (Match(TokenType.NULL)) return new Expr.Literal(null);
         if (Match(TokenType.NUMBER, TokenType.STRING, TokenType.BIGINT_LITERAL)) return new Expr.Literal(Previous().Literal);
+        if (Match(TokenType.REGEX))
+        {
+            var value = (RegexLiteralValue)Previous().Literal!;
+            return new Expr.RegexLiteral(value.Pattern, value.Flags);
+        }
         if (Match(TokenType.THIS)) return new Expr.This(Previous());
         if (Match(TokenType.SUPER))
         {

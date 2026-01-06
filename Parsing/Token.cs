@@ -48,9 +48,15 @@ public enum TokenType
     SYMBOL,  // Symbol() constructor
     BIGINT,  // BigInt() constructor
     BIGINT_LITERAL,  // 123n literal (stores BigInteger value)
+    REGEX,  // Regex literal /pattern/flags
 
     EOF
 }
+
+/// <summary>
+/// Value type for regex literal tokens, containing the pattern and flags.
+/// </summary>
+public record RegexLiteralValue(string Pattern, string Flags);
 
 /// <summary>
 /// Represents a single token from the source code.

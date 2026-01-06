@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (Computed property names: `{ [expr]: value }`, string/number literal keys)
+**Last Updated:** 2026-01-05 (RegExp: `/pattern/flags` literal, `new RegExp()` constructor, string method integration)
 
 ## Legend
 - ✅ Implemented
@@ -187,7 +187,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
 | `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
 | `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys |
-| `RegExp` | ❌ | |
+| `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
 
 ---
 
@@ -513,3 +513,15 @@ _No known bugs at this time._
 - ✅ Type inference produces index signatures for computed keys
 - ✅ Computed keys combined with spread syntax: `{ ...base, [key]: value }`
 - ✅ Full interpreter and IL compiler support with 16 test cases
+
+### Phase 26 Features (RegExp)
+- ✅ Regular expression literal syntax (`/pattern/flags`)
+- ✅ `RegExp` constructor (`new RegExp(pattern, flags?)`)
+- ✅ Context-sensitive lexer disambiguation (division vs regex literal)
+- ✅ Flags support: `g` (global), `i` (ignoreCase), `m` (multiline)
+- ✅ Properties: `source`, `flags`, `global`, `ignoreCase`, `multiline`, `lastIndex`
+- ✅ Methods: `test(string)`, `exec(string)` with capture groups and index/input properties
+- ✅ String method integration: `match`, `replace`, `search`, `split` with regex support
+- ✅ LastIndex tracking for global regex iteration
+- ✅ `.NET System.Text.RegularExpressions` with ECMAScript mode for JS compatibility
+- ✅ Full interpreter and IL compiler support

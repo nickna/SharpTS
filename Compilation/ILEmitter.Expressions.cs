@@ -277,4 +277,12 @@ public partial class ILEmitter
         // Template literal produces a string
         _stackType = StackType.String;
     }
+
+    private void EmitRegexLiteral(Expr.RegexLiteral re)
+    {
+        IL.Emit(OpCodes.Ldstr, re.Pattern);
+        IL.Emit(OpCodes.Ldstr, re.Flags);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
+        _stackType = StackType.Unknown;
+    }
 }

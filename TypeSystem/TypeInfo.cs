@@ -225,6 +225,11 @@ public abstract record TypeInfo
         public override string ToString() => "Date";
     }
 
+    public record RegExp() : TypeInfo
+    {
+        public override string ToString() => "RegExp";
+    }
+
     /// <summary>
     /// Represents a Promise type (Promise&lt;T&gt;).
     /// Promise types automatically flatten - Promise&lt;Promise&lt;T&gt;&gt; becomes Promise&lt;T&gt;.

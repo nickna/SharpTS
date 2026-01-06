@@ -292,6 +292,37 @@ public partial class TypeChecker
             return new TypeInfo.Date();
         }
 
+        // Handle new RegExp() constructor
+        if (newExpr.ClassName.Lexeme == "RegExp")
+        {
+            // RegExp() accepts 0-2 arguments (pattern, flags)
+            if (newExpr.Arguments.Count > 2)
+            {
+                throw new Exception("Type Error: RegExp constructor accepts at most 2 arguments.");
+            }
+
+            // Validate argument types
+            if (newExpr.Arguments.Count >= 1)
+            {
+                var patternType = CheckExpr(newExpr.Arguments[0]);
+                if (!IsString(patternType) && patternType is not TypeInfo.Any)
+                {
+                    throw new Exception($"Type Error: RegExp pattern must be a string, got '{patternType}'.");
+                }
+            }
+
+            if (newExpr.Arguments.Count == 2)
+            {
+                var flagsType = CheckExpr(newExpr.Arguments[1]);
+                if (!IsString(flagsType) && flagsType is not TypeInfo.Any)
+                {
+                    throw new Exception($"Type Error: RegExp flags must be a string, got '{flagsType}'.");
+                }
+            }
+
+            return new TypeInfo.RegExp();
+        }
+
         // Handle new Map() and new Map<K, V>() constructor
         if (newExpr.ClassName.Lexeme == "Map")
         {
@@ -719,6 +750,13 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetDateInstanceMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;
             throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
+        }
+        // Handle RegExp instance members
+        if (objType is TypeInfo.RegExp)
+        {
+            var memberType = BuiltInTypes.GetRegExpMemberType(get.Name.Lexeme);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'RegExp'.");
         }
         // Handle Map instance methods
         if (objType is TypeInfo.Map mapType)

@@ -244,4 +244,22 @@ public class EmittedRuntime
     public MethodBuilder DateToDateString { get; set; } = null!;
     public MethodBuilder DateToTimeString { get; set; } = null!;
     public MethodBuilder DateValueOf { get; set; } = null!;
+
+    // RegExp support
+    public MethodBuilder CreateRegExp { get; set; } = null!;
+    public MethodBuilder CreateRegExpWithFlags { get; set; } = null!;
+    public MethodBuilder RegExpTest { get; set; } = null!;
+    public MethodBuilder RegExpExec { get; set; } = null!;
+    public MethodBuilder RegExpToString { get; set; } = null!;
+    public MethodBuilder RegExpGetSource { get; set; } = null!;
+    public MethodBuilder RegExpGetFlags { get; set; } = null!;
+    public MethodBuilder RegExpGetGlobal { get; set; } = null!;
+    public MethodBuilder RegExpGetIgnoreCase { get; set; } = null!;
+    public MethodBuilder RegExpGetMultiline { get; set; } = null!;
+    public MethodBuilder RegExpGetLastIndex { get; set; } = null!;
+    public MethodBuilder RegExpSetLastIndex { get; set; } = null!;
+    public MethodBuilder StringMatchRegExp { get; set; } = null!;
+    public MethodBuilder StringReplaceRegExp { get; set; } = null!;
+    public MethodBuilder StringSearchRegExp { get; set; } = null!;
+    public MethodBuilder StringSplitRegExp { get; set; } = null!;
 }
