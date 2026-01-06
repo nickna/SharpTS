@@ -256,4 +256,133 @@ public class ArrayMethodTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("2\n6\n10\n", output);
     }
+
+    // Regression tests for array method boxing (IL compiler)
+    // These test that boolean-returning methods work correctly in expressions
+
+    [Fact]
+    public void Array_Some_ResultInTernary()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let msg: string = nums.some((n: number): boolean => n > 2) ? "found" : "not found";
+            console.log(msg);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("found\n", output);
+    }
+
+    [Fact]
+    public void Array_Every_ResultInTernary()
+    {
+        var source = """
+            let nums: number[] = [2, 4, 6];
+            let msg: string = nums.every((n: number): boolean => n % 2 == 0) ? "all even" : "some odd";
+            console.log(msg);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("all even\n", output);
+    }
+
+    [Fact]
+    public void Array_Includes_ResultInTernary()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let msg: string = nums.includes(2) ? "has 2" : "no 2";
+            console.log(msg);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("has 2\n", output);
+    }
+
+    [Fact]
+    public void Array_Some_AssignToVariable()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            let result: boolean = nums.some((n: number): boolean => n > 3);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Array_Every_AssignToVariable()
+    {
+        var source = """
+            let nums: number[] = [2, 4, 6, 8];
+            let result: boolean = nums.every((n: number): boolean => n % 2 == 0);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Array_Includes_AssignToVariable()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            let result: boolean = nums.includes(3);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Array_Some_InIfCondition()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            if (nums.some((n: number): boolean => n > 2)) {
+                console.log("found larger than 2");
+            } else {
+                console.log("none larger than 2");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("found larger than 2\n", output);
+    }
+
+    [Fact]
+    public void Array_Every_InIfCondition()
+    {
+        var source = """
+            let nums: number[] = [2, 4, 6];
+            if (nums.every((n: number): boolean => n % 2 == 0)) {
+                console.log("all even");
+            } else {
+                console.log("not all even");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("all even\n", output);
+    }
+
+    [Fact]
+    public void Array_Includes_InIfCondition()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            if (nums.includes(2)) {
+                console.log("has 2");
+            } else {
+                console.log("no 2");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("has 2\n", output);
+    }
 }

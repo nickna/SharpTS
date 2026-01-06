@@ -1038,7 +1038,7 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArraySome",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
+            typeof(object),  // Return boxed bool to match ILEmitter expectations
             [typeof(List<object>), typeof(object)]
         );
         runtime.ArraySome = method;
@@ -1091,6 +1091,7 @@ public static partial class RuntimeEmitter
         var notFound = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notFound);
         il.Emit(OpCodes.Ldc_I4_1); // return true
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notFound);
@@ -1102,6 +1103,7 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldc_I4_0); // return false
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1110,7 +1112,7 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayEvery",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
+            typeof(object),  // Return boxed bool to match ILEmitter expectations
             [typeof(List<object>), typeof(object)]
         );
         runtime.ArrayEvery = method;
@@ -1163,6 +1165,7 @@ public static partial class RuntimeEmitter
         var continueLoop = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, continueLoop);
         il.Emit(OpCodes.Ldc_I4_0); // return false
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(continueLoop);
@@ -1174,6 +1177,7 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldc_I4_1); // return true
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1297,7 +1301,7 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ArrayIncludes",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
+            typeof(object),  // Return boxed bool to match ILEmitter expectations
             [typeof(List<object>), typeof(object)]
         );
         runtime.ArrayIncludes = method;
@@ -1327,6 +1331,7 @@ public static partial class RuntimeEmitter
         var notMatch = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notMatch);
         il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notMatch);
@@ -1338,6 +1343,7 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Box, typeof(bool));
         il.Emit(OpCodes.Ret);
     }
 

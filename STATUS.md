@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (Number methods support)
+**Last Updated:** 2026-01-05 (IL compiler bug fixes - array method boxing, Math error handling)
 
 ## Legend
 - ✅ Implemented
@@ -239,13 +239,10 @@ This document tracks TypeScript language features and their implementation statu
 
 ### IL Compiler Bugs
 
-Many features that work in the interpreter produce `InvalidProgramException` when compiled:
-- All Math methods (abs, ceil, floor, round, sqrt, sin, cos, tan, log, exp, pow, min, max, random, sign, trunc)
-- Array methods (concat, every, find, findIndex, includes, indexOf, join, reduce, reverse, some)
-- `instanceof` and `typeof` operators
-- Protected field access in subclasses
-- Object rest patterns (partial - simple cases work, complex may fail)
-- Object method `this` binding (`{ fn() { return this.x; } }` - `this` is not bound in compiled code)
+| Issue | Description |
+|-------|-------------|
+| Object rest patterns | Partial - simple cases work, complex may fail |
+| Object method `this` binding | `{ fn() { return this.x; } }` - `this` is not bound in compiled code |
 
 ---
 

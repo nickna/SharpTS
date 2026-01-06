@@ -616,8 +616,7 @@ public partial class ILEmitter
         }
         else
         {
-            IL.Emit(OpCodes.Ldnull);
-            _stackType = StackType.Null;
+            throw new Exception($"Compile Error: Unknown Math method '{methodName}'.");
         }
     }
 
@@ -1135,7 +1134,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArraySome);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                // Method now returns boxed bool (object), no additional boxing needed
                 return;
 
             case "every":
@@ -1149,7 +1148,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayEvery);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                // Method now returns boxed bool (object), no additional boxing needed
                 return;
 
             case "reduce":
@@ -1208,7 +1207,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludes);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                // Method now returns boxed bool (object), no additional boxing needed
                 return;
 
             case "indexOf":
