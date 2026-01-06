@@ -39,7 +39,12 @@ public abstract record Expr
     public record New(Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record ArrayLiteral(List<Expr> Elements) : Expr;
     public record ObjectLiteral(List<Property> Properties) : Expr;
-    public record Property(Token? Name, Expr Value, bool IsSpread = false);
+    // Property key types for object literals: identifier, string/number literal, or computed [expr]
+    public abstract record PropertyKey;
+    public record IdentifierKey(Token Name) : PropertyKey;
+    public record LiteralKey(Token Literal) : PropertyKey;  // STRING or NUMBER token
+    public record ComputedKey(Expr Expression) : PropertyKey;
+    public record Property(PropertyKey? Key, Expr Value, bool IsSpread = false);
     public record GetIndex(Expr Object, Expr Index) : Expr;
     public record SetIndex(Expr Object, Expr Index, Expr Value) : Expr;
     public record Super(Token Keyword, Token? Method) : Expr;  // Method is null for super() constructor calls

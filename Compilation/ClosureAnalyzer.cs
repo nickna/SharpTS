@@ -250,7 +250,12 @@ public class ClosureAnalyzer
 
             case Expr.ObjectLiteral o:
                 foreach (var prop in o.Properties)
+                {
+                    // Analyze computed key expressions for captured variables
+                    if (prop.Key is Expr.ComputedKey ck)
+                        AnalyzeExpr(ck.Expression);
                     AnalyzeExpr(prop.Value);
+                }
                 break;
 
             case Expr.Ternary t:

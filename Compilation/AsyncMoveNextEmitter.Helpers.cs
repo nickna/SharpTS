@@ -970,18 +970,19 @@ public partial class AsyncMoveNextEmitter
 
     private void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
-        // Check if any property is a spread
+        // Check if any property is a spread or computed key
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
+        bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
 
-        if (!hasSpreads)
+        if (!hasSpreads && !hasComputedKeys)
         {
-            // Simple case: no spreads
+            // Simple case: no spreads, no computed keys
             _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
 
             foreach (var prop in o.Properties)
             {
                 _il.Emit(OpCodes.Dup);
-                _il.Emit(OpCodes.Ldstr, prop.Name!.Lexeme);
+                EmitStaticPropertyKey(prop.Key!);
                 EmitExpression(prop.Value);
                 EnsureBoxed();
                 _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
@@ -991,7 +992,7 @@ public partial class AsyncMoveNextEmitter
         }
         else
         {
-            // Complex case: has spreads, use MergeIntoObject
+            // Complex case: has spreads or computed keys, use SetIndex
             _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
 
             foreach (var prop in o.Properties)
@@ -1004,9 +1005,19 @@ public partial class AsyncMoveNextEmitter
                     EnsureBoxed();
                     _il.Emit(OpCodes.Call, _ctx!.Runtime!.MergeIntoObject);
                 }
+                else if (prop.Key is Expr.ComputedKey ck)
+                {
+                    // Computed key: evaluate key expression and use SetIndex
+                    EmitExpression(ck.Expression);
+                    EnsureBoxed();
+                    EmitExpression(prop.Value);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetIndex);
+                }
                 else
                 {
-                    _il.Emit(OpCodes.Ldstr, prop.Name!.Lexeme);
+                    // Static key: set directly
+                    EmitStaticPropertyKey(prop.Key!);
                     EmitExpression(prop.Value);
                     EnsureBoxed();
                     _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item")!);
@@ -1016,6 +1027,28 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
         }
         _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits a static property key (identifier, string literal, or number literal) as a string.
+    /// </summary>
+    private void EmitStaticPropertyKey(Expr.PropertyKey key)
+    {
+        switch (key)
+        {
+            case Expr.IdentifierKey ik:
+                _il.Emit(OpCodes.Ldstr, ik.Name.Lexeme);
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                _il.Emit(OpCodes.Ldstr, (string)lk.Literal.Literal!);
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                // Number keys are converted to strings in JS/TS
+                _il.Emit(OpCodes.Ldstr, lk.Literal.Literal!.ToString()!);
+                break;
+            default:
+                throw new Exception($"Internal Error: Unexpected static property key type: {key.GetType().Name}");
+        }
     }
 
     private void EmitGetIndex(Expr.GetIndex gi)

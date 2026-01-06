@@ -453,6 +453,37 @@ public partial class Parser
                         continue;
                     }
 
+                    // Check for computed property key: { [expr]: value }
+                    if (Match(TokenType.LEFT_BRACKET))
+                    {
+                        Expr keyExpr = Expression();
+                        Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed property key.");
+                        Consume(TokenType.COLON, "Expect ':' after computed property key.");
+                        Expr computedValue = Expression();
+                        properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), computedValue));
+                        continue;
+                    }
+
+                    // Check for string literal key: { "key": value }
+                    if (Match(TokenType.STRING))
+                    {
+                        Token stringKey = Previous();
+                        Consume(TokenType.COLON, "Expect ':' after string property key.");
+                        Expr stringValue = Expression();
+                        properties.Add(new Expr.Property(new Expr.LiteralKey(stringKey), stringValue));
+                        continue;
+                    }
+
+                    // Check for number literal key: { 123: value }
+                    if (Match(TokenType.NUMBER))
+                    {
+                        Token numberKey = Previous();
+                        Consume(TokenType.COLON, "Expect ':' after number property key.");
+                        Expr numberValue = Expression();
+                        properties.Add(new Expr.Property(new Expr.LiteralKey(numberKey), numberValue));
+                        continue;
+                    }
+
                     Token name = Consume(TokenType.IDENTIFIER, "Expect property name.");
                     Expr value;
 
@@ -515,7 +546,7 @@ public partial class Parser
                         value = new Expr.Variable(name);
                     }
 
-                    properties.Add(new Expr.Property(name, value));
+                    properties.Add(new Expr.Property(new Expr.IdentifierKey(name), value));
                 } while (Match(TokenType.COMMA));
             }
             Consume(TokenType.RIGHT_BRACE, "Expect '}' after object literal.");

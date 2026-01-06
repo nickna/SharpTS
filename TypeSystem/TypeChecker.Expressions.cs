@@ -107,6 +107,10 @@ public partial class TypeChecker
     private TypeInfo CheckObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, TypeInfo> fields = [];
+        TypeInfo? stringIndexType = null;
+        TypeInfo? numberIndexType = null;
+        TypeInfo? symbolIndexType = null;
+
         foreach (var prop in obj.Properties)
         {
             if (prop.IsSpread)
@@ -135,10 +139,61 @@ public partial class TypeChecker
             }
             else
             {
-                fields[prop.Name!.Lexeme] = CheckExpr(prop.Value);
+                TypeInfo valueType = CheckExpr(prop.Value);
+
+                switch (prop.Key)
+                {
+                    case Expr.IdentifierKey ik:
+                        fields[ik.Name.Lexeme] = valueType;
+                        break;
+
+                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                        fields[(string)lk.Literal.Literal!] = valueType;
+                        break;
+
+                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                        // Number keys are converted to strings in JS/TS
+                        fields[lk.Literal.Literal!.ToString()!] = valueType;
+                        numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
+                        break;
+
+                    case Expr.ComputedKey ck:
+                        TypeInfo keyType = CheckExpr(ck.Expression);
+                        // Infer index signature based on key type
+                        if (keyType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING)
+                            stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
+                        else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)
+                            numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
+                        else if (keyType is TypeInfo.Symbol)
+                            symbolIndexType = UnifyIndexTypes(symbolIndexType, valueType);
+                        else if (keyType is TypeInfo.StringLiteral sl)
+                            fields[sl.Value] = valueType;  // Known key at compile time
+                        else if (keyType is TypeInfo.NumberLiteral nl)
+                            fields[nl.Value.ToString()] = valueType;
+                        else if (keyType is TypeInfo.Any)
+                            stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
+                        else if (keyType is TypeInfo.Union)
+                            // Union of string/number types - use string index signature
+                            stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
+                        else
+                            throw new Exception($"Type Error: Computed property key must be string, number, or symbol, got '{keyType}'.");
+                        break;
+                }
             }
         }
-        return new TypeInfo.Record(fields);
+        return new TypeInfo.Record(fields, stringIndexType, numberIndexType, symbolIndexType);
+    }
+
+    /// <summary>
+    /// Unifies index signature types - creates a union if types differ.
+    /// </summary>
+    private TypeInfo UnifyIndexTypes(TypeInfo? existing, TypeInfo newType)
+    {
+        if (existing == null) return newType;
+        if (IsCompatible(existing, newType)) return existing;
+        if (IsCompatible(newType, existing)) return newType;
+        // Create union if incompatible
+        return new TypeInfo.Union([existing, newType]);
     }
 
     private TypeInfo CheckArray(Expr.ArrayLiteral array)

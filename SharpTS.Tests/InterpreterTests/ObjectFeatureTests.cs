@@ -281,4 +281,114 @@ public class ObjectFeatureTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("3\n2\n", output);
     }
+
+    // Computed Property Names
+    [Fact]
+    public void Object_ComputedPropertyName_VariableKey()
+    {
+        var source = """
+            let key: string = "dynamicKey";
+            let obj: any = { [key]: 42 };
+            console.log(obj["dynamicKey"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void Object_ComputedPropertyName_StringConcatenation()
+    {
+        var source = """
+            let prefix: string = "prop";
+            let obj: any = { [prefix + "1"]: "one", [prefix + "2"]: "two" };
+            console.log(obj["prop1"]);
+            console.log(obj["prop2"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("one\ntwo\n", output);
+    }
+
+    [Fact]
+    public void Object_StringLiteralKey()
+    {
+        var source = """
+            let obj: any = { "string-key": "hello", "another key": "world" };
+            console.log(obj["string-key"]);
+            console.log(obj["another key"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello\nworld\n", output);
+    }
+
+    [Fact]
+    public void Object_NumberLiteralKey()
+    {
+        var source = """
+            let obj: any = { 123: "numeric key", 456: "another" };
+            console.log(obj["123"]);
+            console.log(obj["456"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("numeric key\nanother\n", output);
+    }
+
+    [Fact]
+    public void Object_MixedStaticAndComputedKeys()
+    {
+        var source = """
+            let key: string = "computed";
+            let obj: any = { regular: 1, [key]: 2, "literal": 3 };
+            console.log(obj.regular);
+            console.log(obj["computed"]);
+            console.log(obj["literal"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void Object_ComputedPropertyName_NumberKey()
+    {
+        var source = """
+            let idx: number = 42;
+            let obj: any = { [idx]: "value at 42" };
+            console.log(obj["42"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("value at 42\n", output);
+    }
+
+    [Fact]
+    public void Object_ComputedPropertyName_SymbolKey()
+    {
+        var source = """
+            let sym: symbol = Symbol("myKey");
+            let obj: any = { [sym]: "symbol value" };
+            console.log(obj[sym]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("symbol value\n", output);
+    }
+
+    [Fact]
+    public void Object_ComputedPropertyName_WithSpread()
+    {
+        var source = """
+            let key: string = "added";
+            let base: { x: number } = { x: 1 };
+            let obj: any = { ...base, [key]: 2 };
+            console.log(obj.x);
+            console.log(obj["added"]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n2\n", output);
+    }
 }

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (JSON.parse/stringify: Full support with reviver, replacer, indentation, class instances, toJSON(), BigInt TypeError)
+**Last Updated:** 2026-01-05 (Computed property names: `{ [expr]: value }`, string/number literal keys)
 
 ## Legend
 - ✅ Implemented
@@ -203,7 +203,7 @@ This document tracks TypeScript language features and their implementation statu
 | Block comments (`/* */`) | ✅ | |
 | Single-quoted strings | ✅ | |
 | Object method shorthand | ✅ | `{ fn() {} }` |
-| Computed property names | ❌ | `{ [expr]: value }` |
+| Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
 | Class expressions | ❌ | `const C = class { }` |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
 
@@ -503,3 +503,13 @@ _No known bugs at this time._
 - ✅ Invalid date handling (returns NaN from getTime, "Invalid Date" from toString)
 - ✅ Local timezone support (no UTC variants)
 - ✅ Full interpreter and IL compiler support with 42 test cases
+
+### Phase 25 Features (Computed Property Names)
+- ✅ Computed property keys in object literals: `{ [expr]: value }`
+- ✅ String literal keys: `{ "string-key": value }`
+- ✅ Number literal keys: `{ 123: value }`
+- ✅ Symbol as computed key: `{ [sym]: value }` with symbol stored separately
+- ✅ Mixed static and computed keys in same object literal
+- ✅ Type inference produces index signatures for computed keys
+- ✅ Computed keys combined with spread syntax: `{ ...base, [key]: value }`
+- ✅ Full interpreter and IL compiler support with 16 test cases

@@ -257,7 +257,9 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     private object? EvaluateObject(Expr.ObjectLiteral obj)
     {
-        Dictionary<string, object?> fields = [];
+        Dictionary<string, object?> stringFields = [];
+        Dictionary<SharpTSSymbol, object?> symbolFields = [];
+
         foreach (var prop in obj.Properties)
         {
             if (prop.IsSpread)
@@ -267,14 +269,14 @@ public partial class Interpreter
                 {
                     foreach (var kv in spreadObj.Fields)
                     {
-                        fields[kv.Key] = kv.Value;
+                        stringFields[kv.Key] = kv.Value;
                     }
                 }
                 else if (spreadValue is SharpTSInstance inst)
                 {
                     foreach (var key in inst.GetFieldNames())
                     {
-                        fields[key] = inst.GetFieldValue(key);
+                        stringFields[key] = inst.GetFieldValue(key);
                     }
                 }
                 else
@@ -284,10 +286,40 @@ public partial class Interpreter
             }
             else
             {
-                fields[prop.Name!.Lexeme] = Evaluate(prop.Value);
+                object? value = Evaluate(prop.Value);
+
+                switch (prop.Key)
+                {
+                    case Expr.IdentifierKey ik:
+                        stringFields[ik.Name.Lexeme] = value;
+                        break;
+                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                        stringFields[(string)lk.Literal.Literal!] = value;
+                        break;
+                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                        // Number keys are converted to strings in JS/TS
+                        stringFields[lk.Literal.Literal!.ToString()!] = value;
+                        break;
+                    case Expr.ComputedKey ck:
+                        object? keyValue = Evaluate(ck.Expression);
+                        if (keyValue is SharpTSSymbol sym)
+                            symbolFields[sym] = value;
+                        else if (keyValue is double numKey)
+                            stringFields[numKey.ToString()] = value;
+                        else
+                            stringFields[keyValue?.ToString() ?? "undefined"] = value;
+                        break;
+                }
             }
         }
-        return new SharpTSObject(fields);
+
+        var result = new SharpTSObject(stringFields);
+        // Apply symbol fields
+        foreach (var (sym, val) in symbolFields)
+        {
+            result.SetBySymbol(sym, val);
+        }
+        return result;
     }
 
     /// <summary>
