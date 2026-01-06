@@ -565,6 +565,17 @@ public partial class TypeChecker
             return new TypeInfo.Any();
         }
 
+        // Handle namespace member access (e.g., Foo.Bar or Foo.someFunction)
+        if (objType is TypeInfo.Namespace nsType)
+        {
+            var memberType = nsType.GetMember(get.Name.Lexeme);
+            if (memberType != null)
+            {
+                return memberType;
+            }
+            throw new Exception($"Type Error: '{get.Name.Lexeme}' does not exist on namespace '{nsType.Name}'.");
+        }
+
         // Handle enum member access (e.g., Direction.Up or Status.Success)
         if (objType is TypeInfo.Enum enumTypeInfo)
         {

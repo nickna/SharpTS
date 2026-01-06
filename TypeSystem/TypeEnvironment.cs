@@ -19,6 +19,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
     private readonly Dictionary<string, TypeInfo> _types = [];
     private readonly Dictionary<string, string> _typeAliases = [];
     private readonly Dictionary<string, TypeInfo> _typeParameters = [];
+    private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = [];
     private readonly TypeEnvironment? _enclosing = enclosing;
 
     public void Define(string name, TypeInfo type)
@@ -95,5 +96,37 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
         if (_typeAliases.TryGetValue(name, out var definition))
             return definition;
         return _enclosing?.GetTypeAlias(name);
+    }
+
+    /// <summary>
+    /// Defines or merges a namespace in the current scope.
+    /// If a namespace with the same name already exists, merges the members.
+    /// </summary>
+    public void DefineNamespace(string name, TypeInfo.Namespace ns)
+    {
+        if (_namespaces.TryGetValue(name, out var existing))
+        {
+            // Merge: combine types and values from both namespace declarations
+            foreach (var (k, v) in ns.Types)
+                existing.Types[k] = v;
+            foreach (var (k, v) in ns.Values)
+                existing.Values[k] = v;
+        }
+        else
+        {
+            _namespaces[name] = ns;
+            // Also define in types so it can be looked up via Get()
+            _types[name] = ns;
+        }
+    }
+
+    /// <summary>
+    /// Gets a namespace by name, searching up the scope chain.
+    /// </summary>
+    public TypeInfo.Namespace? GetNamespace(string name)
+    {
+        if (_namespaces.TryGetValue(name, out var ns))
+            return ns;
+        return _enclosing?.GetNamespace(name);
     }
 }

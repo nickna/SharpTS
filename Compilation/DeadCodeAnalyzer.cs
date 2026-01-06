@@ -113,6 +113,7 @@ public class DeadCodeAnalyzer
             case Stmt.Interface:
             case Stmt.TypeAlias:
             case Stmt.Enum:
+            case Stmt.Namespace:
                 break;
 
             case Stmt.LabeledStatement labeledStmt:

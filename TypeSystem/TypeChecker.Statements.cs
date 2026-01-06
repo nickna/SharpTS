@@ -177,6 +177,9 @@ public partial class TypeChecker
             case Stmt.Enum enumStmt:
                 CheckEnumDeclaration(enumStmt);
                 break;
+            case Stmt.Namespace ns:
+                CheckNamespace(ns);
+                break;
             case Stmt.Class classStmt:
                 // Check class decorators
                 CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);

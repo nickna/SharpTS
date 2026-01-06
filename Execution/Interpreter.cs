@@ -559,6 +559,9 @@ public partial class Interpreter
             case Stmt.Enum enumStmt:
                 ExecuteEnumDeclaration(enumStmt);
                 break;
+            case Stmt.Namespace ns:
+                ExecuteNamespace(ns);
+                break;
             case Stmt.Return returnStmt:
                 object? returnValue = null;
                 if (returnStmt.Value != null) returnValue = Evaluate(returnStmt.Value);

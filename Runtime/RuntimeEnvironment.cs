@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime;
 
@@ -15,6 +16,7 @@ namespace SharpTS.Runtime;
 public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
 {
     private readonly Dictionary<string, object?> _values = [];
+    private readonly Dictionary<string, SharpTSNamespace> _namespaces = [];
     public RuntimeEnvironment? Enclosing { get; } = enclosing;
 
     public void Define(string name, object? value)
@@ -49,5 +51,34 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
         }
 
         throw new Exception($"Undefined variable '{name.Lexeme}'.");
+    }
+
+    /// <summary>
+    /// Defines or merges a namespace in the current scope.
+    /// If a namespace with the same name already exists, merges the members.
+    /// </summary>
+    public void DefineNamespace(string name, SharpTSNamespace ns)
+    {
+        if (_namespaces.TryGetValue(name, out var existing))
+        {
+            // Merge: combine members from both namespace declarations
+            existing.Merge(ns);
+        }
+        else
+        {
+            _namespaces[name] = ns;
+            // Also define in values so it can be looked up as a variable
+            _values[name] = ns;
+        }
+    }
+
+    /// <summary>
+    /// Gets a namespace by name, searching up the scope chain.
+    /// </summary>
+    public SharpTSNamespace? GetNamespace(string name)
+    {
+        if (_namespaces.TryGetValue(name, out var ns))
+            return ns;
+        return Enclosing?.GetNamespace(name);
     }
 }

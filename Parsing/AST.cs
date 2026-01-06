@@ -140,6 +140,16 @@ public abstract record Stmt
     public record EnumMember(Token Name, Expr? Value);
     public record Enum(Token Name, List<EnumMember> Members, bool IsConst = false) : Stmt;
 
+    /// <summary>
+    /// Namespace declaration: namespace Name { members }
+    /// Supports dotted names (A.B.C), which are desugared to nested namespaces during parsing.
+    /// Members can include: classes, interfaces, functions, variables, enums, type aliases, nested namespaces.
+    /// </summary>
+    /// <param name="Name">The namespace name token</param>
+    /// <param name="Members">List of member declarations</param>
+    /// <param name="IsExported">Whether this namespace is exported from a module</param>
+    public record Namespace(Token Name, List<Stmt> Members, bool IsExported = false) : Stmt;
+
     // Module statements
     /// <summary>
     /// Import declaration: import { x, y } from './file', import Default from './file', etc.

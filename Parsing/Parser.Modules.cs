@@ -212,6 +212,10 @@ public partial class Parser
         {
             decl = EnumDeclaration(isConst: false);
         }
+        else if (Match(TokenType.NAMESPACE))
+        {
+            decl = NamespaceDeclaration(isExported: true);
+        }
         else
         {
             throw new Exception($"Line {Peek().Line}: Expect declaration after 'export'.");

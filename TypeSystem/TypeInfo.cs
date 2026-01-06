@@ -121,6 +121,30 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a TypeScript namespace type.
+    /// Contains types (classes, interfaces, enums, type aliases, nested namespaces)
+    /// and values (functions, variables) declared within the namespace.
+    /// </summary>
+    public record Namespace(
+        string Name,
+        Dictionary<string, TypeInfo> Types,   // Classes, interfaces, enums, nested namespaces
+        Dictionary<string, TypeInfo> Values   // Functions, variables
+    ) : TypeInfo
+    {
+        /// <summary>
+        /// Gets a member by name, checking both types and values.
+        /// </summary>
+        public TypeInfo? GetMember(string name)
+        {
+            if (Types.TryGetValue(name, out var type)) return type;
+            if (Values.TryGetValue(name, out var value)) return value;
+            return null;
+        }
+
+        public override string ToString() => $"namespace {Name}";
+    }
+
+    /// <summary>
     /// Represents an instance of a class. ClassType can be either a regular Class
     /// or an InstantiatedGeneric (for generic class instances like Box&lt;number&gt;).
     /// </summary>

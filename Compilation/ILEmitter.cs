@@ -238,6 +238,10 @@ public partial class ILEmitter
                 // Handled at top level / compile-time only
                 break;
 
+            case Stmt.Namespace ns:
+                EmitNamespace(ns);
+                break;
+
             case Stmt.Import import:
                 EmitImport(import);
                 break;

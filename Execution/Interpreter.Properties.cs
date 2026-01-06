@@ -188,6 +188,16 @@ public partial class Interpreter
             throw new Exception($"Runtime Error: Static member '{get.Name.Lexeme}' does not exist on class '{klass.Name}'.");
         }
 
+        // Handle namespace member access
+        if (obj is SharpTSNamespace nsObj)
+        {
+            if (nsObj.HasMember(get.Name.Lexeme))
+            {
+                return nsObj.Get(get.Name.Lexeme);
+            }
+            throw new Exception($"Runtime Error: '{get.Name.Lexeme}' does not exist on namespace '{nsObj.Name}'.");
+        }
+
         // Handle enum member access
         if (obj is SharpTSEnum enumObj)
         {

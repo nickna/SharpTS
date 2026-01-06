@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (RegExp: `/pattern/flags` literal, `new RegExp()` constructor, string method integration)
+**Last Updated:** 2026-01-06 (TypeScript namespaces: declaration, merging, dotted syntax, nested namespaces)
 
 ## Legend
 - ✅ Implemented
@@ -110,7 +110,7 @@ This document tracks TypeScript language features and their implementation statu
 | Default exports | ✅ | `export default` |
 | Namespace imports | ✅ | `import * as X from './file'` |
 | Re-exports | ✅ | `export { x } from './file'`, `export * from './file'` |
-| TypeScript namespaces | ❌ | `namespace X { }` |
+| TypeScript namespaces | ⚠️ | `namespace X { }` with declaration merging, dotted syntax, functions, variables, enums, nested namespaces; classes in namespaces WIP |
 | Dynamic imports | ❌ | `await import('./file')` |
 
 ---
@@ -525,3 +525,15 @@ _No known bugs at this time._
 - ✅ LastIndex tracking for global regex iteration
 - ✅ `.NET System.Text.RegularExpressions` with ECMAScript mode for JS compatibility
 - ✅ Full interpreter and IL compiler support
+
+### Phase 29 Features (TypeScript Namespaces)
+- ⚠️ Namespace declaration (`namespace Foo { }`)
+- ✅ Dotted namespace syntax (`namespace A.B.C { }` desugars to nested namespaces)
+- ✅ Declaration merging (multiple `namespace Foo { }` blocks merge members)
+- ✅ Namespace members: functions, variables, enums, type aliases, nested namespaces
+- ✅ Export from namespaces (`export namespace Foo { }` in modules)
+- ✅ Namespace member access (`Foo.bar()`, `Foo.value`)
+- ✅ Runtime object hierarchy (namespaces are objects at runtime)
+- ⚠️ Classes in namespaces (declared but `new Namespace.Class()` not yet supported)
+- ❌ `import X = Namespace.Member` alias syntax (intentionally skipped)
+- ✅ Full interpreter and IL compiler support with 8 test cases

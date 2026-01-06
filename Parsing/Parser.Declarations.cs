@@ -36,6 +36,7 @@ public partial class Parser
             return VarDeclaration();
         }
         if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: false);
+        if (Match(TokenType.NAMESPACE)) return NamespaceDeclaration();
         if (Match(TokenType.INTERFACE)) return InterfaceDeclaration();
         if (Match(TokenType.TYPE)) return TypeAliasDeclaration();
         if (Match(TokenType.ASYNC))

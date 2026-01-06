@@ -194,6 +194,7 @@ public class GeneratorStateAnalyzer
             case Stmt.Interface:
             case Stmt.TypeAlias:
             case Stmt.Enum:
+            case Stmt.Namespace:
                 break;
         }
     }
