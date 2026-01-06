@@ -1261,16 +1261,66 @@ public static partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var dictLabel = il.DefineLabel();
+        var emptyLabel = il.DefineLabel();
+
+        // Locals for class instance path
+        var fieldInfoLocal = il.DeclareLocal(typeof(FieldInfo));
+        var fieldsLocal = il.DeclareLocal(typeof(object));
+        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
 
         // Check if Dictionary<string, object>
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Brtrue, dictLabel);
 
-        // Default - empty list
+        // Check if obj is not null (for class instance path)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // Class instance path: get _fields via reflection
+        // var fieldInfo = obj.GetType().GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Stloc, fieldInfoLocal);
+
+        // if (fieldInfo == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var fields = fieldInfo.GetValue(obj);
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // if (fields == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var dict = fields as Dictionary<string, object>;
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // if (dict == null) goto empty
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // return new List<object>(dict.Values);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Values")!.GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor([typeof(IEnumerable<object>)])!);
+        il.Emit(OpCodes.Ret);
+
+        // Empty list fallback
+        il.MarkLabel(emptyLabel);
         il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
+        // Dictionary path
         il.MarkLabel(dictLabel);
         // Get values: new List<object>(dict.Values)
         il.Emit(OpCodes.Ldarg_0);
@@ -1283,7 +1333,6 @@ public static partial class RuntimeEmitter
     private static void EmitGetEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // GetEntries is more complex - we need to iterate and create [key, value] pairs
-        // We'll delegate to a static helper in the emitted class
         var method = typeBuilder.DefineMethod(
             "GetEntries",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -1294,23 +1343,127 @@ public static partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var dictLabel = il.DefineLabel();
+        var emptyLabel = il.DefineLabel();
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
+        var classLoopStart = il.DefineLabel();
+        var classLoopEnd = il.DefineLabel();
 
+        // Locals for common use
         var resultLocal = il.DeclareLocal(typeof(List<object>));
         var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
         var currentLocal = il.DeclareLocal(typeof(KeyValuePair<string, object>));
         var entryLocal = il.DeclareLocal(typeof(List<object>));
+
+        // Locals for class instance path
+        var fieldInfoLocal = il.DeclareLocal(typeof(FieldInfo));
+        var fieldsLocal = il.DeclareLocal(typeof(object));
+        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
 
         // Check if Dictionary<string, object>
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
         il.Emit(OpCodes.Brtrue, dictLabel);
 
-        // Default - empty list
+        // Check if obj is not null (for class instance path)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // Class instance path: get _fields via reflection
+        // var fieldInfo = obj.GetType().GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Stloc, fieldInfoLocal);
+
+        // if (fieldInfo == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var fields = fieldInfo.GetValue(obj);
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // if (fields == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var dict = fields as Dictionary<string, object>;
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // if (dict == null) goto empty
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // Create result list for class instance path
+        il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // Get enumerator from _fields dict
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        // Class instance loop start
+        il.MarkLabel(classLoopStart);
+
+        // MoveNext
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, classLoopEnd);
+
+        // Get current
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentLocal);
+
+        // Create entry [key, value]
+        il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, entryLocal);
+
+        // Add key
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
+
+        // Add value
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
+
+        // Add entry to result
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
+
+        // Loop back
+        il.Emit(OpCodes.Br, classLoopStart);
+
+        il.MarkLabel(classLoopEnd);
+
+        // Dispose enumerator for class instance path
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Constrained, typeof(Dictionary<string, object>.Enumerator));
+        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+
+        // Return result
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Empty list fallback
+        il.MarkLabel(emptyLabel);
         il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
+        // Dictionary path
         il.MarkLabel(dictLabel);
 
         // Create result list

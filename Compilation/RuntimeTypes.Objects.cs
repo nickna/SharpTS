@@ -221,6 +221,16 @@ public static partial class RuntimeTypes
         {
             return dict.Values.ToList();
         }
+        // For compiled class instances, get values from _fields
+        if (obj != null)
+        {
+            var type = obj.GetType();
+            var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null && field.GetValue(obj) is Dictionary<string, object?> fields)
+            {
+                return fields.Values.ToList();
+            }
+        }
         return [];
     }
 
@@ -229,6 +239,16 @@ public static partial class RuntimeTypes
         if (obj is Dictionary<string, object?> dict)
         {
             return dict.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
+        }
+        // For compiled class instances, get entries from _fields
+        if (obj != null)
+        {
+            var type = obj.GetType();
+            var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (field != null && field.GetValue(obj) is Dictionary<string, object?> fields)
+            {
+                return fields.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
+            }
         }
         return [];
     }

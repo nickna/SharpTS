@@ -182,7 +182,7 @@ This document tracks TypeScript language features and their implementation statu
 | String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at |
 | Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, some, every, reduce, includes, indexOf, join |
 | `JSON.parse`/`stringify` | ❌ | |
-| `Object.keys`/`values`/`entries` | ⚠️ | `Object.keys()` implemented |
+| `Object.keys`/`values`/`entries` | ✅ | Full support for object literals and class instances |
 | `Array.isArray` | ❌ | |
 | `Number` methods | ❌ | parseInt, parseFloat, isNaN, etc. |
 | `Date` object | ❌ | |
@@ -244,7 +244,7 @@ Many features that work in the interpreter produce `InvalidProgramException` whe
 - Array methods (concat, every, find, findIndex, includes, indexOf, join, reduce, reverse, some)
 - `instanceof` and `typeof` operators
 - Protected field access in subclasses
-- Object.keys() and object rest patterns
+- Object rest patterns (partial - simple cases work, complex may fail)
 - Object method `this` binding (`{ fn() { return this.x; } }` - `this` is not bound in compiled code)
 
 ---

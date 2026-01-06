@@ -162,6 +162,72 @@ public class ObjectFeatureTests
         Assert.Equal("2\na\n1\nb\n2\n", output);
     }
 
+    // Object.keys on class instance
+    [Fact]
+    public void Object_Keys_OnClassInstance()
+    {
+        var source = """
+            class Person {
+                name: string;
+                age: number;
+                constructor(n: string, a: number) {
+                    this.name = n;
+                    this.age = a;
+                }
+            }
+            let p = new Person("Alice", 30);
+            let keys: string[] = Object.keys(p);
+            console.log(keys.length);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n", output);
+    }
+
+    // Object.values on class instance
+    [Fact]
+    public void Object_Values_OnClassInstance()
+    {
+        var source = """
+            class Person {
+                name: string;
+                age: number;
+                constructor(n: string, a: number) {
+                    this.name = n;
+                    this.age = a;
+                }
+            }
+            let p = new Person("Alice", 30);
+            let values: any[] = Object.values(p);
+            console.log(values.length);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n", output);
+    }
+
+    // Object.entries on class instance
+    [Fact]
+    public void Object_Entries_OnClassInstance()
+    {
+        var source = """
+            class Person {
+                name: string;
+                age: number;
+                constructor(n: string, a: number) {
+                    this.name = n;
+                    this.age = a;
+                }
+            }
+            let p = new Person("Alice", 30);
+            let entries: any[] = Object.entries(p);
+            console.log(entries.length);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n", output);
+    }
+
     // Empty Object
     [Fact]
     public void Object_Empty_Works()
