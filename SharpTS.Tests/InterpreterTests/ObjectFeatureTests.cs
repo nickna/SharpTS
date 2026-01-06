@@ -391,4 +391,98 @@ public class ObjectFeatureTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("1\n2\n", output);
     }
+
+    // Object Method This Binding
+    [Fact]
+    public void Object_MethodShorthand_ThisBinding_SingleProperty()
+    {
+        var source = """
+            let obj = {
+                x: 10,
+                getX() {
+                    return this.x;
+                }
+            };
+            console.log(obj.getX());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("10\n", output);
+    }
+
+    [Fact]
+    public void Object_MethodShorthand_ThisBinding_MultipleProperties()
+    {
+        var source = """
+            let obj = {
+                x: 10,
+                y: 20,
+                getSum() {
+                    return this.x + this.y;
+                }
+            };
+            console.log(obj.getSum());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("30\n", output);
+    }
+
+    [Fact]
+    public void Object_MethodShorthand_ThisBinding_NestedObject()
+    {
+        var source = """
+            let obj = {
+                nested: {
+                    value: 100,
+                    getValue() {
+                        return this.value;
+                    }
+                }
+            };
+            console.log(obj.nested.getValue());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
+    public void Object_MethodShorthand_ThisBinding_MultipleMethods()
+    {
+        var source = """
+            let calculator = {
+                value: 5,
+                double() {
+                    return this.value * 2;
+                },
+                triple() {
+                    return this.value * 3;
+                }
+            };
+            console.log(calculator.double());
+            console.log(calculator.triple());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("10\n15\n", output);
+    }
+
+    [Fact]
+    public void Object_MethodShorthand_ThisBinding_WithParameters()
+    {
+        var source = """
+            let obj = {
+                base: 10,
+                add(n: number) {
+                    return this.base + n;
+                }
+            };
+            console.log(obj.add(5));
+            console.log(obj.add(20));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("15\n30\n", output);
+    }
 }

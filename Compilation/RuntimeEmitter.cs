@@ -202,6 +202,101 @@ public static partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
         invokeIL.Emit(OpCodes.Ret);
 
+        // InvokeWithThis method: public object InvokeWithThis(object thisArg, object[] args)
+        // This checks if the first parameter is named "__this" and prepends thisArg if so
+        var invokeWithThisBuilder = typeBuilder.DefineMethod(
+            "InvokeWithThis",
+            MethodAttributes.Public,
+            typeof(object),
+            [typeof(object), typeof(object[])]
+        );
+        runtime.TSFunctionInvokeWithThis = invokeWithThisBuilder;
+
+        var iwt = invokeWithThisBuilder.GetILGenerator();
+
+        // Local variables
+        var paramsLocal = iwt.DeclareLocal(typeof(ParameterInfo[]));
+        var paramCountLocalIWT = iwt.DeclareLocal(typeof(int));
+        var expectsThisLocal = iwt.DeclareLocal(typeof(bool));
+        var effectiveArgsIWT = iwt.DeclareLocal(typeof(object[]));
+
+        // params = _method.GetParameters()
+        iwt.Emit(OpCodes.Ldarg_0);
+        iwt.Emit(OpCodes.Ldfld, methodField);
+        iwt.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("GetParameters")!);
+        iwt.Emit(OpCodes.Stloc, paramsLocal);
+
+        // paramCount = params.Length
+        iwt.Emit(OpCodes.Ldloc, paramsLocal);
+        iwt.Emit(OpCodes.Ldlen);
+        iwt.Emit(OpCodes.Conv_I4);
+        iwt.Emit(OpCodes.Stloc, paramCountLocalIWT);
+
+        // expectsThis = paramCount > 0 && params[0].Name == "__this"
+        var checkDoneLabel = iwt.DefineLabel();
+
+        iwt.Emit(OpCodes.Ldc_I4_0);
+        iwt.Emit(OpCodes.Stloc, expectsThisLocal);
+
+        iwt.Emit(OpCodes.Ldloc, paramCountLocalIWT);
+        iwt.Emit(OpCodes.Ldc_I4_0);
+        iwt.Emit(OpCodes.Ble, checkDoneLabel);
+
+        iwt.Emit(OpCodes.Ldloc, paramsLocal);
+        iwt.Emit(OpCodes.Ldc_I4_0);
+        iwt.Emit(OpCodes.Ldelem_Ref);
+        iwt.Emit(OpCodes.Callvirt, typeof(ParameterInfo).GetProperty("Name")!.GetGetMethod()!);
+        iwt.Emit(OpCodes.Ldstr, "__this");
+        iwt.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        iwt.Emit(OpCodes.Stloc, expectsThisLocal);
+
+        iwt.MarkLabel(checkDoneLabel);
+
+        // if (!expectsThis) { return Invoke(args); }
+        var expectsThisLabel = iwt.DefineLabel();
+        iwt.Emit(OpCodes.Ldloc, expectsThisLocal);
+        iwt.Emit(OpCodes.Brtrue, expectsThisLabel);
+
+        // Call Invoke(args) and return
+        iwt.Emit(OpCodes.Ldarg_0);
+        iwt.Emit(OpCodes.Ldarg_2);
+        iwt.Emit(OpCodes.Callvirt, invokeBuilder);
+        iwt.Emit(OpCodes.Ret);
+
+        // expectsThis is true - prepend thisArg to args
+        iwt.MarkLabel(expectsThisLabel);
+
+        // effectiveArgs = new object[args.Length + 1]
+        iwt.Emit(OpCodes.Ldarg_2);
+        iwt.Emit(OpCodes.Ldlen);
+        iwt.Emit(OpCodes.Conv_I4);
+        iwt.Emit(OpCodes.Ldc_I4_1);
+        iwt.Emit(OpCodes.Add);
+        iwt.Emit(OpCodes.Newarr, typeof(object));
+        iwt.Emit(OpCodes.Stloc, effectiveArgsIWT);
+
+        // effectiveArgs[0] = thisArg
+        iwt.Emit(OpCodes.Ldloc, effectiveArgsIWT);
+        iwt.Emit(OpCodes.Ldc_I4_0);
+        iwt.Emit(OpCodes.Ldarg_1);
+        iwt.Emit(OpCodes.Stelem_Ref);
+
+        // Array.Copy(args, 0, effectiveArgs, 1, args.Length)
+        iwt.Emit(OpCodes.Ldarg_2);  // source
+        iwt.Emit(OpCodes.Ldc_I4_0); // sourceIndex
+        iwt.Emit(OpCodes.Ldloc, effectiveArgsIWT); // dest
+        iwt.Emit(OpCodes.Ldc_I4_1); // destIndex
+        iwt.Emit(OpCodes.Ldarg_2);
+        iwt.Emit(OpCodes.Ldlen);
+        iwt.Emit(OpCodes.Conv_I4);  // length
+        iwt.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+
+        // Call Invoke(effectiveArgs) and return
+        iwt.Emit(OpCodes.Ldarg_0);
+        iwt.Emit(OpCodes.Ldloc, effectiveArgsIWT);
+        iwt.Emit(OpCodes.Callvirt, invokeBuilder);
+        iwt.Emit(OpCodes.Ret);
+
         // ToString method
         var toStringBuilder = typeBuilder.DefineMethod(
             "ToString",
@@ -450,6 +545,7 @@ public static partial class RuntimeEmitter
         EmitGetIndex(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitInvokeValue(typeBuilder, runtime);
+        EmitInvokeMethodValue(typeBuilder, runtime);
         // Array callback methods must come after InvokeValue and IsTruthy
         EmitArrayMap(typeBuilder, runtime);
         EmitArrayFilter(typeBuilder, runtime);

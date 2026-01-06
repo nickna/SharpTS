@@ -305,7 +305,8 @@ public class ClosureAnalyzer
             case Expr.This:
                 // Arrow functions capture 'this' from their lexical scope
                 // Track this as a captured variable so display classes include a field for it
-                if (_currentFunction != null && _currentFunction is Expr.ArrowFunction)
+                // EXCEPT for object methods which receive 'this' via the __this parameter
+                if (_currentFunction != null && _currentFunction is Expr.ArrowFunction thisArrowFunc && !thisArrowFunc.IsObjectMethod)
                 {
                     _captures[_currentFunction].Add("this");
                 }

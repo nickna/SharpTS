@@ -153,6 +153,12 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldfld, thisField);
         }
+        // Check if we have a __this parameter (object method shorthand)
+        else if (_ctx.TryGetParameter("__this", out var thisArgIndex))
+        {
+            // Load 'this' from the __this parameter
+            IL.Emit(OpCodes.Ldarg, thisArgIndex);
+        }
         else if (_ctx.IsInstanceMethod)
         {
             IL.Emit(OpCodes.Ldarg_0);

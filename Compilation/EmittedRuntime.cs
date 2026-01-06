@@ -21,6 +21,7 @@ public class EmittedRuntime
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
+    public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
     public MethodBuilder TSFunctionBindThis { get; set; } = null!;
 
     // The emitted runtime helper class
@@ -108,6 +109,7 @@ public class EmittedRuntime
 
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;
+    public MethodBuilder InvokeMethodValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
 
     // Exception methods

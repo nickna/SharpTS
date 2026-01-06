@@ -84,6 +84,25 @@ public class MathBuiltInTests
     }
 
     [Fact]
+    public void Math_Round_JSParity_NegativeHalfValues()
+    {
+        // JavaScript rounds half-values toward +infinity
+        // -2.5 rounds to -2 (not -3)
+        // -1.5 rounds to -1 (not -2)
+        var source = """
+            console.log(Math.round(2.5));
+            console.log(Math.round(-2.5));
+            console.log(Math.round(1.5));
+            console.log(Math.round(-1.5));
+            console.log(Math.round(0.5));
+            console.log(Math.round(-0.5));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n-2\n2\n-1\n1\n0\n", output);
+    }
+
+    [Fact]
     public void Math_Sqrt_ReturnsSquareRoot()
     {
         var source = """

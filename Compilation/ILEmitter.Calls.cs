@@ -592,10 +592,11 @@ public partial class ILEmitter
 
         if (methodName == "round")
         {
-            // Use MidpointRounding.AwayFromZero to match JavaScript behavior
-            IL.Emit(OpCodes.Ldc_I4, (int)MidpointRounding.AwayFromZero);
-            var roundMethod = typeof(Math).GetMethod("Round", [typeof(double), typeof(MidpointRounding)])!;
-            IL.Emit(OpCodes.Call, roundMethod);
+            // JavaScript rounds half-values toward +infinity: Math.Floor(x + 0.5)
+            IL.Emit(OpCodes.Ldc_R8, 0.5);
+            IL.Emit(OpCodes.Add);
+            var floorMethod = typeof(Math).GetMethod("Floor", [typeof(double)])!;
+            IL.Emit(OpCodes.Call, floorMethod);
             IL.Emit(OpCodes.Box, typeof(double));
             SetStackUnknown();
             return;
@@ -721,8 +722,22 @@ public partial class ILEmitter
             return;
         }
 
-        // Get the method/function value from the object
-        EmitExpression(methodGet);
+        // For object method calls, we need to pass the receiver as 'this'
+        // Stack order: receiver, function, args
+
+        // Emit receiver object once and store in a local to avoid double evaluation
+        EmitExpression(methodGet.Object);
+        EmitBoxIfNeeded(methodGet.Object);
+        var receiverLocal = IL.DeclareLocal(typeof(object));
+        IL.Emit(OpCodes.Stloc, receiverLocal);
+
+        // Load receiver for InvokeMethodValue's first argument
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
+
+        // Get the method/function value from the object using same receiver
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
+        IL.Emit(OpCodes.Ldstr, methodName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
 
         // Create args array
         IL.Emit(OpCodes.Ldc_I4, arguments.Count);
@@ -737,8 +752,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stelem_Ref);
         }
 
-        // Call TSFunction.Invoke or use runtime dispatch
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeValue);
+        // Call InvokeMethodValue(receiver, function, args) to bind 'this'
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
     }
 
     private void EmitStringMethodCall(Expr obj, string methodName, List<Expr> arguments)

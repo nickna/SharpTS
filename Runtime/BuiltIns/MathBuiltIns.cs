@@ -37,7 +37,7 @@ public static class MathBuiltIns
                 Math.Ceiling((double)args[0]!)),
 
             "round" => new BuiltInMethod("round", 1, (_, _, args) =>
-                Math.Round((double)args[0]!, MidpointRounding.AwayFromZero)),
+                Math.Floor((double)args[0]! + 0.5)),  // JS rounds half towards +∞
 
             "sqrt" => new BuiltInMethod("sqrt", 1, (_, _, args) =>
                 Math.Sqrt((double)args[0]!)),

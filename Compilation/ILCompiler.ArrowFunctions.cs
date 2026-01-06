@@ -22,7 +22,19 @@ public partial class ILCompiler
         // Define methods and display classes
         foreach (var (arrow, captures) in _collectedArrows)
         {
-            var paramTypes = arrow.Parameters.Select(_ => typeof(object)).ToArray();
+            // For object methods, add __this as the first parameter
+            Type[] paramTypes;
+            if (arrow.IsObjectMethod)
+            {
+                paramTypes = new Type[arrow.Parameters.Count + 1];
+                paramTypes[0] = typeof(object);  // __this
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                    paramTypes[i + 1] = typeof(object);
+            }
+            else
+            {
+                paramTypes = arrow.Parameters.Select(_ => typeof(object)).ToArray();
+            }
 
             if (captures.Count == 0)
             {
@@ -33,6 +45,20 @@ public partial class ILCompiler
                     typeof(object),
                     paramTypes
                 );
+
+                // Define parameter names (important for InvokeWithThis to detect __this)
+                if (arrow.IsObjectMethod)
+                {
+                    methodBuilder.DefineParameter(1, ParameterAttributes.None, "__this");
+                    for (int i = 0; i < arrow.Parameters.Count; i++)
+                        methodBuilder.DefineParameter(i + 2, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
+                }
+                else
+                {
+                    for (int i = 0; i < arrow.Parameters.Count; i++)
+                        methodBuilder.DefineParameter(i + 1, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
+                }
+
                 _arrowMethods[arrow] = methodBuilder;
             }
             else
@@ -72,6 +98,19 @@ public partial class ILCompiler
                     typeof(object),
                     paramTypes
                 );
+
+                // Define parameter names (important for InvokeWithThis to detect __this)
+                if (arrow.IsObjectMethod)
+                {
+                    invokeMethod.DefineParameter(1, ParameterAttributes.None, "__this");
+                    for (int i = 0; i < arrow.Parameters.Count; i++)
+                        invokeMethod.DefineParameter(i + 2, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
+                }
+                else
+                {
+                    for (int i = 0; i < arrow.Parameters.Count; i++)
+                        invokeMethod.DefineParameter(i + 1, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
+                }
 
                 _displayClasses[arrow] = displayClass;
                 _arrowMethods[arrow] = invokeMethod;
@@ -333,18 +372,43 @@ public partial class ILCompiler
                 ctx.CapturedFields = [];
             }
 
-            // Parameters start at index 1
-            for (int i = 0; i < arrow.Parameters.Count; i++)
+            // For object methods, __this is the first parameter after 'this' (display class)
+            // Parameters start at index 1 (display class is arg 0)
+            if (arrow.IsObjectMethod)
             {
-                ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1);
+                // __this is at index 1, actual parameters start at index 2
+                ctx.DefineParameter("__this", 1);
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                {
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 2);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                {
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1);
+                }
             }
         }
         else
         {
             // Static method - parameters start at index 0
-            for (int i = 0; i < arrow.Parameters.Count; i++)
+            if (arrow.IsObjectMethod)
             {
-                ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i);
+                // __this is at index 0, actual parameters start at index 1
+                ctx.DefineParameter("__this", 0);
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                {
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                {
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i);
+                }
             }
         }
 

@@ -894,6 +894,53 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private static void EmitInvokeMethodValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "InvokeMethodValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            [typeof(object), typeof(object), typeof(object[])]  // receiver, function, args
+        );
+        runtime.InvokeMethodValue = method;
+
+        var il = method.GetILGenerator();
+        // Check if value is $TSFunction and call InvokeWithThis
+        // arg0 = receiver, arg1 = function, arg2 = args
+        var nullLabel = il.DefineLabel();
+        var notTSFunctionLabel = il.DefineLabel();
+
+        // if (function == null) return null
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // if (function is $TSFunction tsFunc)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
+
+        // return tsFunc.InvokeWithThis(receiver, args)
+        il.Emit(OpCodes.Ldarg_0);  // receiver
+        il.Emit(OpCodes.Ldarg_2);  // args
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+
+        // Not a TSFunction - try InvokeValue fallback
+        il.MarkLabel(notTSFunctionLabel);
+        il.Emit(OpCodes.Pop);  // Pop the null from isinst
+
+        // Fall back to InvokeValue(function, args)
+        il.Emit(OpCodes.Ldarg_1);  // function
+        il.Emit(OpCodes.Ldarg_2);  // args
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
     private static void EmitGetSuperMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

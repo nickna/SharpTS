@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-06 (TypeScript namespaces: declaration, merging, dotted syntax, nested namespaces)
+**Last Updated:** 2026-01-06 (Bug fixes: Math.round JS parity, object method this binding in IL compiler)
 
 ## Legend
 - ✅ Implemented
@@ -230,6 +230,10 @@ This document tracks TypeScript language features and their implementation statu
 ### IL Compiler Bugs
 
 _No known bugs at this time._
+
+### Recently Fixed Bugs (2026-01-06)
+- ~~Math.round() JS parity~~ - Fixed: Now uses `Math.Floor(x + 0.5)` for JavaScript-compatible rounding (half-values toward +∞)
+- ~~Object method `this` binding~~ - Fixed: `{ fn() { return this.x; } }` now correctly binds `this` in compiled code via `__this` parameter
 
 ---
 
