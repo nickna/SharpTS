@@ -401,6 +401,79 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Stloc, local);
             }
             _stackType = StackType.Unknown; // Boxed double
+            return;
+        }
+
+        if (pi.Operand is Expr.Get get)
+        {
+            // Prefix increment on property: ++obj.prop
+            // Get current value
+            EmitExpression(get.Object);
+            EmitBoxIfNeeded(get.Object);
+            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+            EmitUnboxToDouble();
+
+            // Increment or decrement
+            IL.Emit(OpCodes.Ldc_R8, 1.0);
+            if (pi.Operator.Type == TokenType.PLUS_PLUS)
+                IL.Emit(OpCodes.Add);
+            else
+                IL.Emit(OpCodes.Sub);
+
+            // Box new value and store in temp
+            IL.Emit(OpCodes.Box, typeof(double));
+            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, newValue);
+
+            // SetProperty(obj, name, newValue)
+            EmitExpression(get.Object);
+            EmitBoxIfNeeded(get.Object);
+            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloc, newValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+
+            // Return new value (prefix behavior)
+            IL.Emit(OpCodes.Ldloc, newValue);
+            _stackType = StackType.Unknown; // Boxed double
+            return;
+        }
+
+        if (pi.Operand is Expr.GetIndex gi)
+        {
+            // Prefix increment on array index: ++arr[i]
+            // Get current value
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            EmitExpression(gi.Index);
+            EmitBoxIfNeeded(gi.Index);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+            EmitUnboxToDouble();
+
+            // Increment or decrement
+            IL.Emit(OpCodes.Ldc_R8, 1.0);
+            if (pi.Operator.Type == TokenType.PLUS_PLUS)
+                IL.Emit(OpCodes.Add);
+            else
+                IL.Emit(OpCodes.Sub);
+
+            // Box new value and store in temp
+            IL.Emit(OpCodes.Box, typeof(double));
+            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, newValue);
+
+            // SetIndex(obj, index, newValue)
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            EmitExpression(gi.Index);
+            EmitBoxIfNeeded(gi.Index);
+            IL.Emit(OpCodes.Ldloc, newValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+
+            // Return new value (prefix behavior)
+            IL.Emit(OpCodes.Ldloc, newValue);
+            _stackType = StackType.Unknown; // Boxed double
+            return;
         }
     }
 
@@ -434,6 +507,91 @@ public partial class ILEmitter
             // Original value is still on stack, box it
             IL.Emit(OpCodes.Box, typeof(double));
             _stackType = StackType.Unknown; // Boxed double
+            return;
+        }
+
+        if (pi.Operand is Expr.Get get)
+        {
+            // Postfix increment on property: obj.prop++
+            // Get current value
+            EmitExpression(get.Object);
+            EmitBoxIfNeeded(get.Object);
+            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+            EmitUnboxToDouble();
+
+            // Save old value for postfix return
+            var oldValue = IL.DeclareLocal(typeof(double));
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, oldValue);
+
+            // Increment or decrement
+            IL.Emit(OpCodes.Ldc_R8, 1.0);
+            if (pi.Operator.Type == TokenType.PLUS_PLUS)
+                IL.Emit(OpCodes.Add);
+            else
+                IL.Emit(OpCodes.Sub);
+
+            // Box new value and store in temp
+            IL.Emit(OpCodes.Box, typeof(double));
+            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, newValue);
+
+            // SetProperty(obj, name, newValue)
+            EmitExpression(get.Object);
+            EmitBoxIfNeeded(get.Object);
+            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloc, newValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+
+            // Return old value (postfix behavior)
+            IL.Emit(OpCodes.Ldloc, oldValue);
+            IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown; // Boxed double
+            return;
+        }
+
+        if (pi.Operand is Expr.GetIndex gi)
+        {
+            // Postfix increment on array index: arr[i]++
+            // Get current value
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            EmitExpression(gi.Index);
+            EmitBoxIfNeeded(gi.Index);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+            EmitUnboxToDouble();
+
+            // Save old value
+            var oldValue = IL.DeclareLocal(typeof(double));
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, oldValue);
+
+            // Increment or decrement
+            IL.Emit(OpCodes.Ldc_R8, 1.0);
+            if (pi.Operator.Type == TokenType.PLUS_PLUS)
+                IL.Emit(OpCodes.Add);
+            else
+                IL.Emit(OpCodes.Sub);
+
+            // Box new value and store in temp
+            IL.Emit(OpCodes.Box, typeof(double));
+            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, newValue);
+
+            // SetIndex(obj, index, newValue)
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            EmitExpression(gi.Index);
+            EmitBoxIfNeeded(gi.Index);
+            IL.Emit(OpCodes.Ldloc, newValue);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+
+            // Return old value
+            IL.Emit(OpCodes.Ldloc, oldValue);
+            IL.Emit(OpCodes.Box, typeof(double));
+            _stackType = StackType.Unknown; // Boxed double
+            return;
         }
     }
 

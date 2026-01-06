@@ -309,6 +309,172 @@ public class OperatorTests
         Assert.Equal("16\n", output);
     }
 
+    // Property Increment/Decrement
+    [Fact]
+    public void PostfixIncrement_OnObjectProperty_ReturnsOldValue()
+    {
+        var source = """
+            const obj = { count: 5 };
+            console.log(obj.count++);
+            console.log(obj.count);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n6\n", output);
+    }
+
+    [Fact]
+    public void PrefixIncrement_OnObjectProperty_ReturnsNewValue()
+    {
+        var source = """
+            const obj = { count: 5 };
+            console.log(++obj.count);
+            console.log(obj.count);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("6\n6\n", output);
+    }
+
+    [Fact]
+    public void PostfixDecrement_OnObjectProperty_ReturnsOldValue()
+    {
+        var source = """
+            const obj = { value: 10 };
+            console.log(obj.value--);
+            console.log(obj.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n9\n", output);
+    }
+
+    [Fact]
+    public void PrefixDecrement_OnObjectProperty_ReturnsNewValue()
+    {
+        var source = """
+            const obj = { value: 10 };
+            console.log(--obj.value);
+            console.log(obj.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("9\n9\n", output);
+    }
+
+    // Array Index Increment/Decrement
+    [Fact]
+    public void PostfixIncrement_OnArrayIndex_ReturnsOldValue()
+    {
+        var source = """
+            const arr: number[] = [10, 20, 30];
+            console.log(arr[0]++);
+            console.log(arr[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n11\n", output);
+    }
+
+    [Fact]
+    public void PrefixIncrement_OnArrayIndex_ReturnsNewValue()
+    {
+        var source = """
+            const arr: number[] = [10, 20, 30];
+            console.log(++arr[1]);
+            console.log(arr[1]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("21\n21\n", output);
+    }
+
+    [Fact]
+    public void PostfixDecrement_OnArrayIndex_ReturnsOldValue()
+    {
+        var source = """
+            const arr: number[] = [100, 200, 300];
+            console.log(arr[2]--);
+            console.log(arr[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("300\n299\n", output);
+    }
+
+    [Fact]
+    public void PrefixDecrement_OnArrayIndex_ReturnsNewValue()
+    {
+        var source = """
+            const arr: number[] = [100, 200, 300];
+            console.log(--arr[0]);
+            console.log(arr[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("99\n99\n", output);
+    }
+
+    // this.prop++ in class methods
+    [Fact]
+    public void PostfixIncrement_OnThisProperty_InClassMethod()
+    {
+        var source = """
+            class Counter {
+                value: number = 0;
+                increment(): number {
+                    return this.value++;
+                }
+            }
+            const c = new Counter();
+            console.log(c.increment());
+            console.log(c.increment());
+            console.log(c.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n1\n2\n", output);
+    }
+
+    [Fact]
+    public void PrefixIncrement_OnThisProperty_InClassMethod()
+    {
+        var source = """
+            class Counter {
+                value: number = 0;
+                increment(): number {
+                    return ++this.value;
+                }
+            }
+            const c = new Counter();
+            console.log(c.increment());
+            console.log(c.increment());
+            console.log(c.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n2\n", output);
+    }
+
+    [Fact]
+    public void PostfixDecrement_OnThisProperty_InClassMethod()
+    {
+        var source = """
+            class Counter {
+                value: number = 10;
+                decrement(): number {
+                    return this.value--;
+                }
+            }
+            const c = new Counter();
+            console.log(c.decrement());
+            console.log(c.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n9\n", output);
+    }
+
     // Compound Assignment Operators
     [Fact]
     public void CompoundAssignment_Add_ReturnsCorrectResult()

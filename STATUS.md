@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (IL compiler: Promise.all/race/allSettled now emit pure IL state machines; Promise.any delegates to RuntimeTypes due to ContinueWith complexity)
+**Last Updated:** 2026-01-05 (IL compiler: Fixed increment/decrement on properties and array indices - obj.prop++, this.prop++, arr[i]++ now work correctly)
 
 ## Legend
 - ✅ Implemented
@@ -229,9 +229,7 @@ This document tracks TypeScript language features and their implementation statu
 
 ### IL Compiler Bugs
 
-| Issue | Description |
-|-------|-------------|
-| `this.prop++` in object methods | Increment/decrement on `this.property` inside object method shorthand may fail |
+_No known bugs at this time._
 
 ---
 
