@@ -89,6 +89,32 @@ public class TSFunction
     /// </summary>
     public int Arity => _method.GetParameters().Length;
 
+    /// <summary>
+    /// Gets the display class instance (for closures) or null for non-capturing functions.
+    /// </summary>
+    public object? Target => _target;
+
+    /// <summary>
+    /// Binds 'this' to the given object by setting the display class's 'this' field.
+    /// Used for object method shorthand where 'this' should reference the containing object.
+    /// </summary>
+    /// <param name="thisValue">The object to bind as 'this'.</param>
+    /// <returns>True if binding succeeded, false if there's no 'this' field to bind.</returns>
+    public bool BindThis(object? thisValue)
+    {
+        if (_target == null) return false;
+
+        // Find the 'this' field in the display class
+        var thisField = _target.GetType().GetField("this",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        if (thisField != null)
+        {
+            thisField.SetValue(_target, thisValue);
+            return true;
+        }
+        return false;
+    }
+
     public override string ToString() => "[Function]";
 }
 

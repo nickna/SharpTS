@@ -48,7 +48,17 @@ public static partial class RuntimeTypes
         // Dictionary (object literal)
         if (obj is Dictionary<string, object?> dict)
         {
-            return dict.TryGetValue(name, out var value) ? value : null;
+            if (dict.TryGetValue(name, out var value))
+            {
+                // If it's a TSFunction with a display class, bind 'this' to the dictionary
+                // This handles object method shorthand: { fn() { return this.x; } }
+                if (value is TSFunction func)
+                {
+                    func.BindThis(dict);
+                }
+                return value;
+            }
+            return null;
         }
 
         // List (array)
@@ -133,7 +143,16 @@ public static partial class RuntimeTypes
         // Object/Dictionary with string key
         if (obj is Dictionary<string, object?> dict && index is string key)
         {
-            return dict.TryGetValue(key, out var value) ? value : null;
+            if (dict.TryGetValue(key, out var value))
+            {
+                // Bind 'this' for object method shorthand functions
+                if (value is TSFunction func)
+                {
+                    func.BindThis(dict);
+                }
+                return value;
+            }
+            return null;
         }
 
         // Number key on dictionary (convert to string)

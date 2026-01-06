@@ -158,10 +158,9 @@ public partial class ILEmitter
         {
             if (c.Arguments.Count >= 2)
             {
-                // Emit source object (Dictionary<string, object>)
+                // Emit source object (now accepts object to support both dictionaries and class instances)
                 EmitExpression(c.Arguments[0]);
                 EmitBoxIfNeeded(c.Arguments[0]);
-                IL.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
 
                 // Emit exclude keys (List<object>)
                 EmitExpression(c.Arguments[1]);

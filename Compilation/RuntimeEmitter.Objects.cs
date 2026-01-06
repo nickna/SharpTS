@@ -429,8 +429,14 @@ public static partial class RuntimeEmitter
         il.MarkLabel(dictLabel);
         // dict.TryGetValue(name, out value) ? value : null
         var valueLocal = il.DeclareLocal(typeof(object));
+        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+
+        // Store the dictionary in a local for later use with BindThis
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
@@ -439,6 +445,21 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(foundLabel);
+
+        // If value is a TSFunction, call BindThis(dict) on it
+        // to bind 'this' for object method shorthand
+        var notTSFunction = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notTSFunction);
+
+        // Call func.BindThis(dict)
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionBindThis);
+
+        il.MarkLabel(notTSFunction);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
 
@@ -1137,15 +1158,84 @@ public static partial class RuntimeEmitter
 
     private static void EmitObjectRest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        // Accept object instead of Dictionary to support both object literals and class instances
         var method = typeBuilder.DefineMethod(
             "ObjectRest",
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(Dictionary<string, object>),
-            [typeof(Dictionary<string, object>), typeof(List<object>)]
+            [typeof(object), typeof(List<object>)]
         );
         runtime.ObjectRest = method;
 
         var il = method.GetILGenerator();
+
+        var dictLabel = il.DefineLabel();
+        var emptyLabel = il.DefineLabel();
+        var processLabel = il.DefineLabel();
+
+        // Locals for class instance path
+        var fieldInfoLocal = il.DeclareLocal(typeof(FieldInfo));
+        var fieldsLocal = il.DeclareLocal(typeof(object));
+        var sourceDictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+
+        // Check if arg0 is Dictionary<string, object>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Check if obj is not null (for class instance path)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // Class instance path: get _fields via reflection
+        // var fieldInfo = obj.GetType().GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Stloc, fieldInfoLocal);
+
+        // if (fieldInfo == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var fields = fieldInfo.GetValue(obj);
+        il.Emit(OpCodes.Ldloc, fieldInfoLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // if (fields == null) goto empty
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // var sourceDict = fields as Dictionary<string, object>;
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Stloc, sourceDictLocal);
+
+        // if (sourceDict == null) goto empty
+        il.Emit(OpCodes.Ldloc, sourceDictLocal);
+        il.Emit(OpCodes.Brfalse, emptyLabel);
+
+        // sourceDict now has the dictionary from class instance
+        il.Emit(OpCodes.Br, processLabel);
+
+        // Dictionary path: cast arg0 directly
+        il.MarkLabel(dictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Stloc, sourceDictLocal);
+        il.Emit(OpCodes.Br, processLabel);
+
+        // Empty result fallback
+        il.MarkLabel(emptyLabel);
+        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ret);
+
+        // Process the source dictionary (now in sourceDictLocal)
+        il.MarkLabel(processLabel);
 
         // Create result dictionary
         var resultLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
@@ -1197,10 +1287,9 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(excludeLoopEnd);
 
-        // Iterate over source dictionary keys
-        // Get enumerator from source.Keys
+        // Iterate over source dictionary keys using sourceDictLocal
         var keysEnumLocal = il.DeclareLocal(typeof(Dictionary<string, object>.KeyCollection.Enumerator));
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, sourceDictLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Keys")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>.KeyCollection).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, keysEnumLocal);
@@ -1227,10 +1316,10 @@ public static partial class RuntimeEmitter
         var skipKey = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, skipKey);
 
-        // Add to result: result[key] = source[key]
+        // Add to result: result[key] = sourceDict[key]
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, sourceDictLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Item")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Item")!.GetSetMethod()!);

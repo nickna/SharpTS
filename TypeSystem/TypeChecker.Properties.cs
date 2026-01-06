@@ -574,6 +574,15 @@ public partial class TypeChecker
 
             return new TypeInfo.Any();
         }
+        // Handle interface member access
+        if (objType is TypeInfo.Interface itf)
+        {
+            if (itf.Members.TryGetValue(get.Name.Lexeme, out var memberType))
+            {
+                return memberType;
+            }
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on interface '{itf.Name}'.");
+        }
         if (objType is TypeInfo.Record record)
         {
             if (record.Fields.TryGetValue(get.Name.Lexeme, out var fieldType))
@@ -757,6 +766,11 @@ public partial class TypeChecker
              }
              // For now, disallow adding new properties to records via assignment to mimic strictness
              throw new Exception($"Type Error: Property '{set.Name.Lexeme}' does not exist on type '{record}'.");
+        }
+        // Allow property assignment on Any type (e.g., 'this' in object method shorthand)
+        if (objType is TypeInfo.Any)
+        {
+            return CheckExpr(set.Value);
         }
         throw new Exception("Type Error: Only instances and objects have properties.");
     }

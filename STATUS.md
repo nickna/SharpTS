@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-05 (IL compiler bug fixes - array method boxing, Math error handling)
+**Last Updated:** 2026-01-05 (Fixed: interface polymorphism type checking, object method `this` binding in IL compiler, object rest patterns with class instances)
 
 ## Legend
 - ✅ Implemented
@@ -227,22 +227,11 @@ This document tracks TypeScript language features and their implementation statu
 
 ## Known Bugs
 
-### Interpreter Bugs
-
-| Issue | Description |
-|-------|-------------|
-| Enum variable typing | Assigning enum to typed variable (e.g., `let d: Direction = Direction.Up`) fails |
-| Enum in conditionals | Using enum in switch/if comparisons fails |
-| Interface polymorphism | Calling methods on interface-typed variables fails |
-| `typeof null` | Returns incorrect value (should return "object") |
-| `Math.round()` | Edge case rounding issues |
-
 ### IL Compiler Bugs
 
 | Issue | Description |
 |-------|-------------|
-| Object rest patterns | Partial - simple cases work, complex may fail |
-| Object method `this` binding | `{ fn() { return this.x; } }` - `this` is not bound in compiled code |
+| `this.prop++` in object methods | Increment/decrement on `this.property` inside object method shorthand may fail |
 
 ---
 

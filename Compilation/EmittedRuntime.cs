@@ -21,6 +21,7 @@ public class EmittedRuntime
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
+    public MethodBuilder TSFunctionBindThis { get; set; } = null!;
 
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;

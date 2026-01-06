@@ -213,6 +213,51 @@ public static partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ldstr, "[Function]");
         toStringIL.Emit(OpCodes.Ret);
 
+        // BindThis method: public void BindThis(object thisValue)
+        // Sets the 'this' field in the display class to the given value
+        var bindThisBuilder = typeBuilder.DefineMethod(
+            "BindThis",
+            MethodAttributes.Public,
+            typeof(void),
+            [typeof(object)]
+        );
+        runtime.TSFunctionBindThis = bindThisBuilder;
+
+        var bindThisIL = bindThisBuilder.GetILGenerator();
+        var noTargetLabel = bindThisIL.DefineLabel();
+        var endLabel = bindThisIL.DefineLabel();
+        var thisFieldLocal = bindThisIL.DeclareLocal(typeof(FieldInfo));
+
+        // if (_target == null) return;
+        bindThisIL.Emit(OpCodes.Ldarg_0);
+        bindThisIL.Emit(OpCodes.Ldfld, targetField);
+        bindThisIL.Emit(OpCodes.Brfalse, noTargetLabel);
+
+        // var thisField = _target.GetType().GetField("this", BindingFlags.Public | BindingFlags.Instance);
+        bindThisIL.Emit(OpCodes.Ldarg_0);
+        bindThisIL.Emit(OpCodes.Ldfld, targetField);
+        bindThisIL.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        bindThisIL.Emit(OpCodes.Ldstr, "this");
+        bindThisIL.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Instance));
+        bindThisIL.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        bindThisIL.Emit(OpCodes.Stloc, thisFieldLocal);
+
+        // if (thisField == null) return;
+        bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
+        bindThisIL.Emit(OpCodes.Brfalse, noTargetLabel);
+
+        // thisField.SetValue(_target, thisValue);
+        bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
+        bindThisIL.Emit(OpCodes.Ldarg_0);
+        bindThisIL.Emit(OpCodes.Ldfld, targetField);
+        bindThisIL.Emit(OpCodes.Ldarg_1);
+        bindThisIL.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("SetValue", [typeof(object), typeof(object)])!);
+        bindThisIL.Emit(OpCodes.Br, endLabel);
+
+        bindThisIL.MarkLabel(noTargetLabel);
+        bindThisIL.MarkLabel(endLabel);
+        bindThisIL.Emit(OpCodes.Ret);
+
         typeBuilder.CreateType();
     }
 
