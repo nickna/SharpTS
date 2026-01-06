@@ -1,0 +1,222 @@
+using System.Reflection;
+using System.Reflection.Emit;
+using SharpTS.Runtime.Types;
+
+namespace SharpTS.Compilation;
+
+public static partial class RuntimeEmitter
+{
+    private static void EmitMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        EmitCreateMap(typeBuilder, runtime);
+        EmitCreateMapFromEntries(typeBuilder, runtime);
+        EmitMapSize(typeBuilder, runtime);
+        EmitMapGet(typeBuilder, runtime);
+        EmitMapSet(typeBuilder, runtime);
+        EmitMapHas(typeBuilder, runtime);
+        EmitMapDelete(typeBuilder, runtime);
+        EmitMapClear(typeBuilder, runtime);
+        EmitMapKeys(typeBuilder, runtime);
+        EmitMapValues(typeBuilder, runtime);
+        EmitMapEntries(typeBuilder, runtime);
+        EmitMapForEach(typeBuilder, runtime);
+    }
+
+    private static void EmitCreateMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CreateMap",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            Type.EmptyTypes
+        );
+        runtime.CreateMap = method;
+
+        var il = method.GetILGenerator();
+        // Call RuntimeTypes.CreateMap()
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("CreateMap")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitCreateMapFromEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CreateMapFromEntries",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            [typeof(object)]
+        );
+        runtime.CreateMapFromEntries = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("CreateMapFromEntries")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapSize",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(double),
+            [typeof(object)]
+        );
+        runtime.MapSize = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapSize")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapGet",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            [typeof(object), typeof(object)]
+        );
+        runtime.MapGet = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapGet")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapSet",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            [typeof(object), typeof(object), typeof(object)]
+        );
+        runtime.MapSet = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapSet")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapHas",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(bool),
+            [typeof(object), typeof(object)]
+        );
+        runtime.MapHas = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapHas")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapDelete",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(bool),
+            [typeof(object), typeof(object)]
+        );
+        runtime.MapDelete = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapDelete")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapClear",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(object)]
+        );
+        runtime.MapClear = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapClear")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapKeys",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(List<object>),
+            [typeof(object)]
+        );
+        runtime.MapKeys = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapKeys")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapValues",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(List<object>),
+            [typeof(object)]
+        );
+        runtime.MapValues = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapValues")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapEntries",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(List<object>),
+            [typeof(object)]
+        );
+        runtime.MapEntries = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapEntries")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "MapForEach",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(object), typeof(object)]
+        );
+        runtime.MapForEach = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("MapForEach")!);
+        il.Emit(OpCodes.Ret);
+    }
+}

@@ -699,6 +699,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Map method calls (based on type info)
+        if (objType is TypeSystem.TypeInfo.Map)
+        {
+            EmitMapMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
+        // Special case: Set method calls (based on type info)
+        if (objType is TypeSystem.TypeInfo.Set)
+        {
+            EmitSetMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
         // Get the method/function value from the object
         EmitExpression(methodGet);
 
@@ -1568,6 +1582,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new Map(...) constructor
+        if (n.ClassName.Lexeme == "Map")
+        {
+            EmitNewMap(n.Arguments);
+            return;
+        }
+
+        // Special case: new Set(...) constructor
+        if (n.ClassName.Lexeme == "Set")
+        {
+            EmitNewSet(n.Arguments);
+            return;
+        }
+
         if (_ctx.Classes.TryGetValue(n.ClassName.Lexeme, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
             _ctx.ClassConstructors.TryGetValue(n.ClassName.Lexeme, out var ctorBuilder))
@@ -2319,5 +2347,237 @@ public partial class ILEmitter
         }
         // All Date constructors return an object, reset stack type
         _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits code for new Map(...) construction.
+    /// </summary>
+    private void EmitNewMap(List<Expr> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            // new Map() - empty map
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateMap);
+        }
+        else
+        {
+            // new Map(entries) - map from entries
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateMapFromEntries);
+        }
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits code for new Set(...) construction.
+    /// </summary>
+    private void EmitNewSet(List<Expr> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            // new Set() - empty set
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateSet);
+        }
+        else
+        {
+            // new Set(values) - set from array
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateSetFromArray);
+        }
+        _stackType = StackType.Unknown;
+    }
+
+    /// <summary>
+    /// Emits code for Map method calls.
+    /// </summary>
+    private void EmitMapMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the Map object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            case "get":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapGet);
+                return;
+
+            case "set":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSet);
+                return;
+
+            case "has":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapHas);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                return;
+
+            case "delete":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapDelete);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                return;
+
+            case "clear":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapClear);
+                IL.Emit(OpCodes.Ldnull); // clear returns undefined
+                return;
+
+            case "keys":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapKeys);
+                return;
+
+            case "values":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapValues);
+                return;
+
+            case "entries":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+                return;
+
+            case "forEach":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.MapForEach);
+                IL.Emit(OpCodes.Ldnull); // forEach returns undefined
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Emits code for Set method calls.
+    /// </summary>
+    private void EmitSetMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the Set object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            case "add":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetAdd);
+                return;
+
+            case "has":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetHas);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                return;
+
+            case "delete":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetDelete);
+                IL.Emit(OpCodes.Box, typeof(bool));
+                return;
+
+            case "clear":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetClear);
+                IL.Emit(OpCodes.Ldnull); // clear returns undefined
+                return;
+
+            case "keys":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetKeys);
+                return;
+
+            case "values":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+                return;
+
+            case "entries":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetEntries);
+                return;
+
+            case "forEach":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetForEach);
+                IL.Emit(OpCodes.Ldnull); // forEach returns undefined
+                return;
+        }
     }
 }

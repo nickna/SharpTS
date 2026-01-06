@@ -220,4 +220,58 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for instance methods on Map objects
+    /// </summary>
+    public static TypeInfo? GetMapMemberType(string name, TypeInfo keyType, TypeInfo valueType)
+    {
+        return name switch
+        {
+            "size" => NumberType,
+            "get" => new TypeInfo.Function([keyType],
+                new TypeInfo.Union([valueType, new TypeInfo.Null()])),
+            "set" => new TypeInfo.Function([keyType, valueType],
+                new TypeInfo.Map(keyType, valueType)),  // Returns this for chaining
+            "has" => new TypeInfo.Function([keyType], BooleanType),
+            "delete" => new TypeInfo.Function([keyType], BooleanType),
+            "clear" => new TypeInfo.Function([], VoidType),
+            "keys" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(keyType)),
+            "values" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(valueType)),
+            "entries" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(new TypeInfo.Tuple([keyType, valueType], 2))),
+            "forEach" => new TypeInfo.Function(
+                [new TypeInfo.Function([valueType, keyType], VoidType)],
+                VoidType),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance methods on Set objects
+    /// </summary>
+    public static TypeInfo? GetSetMemberType(string name, TypeInfo elementType)
+    {
+        return name switch
+        {
+            "size" => NumberType,
+            "add" => new TypeInfo.Function([elementType],
+                new TypeInfo.Set(elementType)),  // Returns this for chaining
+            "has" => new TypeInfo.Function([elementType], BooleanType),
+            "delete" => new TypeInfo.Function([elementType], BooleanType),
+            "clear" => new TypeInfo.Function([], VoidType),
+            "keys" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(elementType)),  // Same as values() for Set
+            "values" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(elementType)),
+            "entries" => new TypeInfo.Function([],
+                new TypeInfo.Iterator(new TypeInfo.Tuple([elementType, elementType], 2))),
+            "forEach" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType, elementType], VoidType)],
+                VoidType),
+            _ => null
+        };
+    }
 }

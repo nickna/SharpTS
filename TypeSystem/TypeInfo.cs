@@ -126,6 +126,30 @@ public abstract record TypeInfo
             : $"{ElementType}[]";
     }
 
+    /// <summary>
+    /// Represents the Map&lt;K, V&gt; built-in type for key-value collections.
+    /// </summary>
+    public record Map(TypeInfo KeyType, TypeInfo ValueType) : TypeInfo
+    {
+        public override string ToString() => $"Map<{KeyType}, {ValueType}>";
+    }
+
+    /// <summary>
+    /// Represents the Set&lt;T&gt; built-in type for unique value collections.
+    /// </summary>
+    public record Set(TypeInfo ElementType) : TypeInfo
+    {
+        public override string ToString() => $"Set<{ElementType}>";
+    }
+
+    /// <summary>
+    /// Represents an iterator type returned by keys(), values(), entries() methods.
+    /// </summary>
+    public record Iterator(TypeInfo ElementType) : TypeInfo
+    {
+        public override string ToString() => $"IterableIterator<{ElementType}>";
+    }
+
     public record Tuple(
         List<TypeInfo> ElementTypes,
         int RequiredCount,

@@ -216,8 +216,22 @@ public partial class ILEmitter
         _ctx.EnterLoop(endLabel, continueLabel);
         _ctx.Locals.EnterScope();
 
-        // Evaluate iterable and get enumerator
+        // Evaluate iterable
+        TypeInfo? iterableType = _ctx.TypeMap?.Get(f.Iterable);
         EmitExpression(f.Iterable);
+
+        // For Map/Set, convert to a List first
+        if (iterableType is TypeInfo.Map)
+        {
+            // Map iteration yields [key, value] entries
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+        }
+        else if (iterableType is TypeInfo.Set)
+        {
+            // Set iteration yields values
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+        }
+
         var iterableLocal = IL.DeclareLocal(typeof(object));
         IL.Emit(OpCodes.Stloc, iterableLocal);
 

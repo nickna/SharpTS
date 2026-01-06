@@ -391,12 +391,18 @@ public partial class Interpreter
     {
         object? iterable = Evaluate(forOf.Iterable);
 
-        if (iterable is not SharpTSArray array)
+        // Get elements based on iterable type
+        IEnumerable<object?> elements = iterable switch
         {
-            throw new Exception("Runtime Error: for...of requires an iterable (array).");
-        }
+            SharpTSArray array => array.Elements,
+            SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
+            SharpTSSet set => set.Values().Elements,       // yields values
+            SharpTSIterator iter => iter.Elements,
+            string s => s.Select(c => (object?)c.ToString()),
+            _ => throw new Exception("Runtime Error: for...of requires an iterable (array, Map, Set, or iterator).")
+        };
 
-        foreach (var element in array.Elements)
+        foreach (var element in elements)
         {
             RuntimeEnvironment loopEnv = new(_environment);
             loopEnv.Define(forOf.Variable.Lexeme, element);

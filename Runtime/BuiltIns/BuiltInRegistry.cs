@@ -139,6 +139,9 @@ public sealed class BuiltInRegistry
         RegisterPromiseType(registry);
         RegisterDoubleType(registry);
         RegisterDateType(registry);
+        RegisterMapType(registry);
+        RegisterSetType(registry);
+        RegisterIteratorType(registry);
 
         return registry;
     }
@@ -270,6 +273,25 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSDate), (instance, name) =>
             DateBuiltIns.GetMember((SharpTSDate)instance, name));
+    }
+
+    private static void RegisterMapType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSMap), (instance, name) =>
+            MapBuiltIns.GetMember((SharpTSMap)instance, name));
+    }
+
+    private static void RegisterSetType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSSet), (instance, name) =>
+            SetBuiltIns.GetMember((SharpTSSet)instance, name));
+    }
+
+    private static void RegisterIteratorType(BuiltInRegistry registry)
+    {
+        // Iterator doesn't have instance methods beyond iteration itself
+        // It's consumed by for...of loops directly
+        registry.RegisterInstanceType(typeof(SharpTSIterator), (_, _) => null);
     }
 
     private static string Stringify(object? obj)

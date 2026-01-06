@@ -292,6 +292,68 @@ public partial class TypeChecker
             return new TypeInfo.Date();
         }
 
+        // Handle new Map() and new Map<K, V>() constructor
+        if (newExpr.ClassName.Lexeme == "Map")
+        {
+            // Map() accepts 0-1 arguments (optional iterable of entries)
+            if (newExpr.Arguments.Count > 1)
+            {
+                throw new Exception("Type Error: Map constructor accepts at most 1 argument.");
+            }
+
+            // Validate argument if provided
+            foreach (var arg in newExpr.Arguments)
+            {
+                CheckExpr(arg);
+            }
+
+            // Determine key and value types from type arguments or default to any
+            TypeInfo keyType = new TypeInfo.Any();
+            TypeInfo valueType = new TypeInfo.Any();
+
+            if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
+            {
+                keyType = ToTypeInfo(newExpr.TypeArgs[0]);
+                valueType = ToTypeInfo(newExpr.TypeArgs[1]);
+            }
+            else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
+            {
+                throw new Exception("Type Error: Map requires exactly 2 type arguments: Map<K, V>");
+            }
+
+            return new TypeInfo.Map(keyType, valueType);
+        }
+
+        // Handle new Set() and new Set<T>() constructor
+        if (newExpr.ClassName.Lexeme == "Set")
+        {
+            // Set() accepts 0-1 arguments (optional iterable of values)
+            if (newExpr.Arguments.Count > 1)
+            {
+                throw new Exception("Type Error: Set constructor accepts at most 1 argument.");
+            }
+
+            // Validate argument if provided
+            foreach (var arg in newExpr.Arguments)
+            {
+                CheckExpr(arg);
+            }
+
+            // Determine element type from type argument or default to any
+            TypeInfo elementType = new TypeInfo.Any();
+
+            if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
+            {
+                elementType = ToTypeInfo(newExpr.TypeArgs[0]);
+            }
+            else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
+            {
+                throw new Exception("Type Error: Set requires exactly 1 type argument: Set<T>");
+            }
+
+            return new TypeInfo.Set(elementType);
+        }
+
         TypeInfo type = LookupVariable(newExpr.ClassName);
 
         // Check for abstract class instantiation
@@ -657,6 +719,20 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetDateInstanceMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;
             throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
+        }
+        // Handle Map instance methods
+        if (objType is TypeInfo.Map mapType)
+        {
+            var memberType = BuiltInTypes.GetMapMemberType(get.Name.Lexeme, mapType.KeyType, mapType.ValueType);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Map'.");
+        }
+        // Handle Set instance methods
+        if (objType is TypeInfo.Set setType)
+        {
+            var memberType = BuiltInTypes.GetSetMemberType(get.Name.Lexeme, setType.ElementType);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Set'.");
         }
         return new TypeInfo.Any();
     }

@@ -105,6 +105,26 @@ public partial class ILEmitter
         if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))
             return;
 
+        // Special case: Map.size property
+        if (objType is TypeInfo.Map && g.Name.Lexeme == "size")
+        {
+            EmitExpression(g.Object);
+            EmitBoxIfNeeded(g.Object);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
+            IL.Emit(OpCodes.Box, typeof(double));
+            return;
+        }
+
+        // Special case: Set.size property
+        if (objType is TypeInfo.Set && g.Name.Lexeme == "size")
+        {
+            EmitExpression(g.Object);
+            EmitBoxIfNeeded(g.Object);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
+            IL.Emit(OpCodes.Box, typeof(double));
+            return;
+        }
+
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 

@@ -138,11 +138,15 @@ public partial class Interpreter
     {
         object? iterable = await EvaluateAsync(forOf.Iterable);
 
+        // Get elements based on iterable type
         IEnumerable<object?> items = iterable switch
         {
             SharpTSArray arr => arr.Elements,
+            SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
+            SharpTSSet set => set.Values().Elements,       // yields values
+            SharpTSIterator iter => iter.Elements,
             string s => s.Select(c => (object?)c.ToString()),
-            _ => throw new Exception("Runtime Error: for...of requires an iterable.")
+            _ => throw new Exception("Runtime Error: for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
         foreach (var item in items)

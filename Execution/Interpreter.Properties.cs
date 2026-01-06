@@ -27,6 +27,38 @@ public partial class Interpreter
             return CreateDate(args);
         }
 
+        // Handle new Map(...) constructor
+        if (newExpr.ClassName.Lexeme == "Map")
+        {
+            if (newExpr.Arguments.Count == 0)
+            {
+                return new SharpTSMap();
+            }
+            // Handle new Map([[k1, v1], [k2, v2], ...])
+            var arg = Evaluate(newExpr.Arguments[0]);
+            if (arg is SharpTSArray entriesArray)
+            {
+                return SharpTSMap.FromEntries(entriesArray);
+            }
+            return new SharpTSMap();
+        }
+
+        // Handle new Set(...) constructor
+        if (newExpr.ClassName.Lexeme == "Set")
+        {
+            if (newExpr.Arguments.Count == 0)
+            {
+                return new SharpTSSet();
+            }
+            // Handle new Set([v1, v2, v3, ...])
+            var arg = Evaluate(newExpr.Arguments[0]);
+            if (arg is SharpTSArray valuesArray)
+            {
+                return SharpTSSet.FromArray(valuesArray);
+            }
+            return new SharpTSSet();
+        }
+
         object? klass = _environment.Get(newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {

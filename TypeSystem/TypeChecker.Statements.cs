@@ -797,6 +797,21 @@ public partial class TypeChecker
                 {
                     elementType = arr.ElementType;
                 }
+                // Map iteration yields [key, value] tuples
+                else if (iterableType is TypeInfo.Map mapType)
+                {
+                    elementType = new TypeInfo.Tuple([mapType.KeyType, mapType.ValueType], 2);
+                }
+                // Set iteration yields values
+                else if (iterableType is TypeInfo.Set setType)
+                {
+                    elementType = setType.ElementType;
+                }
+                // Iterator yields its element type
+                else if (iterableType is TypeInfo.Iterator iterType)
+                {
+                    elementType = iterType.ElementType;
+                }
 
                 // Create new scope and define the loop variable
                 TypeEnvironment forOfEnv = new(_environment);

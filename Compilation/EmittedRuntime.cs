@@ -189,6 +189,33 @@ public class EmittedRuntime
     public MethodBuilder NumberToExponential { get; set; } = null!;
     public MethodBuilder NumberToStringRadix { get; set; } = null!;
 
+    // Map support
+    public MethodBuilder CreateMap { get; set; } = null!;
+    public MethodBuilder CreateMapFromEntries { get; set; } = null!;
+    public MethodBuilder MapSize { get; set; } = null!;
+    public MethodBuilder MapGet { get; set; } = null!;
+    public MethodBuilder MapSet { get; set; } = null!;
+    public MethodBuilder MapHas { get; set; } = null!;
+    public MethodBuilder MapDelete { get; set; } = null!;
+    public MethodBuilder MapClear { get; set; } = null!;
+    public MethodBuilder MapKeys { get; set; } = null!;
+    public MethodBuilder MapValues { get; set; } = null!;
+    public MethodBuilder MapEntries { get; set; } = null!;
+    public MethodBuilder MapForEach { get; set; } = null!;
+
+    // Set support
+    public MethodBuilder CreateSet { get; set; } = null!;
+    public MethodBuilder CreateSetFromArray { get; set; } = null!;
+    public MethodBuilder SetSize { get; set; } = null!;
+    public MethodBuilder SetAdd { get; set; } = null!;
+    public MethodBuilder SetHas { get; set; } = null!;
+    public MethodBuilder SetDelete { get; set; } = null!;
+    public MethodBuilder SetClear { get; set; } = null!;
+    public MethodBuilder SetKeys { get; set; } = null!;
+    public MethodBuilder SetValues { get; set; } = null!;
+    public MethodBuilder SetEntries { get; set; } = null!;
+    public MethodBuilder SetForEach { get; set; } = null!;
+
     // Date support
     public MethodBuilder DateNow { get; set; } = null!;
     public MethodBuilder CreateDateNoArgs { get; set; } = null!;

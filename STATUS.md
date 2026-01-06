@@ -186,8 +186,8 @@ This document tracks TypeScript language features and their implementation statu
 | `Array.isArray` | ✅ | Type guard for array detection |
 | `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
 | `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
+| `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys |
 | `RegExp` | ❌ | |
-| `Map`/`Set` | ❌ | |
 
 ---
 
