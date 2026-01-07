@@ -273,6 +273,12 @@ public class AssemblyReferenceRewriter : IDisposable
             }
         }
 
+        // Always include System.Runtime as the core runtime assembly.
+        // This ensures deterministic behavior across platforms since Directory.GetFiles()
+        // returns files in different orders on Windows (alphabetical) vs Linux (inode order),
+        // which affects type-to-assembly mapping when types exist in multiple assemblies.
+        neededAssemblies.Add("System.Runtime");
+
         // Create references for all needed SDK assemblies
         foreach (var asmName in neededAssemblies)
         {
