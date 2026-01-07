@@ -311,24 +311,18 @@ public partial class ILCompiler
         );
         _classProperties[className][fieldName] = property;
 
-        // Define getter method - returns object for compatibility but boxes internally
-        // This allows existing code to call the getter and get a boxed value
+        // Define getter method - returns actual property type for proper C# interop
         var getter = typeBuilder.DefineMethod(
             $"get_{fieldName}",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual,
-            typeof(object),  // Return object for compatibility
+            propertyType,  // Return actual type for C# interop
             Type.EmptyTypes
         );
 
         var getterIL = getter.GetILGenerator();
         getterIL.Emit(OpCodes.Ldarg_0);             // this
         getterIL.Emit(OpCodes.Ldfld, backingField); // this.__fieldName (typed value)
-        // Box value types and generic type parameters so return is always object
-        if (propertyType.IsValueType || propertyType.IsGenericParameter)
-        {
-            getterIL.Emit(OpCodes.Box, propertyType);
-        }
-        getterIL.Emit(OpCodes.Ret);
+        getterIL.Emit(OpCodes.Ret);                 // Return typed value directly
 
         property.SetGetMethod(getter);
 
@@ -340,59 +334,21 @@ public partial class ILCompiler
         }
         classGetters[fieldName] = getter;
 
-        // Define setter method - always create for runtime SetFieldsProperty to find
-        // Returns object (the value set) for consistency with existing code
+        // Define setter method - accepts actual property type for proper C# interop
         // For readonly fields: define the setter but don't register it for direct dispatch,
         // so type-checked code won't allow setting, but constructor can via runtime reflection
         {
             var setter = typeBuilder.DefineMethod(
                 $"set_{fieldName}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual,
-                typeof(object),  // Return object for consistency (returns the value set)
-                [typeof(object)]  // Accept object for compatibility
+                typeof(void),    // Standard setter returns void
+                [propertyType]   // Accept actual type for C# interop
             );
 
             var setterIL = setter.GetILGenerator();
-
-            // Store the original value argument for returning later
-            setterIL.Emit(OpCodes.Ldarg_1);  // value (object)
-            var returnValue = setterIL.DeclareLocal(typeof(object));
-            setterIL.Emit(OpCodes.Stloc, returnValue);
-
-            setterIL.Emit(OpCodes.Ldarg_0);  // this
-            setterIL.Emit(OpCodes.Ldarg_1);  // value (object)
-
-            // Convert from object to target type
-            if (propertyType == typeof(double))
-            {
-                setterIL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-            }
-            else if (propertyType == typeof(bool))
-            {
-                setterIL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBoolean", [typeof(object)])!);
-            }
-            else if (propertyType == typeof(string))
-            {
-                setterIL.Emit(OpCodes.Castclass, typeof(string));
-            }
-            else if (propertyType.IsGenericParameter)
-            {
-                // For generic type parameters (T), use Unbox_Any which handles both value and reference types
-                setterIL.Emit(OpCodes.Unbox_Any, propertyType);
-            }
-            else if (propertyType.IsValueType)
-            {
-                setterIL.Emit(OpCodes.Unbox_Any, propertyType);
-            }
-            else if (propertyType != typeof(object))
-            {
-                setterIL.Emit(OpCodes.Castclass, propertyType);
-            }
-
-            setterIL.Emit(OpCodes.Stfld, backingField);  // this.__fieldName = converted value
-
-            // Return the original value
-            setterIL.Emit(OpCodes.Ldloc, returnValue);
+            setterIL.Emit(OpCodes.Ldarg_0);          // this
+            setterIL.Emit(OpCodes.Ldarg_1);          // value (already typed)
+            setterIL.Emit(OpCodes.Stfld, backingField);  // this.__fieldName = value
             setterIL.Emit(OpCodes.Ret);
 
             // Only link to PropertyBuilder for non-readonly (C# interop visibility)

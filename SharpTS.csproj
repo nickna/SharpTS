@@ -35,10 +35,12 @@
     <None Include="README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
-  <!-- Exclude test project from this compilation -->
+  <!-- Exclude test and example projects from this compilation -->
   <ItemGroup>
     <Compile Remove="SharpTS.Tests/**" />
     <None Remove="SharpTS.Tests/**" />
+    <Compile Remove="SharpTS.Example.Interop/**" />
+    <None Remove="SharpTS.Example.Interop/**" />
   </ItemGroup>
 
   <ItemGroup>

@@ -528,6 +528,27 @@ public partial class ILEmitter
         EmitBoxIfNeeded(receiver);
         IL.Emit(OpCodes.Castclass, classType);
         IL.Emit(OpCodes.Callvirt, getterBuilder);
+
+        // Check the actual return type of the getter method
+        // Field properties have typed getters, but explicit accessors return object
+        var getterReturnType = getterBuilder.ReturnType;
+
+        if (getterReturnType.IsValueType)
+        {
+            // Getter returns a native value type - box it for internal code that expects object
+            IL.Emit(OpCodes.Box, getterReturnType);
+            SetStackUnknown();
+        }
+        else if (getterReturnType == typeof(string))
+        {
+            SetStackType(StackType.String);
+        }
+        else
+        {
+            // Reference types (including object) don't need boxing
+            SetStackUnknown();
+        }
+
         return true;
     }
 
@@ -562,26 +583,61 @@ public partial class ILEmitter
         if (!_ctx.Classes.TryGetValue(className, out var classType))
             return false;
 
+        // Get the actual parameter type of the setter method
+        // Field properties have typed setters, but explicit accessors take object
+        var setterParams = setterBuilder.GetParameters();
+        var setterParamType = setterParams.Length > 0 ? setterParams[0].ParameterType : typeof(object);
+
         // Emit: ((ClassName)receiver).set_PropertyName(value)
         // Also need to keep the value on the stack as the expression result
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
         IL.Emit(OpCodes.Castclass, classType);
 
+        // Emit value and convert to setter parameter type
         EmitExpression(value);
-        EmitBoxIfNeeded(value);
 
-        // Dup value for expression result before calling setter
-        IL.Emit(OpCodes.Dup);
-        var resultTemp = IL.DeclareLocal(typeof(object));
-        IL.Emit(OpCodes.Stloc, resultTemp);
+        // Check if setter returns void (field properties) or object (explicit accessors)
+        var setterReturnsVoid = setterBuilder.ReturnType == typeof(void);
 
-        // Call the setter (it returns a value we need to discard)
-        IL.Emit(OpCodes.Callvirt, setterBuilder);
-        IL.Emit(OpCodes.Pop);  // Discard setter's return value
+        // Save a copy for expression result (need to box if value type for consistent handling)
+        if (setterParamType.IsValueType)
+        {
+            // For value types: box first, then dup, then unbox for setter
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Dup);
+            var resultTemp = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, resultTemp);
+            IL.Emit(OpCodes.Unbox_Any, setterParamType);
+            IL.Emit(OpCodes.Callvirt, setterBuilder);
+            // Pop setter return value if not void (explicit accessors return object)
+            if (!setterReturnsVoid)
+            {
+                IL.Emit(OpCodes.Pop);
+            }
+            IL.Emit(OpCodes.Ldloc, resultTemp);
+        }
+        else
+        {
+            // For reference types (including object): dup, optionally cast, call setter
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Dup);
+            var resultTemp = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, resultTemp);
+            if (setterParamType != typeof(object))
+            {
+                IL.Emit(OpCodes.Castclass, setterParamType);
+            }
+            IL.Emit(OpCodes.Callvirt, setterBuilder);
+            // Pop setter return value if not void (explicit accessors return object)
+            if (!setterReturnsVoid)
+            {
+                IL.Emit(OpCodes.Pop);
+            }
+            IL.Emit(OpCodes.Ldloc, resultTemp);
+        }
 
-        // Put saved value back on stack as expression result
-        IL.Emit(OpCodes.Ldloc, resultTemp);
+        SetStackUnknown();  // Result is boxed object
         return true;
     }
 }
