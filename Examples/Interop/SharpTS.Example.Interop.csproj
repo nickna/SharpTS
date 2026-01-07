@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Copy compiled TypeScript DLLs to output directory for runtime loading -->
+  <ItemGroup>
+    <None Include="CompiledTS\Library.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('CompiledTS\Library.dll')" />
+    <None Include="CompiledTS\SharpTS.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('CompiledTS\SharpTS.dll')" />
+  </ItemGroup>
+
+</Project>
