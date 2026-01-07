@@ -75,7 +75,7 @@ public partial class ILEmitter
     /// Ensures the value on stack is an unboxed double.
     /// Only emits unboxing IL if stack is not already a double.
     /// </summary>
-    private void EnsureDouble()
+    public void EnsureDouble()
     {
         if (_stackType != StackType.Double)
         {
@@ -88,12 +88,26 @@ public partial class ILEmitter
     /// Ensures the value on stack is an unboxed boolean (int32 0 or 1).
     /// Only emits conversion IL if stack is not already a boolean.
     /// </summary>
-    private void EnsureBoolean()
+    public void EnsureBoolean()
     {
         if (_stackType != StackType.Boolean)
         {
             IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBoolean", [typeof(object)])!);
             _stackType = StackType.Boolean;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is a string.
+    /// Converts to string if not already a string.
+    /// </summary>
+    public void EnsureString()
+    {
+        if (_stackType != StackType.String)
+        {
+            // Call object.ToString() - handles null and value types
+            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+            _stackType = StackType.String;
         }
     }
 
@@ -1070,20 +1084,20 @@ public partial class ILEmitter
                     {
                         EmitStoreLocalToExportField(local, defaultField);
                     }
-                    else if (_ctx.Functions.TryGetValue(name, out var funcBuilder))
+                    else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(name), out var funcBuilder))
                     {
                         // Create TSFunction for function
-                        EmitFunctionReference(name, funcBuilder);
+                        EmitFunctionReference(_ctx.GetQualifiedFunctionName(name), funcBuilder);
                         IL.Emit(OpCodes.Stsfld, defaultField);
                     }
-                    else if (_ctx.Classes.TryGetValue(name, out var classBuilder))
+                    else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
                     {
                         // Store class type token
                         IL.Emit(OpCodes.Ldtoken, classBuilder);
                         IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
                         IL.Emit(OpCodes.Stsfld, defaultField);
                     }
-                    else if (_ctx.EnumMembers?.TryGetValue(name, out var enumMembers) == true)
+                    else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
                     {
                         // Create SharpTSObject with enum members
                         EmitEnumAsObject(enumMembers);
@@ -1115,18 +1129,18 @@ public partial class ILEmitter
                 {
                     EmitStoreLocalToExportField(local, field);
                 }
-                else if (_ctx.Functions.TryGetValue(name, out var funcBuilder))
+                else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(name), out var funcBuilder))
                 {
-                    EmitFunctionReference(name, funcBuilder);
+                    EmitFunctionReference(_ctx.GetQualifiedFunctionName(name), funcBuilder);
                     IL.Emit(OpCodes.Stsfld, field);
                 }
-                else if (_ctx.Classes.TryGetValue(name, out var classBuilder))
+                else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
                 {
                     IL.Emit(OpCodes.Ldtoken, classBuilder);
                     IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
                     IL.Emit(OpCodes.Stsfld, field);
                 }
-                else if (_ctx.EnumMembers?.TryGetValue(name, out var enumMembers) == true)
+                else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
                 {
                     // Create SharpTSObject with enum members
                     EmitEnumAsObject(enumMembers);
@@ -1149,18 +1163,18 @@ public partial class ILEmitter
                     {
                         EmitStoreLocalToExportField(local, field);
                     }
-                    else if (_ctx.Functions.TryGetValue(localName, out var funcBuilder))
+                    else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(localName), out var funcBuilder))
                     {
-                        EmitFunctionReference(localName, funcBuilder);
+                        EmitFunctionReference(_ctx.GetQualifiedFunctionName(localName), funcBuilder);
                         IL.Emit(OpCodes.Stsfld, field);
                     }
-                    else if (_ctx.Classes.TryGetValue(localName, out var classBuilder))
+                    else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(localName), out var classBuilder))
                     {
                         IL.Emit(OpCodes.Ldtoken, classBuilder);
                         IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
                         IL.Emit(OpCodes.Stsfld, field);
                     }
-                    else if (_ctx.EnumMembers?.TryGetValue(localName, out var enumMembers) == true)
+                    else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(localName), out var enumMembers) == true)
                     {
                         // Create SharpTSObject with enum members
                         EmitEnumAsObject(enumMembers);

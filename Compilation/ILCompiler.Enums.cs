@@ -10,6 +10,17 @@ public partial class ILCompiler
 {
     private void DefineEnum(Stmt.Enum enumStmt)
     {
+        var ctx = GetDefinitionContext();
+
+        // Get qualified enum name (module-prefixed in multi-module compilation)
+        string qualifiedEnumName = ctx.GetQualifiedEnumName(enumStmt.Name.Lexeme);
+
+        // Track simple name -> module mapping for later lookups
+        if (_currentModulePath != null)
+        {
+            _enumToModule[enumStmt.Name.Lexeme] = _currentModulePath;
+        }
+
         Dictionary<string, object> members = [];
         Dictionary<double, string> reverse = [];
         double? currentNumericValue = null;
@@ -70,14 +81,14 @@ public partial class ILCompiler
             _ => EnumKind.Numeric
         };
 
-        _enumMembers[enumStmt.Name.Lexeme] = members;
-        _enumReverse[enumStmt.Name.Lexeme] = reverse;
-        _enumKinds[enumStmt.Name.Lexeme] = kind;
+        _enumMembers[qualifiedEnumName] = members;
+        _enumReverse[qualifiedEnumName] = reverse;
+        _enumKinds[qualifiedEnumName] = kind;
 
         // Track const enums
         if (enumStmt.IsConst)
         {
-            _constEnums.Add(enumStmt.Name.Lexeme);
+            _constEnums.Add(qualifiedEnumName);
         }
     }
 

@@ -287,7 +287,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // Check if it's a function
-        if (_ctx.Functions.TryGetValue(name, out var funcMethod))
+        if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod))
         {
             // Create TSFunction wrapper
             _il.Emit(OpCodes.Ldnull);
@@ -640,7 +640,7 @@ public partial class AsyncMoveNextEmitter
         }
 
         // Check if it's a direct function call
-        if (c.Callee is Expr.Variable funcVar && _ctx!.Functions.TryGetValue(funcVar.Name.Lexeme, out var funcMethod))
+        if (c.Callee is Expr.Variable funcVar && _ctx!.Functions.TryGetValue(_ctx.ResolveFunctionName(funcVar.Name.Lexeme), out var funcMethod))
         {
             // Direct call to known function
             // IMPORTANT: In async context, await can happen in arguments

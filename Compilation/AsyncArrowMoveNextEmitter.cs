@@ -316,7 +316,7 @@ public class AsyncArrowMoveNextEmitter
         }
 
         // Check if it's a global function
-        if (_ctx?.Functions.TryGetValue(name, out var funcMethod) == true)
+        if (_ctx?.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod) == true)
         {
             // Load function reference
             _il.Emit(OpCodes.Ldnull);

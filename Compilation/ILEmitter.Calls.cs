@@ -256,10 +256,11 @@ public partial class ILEmitter
         // Special case: Static method call on class (e.g., Counter.increment())
         if (c.Callee is Expr.Get staticGet &&
             staticGet.Object is Expr.Variable classVar &&
-            _ctx.Classes.TryGetValue(classVar.Name.Lexeme, out var classBuilder))
+            _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             if (_ctx.StaticMethods != null &&
-                _ctx.StaticMethods.TryGetValue(classVar.Name.Lexeme, out var classMethods) &&
+                _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
                 classMethods.TryGetValue(staticGet.Name.Lexeme, out var staticMethod))
             {
                 var paramCount = staticMethod.GetParameters().Length;
@@ -297,85 +298,148 @@ public partial class ILEmitter
             return;
         }
 
-        if (c.Callee is Expr.Variable funcVar && _ctx.Functions.TryGetValue(funcVar.Name.Lexeme, out var methodBuilder))
+        if (c.Callee is Expr.Variable funcVar)
         {
-            // Determine target method (may be generic instantiation)
-            MethodInfo targetMethod = methodBuilder;
+            // Resolve function name (may be module-qualified in multi-module compilation)
+            string resolvedFuncName = _ctx.ResolveFunctionName(funcVar.Name.Lexeme);
 
-            // Handle generic function call (e.g., identity<number>(42))
-            if (_ctx.IsGenericFunction?.TryGetValue(funcVar.Name.Lexeme, out var isGeneric) == true && isGeneric)
+            if (_ctx.Functions.TryGetValue(resolvedFuncName, out var methodBuilder))
             {
-                if (c.TypeArgs != null && c.TypeArgs.Count > 0)
+                // Determine target method (may be generic instantiation)
+                MethodInfo targetMethod = methodBuilder;
+
+                // Handle generic function call (e.g., identity<number>(42))
+                if (_ctx.IsGenericFunction?.TryGetValue(resolvedFuncName, out var isGeneric) == true && isGeneric)
                 {
-                    // Explicit type arguments
-                    Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
-                    targetMethod = methodBuilder.MakeGenericMethod(typeArgs);
-                }
-                else
-                {
-                    // Type inference fallback - use constraint type or object
-                    var genericParams = _ctx.FunctionGenericParams![funcVar.Name.Lexeme];
-                    Type[] inferredArgs = new Type[genericParams.Length];
-                    for (int i = 0; i < genericParams.Length; i++)
+                    if (c.TypeArgs != null && c.TypeArgs.Count > 0)
                     {
-                        // Use the base type constraint if available, otherwise object
-                        var baseConstraint = genericParams[i].BaseType;
-                        inferredArgs[i] = (baseConstraint != null && baseConstraint != typeof(object))
-                            ? baseConstraint
-                            : typeof(object);
-                    }
-                    targetMethod = methodBuilder.MakeGenericMethod(inferredArgs);
-                }
-            }
-
-            var paramCount = targetMethod.GetParameters().Length;
-
-            // Check if this function has a rest parameter
-            (int RestParamIndex, int RegularParamCount) restInfo = default;
-            bool hasRestParam = _ctx.FunctionRestParams?.TryGetValue(funcVar.Name.Lexeme, out restInfo) == true;
-            bool hasSpreads = c.Arguments.Any(a => a is Expr.Spread);
-
-            if (hasRestParam)
-            {
-                int regularCount = restInfo.RegularParamCount;
-                int restIndex = restInfo.RestParamIndex;
-
-                // Emit regular arguments (up to rest param index)
-                for (int i = 0; i < Math.Min(regularCount, c.Arguments.Count); i++)
-                {
-                    if (c.Arguments[i] is Expr.Spread spread)
-                    {
-                        // Spread in regular position - just emit the expression
-                        EmitExpression(spread.Expression);
-                        EmitBoxIfNeeded(spread.Expression);
+                        // Explicit type arguments
+                        Type[] typeArgs = c.TypeArgs.Select(ResolveTypeArg).ToArray();
+                        targetMethod = methodBuilder.MakeGenericMethod(typeArgs);
                     }
                     else
                     {
-                        EmitExpression(c.Arguments[i]);
-                        EmitBoxIfNeeded(c.Arguments[i]);
+                        // Type inference fallback - use constraint type or object
+                        var genericParams = _ctx.FunctionGenericParams![resolvedFuncName];
+                        Type[] inferredArgs = new Type[genericParams.Length];
+                        for (int i = 0; i < genericParams.Length; i++)
+                        {
+                            // Use the base type constraint if available, otherwise object
+                            var baseConstraint = genericParams[i].BaseType;
+                            inferredArgs[i] = (baseConstraint != null && baseConstraint != typeof(object))
+                                ? baseConstraint
+                                : typeof(object);
+                        }
+                        targetMethod = methodBuilder.MakeGenericMethod(inferredArgs);
                     }
                 }
 
-                // Pad regular args with nulls if needed
-                for (int i = c.Arguments.Count; i < regularCount; i++)
-                {
-                    IL.Emit(OpCodes.Ldnull);
-                }
+                var paramCount = targetMethod.GetParameters().Length;
 
-                // Create array for rest parameter from remaining arguments
-                int restArgsCount = Math.Max(0, c.Arguments.Count - regularCount);
-                if (hasSpreads && restArgsCount > 0)
+                // Check if this function has a rest parameter
+                (int RestParamIndex, int RegularParamCount) restInfo = default;
+                bool hasRestParam = _ctx.FunctionRestParams?.TryGetValue(resolvedFuncName, out restInfo) == true;
+                bool hasSpreads = c.Arguments.Any(a => a is Expr.Spread);
+
+                if (hasRestParam)
                 {
-                    // Has spreads in rest args - use ExpandCallArgs helper
-                    IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                    IL.Emit(OpCodes.Newarr, typeof(object));
-                    for (int i = 0; i < restArgsCount; i++)
+                    int regularCount = restInfo.RegularParamCount;
+                    int restIndex = restInfo.RestParamIndex;
+
+                    // Emit regular arguments (up to rest param index)
+                    for (int i = 0; i < Math.Min(regularCount, c.Arguments.Count); i++)
                     {
-                        IL.Emit(OpCodes.Dup);
-                        IL.Emit(OpCodes.Ldc_I4, i);
-                        var arg = c.Arguments[regularCount + i];
+                        if (c.Arguments[i] is Expr.Spread spread)
+                        {
+                            // Spread in regular position - just emit the expression
+                            EmitExpression(spread.Expression);
+                            EmitBoxIfNeeded(spread.Expression);
+                        }
+                        else
+                        {
+                            EmitExpression(c.Arguments[i]);
+                            EmitBoxIfNeeded(c.Arguments[i]);
+                        }
+                    }
+
+                    // Pad regular args with nulls if needed
+                    for (int i = c.Arguments.Count; i < regularCount; i++)
+                    {
+                        IL.Emit(OpCodes.Ldnull);
+                    }
+
+                    // Create array for rest parameter from remaining arguments
+                    int restArgsCount = Math.Max(0, c.Arguments.Count - regularCount);
+                    if (hasSpreads && restArgsCount > 0)
+                    {
+                        // Has spreads in rest args - use ExpandCallArgs helper
+                        IL.Emit(OpCodes.Ldc_I4, restArgsCount);
+                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        for (int i = 0; i < restArgsCount; i++)
+                        {
+                            IL.Emit(OpCodes.Dup);
+                            IL.Emit(OpCodes.Ldc_I4, i);
+                            var arg = c.Arguments[regularCount + i];
+                            if (arg is Expr.Spread spread)
+                            {
+                                EmitExpression(spread.Expression);
+                                EmitBoxIfNeeded(spread.Expression);
+                            }
+                            else
+                            {
+                                EmitExpression(arg);
+                                EmitBoxIfNeeded(arg);
+                            }
+                            IL.Emit(OpCodes.Stelem_Ref);
+                        }
+
+                        // Emit isSpread array
+                        IL.Emit(OpCodes.Ldc_I4, restArgsCount);
+                        IL.Emit(OpCodes.Newarr, typeof(bool));
+                        for (int i = 0; i < restArgsCount; i++)
+                        {
+                            if (c.Arguments[regularCount + i] is Expr.Spread)
+                            {
+                                IL.Emit(OpCodes.Dup);
+                                IL.Emit(OpCodes.Ldc_I4, i);
+                                IL.Emit(OpCodes.Ldc_I4_1);
+                                IL.Emit(OpCodes.Stelem_I1);
+                            }
+                        }
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+                    }
+                    else if (restArgsCount > 0)
+                    {
+                        // No spreads - simple array creation
+                        IL.Emit(OpCodes.Ldc_I4, restArgsCount);
+                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        for (int i = 0; i < restArgsCount; i++)
+                        {
+                            IL.Emit(OpCodes.Dup);
+                            IL.Emit(OpCodes.Ldc_I4, i);
+                            EmitExpression(c.Arguments[regularCount + i]);
+                            EmitBoxIfNeeded(c.Arguments[regularCount + i]);
+                            IL.Emit(OpCodes.Stelem_Ref);
+                        }
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+                    }
+                    else
+                    {
+                        // No rest args - empty array
+                        IL.Emit(OpCodes.Ldc_I4, 0);
+                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+                    }
+                }
+                else
+                {
+                    // No rest param - regular argument emission
+                    foreach (var arg in c.Arguments)
+                    {
                         if (arg is Expr.Spread spread)
                         {
+                            // Spread in non-rest function - just emit the expression
                             EmitExpression(spread.Expression);
                             EmitBoxIfNeeded(spread.Expression);
                         }
@@ -384,76 +448,19 @@ public partial class ILEmitter
                             EmitExpression(arg);
                             EmitBoxIfNeeded(arg);
                         }
-                        IL.Emit(OpCodes.Stelem_Ref);
                     }
 
-                    // Emit isSpread array
-                    IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                    IL.Emit(OpCodes.Newarr, typeof(bool));
-                    for (int i = 0; i < restArgsCount; i++)
+                    // Pad with nulls for missing arguments (for default parameters)
+                    for (int i = c.Arguments.Count; i < paramCount; i++)
                     {
-                        if (c.Arguments[regularCount + i] is Expr.Spread)
-                        {
-                            IL.Emit(OpCodes.Dup);
-                            IL.Emit(OpCodes.Ldc_I4, i);
-                            IL.Emit(OpCodes.Ldc_I4_1);
-                            IL.Emit(OpCodes.Stelem_I1);
-                        }
+                        IL.Emit(OpCodes.Ldnull);
                     }
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
                 }
-                else if (restArgsCount > 0)
-                {
-                    // No spreads - simple array creation
-                    IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                    IL.Emit(OpCodes.Newarr, typeof(object));
-                    for (int i = 0; i < restArgsCount; i++)
-                    {
-                        IL.Emit(OpCodes.Dup);
-                        IL.Emit(OpCodes.Ldc_I4, i);
-                        EmitExpression(c.Arguments[regularCount + i]);
-                        EmitBoxIfNeeded(c.Arguments[regularCount + i]);
-                        IL.Emit(OpCodes.Stelem_Ref);
-                    }
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
-                }
-                else
-                {
-                    // No rest args - empty array
-                    IL.Emit(OpCodes.Ldc_I4, 0);
-                    IL.Emit(OpCodes.Newarr, typeof(object));
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
-                }
+
+                IL.Emit(OpCodes.Call, targetMethod);
+                SetStackUnknown(); // Function returns boxed object
+                return;
             }
-            else
-            {
-                // No rest param - regular argument emission
-                foreach (var arg in c.Arguments)
-                {
-                    if (arg is Expr.Spread spread)
-                    {
-                        // Spread in non-rest function - just emit the expression
-                        EmitExpression(spread.Expression);
-                        EmitBoxIfNeeded(spread.Expression);
-                    }
-                    else
-                    {
-                        EmitExpression(arg);
-                        EmitBoxIfNeeded(arg);
-                    }
-                }
-
-                // Pad with nulls for missing arguments (for default parameters)
-                for (int i = c.Arguments.Count; i < paramCount; i++)
-                {
-                    IL.Emit(OpCodes.Ldnull);
-                }
-            }
-
-            IL.Emit(OpCodes.Call, targetMethod);
-            SetStackUnknown(); // Function returns boxed object
-            return;
         }
 
         // Function value call (variable holding TSFunction, or direct arrow call)
@@ -541,7 +548,7 @@ public partial class ILEmitter
             "string" => typeof(string),
             "boolean" => typeof(bool),
             _ when _ctx.GenericTypeParameters.TryGetValue(typeArg, out var gp) => gp,
-            _ when _ctx.Classes.TryGetValue(typeArg, out var tb) => tb,
+            _ when _ctx.Classes.TryGetValue(_ctx.ResolveClassName(typeArg), out var tb) => tb,
             _ => typeof(object)
         };
     }
@@ -1703,16 +1710,19 @@ public partial class ILEmitter
             return;
         }
 
-        if (_ctx.Classes.TryGetValue(n.ClassName.Lexeme, out var typeBuilder) &&
+        // Resolve class name (may be qualified in multi-module compilation)
+        string resolvedClassName = _ctx.ResolveClassName(n.ClassName.Lexeme);
+
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(n.ClassName.Lexeme, out var ctorBuilder))
+            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
         {
             Type targetType = typeBuilder;
             ConstructorInfo targetCtor = ctorBuilder;
 
             // Handle generic class instantiation (e.g., new Box<number>(42))
             if (n.TypeArgs != null && n.TypeArgs.Count > 0 &&
-                _ctx.ClassGenericParams?.TryGetValue(n.ClassName.Lexeme, out var _) == true)
+                _ctx.ClassGenericParams?.TryGetValue(resolvedClassName, out var _) == true)
             {
                 // Resolve type arguments
                 Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
@@ -1745,7 +1755,36 @@ public partial class ILEmitter
         }
         else
         {
-            IL.Emit(OpCodes.Ldnull);
+            // Fallback: try to instantiate via local variable (imported class as Type)
+            var local = _ctx.Locals.GetLocal(n.ClassName.Lexeme);
+            if (local != null)
+            {
+                // The local contains a Type object - use Activator.CreateInstance
+                // Load the Type first
+                IL.Emit(OpCodes.Ldloc, local);
+
+                // Create an object array for the arguments
+                IL.Emit(OpCodes.Ldc_I4, n.Arguments.Count);
+                IL.Emit(OpCodes.Newarr, typeof(object));
+
+                for (int i = 0; i < n.Arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(n.Arguments[i]);
+                    EmitBoxIfNeeded(n.Arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+
+                // Call Activator.CreateInstance(Type, object[])
+                // Stack: Type, object[]
+                var createInstanceMethod = typeof(Activator).GetMethod("CreateInstance", [typeof(Type), typeof(object[])]);
+                IL.Emit(OpCodes.Call, createInstanceMethod!);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
         }
     }
 
@@ -2372,13 +2411,16 @@ public partial class ILEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? className = instance.ClassType switch
+        string? simpleClassName = instance.ClassType switch
         {
             TypeSystem.TypeInfo.Class c => c.Name,
             _ => null
         };
-        if (className == null)
+        if (simpleClassName == null)
             return false;
+
+        // Resolve to qualified name for multi-module compilation
+        string className = _ctx.ResolveClassName(simpleClassName);
 
         // Look up the method in the class hierarchy
         var methodBuilder = _ctx.ResolveInstanceMethod(className, methodName);

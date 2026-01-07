@@ -1330,16 +1330,19 @@ public partial class AsyncMoveNextEmitter
 
     private void EmitNew(Expr.New n)
     {
-        if (_ctx!.Classes.TryGetValue(n.ClassName.Lexeme, out var typeBuilder) &&
+        // Resolve class name (may be qualified in multi-module compilation)
+        string resolvedClassName = _ctx!.ResolveClassName(n.ClassName.Lexeme);
+
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(n.ClassName.Lexeme, out var ctorBuilder))
+            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
         {
             Type targetType = typeBuilder;
             ConstructorInfo targetCtor = ctorBuilder;
 
             // Handle generic class instantiation (e.g., new Box<number>(42))
             if (n.TypeArgs != null && n.TypeArgs.Count > 0 &&
-                _ctx.ClassGenericParams?.TryGetValue(n.ClassName.Lexeme, out var _) == true)
+                _ctx.ClassGenericParams?.TryGetValue(resolvedClassName, out var _) == true)
             {
                 // Resolve type arguments
                 Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
@@ -1802,16 +1805,19 @@ public partial class AsyncMoveNextEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? className = instance.ClassType switch
+        string? simpleClassName = instance.ClassType switch
         {
             TypeSystem.TypeInfo.Class c => c.Name,
             _ => null
         };
-        if (className == null)
+        if (simpleClassName == null)
             return false;
 
+        // Resolve to qualified name for multi-module compilation
+        string className = _ctx!.ResolveClassName(simpleClassName);
+
         // Look up the method in the class hierarchy
-        var methodBuilder = _ctx!.ResolveInstanceMethod(className, methodName);
+        var methodBuilder = _ctx.ResolveInstanceMethod(className, methodName);
         if (methodBuilder == null)
             return false;
 

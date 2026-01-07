@@ -98,6 +98,22 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _moduleExportFields = [];
     private readonly Dictionary<string, MethodBuilder> _moduleInitMethods = [];
     private ModuleResolver? _moduleResolver;
+    private string? _currentModulePath; // Current module being compiled (for qualified type names)
+    private readonly Dictionary<string, string> _classToModule = []; // Maps class name to module path for lookups
+    private readonly Dictionary<string, string> _functionToModule = []; // Maps function name to module path for lookups
+    private readonly Dictionary<string, string> _enumToModule = []; // Maps enum name to module path for lookups
+
+    // Typed Interop: Real .NET property support
+    private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _propertyBackingFields = [];
+    private readonly Dictionary<string, Dictionary<string, PropertyBuilder>> _classProperties = [];
+    private readonly Dictionary<string, HashSet<string>> _declaredPropertyNames = [];
+    private readonly Dictionary<string, HashSet<string>> _readonlyPropertyNames = [];
+    private readonly Dictionary<string, Dictionary<string, Type>> _propertyTypes = [];
+    private readonly Dictionary<string, FieldBuilder> _extrasFields = []; // _extras dict field for dynamic properties
+    private UnionTypeGenerator? _unionGenerator;
+
+    // Shared context for definition phase (module name resolution)
+    private CompilationContext? _definitionContext;
 
     // Entry point
     private MethodBuilder? _entryPoint;
@@ -112,6 +128,22 @@ public partial class ILCompiler
         );
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
         _typeMapper = new TypeMapper(_moduleBuilder);
+    }
+
+    /// <summary>
+    /// Gets a shared CompilationContext for the definition phase (module name resolution).
+    /// Lazily creates the context and updates CurrentModulePath on each call.
+    /// </summary>
+    private CompilationContext GetDefinitionContext()
+    {
+        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functionBuilders, _classBuilders)
+        {
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule
+        };
+        _definitionContext.CurrentModulePath = _currentModulePath;
+        return _definitionContext;
     }
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
@@ -152,6 +184,11 @@ public partial class ILCompiler
                 DefineEnum(enumStmt);
             }
         }
+
+        // Phase 4.5: Initialize typed interop support now that all classes are defined
+        _unionGenerator = new UnionTypeGenerator(_typeMapper);
+        _typeMapper.SetClassBuilders(_classBuilders);
+        _typeMapper.SetUnionGenerator(_unionGenerator);
 
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
@@ -235,6 +272,7 @@ public partial class ILCompiler
         // Phase 5: Collect and define all class and function declarations
         foreach (var module in modules)
         {
+            _currentModulePath = module.Path; // Track which module we're processing
             foreach (var stmt in module.Statements)
             {
                 if (stmt is Stmt.Class classStmt)
@@ -267,6 +305,12 @@ public partial class ILCompiler
                 }
             }
         }
+        _currentModulePath = null;
+
+        // Phase 5.5: Initialize typed interop support now that all classes are defined
+        _unionGenerator = new UnionTypeGenerator(_typeMapper);
+        _typeMapper.SetClassBuilders(_classBuilders);
+        _typeMapper.SetUnionGenerator(_unionGenerator);
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);
@@ -277,6 +321,7 @@ public partial class ILCompiler
         // Phase 8: Emit method bodies
         foreach (var module in modules)
         {
+            _currentModulePath = module.Path; // Track which module we're processing
             foreach (var stmt in module.Statements)
             {
                 if (stmt is Stmt.Class classStmt)
@@ -300,6 +345,7 @@ public partial class ILCompiler
                 }
             }
         }
+        _currentModulePath = null;
 
         // Phase 9: Emit module initialization methods
         foreach (var module in modules)

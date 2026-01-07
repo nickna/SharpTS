@@ -240,15 +240,38 @@ public static partial class RuntimeTypes
         {
             return dict.Values.ToList();
         }
-        // For compiled class instances, get values from _fields
+        // For compiled class instances, get values from typed backing fields AND _fields dictionary
         if (obj != null)
         {
+            var values = new List<object?>();
             var type = obj.GetType();
-            var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null && field.GetValue(obj) is Dictionary<string, object?> fields)
+            var seenKeys = new HashSet<string>();
+
+            // Get values from typed backing fields (fields starting with __)
+            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                return fields.Values.ToList();
+                if (backingField.Name.StartsWith("__"))
+                {
+                    string propName = backingField.Name[2..];
+                    seenKeys.Add(propName);
+                    values.Add(backingField.GetValue(obj));
+                }
             }
+
+            // Also get values from _fields dictionary (for dynamic properties and generic type fields)
+            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
+            {
+                foreach (var kv in fields)
+                {
+                    if (!seenKeys.Contains(kv.Key))
+                    {
+                        values.Add(kv.Value);
+                    }
+                }
+            }
+
+            return values;
         }
         return [];
     }
@@ -259,15 +282,38 @@ public static partial class RuntimeTypes
         {
             return dict.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
         }
-        // For compiled class instances, get entries from _fields
+        // For compiled class instances, get entries from typed backing fields AND _fields dictionary
         if (obj != null)
         {
+            var entries = new List<object?>();
             var type = obj.GetType();
-            var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null && field.GetValue(obj) is Dictionary<string, object?> fields)
+            var seenKeys = new HashSet<string>();
+
+            // Get entries from typed backing fields (fields starting with __)
+            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                return fields.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
+                if (backingField.Name.StartsWith("__"))
+                {
+                    string propName = backingField.Name[2..];
+                    seenKeys.Add(propName);
+                    entries.Add(new List<object?> { propName, backingField.GetValue(obj) });
+                }
             }
+
+            // Also get entries from _fields dictionary (for dynamic properties and generic type fields)
+            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
+            {
+                foreach (var kv in fields)
+                {
+                    if (!seenKeys.Contains(kv.Key))
+                    {
+                        entries.Add(new List<object?> { kv.Key, kv.Value });
+                    }
+                }
+            }
+
+            return entries;
         }
         return [];
     }

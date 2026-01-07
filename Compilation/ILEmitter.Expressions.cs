@@ -74,7 +74,7 @@ public partial class ILEmitter
         }
 
         // Check if it's a class - load the Type object
-        if (_ctx.Classes.TryGetValue(name, out var classType))
+        if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
         {
             // Load the Type object using typeof(ClassName)
             IL.Emit(OpCodes.Ldtoken, classType);
@@ -84,7 +84,7 @@ public partial class ILEmitter
         }
 
         // Check if it's a top-level function - wrap as TSFunction
-        if (_ctx.Functions.TryGetValue(name, out var methodBuilder))
+        if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var methodBuilder))
         {
             // Create TSFunction(null, methodInfo)
             IL.Emit(OpCodes.Ldnull); // target (static method)

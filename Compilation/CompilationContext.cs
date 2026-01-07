@@ -133,6 +133,37 @@ public class CompilationContext
     // Class superclass mapping (class name -> superclass name or null)
     public Dictionary<string, string?>? ClassSuperclass { get; set; }
 
+    // ============================================
+    // Typed Interop: Real .NET Property Support
+    // ============================================
+
+    // Property backing fields (class name -> property name -> FieldBuilder)
+    // Used for typed properties with real .NET backing fields
+    public Dictionary<string, Dictionary<string, FieldBuilder>>? PropertyBackingFields { get; set; }
+
+    // Property builders (class name -> property name -> PropertyBuilder)
+    // Tracks real .NET PropertyBuilder for each declared TypeScript property
+    public Dictionary<string, Dictionary<string, PropertyBuilder>>? ClassProperties { get; set; }
+
+    // Declared property names per class (class name -> set of property names)
+    // Used to distinguish declared properties (have backing fields) from dynamic properties (_extras)
+    public Dictionary<string, HashSet<string>>? DeclaredPropertyNames { get; set; }
+
+    // Readonly property names per class (class name -> set of readonly property names)
+    // Properties that can only be set in the constructor
+    public Dictionary<string, HashSet<string>>? ReadonlyPropertyNames { get; set; }
+
+    // Property types per class (class name -> property name -> .NET Type)
+    // The actual .NET type for each typed property backing field
+    public Dictionary<string, Dictionary<string, Type>>? PropertyTypes { get; set; }
+
+    // Union type generator for creating discriminated union types
+    public UnionTypeGenerator? UnionGenerator { get; set; }
+
+    // Dynamic property dictionary field (class name -> FieldBuilder for _extras)
+    // Used for runtime-added properties that weren't declared in TypeScript
+    public Dictionary<string, FieldBuilder>? ExtrasFields { get; set; }
+
     // Async method support (uses native IL state machine generation)
     // Async function name -> compiled MethodInfo
     public Dictionary<string, MethodInfo>? AsyncMethods { get; set; }
@@ -159,6 +190,100 @@ public class CompilationContext
 
     // Module resolver for import path resolution
     public ModuleResolver? ModuleResolver { get; set; }
+
+    // Class to module mapping (simple class name -> module path)
+    // Used to resolve qualified class names in multi-module compilation
+    public Dictionary<string, string>? ClassToModule { get; set; }
+
+    // Function to module mapping (simple function name -> module path)
+    public Dictionary<string, string>? FunctionToModule { get; set; }
+
+    // Enum to module mapping (simple enum name -> module path)
+    public Dictionary<string, string>? EnumToModule { get; set; }
+
+    /// <summary>
+    /// Resolves a simple class name to its qualified name for lookup in the Classes dictionary.
+    /// In multi-module compilation, class names are qualified with their module to avoid collisions.
+    /// </summary>
+    public string ResolveClassName(string simpleClassName)
+    {
+        // If we have a module mapping, use it to create the qualified name
+        if (ClassToModule != null && ClassToModule.TryGetValue(simpleClassName, out var modulePath))
+        {
+            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            return $"$M_{sanitizedModule}_{simpleClassName}";
+        }
+
+        // Fall back to simple name (for single-file compilation)
+        return simpleClassName;
+    }
+
+    /// <summary>
+    /// Resolves a simple function name to its qualified name for lookup in the Functions dictionary.
+    /// </summary>
+    public string ResolveFunctionName(string simpleFunctionName)
+    {
+        if (FunctionToModule != null && FunctionToModule.TryGetValue(simpleFunctionName, out var modulePath))
+        {
+            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            return $"$M_{sanitizedModule}_{simpleFunctionName}";
+        }
+        return simpleFunctionName;
+    }
+
+    /// <summary>
+    /// Resolves a simple enum name to its qualified name for lookup in the EnumMembers dictionary.
+    /// </summary>
+    public string ResolveEnumName(string simpleEnumName)
+    {
+        if (EnumToModule != null && EnumToModule.TryGetValue(simpleEnumName, out var modulePath))
+        {
+            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            return $"$M_{sanitizedModule}_{simpleEnumName}";
+        }
+        return simpleEnumName;
+    }
+
+    /// <summary>
+    /// Gets the qualified class name for the current module context.
+    /// </summary>
+    public string GetQualifiedClassName(string simpleClassName)
+    {
+        if (CurrentModulePath == null)
+            return simpleClassName;
+
+        string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+        return $"$M_{sanitizedModule}_{simpleClassName}";
+    }
+
+    /// <summary>
+    /// Gets the qualified function name for the current module context.
+    /// </summary>
+    public string GetQualifiedFunctionName(string simpleFunctionName)
+    {
+        if (CurrentModulePath == null)
+            return simpleFunctionName;
+
+        string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+        return $"$M_{sanitizedModule}_{simpleFunctionName}";
+    }
+
+    /// <summary>
+    /// Gets the qualified enum name for the current module context.
+    /// </summary>
+    public string GetQualifiedEnumName(string simpleEnumName)
+    {
+        if (CurrentModulePath == null)
+            return simpleEnumName;
+
+        string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+        return $"$M_{sanitizedModule}_{simpleEnumName}";
+    }
+
+    public static string SanitizeModuleName(string name)
+    {
+        return name.Replace("/", "_").Replace("\\", "_").Replace(".", "_").Replace("-", "_");
+    }
 
     // Parameter tracking (name -> arg index)
     private readonly Dictionary<string, int> _parameters = [];
@@ -268,6 +393,85 @@ public class CompilationContext
             if (InstanceSetters?.TryGetValue(current, out var setters) == true &&
                 setters.TryGetValue(propertyName, out var setter))
                 return setter;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolve a property backing field by walking up the inheritance chain.
+    /// </summary>
+    public FieldBuilder? ResolvePropertyBackingField(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (PropertyBackingFields?.TryGetValue(current, out var fields) == true &&
+                fields.TryGetValue(propertyName, out var field))
+                return field;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolve a property type by walking up the inheritance chain.
+    /// </summary>
+    public Type? ResolvePropertyType(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (PropertyTypes?.TryGetValue(current, out var types) == true &&
+                types.TryGetValue(propertyName, out var type))
+                return type;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Check if a property is declared (has a backing field) vs dynamic.
+    /// </summary>
+    public bool IsDeclaredProperty(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (DeclaredPropertyNames?.TryGetValue(current, out var names) == true &&
+                names.Contains(propertyName))
+                return true;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Check if a property is readonly (can only be set in constructor).
+    /// </summary>
+    public bool IsReadonlyProperty(string className, string propertyName)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (ReadonlyPropertyNames?.TryGetValue(current, out var names) == true &&
+                names.Contains(propertyName))
+                return true;
+            current = ClassSuperclass?.GetValueOrDefault(current);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Get the _extras field for dynamic property storage for a class.
+    /// </summary>
+    public FieldBuilder? ResolveExtrasField(string className)
+    {
+        string? current = className;
+        while (current != null)
+        {
+            if (ExtrasFields?.TryGetValue(current, out var field) == true)
+                return field;
             current = ClassSuperclass?.GetValueOrDefault(current);
         }
         return null;

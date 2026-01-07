@@ -354,7 +354,12 @@ public partial class ILCompiler
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
             ClassSuperclass = _classSuperclass,
-            AsyncMethods = null
+            AsyncMethods = null,
+            // Module support for multi-module compilation
+            CurrentModulePath = _currentModulePath,
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule
         };
 
         if (displayClass != null)

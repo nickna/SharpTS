@@ -14,11 +14,33 @@ namespace SharpTS.TypeSystem;
 public class TypeMap
 {
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, TypeInfo.Class> _classTypes = [];
+    private readonly Dictionary<string, TypeInfo.Function> _functionTypes = [];
 
     /// <summary>
     /// Associates an expression with its resolved type.
     /// </summary>
     public void Set(Expr expr, TypeInfo type) => _types[expr] = type;
+
+    /// <summary>
+    /// Registers a class type by name for later lookup during compilation.
+    /// </summary>
+    public void SetClassType(string className, TypeInfo.Class classType) => _classTypes[className] = classType;
+
+    /// <summary>
+    /// Gets the class type by name, or null if not found.
+    /// </summary>
+    public TypeInfo.Class? GetClassType(string className) => _classTypes.GetValueOrDefault(className);
+
+    /// <summary>
+    /// Registers a top-level function type by name.
+    /// </summary>
+    public void SetFunctionType(string functionName, TypeInfo.Function functionType) => _functionTypes[functionName] = functionType;
+
+    /// <summary>
+    /// Gets the function type by name, or null if not found.
+    /// </summary>
+    public TypeInfo.Function? GetFunctionType(string functionName) => _functionTypes.GetValueOrDefault(functionName);
 
     /// <summary>
     /// Gets the resolved type for an expression, or null if not found.

@@ -351,4 +351,347 @@ public class ModuleTests
     }
 
     #endregion
+
+    #region Duplicate Class Names Across Modules
+
+    /// <summary>
+    /// Tests that two different modules can each define a class with the same name,
+    /// and they should be treated as separate types.
+    /// </summary>
+    [Fact]
+    public void DuplicateClassNames_AcrossModules_ShouldBeDistinct()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./file1.ts"] = """
+                export class Foo {
+                    x: number = 1;
+                }
+                """,
+            ["./file2.ts"] = """
+                export class Foo {
+                    y: number = 2;
+                }
+                """,
+            ["./main.ts"] = """
+                import { Foo as Foo1 } from './file1';
+                import { Foo as Foo2 } from './file2';
+
+                let f1 = new Foo1();
+                let f2 = new Foo2();
+
+                console.log(f1.x);
+                console.log(f2.y);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("1\n2\n", output);
+    }
+
+    /// <summary>
+    /// Tests that two different modules can each define a function with the same name,
+    /// and they should be treated as separate functions.
+    /// </summary>
+    [Fact]
+    public void DuplicateFunctionNames_AcrossModules_ShouldBeDistinct()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./file1.ts"] = """
+                export function getValue(): number {
+                    return 1;
+                }
+                """,
+            ["./file2.ts"] = """
+                export function getValue(): number {
+                    return 2;
+                }
+                """,
+            ["./main.ts"] = """
+                import { getValue as getValue1 } from './file1';
+                import { getValue as getValue2 } from './file2';
+
+                console.log(getValue1());
+                console.log(getValue2());
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("1\n2\n", output);
+    }
+
+    /// <summary>
+    /// Tests that two different modules can each define an enum with the same name,
+    /// and they should be treated as separate enums.
+    /// </summary>
+    [Fact]
+    public void DuplicateEnumNames_AcrossModules_ShouldBeDistinct()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./file1.ts"] = """
+                export enum Status {
+                    Active = 10
+                }
+                """,
+            ["./file2.ts"] = """
+                export enum Status {
+                    Active = 20
+                }
+                """,
+            ["./main.ts"] = """
+                import { Status as Status1 } from './file1';
+                import { Status as Status2 } from './file2';
+
+                console.log(Status1.Active);
+                console.log(Status2.Active);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("10\n20\n", output);
+    }
+
+    #endregion
+
+    #region Cross-Module Type Usage
+
+    /// <summary>
+    /// Tests that a class exported from one module can be imported, instantiated,
+    /// and have its methods called from another module.
+    /// </summary>
+    [Fact]
+    public void CrossModule_ClassInstantiationAndMethodCall()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./person.ts"] = """
+                export class Person {
+                    name: string;
+                    age: number;
+
+                    constructor(name: string, age: number) {
+                        this.name = name;
+                        this.age = age;
+                    }
+
+                    greet(): string {
+                        return "Hello, " + this.name;
+                    }
+
+                    getAgeInMonths(): number {
+                        return this.age * 12;
+                    }
+                }
+                """,
+            ["./main.ts"] = """
+                import { Person } from './person';
+
+                let p = new Person("Alice", 30);
+                console.log(p.name);
+                console.log(p.age);
+                console.log(p.greet());
+                console.log(p.getAgeInMonths());
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("Alice\n30\nHello, Alice\n360\n", output);
+    }
+
+    /// <summary>
+    /// Tests that a function exported from one module can be imported and called
+    /// from another module with arguments and return values.
+    /// </summary>
+    [Fact]
+    public void CrossModule_FunctionCall()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./math-utils.ts"] = """
+                export function add(a: number, b: number): number {
+                    return a + b;
+                }
+
+                export function multiply(a: number, b: number): number {
+                    return a * b;
+                }
+
+                export function factorial(n: number): number {
+                    if (n <= 1) return 1;
+                    return n * factorial(n - 1);
+                }
+                """,
+            ["./main.ts"] = """
+                import { add, multiply, factorial } from './math-utils';
+
+                console.log(add(3, 4));
+                console.log(multiply(5, 6));
+                console.log(factorial(5));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("7\n30\n120\n", output);
+    }
+
+    /// <summary>
+    /// Tests that an enum exported from one module can be imported and its
+    /// members accessed from another module.
+    /// </summary>
+    [Fact]
+    public void CrossModule_EnumAccess()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./status.ts"] = """
+                export enum Status {
+                    Pending = 0,
+                    Active = 1,
+                    Completed = 2
+                }
+
+                export enum Priority {
+                    Low = "low",
+                    Medium = "medium",
+                    High = "high"
+                }
+                """,
+            ["./main.ts"] = """
+                import { Status, Priority } from './status';
+
+                console.log(Status.Pending);
+                console.log(Status.Active);
+                console.log(Status.Completed);
+                console.log(Priority.Low);
+                console.log(Priority.High);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("0\n1\n2\nlow\nhigh\n", output);
+    }
+
+    /// <summary>
+    /// Tests that multiple modules can import from the same shared module,
+    /// and each gets the correct types without interference.
+    /// </summary>
+    [Fact]
+    public void CrossModule_SharedDependency()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./shared.ts"] = """
+                export class Counter {
+                    value: number = 0;
+
+                    increment(): void {
+                        this.value = this.value + 1;
+                    }
+
+                    getValue(): number {
+                        return this.value;
+                    }
+                }
+
+                export function createCounter(): Counter {
+                    return new Counter();
+                }
+                """,
+            ["./module-a.ts"] = """
+                import { Counter, createCounter } from './shared';
+
+                export function useCounterA(): number {
+                    let c = createCounter();
+                    c.increment();
+                    c.increment();
+                    return c.getValue();
+                }
+                """,
+            ["./module-b.ts"] = """
+                import { Counter } from './shared';
+
+                export function useCounterB(): number {
+                    let c = new Counter();
+                    c.increment();
+                    c.increment();
+                    c.increment();
+                    return c.getValue();
+                }
+                """,
+            ["./main.ts"] = """
+                import { useCounterA } from './module-a';
+                import { useCounterB } from './module-b';
+
+                console.log(useCounterA());
+                console.log(useCounterB());
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("2\n3\n", output);
+    }
+
+    /// <summary>
+    /// Tests a complex scenario with classes, functions, and enums all being
+    /// imported and used across modules.
+    /// </summary>
+    [Fact]
+    public void CrossModule_MixedTypes()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./types.ts"] = """
+                export enum TaskStatus {
+                    Todo = 0,
+                    InProgress = 1,
+                    Done = 2
+                }
+
+                export class Task {
+                    title: string;
+                    status: number;
+
+                    constructor(title: string) {
+                        this.title = title;
+                        this.status = TaskStatus.Todo;
+                    }
+
+                    start(): void {
+                        this.status = TaskStatus.InProgress;
+                    }
+
+                    complete(): void {
+                        this.status = TaskStatus.Done;
+                    }
+                }
+
+                export function createTask(title: string): Task {
+                    return new Task(title);
+                }
+                """,
+            ["./main.ts"] = """
+                import { Task, TaskStatus, createTask } from './types';
+
+                let t1 = new Task("Write tests");
+                console.log(t1.status);
+
+                t1.start();
+                console.log(t1.status);
+
+                t1.complete();
+                console.log(t1.status);
+
+                let t2 = createTask("Review PR");
+                console.log(t2.title);
+                console.log(t2.status);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "./main.ts");
+        Assert.Equal("0\n1\n2\nReview PR\n0\n", output);
+    }
+
+    #endregion
 }

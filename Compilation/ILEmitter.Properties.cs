@@ -79,7 +79,7 @@ public partial class ILEmitter
 
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
         if (g.Object is Expr.Variable enumVar &&
-            _ctx.EnumMembers?.TryGetValue(enumVar.Name.Lexeme, out var members) == true &&
+            _ctx.EnumMembers?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var members) == true &&
             members.TryGetValue(g.Name.Lexeme, out var value))
         {
             if (value is double d)
@@ -97,11 +97,12 @@ public partial class ILEmitter
         }
 
         // Handle static member access via class name
-        if (g.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(classVar.Name.Lexeme, out var classBuilder))
+        if (g.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             // Try to find static field using stored FieldBuilders
             if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(classVar.Name.Lexeme, out var classFields) &&
+                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
                 classFields.TryGetValue(g.Name.Lexeme, out var staticField))
             {
                 IL.Emit(OpCodes.Ldsfld, staticField);
@@ -209,10 +210,11 @@ public partial class ILEmitter
     private void EmitSet(Expr.Set s)
     {
         // Handle static property assignment via class name
-        if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(classVar.Name.Lexeme, out var classBuilder))
+        if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(classVar.Name.Lexeme, out var classFields) &&
+                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
                 classFields.TryGetValue(s.Name.Lexeme, out var staticField))
             {
                 EmitExpression(s.Value);
@@ -270,7 +272,7 @@ public partial class ILEmitter
     {
         // Enum reverse mapping: Direction[0] -> "Up"
         if (gi.Object is Expr.Variable enumVar &&
-            _ctx.EnumReverse?.TryGetValue(enumVar.Name.Lexeme, out var reverse) == true)
+            _ctx.EnumReverse?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var reverse) == true)
         {
             // Check if index is a literal we can resolve at compile time
             if (gi.Index is Expr.Literal lit && lit.Value is double d && reverse.TryGetValue(d, out var memberName))
@@ -501,13 +503,16 @@ public partial class ILEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? className = instance.ClassType switch
+        string? simpleClassName = instance.ClassType switch
         {
             TypeInfo.Class c => c.Name,
             _ => null
         };
-        if (className == null)
+        if (simpleClassName == null)
             return false;
+
+        // Resolve to qualified name for multi-module compilation
+        string className = _ctx.ResolveClassName(simpleClassName);
 
         // Look up the getter in the class hierarchy
         var getterBuilder = _ctx.ResolveInstanceGetter(className, propertyName);
@@ -537,13 +542,16 @@ public partial class ILEmitter
             return false;
 
         // Extract the class name from the instance's class type
-        string? className = instance.ClassType switch
+        string? simpleClassName = instance.ClassType switch
         {
             TypeInfo.Class c => c.Name,
             _ => null
         };
-        if (className == null)
+        if (simpleClassName == null)
             return false;
+
+        // Resolve to qualified name for multi-module compilation
+        string className = _ctx.ResolveClassName(simpleClassName);
 
         // Look up the setter in the class hierarchy
         var setterBuilder = _ctx.ResolveInstanceSetter(className, propertyName);

@@ -25,9 +25,20 @@ public partial class ILCompiler
             return;
         }
 
+        var ctx = GetDefinitionContext();
+
+        // Get qualified function name (module-prefixed in multi-module compilation)
+        string qualifiedFunctionName = ctx.GetQualifiedFunctionName(funcStmt.Name.Lexeme);
+
+        // Track simple name -> module mapping for later lookups
+        if (_currentModulePath != null)
+        {
+            _functionToModule[funcStmt.Name.Lexeme] = _currentModulePath;
+        }
+
         var paramTypes = funcStmt.Parameters.Select(_ => typeof(object)).ToArray();
         var methodBuilder = _programType.DefineMethod(
-            funcStmt.Name.Lexeme,
+            qualifiedFunctionName,
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(object),
             paramTypes
@@ -35,7 +46,7 @@ public partial class ILCompiler
 
         // Handle generic type parameters
         bool isGeneric = funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0;
-        _isGenericFunction[funcStmt.Name.Lexeme] = isGeneric;
+        _isGenericFunction[qualifiedFunctionName] = isGeneric;
 
         if (isGeneric)
         {
@@ -56,10 +67,10 @@ public partial class ILCompiler
                 }
             }
 
-            _functionGenericParams[funcStmt.Name.Lexeme] = genericParams;
+            _functionGenericParams[qualifiedFunctionName] = genericParams;
         }
 
-        _functionBuilders[funcStmt.Name.Lexeme] = methodBuilder;
+        _functionBuilders[qualifiedFunctionName] = methodBuilder;
 
         // Track rest parameter info
         var restParam = funcStmt.Parameters.FirstOrDefault(p => p.IsRest);
@@ -67,21 +78,24 @@ public partial class ILCompiler
         {
             int restIndex = funcStmt.Parameters.IndexOf(restParam);
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
-            _functionRestParams[funcStmt.Name.Lexeme] = (restIndex, regularCount);
+            _functionRestParams[qualifiedFunctionName] = (restIndex, regularCount);
         }
     }
 
     private void EmitFunctionBody(Stmt.Function funcStmt)
     {
+        // Get qualified function name (must match what DefineFunction used)
+        string qualifiedFunctionName = GetDefinitionContext().GetQualifiedFunctionName(funcStmt.Name.Lexeme);
+
         // Skip async functions - they use native state machine emission
-        if (funcStmt.IsAsync || _asyncStateMachines.ContainsKey(funcStmt.Name.Lexeme))
+        if (funcStmt.IsAsync || _asyncStateMachines.ContainsKey(qualifiedFunctionName))
             return;
 
         // Skip generator functions - they use generator state machine emission
-        if (funcStmt.IsGenerator || _generatorStateMachines.ContainsKey(funcStmt.Name.Lexeme))
+        if (funcStmt.IsGenerator || _generatorStateMachines.ContainsKey(qualifiedFunctionName))
             return;
 
-        var methodBuilder = _functionBuilders[funcStmt.Name.Lexeme];
+        var methodBuilder = _functionBuilders[qualifiedFunctionName];
         var il = methodBuilder.GetILGenerator();
         var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
         {
@@ -107,11 +121,16 @@ public partial class ILCompiler
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
             ClassSuperclass = _classSuperclass,
-            AsyncMethods = null
+            AsyncMethods = null,
+            // Module support for multi-module compilation
+            CurrentModulePath = _currentModulePath,
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule
         };
 
         // Add generic type parameters to context if this is a generic function
-        if (_functionGenericParams.TryGetValue(funcStmt.Name.Lexeme, out var genericParams))
+        if (_functionGenericParams.TryGetValue(qualifiedFunctionName, out var genericParams))
         {
             foreach (var gp in genericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;

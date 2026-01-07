@@ -304,7 +304,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         // Check if it's a function
-        if (_ctx.Functions.TryGetValue(name, out var funcMethod))
+        if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod))
         {
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Ldtoken, funcMethod);
@@ -552,7 +552,7 @@ public partial class GeneratorMoveNextEmitter
         }
 
         // Direct function call
-        if (c.Callee is Expr.Variable funcVar && _ctx!.Functions.TryGetValue(funcVar.Name.Lexeme, out var funcMethod))
+        if (c.Callee is Expr.Variable funcVar && _ctx!.Functions.TryGetValue(_ctx.ResolveFunctionName(funcVar.Name.Lexeme), out var funcMethod))
         {
             var parameters = funcMethod.GetParameters();
             for (int i = 0; i < parameters.Length; i++)
@@ -823,9 +823,12 @@ public partial class GeneratorMoveNextEmitter
 
     private void EmitNew(Expr.New n)
     {
-        if (_ctx!.Classes.TryGetValue(n.ClassName.Lexeme, out var typeBuilder) &&
+        // Resolve class name (may be qualified in multi-module compilation)
+        string resolvedClassName = _ctx!.ResolveClassName(n.ClassName.Lexeme);
+
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(n.ClassName.Lexeme, out var ctorBuilder))
+            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
         {
             int expectedParamCount = ctorBuilder.GetParameters().Length;
 

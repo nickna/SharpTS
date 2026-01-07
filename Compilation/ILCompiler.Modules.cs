@@ -16,7 +16,7 @@ public partial class ILCompiler
     private void DefineModuleType(ParsedModule module)
     {
         // Create module class: $Module_<name>
-        string moduleTypeName = $"$Module_{SanitizeModuleName(module.ModuleName)}";
+        string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
         var moduleType = _moduleBuilder.DefineType(
             moduleTypeName,
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract
@@ -135,15 +135,6 @@ public partial class ILCompiler
     };
 
     /// <summary>
-    /// Sanitizes a module name for use as a type name.
-    /// </summary>
-    private string SanitizeModuleName(string name)
-    {
-        // Replace invalid characters
-        return name.Replace("/", "_").Replace("\\", "_").Replace(".", "_").Replace("-", "_");
-    }
-
-    /// <summary>
     /// Emits the initialization method for a module.
     /// </summary>
     private void EmitModuleInit(ParsedModule module)
@@ -238,7 +229,10 @@ public partial class ILCompiler
             InstanceGetters = _instanceGetters,
             InstanceSetters = _instanceSetters,
             ClassSuperclass = _classSuperclass,
-            AsyncMethods = null
+            AsyncMethods = null,
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule
         };
     }
 }

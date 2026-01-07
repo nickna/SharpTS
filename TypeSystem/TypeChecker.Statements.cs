@@ -459,6 +459,7 @@ public partial class TypeChecker
                         methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
                         classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
                         abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
+                    _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
                 }
                 else
                 {
@@ -468,6 +469,7 @@ public partial class TypeChecker
                         classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
                         abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
                     _environment.Define(classStmt.Name.Lexeme, classType);
+                    _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
                     classTypeForBody = classType;
                 }
 
@@ -1155,6 +1157,22 @@ public partial class TypeChecker
         }
 
         _environment.Define(funcName, funcType);
+
+        // Register function type for typed compilation
+        // For overloaded functions, use the implementation type
+        if (funcType is TypeInfo.Function ft)
+        {
+            _typeMap.SetFunctionType(funcName, ft);
+        }
+        else if (funcType is TypeInfo.OverloadedFunction of)
+        {
+            _typeMap.SetFunctionType(funcName, of.Implementation);
+        }
+        else if (funcType is TypeInfo.GenericFunction gf)
+        {
+            // For generic functions, store a function type with the unsubstituted types
+            _typeMap.SetFunctionType(funcName, new TypeInfo.Function(gf.ParamTypes, gf.ReturnType, gf.RequiredParams, gf.HasRestParam, gf.ThisType));
+        }
 
         // Add parameters to function environment and check body
         for (int i = 0; i < funcStmt.Parameters.Count; i++)

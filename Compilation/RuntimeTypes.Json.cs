@@ -192,27 +192,45 @@ public static partial class RuntimeTypes
     }
 
     /// <summary>
-    /// Stringifies a class instance by serializing its _fields dictionary.
+    /// Stringifies a class instance by serializing its typed backing fields and _fields dictionary.
     /// </summary>
     private static string StringifyClassInstance(object value, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         var type = value.GetType();
+        var allFields = new Dictionary<string, object?>();
+        var seenKeys = new HashSet<string>();
+
+        // Get values from typed backing fields (fields starting with __)
+        foreach (var backingField in type.GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
+        {
+            if (backingField.Name.StartsWith("__"))
+            {
+                string propName = backingField.Name[2..];
+                seenKeys.Add(propName);
+                if (allowedKeys == null || allowedKeys.Contains(propName))
+                {
+                    allFields[propName] = backingField.GetValue(value);
+                }
+            }
+        }
+
+        // Also get from _fields dictionary (for dynamic properties and generic type fields)
         var fieldsField = type.GetField("_fields", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (fieldsField?.GetValue(value) is not Dictionary<string, object?> fields)
+        if (fieldsField?.GetValue(value) is Dictionary<string, object?> fields)
         {
-            return "{}";
+            foreach (var kv in fields)
+            {
+                if (!seenKeys.Contains(kv.Key) && (allowedKeys == null || allowedKeys.Contains(kv.Key)))
+                {
+                    allFields[kv.Key] = kv.Value;
+                }
+            }
         }
 
-        if (allowedKeys != null)
-        {
-            fields = fields.Where(kv => allowedKeys.Contains(kv.Key))
-                .ToDictionary(kv => kv.Key, kv => kv.Value);
-        }
-
-        if (fields.Count == 0) return "{}";
+        if (allFields.Count == 0) return "{}";
 
         var parts = new List<string>();
-        foreach (var kv in fields)
+        foreach (var kv in allFields)
         {
             var val = kv.Value;
             if (replacer != null)

@@ -426,7 +426,12 @@ public partial class ILCompiler
                 AsyncMethods = null,
                 AsyncArrowBuilders = _asyncArrowBuilders,
                 AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-                AsyncArrowParentBuilders = _asyncArrowParentBuilders
+                AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+                // Module support for multi-module compilation
+                CurrentModulePath = _currentModulePath,
+                ClassToModule = _classToModule,
+                FunctionToModule = _functionToModule,
+                EnumToModule = _enumToModule
             };
 
             // Emit MoveNext body
@@ -498,7 +503,12 @@ public partial class ILCompiler
             AsyncMethods = null,
             AsyncArrowBuilders = _asyncArrowBuilders,
             AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-            AsyncArrowParentBuilders = _asyncArrowParentBuilders
+            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            // Inherit module support from parent context
+            CurrentModulePath = parentCtx.CurrentModulePath,
+            ClassToModule = parentCtx.ClassToModule,
+            FunctionToModule = parentCtx.FunctionToModule,
+            EnumToModule = parentCtx.EnumToModule
         };
 
         // Create arrow-specific emitter
@@ -668,7 +678,12 @@ public partial class ILCompiler
             AsyncMethods = null,
             AsyncArrowBuilders = _asyncArrowBuilders,
             AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-            AsyncArrowParentBuilders = _asyncArrowParentBuilders
+            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            // Module support for multi-module compilation
+            CurrentModulePath = _currentModulePath,
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule
         };
 
         // Emit MoveNext body

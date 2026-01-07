@@ -234,6 +234,15 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
             """;
         File.WriteAllText(runtimeConfigPath, runtimeConfig);
 
+        // Copy SharpTS.dll to output directory (required for runtime helpers)
+        string outputDir = Path.GetDirectoryName(outputPath) ?? ".";
+        string sharpTsSource = typeof(SharpTS.Compilation.RuntimeTypes).Assembly.Location;
+        string sharpTsDest = Path.Combine(outputDir, "SharpTS.dll");
+        if (!string.IsNullOrEmpty(sharpTsSource) && File.Exists(sharpTsSource) && sharpTsSource != sharpTsDest)
+        {
+            File.Copy(sharpTsSource, sharpTsDest, overwrite: true);
+        }
+
         Console.WriteLine($"Compiled to {outputPath}");
     }
     catch (Exception ex)
