@@ -213,7 +213,7 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Decorators (`@decorator`) | ❌ | Class/method metadata |
+| Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API |
 | Generators (`function*`) | ❌ | Iterable generators |
 | Iterators (Symbol.iterator) | ❌ | Custom iteration |
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |

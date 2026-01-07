@@ -9,7 +9,7 @@ A TypeScript interpreter and ahead-of-time compiler written in C#.
 ## Overview
 <img width="2816" height="1536" alt="Gemini_Generated_Image_go1ahqgo1ahqgo1a" src="https://github.com/user-attachments/assets/565d98dc-8268-4cd6-8b34-7cc24a0f7a4a" />
 
-SharpTS is an educational implementation of a TypeScript interpreter and compiler. It demonstrates how programming languages work by implementing the complete pipeline from source code to execution:
+SharpTS is an implementation of a TypeScript interpreter and compiler. It implements the complete pipeline from source code to execution:
 
 1. **Lexical Analysis** - Tokenizing source code
 2. **Parsing** - Building an Abstract Syntax Tree
@@ -24,22 +24,31 @@ SharpTS supports two execution modes:
 
 ### Language Support
 
-- **Types**: `string`, `number`, `boolean`, `null`, `any`, `void`
+- **Types**: `string`, `number`, `boolean`, `null`, `any`, `void`, `unknown`, `never`
+- **Generics**: Generic functions, classes, and interfaces with type constraints
+- **Advanced Types**: Union (`|`), intersection (`&`), tuples, literal types
 - **Arrays**: Typed arrays with `push`, `pop`, `map`, `filter`, `reduce`, `forEach`, etc.
 - **Objects**: Object literals with structural typing
 - **Classes**: Constructors, methods, fields, inheritance, `super`, static members
+- **Abstract Classes**: Abstract classes and abstract methods
 - **Interfaces**: Structural type checking (duck typing)
 - **Functions**: First-class functions, arrow functions, closures, default parameters
-- **Control Flow**: `if/else`, `while`, `do-while`, `for`, `for...of`, `switch`
+- **Async/Await**: Full `async`/`await` with `Promise<T>` and combinators (`all`, `race`, `any`)
+- **Modules**: ES6 `import`/`export` with default, named, and namespace imports
+- **Decorators**: Legacy and TC39 Stage 3 decorators with Reflect metadata API
+- **Control Flow**: `if/else`, `while`, `do-while`, `for`, `for...of`, `for...in`, `switch`
 - **Error Handling**: `try/catch/finally`, `throw`
 - **Operators**: `??`, `?.`, `?:`, `instanceof`, `typeof`, bitwise operators
-- **Built-ins**: `console.log`, `Math` object, string methods
+- **Destructuring**: Array/object destructuring with rest patterns
+- **Built-ins**: `console.log`, `Math`, `Date`, `Map`, `Set`, `RegExp`, `bigint`, `Symbol`, string methods
 
 ### Compiler Features
 
 - Static type checking with helpful error messages
 - Nominal typing for classes, structural typing for interfaces
 - Compile to standalone .NET executables
+- Reference assembly output for C# interop (`--ref-asm`)
+- IL verification (`--verify`)
 
 ## Quick Start
 
@@ -82,6 +91,19 @@ dotnet script.dll
 **Compile with custom output:**
 ```bash
 sharpts --compile script.ts -o myapp.dll
+```
+
+**Additional compiler options:**
+```bash
+sharpts --compile script.ts --ref-asm       # Reference assembly for C# interop
+sharpts --compile script.ts --verify        # Verify emitted IL
+sharpts --compile script.ts --preserveConstEnums  # Keep const enums
+```
+
+**Decorator support:**
+```bash
+sharpts --experimentalDecorators script.ts  # Legacy (Stage 2) decorators
+sharpts --decorators script.ts              # TC39 Stage 3 decorators
 ```
 
 ## Examples
@@ -155,6 +177,15 @@ $ dotnet functional.dll
 15
 ```
 
+### Access TypeScript classes from .NET (C#)
+```C#
+// Compile your TypeScript with --ref-asm:
+
+var person = new Person("Alice", 30.0);  // Direct instantiation
+Console.WriteLine(person.name);          // Direct property access
+string greeting = person.greet();        // Typed return values
+```
+[Example code](Examples\Interop\README.md)
 ## Documentation
 
 - [**Architecture Guide**](ARCHITECTURE.md) - Deep dive into the compiler/interpreter internals
@@ -165,7 +196,7 @@ $ dotnet functional.dll
 SharpTS is under active development. See [STATUS.md](STATUS.md) for current feature support and roadmap.
 
 **Looking for help with:**
-- Additional TypeScript features (generics, enums, modules)
+- Additional TypeScript features
 - IL compiler feature parity
 - Performance optimizations
 - Test coverage
@@ -173,7 +204,6 @@ SharpTS is under active development. See [STATUS.md](STATUS.md) for current feat
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
-- Setting up your development environment
 - Code style guidelines
 - How to add new language features
 - Submitting pull requests
