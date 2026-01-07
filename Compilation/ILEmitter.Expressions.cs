@@ -107,7 +107,7 @@ public partial class ILEmitter
         if (local != null)
         {
             var localType = _ctx.Locals.GetLocalType(a.Name.Lexeme);
-            if (_ctx.Types.IsDouble(localType))
+            if (localType != null && _ctx.Types.IsDouble(localType))
             {
                 // Typed local - ensure unboxed double
                 EnsureDouble();
