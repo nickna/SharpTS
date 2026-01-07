@@ -13,6 +13,7 @@ public partial class GeneratorMoveNextEmitter
     private readonly GeneratorStateMachineBuilder _builder;
     private readonly GeneratorStateAnalyzer.GeneratorFunctionAnalysis _analysis;
     private readonly ILGenerator _il;
+    private readonly TypeProvider _types;
 
     // Labels for state dispatch
     private readonly Dictionary<int, Label> _stateLabels = [];
@@ -30,11 +31,12 @@ public partial class GeneratorMoveNextEmitter
     // Loop label tracking for break/continue
     private readonly Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> _loopLabels = new();
 
-    public GeneratorMoveNextEmitter(GeneratorStateMachineBuilder builder, GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis)
+    public GeneratorMoveNextEmitter(GeneratorStateMachineBuilder builder, GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis, TypeProvider types)
     {
         _builder = builder;
         _analysis = analysis;
         _il = builder.MoveNextMethod.GetILGenerator();
+        _types = types;
     }
 
     /// <summary>

@@ -45,8 +45,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateNow",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            Type.EmptyTypes
+            _types.Double,
+            _types.EmptyTypes
         );
         runtime.DateNow = method;
 
@@ -60,8 +60,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateDateNoArgs",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            Type.EmptyTypes
+            _types.Object,
+            _types.EmptyTypes
         );
         runtime.CreateDateNoArgs = method;
 
@@ -75,8 +75,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateDateFromValue",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
         runtime.CreateDateFromValue = method;
 
@@ -91,8 +91,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateDateFromComponents",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(double), typeof(double), typeof(double), typeof(double), typeof(double), typeof(double), typeof(double)]
+            _types.Object,
+            [_types.Double, _types.Double, _types.Double, _types.Double, _types.Double, _types.Double, _types.Double]
         );
         runtime.CreateDateFromComponents = method;
 
@@ -113,8 +113,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateToString",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.DateToString = method;
 
@@ -129,8 +129,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetTime",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetTime = method;
 
@@ -145,8 +145,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetFullYear",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetFullYear = method;
 
@@ -161,8 +161,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetMonth",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetMonth = method;
 
@@ -177,8 +177,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetDate",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetDate = method;
 
@@ -193,8 +193,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetDay",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetDay = method;
 
@@ -209,8 +209,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetHours",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetHours = method;
 
@@ -225,8 +225,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetMinutes",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetMinutes = method;
 
@@ -241,8 +241,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetSeconds",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetSeconds = method;
 
@@ -257,8 +257,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetMilliseconds",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetMilliseconds = method;
 
@@ -273,8 +273,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateGetTimezoneOffset",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateGetTimezoneOffset = method;
 
@@ -289,8 +289,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetTime",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(double)]
+            _types.Double,
+            [_types.Object, _types.Double]
         );
         runtime.DateSetTime = method;
 
@@ -306,8 +306,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetFullYear",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object[])]
+            _types.Double,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.DateSetFullYear = method;
 
@@ -323,8 +323,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetMonth",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object[])]
+            _types.Double,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.DateSetMonth = method;
 
@@ -340,8 +340,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetDate",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(double)]
+            _types.Double,
+            [_types.Object, _types.Double]
         );
         runtime.DateSetDate = method;
 
@@ -357,8 +357,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetHours",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object[])]
+            _types.Double,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.DateSetHours = method;
 
@@ -374,8 +374,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetMinutes",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object[])]
+            _types.Double,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.DateSetMinutes = method;
 
@@ -391,8 +391,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetSeconds",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object[])]
+            _types.Double,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.DateSetSeconds = method;
 
@@ -408,8 +408,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateSetMilliseconds",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(double)]
+            _types.Double,
+            [_types.Object, _types.Double]
         );
         runtime.DateSetMilliseconds = method;
 
@@ -425,8 +425,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateToISOString",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.DateToISOString = method;
 
@@ -441,8 +441,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateToDateString",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.DateToDateString = method;
 
@@ -457,8 +457,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateToTimeString",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.DateToTimeString = method;
 
@@ -473,8 +473,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DateValueOf",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.DateValueOf = method;
 

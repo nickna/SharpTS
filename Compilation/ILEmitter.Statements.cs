@@ -12,14 +12,14 @@ public partial class ILEmitter
     private void EmitVarDeclaration(Stmt.Var v)
     {
         // Determine if this local can use unboxed double type
-        Type localType = CanUseUnboxedLocal(v) ? typeof(double) : typeof(object);
+        Type localType = CanUseUnboxedLocal(v) ? _ctx.Types.Double : _ctx.Types.Object;
         var local = _ctx.Locals.DeclareLocal(v.Name.Lexeme, localType);
 
         if (v.Initializer != null)
         {
             EmitExpression(v.Initializer);
 
-            if (localType == typeof(double))
+            if (_ctx.Types.IsDouble(localType))
             {
                 // Ensure we have an unboxed double on stack
                 EnsureDouble();
@@ -33,7 +33,7 @@ public partial class ILEmitter
         }
         else
         {
-            if (localType == typeof(double))
+            if (_ctx.Types.IsDouble(localType))
             {
                 // Initialize to 0.0 for uninitialized number variables
                 IL.Emit(OpCodes.Ldc_R8, 0.0);
@@ -100,7 +100,7 @@ public partial class ILEmitter
         else if (_stackType == StackType.Unknown && IsComparisonExpr(i.Condition))
         {
             // Boxed boolean from comparison - unbox it
-            IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
         else if (i.Condition is Expr.Logical)
         {
@@ -143,7 +143,7 @@ public partial class ILEmitter
         else if (_stackType == StackType.Unknown && IsComparisonExpr(w.Condition))
         {
             // Boxed boolean from comparison - unbox it
-            IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
         else if (w.Condition is Expr.Logical)
         {
@@ -189,7 +189,7 @@ public partial class ILEmitter
         else if (_stackType == StackType.Unknown && IsComparisonExpr(dw.Condition))
         {
             // Boxed boolean from comparison - unbox it
-            IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
         else if (dw.Condition is Expr.Logical)
         {
@@ -239,16 +239,16 @@ public partial class ILEmitter
             return;
         }
 
-        var iterableLocal = IL.DeclareLocal(typeof(object));
+        var iterableLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iterableLocal);
 
         // Create index variable
-        var indexLocal = IL.DeclareLocal(typeof(int));
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stloc, indexLocal);
 
         // Loop variable
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, typeof(object));
+        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
         IL.MarkLabel(startLabel);
 
@@ -286,19 +286,19 @@ public partial class ILEmitter
     private void EmitForOfEnumerator(Stmt.ForOf f, Label startLabel, Label endLabel, Label continueLabel)
     {
         // Use IEnumerable.GetEnumerator()/MoveNext()/Current pattern for generators
-        var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
-        var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
-        var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
+        var getEnumerator = _ctx.Types.GetMethod(_ctx.Types.IEnumerable, "GetEnumerator");
+        var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
+        var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
 
         // Stack has the iterable (generator)
-        IL.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.IEnumerable);
         IL.Emit(OpCodes.Callvirt, getEnumerator);
 
-        var enumLocal = IL.DeclareLocal(typeof(System.Collections.IEnumerator));
+        var enumLocal = IL.DeclareLocal(_ctx.Types.IEnumerator);
         IL.Emit(OpCodes.Stloc, enumLocal);
 
         // Loop variable
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, typeof(object));
+        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
         IL.MarkLabel(startLabel);
 
@@ -335,16 +335,16 @@ public partial class ILEmitter
         // Evaluate object and get keys
         EmitExpression(f.Object);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetKeys);
-        var keysLocal = IL.DeclareLocal(typeof(List<object>));
+        var keysLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);
 
         // Create index variable
-        var indexLocal = IL.DeclareLocal(typeof(int));
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stloc, indexLocal);
 
         // Loop variable (holds current key)
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, typeof(object));
+        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
         IL.MarkLabel(startLabel);
 
@@ -406,7 +406,7 @@ public partial class ILEmitter
             // Inside exception block: store value and leave
             if (_ctx.ReturnValueLocal == null)
             {
-                _ctx.ReturnValueLocal = IL.DeclareLocal(typeof(object));
+                _ctx.ReturnValueLocal = IL.DeclareLocal(_ctx.Types.Object);
                 _ctx.ReturnLabel = IL.DefineLabel();
             }
             IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
@@ -491,7 +491,7 @@ public partial class ILEmitter
 
         // Evaluate subject once
         EmitExpression(s.Subject);
-        var subjectLocal = IL.DeclareLocal(typeof(object));
+        var subjectLocal = IL.DeclareLocal(_ctx.Types.Object);
         EmitBoxIfNeeded(s.Subject);
         IL.Emit(OpCodes.Stloc, subjectLocal);
 
@@ -584,12 +584,12 @@ public partial class ILEmitter
 
         if (t.CatchBlock != null)
         {
-            IL.BeginCatchBlock(typeof(Exception));
+            IL.BeginCatchBlock(_ctx.Types.Exception);
 
             if (t.CatchParam != null)
             {
                 // Store exception
-                var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, typeof(object));
+                var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
                 IL.Emit(OpCodes.Stloc, exLocal);
             }
@@ -631,6 +631,6 @@ public partial class ILEmitter
         EmitExpression(p.Expr);
         EmitBoxIfNeeded(p.Expr);
         // Call Console.WriteLine(object) directly
-        IL.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Console, "WriteLine", _ctx.Types.Object));
     }
 }

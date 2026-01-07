@@ -60,11 +60,11 @@ public partial class ILEmitter
         switch (_stackType)
         {
             case StackType.Double:
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 _stackType = StackType.Unknown;
                 break;
             case StackType.Boolean:
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 _stackType = StackType.Unknown;
                 break;
             // String, Null, Unknown are already reference types - no boxing needed
@@ -79,7 +79,7 @@ public partial class ILEmitter
     {
         if (_stackType != StackType.Double)
         {
-            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToDouble", _ctx.Types.Object));
             _stackType = StackType.Double;
         }
     }
@@ -92,7 +92,7 @@ public partial class ILEmitter
     {
         if (_stackType != StackType.Boolean)
         {
-            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBoolean", [typeof(object)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToBoolean", _ctx.Types.Object));
             _stackType = StackType.Boolean;
         }
     }
@@ -106,7 +106,7 @@ public partial class ILEmitter
         if (_stackType != StackType.String)
         {
             // Call object.ToString() - handles null and value types
-            IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToString", _ctx.Types.Object));
             _stackType = StackType.String;
         }
     }
@@ -118,7 +118,7 @@ public partial class ILEmitter
     private void EmitBoxedDoubleConstant(double value)
     {
         IL.Emit(OpCodes.Ldc_R8, value);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -158,7 +158,7 @@ public partial class ILEmitter
     private void EmitBoxedBoolConstant(bool value)
     {
         IL.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -180,7 +180,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitBoxDouble()
     {
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -189,7 +189,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitBoxBool()
     {
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -273,7 +273,7 @@ public partial class ILEmitter
     private void EmitAddAndBox()
     {
         IL.Emit(OpCodes.Add);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -283,7 +283,7 @@ public partial class ILEmitter
     private void EmitSubAndBox()
     {
         IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -293,7 +293,7 @@ public partial class ILEmitter
     private void EmitMulAndBox()
     {
         IL.Emit(OpCodes.Mul);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -303,7 +303,7 @@ public partial class ILEmitter
     private void EmitDivAndBox()
     {
         IL.Emit(OpCodes.Div);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -370,8 +370,8 @@ public partial class ILEmitter
     private void EmitLdloc(LocalBuilder local, Type localType)
     {
         IL.Emit(OpCodes.Ldloc, local);
-        _stackType = localType == typeof(double) ? StackType.Double
-                   : localType == typeof(bool) ? StackType.Boolean
+        _stackType = _ctx.Types.IsDouble(localType) ? StackType.Double
+                   : _ctx.Types.IsBoolean(localType) ? StackType.Boolean
                    : StackType.Unknown;
     }
 
@@ -475,7 +475,7 @@ public partial class ILEmitter
     private void EmitCallAndBoxDouble(MethodInfo method)
     {
         IL.Emit(OpCodes.Call, method);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -485,7 +485,7 @@ public partial class ILEmitter
     private void EmitCallAndBoxBool(MethodInfo method)
     {
         IL.Emit(OpCodes.Call, method);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -507,7 +507,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitConvertToDouble()
     {
-        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToDouble", _ctx.Types.Object));
         _stackType = StackType.Double;
     }
 
@@ -517,7 +517,7 @@ public partial class ILEmitter
     private void EmitConvR8AndBox()
     {
         IL.Emit(OpCodes.Conv_R8);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -526,8 +526,8 @@ public partial class ILEmitter
     /// </summary>
     private void EmitObjectEqualsBoxed()
     {
-        IL.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Object, "Equals", _ctx.Types.Object, _ctx.Types.Object));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -536,10 +536,10 @@ public partial class ILEmitter
     /// </summary>
     private void EmitObjectNotEqualsBoxed()
     {
-        IL.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Object, "Equals", _ctx.Types.Object, _ctx.Types.Object));
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Ceq);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -942,11 +942,11 @@ public partial class ILEmitter
 
         // Check if it's a boolean
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Isinst, typeof(bool));
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Boolean);
         IL.Emit(OpCodes.Brfalse, checkBoolLabel);
 
         // It's a boxed bool - unbox and use the value
-        IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         IL.Emit(OpCodes.Br, endLabel);
 
         IL.MarkLabel(checkBoolLabel);
@@ -998,7 +998,7 @@ public partial class ILEmitter
             string localName = import.DefaultImport.Lexeme;
             if (exportFields.TryGetValue("$default", out var defaultField))
             {
-                var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+                var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
                 IL.Emit(OpCodes.Ldsfld, defaultField);
                 IL.Emit(OpCodes.Stloc, local);
             }
@@ -1014,7 +1014,7 @@ public partial class ILEmitter
 
                 if (exportFields.TryGetValue(importedName, out var field))
                 {
-                    var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+                    var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
                     IL.Emit(OpCodes.Ldsfld, field);
                     IL.Emit(OpCodes.Stloc, local);
                 }
@@ -1025,12 +1025,12 @@ public partial class ILEmitter
         if (import.NamespaceImport != null)
         {
             string localName = import.NamespaceImport.Lexeme;
-            var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, typeof(object));
+            var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
 
             // Create new Dictionary<string, object?>
-            var dictType = typeof(Dictionary<string, object?>);
-            var dictCtor = dictType.GetConstructor(Type.EmptyTypes)!;
-            var addMethod = dictType.GetMethod("Add", [typeof(string), typeof(object)])!;
+            var dictType = _ctx.Types.DictionaryStringObject;
+            var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+            var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
 
             IL.Emit(OpCodes.Newobj, dictCtor);
 
@@ -1094,7 +1094,7 @@ public partial class ILEmitter
                     {
                         // Store class type token
                         IL.Emit(OpCodes.Ldtoken, classBuilder);
-                        IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
                         IL.Emit(OpCodes.Stsfld, defaultField);
                     }
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
@@ -1137,7 +1137,7 @@ public partial class ILEmitter
                 else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(name), out var classBuilder))
                 {
                     IL.Emit(OpCodes.Ldtoken, classBuilder);
-                    IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
                     IL.Emit(OpCodes.Stsfld, field);
                 }
                 else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(name), out var enumMembers) == true)
@@ -1171,7 +1171,7 @@ public partial class ILEmitter
                     else if (_ctx.Classes.TryGetValue(_ctx.GetQualifiedClassName(localName), out var classBuilder))
                     {
                         IL.Emit(OpCodes.Ldtoken, classBuilder);
-                        IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
                         IL.Emit(OpCodes.Stsfld, field);
                     }
                     else if (_ctx.EnumMembers?.TryGetValue(_ctx.GetQualifiedEnumName(localName), out var enumMembers) == true)
@@ -1257,9 +1257,10 @@ public partial class ILEmitter
         // Create TSFunction(null, methodInfo) - same pattern as arrow functions
         IL.Emit(OpCodes.Ldnull);  // target (null for static methods)
         IL.Emit(OpCodes.Ldtoken, method);
-        IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
-            "GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
-        IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+        var runtimeMethodHandle = _ctx.Types.Resolve("System.RuntimeMethodHandle");
+        var methodBase = _ctx.Types.Resolve("System.Reflection.MethodBase");
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
     }
 
@@ -1269,9 +1270,9 @@ public partial class ILEmitter
     private void EmitEnumAsObject(Dictionary<string, object> members)
     {
         // Create new Dictionary<string, object?>()
-        var dictType = typeof(Dictionary<string, object?>);
-        var dictCtor = dictType.GetConstructor(Type.EmptyTypes)!;
-        var addMethod = dictType.GetMethod("Add", [typeof(string), typeof(object)])!;
+        var dictType = _ctx.Types.DictionaryStringObject;
+        var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+        var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
 
         IL.Emit(OpCodes.Newobj, dictCtor);
 
@@ -1282,7 +1283,7 @@ public partial class ILEmitter
             if (value is double d)
             {
                 IL.Emit(OpCodes.Ldc_R8, d);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
             }
             else if (value is string s)
             {
@@ -1310,7 +1311,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(di.PathExpression);
 
         // Convert to string
-        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToString", _ctx.Types.Object));
 
         // Push current module path (or empty string if not in module context)
         IL.Emit(OpCodes.Ldstr, _ctx.CurrentModulePath ?? "");

@@ -14,6 +14,7 @@ public partial class AsyncMoveNextEmitter
     private readonly AsyncStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
     private readonly ILGenerator _il;
+    private readonly TypeProvider _types;
 
     // Labels for state dispatch
     private readonly Dictionary<int, Label> _stateLabels = [];
@@ -47,11 +48,12 @@ public partial class AsyncMoveNextEmitter
     private LocalBuilder? _pendingReturnFlagLocal = null;
     private Label? _afterFinallyLabel = null;
 
-    public AsyncMoveNextEmitter(AsyncStateMachineBuilder builder, AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
+    public AsyncMoveNextEmitter(AsyncStateMachineBuilder builder, AsyncStateAnalyzer.AsyncFunctionAnalysis analysis, TypeProvider types)
     {
         _builder = builder;
         _analysis = analysis;
         _il = builder.MoveNextMethod.GetILGenerator();
+        _types = types;
     }
 
     /// <summary>
@@ -62,15 +64,15 @@ public partial class AsyncMoveNextEmitter
         if (body == null) return;
 
         _ctx = ctx;
-        _hasReturnValue = returnType != typeof(void);
+        _hasReturnValue = returnType != _types.Void;
 
         // Declare exception local for catch block
-        _exceptionLocal = _il.DeclareLocal(typeof(Exception));
+        _exceptionLocal = _il.DeclareLocal(_types.Exception);
 
         // Declare return value local if needed
         if (_hasReturnValue)
         {
-            _returnValueLocal = _il.DeclareLocal(typeof(object));
+            _returnValueLocal = _il.DeclareLocal(_types.Object);
         }
 
         // Define labels for each await resume point
@@ -115,7 +117,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Leave, _endLabel);
 
         // Begin catch block
-        _il.BeginCatchBlock(typeof(Exception));
+        _il.BeginCatchBlock(_types.Exception);
         _il.Emit(OpCodes.Stloc, _exceptionLocal);
 
         // this.<>1__state = -2

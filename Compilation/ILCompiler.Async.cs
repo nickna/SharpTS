@@ -15,16 +15,16 @@ public partial class ILCompiler
         var analysis = _asyncAnalyzer.Analyze(funcStmt);
 
         // Create state machine builder
-        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _asyncStateMachineCounter++);
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
-        smBuilder.DefineStateMachine(funcStmt.Name.Lexeme, analysis, typeof(object), false, hasAsyncArrows);
+        smBuilder.DefineStateMachine(funcStmt.Name.Lexeme, analysis, _types.Object, false, hasAsyncArrows);
 
         // Define stub method (returns Task<object>)
-        var paramTypes = funcStmt.Parameters.Select(_ => typeof(object)).ToArray();
+        var paramTypes = funcStmt.Parameters.Select(_ => _types.Object).ToArray();
         var stubMethod = _programType.DefineMethod(
             funcStmt.Name.Lexeme,
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Task<object>),
+            _types.TaskOfObject,
             paramTypes
         );
 
@@ -69,6 +69,7 @@ public partial class ILCompiler
             // Create state machine builder for the async arrow
             var arrowBuilder = new AsyncArrowStateMachineBuilder(
                 _moduleBuilder,
+                _types,
                 arrowInfo.Arrow,
                 arrowInfo.Captures,
                 _asyncArrowCounter++);
@@ -399,7 +400,7 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
-            var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+            var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
             {
                 Runtime = _runtime,
                 ClassConstructors = _classConstructors,
@@ -435,8 +436,8 @@ public partial class ILCompiler
             };
 
             // Emit MoveNext body
-            var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis);
-            moveNextEmitter.EmitMoveNext(func.Body, ctx, typeof(object));
+            var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
+            moveNextEmitter.EmitMoveNext(func.Body, ctx, _types.Object);
 
             // Emit async arrow MoveNext bodies
             foreach (var arrowInfo in analysis.AsyncArrows)
@@ -476,7 +477,7 @@ public partial class ILCompiler
         );
 
         // Create a new context for arrow MoveNext emission
-        var ctx = new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes)
+        var ctx = new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.Types)
         {
             Runtime = parentCtx.Runtime,
             ClassConstructors = parentCtx.ClassConstructors,
@@ -512,7 +513,7 @@ public partial class ILCompiler
         };
 
         // Create arrow-specific emitter
-        var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis);
+        var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
 
         // Get the body statements
         List<Stmt> bodyStatements;
@@ -531,7 +532,7 @@ public partial class ILCompiler
             bodyStatements = [];
         }
 
-        arrowEmitter.EmitMoveNext(bodyStatements, ctx, typeof(object));
+        arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
     }
 
     private void EmitAsyncStubMethod(MethodBuilder stubMethod, AsyncStateMachineBuilder smBuilder, List<Stmt.Parameter> parameters, bool isInstanceMethod = false)
@@ -631,12 +632,12 @@ public partial class ILCompiler
         var analysis = _asyncAnalyzer.Analyze(method);
 
         // Build state machine type
-        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _asyncStateMachineCounter++);
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             $"{methodBuilder.DeclaringType!.Name}_{method.Name.Lexeme}",
             analysis,
-            typeof(object),
+            _types.Object,
             isInstanceMethod: true,  // This is an instance method
             hasAsyncArrows: hasAsyncArrows
         );
@@ -649,7 +650,7 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,
@@ -687,8 +688,8 @@ public partial class ILCompiler
         };
 
         // Emit MoveNext body
-        var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis);
-        moveNextEmitter.EmitMoveNext(method.Body, ctx, typeof(object));
+        var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
+        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object);
 
         // Emit MoveNext bodies for async arrows
         foreach (var arrowInfo in analysis.AsyncArrows)
@@ -722,8 +723,8 @@ public partial class ILCompiler
                         false, // HasTryCatch
                         false, // UsesThis
                         []     // AsyncArrows - handled separately via _asyncArrowBuilders
-                    ));
-                arrowEmitter.EmitMoveNext(bodyStatements, ctx, typeof(object));
+                    ), _types);
+                arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
             }
         }
 

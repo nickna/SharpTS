@@ -49,13 +49,13 @@ public partial class ILEmitter
             else if (c.Arguments.Count == 0)
             {
                 // No arguments - just print newline
-                IL.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethodNoParams(_ctx.Types.Console, "WriteLine"));
             }
             else
             {
                 // Multiple arguments - use RuntimeTypes.ConsoleLogMultiple
                 IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < c.Arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -81,12 +81,12 @@ public partial class ILEmitter
             }
             else if (c.Arguments.Count == 0)
             {
-                IL.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethodNoParams(_ctx.Types.Console, "WriteLine"));
             }
             else
             {
                 IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < c.Arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -165,7 +165,7 @@ public partial class ILEmitter
                 // Emit exclude keys (List<object>)
                 EmitExpression(c.Arguments[1]);
                 EmitBoxIfNeeded(c.Arguments[1]);
-                IL.Emit(OpCodes.Castclass, typeof(List<object>));
+                IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
 
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRest);
                 return;
@@ -221,7 +221,7 @@ public partial class ILEmitter
             dateGet.Name.Lexeme == "now")
         {
             IL.Emit(OpCodes.Call, _ctx.Runtime!.DateNow);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             return;
         }
 
@@ -326,9 +326,9 @@ public partial class ILEmitter
                         {
                             // Use the base type constraint if available, otherwise object
                             var baseConstraint = genericParams[i].BaseType;
-                            inferredArgs[i] = (baseConstraint != null && baseConstraint != typeof(object))
+                            inferredArgs[i] = (baseConstraint != null && !_ctx.Types.IsObject(baseConstraint))
                                 ? baseConstraint
-                                : typeof(object);
+                                : _ctx.Types.Object;
                         }
                         targetMethod = methodBuilder.MakeGenericMethod(inferredArgs);
                     }
@@ -374,7 +374,7 @@ public partial class ILEmitter
                     {
                         // Has spreads in rest args - use ExpandCallArgs helper
                         IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                         for (int i = 0; i < restArgsCount; i++)
                         {
                             IL.Emit(OpCodes.Dup);
@@ -395,7 +395,7 @@ public partial class ILEmitter
 
                         // Emit isSpread array
                         IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                        IL.Emit(OpCodes.Newarr, typeof(bool));
+                        IL.Emit(OpCodes.Newarr, _ctx.Types.Boolean);
                         for (int i = 0; i < restArgsCount; i++)
                         {
                             if (c.Arguments[regularCount + i] is Expr.Spread)
@@ -413,7 +413,7 @@ public partial class ILEmitter
                     {
                         // No spreads - simple array creation
                         IL.Emit(OpCodes.Ldc_I4, restArgsCount);
-                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                         for (int i = 0; i < restArgsCount; i++)
                         {
                             IL.Emit(OpCodes.Dup);
@@ -428,7 +428,7 @@ public partial class ILEmitter
                     {
                         // No rest args - empty array
                         IL.Emit(OpCodes.Ldc_I4, 0);
-                        IL.Emit(OpCodes.Newarr, typeof(object));
+                        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
                     }
                 }
@@ -479,7 +479,7 @@ public partial class ILEmitter
         {
             // Simple case: no spreads
             IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-            IL.Emit(OpCodes.Newarr, typeof(object));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
             for (int i = 0; i < c.Arguments.Count; i++)
             {
@@ -495,7 +495,7 @@ public partial class ILEmitter
             // Complex case: has spreads, use ExpandCallArgs
             // First emit args array
             IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-            IL.Emit(OpCodes.Newarr, typeof(object));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
             for (int i = 0; i < c.Arguments.Count; i++)
             {
@@ -516,7 +516,7 @@ public partial class ILEmitter
 
             // Now emit isSpread bool array
             IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-            IL.Emit(OpCodes.Newarr, typeof(bool));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Boolean);
 
             for (int i = 0; i < c.Arguments.Count; i++)
             {
@@ -544,12 +544,12 @@ public partial class ILEmitter
     {
         return typeArg switch
         {
-            "number" => typeof(double),
-            "string" => typeof(string),
-            "boolean" => typeof(bool),
+            "number" => _ctx.Types.Double,
+            "string" => _ctx.Types.String,
+            "boolean" => _ctx.Types.Boolean,
             _ when _ctx.GenericTypeParameters.TryGetValue(typeArg, out var gp) => gp,
             _ when _ctx.Classes.TryGetValue(_ctx.ResolveClassName(typeArg), out var tb) => tb,
-            _ => typeof(object)
+            _ => _ctx.Types.Object
         };
     }
 
@@ -558,7 +558,7 @@ public partial class ILEmitter
         if (methodName == "random")
         {
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Random);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -567,8 +567,8 @@ public partial class ILEmitter
         if (methodName is "min" or "max")
         {
             var minMaxMethod = methodName == "min"
-                ? typeof(Math).GetMethod("Min", [typeof(double), typeof(double)])!
-                : typeof(Math).GetMethod("Max", [typeof(double), typeof(double)])!;
+                ? _ctx.Types.GetMethod(_ctx.Types.Math, "Min", _ctx.Types.Double, _ctx.Types.Double)
+                : _ctx.Types.GetMethod(_ctx.Types.Math, "Max", _ctx.Types.Double, _ctx.Types.Double);
 
             if (arguments.Count == 0)
             {
@@ -586,7 +586,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, minMaxMethod);
                 }
             }
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -602,9 +602,9 @@ public partial class ILEmitter
             // JavaScript rounds half-values toward +infinity: Math.Floor(x + 0.5)
             IL.Emit(OpCodes.Ldc_R8, 0.5);
             IL.Emit(OpCodes.Add);
-            var floorMethod = typeof(Math).GetMethod("Floor", [typeof(double)])!;
+            var floorMethod = _ctx.Types.GetMethod(_ctx.Types.Math, "Floor", _ctx.Types.Double);
             IL.Emit(OpCodes.Call, floorMethod);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -612,34 +612,34 @@ public partial class ILEmitter
         if (methodName == "sign")
         {
             // Math.Sign returns int, need to convert to double
-            var signMethod = typeof(Math).GetMethod("Sign", [typeof(double)])!;
+            var signMethod = _ctx.Types.GetMethod(_ctx.Types.Math, "Sign", _ctx.Types.Double);
             IL.Emit(OpCodes.Call, signMethod);
             IL.Emit(OpCodes.Conv_R8); // Convert int to double
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
 
         MethodInfo? mathMethod = methodName switch
         {
-            "abs" => typeof(Math).GetMethod("Abs", [typeof(double)]),
-            "floor" => typeof(Math).GetMethod("Floor", [typeof(double)]),
-            "ceil" => typeof(Math).GetMethod("Ceiling", [typeof(double)]),
-            "sqrt" => typeof(Math).GetMethod("Sqrt", [typeof(double)]),
-            "sin" => typeof(Math).GetMethod("Sin", [typeof(double)]),
-            "cos" => typeof(Math).GetMethod("Cos", [typeof(double)]),
-            "tan" => typeof(Math).GetMethod("Tan", [typeof(double)]),
-            "log" => typeof(Math).GetMethod("Log", [typeof(double)]),
-            "exp" => typeof(Math).GetMethod("Exp", [typeof(double)]),
-            "trunc" => typeof(Math).GetMethod("Truncate", [typeof(double)]),
-            "pow" => typeof(Math).GetMethod("Pow", [typeof(double), typeof(double)]),
+            "abs" => _ctx.Types.GetMethod(_ctx.Types.Math, "Abs", _ctx.Types.Double),
+            "floor" => _ctx.Types.GetMethod(_ctx.Types.Math, "Floor", _ctx.Types.Double),
+            "ceil" => _ctx.Types.GetMethod(_ctx.Types.Math, "Ceiling", _ctx.Types.Double),
+            "sqrt" => _ctx.Types.GetMethod(_ctx.Types.Math, "Sqrt", _ctx.Types.Double),
+            "sin" => _ctx.Types.GetMethod(_ctx.Types.Math, "Sin", _ctx.Types.Double),
+            "cos" => _ctx.Types.GetMethod(_ctx.Types.Math, "Cos", _ctx.Types.Double),
+            "tan" => _ctx.Types.GetMethod(_ctx.Types.Math, "Tan", _ctx.Types.Double),
+            "log" => _ctx.Types.GetMethod(_ctx.Types.Math, "Log", _ctx.Types.Double),
+            "exp" => _ctx.Types.GetMethod(_ctx.Types.Math, "Exp", _ctx.Types.Double),
+            "trunc" => _ctx.Types.GetMethod(_ctx.Types.Math, "Truncate", _ctx.Types.Double),
+            "pow" => _ctx.Types.GetMethod(_ctx.Types.Math, "Pow", _ctx.Types.Double, _ctx.Types.Double),
             _ => null
         };
 
         if (mathMethod != null)
         {
             IL.Emit(OpCodes.Call, mathMethod);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
         }
         else
@@ -735,7 +735,7 @@ public partial class ILEmitter
         // Emit receiver object once and store in a local to avoid double evaluation
         EmitExpression(methodGet.Object);
         EmitBoxIfNeeded(methodGet.Object);
-        var receiverLocal = IL.DeclareLocal(typeof(object));
+        var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, receiverLocal);
 
         // Load receiver for InvokeMethodValue's first argument
@@ -748,7 +748,7 @@ public partial class ILEmitter
 
         // Create args array
         IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-        IL.Emit(OpCodes.Newarr, typeof(object));
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
         for (int i = 0; i < arguments.Count; i++)
         {
@@ -768,14 +768,14 @@ public partial class ILEmitter
         // Emit the string object
         EmitExpression(obj);
         EmitBoxIfNeeded(obj);
-        IL.Emit(OpCodes.Castclass, typeof(string));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.String);
 
         switch (methodName)
         {
             case "charAt":
                 // str.charAt(index) -> str[index].ToString() or "" if out of range
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -789,7 +789,7 @@ public partial class ILEmitter
 
             case "substring":
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -806,26 +806,26 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "toUpperCase":
-                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("ToUpper", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.String, "ToUpper"));
                 return;
 
             case "toLowerCase":
-                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("ToLower", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.String, "ToLower"));
                 return;
 
             case "trim":
-                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("Trim", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.String, "Trim"));
                 return;
 
             case "replace":
@@ -888,7 +888,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSearchRegExp);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "includes":
@@ -896,14 +896,14 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIncludes);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "startsWith":
@@ -911,14 +911,14 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringStartsWith);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "endsWith":
@@ -926,14 +926,14 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringEndsWith);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "slice":
@@ -943,7 +943,7 @@ public partial class ILEmitter
                 // Need to push: argCount, then args array
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object); // [string, argCount, array]
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -961,7 +961,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
                 }
                 else
                 {
@@ -977,7 +977,7 @@ public partial class ILEmitter
                 // Need to push: argCount, then args array
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object); // [string, argCount, array]
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -996,7 +996,7 @@ public partial class ILEmitter
                 // Need to push: argCount, then args array
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count); // [string, argCount]
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object)); // [string, argCount, array]
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object); // [string, argCount, array]
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1014,20 +1014,20 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldc_R8, 0.0);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "concat":
                 // str.concat(...strings)
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1045,24 +1045,24 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLastIndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "trimStart":
                 // str.trimStart() -> string
-                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("TrimStart", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.String, "TrimStart"));
                 return;
 
             case "trimEnd":
                 // str.trimEnd() -> string
-                IL.Emit(OpCodes.Callvirt, typeof(string).GetMethod("TrimEnd", Type.EmptyTypes)!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.String, "TrimEnd"));
                 return;
 
             case "replaceAll":
@@ -1071,10 +1071,10 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
@@ -1090,7 +1090,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Unbox_Any, typeof(double));
+                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
                 }
                 else
                 {
@@ -1108,7 +1108,7 @@ public partial class ILEmitter
         EmitBoxIfNeeded(obj);
 
         // Cast to List<object>
-        IL.Emit(OpCodes.Castclass, typeof(List<object>));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
 
         switch (methodName)
         {
@@ -1131,7 +1131,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayUnshift);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "push":
@@ -1145,12 +1145,12 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayPush);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "slice":
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1226,7 +1226,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayFindIndex);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             case "some":
@@ -1260,7 +1260,7 @@ public partial class ILEmitter
             case "reduce":
                 // reduce(callback, initialValue?)
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1327,7 +1327,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
         }
     }
@@ -1338,7 +1338,7 @@ public partial class ILEmitter
         EmitExpression(obj);
         EmitBoxIfNeeded(obj);
 
-        var objLocal = IL.DeclareLocal(typeof(object));
+        var objLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, objLocal);
 
         // Check if it's a string
@@ -1347,7 +1347,7 @@ public partial class ILEmitter
         var doneLabel = IL.DefineLabel();
 
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Isinst, typeof(string));
+        IL.Emit(OpCodes.Isinst, _ctx.Types.String);
         IL.Emit(OpCodes.Brtrue, isStringLabel);
 
         // Assume it's a list if not a string
@@ -1356,7 +1356,7 @@ public partial class ILEmitter
         // String path
         IL.MarkLabel(isStringLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Castclass, typeof(string));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.String);
 
         switch (methodName)
         {
@@ -1365,14 +1365,14 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIncludes);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
             case "indexOf":
@@ -1380,14 +1380,14 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(string));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
             case "slice":
@@ -1395,7 +1395,7 @@ public partial class ILEmitter
                 // StringSlice(string str, int argCount, object[] args)
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count); // argCount
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1410,7 +1410,7 @@ public partial class ILEmitter
             case "concat":
                 // str.concat(...strings)
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1427,7 +1427,7 @@ public partial class ILEmitter
         // List path
         IL.MarkLabel(isListLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Castclass, typeof(List<object>));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
 
         switch (methodName)
         {
@@ -1442,7 +1442,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludes);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
             case "indexOf":
@@ -1456,12 +1456,12 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIndexOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
             case "slice":
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1478,11 +1478,11 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Castclass, typeof(List<object>));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+                    IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.ListOfObject));
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayConcat);
                 break;
@@ -1502,43 +1502,43 @@ public partial class ILEmitter
             // Getters (no arguments, return double)
             case "getTime":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetTime);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getFullYear":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetFullYear);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getMonth":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMonth);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getDate":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetDate);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getDay":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetDay);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getHours":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetHours);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getMinutes":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMinutes);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getSeconds":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetSeconds);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getMilliseconds":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetMilliseconds);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "getTimezoneOffset":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateGetTimezoneOffset);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             // Simple setters (single argument, return double)
@@ -1552,7 +1552,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetTime);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "setDate":
                 if (arguments.Count > 0)
@@ -1564,7 +1564,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetDate);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
             case "setMilliseconds":
                 if (arguments.Count > 0)
@@ -1576,7 +1576,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateSetMilliseconds);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             // Multi-argument setters (variadic, packaged as object[])
@@ -1587,7 +1587,7 @@ public partial class ILEmitter
             case "setSeconds":
                 // Create args array
                 IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                 for (int i = 0; i < arguments.Count; i++)
                 {
                     IL.Emit(OpCodes.Dup);
@@ -1607,7 +1607,7 @@ public partial class ILEmitter
                     _ => throw new Exception($"Unknown Date method: {methodName}")
                 };
                 IL.Emit(OpCodes.Call, setMethod);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             // Conversion methods (no arguments, return string)
@@ -1624,7 +1624,7 @@ public partial class ILEmitter
             // valueOf (no arguments, returns double)
             case "valueOf":
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.DateValueOf);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 return;
 
             // toString (no arguments, returns string)
@@ -1658,7 +1658,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpTest);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 SetStackUnknown();
                 break;
 
@@ -1765,7 +1765,7 @@ public partial class ILEmitter
 
                 // Create an object array for the arguments
                 IL.Emit(OpCodes.Ldc_I4, n.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, typeof(object));
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
                 for (int i = 0; i < n.Arguments.Count; i++)
                 {
@@ -1778,7 +1778,7 @@ public partial class ILEmitter
 
                 // Call Activator.CreateInstance(Type, object[])
                 // Stack: Type, object[]
-                var createInstanceMethod = typeof(Activator).GetMethod("CreateInstance", [typeof(Type), typeof(object[])]);
+                var createInstanceMethod = _ctx.Types.GetMethod(_ctx.Types.Activator, "CreateInstance", _ctx.Types.Type, _ctx.Types.ObjectArray);
                 IL.Emit(OpCodes.Call, createInstanceMethod!);
             }
             else
@@ -1827,10 +1827,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, method);
 
         // For static methods on a non-generic type:
-        IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
-            "GetMethodFromHandle",
-            [typeof(RuntimeMethodHandle)])!);
-        IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
@@ -1853,10 +1851,8 @@ public partial class ILEmitter
         {
             // No fields to populate, just create TSFunction
             IL.Emit(OpCodes.Ldtoken, method);
-            IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
-                "GetMethodFromHandle",
-                [typeof(RuntimeMethodHandle)])!);
-            IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
             IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             return;
         }
@@ -1910,10 +1906,8 @@ public partial class ILEmitter
 
         // Load method info
         IL.Emit(OpCodes.Ldtoken, method);
-        IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
-            "GetMethodFromHandle",
-            [typeof(RuntimeMethodHandle)])!);
-        IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
@@ -1965,7 +1959,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.IsArray);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             default:
                 IL.Emit(OpCodes.Ldnull);
@@ -2065,7 +2059,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsNaN);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case "isFinite":
                 // Number.isFinite is stricter than global isFinite
@@ -2079,7 +2073,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsFinite);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case "isInteger":
                 if (arguments.Count > 0)
@@ -2092,7 +2086,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsInteger);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case "isSafeInteger":
                 if (arguments.Count > 0)
@@ -2105,7 +2099,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberIsSafeInteger);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             default:
                 IL.Emit(OpCodes.Ldnull);
@@ -2135,11 +2129,11 @@ public partial class ILEmitter
         else
         {
             IL.Emit(OpCodes.Ldc_I4, 10);
-            IL.Emit(OpCodes.Box, typeof(int));
+            IL.Emit(OpCodes.Box, _ctx.Types.Int32);
         }
 
         IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberParseInt);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
     }
 
     private void EmitGlobalParseFloat(List<Expr> arguments)
@@ -2155,7 +2149,7 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberParseFloat);
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
     }
 
     private void EmitGlobalIsNaN(List<Expr> arguments)
@@ -2171,7 +2165,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldnull);
         }
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalIsNaN);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
     }
 
     private void EmitGlobalIsFinite(List<Expr> arguments)
@@ -2187,7 +2181,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldnull);
         }
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalIsFinite);
-        IL.Emit(OpCodes.Box, typeof(bool));
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
     }
 
     /// <summary>
@@ -2217,15 +2211,15 @@ public partial class ILEmitter
         // Synchronously wait for the result: task.GetAwaiter().GetResult()
         Type returnType = asyncMethod.ReturnType;
 
-        if (returnType == typeof(Task))
+        if (returnType == _ctx.Types.Task || returnType.FullName == "System.Threading.Tasks.Task")
         {
             // Task (no return value) - just wait for completion
-            var getAwaiter = typeof(Task).GetMethod("GetAwaiter")!;
-            var awaiterType = getAwaiter.ReturnType;
-            var getResult = awaiterType.GetMethod("GetResult")!;
+            var getAwaiter = _ctx.Types.GetMethod(_ctx.Types.Task, "GetAwaiter");
+            var awaiterType = _ctx.Types.TaskAwaiter;
+            var getResult = _ctx.Types.GetMethod(awaiterType, "GetResult");
 
             // Store task in local to call methods on it
-            var taskLocal = IL.DeclareLocal(typeof(Task));
+            var taskLocal = IL.DeclareLocal(_ctx.Types.Task);
             IL.Emit(OpCodes.Stloc, taskLocal);
             IL.Emit(OpCodes.Ldloca, taskLocal);
             IL.Emit(OpCodes.Call, getAwaiter);
@@ -2238,7 +2232,7 @@ public partial class ILEmitter
             // void async functions return null
             IL.Emit(OpCodes.Ldnull);
         }
-        else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+        else if (returnType.IsGenericType && returnType.GetGenericTypeDefinition().FullName == "System.Threading.Tasks.Task`1")
         {
             // Task<T> - wait and get result
             var getAwaiter = returnType.GetMethod("GetAwaiter")!;
@@ -2382,20 +2376,21 @@ public partial class ILEmitter
     private void EmitAwaitTask()
     {
         // Store task in local
-        var taskLocal = IL.DeclareLocal(typeof(Task<object?>));
+        var taskOfObject = _ctx.Types.TaskOfObject;
+        var taskLocal = IL.DeclareLocal(taskOfObject);
         IL.Emit(OpCodes.Stloc, taskLocal);
         IL.Emit(OpCodes.Ldloca, taskLocal);
 
         // Call GetAwaiter()
-        var getAwaiter = typeof(Task<object?>).GetMethod("GetAwaiter")!;
+        var getAwaiter = _ctx.Types.GetMethod(taskOfObject, "GetAwaiter");
         IL.Emit(OpCodes.Call, getAwaiter);
 
         // Store awaiter and call GetResult()
-        var awaiterType = getAwaiter.ReturnType;
+        var awaiterType = _ctx.Types.TaskAwaiterOfObject;
         var awaiterLocal = IL.DeclareLocal(awaiterType);
         IL.Emit(OpCodes.Stloc, awaiterLocal);
         IL.Emit(OpCodes.Ldloca, awaiterLocal);
-        var getResult = awaiterType.GetMethod("GetResult")!;
+        var getResult = _ctx.Types.GetMethod(awaiterType, "GetResult");
         IL.Emit(OpCodes.Call, getResult);
     }
 
@@ -2632,7 +2627,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.MapHas);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "delete":
@@ -2646,7 +2641,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.MapDelete);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "clear":
@@ -2717,7 +2712,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.SetHas);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "delete":
@@ -2731,7 +2726,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.SetDelete);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
 
             case "clear":

@@ -14,6 +14,7 @@ public class AsyncArrowMoveNextEmitter
 {
     private readonly AsyncArrowStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
+    private readonly TypeProvider _types;
     private ILGenerator _il = null!;
     private CompilationContext? _ctx;
     private int _currentState = 0;
@@ -28,10 +29,12 @@ public class AsyncArrowMoveNextEmitter
 
     public AsyncArrowMoveNextEmitter(
         AsyncArrowStateMachineBuilder builder,
-        AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
+        AsyncStateAnalyzer.AsyncFunctionAnalysis analysis,
+        TypeProvider types)
     {
         _builder = builder;
         _analysis = analysis;
+        _types = types;
     }
 
     /// <summary>
@@ -50,8 +53,8 @@ public class AsyncArrowMoveNextEmitter
         _exitLabel = _il.DefineLabel();
 
         // Declare locals
-        _resultLocal = _il.DeclareLocal(typeof(object));
-        _exceptionLocal = _il.DeclareLocal(typeof(Exception));
+        _resultLocal = _il.DeclareLocal(_types.Object);
+        _exceptionLocal = _il.DeclareLocal(_types.Exception);
 
         // Begin try block
         _il.BeginExceptionBlock();
@@ -69,7 +72,7 @@ public class AsyncArrowMoveNextEmitter
         EmitReturnNull();
 
         // Catch block
-        _il.BeginCatchBlock(typeof(Exception));
+        _il.BeginCatchBlock(_types.Exception);
         EmitCatchBlock();
 
         _il.EndExceptionBlock();

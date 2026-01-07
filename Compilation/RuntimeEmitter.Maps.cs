@@ -27,8 +27,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateMap",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            Type.EmptyTypes
+            _types.Object,
+            _types.EmptyTypes
         );
         runtime.CreateMap = method;
 
@@ -43,8 +43,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateMapFromEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
         runtime.CreateMapFromEntries = method;
 
@@ -59,8 +59,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapSize",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.MapSize = method;
 
@@ -75,8 +75,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapGet",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object]
         );
         runtime.MapGet = method;
 
@@ -92,8 +92,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapSet",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.MapSet = method;
 
@@ -110,8 +110,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapHas",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.MapHas = method;
 
@@ -127,8 +127,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapDelete",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.MapDelete = method;
 
@@ -144,8 +144,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapClear",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object)]
+            _types.Void,
+            [_types.Object]
         );
         runtime.MapClear = method;
 
@@ -160,8 +160,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapKeys",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.MapKeys = method;
 
@@ -176,8 +176,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapValues",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.MapValues = method;
 
@@ -192,8 +192,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.MapEntries = method;
 
@@ -208,8 +208,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapForEach",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(object)]
+            _types.Void,
+            [_types.Object, _types.Object]
         );
         runtime.MapForEach = method;
 

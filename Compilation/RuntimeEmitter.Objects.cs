@@ -11,8 +11,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateObject",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Dictionary<string, object>),
-            [typeof(Dictionary<string, object>)]
+            _types.DictionaryStringObject,
+            [_types.DictionaryStringObject]
         );
         runtime.CreateObject = method;
 
@@ -31,8 +31,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetFieldsProperty",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(string)]
+            _types.Object,
+            [_types.Object, _types.String]
         );
         runtime.GetFieldsProperty = method;
 
@@ -42,12 +42,12 @@ public static partial class RuntimeEmitter
         var tryFieldsLabel = il.DefineLabel();
 
         // Declare locals upfront
-        var fieldsFieldLocal = il.DeclareLocal(typeof(FieldInfo));
-        var fieldsLocal = il.DeclareLocal(typeof(object));
-        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
-        var valueLocal = il.DeclareLocal(typeof(object));
-        var getterMethodLocal = il.DeclareLocal(typeof(MethodInfo));
-        var currentTypeLocal = il.DeclareLocal(typeof(Type));
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsLocal = il.DeclareLocal(_types.Object);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var getterMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // if (obj == null) return null;
         il.Emit(OpCodes.Ldarg_0);
@@ -55,11 +55,11 @@ public static partial class RuntimeEmitter
 
         // Check for getter method first: var getterMethod = obj.GetType().GetMethod("get_" + name);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "get_");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, getterMethodLocal);
 
         // if (getterMethod == null) goto tryFields;
@@ -70,7 +70,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, getterMethodLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
 
         // Try _fields dictionary - walk up type hierarchy
@@ -78,7 +78,7 @@ public static partial class RuntimeEmitter
 
         // currentType = obj.GetType();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, currentTypeLocal);
 
         // Loop through type hierarchy
@@ -95,7 +95,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentTypeLocal);
         il.Emit(OpCodes.Ldstr, "_fields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.NonPublic));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, _types.BindingFlags));
         il.Emit(OpCodes.Stloc, fieldsFieldLocal);
 
         // if (fieldsField == null) goto nextType;
@@ -105,7 +105,7 @@ public static partial class RuntimeEmitter
         // var fields = fieldsField.GetValue(obj);
         il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
         il.Emit(OpCodes.Stloc, fieldsLocal);
 
         // if (fields == null) goto nextType;
@@ -114,7 +114,7 @@ public static partial class RuntimeEmitter
 
         // var dict = fields as Dictionary<string, object>;
         il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // if (dict == null) goto nextType;
@@ -125,7 +125,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         var foundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, foundLabel);
         il.Emit(OpCodes.Br, nextType);
@@ -137,7 +137,7 @@ public static partial class RuntimeEmitter
         // nextType: currentType = currentType.BaseType; goto loopStart;
         il.MarkLabel(nextType);
         il.Emit(OpCodes.Ldloc, currentTypeLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("BaseType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentTypeLocal);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -149,7 +149,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetArrayMethod);
-        var arrayMethodLocal = il.DeclareLocal(typeof(object));
+        var arrayMethodLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, arrayMethodLocal);
         il.Emit(OpCodes.Ldloc, arrayMethodLocal);
         il.Emit(OpCodes.Brfalse, tryReflectionLabel);
@@ -160,10 +160,10 @@ public static partial class RuntimeEmitter
         il.MarkLabel(tryReflectionLabel);
         // var methodInfo = obj.GetType().GetMethod(name);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
-        var methodLocal = il.DeclareLocal(typeof(MethodInfo));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        var methodLocal = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Stloc, methodLocal);
 
         // if (methodInfo == null) return null;
@@ -189,8 +189,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetFieldsProperty",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(string), typeof(object)]
+            _types.Void,
+            [_types.Object, _types.String, _types.Object]
         );
         runtime.SetFieldsProperty = method;
 
@@ -199,11 +199,11 @@ public static partial class RuntimeEmitter
         var tryFieldsLabel = il.DefineLabel();
 
         // Declare locals upfront
-        var fieldsFieldLocal = il.DeclareLocal(typeof(FieldInfo));
-        var fieldsLocal = il.DeclareLocal(typeof(object));
-        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
-        var setterMethodLocal = il.DeclareLocal(typeof(MethodInfo));
-        var argsArrayLocal = il.DeclareLocal(typeof(object[]));
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsLocal = il.DeclareLocal(_types.Object);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
 
         // if (obj == null) return;
         il.Emit(OpCodes.Ldarg_0);
@@ -211,11 +211,11 @@ public static partial class RuntimeEmitter
 
         // Check for setter method first: var setterMethod = obj.GetType().GetMethod("set_" + name);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "set_");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, setterMethodLocal);
 
         // if (setterMethod == null) goto tryFields;
@@ -224,7 +224,7 @@ public static partial class RuntimeEmitter
 
         // Create args array: new object[] { value }
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, typeof(object));
+        il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, argsArrayLocal);
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -235,7 +235,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, setterMethodLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argsArrayLocal);
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Pop); // Discard return value (setters return void but Invoke returns object)
         il.Emit(OpCodes.Ret);
 
@@ -243,11 +243,11 @@ public static partial class RuntimeEmitter
         il.MarkLabel(tryFieldsLabel);
 
         // Add currentType local
-        var currentTypeLocal = il.DeclareLocal(typeof(Type));
+        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // currentType = obj.GetType();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, currentTypeLocal);
 
         // Loop through type hierarchy
@@ -264,7 +264,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentTypeLocal);
         il.Emit(OpCodes.Ldstr, "_fields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.NonPublic));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, _types.BindingFlags));
         il.Emit(OpCodes.Stloc, fieldsFieldLocal);
 
         // if (fieldsField == null) goto nextType;
@@ -274,7 +274,7 @@ public static partial class RuntimeEmitter
         // var fields = fieldsField.GetValue(obj);
         il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
         il.Emit(OpCodes.Stloc, fieldsLocal);
 
         // if (fields == null) goto nextType;
@@ -283,7 +283,7 @@ public static partial class RuntimeEmitter
 
         // var dict = fields as Dictionary<string, object>;
         il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // if (dict == null) goto nextType;
@@ -295,13 +295,13 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
 
         // nextType: currentType = currentType.BaseType; goto loopStart;
         il.MarkLabel(nextType);
         il.Emit(OpCodes.Ldloc, currentTypeLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("BaseType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentTypeLocal);
         il.Emit(OpCodes.Br, loopStart);
 
@@ -316,8 +316,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetArrayMethod",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(string)]
+            _types.Object,
+            [_types.Object, _types.String]
         );
         runtime.GetArrayMethod = method;
 
@@ -329,7 +329,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notArrayLabel);
 
         // Map TypeScript method name to .NET method name
@@ -341,13 +341,13 @@ public static partial class RuntimeEmitter
         // Check for "push"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "push");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, pushLabel);
 
         // Check for "pop"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "pop");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, popLabel);
 
         // Unknown array method - return null
@@ -356,10 +356,10 @@ public static partial class RuntimeEmitter
         // Handle push - wrap List.Add as TSFunction
         il.MarkLabel(pushLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
-        il.Emit(OpCodes.Ldtoken, typeof(List<object>));
-        il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle), typeof(RuntimeTypeHandle)])!);
-        il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+        il.Emit(OpCodes.Ldtoken, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
 
@@ -380,8 +380,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(string)]
+            _types.Object,
+            [_types.Object, _types.String]
         );
         runtime.GetProperty = method;
 
@@ -397,17 +397,17 @@ public static partial class RuntimeEmitter
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // List - check for "length"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // String - check for "length"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
         // Default - try to access _fields dictionary via reflection for class instances
@@ -428,18 +428,18 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(dictLabel);
         // dict.TryGetValue(name, out value) ? value : null
-        var valueLocal = il.DeclareLocal(typeof(object));
-        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
         // Store the dictionary in a local for later use with BindThis
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         var foundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, foundLabel);
         il.Emit(OpCodes.Ldnull);
@@ -467,14 +467,14 @@ public static partial class RuntimeEmitter
         // Check for "length"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notLengthLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notLengthLabel);
         // For other properties on List (like methods push, pop, etc.), use GetFieldsProperty
@@ -487,14 +487,14 @@ public static partial class RuntimeEmitter
         // Check for "length"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notStrLenLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notStrLenLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(string));
-        il.Emit(OpCodes.Callvirt, typeof(string).GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrLenLabel);
         il.Emit(OpCodes.Ldnull);
@@ -506,8 +506,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(string), typeof(object)]
+            _types.Void,
+            [_types.Object, _types.String, _types.Object]
         );
         runtime.SetProperty = method;
 
@@ -521,7 +521,7 @@ public static partial class RuntimeEmitter
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Not a dict - try SetFieldsProperty for class instances
@@ -536,10 +536,10 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(dictLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -548,8 +548,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MergeIntoObject",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(Dictionary<string, object>), typeof(object)]
+            _types.Void,
+            [_types.DictionaryStringObject, _types.Object]
         );
         runtime.MergeIntoObject = method;
 
@@ -558,20 +558,20 @@ public static partial class RuntimeEmitter
 
         // Check if source is dict
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Not a dict - do nothing
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
-        // Iterate and copy
+        // Iterate and copy - use typeof() for nested enumerator types as they're complex
         var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
@@ -590,7 +590,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         il.Emit(OpCodes.Br, loopStart);
 
@@ -603,8 +603,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetIndex",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object]
         );
         runtime.GetIndex = method;
 
@@ -629,22 +629,22 @@ public static partial class RuntimeEmitter
 
         // List
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // String
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
         // Dict with string key
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Class instance: check if index is string, then use GetFieldsProperty
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, classInstanceLabel);
 
         // Fallthrough: return null
@@ -654,8 +654,8 @@ public static partial class RuntimeEmitter
 
         // Symbol key handler: use GetSymbolDict(obj).TryGetValue(index, out value)
         il.MarkLabel(symbolKeyLabel);
-        var symbolDictLocal = il.DeclareLocal(typeof(Dictionary<object, object?>));
-        var symbolValueLocal = il.DeclareLocal(typeof(object));
+        var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var symbolValueLocal = il.DeclareLocal(_types.Object);
         // var symbolDict = GetSymbolDict(obj);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
@@ -664,7 +664,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symbolDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, symbolValueLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         var symbolFoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, symbolFoundLabel);
         il.Emit(OpCodes.Ldnull);
@@ -677,49 +677,49 @@ public static partial class RuntimeEmitter
         il.MarkLabel(classInstanceLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
-        il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("get_Chars", [typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(char).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
         // Check if index is string
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
         // Check if index is double (numeric key - convert to string)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
         // Otherwise return null (non-string, non-numeric, non-symbol keys not supported)
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
-        var valueLocal = il.DeclareLocal(typeof(object));
+        var valueLocal = il.DeclareLocal(_types.Object);
 
         il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         var foundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, foundLabel);
         il.Emit(OpCodes.Ldnull);
@@ -730,11 +730,11 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(dictNumericKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
         il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         var foundNumLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, foundNumLabel);
         il.Emit(OpCodes.Ldnull);
@@ -749,8 +749,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetIndex",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(object), typeof(object)]
+            _types.Void,
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.SetIndex = method;
 
@@ -774,17 +774,17 @@ public static partial class RuntimeEmitter
 
         // List
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // Dict
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Class instance: check if index is string, then use SetFieldsProperty
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, classInstanceLabel);
 
         // Fallthrough: return (ignore)
@@ -798,55 +798,55 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object?>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
         il.Emit(OpCodes.Ret);
 
         // Class instance handler: use SetFieldsProperty(obj, index as string, value)
         il.MarkLabel(classInstanceLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetFieldsProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("set_Item", [typeof(int), typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", _types.Int32, _types.Object));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
         // Check if index is string
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
         // Check if index is double (numeric key - convert to string)
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
         // Otherwise ignore (non-string, non-numeric, non-symbol keys not supported)
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictNumericKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -855,8 +855,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "InvokeValue",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object[])]
+            _types.Object,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.InvokeValue = method;
 
@@ -869,9 +869,9 @@ public static partial class RuntimeEmitter
 
         // Try to find and call Invoke method
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "Invoke");
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Dup);
         var noInvokeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, noInvokeLabel);
@@ -879,12 +879,12 @@ public static partial class RuntimeEmitter
         // Has Invoke - call it
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, typeof(object));
+        il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noInvokeLabel);
@@ -899,8 +899,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "InvokeMethodValue",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object), typeof(object[])]  // receiver, function, args
+            _types.Object,
+            [_types.Object, _types.Object, _types.ObjectArray]  // receiver, function, args
         );
         runtime.InvokeMethodValue = method;
 
@@ -946,14 +946,14 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetSuperMethod",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(string)]
+            _types.Object,
+            [_types.Object, _types.String]
         );
         runtime.GetSuperMethod = method;
 
         var il = method.GetILGenerator();
-        var methodInfoLocal = il.DeclareLocal(typeof(MethodInfo));
-        var baseTypeLocal = il.DeclareLocal(typeof(Type));
+        var methodInfoLocal = il.DeclareLocal(_types.MethodInfo);
+        var baseTypeLocal = il.DeclareLocal(_types.Type);
         var nullLabel = il.DefineLabel();
 
         // Check if instance is null
@@ -962,8 +962,8 @@ public static partial class RuntimeEmitter
 
         // Get base type and store it
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("BaseType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, baseTypeLocal);
 
         // Check if baseType is null
@@ -973,7 +973,7 @@ public static partial class RuntimeEmitter
         // Get method from base type
         il.Emit(OpCodes.Ldloc, baseTypeLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, methodInfoLocal);
 
         // Check if method was found
@@ -996,26 +996,26 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateException",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Exception),
-            [typeof(object)]
+            _types.Exception,
+            [_types.Object]
         );
         runtime.CreateException = method;
 
         var il = method.GetILGenerator();
-        var exLocal = il.DeclareLocal(typeof(Exception));
+        var exLocal = il.DeclareLocal(_types.Exception);
 
         // var ex = new Exception(value?.ToString() ?? "null")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Stloc, exLocal);
 
         // ex.Data["__tsValue"] = value;  (preserve original value)
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Data")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__tsValue");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(System.Collections.IDictionary).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "set_Item"));
 
         // return ex;
         il.Emit(OpCodes.Ldloc, exLocal);
@@ -1027,45 +1027,45 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "WrapException",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(Exception)]
+            _types.Object,
+            [_types.Exception]
         );
         runtime.WrapException = method;
 
         var il = method.GetILGenerator();
         var fallbackLabel = il.DefineLabel();
-        var tsValueLocal = il.DeclareLocal(typeof(object));
+        var tsValueLocal = il.DeclareLocal(_types.Object);
 
         // Check if ex.Data contains "__tsValue" (TypeScript throw value)
         // if (ex.Data.Contains("__tsValue")) return ex.Data["__tsValue"];
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Data")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__tsValue");
-        il.Emit(OpCodes.Callvirt, typeof(System.Collections.IDictionary).GetMethod("Contains")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "Contains", _types.Object));
         il.Emit(OpCodes.Brfalse, fallbackLabel);
 
         // Return the original TypeScript value
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Data")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__tsValue");
-        il.Emit(OpCodes.Callvirt, typeof(System.Collections.IDictionary).GetMethod("get_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "get_Item", _types.Object));
         il.Emit(OpCodes.Ret);
 
         // Fallback: wrap standard .NET exceptions as Dictionary
         il.MarkLabel(fallbackLabel);
         // return new Dictionary<string, object> { ["message"] = ex.Message, ["name"] = ex.GetType().Name }
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Message")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "name");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1074,14 +1074,14 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "Random",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            Type.EmptyTypes
+            _types.Double,
+            _types.EmptyTypes
         );
         runtime.Random = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldsfld, randomField);
-        il.Emit(OpCodes.Callvirt, typeof(Random).GetMethod("NextDouble")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Random, "NextDouble"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1090,14 +1090,14 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetEnumMemberName",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(string), typeof(double), typeof(double[]), typeof(string[])]
+            _types.String,
+            [_types.String, _types.Double, _types.DoubleArray, _types.StringArray]
         );
         runtime.GetEnumMemberName = method;
 
         var il = method.GetILGenerator();
         // Simple linear search through keys to find matching value
-        var indexLocal = il.DeclareLocal(typeof(int));
+        var indexLocal = il.DeclareLocal(_types.Int32);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
@@ -1136,7 +1136,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         // Not found - throw
         il.Emit(OpCodes.Ldstr, "Value not found in enum");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Throw);
     }
 
@@ -1145,20 +1145,20 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ConcatTemplate",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object[])]
+            _types.String,
+            [_types.ObjectArray]
         );
         runtime.ConcatTemplate = method;
 
         var il = method.GetILGenerator();
 
         // Use StringBuilder to concatenate stringified parts
-        var sbLocal = il.DeclareLocal(typeof(StringBuilder));
-        var indexLocal = il.DeclareLocal(typeof(int));
-        var lengthLocal = il.DeclareLocal(typeof(int));
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var lengthLocal = il.DeclareLocal(_types.Int32);
 
         // sb = new StringBuilder()
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.StringBuilder));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // length = parts.Length
@@ -1186,7 +1186,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop); // discard StringBuilder return value
 
         // index++
@@ -1199,7 +1199,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         // return sb.ToString()
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1209,8 +1209,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ObjectRest",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Dictionary<string, object>),
-            [typeof(object), typeof(List<object>)]
+            _types.DictionaryStringObject,
+            [_types.Object, _types.ListOfObject]
         );
         runtime.ObjectRest = method;
 
@@ -1221,13 +1221,13 @@ public static partial class RuntimeEmitter
         var processLabel = il.DefineLabel();
 
         // Locals for class instance path
-        var fieldInfoLocal = il.DeclareLocal(typeof(FieldInfo));
-        var fieldsLocal = il.DeclareLocal(typeof(object));
-        var sourceDictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+        var fieldInfoLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsLocal = il.DeclareLocal(_types.Object);
+        var sourceDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
         // Check if arg0 is Dictionary<string, object>
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Check if obj is not null (for class instance path)
@@ -1237,10 +1237,10 @@ public static partial class RuntimeEmitter
         // Class instance path: get _fields via reflection
         // var fieldInfo = obj.GetType().GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "_fields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, _types.BindingFlags));
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // if (fieldInfo == null) goto empty
@@ -1250,7 +1250,7 @@ public static partial class RuntimeEmitter
         // var fields = fieldInfo.GetValue(obj);
         il.Emit(OpCodes.Ldloc, fieldInfoLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
         il.Emit(OpCodes.Stloc, fieldsLocal);
 
         // if (fields == null) goto empty
@@ -1259,7 +1259,7 @@ public static partial class RuntimeEmitter
 
         // var sourceDict = fields as Dictionary<string, object>;
         il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, sourceDictLocal);
 
         // if (sourceDict == null) goto empty
@@ -1272,30 +1272,30 @@ public static partial class RuntimeEmitter
         // Dictionary path: cast arg0 directly
         il.MarkLabel(dictLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, sourceDictLocal);
         il.Emit(OpCodes.Br, processLabel);
 
         // Empty result fallback
         il.MarkLabel(emptyLabel);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Ret);
 
         // Process the source dictionary (now in sourceDictLocal)
         il.MarkLabel(processLabel);
 
         // Create result dictionary
-        var resultLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        var resultLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Create HashSet<string> from excludeKeys
-        var excludeSetLocal = il.DeclareLocal(typeof(HashSet<string>));
-        il.Emit(OpCodes.Newobj, typeof(HashSet<string>).GetConstructor(Type.EmptyTypes)!);
+        var excludeSetLocal = il.DeclareLocal(_types.HashSetOfString);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.HashSetOfString));
         il.Emit(OpCodes.Stloc, excludeSetLocal);
 
         // Add each exclude key to the set
-        var excludeIndexLocal = il.DeclareLocal(typeof(int));
+        var excludeIndexLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, excludeIndexLocal);
 
@@ -1305,14 +1305,14 @@ public static partial class RuntimeEmitter
         il.MarkLabel(excludeLoopStart);
         il.Emit(OpCodes.Ldloc, excludeIndexLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, excludeLoopEnd);
 
         // Get excludeKeys[i] and add to set if not null
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, excludeIndexLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Item")!.GetGetMethod()!);
-        var keyLocal = il.DeclareLocal(typeof(object));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        var keyLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         var skipAdd = il.DefineLabel();
@@ -1321,8 +1321,8 @@ public static partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, excludeSetLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
-        il.Emit(OpCodes.Callvirt, typeof(HashSet<string>).GetMethod("Add", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Add", _types.String));
         il.Emit(OpCodes.Pop); // discard bool return
 
         il.MarkLabel(skipAdd);
@@ -1334,7 +1334,7 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(excludeLoopEnd);
 
-        // Iterate over source dictionary keys using sourceDictLocal
+        // Iterate over source dictionary keys using sourceDictLocal - use typeof() for nested enumerator types
         var keysEnumLocal = il.DeclareLocal(typeof(Dictionary<string, object>.KeyCollection.Enumerator));
         il.Emit(OpCodes.Ldloc, sourceDictLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Keys")!.GetGetMethod()!);
@@ -1353,13 +1353,13 @@ public static partial class RuntimeEmitter
         // Get Current key
         il.Emit(OpCodes.Ldloca, keysEnumLocal);
         il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.KeyCollection.Enumerator).GetProperty("Current")!.GetGetMethod()!);
-        var currentKeyLocal = il.DeclareLocal(typeof(string));
+        var currentKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, currentKeyLocal);
 
         // Check if key is in excludeSet
         il.Emit(OpCodes.Ldloc, excludeSetLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, typeof(HashSet<string>).GetMethod("Contains", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Contains", _types.String));
         var skipKey = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, skipKey);
 
@@ -1390,8 +1390,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetValues",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.GetValues = method;
 
@@ -1408,8 +1408,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GetEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.GetEntries = method;
 
@@ -1426,8 +1426,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "IsArray",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.IsArray = method;
 
@@ -1437,7 +1437,7 @@ public static partial class RuntimeEmitter
 
         // Check if List<object>
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         // False

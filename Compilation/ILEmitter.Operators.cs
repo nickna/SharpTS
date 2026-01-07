@@ -106,11 +106,11 @@ public partial class ILEmitter
         // Convert to int32 for bitwise operations
         EmitExpression(b.Left);
         EmitBoxIfNeeded(b.Left);
-        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToInt32", _ctx.Types.Object));
 
         EmitExpression(b.Right);
         EmitBoxIfNeeded(b.Right);
-        IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToInt32", _ctx.Types.Object));
 
         switch (b.Operator.Type)
         {
@@ -239,7 +239,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(u.Right);
                     EmitBoxIfNeeded(u.Right);
-                    IL.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToInt32", [typeof(object)])!);
+                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToInt32", _ctx.Types.Object));
                     IL.Emit(OpCodes.Not);
                     EmitConvR8AndBox();
                 }
@@ -262,7 +262,7 @@ public partial class ILEmitter
             EmitBoxIfNeeded(ca.Value);
 
             // String concatenation
-            IL.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(object), typeof(object)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat", _ctx.Types.Object, _ctx.Types.Object));
             IL.Emit(OpCodes.Dup);
 
             // Store result
@@ -335,7 +335,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Conv_R8);
         }
 
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
         IL.Emit(OpCodes.Dup);
 
         // Store result
@@ -364,7 +364,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
             }
 
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Dup);
 
             var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
@@ -394,8 +394,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
 
             // Box new value and store in temp
-            IL.Emit(OpCodes.Box, typeof(double));
-            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var newValue = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, newValue);
 
             // SetProperty(obj, name, newValue)
@@ -430,8 +430,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
 
             // Box new value and store in temp
-            IL.Emit(OpCodes.Box, typeof(double));
-            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var newValue = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, newValue);
 
             // SetIndex(obj, index, newValue)
@@ -468,7 +468,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
             }
 
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
 
             var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
             if (local != null)
@@ -477,7 +477,7 @@ public partial class ILEmitter
             }
 
             // Original value is still on stack, box it
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -493,7 +493,7 @@ public partial class ILEmitter
             EmitUnboxToDouble();
 
             // Save old value for postfix return
-            var oldValue = IL.DeclareLocal(typeof(double));
+            var oldValue = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Stloc, oldValue);
 
@@ -505,8 +505,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
 
             // Box new value and store in temp
-            IL.Emit(OpCodes.Box, typeof(double));
-            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var newValue = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, newValue);
 
             // SetProperty(obj, name, newValue)
@@ -518,7 +518,7 @@ public partial class ILEmitter
 
             // Return old value (postfix behavior)
             IL.Emit(OpCodes.Ldloc, oldValue);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -535,7 +535,7 @@ public partial class ILEmitter
             EmitUnboxToDouble();
 
             // Save old value
-            var oldValue = IL.DeclareLocal(typeof(double));
+            var oldValue = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Stloc, oldValue);
 
@@ -547,8 +547,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
 
             // Box new value and store in temp
-            IL.Emit(OpCodes.Box, typeof(double));
-            var newValue = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var newValue = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, newValue);
 
             // SetIndex(obj, index, newValue)
@@ -561,7 +561,7 @@ public partial class ILEmitter
 
             // Return old value
             IL.Emit(OpCodes.Ldloc, oldValue);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -584,7 +584,7 @@ public partial class ILEmitter
         EmitCompoundOperation(cs.Operator.Type, cs.Value);
 
         // Store result: SetProperty(obj, name, value)
-        var resultLocal = IL.DeclareLocal(typeof(object));
+        var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultLocal);
 
         EmitExpression(cs.Object);
@@ -616,7 +616,7 @@ public partial class ILEmitter
         EmitCompoundOperation(csi.Operator.Type, csi.Value);
 
         // Store result: SetIndex(obj, index, value)
-        var resultLocal = IL.DeclareLocal(typeof(object));
+        var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultLocal);
 
         EmitExpression(csi.Object);
@@ -642,7 +642,7 @@ public partial class ILEmitter
             // String concatenation
             EmitExpression(value);
             EmitBoxIfNeeded(value);
-            IL.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(object), typeof(object)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat", _ctx.Types.Object, _ctx.Types.Object));
             return;
         }
 
@@ -699,7 +699,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Conv_R8);
         }
 
-        IL.Emit(OpCodes.Box, typeof(double));
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
     }
 
     private bool IsBigIntOperation(Expr.Binary b)
@@ -753,31 +753,31 @@ public partial class ILEmitter
             // Comparison
             case TokenType.LESS:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThan);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case TokenType.LESS_EQUAL:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThanOrEqual);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case TokenType.GREATER:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThan);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case TokenType.GREATER_EQUAL:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThanOrEqual);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case TokenType.EQUAL_EQUAL:
             case TokenType.EQUAL_EQUAL_EQUAL:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
             case TokenType.BANG_EQUAL:
             case TokenType.BANG_EQUAL_EQUAL:
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ceq);
-                IL.Emit(OpCodes.Box, typeof(bool));
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
 
             // Bitwise

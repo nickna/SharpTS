@@ -18,12 +18,12 @@ public partial class ILEmitter
             {
                 case "PI":
                     IL.Emit(OpCodes.Ldc_R8, Math.PI);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "E":
                     IL.Emit(OpCodes.Ldc_R8, Math.E);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
             }
@@ -36,42 +36,42 @@ public partial class ILEmitter
             {
                 case "MAX_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.MaxValue);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "MIN_VALUE":
                     IL.Emit(OpCodes.Ldc_R8, double.Epsilon); // JS MIN_VALUE = smallest positive
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "NaN":
                     IL.Emit(OpCodes.Ldc_R8, double.NaN);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "POSITIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "NEGATIVE_INFINITY":
                     IL.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "MAX_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, 9007199254740991.0); // 2^53 - 1
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "MIN_SAFE_INTEGER":
                     IL.Emit(OpCodes.Ldc_R8, -9007199254740991.0); // -(2^53 - 1)
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
                 case "EPSILON":
                     IL.Emit(OpCodes.Ldc_R8, 2.220446049250313e-16); // 2^-52
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
             }
@@ -85,7 +85,7 @@ public partial class ILEmitter
             if (value is double d)
             {
                 IL.Emit(OpCodes.Ldc_R8, d);
-                IL.Emit(OpCodes.Box, typeof(double));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 SetStackUnknown();
             }
             else if (value is string s)
@@ -125,7 +125,7 @@ public partial class ILEmitter
             EmitExpression(g.Object);
             EmitBoxIfNeeded(g.Object);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -136,7 +136,7 @@ public partial class ILEmitter
             EmitExpression(g.Object);
             EmitBoxIfNeeded(g.Object);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;
         }
@@ -158,22 +158,22 @@ public partial class ILEmitter
                     return;
                 case "global":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
-                    IL.Emit(OpCodes.Box, typeof(bool));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                     SetStackUnknown();
                     return;
                 case "ignoreCase":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
-                    IL.Emit(OpCodes.Box, typeof(bool));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                     SetStackUnknown();
                     return;
                 case "multiline":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
-                    IL.Emit(OpCodes.Box, typeof(bool));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                     SetStackUnknown();
                     return;
                 case "lastIndex":
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
-                    IL.Emit(OpCodes.Box, typeof(double));
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
                     SetStackUnknown();
                     return;
             }
@@ -239,12 +239,12 @@ public partial class ILEmitter
             EmitUnboxToDouble();
             // Dup value for expression result
             IL.Emit(OpCodes.Dup);
-            var valueTemp = IL.DeclareLocal(typeof(double));
+            var valueTemp = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, valueTemp);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpSetLastIndex);
             // Put value back on stack as boxed result
             IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Box, typeof(double));
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             return;
         }
 
@@ -258,7 +258,7 @@ public partial class ILEmitter
         // Stack: [obj, name, value]
         // Dup value for expression result, then store it
         IL.Emit(OpCodes.Dup);
-        var resultTemp = IL.DeclareLocal(typeof(object));
+        var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultTemp);
 
         // Stack: [obj, name, value] - call SetProperty
@@ -296,7 +296,7 @@ public partial class ILEmitter
 
             // Arg 3: keys array
             IL.Emit(OpCodes.Ldc_I4, keys.Length);
-            IL.Emit(OpCodes.Newarr, typeof(double));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Double);
             for (int i = 0; i < keys.Length; i++)
             {
                 IL.Emit(OpCodes.Dup);
@@ -307,7 +307,7 @@ public partial class ILEmitter
 
             // Arg 4: values array
             IL.Emit(OpCodes.Ldc_I4, values.Length);
-            IL.Emit(OpCodes.Newarr, typeof(string));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.String);
             for (int i = 0; i < values.Length; i++)
             {
                 IL.Emit(OpCodes.Dup);
@@ -334,7 +334,7 @@ public partial class ILEmitter
         // once for SetIndex, once for the expression result
         EmitExpression(si.Value);
         EmitBoxIfNeeded(si.Value);
-        var valueLocal = IL.DeclareLocal(typeof(object));
+        var valueLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, valueLocal);
 
         // Call SetIndex(object, index, value)
@@ -358,7 +358,7 @@ public partial class ILEmitter
         {
             // Simple case: no spreads, just create array directly
             IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
-            IL.Emit(OpCodes.Newarr, typeof(object));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
             for (int i = 0; i < a.Elements.Count; i++)
             {
@@ -376,7 +376,7 @@ public partial class ILEmitter
             // Complex case: has spreads, use ConcatArrays
             // Build array of arrays/elements to concat
             IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
-            IL.Emit(OpCodes.Newarr, typeof(object));
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
             for (int i = 0; i < a.Elements.Count; i++)
             {
@@ -393,7 +393,7 @@ public partial class ILEmitter
                 {
                     // Non-spread: wrap in single-element array
                     IL.Emit(OpCodes.Ldc_I4, 1);
-                    IL.Emit(OpCodes.Newarr, typeof(object));
+                    IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
                     IL.Emit(OpCodes.Dup);
                     IL.Emit(OpCodes.Ldc_I4, 0);
                     EmitExpression(a.Elements[i]);
@@ -418,7 +418,7 @@ public partial class ILEmitter
         if (!hasSpreads && !hasComputedKeys)
         {
             // Simple case: no spreads, no computed keys
-            IL.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+            IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
 
             foreach (var prop in o.Properties)
             {
@@ -426,7 +426,7 @@ public partial class ILEmitter
                 EmitStaticPropertyKey(prop.Key!);
                 EmitExpression(prop.Value);
                 EmitBoxIfNeeded(prop.Value);
-                IL.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
             }
 
             IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
@@ -434,7 +434,7 @@ public partial class ILEmitter
         else
         {
             // Complex case: has spreads or computed keys, use Dictionary<string, object?> and SetIndex
-            IL.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
+            IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
 
             foreach (var prop in o.Properties)
             {
@@ -462,7 +462,7 @@ public partial class ILEmitter
                     EmitStaticPropertyKey(prop.Key!);
                     EmitExpression(prop.Value);
                     EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item")!);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
                 }
             }
 
@@ -539,7 +539,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Box, getterReturnType);
             SetStackUnknown();
         }
-        else if (getterReturnType == typeof(string))
+        else if (_ctx.Types.IsString(getterReturnType))
         {
             SetStackType(StackType.String);
         }
@@ -586,7 +586,7 @@ public partial class ILEmitter
         // Get the actual parameter type of the setter method
         // Field properties have typed setters, but explicit accessors take object
         var setterParams = setterBuilder.GetParameters();
-        var setterParamType = setterParams.Length > 0 ? setterParams[0].ParameterType : typeof(object);
+        var setterParamType = setterParams.Length > 0 ? setterParams[0].ParameterType : _ctx.Types.Object;
 
         // Emit: ((ClassName)receiver).set_PropertyName(value)
         // Also need to keep the value on the stack as the expression result
@@ -598,7 +598,7 @@ public partial class ILEmitter
         EmitExpression(value);
 
         // Check if setter returns void (field properties) or object (explicit accessors)
-        var setterReturnsVoid = setterBuilder.ReturnType == typeof(void);
+        var setterReturnsVoid = _ctx.Types.IsVoid(setterBuilder.ReturnType);
 
         // Save a copy for expression result (need to box if value type for consistent handling)
         if (setterParamType.IsValueType)
@@ -606,7 +606,7 @@ public partial class ILEmitter
             // For value types: box first, then dup, then unbox for setter
             EmitBoxIfNeeded(value);
             IL.Emit(OpCodes.Dup);
-            var resultTemp = IL.DeclareLocal(typeof(object));
+            var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, resultTemp);
             IL.Emit(OpCodes.Unbox_Any, setterParamType);
             IL.Emit(OpCodes.Callvirt, setterBuilder);
@@ -622,9 +622,9 @@ public partial class ILEmitter
             // For reference types (including object): dup, optionally cast, call setter
             EmitBoxIfNeeded(value);
             IL.Emit(OpCodes.Dup);
-            var resultTemp = IL.DeclareLocal(typeof(object));
+            var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, resultTemp);
-            if (setterParamType != typeof(object))
+            if (!_ctx.Types.IsObject(setterParamType))
             {
                 IL.Emit(OpCodes.Castclass, setterParamType);
             }

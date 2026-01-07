@@ -14,6 +14,7 @@ namespace SharpTS.Compilation;
 public class GeneratorStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
+    private readonly TypeProvider _types;
     private TypeBuilder _stateMachineType = null!;
     private int _counter;
 
@@ -46,9 +47,10 @@ public class GeneratorStateMachineBuilder
     public MethodBuilder GetEnumeratorMethod { get; private set; } = null!;
     public MethodBuilder NonGenericGetEnumeratorMethod { get; private set; } = null!;
 
-    public GeneratorStateMachineBuilder(ModuleBuilder moduleBuilder, int counter = 0)
+    public GeneratorStateMachineBuilder(ModuleBuilder moduleBuilder, TypeProvider types, int counter = 0)
     {
         _moduleBuilder = moduleBuilder;
+        _types = types;
         _counter = counter;
     }
 
@@ -68,9 +70,9 @@ public class GeneratorStateMachineBuilder
         _stateMachineType = _moduleBuilder.DefineType(
             $"<{methodName}>d__{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object),
-            [typeof(IEnumerator<object>), typeof(IEnumerator), typeof(IDisposable),
-             typeof(IEnumerable<object>), typeof(IEnumerable)]
+            _types.Object,
+            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
+             _types.IEnumerableOfObject, _types.IEnumerable]
         );
 
         // Define core fields
@@ -82,7 +84,7 @@ public class GeneratorStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 paramName,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             HoistedParameters[paramName] = field;
@@ -93,7 +95,7 @@ public class GeneratorStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 localName,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             HoistedLocals[localName] = field;
@@ -104,7 +106,7 @@ public class GeneratorStateMachineBuilder
         {
             ThisField = _stateMachineType.DefineField(
                 "<>4__this",
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
         }
@@ -114,7 +116,7 @@ public class GeneratorStateMachineBuilder
         {
             DelegatedEnumeratorField = _stateMachineType.DefineField(
                 "<>7__wrap1",
-                typeof(System.Collections.IEnumerator),
+                _types.IEnumerator,
                 FieldAttributes.Private
             );
         }
@@ -138,7 +140,7 @@ public class GeneratorStateMachineBuilder
         // -1 = not started, -2 = completed, 0+ = yielded at specific point
         StateField = _stateMachineType.DefineField(
             "<>1__state",
-            typeof(int),
+            _types.Int32,
             FieldAttributes.Public
         );
     }
@@ -148,7 +150,7 @@ public class GeneratorStateMachineBuilder
         // <>2__current - the current yielded value
         CurrentField = _stateMachineType.DefineField(
             "<>2__current",
-            typeof(object),
+            _types.Object,
             FieldAttributes.Private
         );
     }
@@ -165,7 +167,7 @@ public class GeneratorStateMachineBuilder
         var il = Constructor.GetILGenerator();
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         // Initialize state to -1 (not started)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_M1);
@@ -179,12 +181,12 @@ public class GeneratorStateMachineBuilder
         MoveNextMethod = _stateMachineType.DefineMethod(
             "MoveNext",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(bool),
+            _types.Boolean,
             Type.EmptyTypes
         );
 
         // Mark as implementing IEnumerator.MoveNext
-        var interfaceMethod = typeof(IEnumerator).GetMethod("MoveNext")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IEnumerator, "MoveNext");
         _stateMachineType.DefineMethodOverride(MoveNextMethod, interfaceMethod);
     }
 
@@ -194,14 +196,14 @@ public class GeneratorStateMachineBuilder
         var currentProp = _stateMachineType.DefineProperty(
             "Current",
             PropertyAttributes.None,
-            typeof(object),
+            _types.Object,
             Type.EmptyTypes
         );
 
         CurrentGetMethod = _stateMachineType.DefineMethod(
             "get_Current",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.NewSlot,
-            typeof(object),
+            _types.Object,
             Type.EmptyTypes
         );
 
@@ -213,21 +215,21 @@ public class GeneratorStateMachineBuilder
         currentProp.SetGetMethod(CurrentGetMethod);
 
         // Mark as implementing IEnumerator<object>.Current
-        var interfaceMethod = typeof(IEnumerator<object>).GetProperty("Current")!.GetGetMethod()!;
+        var interfaceMethod = _types.GetPropertyGetter(_types.IEnumeratorOfObject, "Current");
         _stateMachineType.DefineMethodOverride(CurrentGetMethod, interfaceMethod);
 
         // Also implement non-generic IEnumerator.Current
         var nonGenericCurrentProp = _stateMachineType.DefineProperty(
             "System.Collections.IEnumerator.Current",
             PropertyAttributes.None,
-            typeof(object),
+            _types.Object,
             Type.EmptyTypes
         );
 
         NonGenericCurrentGetMethod = _stateMachineType.DefineMethod(
             "System.Collections.IEnumerator.get_Current",
             MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.NewSlot,
-            typeof(object),
+            _types.Object,
             Type.EmptyTypes
         );
 
@@ -238,7 +240,7 @@ public class GeneratorStateMachineBuilder
 
         nonGenericCurrentProp.SetGetMethod(NonGenericCurrentGetMethod);
 
-        var nonGenericInterfaceMethod = typeof(IEnumerator).GetProperty("Current")!.GetGetMethod()!;
+        var nonGenericInterfaceMethod = _types.GetPropertyGetter(_types.IEnumerator, "Current");
         _stateMachineType.DefineMethodOverride(NonGenericCurrentGetMethod, nonGenericInterfaceMethod);
     }
 
@@ -248,15 +250,15 @@ public class GeneratorStateMachineBuilder
         ResetMethod = _stateMachineType.DefineMethod(
             "Reset",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
 
         var il = ResetMethod.GetILGenerator();
-        il.Emit(OpCodes.Newobj, typeof(NotSupportedException).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.NotSupportedException));
         il.Emit(OpCodes.Throw);
 
-        var interfaceMethod = typeof(IEnumerator).GetMethod("Reset")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IEnumerator, "Reset");
         _stateMachineType.DefineMethodOverride(ResetMethod, interfaceMethod);
     }
 
@@ -266,7 +268,7 @@ public class GeneratorStateMachineBuilder
         DisposeMethod = _stateMachineType.DefineMethod(
             "Dispose",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
 
@@ -274,7 +276,7 @@ public class GeneratorStateMachineBuilder
         var il = DisposeMethod.GetILGenerator();
         il.Emit(OpCodes.Ret);
 
-        var interfaceMethod = typeof(IDisposable).GetMethod("Dispose")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IDisposable, "Dispose");
         _stateMachineType.DefineMethodOverride(DisposeMethod, interfaceMethod);
     }
 
@@ -285,7 +287,7 @@ public class GeneratorStateMachineBuilder
         GetEnumeratorMethod = _stateMachineType.DefineMethod(
             "GetEnumerator",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(IEnumerator<object>),
+            _types.IEnumeratorOfObject,
             Type.EmptyTypes
         );
 
@@ -293,14 +295,14 @@ public class GeneratorStateMachineBuilder
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
 
-        var interfaceMethod = typeof(IEnumerable<object>).GetMethod("GetEnumerator")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IEnumerableOfObject, "GetEnumerator");
         _stateMachineType.DefineMethodOverride(GetEnumeratorMethod, interfaceMethod);
 
         // IEnumerator IEnumerable.GetEnumerator()
         NonGenericGetEnumeratorMethod = _stateMachineType.DefineMethod(
             "System.Collections.IEnumerable.GetEnumerator",
             MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(IEnumerator),
+            _types.IEnumerator,
             Type.EmptyTypes
         );
 
@@ -308,7 +310,7 @@ public class GeneratorStateMachineBuilder
         il2.Emit(OpCodes.Ldarg_0);
         il2.Emit(OpCodes.Ret);
 
-        var nonGenericInterfaceMethod = typeof(IEnumerable).GetMethod("GetEnumerator")!;
+        var nonGenericInterfaceMethod = _types.GetMethodNoParams(_types.IEnumerable, "GetEnumerator");
         _stateMachineType.DefineMethodOverride(NonGenericGetEnumeratorMethod, nonGenericInterfaceMethod);
     }
 

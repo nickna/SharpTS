@@ -11,8 +11,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "JsonParse",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
         runtime.JsonParse = method;
 
@@ -32,8 +32,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "JsonParseHelper",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
 
         var il = method.GetILGenerator();
@@ -51,24 +51,24 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ParseJsonValue",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
 
         var il = method.GetILGenerator();
 
         // Simple implementation: just call ToString and return
         // This won't properly parse, but at least we can test the infrastructure
-        var strLocal = il.DeclareLocal(typeof(string));
+        var strLocal = il.DeclareLocal(_types.String);
         var notNullLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse_S, notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, strLocal);
 
-        // Parse using JsonDocument - need to include JsonDocumentOptions parameter
+        // Parse using JsonDocument - keep typeof() for System.Text.Json types
         var parseMethod = typeof(System.Text.Json.JsonDocument).GetMethod("Parse",
             [typeof(string), typeof(System.Text.Json.JsonDocumentOptions)])!;
         var optionsLocal = il.DeclareLocal(typeof(System.Text.Json.JsonDocumentOptions));
@@ -112,14 +112,14 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ConvertJsonElement",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(object),
+            _types.Object,
             [typeof(System.Text.Json.JsonElement).MakeByRefType()] // byref for struct
         );
 
         var il = method.GetILGenerator();
 
-        var resultDictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
-        var resultListLocal = il.DeclareLocal(typeof(List<object>));
+        var resultDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var resultListLocal = il.DeclareLocal(_types.ListOfObject);
         var propEnumLocal = il.DeclareLocal(typeof(System.Text.Json.JsonElement.ObjectEnumerator));
         var arrEnumLocal = il.DeclareLocal(typeof(System.Text.Json.JsonElement.ArrayEnumerator));
         var propLocal = il.DeclareLocal(typeof(System.Text.Json.JsonProperty));
@@ -173,7 +173,7 @@ public static partial class RuntimeEmitter
         // Object
         il.MarkLabel(objectLabel);
         il.Emit(OpCodes.Pop); // pop valueKind
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, resultDictLocal);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -198,7 +198,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, elemLocal);
         il.Emit(OpCodes.Ldloca, elemLocal);
         il.Emit(OpCodes.Call, method); // recursive
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item", [typeof(string), typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object]));
         il.Emit(OpCodes.Br, objLoopStart);
 
         il.MarkLabel(objLoopEnd);
@@ -208,7 +208,7 @@ public static partial class RuntimeEmitter
         // Array
         il.MarkLabel(arrayLabel);
         il.Emit(OpCodes.Pop); // pop valueKind
-        il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, resultListLocal);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -226,7 +226,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, elemLocal);
         il.Emit(OpCodes.Ldloca, elemLocal);
         il.Emit(OpCodes.Call, method); // recursive
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
         il.Emit(OpCodes.Br, arrLoopStart);
 
         il.MarkLabel(arrLoopEnd);
@@ -245,21 +245,21 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // pop valueKind
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(System.Text.Json.JsonElement).GetMethod("GetDouble")!);
-        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
         // True
         il.MarkLabel(trueLiteralLabel);
         il.Emit(OpCodes.Pop); // pop valueKind
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, typeof(bool));
+        il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
         // False
         il.MarkLabel(falseLiteralLabel);
         il.Emit(OpCodes.Pop); // pop valueKind
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, typeof(bool));
+        il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
         // Null/Undefined
@@ -278,8 +278,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "JsonParseWithReviver",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object]
         );
         runtime.JsonParseWithReviver = method;
 
@@ -316,23 +316,23 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ApplyReviver",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]
         );
 
         var il = method.GetILGenerator();
 
-        // Locals
-        var newDictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
-        var newListLocal = il.DeclareLocal(typeof(List<object>));
+        // Locals - keep nested enumerator types as typeof() to avoid BadImageFormatException
+        var newDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var newListLocal = il.DeclareLocal(_types.ListOfObject);
         var enumLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
         var listEnumLocal = il.DeclareLocal(typeof(List<object>.Enumerator));
-        var kvpLocal = il.DeclareLocal(typeof(KeyValuePair<string, object>));
-        var indexLocal = il.DeclareLocal(typeof(int));
-        var elemLocal = il.DeclareLocal(typeof(object));
-        var resultLocal = il.DeclareLocal(typeof(object));
-        var valueLocal = il.DeclareLocal(typeof(object));
-        var argsLocal = il.DeclareLocal(typeof(object[]));
+        var kvpLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var elemLocal = il.DeclareLocal(_types.Object);
+        var resultLocal = il.DeclareLocal(_types.Object);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         var notDictLabel = il.DefineLabel();
         var notListLabel = il.DefineLabel();
@@ -348,16 +348,16 @@ public static partial class RuntimeEmitter
 
         // Check if value is Dictionary<string, object>
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notDictLabel);
 
         // It's a dictionary - process it
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, newDictLocal);
 
-        // Get enumerator
+        // Get enumerator - keep typeof() for nested enumerator types
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumLocal);
 
@@ -374,9 +374,9 @@ public static partial class RuntimeEmitter
 
         // Recursively apply reviver: result = ApplyReviver(kvp.Value, kvp.Key, reviver)
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, method); // Recursive call
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -387,9 +387,9 @@ public static partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, newDictLocal);
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item", [typeof(string), typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object]));
         il.Emit(OpCodes.Br, dictLoopStart);
 
         il.MarkLabel(dictLoopEnd);
@@ -400,18 +400,18 @@ public static partial class RuntimeEmitter
         // Check if value is List<object>
         il.MarkLabel(notDictLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notListLabel);
 
         // It's a list - process it
-        il.Emit(OpCodes.Newobj, typeof(List<object>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, newListLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
 
-        // Get list enumerator
+        // Get list enumerator - keep typeof() for nested enumerator types
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, listEnumLocal);
 
@@ -430,7 +430,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, method); // Recursive call
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -438,7 +438,7 @@ public static partial class RuntimeEmitter
         // Add result to new list
         il.Emit(OpCodes.Ldloc, newListLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("Add", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
 
         // Increment index
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -460,7 +460,7 @@ public static partial class RuntimeEmitter
 
         // Create args array [key, value]
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, typeof(object));
+        il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, argsLocal);
 
         il.Emit(OpCodes.Ldloc, argsLocal);
@@ -488,8 +488,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "JsonStringify",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
         runtime.JsonStringify = method;
 
@@ -506,8 +506,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringifyValue",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(int), typeof(int)] // value, indent, depth
+            _types.String,
+            [_types.Object, _types.Int32, _types.Int32] // value, indent, depth
         );
 
         var il = method.GetILGenerator();
@@ -526,27 +526,27 @@ public static partial class RuntimeEmitter
 
         // if (value is bool)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, boolLabel);
 
         // if (value is double)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, doubleLabel);
 
         // if (value is string)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
         // if (value is List<object>)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // if (value is Dictionary<string, object>)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Default: return null
@@ -558,7 +558,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(boolLabel);
         var trueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(bool));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldstr, "false");
         il.Emit(OpCodes.Ret);
@@ -573,7 +573,7 @@ public static partial class RuntimeEmitter
         // string - use JsonSerializer.Serialize<string>(value, null)
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldnull); // options = null
         var serializeMethod = typeof(System.Text.Json.JsonSerializer)
             .GetMethods()
@@ -598,34 +598,34 @@ public static partial class RuntimeEmitter
 
     private static void EmitFormatNumber(ILGenerator il)
     {
-        var local = il.DeclareLocal(typeof(double));
+        var local = il.DeclareLocal(_types.Double);
         var isIntLabel = il.DefineLabel();
         var isNanLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Stloc, local);
 
         // Check NaN/Infinity
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double]));
         il.Emit(OpCodes.Brtrue, isNanLabel);
 
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", [_types.Double]));
         il.Emit(OpCodes.Brtrue, isNanLabel);
 
         // Check if integer
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Floor", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", [_types.Double]));
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, isIntLabel);
 
         // Float format
         il.Emit(OpCodes.Ldloca, local);
         il.Emit(OpCodes.Ldstr, "G15");
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String]));
         il.Emit(OpCodes.Ret);
 
         // NaN/Infinity -> "null"
@@ -637,29 +637,29 @@ public static partial class RuntimeEmitter
         il.MarkLabel(isIntLabel);
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Conv_I8);
-        var longLocal = il.DeclareLocal(typeof(long));
+        var longLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Stloc, longLocal);
         il.Emit(OpCodes.Ldloca, longLocal);
-        il.Emit(OpCodes.Call, typeof(long).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int64, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
     private static void EmitStringifyArray(ILGenerator il, MethodBuilder stringifyMethod)
     {
-        var sbLocal = il.DeclareLocal(typeof(System.Text.StringBuilder));
-        var arrLocal = il.DeclareLocal(typeof(List<object>));
-        var iLocal = il.DeclareLocal(typeof(int));
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        var arrLocal = il.DeclareLocal(_types.ListOfObject);
+        var iLocal = il.DeclareLocal(_types.Int32);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, arrLocal);
 
         // if (arr.Count == 0) return "[]";
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "[]");
@@ -669,7 +669,7 @@ public static partial class RuntimeEmitter
 
         // StringBuilder sb = new StringBuilder("[");
         il.Emit(OpCodes.Ldstr, "[");
-        il.Emit(OpCodes.Newobj, typeof(System.Text.StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // for (int i = 0; i < arr.Count; i++)
@@ -679,7 +679,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // if (i > 0) sb.Append(",");
@@ -688,7 +688,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipComma);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ",");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipComma);
 
@@ -696,13 +696,13 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, stringifyMethod);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -717,32 +717,33 @@ public static partial class RuntimeEmitter
         // sb.Append("]");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "]");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
     private static void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod)
     {
-        var sbLocal = il.DeclareLocal(typeof(System.Text.StringBuilder));
-        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        // Keep nested enumerator types as typeof() to avoid BadImageFormatException
         var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
-        var currentLocal = il.DeclareLocal(typeof(KeyValuePair<string, object>));
-        var firstLocal = il.DeclareLocal(typeof(bool));
+        var currentLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
+        var firstLocal = il.DeclareLocal(_types.Boolean);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // if (dict.Count == 0) return "{}";
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -752,14 +753,14 @@ public static partial class RuntimeEmitter
 
         // StringBuilder sb = new StringBuilder("{");
         il.Emit(OpCodes.Ldstr, "{");
-        il.Emit(OpCodes.Newobj, typeof(System.Text.StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // bool first = true;
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, firstLocal);
 
-        // Get enumerator
+        // Get enumerator - keep typeof() for nested enumerator types
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
@@ -779,7 +780,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, skipComma);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ",");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipComma);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -788,7 +789,7 @@ public static partial class RuntimeEmitter
         // sb.Append(JsonSerializer.Serialize<string>(key, null));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldnull); // options = null
         var serializeKeyMethod = typeof(System.Text.Json.JsonSerializer)
             .GetMethods()
@@ -798,44 +799,44 @@ public static partial class RuntimeEmitter
                         m.GetParameters()[1].ParameterType == typeof(System.Text.Json.JsonSerializerOptions))
             .MakeGenericMethod(typeof(string));
         il.Emit(OpCodes.Call, serializeKeyMethod);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append(":");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ":");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append(StringifyValue(value, indent, depth + 1));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, stringifyMethod);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
 
-        // Dispose enumerator
+        // Dispose enumerator - keep typeof() for nested enumerator types
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         il.Emit(OpCodes.Constrained, typeof(Dictionary<string, object>.Enumerator));
-        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
 
         // sb.Append("}");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "}");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
@@ -844,8 +845,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "JsonStringifyFull",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.JsonStringifyFull = method;
 
@@ -865,8 +866,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringifyValueWithKeys",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(HashSet<string>), typeof(int), typeof(int)]
+            _types.String,
+            [_types.Object, _types.HashSetOfString, _types.Int32, _types.Int32]
         );
 
         var il = method.GetILGenerator();
@@ -884,27 +885,27 @@ public static partial class RuntimeEmitter
 
         // if (value is bool)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, boolLabel);
 
         // if (value is double)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, doubleLabel);
 
         // if (value is string)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
         // if (value is List<object>)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // if (value is Dictionary<string, object>)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
         // Default: return null
@@ -916,7 +917,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(boolLabel);
         var trueLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(bool));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldstr, "false");
         il.Emit(OpCodes.Ret);
@@ -931,7 +932,7 @@ public static partial class RuntimeEmitter
         // string
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(string));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldnull);
         var serializeMethod = typeof(System.Text.Json.JsonSerializer)
             .GetMethods()
@@ -956,31 +957,31 @@ public static partial class RuntimeEmitter
 
     private static void EmitFormatNumberForFullStringify(ILGenerator il)
     {
-        var local = il.DeclareLocal(typeof(double));
+        var local = il.DeclareLocal(_types.Double);
         var isIntLabel = il.DefineLabel();
         var isNanLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Stloc, local);
 
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double]));
         il.Emit(OpCodes.Brtrue, isNanLabel);
 
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", [_types.Double]));
         il.Emit(OpCodes.Brtrue, isNanLabel);
 
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Ldloc, local);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Floor", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", [_types.Double]));
         il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Brtrue, isIntLabel);
 
         il.Emit(OpCodes.Ldloca, local);
         il.Emit(OpCodes.Ldstr, "G15");
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String]));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(isNanLabel);
@@ -990,20 +991,20 @@ public static partial class RuntimeEmitter
         il.MarkLabel(isIntLabel);
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Conv_I8);
-        var longLocal = il.DeclareLocal(typeof(long));
+        var longLocal = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Stloc, longLocal);
         il.Emit(OpCodes.Ldloca, longLocal);
-        il.Emit(OpCodes.Call, typeof(long).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int64, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
     private static void EmitStringifyArrayWithIndent(ILGenerator il, MethodBuilder stringifyMethod)
     {
-        var sbLocal = il.DeclareLocal(typeof(System.Text.StringBuilder));
-        var arrLocal = il.DeclareLocal(typeof(List<object>));
-        var iLocal = il.DeclareLocal(typeof(int));
-        var newlineLocal = il.DeclareLocal(typeof(string));
-        var closeLocal = il.DeclareLocal(typeof(string));
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        var arrLocal = il.DeclareLocal(_types.ListOfObject);
+        var iLocal = il.DeclareLocal(_types.Int32);
+        var newlineLocal = il.DeclareLocal(_types.String);
+        var closeLocal = il.DeclareLocal(_types.String);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -1012,12 +1013,12 @@ public static partial class RuntimeEmitter
         var doneFormatting = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, arrLocal);
 
         // if (arr.Count == 0) return "[]";
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "[]");
@@ -1037,8 +1038,8 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newobj, typeof(string).GetConstructor([typeof(char), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String]));
         il.Emit(OpCodes.Stloc, newlineLocal);
 
         // close = "\n" + new string(' ', indent * depth)
@@ -1047,8 +1048,8 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newobj, typeof(string).GetConstructor([typeof(char), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String]));
         il.Emit(OpCodes.Stloc, closeLocal);
         il.Emit(OpCodes.Br, hasIndent);
 
@@ -1062,7 +1063,7 @@ public static partial class RuntimeEmitter
 
         // StringBuilder sb = new StringBuilder("[");
         il.Emit(OpCodes.Ldstr, "[");
-        il.Emit(OpCodes.Newobj, typeof(System.Text.StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // for (int i = 0; i < arr.Count; i++)
@@ -1072,7 +1073,7 @@ public static partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // if (i > 0) sb.Append(",");
@@ -1081,28 +1082,28 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipComma);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ",");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipComma);
 
         // sb.Append(newline);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, newlineLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append(StringifyValueWithKeys(arr[i], allowedKeys, indent, depth + 1));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, arrLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
         il.Emit(OpCodes.Ldarg_1); // allowedKeys
         il.Emit(OpCodes.Ldarg_2); // indent
         il.Emit(OpCodes.Ldarg_3); // depth
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, stringifyMethod);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -1117,30 +1118,31 @@ public static partial class RuntimeEmitter
         // sb.Append(close);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, closeLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append("]");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "]");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
     private static void EmitStringifyObjectWithKeysAndIndent(ILGenerator il, MethodBuilder stringifyMethod)
     {
-        var sbLocal = il.DeclareLocal(typeof(System.Text.StringBuilder));
-        var dictLocal = il.DeclareLocal(typeof(Dictionary<string, object>));
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        // Keep nested enumerator types as typeof() to avoid BadImageFormatException
         var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
-        var currentLocal = il.DeclareLocal(typeof(KeyValuePair<string, object>));
-        var firstLocal = il.DeclareLocal(typeof(bool));
-        var newlineLocal = il.DeclareLocal(typeof(string));
-        var closeLocal = il.DeclareLocal(typeof(string));
-        var keyStrLocal = il.DeclareLocal(typeof(string));
+        var currentLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
+        var firstLocal = il.DeclareLocal(_types.Boolean);
+        var newlineLocal = il.DeclareLocal(_types.String);
+        var closeLocal = il.DeclareLocal(_types.String);
+        var keyStrLocal = il.DeclareLocal(_types.String);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -1148,12 +1150,12 @@ public static partial class RuntimeEmitter
         var hasIndent = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(Dictionary<string, object>));
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // if (dict.Count == 0) return "{}";
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -1172,8 +1174,8 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newobj, typeof(string).GetConstructor([typeof(char), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String]));
         il.Emit(OpCodes.Stloc, newlineLocal);
 
         il.Emit(OpCodes.Ldstr, "\n");
@@ -1181,8 +1183,8 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newobj, typeof(string).GetConstructor([typeof(char), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String]));
         il.Emit(OpCodes.Stloc, closeLocal);
         il.Emit(OpCodes.Br, hasIndent);
 
@@ -1196,14 +1198,14 @@ public static partial class RuntimeEmitter
 
         // StringBuilder sb = new StringBuilder("{");
         il.Emit(OpCodes.Ldstr, "{");
-        il.Emit(OpCodes.Newobj, typeof(System.Text.StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // first = true
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, firstLocal);
 
-        // foreach (var kv in dict)
+        // foreach (var kv in dict) - keep typeof() for nested enumerator types
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
@@ -1225,8 +1227,8 @@ public static partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(HashSet<string>).GetMethod("Contains", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Contains", [_types.String]));
         il.Emit(OpCodes.Brtrue, keyAllowed);
         il.Emit(OpCodes.Br, loopStart); // skip this key
 
@@ -1239,7 +1241,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, skipComma);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ",");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipComma);
 
@@ -1250,12 +1252,12 @@ public static partial class RuntimeEmitter
         // sb.Append(newline);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, newlineLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // keyStr = JsonSerializer.Serialize(kv.Key)
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldnull);
         var serializeMethod = typeof(System.Text.Json.JsonSerializer)
             .GetMethods()
@@ -1270,7 +1272,7 @@ public static partial class RuntimeEmitter
         // sb.Append(keyStr);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyStrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append(indent > 0 ? ": " : ":");
@@ -1284,20 +1286,20 @@ public static partial class RuntimeEmitter
         il.MarkLabel(colonNoSpace);
         il.Emit(OpCodes.Ldstr, ":");
         il.MarkLabel(colonDone);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append(StringifyValueWithKeys(kv.Value, allowedKeys, indent, depth + 1));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1); // allowedKeys
         il.Emit(OpCodes.Ldarg_2); // indent
         il.Emit(OpCodes.Ldarg_3); // depth
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, stringifyMethod);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Br, loopStart);
@@ -1307,17 +1309,17 @@ public static partial class RuntimeEmitter
         // sb.Append(close);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, closeLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         // sb.Append("}");
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "}");
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 }

@@ -15,6 +15,7 @@ namespace SharpTS.Compilation;
 public class AsyncStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
+    private readonly TypeProvider _types;
     private TypeBuilder _stateMachineType = null!;
     private int _counter;
 
@@ -45,12 +46,14 @@ public class AsyncStateMachineBuilder
     // Builder type (Task vs Task<T>)
     public Type BuilderType { get; private set; } = null!;
     public Type TaskType { get; private set; } = null!;
-    public Type AwaiterType { get; private set; } = typeof(TaskAwaiter<object>);
+    public Type AwaiterType { get; private set; } = null!;
 
-    public AsyncStateMachineBuilder(ModuleBuilder moduleBuilder, int counter = 0)
+    public AsyncStateMachineBuilder(ModuleBuilder moduleBuilder, TypeProvider types, int counter = 0)
     {
         _moduleBuilder = moduleBuilder;
+        _types = types;
         _counter = counter;
+        AwaiterType = _types.TaskAwaiterOfObject;
     }
 
     /// <summary>
@@ -69,15 +72,15 @@ public class AsyncStateMachineBuilder
         bool hasAsyncArrows = false)
     {
         // Determine builder and task types based on return type
-        if (returnType == typeof(void))
+        if (returnType == _types.Void)
         {
-            BuilderType = typeof(AsyncTaskMethodBuilder);
-            TaskType = typeof(Task);
+            BuilderType = _types.AsyncTaskMethodBuilder;
+            TaskType = _types.Task;
         }
         else
         {
-            BuilderType = typeof(AsyncTaskMethodBuilder<>).MakeGenericType(returnType);
-            TaskType = typeof(Task<>).MakeGenericType(returnType);
+            BuilderType = _types.MakeGenericType(_types.AsyncTaskMethodBuilderOpen, returnType);
+            TaskType = _types.MakeGenericType(_types.TaskOpen, returnType);
         }
 
         // Define the state machine struct
@@ -85,8 +88,8 @@ public class AsyncStateMachineBuilder
         _stateMachineType = _moduleBuilder.DefineType(
             $"<{methodName}>d__{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(ValueType),
-            [typeof(IAsyncStateMachine)]
+            _types.ValueType,
+            [_types.IAsyncStateMachine]
         );
 
         // Define core fields
@@ -98,7 +101,7 @@ public class AsyncStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 paramName,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             HoistedParameters[paramName] = field;
@@ -109,7 +112,7 @@ public class AsyncStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 localName,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             HoistedLocals[localName] = field;
@@ -131,7 +134,7 @@ public class AsyncStateMachineBuilder
         {
             ThisField = _stateMachineType.DefineField(
                 "<>4__this",
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
         }
@@ -143,7 +146,7 @@ public class AsyncStateMachineBuilder
         {
             SelfBoxedField = _stateMachineType.DefineField(
                 "<>__selfBoxed",
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
         }
@@ -159,7 +162,7 @@ public class AsyncStateMachineBuilder
         // -1 = initial/running, -2 = completed, 0+ = awaiting at specific point
         StateField = _stateMachineType.DefineField(
             "<>1__state",
-            typeof(int),
+            _types.Int32,
             FieldAttributes.Public
         );
     }
@@ -180,12 +183,12 @@ public class AsyncStateMachineBuilder
         MoveNextMethod = _stateMachineType.DefineMethod(
             "MoveNext",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
 
         // Mark as implementing IAsyncStateMachine.MoveNext
-        var interfaceMethod = typeof(IAsyncStateMachine).GetMethod("MoveNext")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext");
         _stateMachineType.DefineMethodOverride(MoveNextMethod, interfaceMethod);
     }
 
@@ -195,8 +198,8 @@ public class AsyncStateMachineBuilder
         SetStateMachineMethod = _stateMachineType.DefineMethod(
             "SetStateMachine",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
-            [typeof(IAsyncStateMachine)]
+            _types.Void,
+            [_types.IAsyncStateMachine]
         );
 
         // Emit empty body (modern .NET doesn't use this for structs)
@@ -204,7 +207,7 @@ public class AsyncStateMachineBuilder
         il.Emit(OpCodes.Ret);
 
         // Mark as implementing IAsyncStateMachine.SetStateMachine
-        var interfaceMethod = typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!;
+        var interfaceMethod = _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]);
         _stateMachineType.DefineMethodOverride(SetStateMachineMethod, interfaceMethod);
     }
 
@@ -236,23 +239,7 @@ public class AsyncStateMachineBuilder
         return _stateMachineType.CreateType()!;
     }
 
-    #region Static Helper Methods for IL Emission
-
-    // Cache commonly used methods
-    private static readonly MethodInfo _builderCreateMethod = typeof(AsyncTaskMethodBuilder<object>)
-        .GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
-
-    private static readonly PropertyInfo _builderTaskProperty = typeof(AsyncTaskMethodBuilder<object>)
-        .GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!;
-
-    private static readonly PropertyInfo _awaiterIsCompletedProperty = typeof(TaskAwaiter<object>)
-        .GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance)!;
-
-    private static readonly MethodInfo _awaiterGetResultMethod = typeof(TaskAwaiter<object>)
-        .GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance)!;
-
-    private static readonly MethodInfo _taskGetAwaiterMethod = typeof(Task<object>)
-        .GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance)!;
+    #region Helper Methods for IL Emission
 
     /// <summary>
     /// Gets the Create method for the specific builder type.
@@ -286,7 +273,7 @@ public class AsyncStateMachineBuilder
     /// </summary>
     public MethodInfo GetBuilderSetResultMethod()
     {
-        if (BuilderType == typeof(AsyncTaskMethodBuilder))
+        if (BuilderType == _types.AsyncTaskMethodBuilder)
         {
             return BuilderType.GetMethod("SetResult", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null)!;
         }
@@ -337,7 +324,7 @@ public class AsyncStateMachineBuilder
     /// </summary>
     public MethodInfo GetTaskGetAwaiterMethod()
     {
-        return typeof(Task<object>).GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance)!;
+        return _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
     }
 
     #endregion

@@ -205,7 +205,7 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateCompilationContext(ILGenerator il)
     {
-        return new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        return new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,

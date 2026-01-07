@@ -19,13 +19,20 @@ namespace SharpTS.Compilation;
 public class TypeMapper
 {
     private readonly ModuleBuilder _moduleBuilder;
+    private readonly TypeProvider _types;
     private Dictionary<string, TypeBuilder>? _classBuilders;
     private UnionTypeGenerator? _unionGenerator;
 
-    public TypeMapper(ModuleBuilder moduleBuilder)
+    public TypeMapper(ModuleBuilder moduleBuilder, TypeProvider? types = null)
     {
         _moduleBuilder = moduleBuilder;
+        _types = types ?? TypeProvider.Runtime;
     }
+
+    /// <summary>
+    /// Gets the TypeProvider used for type resolution.
+    /// </summary>
+    public TypeProvider Types => _types;
 
     /// <summary>
     /// Sets the class builders dictionary for resolving TypeScript class types to their actual .NET types.
@@ -48,48 +55,48 @@ public class TypeMapper
     public Type MapTypeInfo(TypeInfo typeInfo) => typeInfo switch
     {
         TypeInfo.Primitive p => MapPrimitive(p),
-        TypeInfo.BigInt => typeof(System.Numerics.BigInteger), // BigInt maps to BigInteger
-        TypeInfo.Array => typeof(object), // Will be TSArray at runtime
-        TypeInfo.Function => typeof(object), // Will be delegate at runtime
+        TypeInfo.BigInt => _types.BigInteger, // BigInt maps to BigInteger
+        TypeInfo.Array => _types.Object, // Will be TSArray at runtime
+        TypeInfo.Function => _types.Object, // Will be delegate at runtime
         TypeInfo.Promise p => MapPromiseType(p), // Promise<T> maps to Task<T>
         TypeInfo.Class c => GetClassType(c.Name),
         TypeInfo.Instance i => i.ClassType switch
         {
             TypeInfo.Class c => GetClassType(c.Name),
-            TypeInfo.InstantiatedGeneric => typeof(object),
-            _ => typeof(object)
+            TypeInfo.InstantiatedGeneric => _types.Object,
+            _ => _types.Object
         },
-        TypeInfo.Record => typeof(object), // Will be TSObject at runtime
-        TypeInfo.Void => typeof(void),
-        TypeInfo.Any => typeof(object),
-        TypeInfo.Union => typeof(object), // Union types are dynamic at runtime
-        TypeInfo.Intersection => typeof(object), // Intersection types are dynamic at runtime
-        TypeInfo.Null => typeof(object), // Null maps to object
-        TypeInfo.Unknown => typeof(object), // Unknown is dynamic at runtime
-        TypeInfo.Never => typeof(void), // Never represents no return
+        TypeInfo.Record => _types.Object, // Will be TSObject at runtime
+        TypeInfo.Void => _types.Void,
+        TypeInfo.Any => _types.Object,
+        TypeInfo.Union => _types.Object, // Union types are dynamic at runtime
+        TypeInfo.Intersection => _types.Object, // Intersection types are dynamic at runtime
+        TypeInfo.Null => _types.Object, // Null maps to object
+        TypeInfo.Unknown => _types.Object, // Unknown is dynamic at runtime
+        TypeInfo.Never => _types.Void, // Never represents no return
         // Generic types erase to object at runtime (type checking is compile-time only)
-        TypeInfo.TypeParameter => typeof(object),
-        TypeInfo.GenericClass => typeof(object),
-        TypeInfo.GenericFunction => typeof(object),
-        TypeInfo.GenericInterface => typeof(object),
-        TypeInfo.InstantiatedGeneric => typeof(object),
-        _ => typeof(object)
+        TypeInfo.TypeParameter => _types.Object,
+        TypeInfo.GenericClass => _types.Object,
+        TypeInfo.GenericFunction => _types.Object,
+        TypeInfo.GenericInterface => _types.Object,
+        TypeInfo.InstantiatedGeneric => _types.Object,
+        _ => _types.Object
     };
 
     private Type MapPromiseType(TypeInfo.Promise promise)
     {
         Type innerType = MapTypeInfo(promise.ValueType);
-        if (innerType == typeof(void))
-            return typeof(Task);
-        return typeof(Task<>).MakeGenericType(innerType);
+        if (_types.IsVoid(innerType))
+            return _types.Task;
+        return _types.MakeGenericType(_types.TaskOpen, innerType);
     }
 
-    private static Type MapPrimitive(TypeInfo.Primitive p) => p.Type switch
+    private Type MapPrimitive(TypeInfo.Primitive p) => p.Type switch
     {
-        TokenType.TYPE_NUMBER => typeof(double),
-        TokenType.TYPE_STRING => typeof(string),
-        TokenType.TYPE_BOOLEAN => typeof(bool),
-        _ => typeof(object)
+        TokenType.TYPE_NUMBER => _types.Double,
+        TokenType.TYPE_STRING => _types.String,
+        TokenType.TYPE_BOOLEAN => _types.Boolean,
+        _ => _types.Object
     };
 
     /// <summary>
@@ -99,7 +106,7 @@ public class TypeMapper
     {
         if (_classBuilders != null && _classBuilders.TryGetValue(className, out var typeBuilder))
             return typeBuilder;
-        return typeof(object);
+        return _types.Object;
     }
 
     /// <summary>
@@ -114,32 +121,32 @@ public class TypeMapper
     public Type MapTypeInfoStrict(TypeInfo typeInfo) => typeInfo switch
     {
         TypeInfo.Primitive p => MapPrimitive(p),
-        TypeInfo.BigInt => typeof(System.Numerics.BigInteger),
+        TypeInfo.BigInt => _types.BigInteger,
         TypeInfo.Array arr => MapArrayTypeStrict(arr),
-        TypeInfo.Function => typeof(Delegate), // Functions map to Delegate for typed interop
+        TypeInfo.Function => _types.Delegate, // Functions map to Delegate for typed interop
         TypeInfo.Promise p => MapPromiseTypeStrict(p),
         TypeInfo.Class c => GetClassType(c.Name),
         TypeInfo.Instance i => MapInstanceTypeStrict(i),
-        TypeInfo.Record => typeof(object), // Records remain dynamic objects
-        TypeInfo.Void => typeof(void),
-        TypeInfo.Any => typeof(object),
+        TypeInfo.Record => _types.Object, // Records remain dynamic objects
+        TypeInfo.Void => _types.Void,
+        TypeInfo.Any => _types.Object,
         TypeInfo.Union u => MapUnionTypeStrict(u),
-        TypeInfo.Intersection => typeof(object), // Intersections are complex, fall back to object
-        TypeInfo.Null => typeof(object),
-        TypeInfo.Unknown => typeof(object),
-        TypeInfo.Never => typeof(void),
+        TypeInfo.Intersection => _types.Object, // Intersections are complex, fall back to object
+        TypeInfo.Null => _types.Object,
+        TypeInfo.Unknown => _types.Object,
+        TypeInfo.Never => _types.Void,
         TypeInfo.Map m => MapMapTypeStrict(m),
         TypeInfo.Set s => MapSetTypeStrict(s),
-        TypeInfo.Date => typeof(DateTime),
-        TypeInfo.RegExp => typeof(System.Text.RegularExpressions.Regex),
-        TypeInfo.Symbol => typeof(string), // Symbols map to string keys
+        TypeInfo.Date => _types.DateTime,
+        TypeInfo.RegExp => _types.Regex,
+        TypeInfo.Symbol => _types.String, // Symbols map to string keys
         // Generic types - attempt to resolve if instantiated
-        TypeInfo.TypeParameter => typeof(object),
+        TypeInfo.TypeParameter => _types.Object,
         TypeInfo.GenericClass gc => GetClassType(gc.Name),
-        TypeInfo.GenericFunction => typeof(Delegate),
-        TypeInfo.GenericInterface => typeof(object),
+        TypeInfo.GenericFunction => _types.Delegate,
+        TypeInfo.GenericInterface => _types.Object,
         TypeInfo.InstantiatedGeneric ig => MapInstantiatedGenericStrict(ig),
-        _ => typeof(object)
+        _ => _types.Object
     };
 
     private Type MapInstanceTypeStrict(TypeInfo.Instance instance) => instance.ClassType switch
@@ -147,7 +154,7 @@ public class TypeMapper
         TypeInfo.Class c => GetClassType(c.Name),
         TypeInfo.GenericClass gc => GetClassType(gc.Name),
         TypeInfo.InstantiatedGeneric ig => MapInstantiatedGenericStrict(ig),
-        _ => typeof(object)
+        _ => _types.Object
     };
 
     private Type MapInstantiatedGenericStrict(TypeInfo.InstantiatedGeneric ig)
@@ -155,35 +162,35 @@ public class TypeMapper
         // For instantiated generics, try to resolve the base type
         if (ig.GenericDefinition is TypeInfo.GenericClass gc)
             return GetClassType(gc.Name);
-        return typeof(object);
+        return _types.Object;
     }
 
     private Type MapArrayTypeStrict(TypeInfo.Array arr)
     {
         Type elementType = MapTypeInfoStrict(arr.ElementType);
         // Use List<T> for typed arrays
-        return typeof(List<>).MakeGenericType(elementType);
+        return _types.MakeGenericType(_types.ListOpen, elementType);
     }
 
     private Type MapMapTypeStrict(TypeInfo.Map map)
     {
         Type keyType = MapTypeInfoStrict(map.KeyType);
         Type valueType = MapTypeInfoStrict(map.ValueType);
-        return typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
+        return _types.MakeGenericType(_types.DictionaryOpen, keyType, valueType);
     }
 
     private Type MapSetTypeStrict(TypeInfo.Set set)
     {
         Type elementType = MapTypeInfoStrict(set.ElementType);
-        return typeof(HashSet<>).MakeGenericType(elementType);
+        return _types.MakeGenericType(_types.HashSetOpen, elementType);
     }
 
     private Type MapPromiseTypeStrict(TypeInfo.Promise promise)
     {
         Type innerType = MapTypeInfoStrict(promise.ValueType);
-        if (innerType == typeof(void))
-            return typeof(Task);
-        return typeof(Task<>).MakeGenericType(innerType);
+        if (_types.IsVoid(innerType))
+            return _types.Task;
+        return _types.MakeGenericType(_types.TaskOpen, innerType);
     }
 
     private Type MapUnionTypeStrict(TypeInfo.Union union)
@@ -198,8 +205,8 @@ public class TypeMapper
             {
                 var nonNullType = types.First(t => t is not TypeInfo.Null);
                 var mapped = MapTypeInfoStrict(nonNullType);
-                if (mapped.IsValueType && mapped != typeof(void))
-                    return typeof(Nullable<>).MakeGenericType(mapped);
+                if (mapped.IsValueType && !_types.IsVoid(mapped))
+                    return _types.MakeNullable(mapped);
                 // Reference types are already nullable
                 return mapped;
             }
@@ -214,7 +221,7 @@ public class TypeMapper
             return _unionGenerator.GetOrCreateUnionType(union, _moduleBuilder);
 
         // Fallback to object if no union generator configured
-        return typeof(object);
+        return _types.Object;
     }
 
     public static Type GetClrType(string typeAnnotation) => typeAnnotation switch

@@ -97,7 +97,7 @@ public partial class ILCompiler
 
         var methodBuilder = _functionBuilders[qualifiedFunctionName];
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,
@@ -183,7 +183,7 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,

@@ -34,8 +34,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(string)]
+            _types.Object,
+            [_types.String]
         );
         runtime.CreateRegExp = method;
 
@@ -50,8 +50,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateRegExpWithFlags",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(string), typeof(string)]
+            _types.Object,
+            [_types.String, _types.String]
         );
         runtime.CreateRegExpWithFlags = method;
 
@@ -67,8 +67,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpTest",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(string)]
+            _types.Boolean,
+            [_types.Object, _types.String]
         );
         runtime.RegExpTest = method;
 
@@ -84,8 +84,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpExec",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(string)]
+            _types.Object,
+            [_types.Object, _types.String]
         );
         runtime.RegExpExec = method;
 
@@ -101,8 +101,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpToString",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.RegExpToString = method;
 
@@ -117,8 +117,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetSource",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.RegExpGetSource = method;
 
@@ -133,8 +133,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetFlags",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.RegExpGetFlags = method;
 
@@ -149,8 +149,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetGlobal",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.RegExpGetGlobal = method;
 
@@ -165,8 +165,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetIgnoreCase",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.RegExpGetIgnoreCase = method;
 
@@ -181,8 +181,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetMultiline",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.RegExpGetMultiline = method;
 
@@ -197,8 +197,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpGetLastIndex",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.RegExpGetLastIndex = method;
 
@@ -213,8 +213,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "RegExpSetLastIndex",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(double)]
+            _types.Void,
+            [_types.Object, _types.Double]
         );
         runtime.RegExpSetLastIndex = method;
 
@@ -230,8 +230,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringMatchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(string), typeof(object)]
+            _types.Object,
+            [_types.String, _types.Object]
         );
         runtime.StringMatchRegExp = method;
 
@@ -247,8 +247,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringReplaceRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(string), typeof(object), typeof(string)]
+            _types.String,
+            [_types.String, _types.Object, _types.String]
         );
         runtime.StringReplaceRegExp = method;
 
@@ -265,8 +265,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringSearchRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(string), typeof(object)]
+            _types.Double,
+            [_types.String, _types.Object]
         );
         runtime.StringSearchRegExp = method;
 
@@ -282,8 +282,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringSplitRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(string), typeof(object)]
+            _types.ListOfObject,
+            [_types.String, _types.Object]
         );
         runtime.StringSplitRegExp = method;
 

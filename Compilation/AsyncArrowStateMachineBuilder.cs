@@ -13,6 +13,7 @@ namespace SharpTS.Compilation;
 public class AsyncArrowStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
+    private readonly TypeProvider _types;
     private TypeBuilder _stateMachineType = null!;
     private int _counter;
 
@@ -67,20 +68,25 @@ public class AsyncArrowStateMachineBuilder
     public MethodBuilder StubMethod { get; private set; } = null!;
 
     // Builder type
-    public Type BuilderType { get; private set; } = typeof(AsyncTaskMethodBuilder<object>);
-    public Type TaskType { get; private set; } = typeof(Task<object>);
-    public Type AwaiterType { get; private set; } = typeof(TaskAwaiter<object>);
+    public Type BuilderType { get; private set; } = null!;
+    public Type TaskType { get; private set; } = null!;
+    public Type AwaiterType { get; private set; } = null!;
 
     public AsyncArrowStateMachineBuilder(
         ModuleBuilder moduleBuilder,
+        TypeProvider types,
         Expr.ArrowFunction arrow,
         HashSet<string> captures,
         int counter = 0)
     {
         _moduleBuilder = moduleBuilder;
+        _types = types;
         Arrow = arrow;
         Captures = captures;
         _counter = counter;
+        BuilderType = _types.AsyncTaskMethodBuilderOfObject;
+        TaskType = _types.TaskOfObject;
+        AwaiterType = _types.TaskAwaiterOfObject;
     }
 
     /// <summary>
@@ -114,15 +120,15 @@ public class AsyncArrowStateMachineBuilder
         _stateMachineType = _moduleBuilder.DefineType(
             $"<>c__AsyncArrow_{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(ValueType),
-            [typeof(IAsyncStateMachine)]
+            _types.ValueType,
+            [_types.IAsyncStateMachine]
         );
 
         // Add outer reference field (stores reference to outer state machine)
         // We use object type and cast as needed, since the outer type might not be created yet
         OuterStateMachineField = _stateMachineType.DefineField(
             "<>__outer",
-            typeof(object),
+            _types.Object,
             FieldAttributes.Public
         );
 
@@ -131,7 +137,7 @@ public class AsyncArrowStateMachineBuilder
         {
             SelfBoxedField = _stateMachineType.DefineField(
                 "<>__selfBoxed",
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
         }
@@ -153,7 +159,7 @@ public class AsyncArrowStateMachineBuilder
         // Define core fields
         StateField = _stateMachineType.DefineField(
             "<>1__state",
-            typeof(int),
+            _types.Int32,
             FieldAttributes.Public
         );
 
@@ -168,7 +174,7 @@ public class AsyncArrowStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 param.Name.Lexeme,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             ParameterFields[param.Name.Lexeme] = field;
@@ -180,7 +186,7 @@ public class AsyncArrowStateMachineBuilder
         {
             var field = _stateMachineType.DefineField(
                 localName,
-                typeof(object),
+                _types.Object,
                 FieldAttributes.Public
             );
             LocalFields[localName] = field;
@@ -209,16 +215,16 @@ public class AsyncArrowStateMachineBuilder
     public void DefineStubMethod(TypeBuilder programType)
     {
         // First parameter is the outer state machine (boxed), rest are arrow parameters
-        var paramTypes = new List<Type> { typeof(object) }; // Outer SM
+        var paramTypes = new List<Type> { _types.Object }; // Outer SM
         foreach (var _ in ParameterOrder)
         {
-            paramTypes.Add(typeof(object)); // All arrow params are object
+            paramTypes.Add(_types.Object); // All arrow params are object
         }
 
         StubMethod = programType.DefineMethod(
             $"<>AsyncArrow_{_counter}_Stub",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(Task<object>),
+            _types.TaskOfObject,
             [.. paramTypes]
         );
 
@@ -260,7 +266,7 @@ public class AsyncArrowStateMachineBuilder
             // Box the state machine
             il.Emit(OpCodes.Ldloc, smLocal);
             il.Emit(OpCodes.Box, _stateMachineType);
-            var boxedLocal = il.DeclareLocal(typeof(object));
+            var boxedLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, boxedLocal);
 
             // Store in sm.<>__selfBoxed (access through the boxed reference since we already boxed)
@@ -305,11 +311,11 @@ public class AsyncArrowStateMachineBuilder
         MoveNextMethod = _stateMachineType.DefineMethod(
             "MoveNext",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
 
-        var interfaceMethod = typeof(IAsyncStateMachine).GetMethod("MoveNext")!;
+        var interfaceMethod = _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext");
         _stateMachineType.DefineMethodOverride(MoveNextMethod, interfaceMethod);
     }
 
@@ -318,15 +324,15 @@ public class AsyncArrowStateMachineBuilder
         SetStateMachineMethod = _stateMachineType.DefineMethod(
             "SetStateMachine",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
-            [typeof(IAsyncStateMachine)]
+            _types.Void,
+            [_types.IAsyncStateMachine]
         );
 
         // Emit empty body
         var il = SetStateMachineMethod.GetILGenerator();
         il.Emit(OpCodes.Ret);
 
-        var interfaceMethod = typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!;
+        var interfaceMethod = _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]);
         _stateMachineType.DefineMethodOverride(SetStateMachineMethod, interfaceMethod);
     }
 
@@ -407,7 +413,7 @@ public class AsyncArrowStateMachineBuilder
 
     public MethodInfo GetTaskGetAwaiterMethod()
     {
-        return typeof(Task<object>).GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance)!;
+        return _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
     }
 
     #endregion

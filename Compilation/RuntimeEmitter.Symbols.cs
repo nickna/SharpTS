@@ -12,14 +12,14 @@ public static partial class RuntimeEmitter
     /// </summary>
     private static void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder symbolStorageField)
     {
-        var symbolDictType = typeof(Dictionary<object, object?>);
-        var symbolStorageType = typeof(ConditionalWeakTable<,>).MakeGenericType(typeof(object), symbolDictType);
+        var symbolDictType = _types.DictionaryObjectObject;
+        var symbolStorageType = _types.MakeGenericType(_types.ConditionalWeakTableOpen, _types.Object, symbolDictType);
 
         var method = typeBuilder.DefineMethod(
             "GetSymbolDict",
             MethodAttributes.Private | MethodAttributes.Static,
             symbolDictType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.GetSymbolDictMethod = method;
 
@@ -28,7 +28,7 @@ public static partial class RuntimeEmitter
         // return _symbolStorage.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, symbolStorageField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, symbolStorageType.GetMethod("GetOrCreateValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, symbolStorageType.GetMethod("GetOrCreateValue", [_types.Object])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -41,8 +41,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "IsSymbol",
             MethodAttributes.Private | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.IsSymbolMethod = method;
 
@@ -56,10 +56,10 @@ public static partial class RuntimeEmitter
 
         // return obj.GetType().Name == "$TSSymbol";
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "$TSSymbol");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Br, doneLabel);
 
         il.MarkLabel(falseLabel);

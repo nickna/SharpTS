@@ -22,18 +22,18 @@ public partial class ILCompiler
         var analysis = _generatorAnalyzer.Analyze(funcStmt);
 
         // Create the state machine builder
-        var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _generatorStateMachineCounter++);
+        var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _types, _generatorStateMachineCounter++);
         smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false);
 
         _generatorStateMachines[funcName] = smBuilder;
         _generatorFunctions[funcName] = funcStmt;
 
         // Define the stub method that creates and returns the state machine
-        var paramTypes = funcStmt.Parameters.Select(_ => typeof(object)).ToArray();
+        var paramTypes = funcStmt.Parameters.Select(_ => _types.Object).ToArray();
         var methodBuilder = _programType.DefineMethod(
             funcName,
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(IEnumerable<object>),  // Generator returns IEnumerable<object>
+            _types.IEnumerableOfObject,  // Generator returns IEnumerable<object>
             paramTypes
         );
 
@@ -108,7 +108,7 @@ public partial class ILCompiler
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,
@@ -141,7 +141,7 @@ public partial class ILCompiler
         };
 
         // Use the new emitter for full generator body emission
-        var emitter = new GeneratorMoveNextEmitter(smBuilder, analysis);
+        var emitter = new GeneratorMoveNextEmitter(smBuilder, analysis, _types);
         emitter.EmitMoveNext(funcStmt.Body, ctx);
     }
 }

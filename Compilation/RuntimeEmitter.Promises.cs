@@ -142,7 +142,7 @@ public static partial class RuntimeEmitter
     /// </summary>
     private static void EmitPromiseMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var taskType = typeof(Task<object?>);
+        var taskType = _types.TaskOfObject;
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
 
         // Promise.resolve(value?) - simply wraps value in completed Task
@@ -151,14 +151,14 @@ public static partial class RuntimeEmitter
             "PromiseResolve",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseResolve = resolve;
         {
             var il = resolve.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
-            // Call Task.FromResult<object?>(value)
-            var fromResult = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object));
+            // Call Task.FromResult<object?>(value) - keep typeof() for generic method lookup
+            var fromResult = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object);
             il.Emit(OpCodes.Call, fromResult);
             il.Emit(OpCodes.Ret);
         }
@@ -169,18 +169,18 @@ public static partial class RuntimeEmitter
             "PromiseReject",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseReject = reject;
         {
             var il = reject.GetILGenerator();
             // Create Exception from reason
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, typeof(object).GetMethod("ToString")!);
-            var exceptionCtor = typeof(Exception).GetConstructor([typeof(string)])!;
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Object, "ToString"));
+            var exceptionCtor = _types.GetConstructor(_types.Exception, [_types.String]);
             il.Emit(OpCodes.Newobj, exceptionCtor);
-            // Call Task.FromException<object?>(exception)
-            var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(typeof(object));
+            // Call Task.FromException<object?>(exception) - keep typeof() for arity-based generic lookup
+            var fromException = typeof(Task).GetMethod("FromException", 1, [typeof(Exception)])!.MakeGenericMethod(_types.Object);
             il.Emit(OpCodes.Call, fromException);
             il.Emit(OpCodes.Ret);
         }
@@ -191,7 +191,7 @@ public static partial class RuntimeEmitter
             "PromiseAll",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseAll = all;
         EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM);
@@ -204,7 +204,7 @@ public static partial class RuntimeEmitter
             "PromiseRace",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseRace = race;
         EmitPromiseRaceWrapper(race.GetILGenerator(), promiseRaceSM);
@@ -217,7 +217,7 @@ public static partial class RuntimeEmitter
             "ProcessElementSettled",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.ProcessElementSettled = processElementSettled;
         EmitProcessElementSettledWrapper(processElementSettled.GetILGenerator(), processElementSettledSM);
@@ -230,7 +230,7 @@ public static partial class RuntimeEmitter
             "PromiseAllSettled",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseAllSettled = allSettled;
         EmitPromiseAllSettledWrapper(allSettled.GetILGenerator(), promiseAllSettledSM, processElementSettled);
@@ -244,7 +244,7 @@ public static partial class RuntimeEmitter
             "PromiseAny",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [typeof(object)]
+            [_types.Object]
         );
         runtime.PromiseAny = any;
         {
@@ -263,7 +263,7 @@ public static partial class RuntimeEmitter
             "PromiseThen",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [taskType, typeof(object), typeof(object)]
+            [taskType, _types.Object, _types.Object]
         );
         runtime.PromiseThen = then;
         EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM);
@@ -275,7 +275,7 @@ public static partial class RuntimeEmitter
             "PromiseCatch",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [taskType, typeof(object)]
+            [taskType, _types.Object]
         );
         runtime.PromiseCatch = catchMethod;
         {
@@ -293,7 +293,7 @@ public static partial class RuntimeEmitter
             "PromiseFinally",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [taskType, typeof(object)]
+            [taskType, _types.Object]
         );
         runtime.PromiseFinally = finallyMethod;
         EmitPromiseFinallyWrapper(finallyMethod.GetILGenerator(), promiseFinallySM);
@@ -308,40 +308,40 @@ public static partial class RuntimeEmitter
     /// </summary>
     private static EmittedStateMachine DefinePromiseAllStateMachine(ModuleBuilder moduleBuilder)
     {
-        var builderType = typeof(AsyncTaskMethodBuilder<object>);
-        var awaiterType = typeof(TaskAwaiter<object?[]>);
+        var builderType = _types.AsyncTaskMethodBuilderOfObject;
+        var awaiterType = _types.TaskAwaiterOfObjectArray;
 
         // Define state machine struct: $PromiseAll_SM
         var smType = moduleBuilder.DefineType(
             "$PromiseAll_SM",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(ValueType),
-            [typeof(IAsyncStateMachine)]
+            _types.ValueType,
+            [_types.IAsyncStateMachine]
         );
 
         // Define fields
-        var stateField = smType.DefineField("<>1__state", typeof(int), FieldAttributes.Public);
+        var stateField = smType.DefineField("<>1__state", _types.Int32, FieldAttributes.Public);
         var builderField = smType.DefineField("<>t__builder", builderType, FieldAttributes.Public);
-        var iterableField = smType.DefineField("iterable", typeof(object), FieldAttributes.Public);
+        var iterableField = smType.DefineField("iterable", _types.Object, FieldAttributes.Public);
         var awaiterField = smType.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
 
         // Define MoveNext method
         var moveNext = smType.DefineMethod(
             "MoveNext",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
-        smType.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        smType.DefineMethodOverride(moveNext, _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext"));
 
         // Define SetStateMachine method (empty body for value types)
         var setStateMachine = smType.DefineMethod(
             "SetStateMachine",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
-            [typeof(IAsyncStateMachine)]
+            _types.Void,
+            [_types.IAsyncStateMachine]
         );
-        smType.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        smType.DefineMethodOverride(setStateMachine, _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]));
         var setSmIL = setStateMachine.GetILGenerator();
         setSmIL.Emit(OpCodes.Ret);
 

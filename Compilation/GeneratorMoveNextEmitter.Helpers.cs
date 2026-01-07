@@ -10,10 +10,10 @@ public partial class GeneratorMoveNextEmitter
         switch (_stackType)
         {
             case StackType.Double:
-                _il.Emit(OpCodes.Box, typeof(double));
+                _il.Emit(OpCodes.Box, _types.Double);
                 break;
             case StackType.Boolean:
-                _il.Emit(OpCodes.Box, typeof(bool));
+                _il.Emit(OpCodes.Box, _types.Boolean);
                 break;
         }
         _stackType = StackType.Unknown;
@@ -37,7 +37,7 @@ public partial class GeneratorMoveNextEmitter
     private void EmitBoxedDoubleConstant(double value)
     {
         _il.Emit(OpCodes.Ldc_R8, value);
-        _il.Emit(OpCodes.Box, typeof(double));
+        _il.Emit(OpCodes.Box, _types.Double);
         _stackType = StackType.Unknown;
     }
 
@@ -50,7 +50,7 @@ public partial class GeneratorMoveNextEmitter
     private void EmitBoxedBoolConstant(bool value)
     {
         _il.Emit(value ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        _il.Emit(OpCodes.Box, typeof(bool));
+        _il.Emit(OpCodes.Box, _types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -72,13 +72,13 @@ public partial class GeneratorMoveNextEmitter
 
     private void EmitBoxDouble()
     {
-        _il.Emit(OpCodes.Box, typeof(double));
+        _il.Emit(OpCodes.Box, _types.Double);
         _stackType = StackType.Unknown;
     }
 
     private void EmitBoxBool()
     {
-        _il.Emit(OpCodes.Box, typeof(bool));
+        _il.Emit(OpCodes.Box, _types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -207,14 +207,14 @@ public partial class GeneratorMoveNextEmitter
     private void EmitCallAndBoxDouble(MethodInfo method)
     {
         _il.Emit(OpCodes.Call, method);
-        _il.Emit(OpCodes.Box, typeof(double));
+        _il.Emit(OpCodes.Box, _types.Double);
         _stackType = StackType.Unknown;
     }
 
     private void EmitCallAndBoxBool(MethodInfo method)
     {
         _il.Emit(OpCodes.Call, method);
-        _il.Emit(OpCodes.Box, typeof(bool));
+        _il.Emit(OpCodes.Box, _types.Boolean);
         _stackType = StackType.Unknown;
     }
 
@@ -252,30 +252,30 @@ public partial class GeneratorMoveNextEmitter
 
     private void EmitConvertToDouble()
     {
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", [_types.Object]));
         _stackType = StackType.Double;
     }
 
     private void EmitConvR8AndBox()
     {
         _il.Emit(OpCodes.Conv_R8);
-        _il.Emit(OpCodes.Box, typeof(double));
+        _il.Emit(OpCodes.Box, _types.Double);
         _stackType = StackType.Unknown;
     }
 
     private void EmitObjectEqualsBoxed()
     {
-        _il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
-        _il.Emit(OpCodes.Box, typeof(bool));
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", [_types.Object, _types.Object]));
+        _il.Emit(OpCodes.Box, _types.Boolean);
         _stackType = StackType.Unknown;
     }
 
     private void EmitObjectNotEqualsBoxed()
     {
-        _il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", [_types.Object, _types.Object]));
         _il.Emit(OpCodes.Ldc_I4_0);
         _il.Emit(OpCodes.Ceq);
-        _il.Emit(OpCodes.Box, typeof(bool));
+        _il.Emit(OpCodes.Box, _types.Boolean);
         _stackType = StackType.Unknown;
     }
 

@@ -12,8 +12,11 @@ namespace SharpTS.Compilation;
 /// </summary>
 public static partial class RuntimeEmitter
 {
-    public static EmittedRuntime EmitAll(ModuleBuilder moduleBuilder)
+    private static TypeProvider _types = null!;
+
+    public static EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, TypeProvider? types = null)
     {
+        _types = types ?? TypeProvider.Runtime;
         var runtime = new EmittedRuntime();
 
         // Emit TSFunction class first (other methods depend on it)
@@ -34,26 +37,26 @@ public static partial class RuntimeEmitter
         var typeBuilder = moduleBuilder.DefineType(
             "$TSFunction",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object)
+            _types.Object
         );
         runtime.TSFunctionType = typeBuilder;
 
         // Fields
-        var targetField = typeBuilder.DefineField("_target", typeof(object), FieldAttributes.Private);
-        var methodField = typeBuilder.DefineField("_method", typeof(MethodInfo), FieldAttributes.Private);
+        var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
+        var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [typeof(object), typeof(MethodInfo)]
+            [_types.Object, _types.MethodInfo]
         );
         runtime.TSFunctionCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
         // this._target = target
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
@@ -68,22 +71,22 @@ public static partial class RuntimeEmitter
         var invokeBuilder = typeBuilder.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
-            typeof(object),
-            [typeof(object[])]
+            _types.Object,
+            [_types.ObjectArray]
         );
         runtime.TSFunctionInvoke = invokeBuilder;
 
         var invokeIL = invokeBuilder.GetILGenerator();
 
         // Local variables
-        var paramCountLocal = invokeIL.DeclareLocal(typeof(int));
-        var effectiveArgsLocal = invokeIL.DeclareLocal(typeof(object[]));
-        var invokeTargetLocal = invokeIL.DeclareLocal(typeof(object));
+        var paramCountLocal = invokeIL.DeclareLocal(_types.Int32);
+        var effectiveArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
+        var invokeTargetLocal = invokeIL.DeclareLocal(_types.Object);
 
         // Get parameter count: int paramCount = _method.GetParameters().Length
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("GetParameters")!);
+        invokeIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
         invokeIL.Emit(OpCodes.Ldlen);
         invokeIL.Emit(OpCodes.Conv_I4);
         invokeIL.Emit(OpCodes.Stloc, paramCountLocal);
@@ -95,7 +98,7 @@ public static partial class RuntimeEmitter
 
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetProperty("IsStatic")!.GetGetMethod()!);
+        invokeIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("IsStatic")!.GetGetMethod()!);
         invokeIL.Emit(OpCodes.Brfalse, notStaticWithTarget);
 
         invokeIL.Emit(OpCodes.Ldarg_0);
@@ -112,7 +115,7 @@ public static partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Conv_I4);
         invokeIL.Emit(OpCodes.Ldc_I4_1);
         invokeIL.Emit(OpCodes.Add);
-        invokeIL.Emit(OpCodes.Newarr, typeof(object));
+        invokeIL.Emit(OpCodes.Newarr, _types.Object);
         invokeIL.Emit(OpCodes.Stloc, effectiveArgsLocal);
 
         invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
@@ -128,7 +131,7 @@ public static partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldarg_1);
         invokeIL.Emit(OpCodes.Ldlen);
         invokeIL.Emit(OpCodes.Conv_I4);  // length
-        invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
 
         invokeIL.Emit(OpCodes.Ldnull);
         invokeIL.Emit(OpCodes.Stloc, invokeTargetLocal);
@@ -145,8 +148,8 @@ public static partial class RuntimeEmitter
         invokeIL.MarkLabel(afterArgPrep);
 
         // Now handle padding/trimming based on paramCount
-        var argsLengthLocal = invokeIL.DeclareLocal(typeof(int));
-        var adjustedArgsLocal = invokeIL.DeclareLocal(typeof(object[]));
+        var argsLengthLocal = invokeIL.DeclareLocal(_types.Int32);
+        var adjustedArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
 
         invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
         invokeIL.Emit(OpCodes.Ldlen);
@@ -169,23 +172,23 @@ public static partial class RuntimeEmitter
 
         // Pad with nulls
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Newarr, typeof(object));
+        invokeIL.Emit(OpCodes.Newarr, _types.Object);
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
         invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
         invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal); // length
-        invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(Array), typeof(int)])!);
+        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         invokeIL.Emit(OpCodes.Br, doInvoke);
 
         // Too many args: trim
         invokeIL.MarkLabel(tooManyArgs);
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Newarr, typeof(object));
+        invokeIL.Emit(OpCodes.Newarr, _types.Object);
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
         invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
         invokeIL.Emit(OpCodes.Ldloc, paramCountLocal); // length
-        invokeIL.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(Array), typeof(int)])!);
+        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
         invokeIL.Emit(OpCodes.Br, doInvoke);
 
         // Exact match - use effectiveArgs directly
@@ -199,7 +202,7 @@ public static partial class RuntimeEmitter
         invokeIL.Emit(OpCodes.Ldfld, methodField);
         invokeIL.Emit(OpCodes.Ldloc, invokeTargetLocal);
         invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        invokeIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
         invokeIL.Emit(OpCodes.Ret);
 
         // InvokeWithThis method: public object InvokeWithThis(object thisArg, object[] args)
@@ -207,23 +210,23 @@ public static partial class RuntimeEmitter
         var invokeWithThisBuilder = typeBuilder.DefineMethod(
             "InvokeWithThis",
             MethodAttributes.Public,
-            typeof(object),
-            [typeof(object), typeof(object[])]
+            _types.Object,
+            [_types.Object, _types.ObjectArray]
         );
         runtime.TSFunctionInvokeWithThis = invokeWithThisBuilder;
 
         var iwt = invokeWithThisBuilder.GetILGenerator();
 
         // Local variables
-        var paramsLocal = iwt.DeclareLocal(typeof(ParameterInfo[]));
-        var paramCountLocalIWT = iwt.DeclareLocal(typeof(int));
-        var expectsThisLocal = iwt.DeclareLocal(typeof(bool));
-        var effectiveArgsIWT = iwt.DeclareLocal(typeof(object[]));
+        var paramsLocal = iwt.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
+        var paramCountLocalIWT = iwt.DeclareLocal(_types.Int32);
+        var expectsThisLocal = iwt.DeclareLocal(_types.Boolean);
+        var effectiveArgsIWT = iwt.DeclareLocal(_types.ObjectArray);
 
         // params = _method.GetParameters()
         iwt.Emit(OpCodes.Ldarg_0);
         iwt.Emit(OpCodes.Ldfld, methodField);
-        iwt.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("GetParameters")!);
+        iwt.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
         iwt.Emit(OpCodes.Stloc, paramsLocal);
 
         // paramCount = params.Length
@@ -245,9 +248,9 @@ public static partial class RuntimeEmitter
         iwt.Emit(OpCodes.Ldloc, paramsLocal);
         iwt.Emit(OpCodes.Ldc_I4_0);
         iwt.Emit(OpCodes.Ldelem_Ref);
-        iwt.Emit(OpCodes.Callvirt, typeof(ParameterInfo).GetProperty("Name")!.GetGetMethod()!);
+        iwt.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("Name")!.GetGetMethod()!);
         iwt.Emit(OpCodes.Ldstr, "__this");
-        iwt.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        iwt.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
         iwt.Emit(OpCodes.Stloc, expectsThisLocal);
 
         iwt.MarkLabel(checkDoneLabel);
@@ -272,7 +275,7 @@ public static partial class RuntimeEmitter
         iwt.Emit(OpCodes.Conv_I4);
         iwt.Emit(OpCodes.Ldc_I4_1);
         iwt.Emit(OpCodes.Add);
-        iwt.Emit(OpCodes.Newarr, typeof(object));
+        iwt.Emit(OpCodes.Newarr, _types.Object);
         iwt.Emit(OpCodes.Stloc, effectiveArgsIWT);
 
         // effectiveArgs[0] = thisArg
@@ -289,7 +292,7 @@ public static partial class RuntimeEmitter
         iwt.Emit(OpCodes.Ldarg_2);
         iwt.Emit(OpCodes.Ldlen);
         iwt.Emit(OpCodes.Conv_I4);  // length
-        iwt.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        iwt.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
 
         // Call Invoke(effectiveArgs) and return
         iwt.Emit(OpCodes.Ldarg_0);
@@ -301,7 +304,7 @@ public static partial class RuntimeEmitter
         var toStringBuilder = typeBuilder.DefineMethod(
             "ToString",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            typeof(string),
+            _types.String,
             Type.EmptyTypes
         );
         var toStringIL = toStringBuilder.GetILGenerator();
@@ -313,15 +316,15 @@ public static partial class RuntimeEmitter
         var bindThisBuilder = typeBuilder.DefineMethod(
             "BindThis",
             MethodAttributes.Public,
-            typeof(void),
-            [typeof(object)]
+            _types.Void,
+            [_types.Object]
         );
         runtime.TSFunctionBindThis = bindThisBuilder;
 
         var bindThisIL = bindThisBuilder.GetILGenerator();
         var noTargetLabel = bindThisIL.DefineLabel();
         var endLabel = bindThisIL.DefineLabel();
-        var thisFieldLocal = bindThisIL.DeclareLocal(typeof(FieldInfo));
+        var thisFieldLocal = bindThisIL.DeclareLocal(_types.FieldInfo);
 
         // if (_target == null) return;
         bindThisIL.Emit(OpCodes.Ldarg_0);
@@ -331,10 +334,10 @@ public static partial class RuntimeEmitter
         // var thisField = _target.GetType().GetField("this", BindingFlags.Public | BindingFlags.Instance);
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
-        bindThisIL.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
         bindThisIL.Emit(OpCodes.Ldstr, "this");
         bindThisIL.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Instance));
-        bindThisIL.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
         bindThisIL.Emit(OpCodes.Stloc, thisFieldLocal);
 
         // if (thisField == null) return;
@@ -346,7 +349,7 @@ public static partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
         bindThisIL.Emit(OpCodes.Ldarg_1);
-        bindThisIL.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("SetValue", [typeof(object), typeof(object)])!);
+        bindThisIL.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("SetValue", [_types.Object, _types.Object])!);
         bindThisIL.Emit(OpCodes.Br, endLabel);
 
         bindThisIL.MarkLabel(noTargetLabel);
@@ -362,33 +365,33 @@ public static partial class RuntimeEmitter
         var typeBuilder = moduleBuilder.DefineType(
             "$TSSymbol",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object)
+            _types.Object
         );
         runtime.TSSymbolType = typeBuilder;
 
         // Static field for next ID
-        var nextIdField = typeBuilder.DefineField("_nextId", typeof(int), FieldAttributes.Private | FieldAttributes.Static);
+        var nextIdField = typeBuilder.DefineField("_nextId", _types.Int32, FieldAttributes.Private | FieldAttributes.Static);
 
         // Instance fields
-        var idField = typeBuilder.DefineField("_id", typeof(int), FieldAttributes.Private);
-        var descriptionField = typeBuilder.DefineField("_description", typeof(string), FieldAttributes.Private);
+        var idField = typeBuilder.DefineField("_id", _types.Int32, FieldAttributes.Private);
+        var descriptionField = typeBuilder.DefineField("_description", _types.String, FieldAttributes.Private);
 
         // Constructor: public $TSSymbol(string? description)
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [typeof(string)]
+            [_types.String]
         );
         runtime.TSSymbolCtor = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
         // _id = Interlocked.Increment(ref _nextId)
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldsflda, nextIdField);
-        ctorIL.Emit(OpCodes.Call, typeof(Interlocked).GetMethod("Increment", [typeof(int).MakeByRefType()])!);
+        ctorIL.Emit(OpCodes.Call, _types.Interlocked.GetMethod("Increment", [_types.Int32.MakeByRefType()])!);
         ctorIL.Emit(OpCodes.Stfld, idField);
         // _description = description
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -400,8 +403,8 @@ public static partial class RuntimeEmitter
         var equalsBuilder = typeBuilder.DefineMethod(
             "Equals",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         var equalsIL = equalsBuilder.GetILGenerator();
         var notSymbol = equalsIL.DefineLabel();
@@ -426,7 +429,7 @@ public static partial class RuntimeEmitter
         var hashCodeBuilder = typeBuilder.DefineMethod(
             "GetHashCode",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            typeof(int),
+            _types.Int32,
             Type.EmptyTypes
         );
         var hashCodeIL = hashCodeBuilder.GetILGenerator();
@@ -438,7 +441,7 @@ public static partial class RuntimeEmitter
         var toStringBuilder = typeBuilder.DefineMethod(
             "ToString",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
-            typeof(string),
+            _types.String,
             Type.EmptyTypes
         );
         var toStringIL = toStringBuilder.GetILGenerator();
@@ -457,7 +460,7 @@ public static partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ldarg_0);
         toStringIL.Emit(OpCodes.Ldfld, descriptionField);
         toStringIL.Emit(OpCodes.Ldstr, ")");
-        toStringIL.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
+        toStringIL.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String, _types.String])!);
         toStringIL.MarkLabel(doneToString);
         toStringIL.Emit(OpCodes.Ret);
 
@@ -470,16 +473,16 @@ public static partial class RuntimeEmitter
         var typeBuilder = moduleBuilder.DefineType(
             "$Runtime",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object)
+            _types.Object
         );
         runtime.RuntimeType = typeBuilder;
 
         // Static field for Random
-        var randomField = typeBuilder.DefineField("_random", typeof(Random), FieldAttributes.Private | FieldAttributes.Static);
+        var randomField = typeBuilder.DefineField("_random", _types.Random, FieldAttributes.Private | FieldAttributes.Static);
 
         // Static field for symbol storage: ConditionalWeakTable<object, Dictionary<object, object?>>
-        var symbolDictType = typeof(Dictionary<object, object?>);
-        var symbolStorageType = typeof(ConditionalWeakTable<,>).MakeGenericType(typeof(object), symbolDictType);
+        var symbolDictType = _types.DictionaryObjectObject;
+        var symbolStorageType = _types.MakeGenericType(_types.ConditionalWeakTableOpen, _types.Object, symbolDictType);
         var symbolStorageField = typeBuilder.DefineField(
             "_symbolStorage",
             symbolStorageType,
@@ -496,7 +499,7 @@ public static partial class RuntimeEmitter
         var cctorIL = cctorBuilder.GetILGenerator();
 
         // Initialize _random = new Random()
-        cctorIL.Emit(OpCodes.Newobj, typeof(Random).GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.Random.GetConstructor(Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, randomField);
 
         // Initialize _symbolStorage = new ConditionalWeakTable<object, Dictionary<object, object?>>()

@@ -31,8 +31,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberParseInt",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object), typeof(object)]
+            _types.Double,
+            [_types.Object, _types.Object]
         );
         runtime.NumberParseInt = method;
 
@@ -50,8 +50,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberParseFloat",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.NumberParseFloat = method;
 
@@ -67,8 +67,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberIsNaN",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.NumberIsNaN = method;
 
@@ -84,8 +84,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberIsFinite",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.NumberIsFinite = method;
 
@@ -101,8 +101,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberIsInteger",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.NumberIsInteger = method;
 
@@ -118,8 +118,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberIsSafeInteger",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.NumberIsSafeInteger = method;
 
@@ -135,8 +135,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GlobalIsNaN",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.GlobalIsNaN = method;
 
@@ -152,8 +152,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "GlobalIsFinite",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.GlobalIsFinite = method;
 
@@ -169,8 +169,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberToFixed",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(object)]
+            _types.String,
+            [_types.Object, _types.Object]
         );
         runtime.NumberToFixed = method;
 
@@ -187,8 +187,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberToPrecision",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(object)]
+            _types.String,
+            [_types.Object, _types.Object]
         );
         runtime.NumberToPrecision = method;
 
@@ -205,8 +205,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberToExponential",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(object)]
+            _types.String,
+            [_types.Object, _types.Object]
         );
         runtime.NumberToExponential = method;
 
@@ -223,8 +223,8 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "NumberToStringRadix",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object), typeof(object)]
+            _types.String,
+            [_types.Object, _types.Object]
         );
         runtime.NumberToStringRadix = method;
 

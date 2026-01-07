@@ -332,7 +332,7 @@ public partial class ILCompiler
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {
         var il = method.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,

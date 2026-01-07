@@ -11,8 +11,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "Stringify",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.Stringify = method;
 
@@ -29,28 +29,28 @@ public static partial class RuntimeEmitter
 
         // if (value is bool b) return b ? "true" : "false"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, boolLabel);
 
         // if (value is double d) return d.ToString()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, doubleLabel);
 
         // if (value is List<object?>) return array string
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(List<object>));
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
         // if (value is BigInteger) return value.ToString() + "n"
         var bigintLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, bigintLabel);
 
         // Default: return value.ToString() ?? "null"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Dup);
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notNullLabel);
@@ -67,7 +67,7 @@ public static partial class RuntimeEmitter
         // bool case
         il.MarkLabel(boolLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(bool));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var trueLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Ldstr, "false");
@@ -79,45 +79,45 @@ public static partial class RuntimeEmitter
         // double case - simple ToString
         il.MarkLabel(doubleLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(double));
-        var doubleLocal = il.DeclareLocal(typeof(double));
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        var doubleLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, doubleLocal);
         il.Emit(OpCodes.Ldloca, doubleLocal);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Double, "ToString"));
         il.Emit(OpCodes.Br, endLabel);
 
         // BigInteger case - format as value.ToString() + "n"
         il.MarkLabel(bigintLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(System.Numerics.BigInteger));
-        var bigintLocal = il.DeclareLocal(typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        var bigintLocal = il.DeclareLocal(_types.BigInteger);
         il.Emit(OpCodes.Stloc, bigintLocal);
         il.Emit(OpCodes.Ldloca, bigintLocal);
-        il.Emit(OpCodes.Call, typeof(System.Numerics.BigInteger).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.BigInteger, "ToString"));
         il.Emit(OpCodes.Ldstr, "n");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Br, endLabel);
 
         // List case - format as "[elem1, elem2, ...]"
         il.MarkLabel(listLabel);
         // Use StringBuilder to build the result
-        var sbLocal = il.DeclareLocal(typeof(StringBuilder));
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        var sbLocal = il.DeclareLocal(_types.StringBuilder);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // Append "["
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "[");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
         // Loop through list elements
-        var listLocal = il.DeclareLocal(typeof(List<object>));
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(List<object>));
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        var indexLocal = il.DeclareLocal(typeof(int));
+        var indexLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
 
@@ -128,7 +128,7 @@ public static partial class RuntimeEmitter
         // if (index >= list.Count) break
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // if (index > 0) append ", "
@@ -138,7 +138,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, skipComma);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ", ");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipComma);
 
@@ -146,9 +146,9 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object>).GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Call, method); // Recursive call to Stringify
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
         // index++
@@ -163,11 +163,11 @@ public static partial class RuntimeEmitter
         // Append "]" and return
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, "]");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(endLabel);
@@ -179,8 +179,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ConsoleLog",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object)]
+            _types.Void,
+            [_types.Object]
         );
         runtime.ConsoleLog = method;
 
@@ -188,7 +188,7 @@ public static partial class RuntimeEmitter
         // Call Stringify then Console.WriteLine
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
 
@@ -197,8 +197,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ConsoleLogMultiple",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object[])]
+            _types.Void,
+            [_types.ObjectArray]
         );
         runtime.ConsoleLogMultiple = method;
 
@@ -207,8 +207,8 @@ public static partial class RuntimeEmitter
         // string.Join(" ", values.Select(Stringify))
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Join", [typeof(string), typeof(object[])])!);
-        il.Emit(OpCodes.Call, typeof(Console).GetMethod("WriteLine", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", _types.String, _types.ObjectArray));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
 
@@ -217,8 +217,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "ToNumber",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.ToNumber = method;
 
@@ -226,10 +226,10 @@ public static partial class RuntimeEmitter
         // Use Convert.ToDouble with try-catch fallback to NaN
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
         var endLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, endLabel);
-        il.BeginCatchBlock(typeof(Exception));
+        il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.EndExceptionBlock();
@@ -242,8 +242,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "IsTruthy",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object)]
+            _types.Boolean,
+            [_types.Object]
         );
         runtime.IsTruthy = method;
 
@@ -258,7 +258,7 @@ public static partial class RuntimeEmitter
 
         // bool => return value
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, checkBool);
 
         // everything else => true
@@ -267,7 +267,7 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(checkBool);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Unbox_Any, typeof(bool));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(falseLabel);
@@ -280,8 +280,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "TypeOf",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(string),
-            [typeof(object)]
+            _types.String,
+            [_types.Object]
         );
         runtime.TypeOf = method;
 
@@ -300,17 +300,17 @@ public static partial class RuntimeEmitter
 
         // bool => "boolean"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, boolLabel);
 
         // double => "number"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, numberLabel);
 
         // string => "string"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
         // TSSymbol => "symbol"
@@ -325,13 +325,13 @@ public static partial class RuntimeEmitter
 
         // Delegate => "function"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Delegate));
+        il.Emit(OpCodes.Isinst, _types.Delegate);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
         // BigInteger => "bigint"
         var bigintLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, bigintLabel);
 
         // Default => "object"
@@ -375,8 +375,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "InstanceOf",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.InstanceOf = method;
 
@@ -391,25 +391,25 @@ public static partial class RuntimeEmitter
 
         // Get type of instance and check IsAssignableFrom
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(Type));
+        il.Emit(OpCodes.Isinst, _types.Type);
         var notTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTypeLabel);
 
         // classType is Type, use it directly
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeof(Type));
+        il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("IsAssignableFrom", [typeof(Type)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notTypeLabel);
         // classType is not Type, get its type
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("IsAssignableFrom", [typeof(Type)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(falseLabel);
@@ -422,8 +422,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "Add",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object]
         );
         runtime.Add = method;
 
@@ -432,26 +432,26 @@ public static partial class RuntimeEmitter
 
         // if (left is string || right is string) string concat
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringConcatLabel);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(string));
+        il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringConcatLabel);
 
         // Numeric addition
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
         // String concat
         il.MarkLabel(stringConcatLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(object), typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.Object, _types.Object));
         il.Emit(OpCodes.Ret);
     }
 
@@ -460,8 +460,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "Equals",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.Equals = method;
 
@@ -469,7 +469,7 @@ public static partial class RuntimeEmitter
         // Use object.Equals(left, right)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Ret);
     }
 }

@@ -25,8 +25,8 @@ public partial class ILEmitter
             case System.Numerics.BigInteger bi:
                 // Emit BigInteger by parsing from string at runtime
                 IL.Emit(OpCodes.Ldstr, bi.ToString());
-                IL.Emit(OpCodes.Call, typeof(System.Numerics.BigInteger).GetMethod("Parse", [typeof(string)])!);
-                IL.Emit(OpCodes.Box, typeof(System.Numerics.BigInteger));
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.BigInteger, "Parse", _ctx.Types.String));
+                IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
                 SetStackUnknown();
                 break;
             case null:
@@ -78,7 +78,7 @@ public partial class ILEmitter
         {
             // Load the Type object using typeof(ClassName)
             IL.Emit(OpCodes.Ldtoken, classType);
-            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle", [typeof(RuntimeTypeHandle)])!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
             SetStackUnknown();
             return;
         }
@@ -89,10 +89,8 @@ public partial class ILEmitter
             // Create TSFunction(null, methodInfo)
             IL.Emit(OpCodes.Ldnull); // target (static method)
             IL.Emit(OpCodes.Ldtoken, methodBuilder);
-            IL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod(
-                "GetMethodFromHandle",
-                [typeof(RuntimeMethodHandle)])!);
-            IL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
             EmitNewobjUnknown(_ctx.Runtime!.TSFunctionCtor);
             return;
         }
@@ -109,7 +107,7 @@ public partial class ILEmitter
         if (local != null)
         {
             var localType = _ctx.Locals.GetLocalType(a.Name.Lexeme);
-            if (localType == typeof(double))
+            if (_ctx.Types.IsDouble(localType))
             {
                 // Typed local - ensure unboxed double
                 EnsureDouble();
@@ -193,7 +191,7 @@ public partial class ILEmitter
         else if (_stackType == StackType.Unknown && IsComparisonExpr(t.Condition))
         {
             // Boxed boolean from comparison - unbox it
-            IL.Emit(OpCodes.Unbox_Any, typeof(bool));
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
         else if (t.Condition is Expr.Logical)
         {
@@ -243,7 +241,7 @@ public partial class ILEmitter
         // Build array of parts
         var totalParts = tl.Strings.Count + tl.Expressions.Count;
         IL.Emit(OpCodes.Ldc_I4, totalParts);
-        IL.Emit(OpCodes.Newarr, typeof(object));
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
 
         int partIndex = 0;
         for (int i = 0; i < tl.Strings.Count; i++)

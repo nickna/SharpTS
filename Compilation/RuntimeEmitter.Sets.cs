@@ -26,8 +26,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateSet",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            Type.EmptyTypes
+            _types.Object,
+            _types.EmptyTypes
         );
         runtime.CreateSet = method;
 
@@ -41,8 +41,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "CreateSetFromArray",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object)]
+            _types.Object,
+            [_types.Object]
         );
         runtime.CreateSetFromArray = method;
 
@@ -57,8 +57,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetSize",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(double),
-            [typeof(object)]
+            _types.Double,
+            [_types.Object]
         );
         runtime.SetSize = method;
 
@@ -73,8 +73,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetAdd",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
-            [typeof(object), typeof(object)]
+            _types.Object,
+            [_types.Object, _types.Object]
         );
         runtime.SetAdd = method;
 
@@ -90,8 +90,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetHas",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.SetHas = method;
 
@@ -107,8 +107,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetDelete",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(bool),
-            [typeof(object), typeof(object)]
+            _types.Boolean,
+            [_types.Object, _types.Object]
         );
         runtime.SetDelete = method;
 
@@ -124,8 +124,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetClear",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object)]
+            _types.Void,
+            [_types.Object]
         );
         runtime.SetClear = method;
 
@@ -140,8 +140,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetKeys",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.SetKeys = method;
 
@@ -156,8 +156,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetValues",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.SetValues = method;
 
@@ -172,8 +172,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(List<object>),
-            [typeof(object)]
+            _types.ListOfObject,
+            [_types.Object]
         );
         runtime.SetEntries = method;
 
@@ -188,8 +188,8 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetForEach",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(object), typeof(object)]
+            _types.Void,
+            [_types.Object, _types.Object]
         );
         runtime.SetForEach = method;
 

@@ -118,16 +118,56 @@ public partial class ILCompiler
     // Entry point
     private MethodBuilder? _entryPoint;
 
+    // Type provider for resolving .NET types (runtime or reference assembly mode)
+    private readonly TypeProvider _types;
+
+    /// <summary>
+    /// Creates a new IL compiler with default settings (runtime assembly mode).
+    /// </summary>
     public ILCompiler(string assemblyName, bool preserveConstEnums = false)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies: false, sdkPath: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new IL compiler with optional reference assembly support.
+    /// </summary>
+    /// <param name="assemblyName">Name for the output assembly.</param>
+    /// <param name="preserveConstEnums">Whether to preserve const enums in output.</param>
+    /// <param name="useReferenceAssemblies">If true, generates assemblies referenceable at compile-time.</param>
+    /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath)
     {
         _assemblyName = assemblyName;
         _preserveConstEnums = preserveConstEnums;
+
+        // Initialize type provider based on mode
+        if (useReferenceAssemblies)
+        {
+            if (sdkPath != null)
+            {
+                _types = TypeProvider.CreateForReferenceAssemblies(sdkPath);
+            }
+            else
+            {
+                _types = TypeProvider.TryCreateForReferenceAssemblies()
+                    ?? throw new InvalidOperationException(
+                        "Could not auto-detect .NET SDK reference assemblies. " +
+                        "Please specify --sdk-path or ensure the .NET SDK is installed.\n" +
+                        SdkResolver.GetDiagnosticInfo());
+            }
+        }
+        else
+        {
+            _types = TypeProvider.Runtime;
+        }
+
         _assemblyBuilder = new PersistedAssemblyBuilder(
             new AssemblyName(assemblyName),
-            typeof(object).Assembly
+            _types.CoreAssembly
         );
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
-        _typeMapper = new TypeMapper(_moduleBuilder);
+        _typeMapper = new TypeMapper(_moduleBuilder, _types);
     }
 
     /// <summary>
@@ -136,7 +176,7 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext GetDefinitionContext()
     {
-        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functionBuilders, _classBuilders)
+        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
@@ -154,7 +194,7 @@ public partial class ILCompiler
 
         // Phase 1: Emit runtime support types into the generated assembly
         // This makes compiled DLLs standalone without requiring SharpTS.dll
-        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder);
+        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder, _types);
 
         // Phase 2: Analyze closures
         _closureAnalyzer = new ClosureAnalyzer();
@@ -250,7 +290,7 @@ public partial class ILCompiler
         _moduleResolver = resolver;
 
         // Phase 1: Emit runtime support types
-        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder);
+        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder, _types);
 
         // Phase 2: Collect all statements for closure analysis
         var allStatements = modules.SelectMany(m => m.Statements).ToList();

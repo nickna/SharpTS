@@ -28,7 +28,7 @@ public static partial class RuntimeEmitter
             "WrapTaskAsPromise",
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(SharpTSPromise),
-            [typeof(Task<object?>)]
+            [_types.TaskOfObject]
         );
         runtime.WrapTaskAsPromise = method;
 
@@ -53,40 +53,40 @@ public static partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "DynamicImportModule",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(Task<object?>),
-            [typeof(string), typeof(string)]
+            _types.TaskOfObject,
+            [_types.String, _types.String]
         );
         runtime.DynamicImportModule = method;
 
         var il = method.GetILGenerator();
 
         // Locals
-        var tcsType = typeof(TaskCompletionSource<object?>);
+        var tcsType = _types.TaskCompletionSourceOfObject;
         var tcsLocal = il.DeclareLocal(tcsType);
-        var exLocal = il.DeclareLocal(typeof(Exception));
+        var exLocal = il.DeclareLocal(_types.Exception);
 
         // var tcs = new TaskCompletionSource<object?>();
-        il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(tcsType));
         il.Emit(OpCodes.Stloc, tcsLocal);
 
         // Build error message: $"Dynamic import of '{specifier}' is not supported in compiled mode."
         il.Emit(OpCodes.Ldstr, "Dynamic import of '");
         il.Emit(OpCodes.Ldarg_0); // specifier
         il.Emit(OpCodes.Ldstr, "' is not supported in compiled mode. Use static imports or ensure all modules are pre-compiled.");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
 
         // var ex = new Exception(message);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Stloc, exLocal);
 
         // tcs.SetException(ex);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, tcsType.GetMethod("SetException", [typeof(Exception)])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "SetException", _types.Exception));
 
         // return tcs.Task;
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Ret);
     }
 }

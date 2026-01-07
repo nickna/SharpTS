@@ -671,7 +671,7 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,
@@ -764,7 +764,7 @@ public partial class ILCompiler
         );
 
         var il = cctor.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,
@@ -819,7 +819,7 @@ public partial class ILCompiler
         var methodBuilder = _staticMethods[className][method.Name.Lexeme];
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             IsInstanceMethod = false,
             ClosureAnalyzer = _closureAnalyzer,
@@ -913,7 +913,7 @@ public partial class ILCompiler
         }
 
         var il = ctorBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             ClosureAnalyzer = _closureAnalyzer,
             ArrowMethods = _arrowMethods,
@@ -1108,7 +1108,7 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders)
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,

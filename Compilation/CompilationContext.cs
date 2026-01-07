@@ -43,6 +43,12 @@ public class CompilationContext
     public ILGenerator IL { get; }
     public TypeMapper TypeMapper { get; }
     public LocalsManager Locals { get; }
+
+    /// <summary>
+    /// Type provider for resolving .NET types (runtime or reference assembly mode).
+    /// Use this instead of typeof() for type resolution to support --ref-asm compilation.
+    /// </summary>
+    public TypeProvider Types { get; }
     public Dictionary<string, MethodBuilder> Functions { get; }
     public Dictionary<string, TypeBuilder> Classes { get; }
 
@@ -300,12 +306,14 @@ public class CompilationContext
         ILGenerator il,
         TypeMapper typeMapper,
         Dictionary<string, MethodBuilder> functions,
-        Dictionary<string, TypeBuilder> classes)
+        Dictionary<string, TypeBuilder> classes,
+        TypeProvider? types = null)
     {
         IL = il;
         TypeMapper = typeMapper;
         Functions = functions;
         Classes = classes;
+        Types = types ?? TypeProvider.Runtime;
         Locals = new LocalsManager(il);
     }
 
