@@ -195,60 +195,111 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 {
     try
     {
-        string source = File.ReadAllText(inputPath);
+        string absolutePath = Path.GetFullPath(inputPath);
+        string source = File.ReadAllText(absolutePath);
 
+        // Parse first to check for module statements
         Lexer lexer = new(source);
         List<Token> tokens = lexer.ScanTokens();
-
         Parser parser = new(tokens, decoratorMode);
         List<Stmt> statements = parser.Parse();
 
-        // Static Analysis Phase
-        TypeChecker checker = new();
-        checker.SetDecoratorMode(decoratorMode);
-        TypeMap typeMap = checker.Check(statements);
+        // Check AST for import/export statements
+        bool hasModules = statements.Any(s => s is Stmt.Import or Stmt.Export);
 
-        // Dead Code Analysis Phase
-        DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
-        DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
-
-        // Compilation Phase
-        string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-        ILCompiler compiler = new(assemblyName, preserveConstEnums);
-        compiler.SetDecoratorMode(decoratorMode);
-        compiler.Compile(statements, typeMap, deadCodeInfo);
-        compiler.Save(outputPath);
-
-        // Generate runtimeconfig.json for the compiled assembly
-        string runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
-        string runtimeConfig = """
-            {
-              "runtimeOptions": {
-                "tfm": "net10.0",
-                "framework": {
-                  "name": "Microsoft.NETCore.App",
-                  "version": "10.0.0"
-                }
-              }
-            }
-            """;
-        File.WriteAllText(runtimeConfigPath, runtimeConfig);
-
-        // Copy SharpTS.dll to output directory (required for runtime helpers)
-        string outputDir = Path.GetDirectoryName(outputPath) ?? ".";
-        string sharpTsSource = typeof(SharpTS.Compilation.RuntimeTypes).Assembly.Location;
-        string sharpTsDest = Path.Combine(outputDir, "SharpTS.dll");
-        if (!string.IsNullOrEmpty(sharpTsSource) && File.Exists(sharpTsSource) && sharpTsSource != sharpTsDest)
+        if (hasModules)
         {
-            File.Copy(sharpTsSource, sharpTsDest, overwrite: true);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, decoratorMode);
         }
-
-        Console.WriteLine($"Compiled to {outputPath}");
+        else
+        {
+            CompileSingleFile(statements, outputPath, preserveConstEnums, decoratorMode);
+        }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Error: {ex.Message}");
         Environment.Exit(1);
+    }
+}
+
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, DecoratorMode decoratorMode)
+{
+    // Load all dependencies via ModuleResolver
+    var resolver = new ModuleResolver(absolutePath);
+    var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
+    var allModules = resolver.GetModulesInOrder(entryModule);
+
+    // Type checking across all modules
+    var checker = new TypeChecker();
+    checker.SetDecoratorMode(decoratorMode);
+    var typeMap = checker.CheckModules(allModules, resolver);
+
+    // Dead Code Analysis
+    DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
+    var allStatements = allModules.SelectMany(m => m.Statements).ToList();
+    DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(allStatements);
+
+    // Compilation
+    string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums);
+    compiler.SetDecoratorMode(decoratorMode);
+    compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+    compiler.Save(outputPath);
+
+    GenerateRuntimeConfig(outputPath);
+    CopySharpTsDll(outputPath);
+    Console.WriteLine($"Compiled to {outputPath}");
+}
+
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, DecoratorMode decoratorMode)
+{
+    // Static Analysis Phase
+    TypeChecker checker = new();
+    checker.SetDecoratorMode(decoratorMode);
+    TypeMap typeMap = checker.Check(statements);
+
+    // Dead Code Analysis Phase
+    DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);
+    DeadCodeInfo deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+    // Compilation Phase
+    string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums);
+    compiler.SetDecoratorMode(decoratorMode);
+    compiler.Compile(statements, typeMap, deadCodeInfo);
+    compiler.Save(outputPath);
+
+    GenerateRuntimeConfig(outputPath);
+    CopySharpTsDll(outputPath);
+    Console.WriteLine($"Compiled to {outputPath}");
+}
+
+static void GenerateRuntimeConfig(string outputPath)
+{
+    string runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
+    string runtimeConfig = """
+        {
+          "runtimeOptions": {
+            "tfm": "net10.0",
+            "framework": {
+              "name": "Microsoft.NETCore.App",
+              "version": "10.0.0"
+            }
+          }
+        }
+        """;
+    File.WriteAllText(runtimeConfigPath, runtimeConfig);
+}
+
+static void CopySharpTsDll(string outputPath)
+{
+    string outputDir = Path.GetDirectoryName(outputPath) ?? ".";
+    string sharpTsSource = typeof(SharpTS.Compilation.RuntimeTypes).Assembly.Location;
+    string sharpTsDest = Path.Combine(outputDir, "SharpTS.dll");
+    if (!string.IsNullOrEmpty(sharpTsSource) && File.Exists(sharpTsSource) && sharpTsSource != sharpTsDest)
+    {
+        File.Copy(sharpTsSource, sharpTsDest, overwrite: true);
     }
 }
 
