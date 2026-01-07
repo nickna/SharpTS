@@ -1,28 +1,23 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
 /// <summary>
-/// Provides type resolution for IL compilation, supporting both runtime types (default)
-/// and reference assembly types (for compile-time referenceable output).
+/// Provides type resolution for IL compilation using runtime types.
 /// </summary>
 /// <remarks>
-/// In runtime mode, uses typeof() directly for fast compilation but generates assemblies
-/// that reference System.Private.CoreLib (only loadable via reflection at runtime).
-/// In reference assembly mode, uses MetadataLoadContext to resolve types from SDK
-/// reference assemblies, producing output that can be referenced at compile-time.
+/// Uses typeof() directly for fast compilation. The AssemblyReferenceRewriter is used
+/// as a post-processing step when --ref-asm is enabled to rewrite System.Private.CoreLib
+/// references to SDK reference assemblies.
 /// </remarks>
-public class TypeProvider : IDisposable
+public class TypeProvider
 {
-    private readonly MetadataLoadContext? _mlc;
     private readonly Assembly _coreAssembly;
     private readonly ConcurrentDictionary<string, Type> _typeCache = new();
     private readonly ConcurrentDictionary<(Type, string, Type[]), MethodInfo> _methodCache = new(new MethodCacheKeyComparer());
     private readonly ConcurrentDictionary<(Type, string), PropertyInfo> _propertyCache = new();
     private readonly ConcurrentDictionary<(Type, Type[]), ConstructorInfo> _ctorCache = new(new CtorCacheKeyComparer());
-    private bool _disposed;
 
     /// <summary>
     /// Comparer for method cache keys with Type[] array comparison.
@@ -74,50 +69,18 @@ public class TypeProvider : IDisposable
     }
 
     /// <summary>
-    /// Gets the runtime TypeProvider instance (uses typeof() directly).
+    /// Gets the singleton TypeProvider instance.
     /// </summary>
-    public static TypeProvider Runtime { get; } = new(null, typeof(object).Assembly);
+    public static TypeProvider Runtime { get; } = new(typeof(object).Assembly);
 
     /// <summary>
-    /// Gets whether this TypeProvider uses reference assemblies.
-    /// </summary>
-    public bool UsesReferenceAssemblies => _mlc != null;
-
-    /// <summary>
-    /// Gets the core assembly (System.Private.CoreLib or System.Runtime).
+    /// Gets the core assembly (System.Private.CoreLib).
     /// </summary>
     public Assembly CoreAssembly => _coreAssembly;
 
-    private TypeProvider(MetadataLoadContext? mlc, Assembly coreAssembly)
+    private TypeProvider(Assembly coreAssembly)
     {
-        _mlc = mlc;
         _coreAssembly = coreAssembly;
-    }
-
-    /// <summary>
-    /// Creates a TypeProvider using reference assemblies from the specified SDK path.
-    /// </summary>
-    /// <param name="refAssemblyPath">Path to the reference assemblies directory.</param>
-    /// <returns>A TypeProvider configured for reference assembly output.</returns>
-    public static TypeProvider CreateForReferenceAssemblies(string refAssemblyPath)
-    {
-        var assemblies = Directory.GetFiles(refAssemblyPath, "*.dll");
-        var resolver = new PathAssemblyResolver(assemblies);
-        var mlc = new MetadataLoadContext(resolver, "System.Runtime");
-        var coreAssembly = mlc.LoadFromAssemblyPath(Path.Combine(refAssemblyPath, "System.Runtime.dll"));
-        return new TypeProvider(mlc, coreAssembly);
-    }
-
-    /// <summary>
-    /// Creates a TypeProvider using auto-detected reference assemblies.
-    /// </summary>
-    /// <returns>A TypeProvider configured for reference assembly output, or null if auto-detection fails.</returns>
-    public static TypeProvider? TryCreateForReferenceAssemblies()
-    {
-        var refPath = SdkResolver.FindReferenceAssembliesPath();
-        if (refPath == null)
-            return null;
-        return CreateForReferenceAssemblies(refPath);
     }
 
     #region Core Types
@@ -305,108 +268,24 @@ public class TypeProvider : IDisposable
 
     private Type ResolveCore(string fullName)
     {
-        Type? type;
-        if (_mlc != null)
+        var type = Type.GetType(fullName, throwOnError: false);
+        if (type == null)
         {
-            // Reference assembly mode - resolve from MetadataLoadContext
-            type = ResolveFromMlc(fullName);
-        }
-        else
-        {
-            // Runtime mode - use Type.GetType
-            type = Type.GetType(fullName, throwOnError: false);
-            if (type == null)
-            {
-                // Try common assemblies
-                type = typeof(object).Assembly.GetType(fullName)
-                    ?? typeof(List<>).Assembly.GetType(fullName)
-                    ?? typeof(Task).Assembly.GetType(fullName)
-                    ?? typeof(System.Text.RegularExpressions.Regex).Assembly.GetType(fullName)
-                    ?? typeof(System.Numerics.BigInteger).Assembly.GetType(fullName)
-                    ?? typeof(System.Console).Assembly.GetType(fullName)
-                    ?? typeof(System.Text.StringBuilder).Assembly.GetType(fullName)
-                    ?? typeof(System.Convert).Assembly.GetType(fullName);
-            }
+            // Try common assemblies
+            type = typeof(object).Assembly.GetType(fullName)
+                ?? typeof(List<>).Assembly.GetType(fullName)
+                ?? typeof(Task).Assembly.GetType(fullName)
+                ?? typeof(System.Text.RegularExpressions.Regex).Assembly.GetType(fullName)
+                ?? typeof(System.Numerics.BigInteger).Assembly.GetType(fullName)
+                ?? typeof(System.Console).Assembly.GetType(fullName)
+                ?? typeof(System.Text.StringBuilder).Assembly.GetType(fullName)
+                ?? typeof(System.Convert).Assembly.GetType(fullName);
         }
 
         if (type == null)
             throw new InvalidOperationException($"Could not resolve type: {fullName}");
 
         return type;
-    }
-
-    private Type? ResolveFromMlc(string fullName)
-    {
-        // Try to load from all assemblies in the context
-        foreach (var assembly in _mlc!.GetAssemblies())
-        {
-            var type = assembly.GetType(fullName);
-            if (type != null)
-                return type;
-        }
-
-        // Try loading assembly that might contain the type
-        var assemblyName = GuessAssemblyForType(fullName);
-        if (assemblyName != null)
-        {
-            try
-            {
-                var assembly = _mlc.LoadFromAssemblyName(assemblyName);
-                return assembly.GetType(fullName);
-            }
-            catch
-            {
-                // Assembly not found, continue
-            }
-        }
-
-        return null;
-    }
-
-    private static string? GuessAssemblyForType(string fullName)
-    {
-        // Specific types that don't follow namespace patterns
-        if (fullName == "System.Console")
-            return "System.Console";
-        if (fullName == "System.Convert")
-            return "System.Runtime.Extensions";
-        if (fullName == "System.Math")
-            return "System.Runtime.Extensions";
-        if (fullName == "System.Random")
-            return "System.Runtime";
-        if (fullName == "System.Environment")
-            return "System.Runtime.Extensions";
-        if (fullName == "System.Activator")
-            return "System.Runtime";
-        if (fullName == "System.DateTime")
-            return "System.Runtime";
-        if (fullName == "System.TimeSpan")
-            return "System.Runtime";
-        if (fullName == "System.Guid")
-            return "System.Runtime";
-        if (fullName.StartsWith("System.Linq."))
-            return "System.Linq";
-        if (fullName.StartsWith("System.Collections."))
-            return "System.Collections";
-        if (fullName.StartsWith("System.Threading.Tasks."))
-            return "System.Threading.Tasks";
-        if (fullName.StartsWith("System.Threading."))
-            return "System.Threading";
-        if (fullName.StartsWith("System.Text.Json."))
-            return "System.Text.Json";
-        if (fullName.StartsWith("System.Text.RegularExpressions."))
-            return "System.Text.RegularExpressions";
-        if (fullName.StartsWith("System.Numerics."))
-            return "System.Numerics";
-        if (fullName.StartsWith("System.Runtime.CompilerServices."))
-            return "System.Runtime";
-        if (fullName.StartsWith("System.Reflection."))
-            return "System.Reflection";
-        if (fullName.StartsWith("System.IO."))
-            return "System.IO";
-        if (fullName.StartsWith("System.Text."))
-            return "System.Text.Encoding.Extensions";
-        return "System.Runtime";
     }
 
     /// <summary>
@@ -559,20 +438,7 @@ public class TypeProvider : IDisposable
     /// <summary>
     /// Gets an empty Type array (equivalent to Type.EmptyTypes).
     /// </summary>
-    public Type[] EmptyTypes => _mlc != null ? [] : Type.EmptyTypes;
-
-    #endregion
-
-    #region IDisposable
-
-    public void Dispose()
-    {
-        if (_disposed)
-            return;
-
-        _mlc?.Dispose();
-        _disposed = true;
-    }
+    public Type[] EmptyTypes => Type.EmptyTypes;
 
     #endregion
 }

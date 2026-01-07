@@ -118,8 +118,12 @@ public partial class ILCompiler
     // Entry point
     private MethodBuilder? _entryPoint;
 
-    // Type provider for resolving .NET types (runtime or reference assembly mode)
+    // Type provider for resolving .NET types (always runtime types for compilation)
     private readonly TypeProvider _types;
+
+    // Whether to post-process the assembly for reference assembly compatibility
+    private readonly bool _useReferenceAssemblies;
+    private readonly string? _sdkPath;
 
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
@@ -134,33 +138,21 @@ public partial class ILCompiler
     /// </summary>
     /// <param name="assemblyName">Name for the output assembly.</param>
     /// <param name="preserveConstEnums">Whether to preserve const enums in output.</param>
-    /// <param name="useReferenceAssemblies">If true, generates assemblies referenceable at compile-time.</param>
+    /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
     public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath)
     {
         _assemblyName = assemblyName;
         _preserveConstEnums = preserveConstEnums;
+        _useReferenceAssemblies = useReferenceAssemblies;
+        _sdkPath = sdkPath;
 
-        // Initialize type provider based on mode
-        if (useReferenceAssemblies)
-        {
-            if (sdkPath != null)
-            {
-                _types = TypeProvider.CreateForReferenceAssemblies(sdkPath);
-            }
-            else
-            {
-                _types = TypeProvider.TryCreateForReferenceAssemblies()
-                    ?? throw new InvalidOperationException(
-                        "Could not auto-detect .NET SDK reference assemblies. " +
-                        "Please specify --sdk-path or ensure the .NET SDK is installed.\n" +
-                        SdkResolver.GetDiagnosticInfo());
-            }
-        }
-        else
-        {
-            _types = TypeProvider.Runtime;
-        }
+        // Always use runtime types for compilation.
+        // When --ref-asm is enabled, the assembly will be post-processed in Save()
+        // to rewrite System.Private.CoreLib references to SDK assemblies.
+        // This is necessary because MetadataLoadContext types cannot be used with
+        // TypeBuilder.DefineType() for interface implementation (async/generator types).
+        _types = TypeProvider.Runtime;
 
         _assemblyBuilder = new PersistedAssemblyBuilder(
             new AssemblyName(assemblyName),
@@ -434,9 +426,34 @@ public partial class ILCompiler
         BlobBuilder peBlob = new();
         peBuilder.Serialize(peBlob);
 
-        // Write the executable
-        using FileStream fileStream = new(outputPath, FileMode.Create, FileAccess.Write);
-        peBlob.WriteContentTo(fileStream);
+        // If using reference assemblies, post-process to rewrite System.Private.CoreLib
+        // references to SDK reference assemblies (System.Runtime, etc.)
+        if (_useReferenceAssemblies)
+        {
+            // Write to a temp memory stream first
+            using var tempStream = new MemoryStream();
+            peBlob.WriteContentTo(tempStream);
+            tempStream.Position = 0;
 
+            // Get the SDK reference assembly path (use explicit path if provided)
+            var refAssemblyPath = _sdkPath ?? SdkResolver.FindReferenceAssembliesPath()
+                ?? throw new InvalidOperationException(
+                    "Could not find SDK reference assemblies for post-processing. " +
+                    "Ensure the .NET SDK is installed.");
+
+            // Rewrite assembly references
+            using var rewriter = new AssemblyReferenceRewriter(tempStream, refAssemblyPath);
+            rewriter.Rewrite();
+
+            // Write the rewritten assembly to the output file
+            using var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write);
+            rewriter.Save(outputStream);
+        }
+        else
+        {
+            // Write directly to file
+            using FileStream fileStream = new(outputPath, FileMode.Create, FileAccess.Write);
+            peBlob.WriteContentTo(fileStream);
+        }
     }
 }

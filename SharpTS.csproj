@@ -41,11 +41,14 @@
     <None Remove="SharpTS.Tests/**" />
     <Compile Remove="SharpTS.Example.Interop/**" />
     <None Remove="SharpTS.Example.Interop/**" />
+    <Compile Remove="Examples/**" />
+    <None Remove="Examples/**" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="9.0.0" />
+    <PackageReference Include="Microsoft.ILVerification" Version="10.0.0" />
   </ItemGroup>
 
 </Project>

@@ -14,6 +14,7 @@
 //   --ref-asm                            - Emit reference-assembly-compatible output
 //   --sdk-path <path>                    - Explicit path to .NET SDK reference assemblies
 //   --preserveConstEnums                 - Preserve const enum declarations
+//   --verify                             - Verify emitted IL using Microsoft.ILVerification
 //
 // Decorator flags:
 //   --experimentalDecorators             - Enable Legacy (Stage 2) decorators
@@ -49,7 +50,7 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
 {
     if (remainingArgs.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--ref-asm] [--sdk-path <path>]");
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
         Environment.Exit(64);
     }
 
@@ -57,6 +58,7 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     string outputFile = Path.ChangeExtension(inputFile, ".dll");
     bool preserveConstEnums = false;
     bool useReferenceAssemblies = false;
+    bool verifyIL = false;
     string? sdkPath = null;
 
     // Parse remaining arguments
@@ -78,9 +80,13 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         {
             sdkPath = remainingArgs[++i];
         }
+        else if (remainingArgs[i] == "--verify")
+        {
+            verifyIL = true;
+        }
     }
 
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, options.DecoratorMode, options.EmitDecoratorMetadata);
+    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata);
 }
 else if (remainingArgs.Length == 1)
 {
@@ -206,7 +212,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
 {
     try
     {
@@ -224,11 +230,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, decoratorMode);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, decoratorMode);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode);
         }
     }
     catch (Exception ex)
@@ -238,7 +244,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, DecoratorMode decoratorMode)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode)
 {
     // Load all dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -265,9 +271,15 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     GenerateRuntimeConfig(outputPath);
     CopySharpTsDll(outputPath);
     Console.WriteLine($"Compiled to {outputPath}");
+
+    // Run IL verification if requested
+    if (verifyIL)
+    {
+        VerifyCompiledAssembly(outputPath, sdkPath);
+    }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, DecoratorMode decoratorMode)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode)
 {
     // Static Analysis Phase
     TypeChecker checker = new();
@@ -288,6 +300,12 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     GenerateRuntimeConfig(outputPath);
     CopySharpTsDll(outputPath);
     Console.WriteLine($"Compiled to {outputPath}");
+
+    // Run IL verification if requested
+    if (verifyIL)
+    {
+        VerifyCompiledAssembly(outputPath, sdkPath);
+    }
 }
 
 static void GenerateRuntimeConfig(string outputPath)
@@ -316,6 +334,21 @@ static void CopySharpTsDll(string outputPath)
     {
         File.Copy(sharpTsSource, sharpTsDest, overwrite: true);
     }
+}
+
+static void VerifyCompiledAssembly(string outputPath, string? sdkPath)
+{
+    // Find SDK path for IL verification
+    var verifierSdkPath = sdkPath ?? SdkResolver.FindReferenceAssembliesPath();
+    if (verifierSdkPath == null)
+    {
+        Console.WriteLine("Warning: Cannot verify IL - SDK reference assemblies not found.");
+        return;
+    }
+
+    using var verifier = new ILVerifier(verifierSdkPath);
+    using var stream = File.OpenRead(outputPath);
+    verifier.VerifyAndReport(stream);
 }
 
 record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);

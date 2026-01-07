@@ -152,6 +152,89 @@ public static class TestHarness
     }
 
     /// <summary>
+    /// Compiles TypeScript source to a .NET DLL with reference assembly mode enabled.
+    /// Returns the path to the compiled DLL (in a temp directory that caller should clean up).
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <returns>Tuple of (tempDir, dllPath) - caller must clean up tempDir</returns>
+    public static (string tempDir, string dllPath) CompileWithRefAsm(string source)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_refasm_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        var dllPath = Path.Combine(tempDir, "test.dll");
+
+        // Compile
+        var lexer = new Lexer(source);
+        var tokens = lexer.ScanTokens();
+        var parser = new Parser(tokens);
+        var statements = parser.Parse();
+
+        var checker = new TypeChecker();
+        var typeMap = checker.Check(statements);
+
+        var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+        var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+        // Use reference assembly mode
+        var compiler = new ILCompiler("test", preserveConstEnums: false, useReferenceAssemblies: true, sdkPath: null);
+        compiler.Compile(statements, typeMap, deadCodeInfo);
+        compiler.Save(dllPath);
+
+        // Copy SharpTS.dll for runtime dependency
+        var sharpTsDll = typeof(RuntimeTypes).Assembly.Location;
+        if (!string.IsNullOrEmpty(sharpTsDll) && File.Exists(sharpTsDll))
+        {
+            File.Copy(sharpTsDll, Path.Combine(tempDir, "SharpTS.dll"), overwrite: true);
+        }
+
+        // Write runtimeconfig.json
+        var configPath = Path.Combine(tempDir, "test.runtimeconfig.json");
+        File.WriteAllText(configPath, """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                }
+              }
+            }
+            """);
+
+        return (tempDir, dllPath);
+    }
+
+    /// <summary>
+    /// Executes a compiled DLL and returns its console output.
+    /// </summary>
+    /// <param name="dllPath">Path to the DLL</param>
+    /// <returns>Console output</returns>
+    public static string ExecuteCompiledDll(string dllPath)
+    {
+        var workingDir = Path.GetDirectoryName(dllPath)!;
+        var psi = new ProcessStartInfo("dotnet", dllPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = workingDir
+        };
+
+        using var process = Process.Start(psi)!;
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            throw new Exception($"Compiled program exited with code {process.ExitCode}. Stderr: {error}");
+        }
+
+        return output.Replace("\r\n", "\n");
+    }
+
+    /// <summary>
     /// Runs multiple TypeScript modules through the interpreter and captures console output.
     /// </summary>
     /// <param name="files">Dictionary mapping file paths to source code</param>
