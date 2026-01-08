@@ -35,7 +35,7 @@
     <None Include="README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 
-  <!-- Exclude test and example projects from this compilation -->
+  <!-- Exclude test, example, and SDK projects from this compilation -->
   <ItemGroup>
     <Compile Remove="SharpTS.Tests/**" />
     <None Remove="SharpTS.Tests/**" />
@@ -43,6 +43,10 @@
     <None Remove="SharpTS.Example.Interop/**" />
     <Compile Remove="Examples/**" />
     <None Remove="Examples/**" />
+    <Compile Remove="SharpTS.Sdk/**" />
+    <None Remove="SharpTS.Sdk/**" />
+    <Compile Remove="SharpTS.Sdk.Tasks/**" />
+    <None Remove="SharpTS.Sdk.Tasks/**" />
   </ItemGroup>
 
   <ItemGroup>

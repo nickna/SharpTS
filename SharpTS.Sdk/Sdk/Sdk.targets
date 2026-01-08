@@ -1,0 +1,101 @@
+<Project>
+  <!-- Import the MSBuild tasks assembly -->
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.ReadTsConfigTask"
+             AssemblyFile="$(SharpTSTasksAssembly)" />
+
+  <!-- Read tsconfig.json settings if available -->
+  <Target Name="_SharpTSReadTsConfig"
+          BeforeTargets="SharpTSCompile"
+          Condition="Exists('$(SharpTSTsConfigPath)')">
+
+    <ReadTsConfigTask TsConfigPath="$(SharpTSTsConfigPath)">
+      <Output TaskParameter="PreserveConstEnums" PropertyName="_TsConfigPreserveConstEnums" />
+      <Output TaskParameter="ExperimentalDecorators" PropertyName="_TsConfigExperimentalDecorators" />
+      <Output TaskParameter="Decorators" PropertyName="_TsConfigDecorators" />
+      <Output TaskParameter="EmitDecoratorMetadata" PropertyName="_TsConfigEmitDecoratorMetadata" />
+      <Output TaskParameter="EntryFile" PropertyName="_TsConfigEntryFile" />
+    </ReadTsConfigTask>
+
+    <!-- Apply tsconfig values as fallbacks (MSBuild properties take precedence) -->
+    <PropertyGroup>
+      <SharpTSPreserveConstEnums Condition="'$(SharpTSPreserveConstEnums)' == 'false' and '$(_TsConfigPreserveConstEnums)' == 'true'">true</SharpTSPreserveConstEnums>
+      <SharpTSExperimentalDecorators Condition="'$(SharpTSExperimentalDecorators)' == 'false' and '$(_TsConfigExperimentalDecorators)' == 'true'">true</SharpTSExperimentalDecorators>
+      <SharpTSDecorators Condition="'$(SharpTSDecorators)' == 'false' and '$(_TsConfigDecorators)' == 'true'">true</SharpTSDecorators>
+      <SharpTSEmitDecoratorMetadata Condition="'$(SharpTSEmitDecoratorMetadata)' == 'false' and '$(_TsConfigEmitDecoratorMetadata)' == 'true'">true</SharpTSEmitDecoratorMetadata>
+      <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">$(_TsConfigEntryFile)</SharpTSEntryPoint>
+    </PropertyGroup>
+
+    <Message Importance="low" Text="SharpTS: Read tsconfig.json from $(SharpTSTsConfigPath)" />
+  </Target>
+
+  <!-- Validate required inputs -->
+  <Target Name="_SharpTSValidateInputs" BeforeTargets="SharpTSCompile">
+    <Error Condition="'$(SharpTSEntryPoint)' == ''"
+           Text="SharpTSEntryPoint must be specified. Set it in your project file or ensure tsconfig.json has a 'files' array." />
+    <Error Condition="!Exists('$(SharpTSEntryPoint)') and !Exists('$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)')"
+           Text="Entry point file '$(SharpTSEntryPoint)' does not exist." />
+  </Target>
+
+  <!-- Resolve entry point to absolute path -->
+  <Target Name="_SharpTSResolveEntryPoint"
+          BeforeTargets="SharpTSCompile"
+          AfterTargets="_SharpTSValidateInputs">
+    <PropertyGroup>
+      <!-- If it's a relative path, make it absolute -->
+      <_SharpTSAbsoluteEntryPoint Condition="$([System.IO.Path]::IsPathRooted('$(SharpTSEntryPoint)'))">$(SharpTSEntryPoint)</_SharpTSAbsoluteEntryPoint>
+      <_SharpTSAbsoluteEntryPoint Condition="'$(_SharpTSAbsoluteEntryPoint)' == ''">$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)</_SharpTSAbsoluteEntryPoint>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Main compilation target -->
+  <Target Name="SharpTSCompile"
+          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint"
+          BeforeTargets="CoreCompile"
+          Outputs="$(SharpTSOutputPath)$(SharpTSOutputFileName)">
+
+    <!-- Ensure output directory exists -->
+    <MakeDir Directories="$(SharpTSOutputPath)" Condition="!Exists('$(SharpTSOutputPath)')" />
+
+    <!-- Build command line arguments -->
+    <PropertyGroup>
+      <_SharpTSArgs>--compile "$(_SharpTSAbsoluteEntryPoint)"</_SharpTSArgs>
+      <_SharpTSArgs>$(_SharpTSArgs) -o "$(SharpTSOutputPath)$(SharpTSOutputFileName)"</_SharpTSArgs>
+      <_SharpTSArgs>$(_SharpTSArgs) --msbuild-errors</_SharpTSArgs>
+      <_SharpTSArgs>$(_SharpTSArgs) --quiet</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSPreserveConstEnums)' == 'true'">$(_SharpTSArgs) --preserveConstEnums</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSExperimentalDecorators)' == 'true'">$(_SharpTSArgs) --experimentalDecorators</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSDecorators)' == 'true'">$(_SharpTSArgs) --decorators</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSEmitDecoratorMetadata)' == 'true'">$(_SharpTSArgs) --emitDecoratorMetadata</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSArgs) --verify</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(SharpTSUseReferenceAssemblies)' == 'true'">$(_SharpTSArgs) --ref-asm</_SharpTSArgs>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="SharpTS: Compiling $(SharpTSEntryPoint)" />
+
+    <!-- Execute the compiler -->
+    <Exec Command="dotnet &quot;$(SharpTSCompilerExe)&quot; $(_SharpTSArgs)"
+          WorkingDirectory="$(MSBuildProjectDirectory)"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="normal"
+          StandardErrorImportance="high">
+      <Output TaskParameter="ExitCode" PropertyName="_SharpTSExitCode" />
+    </Exec>
+
+    <Error Condition="'$(_SharpTSExitCode)' != '0'"
+           Text="SharpTS compilation failed with exit code $(_SharpTSExitCode)." />
+  </Target>
+
+  <!-- Clean target integration -->
+  <Target Name="SharpTSClean" BeforeTargets="Clean">
+    <Delete Files="$(SharpTSOutputPath)$(SharpTSOutputFileName)"
+            Condition="Exists('$(SharpTSOutputPath)$(SharpTSOutputFileName)')" />
+    <Delete Files="$(SharpTSOutputPath)$(AssemblyName).runtimeconfig.json"
+            Condition="Exists('$(SharpTSOutputPath)$(AssemblyName).runtimeconfig.json')" />
+    <Message Importance="normal" Text="SharpTS: Cleaned output files" />
+  </Target>
+
+  <!-- Integrate with Build target chain -->
+  <PropertyGroup>
+    <BuildDependsOn>SharpTSCompile;$(BuildDependsOn)</BuildDependsOn>
+  </PropertyGroup>
+</Project>

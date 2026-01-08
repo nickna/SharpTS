@@ -58,9 +58,19 @@ SharpTS supports two execution modes:
 
 ### Installation
 
-**Install from NuGet (recommended):**
+**Install CLI tool from NuGet (recommended):**
 ```bash
 dotnet tool install -g SharpTS
+```
+
+**Or use the MSBuild SDK in your project:**
+```xml
+<Project Sdk="SharpTS.Sdk/1.0.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
+  </PropertyGroup>
+</Project>
 ```
 
 **Or build from source:**
@@ -196,7 +206,9 @@ string greeting = person.greet();        // Typed return values
 [Example code](Examples/Interop/README.md)
 ## Documentation
 
+- [**MSBuild SDK Guide**](docs/msbuild-sdk.md) - Integrate SharpTS into your .NET build process
 - [**Architecture Guide**](ARCHITECTURE.md) - Deep dive into the compiler/interpreter internals
+- [**.NET Integration**](docs/dotnet-integration.md) - Consume compiled TypeScript from C#
 - [**Contributing Guide**](CONTRIBUTING.md) - How to contribute to the project
 
 ## Project Status

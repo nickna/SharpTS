@@ -52,6 +52,7 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     if (remainingArgs.Length < 2)
     {
         Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
+        Console.WriteLine("       [--msbuild-errors] [--quiet]");
         Console.WriteLine("       [--pack] [--push <source>] [--api-key <key>] [--package-id <id>] [--version <ver>]");
         Environment.Exit(64);
     }
@@ -61,6 +62,8 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     bool preserveConstEnums = false;
     bool useReferenceAssemblies = false;
     bool verifyIL = false;
+    bool msbuildErrors = false;
+    bool quietMode = false;
     string? sdkPath = null;
 
     // Packaging options
@@ -93,6 +96,14 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         {
             verifyIL = true;
         }
+        else if (remainingArgs[i] == "--msbuild-errors")
+        {
+            msbuildErrors = true;
+        }
+        else if (remainingArgs[i] == "--quiet")
+        {
+            quietMode = true;
+        }
         else if (remainingArgs[i] == "--pack")
         {
             pack = true;
@@ -117,7 +128,8 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     }
 
     var packOptions = new PackOptions(pack, pushSource, apiKey, packageIdOverride, versionOverride);
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions);
+    var outputOptions = new OutputOptions(msbuildErrors, quietMode);
+    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions);
 }
 else if (remainingArgs.Length == 1)
 {
@@ -243,7 +255,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions)
 {
     try
     {
@@ -305,11 +317,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, metadata);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, metadata);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata);
         }
 
         // Package if requested
@@ -320,12 +332,20 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error: {ex.Message}");
+        if (outputOptions.MsBuildErrors)
+        {
+            // MSBuild error format: file(line,col): error CODE: message
+            Console.Error.WriteLine($"{inputPath}(1,1): error SHARPTS000: {ex.Message}");
+        }
+        else
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
         Environment.Exit(1);
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, AssemblyMetadata? metadata = null)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata = null)
 {
     // Load all dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -351,7 +371,10 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     GenerateRuntimeConfig(outputPath);
     CopySharpTsDll(outputPath);
-    Console.WriteLine($"Compiled to {outputPath}");
+    if (!outputOptions.QuietMode)
+    {
+        Console.WriteLine($"Compiled to {outputPath}");
+    }
 
     // Run IL verification if requested
     if (verifyIL)
@@ -360,7 +383,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, AssemblyMetadata? metadata = null)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata = null)
 {
     // Static Analysis Phase
     TypeChecker checker = new();
@@ -380,7 +403,10 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
     GenerateRuntimeConfig(outputPath);
     CopySharpTsDll(outputPath);
-    Console.WriteLine($"Compiled to {outputPath}");
+    if (!outputOptions.QuietMode)
+    {
+        Console.WriteLine($"Compiled to {outputPath}");
+    }
 
     // Run IL verification if requested
     if (verifyIL)
@@ -515,3 +541,4 @@ static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, Pa
 
 record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);
 record PackOptions(bool Pack, string? PushSource, string? ApiKey, string? PackageIdOverride, string? VersionOverride);
+record OutputOptions(bool MsBuildErrors, bool QuietMode);

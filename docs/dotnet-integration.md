@@ -243,9 +243,24 @@ Generated packages include:
 
 ## MSBuild Integration
 
-### Simple Pre-Build Target
+### Recommended: SharpTS.Sdk
 
-Add this to your `.csproj` to compile TypeScript before building:
+The easiest way to integrate SharpTS into your build is using the MSBuild SDK:
+
+```xml
+<Project Sdk="SharpTS.Sdk/1.0.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
+  </PropertyGroup>
+</Project>
+```
+
+This provides automatic compilation, tsconfig.json integration, and proper Clean support. See the [MSBuild SDK Guide](msbuild-sdk.md) for full documentation.
+
+### Alternative: Manual Pre-Build Target
+
+If you need more control or can't use the SDK, add a pre-build target to your `.csproj`:
 
 ```xml
 <Target Name="CompileTypeScript" BeforeTargets="Build">
@@ -710,6 +725,7 @@ Calculator.PI = 3.14159
 
 ## See Also
 
+- [MSBuild SDK Guide](msbuild-sdk.md) - Integrate SharpTS into your .NET build process
 - [Execution Modes](execution-modes.md) - Interpreted vs compiled mode details
 - [Code Samples](code-samples.md) - TypeScript to C# mappings
 - [Examples/Interop](../Examples/Interop/) - Complete working example project

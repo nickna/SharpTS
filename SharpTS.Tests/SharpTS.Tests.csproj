@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpTS.csproj" />
+    <ProjectReference Include="..\SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj" />
   </ItemGroup>
 
 </Project>

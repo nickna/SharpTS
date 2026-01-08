@@ -1,0 +1,31 @@
+<Project>
+  <PropertyGroup>
+    <!-- SDK identification marker -->
+    <UsingSharpTSSdk>true</UsingSharpTSSdk>
+
+    <!-- Output configuration -->
+    <SharpTSOutputPath Condition="'$(SharpTSOutputPath)' == ''">$(OutputPath)</SharpTSOutputPath>
+    <SharpTSOutputFileName Condition="'$(SharpTSOutputFileName)' == ''">$(AssemblyName).dll</SharpTSOutputFileName>
+
+    <!-- tsconfig.json path (auto-detected or overridden) -->
+    <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == ''">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
+
+    <!-- Compiler options (defaults - can be overridden by MSBuild properties or tsconfig.json) -->
+    <SharpTSPreserveConstEnums Condition="'$(SharpTSPreserveConstEnums)' == ''">false</SharpTSPreserveConstEnums>
+    <SharpTSExperimentalDecorators Condition="'$(SharpTSExperimentalDecorators)' == ''">false</SharpTSExperimentalDecorators>
+    <SharpTSDecorators Condition="'$(SharpTSDecorators)' == ''">false</SharpTSDecorators>
+    <SharpTSEmitDecoratorMetadata Condition="'$(SharpTSEmitDecoratorMetadata)' == ''">false</SharpTSEmitDecoratorMetadata>
+    <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
+    <SharpTSUseReferenceAssemblies Condition="'$(SharpTSUseReferenceAssemblies)' == ''">false</SharpTSUseReferenceAssemblies>
+
+    <!-- Entry point file (required - user must specify or will be read from tsconfig.json) -->
+    <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''"></SharpTSEntryPoint>
+
+    <!-- Tool location (resolved from package) -->
+    <SharpTSToolPath>$(MSBuildThisFileDirectory)..\tools\net10.0\any\</SharpTSToolPath>
+    <SharpTSCompilerExe>$(SharpTSToolPath)SharpTS.dll</SharpTSCompilerExe>
+
+    <!-- Tasks assembly location -->
+    <SharpTSTasksAssembly>$(MSBuildThisFileDirectory)..\build\SharpTS.Sdk.Tasks.dll</SharpTSTasksAssembly>
+  </PropertyGroup>
+</Project>
