@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+
+    <!-- Required for Release builds with optimizations -->
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>false</TieredCompilationQuickJit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="BenchmarkDotNet.Diagnostics.Windows" Version="0.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpTS.csproj" />
+  </ItemGroup>
+
+  <!-- Embed TypeScript source files as resources for pre-compilation -->
+  <ItemGroup>
+    <EmbeddedResource Include="TypeScriptSources\**\*.ts" />
+  </ItemGroup>
+
+  <!-- Create output directory for pre-compiled DLLs -->
+  <Target Name="CreateCompiledTSDir" BeforeTargets="BeforeBuild">
+    <MakeDir Directories="$(OutputPath)CompiledTS" />
+  </Target>
+
+</Project>

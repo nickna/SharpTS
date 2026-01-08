@@ -83,3 +83,8 @@ TestResults/
 /.openai/
 /SharpTS.dll
 /NUL
+
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+**/CompiledTS/
+*.benchmarklog
