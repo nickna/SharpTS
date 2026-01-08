@@ -9,14 +9,15 @@ namespace SharpTS.Sdk.Tasks;
 /// <summary>
 /// MSBuild task that reads tsconfig.json and extracts compiler options
 /// for use in SharpTS SDK builds.
+/// Uses JSON source generation for optimal performance.
 /// </summary>
-public class ReadTsConfigTask : Task
+public sealed class ReadTsConfigTask : Task
 {
     /// <summary>
     /// Path to the tsconfig.json file to read.
     /// </summary>
     [Required]
-    public string TsConfigPath { get; set; } = string.Empty;
+    public required string TsConfigPath { get; set; }
 
     /// <summary>
     /// Output: Whether preserveConstEnums is enabled in compilerOptions.
@@ -62,60 +63,59 @@ public class ReadTsConfigTask : Task
 
     public override bool Execute()
     {
+        // Validate input path
+        if (string.IsNullOrWhiteSpace(TsConfigPath))
+        {
+            Log.LogError("TsConfigPath is required but was not provided.");
+            return false;
+        }
+
+        // If file doesn't exist, return gracefully with defaults (existing behavior)
+        if (!File.Exists(TsConfigPath))
+        {
+            Log.LogMessage(MessageImportance.Low,
+                $"tsconfig.json not found at '{TsConfigPath}'. Using default compiler options.");
+
+            // Set defaults (empty strings already set by property initializers)
+            return true;
+        }
+
         try
         {
-            if (!File.Exists(TsConfigPath))
-            {
-                Log.LogMessage(MessageImportance.Low, $"tsconfig.json not found at {TsConfigPath}");
-                return true; // Not an error - just use defaults
-            }
-
+            // Read and parse using source-generated JSON context
             var json = File.ReadAllText(TsConfigPath);
-            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
+            var tsConfig = JsonSerializer.Deserialize(
+                json,
+                TsConfigSourceGenerationContext.Default.TsConfigJson);
+
+            if (tsConfig == null)
             {
-                CommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true
-            });
-
-            var root = doc.RootElement;
-
-            // Read compilerOptions
-            if (root.TryGetProperty("compilerOptions", out var compilerOptions))
-            {
-                PreserveConstEnums = GetBoolOption(compilerOptions, "preserveConstEnums");
-                ExperimentalDecorators = GetBoolOption(compilerOptions, "experimentalDecorators");
-                Decorators = GetBoolOption(compilerOptions, "decorators");
-                EmitDecoratorMetadata = GetBoolOption(compilerOptions, "emitDecoratorMetadata");
-
-                if (compilerOptions.TryGetProperty("rootDir", out var rootDir))
-                {
-                    RootDir = rootDir.GetString() ?? string.Empty;
-                }
-
-                if (compilerOptions.TryGetProperty("outDir", out var outDir))
-                {
-                    OutDir = outDir.GetString() ?? string.Empty;
-                }
+                Log.LogWarning($"Failed to parse tsconfig.json at '{TsConfigPath}'. Using defaults.");
+                return true;
             }
 
-            // Read files array for entry point
-            if (root.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+            // Extract compiler options using null-conditional operators
+            var opts = tsConfig.CompilerOptions;
+            if (opts != null)
             {
-                var enumerator = files.EnumerateArray();
-                if (enumerator.MoveNext())
-                {
-                    var firstFile = enumerator.Current.GetString();
-                    if (!string.IsNullOrEmpty(firstFile))
-                    {
-                        // Make relative to tsconfig.json directory
-                        var tsConfigDir = Path.GetDirectoryName(TsConfigPath) ?? ".";
-                        EntryFile = Path.Combine(tsConfigDir, firstFile);
-                    }
-                }
+                PreserveConstEnums = opts.PreserveConstEnums ?? false;
+                ExperimentalDecorators = opts.ExperimentalDecorators ?? false;
+                Decorators = opts.Decorators ?? false;
+                EmitDecoratorMetadata = opts.EmitDecoratorMetadata ?? false;
+                RootDir = opts.RootDir ?? string.Empty;
+                OutDir = opts.OutDir ?? string.Empty;
+            }
+
+            // Extract entry file using collection expressions and pattern matching
+            if (tsConfig.Files is { Length: > 0 } files)
+            {
+                var tsConfigDir = Path.GetDirectoryName(TsConfigPath) ?? string.Empty;
+                EntryFile = Path.Combine(tsConfigDir, files[0]);
             }
 
             Log.LogMessage(MessageImportance.Low,
-                $"Read tsconfig.json: preserveConstEnums={PreserveConstEnums}, " +
+                $"Successfully loaded tsconfig.json from '{TsConfigPath}': " +
+                $"preserveConstEnums={PreserveConstEnums}, " +
                 $"experimentalDecorators={ExperimentalDecorators}, decorators={Decorators}, " +
                 $"emitDecoratorMetadata={EmitDecoratorMetadata}, entryFile={EntryFile}");
 
@@ -123,22 +123,13 @@ public class ReadTsConfigTask : Task
         }
         catch (JsonException ex)
         {
-            Log.LogError($"Failed to parse tsconfig.json at {TsConfigPath}: {ex.Message}");
+            Log.LogError($"Failed to parse tsconfig.json at '{TsConfigPath}': {ex.Message}");
             return false;
         }
         catch (Exception ex)
         {
-            Log.LogError($"Failed to read tsconfig.json at {TsConfigPath}: {ex.Message}");
+            Log.LogError($"Unexpected error reading tsconfig.json at '{TsConfigPath}': {ex.Message}");
             return false;
         }
-    }
-
-    private static bool GetBoolOption(JsonElement obj, string propertyName)
-    {
-        if (obj.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.True)
-        {
-            return true;
-        }
-        return false;
     }
 }

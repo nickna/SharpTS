@@ -157,10 +157,13 @@ dotnet build -c Release
 | SHARPTS004 | Compile Error | IL emission failure |
 | SHARPTS005 | Config Error | Invalid configuration |
 
-## Requirements
+## System Requirements
 
-- .NET 10.0 SDK or later
-- SharpTS compiler (bundled in SDK package)
+- **.NET 10 SDK or later** (required for building projects)
+- **Visual Studio 2026 18.0+** (recommended for IDE support)
+- **MSBuild 18.0+** (included with .NET 10 SDK)
+
+SharpTS.Sdk targets .NET 10 directly for optimal performance and modern features.
 
 ## License
 

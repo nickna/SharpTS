@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
+    <TargetFramework>net10.0</TargetFramework>
 
     <!-- This is an MSBuild tasks assembly, not a standalone app -->
     <OutputType>Library</OutputType>
+
+    <!-- C# language version -->
+    <LangVersion>14</LangVersion>
 
     <!-- Sign the assembly for use in MSBuild -->
     <SignAssembly>false</SignAssembly>
@@ -18,8 +19,5 @@
     <!-- MSBuild task framework -->
     <PackageReference Include="Microsoft.Build.Framework" Version="18.0.2" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.0.2" />
-
-    <!-- JSON parsing (netstandard2.0 compatible) -->
-    <PackageReference Include="System.Text.Json" Version="9.0.0" />
   </ItemGroup>
 </Project>

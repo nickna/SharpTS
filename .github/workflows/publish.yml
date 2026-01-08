@@ -33,8 +33,26 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
 
-      - name: Pack
+      - name: Publish SharpTS for SDK bundling
+        run: dotnet publish SharpTS.csproj --configuration Release --no-build
+
+      - name: Verify SDK dependencies exist
+        run: |
+          echo "Checking SDK package dependencies..."
+          test -f "SharpTS.Sdk.Tasks/bin/Release/net10.0/SharpTS.Sdk.Tasks.dll" || { echo "❌ Tasks.dll not found"; exit 1; }
+          test -d "bin/Release/net10.0/publish" || { echo "❌ Publish directory not found"; exit 1; }
+          echo "✓ All SDK dependencies found"
+
+      - name: Pack packages
         run: dotnet pack --no-build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkg
+
+      - name: Verify packages created
+        run: |
+          echo "Packages created:"
+          ls -lh ./nupkg/
+          test -f "./nupkg/SharpTS.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS package not found"; exit 1; }
+          test -f "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Sdk package not found"; exit 1; }
+          echo "✓ Both packages created successfully"
 
       - name: Push to NuGet
         run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

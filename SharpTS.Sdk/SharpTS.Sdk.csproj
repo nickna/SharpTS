@@ -1,21 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
 
     <!-- NuGet package metadata -->
     <PackageId>SharpTS.Sdk</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Nick B. Nassiri</Authors>
     <Description>MSBuild SDK for SharpTS - compile TypeScript directly to .NET assemblies. Use Sdk="SharpTS.Sdk" in your project file.</Description>
     <PackageTags>typescript;compiler;msbuild;sdk;dotnet;il;aot</PackageTags>
-    <PackageProjectUrl>https://github.com/nickna/SharpTS</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/nickna/SharpTS</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
 
     <!-- SDK package marker -->
@@ -31,10 +26,10 @@
 
   <!-- Tasks assembly (from SharpTS.Sdk.Tasks project) -->
   <ItemGroup>
-    <None Include="..\SharpTS.Sdk.Tasks\bin\Release\netstandard2.0\SharpTS.Sdk.Tasks.dll"
+    <None Include="..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll"
           Pack="true"
           PackagePath="build\"
-          Condition="Exists('..\SharpTS.Sdk.Tasks\bin\Release\netstandard2.0\SharpTS.Sdk.Tasks.dll')" />
+          Condition="Exists('..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll')" />
   </ItemGroup>
 
   <!-- Compiler tool (from main SharpTS project publish output) -->
@@ -45,8 +40,9 @@
           Condition="Exists('..\bin\Release\net10.0\publish\')" />
   </ItemGroup>
 
-  <!-- Package readme -->
+  <!-- Package documentation -->
   <ItemGroup>
     <None Include="readme.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>

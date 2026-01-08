@@ -54,7 +54,10 @@ SharpTS supports two execution modes:
 
 ### Prerequisites
 
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) or later
+- **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** or later (required)
+- **Visual Studio 2026 18.0+** (optional, for IDE support)
+
+**Note for MSBuild SDK users:** SharpTS.Sdk requires .NET 10 SDK and uses modern C# features for optimal performance.
 
 ### Installation
 
