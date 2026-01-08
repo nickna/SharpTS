@@ -72,6 +72,17 @@ public static class TestHarness
     /// <returns>Captured console output from the compiled executable</returns>
     public static string RunCompiled(string source)
     {
+        return RunCompiled(source, DecoratorMode.None);
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source to a .NET DLL with decorator support, executes it, and captures output.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <returns>Captured console output from the compiled executable</returns>
+    public static string RunCompiled(string source, DecoratorMode decoratorMode)
+    {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
 
@@ -82,16 +93,18 @@ public static class TestHarness
             // Compile
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
-            var parser = new Parser(tokens);
+            var parser = new Parser(tokens, decoratorMode);
             var statements = parser.Parse();
 
             var checker = new TypeChecker();
+            checker.SetDecoratorMode(decoratorMode);
             var typeMap = checker.Check(statements);
 
             var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
             var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
 
             var compiler = new ILCompiler("test");
+            compiler.SetDecoratorMode(decoratorMode);
             compiler.Compile(statements, typeMap, deadCodeInfo);
             compiler.Save(dllPath);
 

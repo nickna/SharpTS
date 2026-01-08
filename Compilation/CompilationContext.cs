@@ -197,6 +197,9 @@ public class CompilationContext
     // Module resolver for import path resolution
     public ModuleResolver? ModuleResolver { get; set; }
 
+    // .NET namespace from @Namespace directive (for typed interop)
+    public string? DotNetNamespace { get; set; }
+
     // Class to module mapping (simple class name -> module path)
     // Used to resolve qualified class names in multi-module compilation
     public Dictionary<string, string>? ClassToModule { get; set; }
@@ -210,18 +213,30 @@ public class CompilationContext
     /// <summary>
     /// Resolves a simple class name to its qualified name for lookup in the Classes dictionary.
     /// In multi-module compilation, class names are qualified with their module to avoid collisions.
+    /// Also applies .NET namespace prefix if set via @Namespace directive.
     /// </summary>
     public string ResolveClassName(string simpleClassName)
     {
+        string baseName;
+
         // If we have a module mapping, use it to create the qualified name
         if (ClassToModule != null && ClassToModule.TryGetValue(simpleClassName, out var modulePath))
         {
             string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
-            return $"$M_{sanitizedModule}_{simpleClassName}";
+            baseName = $"$M_{sanitizedModule}_{simpleClassName}";
+        }
+        else
+        {
+            baseName = simpleClassName;
         }
 
-        // Fall back to simple name (for single-file compilation)
-        return simpleClassName;
+        // Apply .NET namespace if set
+        if (DotNetNamespace != null)
+        {
+            return $"{DotNetNamespace}.{baseName}";
+        }
+
+        return baseName;
     }
 
     /// <summary>
@@ -252,14 +267,28 @@ public class CompilationContext
 
     /// <summary>
     /// Gets the qualified class name for the current module context.
+    /// Also applies .NET namespace if set via @Namespace directive.
     /// </summary>
     public string GetQualifiedClassName(string simpleClassName)
     {
+        string baseName;
         if (CurrentModulePath == null)
-            return simpleClassName;
+        {
+            baseName = simpleClassName;
+        }
+        else
+        {
+            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+            baseName = $"$M_{sanitizedModule}_{simpleClassName}";
+        }
 
-        string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
-        return $"$M_{sanitizedModule}_{simpleClassName}";
+        // Apply .NET namespace if set
+        if (DotNetNamespace != null)
+        {
+            return $"{DotNetNamespace}.{baseName}";
+        }
+
+        return baseName;
     }
 
     /// <summary>

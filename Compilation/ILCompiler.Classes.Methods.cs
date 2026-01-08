@@ -120,10 +120,12 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassMethodsOnly(Stmt.Class classStmt)
     {
-        var typeBuilder = _classBuilders[classStmt.Name.Lexeme];
+        var ctx = GetDefinitionContext();
+        string qualifiedClassName = ctx.ResolveClassName(classStmt.Name.Lexeme);
+        var typeBuilder = _classBuilders[qualifiedClassName];
 
         // Pre-define constructor (if not already defined)
-        if (!_classConstructors.ContainsKey(classStmt.Name.Lexeme))
+        if (!_classConstructors.ContainsKey(qualifiedClassName))
         {
             var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
             var ctorParamTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray() ?? [];
@@ -134,7 +136,7 @@ public partial class ILCompiler
                 ctorParamTypes
             );
 
-            _classConstructors[classStmt.Name.Lexeme] = ctorBuilder;
+            _classConstructors[qualifiedClassName] = ctorBuilder;
         }
 
         // Define instance methods (skip overload signatures with no body)
@@ -340,7 +342,7 @@ public partial class ILCompiler
         }
 
         // Emit static constructor for static property initializers
-        EmitStaticConstructor(typeBuilder, classStmt);
+        EmitStaticConstructor(typeBuilder, classStmt, qualifiedClassName);
 
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
@@ -455,7 +457,8 @@ public partial class ILCompiler
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace
         };
 
         // Add class generic type parameters to context

@@ -16,6 +16,12 @@ public partial class Parser
         // Parse decorators before class declarations
         List<Decorator>? decorators = ParseDecorators();
 
+        // Check for file-level @Namespace decorator (must appear before any class)
+        if (decorators != null && decorators.Count > 0 && IsNamespaceDecorator(decorators[0]))
+        {
+            return new Stmt.FileDirective(decorators);
+        }
+
         if (Match(TokenType.ABSTRACT))
         {
             Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");
@@ -304,5 +310,15 @@ public partial class Parser
 
         Consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
         return new Stmt.Var(name, typeAnnotation, initializer);
+    }
+
+    /// <summary>
+    /// Checks if a decorator is the file-level @Namespace decorator.
+    /// </summary>
+    private bool IsNamespaceDecorator(Decorator decorator)
+    {
+        return decorator.Expression is Expr.Call call &&
+               call.Callee is Expr.Variable v &&
+               v.Name.Lexeme == "Namespace";
     }
 }

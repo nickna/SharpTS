@@ -74,7 +74,9 @@ public partial class ILCompiler
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            // .NET namespace support
+            DotNetNamespace = _currentDotNetNamespace
         };
 
         // Add class generic type parameters to context

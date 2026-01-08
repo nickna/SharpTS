@@ -103,6 +103,10 @@ public partial class ILCompiler
     private readonly Dictionary<string, string> _functionToModule = []; // Maps function name to module path for lookups
     private readonly Dictionary<string, string> _enumToModule = []; // Maps enum name to module path for lookups
 
+    // .NET namespace support via @Namespace decorator
+    private string? _currentDotNetNamespace; // Current .NET namespace for compiled types
+    private readonly Dictionary<string, string?> _moduleNamespaces = []; // Per-module .NET namespaces
+
     // Typed Interop: Real .NET property support
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _propertyBackingFields = [];
     private readonly Dictionary<string, Dictionary<string, PropertyBuilder>> _classProperties = [];
@@ -177,7 +181,33 @@ public partial class ILCompiler
             EnumToModule = _enumToModule
         };
         _definitionContext.CurrentModulePath = _currentModulePath;
+        _definitionContext.DotNetNamespace = _currentDotNetNamespace;
         return _definitionContext;
+    }
+
+    /// <summary>
+    /// Extracts the .NET namespace from @Namespace file directive if present.
+    /// </summary>
+    private static string? ExtractNamespaceFromStatements(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.FileDirective directive)
+            {
+                foreach (var decorator in directive.Decorators)
+                {
+                    if (decorator.Expression is Expr.Call call &&
+                        call.Callee is Expr.Variable v &&
+                        v.Name.Lexeme == "Namespace" &&
+                        call.Arguments.Count == 1 &&
+                        call.Arguments[0] is Expr.Literal { Value: string ns })
+                    {
+                        return ns;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
@@ -185,6 +215,9 @@ public partial class ILCompiler
         // Store the type map and dead code info for use by ILEmitter
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
+
+        // Phase 0: Extract .NET namespace from @Namespace file directive
+        _currentDotNetNamespace = ExtractNamespaceFromStatements(statements);
 
         // Phase 1: Emit runtime support types into the generated assembly
         // This makes compiled DLLs standalone without requiring SharpTS.dll
@@ -283,6 +316,12 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
         _moduleResolver = resolver;
 
+        // Phase 0: Extract .NET namespaces from @Namespace directives in each module
+        foreach (var module in modules)
+        {
+            _moduleNamespaces[module.Path] = ExtractNamespaceFromStatements(module.Statements);
+        }
+
         // Phase 1: Emit runtime support types
         _runtime = RuntimeEmitter.EmitAll(_moduleBuilder, _types);
 
@@ -307,6 +346,7 @@ public partial class ILCompiler
         foreach (var module in modules)
         {
             _currentModulePath = module.Path; // Track which module we're processing
+            _currentDotNetNamespace = _moduleNamespaces.GetValueOrDefault(module.Path); // Set .NET namespace for this module
             foreach (var stmt in module.Statements)
             {
                 if (stmt is Stmt.Class classStmt)
@@ -340,6 +380,7 @@ public partial class ILCompiler
             }
         }
         _currentModulePath = null;
+        _currentDotNetNamespace = null;
 
         // Phase 5.5: Initialize typed interop support now that all classes are defined
         _unionGenerator = new UnionTypeGenerator(_typeMapper);

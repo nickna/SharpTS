@@ -377,6 +377,38 @@ public partial class TypeChecker
                 // Check the declaration or expression being exported
                 CheckExportStatement(exportStmt);
                 break;
+
+            case Stmt.FileDirective directive:
+                // Validate file-level directives like @Namespace
+                ValidateFileDirective(directive);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Validates file-level directives like @Namespace.
+    /// </summary>
+    private void ValidateFileDirective(Stmt.FileDirective directive)
+    {
+        foreach (var decorator in directive.Decorators)
+        {
+            if (decorator.Expression is Expr.Call call &&
+                call.Callee is Expr.Variable v &&
+                v.Name.Lexeme == "Namespace")
+            {
+                if (call.Arguments.Count != 1)
+                {
+                    throw new Exception($"Type Error at line {decorator.AtToken.Line}: @Namespace requires exactly one string argument.");
+                }
+                if (call.Arguments[0] is not Expr.Literal { Value: string })
+                {
+                    throw new Exception($"Type Error at line {decorator.AtToken.Line}: @Namespace argument must be a string literal.");
+                }
+            }
+            else
+            {
+                throw new Exception($"Type Error at line {decorator.AtToken.Line}: Unknown file-level directive. Only @Namespace is supported.");
+            }
         }
     }
 }

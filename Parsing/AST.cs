@@ -198,4 +198,10 @@ public abstract record Stmt
     /// <param name="LocalName">Name in current module</param>
     /// <param name="ExportedName">Exported as (null = same as local)</param>
     public record ExportSpecifier(Token LocalName, Token? ExportedName);
+
+    /// <summary>
+    /// File-level directive decorators (e.g., @Namespace("MyCompany.Libraries"))
+    /// Applied to all types in the file during IL compilation.
+    /// </summary>
+    public record FileDirective(List<Decorator> Decorators) : Stmt;
 }

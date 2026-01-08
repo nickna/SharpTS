@@ -22,7 +22,7 @@ public partial class ILCompiler
     {
         var ctx = GetDefinitionContext();
 
-        // Get qualified class name (module-prefixed in multi-module compilation)
+        // Get qualified class name (includes module prefix and .NET namespace if set)
         string qualifiedClassName = ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
 
         // Track simple name -> module mapping for later lookups
@@ -32,11 +32,13 @@ public partial class ILCompiler
         }
 
         Type? baseType = null;
+        string? qualifiedSuperclassName = null;
         if (classStmt.Superclass != null)
         {
-            // Resolve superclass name (may need to be qualified)
-            string qualifiedSuperclass = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
-            if (_classBuilders.TryGetValue(qualifiedSuperclass, out var superBuilder))
+            // Resolve superclass name (includes module prefix and .NET namespace if set)
+            qualifiedSuperclassName = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
+
+            if (_classBuilders.TryGetValue(qualifiedSuperclassName, out var superBuilder))
             {
                 baseType = superBuilder;
             }
@@ -56,7 +58,6 @@ public partial class ILCompiler
         );
 
         // Track superclass for inheritance-aware method resolution
-        string? qualifiedSuperclassName = classStmt.Superclass != null ? ctx.ResolveClassName(classStmt.Superclass.Lexeme) : null;
         _classSuperclass[qualifiedClassName] = qualifiedSuperclassName;
 
         // Handle generic type parameters

@@ -232,7 +232,8 @@ public partial class ILCompiler
             AsyncMethods = null,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace
         };
     }
 }

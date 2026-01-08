@@ -22,7 +22,7 @@ public partial class ILCompiler
         _staticMethods[className][method.Name.Lexeme] = methodBuilder;
     }
 
-    private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt)
+    private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
         // Only emit if there are static fields with initializers
         var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.Initializer != null).ToList();
@@ -64,12 +64,13 @@ public partial class ILCompiler
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace
         };
 
         var emitter = new ILEmitter(ctx);
 
-        var classStaticFields = _staticFields[classStmt.Name.Lexeme];
+        var classStaticFields = _staticFields[qualifiedClassName];
         foreach (var field in staticFieldsWithInit)
         {
             // Emit the initializer expression
@@ -121,7 +122,8 @@ public partial class ILCompiler
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace
         };
 
         // Define parameters (starting at index 0, not 1 since no 'this')

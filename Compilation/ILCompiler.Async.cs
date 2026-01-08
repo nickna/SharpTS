@@ -432,7 +432,8 @@ public partial class ILCompiler
                 CurrentModulePath = _currentModulePath,
                 ClassToModule = _classToModule,
                 FunctionToModule = _functionToModule,
-                EnumToModule = _enumToModule
+                EnumToModule = _enumToModule,
+                DotNetNamespace = _currentDotNetNamespace
             };
 
             // Emit MoveNext body
@@ -684,7 +685,8 @@ public partial class ILCompiler
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace
         };
 
         // Emit MoveNext body
