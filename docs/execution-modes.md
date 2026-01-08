@@ -151,57 +151,6 @@ These differences are internal and don't affect your code's behavior.
 
 ---
 
-## Decision Guide
-
-Use this flowchart to choose the right mode:
-
-```
-Start
-  |
-  v
-Are you developing/debugging?
-  |
-  +-- Yes --> Use INTERPRETED mode
-  |
-  +-- No
-       |
-       v
-     Do you need an interactive REPL?
-       |
-       +-- Yes --> Use INTERPRETED mode
-       |
-       +-- No
-            |
-            v
-          Is this for production/distribution?
-            |
-            +-- Yes --> Use COMPILED mode
-            |
-            +-- No
-                 |
-                 v
-               Is performance critical?
-                 |
-                 +-- Yes --> Use COMPILED mode
-                 |
-                 +-- No --> Either works (use interpreted for convenience)
-```
-
-### Recommendations by Use Case
-
-| Use Case | Recommended Mode |
-|----------|------------------|
-| Learning TypeScript | Interpreted (REPL) |
-| Building a CLI tool | Compiled |
-| Web server | Compiled |
-| One-off scripts | Interpreted |
-| Testing new features | Interpreted |
-| CI/CD builds | Compiled |
-| Sharing with team | Compiled |
-| Quick calculations | Interpreted (REPL) |
-
----
-
 ## Command Reference
 
 ### Interpreted Mode
@@ -304,26 +253,6 @@ dotnet run -- --compile myapp.ts --verify
 # Distribution
 dotnet myapp.dll
 ```
-
----
-
-## Performance Considerations
-
-**Compiled mode is faster for:**
-- Long-running applications
-- Computation-heavy workloads
-- Production servers
-- Repeated execution
-
-**Interpreted mode is faster for:**
-- Single-run scripts (no compilation overhead)
-- Very small programs
-- Interactive exploration
-
-**General guidance:**
-- If your script runs for more than a few seconds, compilation pays off
-- If you're running the same code multiple times, compile it once
-- For quick one-off tasks, interpretation is more convenient
 
 ---
 
