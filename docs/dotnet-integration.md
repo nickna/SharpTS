@@ -53,11 +53,41 @@ TypeScript types map to .NET types as follows:
 
 The compiled assembly organizes code as follows:
 
-- **Classes**: Emitted as .NET classes at the root namespace
+- **Classes**: Emitted as .NET classes (root namespace by default, or custom namespace via `@Namespace`)
 - **Top-level functions**: Static methods on the `$Program` class
 - **Properties**: Accessor methods `get_X()` and `set_X(value)`
 - **Static members**: .NET static fields and methods
 - **Constructors**: Standard .NET constructors matching TypeScript signatures
+
+### Custom .NET Namespaces
+
+Use the `@Namespace` decorator to place compiled types in a specific .NET namespace:
+
+```typescript
+@Namespace("MyCompany.Libraries")
+class Person {
+    name: string;
+    constructor(name: string) {
+        this.name = name;
+    }
+}
+
+class Employee extends Person {
+    department: string;
+    constructor(name: string, department: string) {
+        super(name);
+        this.department = department;
+    }
+}
+```
+
+Both `Person` and `Employee` will be emitted in the `MyCompany.Libraries` namespace.
+
+**Key points:**
+- The decorator applies file-wide (all classes in the file use the same namespace)
+- Requires `--decorators` flag during compilation
+- Nested namespaces supported: `@Namespace("MyCompany.Libraries.Data")`
+- Without the decorator, classes are emitted at the root namespace (backward compatible)
 
 ---
 
@@ -127,6 +157,87 @@ sharpts --compile Library.ts --ref-asm --verify -o dist/Library.dll
 | `--sdk-path <path>` | Explicit path to .NET SDK reference assemblies |
 | `--verify` | Verify emitted IL using Microsoft.ILVerification |
 | `--preserveConstEnums` | Keep const enum declarations in output |
+| `--pack` | Generate NuGet package after compilation |
+| `--push <source>` | Push package to NuGet feed |
+| `--api-key <key>` | API key for NuGet push |
+| `--package-id <id>` | Override package ID |
+| `--version <ver>` | Override package version |
+
+---
+
+## NuGet Package Distribution
+
+SharpTS can generate NuGet packages from compiled TypeScript libraries, making it easy to distribute TypeScript code for .NET consumption.
+
+### Package Metadata
+
+Package metadata is read from `package.json` in the source directory:
+
+```json
+{
+  "name": "my-typescript-lib",
+  "version": "1.0.0",
+  "description": "My TypeScript library for .NET",
+  "author": "Your Name",
+  "license": "MIT",
+  "keywords": ["typescript", "library"],
+  "repository": {
+    "url": "https://github.com/user/my-typescript-lib"
+  }
+}
+```
+
+### Creating Packages
+
+```bash
+# Basic package creation (uses package.json metadata)
+sharpts --compile Library.ts --pack
+
+# Output: Library.1.0.0.nupkg + Library.1.0.0.snupkg (symbols)
+
+# Override version for pre-release
+sharpts --compile Library.ts --pack --version 2.0.0-beta
+
+# Custom package ID
+sharpts --compile Library.ts --pack --package-id "MyCompany.Library"
+```
+
+### Publishing to NuGet
+
+```bash
+# Push to nuget.org
+sharpts --compile Library.ts --pack \
+  --push https://api.nuget.org/v3/index.json \
+  --api-key $NUGET_API_KEY
+
+# Push to private feed
+sharpts --compile Library.ts --pack \
+  --push https://pkgs.dev.azure.com/org/_packaging/feed/nuget/v3/index.json \
+  --api-key $AZURE_PAT
+```
+
+### Package Contents
+
+Generated packages include:
+
+| Path | Content |
+|------|---------|
+| `lib/net10.0/<name>.dll` | Compiled assembly |
+| `lib/net10.0/<name>.runtimeconfig.json` | Runtime configuration |
+| `README.md` | Package readme (if present in source directory) |
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions example
+- name: Build and Publish
+  run: |
+    sharpts --compile src/Library.ts \
+      --pack \
+      --version ${{ github.ref_name }} \
+      --push https://api.nuget.org/v3/index.json \
+      --api-key ${{ secrets.NUGET_API_KEY }}
+```
 
 ---
 
@@ -462,7 +573,8 @@ dotnet run
 
 **Error:** `GetType()` returns `null`
 
-- Classes are in the root namespace (no namespace prefix needed)
+- Classes are in the root namespace by default (no namespace prefix needed)
+- If `@Namespace("X.Y")` was used, include the namespace: `assembly.GetType("X.Y.ClassName")`
 - Top-level functions are on `$Program` class
 - Multi-module compilation uses qualified names: `$M_ModuleName_ClassName`
 

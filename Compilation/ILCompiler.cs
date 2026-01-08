@@ -4,6 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using SharpTS.Modules;
+using SharpTS.Packaging;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -131,11 +132,14 @@ public partial class ILCompiler
     private readonly bool _useReferenceAssemblies;
     private readonly string? _sdkPath;
 
+    // Assembly metadata for version and attributes
+    private readonly AssemblyMetadata? _metadata;
+
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
     /// </summary>
     public ILCompiler(string assemblyName, bool preserveConstEnums = false)
-        : this(assemblyName, preserveConstEnums, useReferenceAssemblies: false, sdkPath: null)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies: false, sdkPath: null, metadata: null)
     {
     }
 
@@ -147,11 +151,25 @@ public partial class ILCompiler
     /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
     public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new IL compiler with optional reference assembly support and assembly metadata.
+    /// </summary>
+    /// <param name="assemblyName">Name for the output assembly.</param>
+    /// <param name="preserveConstEnums">Whether to preserve const enums in output.</param>
+    /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
+    /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    /// <param name="metadata">Optional assembly metadata for version and attributes.</param>
+    public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, AssemblyMetadata? metadata)
     {
         _assemblyName = assemblyName;
         _preserveConstEnums = preserveConstEnums;
         _useReferenceAssemblies = useReferenceAssemblies;
         _sdkPath = sdkPath;
+        _metadata = metadata;
 
         // Always use runtime types for compilation.
         // When --ref-asm is enabled, the assembly will be post-processed in Save()
@@ -160,10 +178,27 @@ public partial class ILCompiler
         // TypeBuilder.DefineType() for interface implementation (async/generator types).
         _types = TypeProvider.Runtime;
 
+        // Create AssemblyName with version if metadata is provided
+        var asmName = new AssemblyName(assemblyName);
+        if (metadata?.Version != null)
+        {
+            asmName.Version = metadata.Version;
+        }
+
         _assemblyBuilder = new PersistedAssemblyBuilder(
-            new AssemblyName(assemblyName),
+            asmName,
             _types.CoreAssembly
         );
+
+        // Apply assembly-level attributes if metadata is provided
+        if (metadata != null)
+        {
+            foreach (var attr in AssemblyAttributeBuilder.BuildAll(metadata))
+            {
+                _assemblyBuilder.SetCustomAttribute(attr);
+            }
+        }
+
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
         _typeMapper = new TypeMapper(_moduleBuilder, _types);
     }

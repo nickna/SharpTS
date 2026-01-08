@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-07 (Namespace class instantiation with `new Namespace.Class()`)
+**Last Updated:** 2026-01-07 (@Namespace decorator for custom .NET namespaces in compiled output)
 
 ## Legend
 - ✅ Implemented
@@ -214,7 +214,7 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API |
+| Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API, `@Namespace` for .NET namespaces |
 | Generators (`function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; for...of integration |
 | Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of` (interpreter) |
 | Well-known Symbols | ✅ | `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables` |
@@ -578,3 +578,15 @@ _No known bugs at this time._
 - ✅ TypeInfo records: `WeakMap(KeyType, ValueType)`, `WeakSet(ElementType)`
 - ✅ .NET interop: WeakMap/WeakSet map to `object` (opaque type)
 - ✅ Full interpreter and IL compiler support with 90 test cases (48 Set operations + 42 WeakMap/WeakSet)
+
+### Phase 32 Features (@Namespace Decorator for .NET Namespaces)
+- ✅ `@Namespace("MyCompany.Libraries")` decorator syntax
+- ✅ File-wide scope: decorator applies to all classes in the file
+- ✅ Nested namespace support: `@Namespace("A.B.C")`
+- ✅ Type checker validation: requires exactly one string literal argument
+- ✅ `Stmt.FileDirective` AST node for file-level decorators
+- ✅ Namespace-aware class name resolution in `CompilationContext`
+- ✅ Static members and methods work correctly with namespaced classes
+- ✅ Class inheritance (`extends`) works within namespaces
+- ✅ Backward compatible: no namespace = root namespace (existing behavior)
+- ✅ Full IL compiler support with 8 test cases

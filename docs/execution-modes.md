@@ -187,6 +187,11 @@ dotnet run -- -c <file.ts> [options]
 | `--experimentalDecorators` | Enable Stage 2 decorators |
 | `--decorators` | Enable Stage 3 decorators |
 | `--emitDecoratorMetadata` | Emit design-time type metadata |
+| `--pack` | Generate NuGet package after compilation |
+| `--push <source>` | Push package to NuGet feed (implies `--pack`) |
+| `--api-key <key>` | API key for NuGet package push |
+| `--package-id <id>` | Override package ID (default: from package.json) |
+| `--version <ver>` | Override package version (default: from package.json) |
 
 ---
 

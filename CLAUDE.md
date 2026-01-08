@@ -27,6 +27,7 @@ dotnet run -- <filename>.ts
 ```bash
 dotnet run -- --compile <filename>.ts           # Outputs <filename>.dll
 dotnet run -- --compile <filename>.ts -o out.dll  # Custom output path
+dotnet run -- --compile <filename>.ts --pack    # Generate NuGet package
 ```
 
 ### Run compiled output
@@ -100,6 +101,16 @@ SharpTS/
 │   ├── LocalsManager.cs        # Local variable tracking
 │   ├── TypeMapper.cs           # TypeScript-to-.NET type mapping
 │   └── EmittedRuntime.cs       # Emitted runtime references
+│
+├── Packaging/                  # NuGet package generation (namespace: SharpTS.Packaging)
+│   ├── AssemblyMetadata.cs     # Assembly version and attributes
+│   ├── AssemblyAttributeBuilder.cs # Build assembly-level attributes
+│   ├── PackageJson.cs          # package.json model
+│   ├── PackageJsonLoader.cs    # package.json parser
+│   ├── NuGetPackager.cs        # .nupkg generation
+│   ├── SymbolPackager.cs       # .snupkg generation
+│   ├── PackageValidator.cs     # Pre-packaging validation
+│   └── NuGetPublisher.cs       # Push to NuGet feeds
 │
 ├── SharpTS.Tests/              # xUnit test project
 ├── Program.cs                  # Entry point

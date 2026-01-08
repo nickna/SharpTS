@@ -35,6 +35,7 @@
 using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Modules;
+using SharpTS.Packaging;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -51,6 +52,7 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     if (remainingArgs.Length < 2)
     {
         Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
+        Console.WriteLine("       [--pack] [--push <source>] [--api-key <key>] [--package-id <id>] [--version <ver>]");
         Environment.Exit(64);
     }
 
@@ -60,6 +62,13 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     bool useReferenceAssemblies = false;
     bool verifyIL = false;
     string? sdkPath = null;
+
+    // Packaging options
+    bool pack = false;
+    string? pushSource = null;
+    string? apiKey = null;
+    string? packageIdOverride = null;
+    string? versionOverride = null;
 
     // Parse remaining arguments
     for (int i = 2; i < remainingArgs.Length; i++)
@@ -84,9 +93,31 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         {
             verifyIL = true;
         }
+        else if (remainingArgs[i] == "--pack")
+        {
+            pack = true;
+        }
+        else if (remainingArgs[i] == "--push" && i + 1 < remainingArgs.Length)
+        {
+            pushSource = remainingArgs[++i];
+            pack = true; // --push implies --pack
+        }
+        else if (remainingArgs[i] == "--api-key" && i + 1 < remainingArgs.Length)
+        {
+            apiKey = remainingArgs[++i];
+        }
+        else if (remainingArgs[i] == "--package-id" && i + 1 < remainingArgs.Length)
+        {
+            packageIdOverride = remainingArgs[++i];
+        }
+        else if (remainingArgs[i] == "--version" && i + 1 < remainingArgs.Length)
+        {
+            versionOverride = remainingArgs[++i];
+        }
     }
 
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata);
+    var packOptions = new PackOptions(pack, pushSource, apiKey, packageIdOverride, versionOverride);
+    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions);
 }
 else if (remainingArgs.Length == 1)
 {
@@ -212,12 +243,56 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions)
 {
     try
     {
         string absolutePath = Path.GetFullPath(inputPath);
         string source = File.ReadAllText(absolutePath);
+
+        // Load package.json if packaging is enabled
+        PackageJson? packageJson = null;
+        AssemblyMetadata? metadata = null;
+        if (packOptions.Pack)
+        {
+            var inputDir = Path.GetDirectoryName(absolutePath) ?? ".";
+            packageJson = PackageJsonLoader.FindAndLoad(inputDir);
+
+            if (packageJson == null && packOptions.PackageIdOverride == null)
+            {
+                Console.WriteLine("Error: No package.json found. Provide --package-id and --version, or create a package.json.");
+                Environment.Exit(1);
+            }
+
+            // Create assembly metadata from package.json and overrides
+            if (packageJson != null)
+            {
+                metadata = AssemblyMetadata.FromPackageJson(packageJson);
+                if (!string.IsNullOrEmpty(packOptions.VersionOverride))
+                {
+                    var versionPart = packOptions.VersionOverride.Split('-')[0];
+                    if (Version.TryParse(versionPart, out var ver))
+                    {
+                        metadata = metadata with { Version = ver, InformationalVersion = packOptions.VersionOverride };
+                    }
+                }
+            }
+            else
+            {
+                // Create minimal metadata from CLI overrides
+                Version? version = null;
+                if (!string.IsNullOrEmpty(packOptions.VersionOverride))
+                {
+                    var versionPart = packOptions.VersionOverride.Split('-')[0];
+                    Version.TryParse(versionPart, out version);
+                }
+                metadata = new AssemblyMetadata(
+                    Version: version,
+                    Title: packOptions.PackageIdOverride,
+                    InformationalVersion: packOptions.VersionOverride
+                );
+            }
+        }
 
         // Parse first to check for module statements
         Lexer lexer = new(source);
@@ -230,11 +305,17 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, metadata);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, metadata);
+        }
+
+        // Package if requested
+        if (packOptions.Pack)
+        {
+            CreateNuGetPackage(outputPath, packageJson, packOptions);
         }
     }
     catch (Exception ex)
@@ -244,7 +325,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, AssemblyMetadata? metadata = null)
 {
     // Load all dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -263,7 +344,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     // Compilation
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
     compiler.Save(outputPath);
@@ -279,7 +360,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, AssemblyMetadata? metadata = null)
 {
     // Static Analysis Phase
     TypeChecker checker = new();
@@ -292,7 +373,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
     // Compilation Phase
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.Compile(statements, typeMap, deadCodeInfo);
     compiler.Save(outputPath);
@@ -351,4 +432,86 @@ static void VerifyCompiledAssembly(string outputPath, string? sdkPath)
     verifier.VerifyAndReport(stream);
 }
 
+static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, PackOptions packOptions)
+{
+    // Create a minimal package.json if one wasn't found but we have CLI overrides
+    packageJson ??= new PackageJson
+    {
+        Name = packOptions.PackageIdOverride,
+        Version = packOptions.VersionOverride ?? "1.0.0"
+    };
+
+    // Validate the package configuration
+    var validation = PackageValidator.Validate(
+        assemblyPath,
+        packageJson,
+        packOptions.PackageIdOverride,
+        packOptions.VersionOverride);
+
+    // Print warnings
+    foreach (var warning in validation.Warnings)
+    {
+        Console.WriteLine($"Warning: {warning}");
+    }
+
+    // Check for errors
+    if (!validation.IsValid)
+    {
+        foreach (var error in validation.Errors)
+        {
+            Console.WriteLine($"Error: {error}");
+        }
+        Environment.Exit(1);
+    }
+
+    // Create the NuGet packager
+    var packager = new NuGetPackager(packageJson, packOptions.PackageIdOverride, packOptions.VersionOverride);
+    var outputDir = Path.GetDirectoryName(assemblyPath) ?? ".";
+
+    // Look for README.md in the package.json directory
+    string? readmePath = null;
+    var candidateReadme = Path.Combine(outputDir, "README.md");
+    if (File.Exists(candidateReadme))
+    {
+        readmePath = candidateReadme;
+    }
+
+    // Create the main package
+    var nupkgPath = packager.CreatePackage(assemblyPath, outputDir, readmePath);
+    Console.WriteLine($"Created package: {nupkgPath}");
+
+    // Create symbol package
+    var symbolPackager = new SymbolPackager(packager.PackageId, packager.Version, packageJson.Author);
+    var snupkgPath = symbolPackager.CreateSymbolPackage(assemblyPath, outputDir);
+    if (snupkgPath != null)
+    {
+        Console.WriteLine($"Created symbol package: {snupkgPath}");
+    }
+
+    // Push to NuGet feed if requested
+    if (!string.IsNullOrEmpty(packOptions.PushSource))
+    {
+        if (string.IsNullOrEmpty(packOptions.ApiKey))
+        {
+            Console.WriteLine("Error: --api-key is required when using --push.");
+            Environment.Exit(1);
+        }
+
+        Console.WriteLine($"Pushing to {packOptions.PushSource}...");
+        var publisher = new NuGetPublisher(packOptions.ApiKey, packOptions.PushSource);
+        var success = publisher.PushWithSymbolsAsync(nupkgPath, snupkgPath).GetAwaiter().GetResult();
+
+        if (success)
+        {
+            Console.WriteLine($"Successfully pushed {packager.PackageId} {packager.Version}");
+        }
+        else
+        {
+            Console.WriteLine("Push failed.");
+            Environment.Exit(1);
+        }
+    }
+}
+
 record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);
+record PackOptions(bool Pack, string? PushSource, string? ApiKey, string? PackageIdOverride, string? VersionOverride);

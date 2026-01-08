@@ -100,6 +100,14 @@ sharpts --compile script.ts --verify        # Verify emitted IL
 sharpts --compile script.ts --preserveConstEnums  # Keep const enums
 ```
 
+**Generate NuGet package:**
+```bash
+sharpts --compile Library.ts --pack         # Creates Library.1.0.0.nupkg
+sharpts --compile Library.ts --pack --version 2.0.0-beta  # Custom version
+sharpts --compile Library.ts --pack --push https://api.nuget.org/v3/index.json --api-key $KEY
+```
+Package metadata is read from `package.json` in the source directory.
+
 **Decorator support:**
 ```bash
 sharpts --experimentalDecorators script.ts  # Legacy (Stage 2) decorators
