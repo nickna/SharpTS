@@ -177,20 +177,27 @@ public partial class ILCompiler
             preDefined[method.Name.Lexeme] = methodBuilder;
         }
 
-        // Define accessors
+        // Define accessors with PascalCase naming
+        // Note: Explicit accessors keep object-typed signatures because their bodies
+        // use dynamic field storage. Field-backed properties already have typed signatures.
         if (classStmt.Accessors != null)
         {
+            string className = typeBuilder.Name;
+
             foreach (var accessor in classStmt.Accessors)
             {
+                string accessorName = accessor.Name.Lexeme;
+                string pascalName = NamingConventions.ToPascalCase(accessorName);
                 string methodName = accessor.Kind.Type == TokenType.GET
-                    ? $"get_{accessor.Name.Lexeme}"
-                    : $"set_{accessor.Name.Lexeme}";
+                    ? $"get_{pascalName}"
+                    : $"set_{pascalName}";
 
+                // Explicit accessors use object types (their bodies work with dynamic field storage)
                 Type[] paramTypes = accessor.Kind.Type == TokenType.SET
                     ? [typeof(object)]
                     : [];
 
-                MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
+                MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual;
                 if (accessor.IsAbstract)
                 {
                     methodAttrs |= MethodAttributes.Abstract;
@@ -199,12 +206,11 @@ public partial class ILCompiler
                 var methodBuilder = typeBuilder.DefineMethod(
                     methodName,
                     methodAttrs,
-                    typeof(object),
+                    typeof(object),  // Explicit accessors return object
                     paramTypes
                 );
 
-                // Track getter/setter
-                string className = typeBuilder.Name;
+                // Track getter/setter using PascalCase key
                 if (accessor.Kind.Type == TokenType.GET)
                 {
                     if (!_instanceGetters.TryGetValue(className, out var classGetters))
@@ -212,7 +218,7 @@ public partial class ILCompiler
                         classGetters = [];
                         _instanceGetters[className] = classGetters;
                     }
-                    classGetters[accessor.Name.Lexeme] = methodBuilder;
+                    classGetters[pascalName] = methodBuilder;
                 }
                 else
                 {
@@ -221,7 +227,7 @@ public partial class ILCompiler
                         classSetters = [];
                         _instanceSetters[className] = classSetters;
                     }
-                    classSetters[accessor.Name.Lexeme] = methodBuilder;
+                    classSetters[pascalName] = methodBuilder;
                 }
 
                 // Store for body emission
@@ -231,7 +237,81 @@ public partial class ILCompiler
                     _preDefinedAccessors[classStmt.Name.Lexeme] = preDefinedAcc;
                 }
                 preDefinedAcc[methodName] = methodBuilder;
+
+                // Track for PropertyBuilder creation
+                if (!_explicitAccessors.TryGetValue(className, out var accessors))
+                {
+                    accessors = [];
+                    _explicitAccessors[className] = accessors;
+                }
+
+                if (!accessors.TryGetValue(pascalName, out var accessorInfo))
+                {
+                    accessorInfo = (null, null, typeof(object));
+                }
+
+                if (accessor.Kind.Type == TokenType.GET)
+                {
+                    accessors[pascalName] = (methodBuilder, accessorInfo.Setter, typeof(object));
+                }
+                else
+                {
+                    accessors[pascalName] = (accessorInfo.Getter, methodBuilder, typeof(object));
+                }
             }
+
+            // Create PropertyBuilders for explicit accessors
+            CreateExplicitAccessorProperties(typeBuilder, className);
+        }
+    }
+
+    /// <summary>
+    /// Creates PropertyBuilders for explicit accessors after all getter/setter methods are defined.
+    /// </summary>
+    private void CreateExplicitAccessorProperties(TypeBuilder typeBuilder, string className)
+    {
+        if (!_explicitAccessors.TryGetValue(className, out var accessors))
+            return;
+
+        foreach (var (pascalName, (getter, setter, propertyType)) in accessors)
+        {
+            if (getter == null && setter == null)
+                continue;
+
+            // Determine property type: prefer getter return type, then setter param, then fallback
+            Type propType = propertyType;
+            if (getter != null && getter.ReturnType != typeof(void))
+            {
+                propType = getter.ReturnType;
+            }
+            else if (setter != null)
+            {
+                var setterParams = setter.GetParameters();
+                if (setterParams.Length > 0)
+                {
+                    propType = setterParams[0].ParameterType;
+                }
+            }
+
+            var property = typeBuilder.DefineProperty(
+                pascalName,
+                PropertyAttributes.None,
+                propType,
+                null
+            );
+
+            if (getter != null)
+                property.SetGetMethod(getter);
+            if (setter != null)
+                property.SetSetMethod(setter);
+
+            // Track the property
+            if (!_classProperties.TryGetValue(className, out var classProps))
+            {
+                classProps = [];
+                _classProperties[className] = classProps;
+            }
+            classProps[pascalName] = property;
         }
     }
 

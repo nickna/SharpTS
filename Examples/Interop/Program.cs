@@ -21,10 +21,10 @@ Console.WriteLine("--- 1. Class Instantiation and Methods ---");
 var personType = assembly.GetType("Person")!;
 var person = Activator.CreateInstance(personType, "Alice", 30.0)!;
 
-// Property access via getter methods
-var getName = personType.GetMethod("get_name")!;
-var getAge = personType.GetMethod("get_age")!;
-Console.WriteLine($"Created Person: {getName.Invoke(person, null)}, age {getAge.Invoke(person, null)}");
+// Property access via .NET PropertyInfo (PascalCase names)
+var nameProp = personType.GetProperty("Name")!;
+var ageProp = personType.GetProperty("Age")!;
+Console.WriteLine($"Created Person: {nameProp.GetValue(person)}, age {ageProp.GetValue(person)}");
 
 // Call method
 var greet = personType.GetMethod("greet")!;
@@ -34,7 +34,7 @@ Console.WriteLine($"Greeting: {greeting}");
 // Modify state via method
 var haveBirthday = personType.GetMethod("haveBirthday")!;
 haveBirthday.Invoke(person, null);
-Console.WriteLine($"After birthday: age is now {getAge.Invoke(person, null)}");
+Console.WriteLine($"After birthday: age is now {ageProp.GetValue(person)}");
 Console.WriteLine();
 
 // ============================================
@@ -43,16 +43,14 @@ Console.WriteLine();
 Console.WriteLine("--- 2. Property Access ---");
 
 var person2 = Activator.CreateInstance(personType, "Bob", 25.0)!;
-Console.WriteLine($"Original name: {getName.Invoke(person2, null)}");
+Console.WriteLine($"Original name: {nameProp.GetValue(person2)}");
 
-// Set property via setter method
-var setName = personType.GetMethod("set_name")!;
-setName.Invoke(person2, ["Robert"]);
-Console.WriteLine($"After rename: {getName.Invoke(person2, null)}");
+// Set property via PropertyInfo
+nameProp.SetValue(person2, "Robert");
+Console.WriteLine($"After rename: {nameProp.GetValue(person2)}");
 
-var setAge = personType.GetMethod("set_age")!;
-setAge.Invoke(person2, [26.0]);
-Console.WriteLine($"After age update: {getAge.Invoke(person2, null)}");
+ageProp.SetValue(person2, 26.0);
+Console.WriteLine($"After age update: {ageProp.GetValue(person2)}");
 Console.WriteLine();
 
 // ============================================
@@ -83,8 +81,8 @@ Console.WriteLine();
 Console.WriteLine("--- 4. Instance Methods with State ---");
 
 var calc = Activator.CreateInstance(calculatorType)!;
-var getAccumulator = calculatorType.GetMethod("get_accumulator")!;
-Console.WriteLine($"Initial accumulator: {getAccumulator.Invoke(calc, null)}");
+var accumulatorProp = calculatorType.GetProperty("Accumulator")!;
+Console.WriteLine($"Initial accumulator: {accumulatorProp.GetValue(calc)}");
 
 var addToAccumulator = calculatorType.GetMethod("addToAccumulator")!;
 object result1 = addToAccumulator.Invoke(calc, [5.0])!;
@@ -95,7 +93,7 @@ Console.WriteLine($"After adding 3: {result2}");
 
 var reset = calculatorType.GetMethod("reset")!;
 reset.Invoke(calc, null);
-Console.WriteLine($"After reset: {getAccumulator.Invoke(calc, null)}");
+Console.WriteLine($"After reset: {accumulatorProp.GetValue(calc)}");
 Console.WriteLine();
 
 // ============================================
@@ -124,11 +122,11 @@ var getInfo = dogType.GetMethod("getInfo")!;
 string dogInfo = (string)getInfo.Invoke(dog, null)!;
 Console.WriteLine($"Dog info: {dogInfo}");
 
-// Property access on inherited and derived properties
-var dogGetName = dogType.GetMethod("get_name")!;
-var dogGetBreed = dogType.GetMethod("get_breed")!;
-Console.WriteLine($"Dog's name (inherited): {dogGetName.Invoke(dog, null)}");
-Console.WriteLine($"Dog's breed: {dogGetBreed.Invoke(dog, null)}");
+// Property access on inherited and derived properties (PascalCase names)
+var dogNameProp = dogType.GetProperty("Name")!;
+var dogBreedProp = dogType.GetProperty("Breed")!;
+Console.WriteLine($"Dog's name (inherited): {dogNameProp.GetValue(dog)}");
+Console.WriteLine($"Dog's breed: {dogBreedProp.GetValue(dog)}");
 Console.WriteLine();
 
 // ============================================
@@ -166,7 +164,7 @@ Console.WriteLine("Key takeaways:");
 Console.WriteLine("  - Assembly loaded via Assembly.LoadFrom()");
 Console.WriteLine("  - Types accessed via assembly.GetType()");
 Console.WriteLine("  - Instances created with Activator.CreateInstance()");
-Console.WriteLine("  - Properties accessed via get_X()/set_X() methods");
+Console.WriteLine("  - Properties accessed via GetProperty() with PascalCase names");
 Console.WriteLine("  - Methods invoked with MethodInfo.Invoke()");
 Console.WriteLine("  - Static members via BindingFlags.Static");
 Console.WriteLine("  - Inheritance works with method overriding");

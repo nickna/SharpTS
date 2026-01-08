@@ -231,17 +231,23 @@ var person = Activator.CreateInstance(personType, "Alice", 30.0)!;
 
 ### Property Access
 
-Properties use accessor methods `get_X()` and `set_X()`:
+Properties are emitted as real .NET properties with PascalCase names:
 
 ```csharp
 // Get property value
-var getName = personType.GetMethod("get_name")!;
-string name = (string)getName.Invoke(person, null)!;
+var nameProp = personType.GetProperty("Name")!;
+string name = (string)nameProp.GetValue(person)!;
 
 // Set property value
-var setName = personType.GetMethod("set_name")!;
-setName.Invoke(person, ["Robert"]);
+nameProp.SetValue(person, "Robert");
+
+// Or access multiple properties
+var ageProp = personType.GetProperty("Age")!;
+double age = (double)ageProp.GetValue(person)!;
+ageProp.SetValue(person, 31.0);
 ```
+
+**Note:** TypeScript property names are converted to PascalCase (e.g., `firstName` becomes `FirstName`).
 
 ### Method Invocation
 
@@ -310,7 +316,6 @@ Standard compilation references `System.Private.CoreLib` (runtime-only). The `--
 
 ### Current Limitations
 
-- Properties still use `get_X()`/`set_X()` accessor methods
 - Top-level functions are on `$Program` (the `$` is valid in IL)
 - Some async patterns may have edge cases
 
@@ -327,23 +332,29 @@ public class PersonWrapper
 {
     private readonly object _instance;
     private readonly Type _type;
-    private readonly MethodInfo _getName;
-    private readonly MethodInfo _setName;
+    private readonly PropertyInfo _nameProp;
+    private readonly PropertyInfo _ageProp;
     private readonly MethodInfo _greet;
 
     public PersonWrapper(Assembly assembly, string name, double age)
     {
         _type = assembly.GetType("Person")!;
         _instance = Activator.CreateInstance(_type, name, age)!;
-        _getName = _type.GetMethod("get_name")!;
-        _setName = _type.GetMethod("set_name")!;
+        _nameProp = _type.GetProperty("Name")!;
+        _ageProp = _type.GetProperty("Age")!;
         _greet = _type.GetMethod("greet")!;
     }
 
     public string Name
     {
-        get => (string)_getName.Invoke(_instance, null)!;
-        set => _setName.Invoke(_instance, [value]);
+        get => (string)_nameProp.GetValue(_instance)!;
+        set => _nameProp.SetValue(_instance, value);
+    }
+
+    public double Age
+    {
+        get => (double)_ageProp.GetValue(_instance)!;
+        set => _ageProp.SetValue(_instance, value);
     }
 
     public string Greet() => (string)_greet.Invoke(_instance, null)!;
@@ -457,9 +468,9 @@ dotnet run
 
 ### Method/Property Not Found
 
-**Error:** `GetMethod()` returns `null`
+**Error:** `GetMethod()` or `GetProperty()` returns `null`
 
-- Properties use `get_X()` and `set_X()` accessor methods
+- Properties use PascalCase names: `name` becomes `Name`, `firstName` becomes `FirstName`
 - Check `BindingFlags.Static` vs `BindingFlags.Instance`
 - Include `BindingFlags.Public` for public members
 
@@ -548,10 +559,10 @@ var assembly = Assembly.LoadFrom(assemblyPath);
 var personType = assembly.GetType("Person")!;
 var person = Activator.CreateInstance(personType, "Alice", 30.0)!;
 
-// 2. Access properties
-var getName = personType.GetMethod("get_name")!;
-var getAge = personType.GetMethod("get_age")!;
-Console.WriteLine($"Person: {getName.Invoke(person, null)}, age {getAge.Invoke(person, null)}");
+// 2. Access properties (using PascalCase names)
+var nameProp = personType.GetProperty("Name")!;
+var ageProp = personType.GetProperty("Age")!;
+Console.WriteLine($"Person: {nameProp.GetValue(person)}, age {ageProp.GetValue(person)}");
 
 // 3. Call instance method
 var greet = personType.GetMethod("greet")!;

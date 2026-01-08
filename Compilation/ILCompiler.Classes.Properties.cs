@@ -62,38 +62,39 @@ public partial class ILCompiler
     private void DefineInstanceProperty(TypeBuilder typeBuilder, string className, Stmt.Field field, GenericTypeParameterBuilder[]? classGenericParams = null)
     {
         string fieldName = field.Name.Lexeme;
+        string pascalName = NamingConventions.ToPascalCase(fieldName);
         Type propertyType = GetFieldType(field, className, classGenericParams);
 
-        // Track as declared property
-        _declaredPropertyNames[className].Add(fieldName);
-        _propertyTypes[className][fieldName] = propertyType;
+        // Track as declared property (using PascalCase for .NET interop)
+        _declaredPropertyNames[className].Add(pascalName);
+        _propertyTypes[className][pascalName] = propertyType;
 
         if (field.IsReadonly)
         {
-            _readonlyPropertyNames[className].Add(fieldName);
+            _readonlyPropertyNames[className].Add(pascalName);
         }
 
         // Define private backing field with __ prefix to avoid conflicts
         // Uses the actual typed field for efficiency
         var backingField = typeBuilder.DefineField(
-            $"__{fieldName}",
+            $"__{pascalName}",
             propertyType,
             FieldAttributes.Private
         );
-        _propertyBackingFields[className][fieldName] = backingField;
+        _propertyBackingFields[className][pascalName] = backingField;
 
-        // Define the property with the actual type (for C# interop)
+        // Define the property with PascalCase name (for C# interop)
         var property = typeBuilder.DefineProperty(
-            fieldName,
+            pascalName,
             PropertyAttributes.None,
             propertyType,
             null
         );
-        _classProperties[className][fieldName] = property;
+        _classProperties[className][pascalName] = property;
 
         // Define getter method - returns actual property type for proper C# interop
         var getter = typeBuilder.DefineMethod(
-            $"get_{fieldName}",
+            $"get_{pascalName}",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual,
             propertyType,  // Return actual type for C# interop
             Type.EmptyTypes
@@ -106,20 +107,20 @@ public partial class ILCompiler
 
         property.SetGetMethod(getter);
 
-        // Track getter for direct dispatch
+        // Track getter for direct dispatch (using PascalCase key)
         if (!_instanceGetters.TryGetValue(className, out var classGetters))
         {
             classGetters = [];
             _instanceGetters[className] = classGetters;
         }
-        classGetters[fieldName] = getter;
+        classGetters[pascalName] = getter;
 
         // Define setter method - accepts actual property type for proper C# interop
         // For readonly fields: define the setter but don't register it for direct dispatch,
         // so type-checked code won't allow setting, but constructor can via runtime reflection
         {
             var setter = typeBuilder.DefineMethod(
-                $"set_{fieldName}",
+                $"set_{pascalName}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual,
                 typeof(void),    // Standard setter returns void
                 [propertyType]   // Accept actual type for C# interop
@@ -137,7 +138,7 @@ public partial class ILCompiler
                 property.SetSetMethod(setter);
             }
 
-            // Track setter for direct dispatch ONLY for non-readonly fields
+            // Track setter for direct dispatch ONLY for non-readonly fields (using PascalCase key)
             // This enforces readonly semantics at compile-time while allowing
             // constructor assignment via runtime SetFieldsProperty
             if (!field.IsReadonly)
@@ -147,7 +148,7 @@ public partial class ILCompiler
                     classSetters = [];
                     _instanceSetters[className] = classSetters;
                 }
-                classSetters[fieldName] = setter;
+                classSetters[pascalName] = setter;
             }
         }
     }

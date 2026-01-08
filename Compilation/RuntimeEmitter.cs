@@ -608,6 +608,7 @@ public static partial class RuntimeEmitter
         // Objects
         EmitCreateObject(typeBuilder, runtime);
         EmitGetArrayMethod(typeBuilder, runtime);
+        EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitGetFieldsProperty(typeBuilder, runtime);
         EmitSetFieldsProperty(typeBuilder, runtime);
         EmitGetProperty(typeBuilder, runtime);

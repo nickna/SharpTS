@@ -111,6 +111,8 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, Type>> _propertyTypes = [];
     private readonly Dictionary<string, FieldBuilder> _extrasFields = []; // _extras dict field for dynamic properties
     private UnionTypeGenerator? _unionGenerator;
+    // Explicit accessor tracking for PropertyBuilder creation (TypeScript get/set syntax)
+    private readonly Dictionary<string, Dictionary<string, (MethodBuilder? Getter, MethodBuilder? Setter, Type PropertyType)>> _explicitAccessors = [];
 
     // Shared context for definition phase (module name resolution)
     private CompilationContext? _definitionContext;

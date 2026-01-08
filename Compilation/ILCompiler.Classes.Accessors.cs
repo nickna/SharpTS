@@ -11,10 +11,11 @@ public partial class ILCompiler
 {
     private void EmitAccessor(TypeBuilder typeBuilder, Stmt.Accessor accessor, FieldInfo fieldsField)
     {
-        // Use naming convention: get_<propertyName> or set_<propertyName>
+        // Use PascalCase naming convention: get_<PascalPropertyName> or set_<PascalPropertyName>
+        string pascalName = NamingConventions.ToPascalCase(accessor.Name.Lexeme);
         string methodName = accessor.Kind.Type == TokenType.GET
-            ? $"get_{accessor.Name.Lexeme}"
-            : $"set_{accessor.Name.Lexeme}";
+            ? $"get_{pascalName}"
+            : $"set_{pascalName}";
 
         string className = typeBuilder.Name;
         MethodBuilder methodBuilder;
@@ -32,7 +33,7 @@ public partial class ILCompiler
                 ? [typeof(object)]
                 : [];
 
-            MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
+            MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.Virtual;
             if (accessor.IsAbstract)
             {
                 methodAttrs |= MethodAttributes.Abstract;
@@ -45,7 +46,7 @@ public partial class ILCompiler
                 paramTypes
             );
 
-            // Track getter/setter for direct dispatch
+            // Track getter/setter for direct dispatch (using PascalCase key)
             if (accessor.Kind.Type == TokenType.GET)
             {
                 if (!_instanceGetters.TryGetValue(className, out var classGetters))
@@ -53,7 +54,7 @@ public partial class ILCompiler
                     classGetters = [];
                     _instanceGetters[className] = classGetters;
                 }
-                classGetters[accessor.Name.Lexeme] = methodBuilder;
+                classGetters[pascalName] = methodBuilder;
             }
             else
             {
@@ -62,7 +63,7 @@ public partial class ILCompiler
                     classSetters = [];
                     _instanceSetters[className] = classSetters;
                 }
-                classSetters[accessor.Name.Lexeme] = methodBuilder;
+                classSetters[pascalName] = methodBuilder;
             }
         }
 

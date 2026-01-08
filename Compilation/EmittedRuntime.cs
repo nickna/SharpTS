@@ -104,6 +104,7 @@ public class EmittedRuntime
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;
     public MethodBuilder MergeIntoObject { get; set; } = null!;
+    public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
 

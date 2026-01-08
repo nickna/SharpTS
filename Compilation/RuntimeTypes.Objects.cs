@@ -76,8 +76,9 @@ public static partial class RuntimeTypes
         // Class instance - use reflection
         var type = obj.GetType();
 
-        // Check for getter method first (get_<propertyName>)
-        var getterMethod = type.GetMethod($"get_{name}");
+        // Check for getter method first (get_<PascalCaseName>)
+        string pascalName = char.ToUpperInvariant(name[0]) + name[1..];
+        var getterMethod = type.GetMethod($"get_{pascalName}");
         if (getterMethod != null)
         {
             return getterMethod.Invoke(obj, null);
@@ -117,8 +118,9 @@ public static partial class RuntimeTypes
         // Class instance
         var type = obj.GetType();
 
-        // Check for setter method first (set_<propertyName>)
-        var setterMethod = type.GetMethod($"set_{name}");
+        // Check for setter method first (set_<PascalCaseName>)
+        string pascalName = char.ToUpperInvariant(name[0]) + name[1..];
+        var setterMethod = type.GetMethod($"set_{pascalName}");
         if (setterMethod != null)
         {
             setterMethod.Invoke(obj, [value]);

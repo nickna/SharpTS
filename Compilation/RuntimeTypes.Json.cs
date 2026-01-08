@@ -4,6 +4,18 @@ namespace SharpTS.Compilation;
 
 public static partial class RuntimeTypes
 {
+    /// <summary>
+    /// Converts a PascalCase property name to camelCase for JSON serialization.
+    /// </summary>
+    private static string ToCamelCase(string pascalCase)
+    {
+        if (string.IsNullOrEmpty(pascalCase))
+            return pascalCase;
+        if (char.IsLower(pascalCase[0]))
+            return pascalCase;
+        return char.ToLowerInvariant(pascalCase[0]) + pascalCase[1..];
+    }
+
     #region JSON Methods
 
     public static object? JsonParse(object? text)
@@ -201,15 +213,17 @@ public static partial class RuntimeTypes
         var seenKeys = new HashSet<string>();
 
         // Get values from typed backing fields (fields starting with __)
+        // Property names are stored as PascalCase but JSON output should use camelCase
         foreach (var backingField in type.GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance))
         {
             if (backingField.Name.StartsWith("__"))
             {
-                string propName = backingField.Name[2..];
-                seenKeys.Add(propName);
-                if (allowedKeys == null || allowedKeys.Contains(propName))
+                string pascalName = backingField.Name[2..];
+                string camelName = ToCamelCase(pascalName);
+                seenKeys.Add(pascalName);  // Track PascalCase for dedup with _fields
+                if (allowedKeys == null || allowedKeys.Contains(camelName))
                 {
-                    allFields[propName] = backingField.GetValue(value);
+                    allFields[camelName] = backingField.GetValue(value);
                 }
             }
         }

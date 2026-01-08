@@ -119,10 +119,11 @@ public partial class ILCompiler
             foreach (var field in instanceFieldsWithInit)
             {
                 string fieldName = field.Name.Lexeme;
+                string pascalName = NamingConventions.ToPascalCase(fieldName);
 
-                // Check if this is a declared property with a backing field
+                // Check if this is a declared property with a backing field (using PascalCase key)
                 if (_propertyBackingFields.TryGetValue(className, out var backingFields) &&
-                    backingFields.TryGetValue(fieldName, out var backingField))
+                    backingFields.TryGetValue(pascalName, out var backingField))
                 {
                     // Store directly in backing field
                     il.Emit(OpCodes.Ldarg_0);  // this
@@ -131,7 +132,7 @@ public partial class ILCompiler
                     initEmitter.EmitExpression(field.Initializer!);
 
                     // Convert to proper type if needed
-                    Type targetType = _propertyTypes[className][fieldName];
+                    Type targetType = _propertyTypes[className][pascalName];
                     EmitTypeConversion(il, initEmitter, field.Initializer!, targetType);
 
                     il.Emit(OpCodes.Stfld, backingField);

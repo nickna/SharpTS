@@ -554,8 +554,11 @@ public partial class ILEmitter
         // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
 
+        // Convert TypeScript camelCase property name to .NET PascalCase for lookup
+        string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
+
         // Look up the getter in the class hierarchy
-        var getterBuilder = _ctx.ResolveInstanceGetter(className, propertyName);
+        var getterBuilder = _ctx.ResolveInstanceGetter(className, pascalPropertyName);
         if (getterBuilder == null)
             return false;
 
@@ -614,8 +617,11 @@ public partial class ILEmitter
         // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
 
+        // Convert TypeScript camelCase property name to .NET PascalCase for lookup
+        string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
+
         // Look up the setter in the class hierarchy
-        var setterBuilder = _ctx.ResolveInstanceSetter(className, propertyName);
+        var setterBuilder = _ctx.ResolveInstanceSetter(className, pascalPropertyName);
         if (setterBuilder == null)
             return false;
 

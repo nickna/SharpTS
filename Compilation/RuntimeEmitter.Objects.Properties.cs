@@ -5,6 +5,50 @@ namespace SharpTS.Compilation;
 
 public static partial class RuntimeEmitter
 {
+    internal static void EmitToPascalCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ToPascalCase(string name) -> string
+        // Converts "camelCase" to "PascalCase" by upper-casing first character
+        var method = typeBuilder.DefineMethod(
+            "ToPascalCase",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String]
+        );
+        runtime.ToPascalCase = method;
+
+        var il = method.GetILGenerator();
+        var returnOriginalLabel = il.DefineLabel();
+
+        // if (string.IsNullOrEmpty(name)) return name;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty"));
+        il.Emit(OpCodes.Brtrue, returnOriginalLabel);
+
+        // if (char.IsUpper(name[0])) return name;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsUpper", [typeof(char)])!);
+        il.Emit(OpCodes.Brtrue, returnOriginalLabel);
+
+        // return char.ToString(char.ToUpperInvariant(name[0])) + name.Substring(1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("ToUpperInvariant", [typeof(char)])!);
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("ToString", [typeof(char)])!);  // static char.ToString(char)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnOriginalLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
     private static void EmitGetFieldsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // GetFieldsProperty(object obj, string name) -> object
@@ -36,11 +80,12 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check for getter method first: var getterMethod = obj.GetType().GetMethod("get_" + name);
+        // Check for getter method first: var getterMethod = obj.GetType().GetMethod("get_" + ToPascalCase(name));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "get_");
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToPascalCase);  // Convert to PascalCase
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, getterMethodLocal);
@@ -192,11 +237,12 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
 
-        // Check for setter method first: var setterMethod = obj.GetType().GetMethod("set_" + name);
+        // Check for setter method first: var setterMethod = obj.GetType().GetMethod("set_" + ToPascalCase(name));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "set_");
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToPascalCase);  // Convert to PascalCase
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, setterMethodLocal);
