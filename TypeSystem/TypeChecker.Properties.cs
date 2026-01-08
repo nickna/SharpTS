@@ -385,6 +385,68 @@ public partial class TypeChecker
             return new TypeInfo.Set(elementType);
         }
 
+        // Handle new WeakMap() and new WeakMap<K, V>() constructor
+        if (newExpr.ClassName.Lexeme == "WeakMap")
+        {
+            // WeakMap() accepts 0 arguments only (no iterable initialization)
+            if (newExpr.Arguments.Count > 0)
+            {
+                throw new Exception("Type Error: WeakMap constructor does not accept arguments.");
+            }
+
+            // Determine key and value types from type arguments or default to any
+            TypeInfo keyType = new TypeInfo.Any();
+            TypeInfo valueType = new TypeInfo.Any();
+
+            if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 2)
+            {
+                keyType = ToTypeInfo(newExpr.TypeArgs[0]);
+                valueType = ToTypeInfo(newExpr.TypeArgs[1]);
+
+                // Validate that key type is not a primitive
+                if (IsPrimitiveType(keyType))
+                {
+                    throw new Exception($"Type Error: WeakMap keys must be objects, not '{keyType}'.");
+                }
+            }
+            else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
+            {
+                throw new Exception("Type Error: WeakMap requires exactly 2 type arguments: WeakMap<K, V>");
+            }
+
+            return new TypeInfo.WeakMap(keyType, valueType);
+        }
+
+        // Handle new WeakSet() and new WeakSet<T>() constructor
+        if (newExpr.ClassName.Lexeme == "WeakSet")
+        {
+            // WeakSet() accepts 0 arguments only (no iterable initialization)
+            if (newExpr.Arguments.Count > 0)
+            {
+                throw new Exception("Type Error: WeakSet constructor does not accept arguments.");
+            }
+
+            // Determine element type from type argument or default to any
+            TypeInfo elementType = new TypeInfo.Any();
+
+            if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
+            {
+                elementType = ToTypeInfo(newExpr.TypeArgs[0]);
+
+                // Validate that element type is not a primitive
+                if (IsPrimitiveType(elementType))
+                {
+                    throw new Exception($"Type Error: WeakSet values must be objects, not '{elementType}'.");
+                }
+            }
+            else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
+            {
+                throw new Exception("Type Error: WeakSet requires exactly 1 type argument: WeakSet<T>");
+            }
+
+            return new TypeInfo.WeakSet(elementType);
+        }
+
         TypeInfo type = LookupVariable(newExpr.ClassName);
 
         // Check for abstract class instantiation
@@ -782,6 +844,20 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetSetMemberType(get.Name.Lexeme, setType.ElementType);
             if (memberType != null) return memberType;
             throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Set'.");
+        }
+        // Handle WeakMap instance methods
+        if (objType is TypeInfo.WeakMap weakMapType)
+        {
+            var memberType = BuiltInTypes.GetWeakMapMemberType(get.Name.Lexeme, weakMapType.KeyType, weakMapType.ValueType);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'WeakMap'.");
+        }
+        // Handle WeakSet instance methods
+        if (objType is TypeInfo.WeakSet weakSetType)
+        {
+            var memberType = BuiltInTypes.GetWeakSetMemberType(get.Name.Lexeme, weakSetType.ElementType);
+            if (memberType != null) return memberType;
+            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'WeakSet'.");
         }
         return new TypeInfo.Any();
     }

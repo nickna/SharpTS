@@ -722,6 +722,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: WeakMap method calls (based on type info)
+        if (objType is TypeSystem.TypeInfo.WeakMap)
+        {
+            EmitWeakMapMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
+        // Special case: WeakSet method calls (based on type info)
+        if (objType is TypeSystem.TypeInfo.WeakSet)
+        {
+            EmitWeakSetMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
         // Special case: RegExp method calls
         if (methodName is "test" or "exec")
         {
@@ -1700,6 +1714,20 @@ public partial class ILEmitter
         if (n.ClassName.Lexeme == "Set")
         {
             EmitNewSet(n.Arguments);
+            return;
+        }
+
+        // Special case: new WeakMap() constructor
+        if (n.ClassName.Lexeme == "WeakMap")
+        {
+            EmitNewWeakMap();
+            return;
+        }
+
+        // Special case: new WeakSet() constructor
+        if (n.ClassName.Lexeme == "WeakSet")
+        {
+            EmitNewWeakSet();
             return;
         }
 
@@ -2758,6 +2786,211 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.SetForEach);
                 IL.Emit(OpCodes.Ldnull); // forEach returns undefined
+                return;
+
+            // ES2025 Set Operations
+            case "union":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetUnion);
+                return;
+
+            case "intersection":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIntersection);
+                return;
+
+            case "difference":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetDifference);
+                return;
+
+            case "symmetricDifference":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSymmetricDifference);
+                return;
+
+            case "isSubsetOf":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIsSubsetOf);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+
+            case "isSupersetOf":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIsSupersetOf);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+
+            case "isDisjointFrom":
+                EmitSetOperationArg(arguments);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIsDisjointFrom);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Emits the argument for ES2025 Set operations (union, intersection, etc.).
+    /// </summary>
+    private void EmitSetOperationArg(List<Expr> arguments)
+    {
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+    }
+
+    /// <summary>
+    /// Emits code for new WeakMap() construction.
+    /// </summary>
+    private void EmitNewWeakMap()
+    {
+        // new WeakMap() - empty weak map (no constructor arguments supported)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateWeakMap);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new WeakSet() construction.
+    /// </summary>
+    private void EmitNewWeakSet()
+    {
+        // new WeakSet() - empty weak set (no constructor arguments supported)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateWeakSet);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for WeakMap method calls.
+    /// </summary>
+    private void EmitWeakMapMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the WeakMap object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            case "get":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakMapGet);
+                return;
+
+            case "set":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakMapSet);
+                return;
+
+            case "has":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakMapHas);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+
+            case "delete":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakMapDelete);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Emits code for WeakSet method calls.
+    /// </summary>
+    private void EmitWeakSetMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the WeakSet object
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        switch (methodName)
+        {
+            case "add":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakSetAdd);
+                return;
+
+            case "has":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakSetHas);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                return;
+
+            case "delete":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.WeakSetDelete);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 return;
         }
     }

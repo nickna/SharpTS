@@ -68,6 +68,18 @@ public partial class Interpreter
             return new SharpTSSet();
         }
 
+        // Handle new WeakMap() constructor (empty only)
+        if (newExpr.ClassName.Lexeme == "WeakMap")
+        {
+            return new SharpTSWeakMap();
+        }
+
+        // Handle new WeakSet() constructor (empty only)
+        if (newExpr.ClassName.Lexeme == "WeakSet")
+        {
+            return new SharpTSWeakSet();
+        }
+
         object? klass = _environment.Get(newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-07 (Async generators, for await...of, async iterator protocol)
+**Last Updated:** 2026-01-07 (ES2025 Set operations, WeakMap, WeakSet)
 
 ## Legend
 - ✅ Implemented
@@ -186,7 +186,8 @@ This document tracks TypeScript language features and their implementation statu
 | `Array.isArray` | ✅ | Type guard for array detection |
 | `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
 | `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
-| `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys |
+| `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys; ES2025 Set operations (union, intersection, difference, symmetricDifference, isSubsetOf, isSupersetOf, isDisjointFrom) |
+| `WeakMap`/`WeakSet` | ✅ | Full API (get, set, has, delete for WeakMap; add, has, delete for WeakSet); object-only keys/values; no iteration or size |
 | `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
 
 ---
@@ -563,3 +564,17 @@ _No known bugs at this time._
 - ✅ Async generators (`async function*`) with `yield`, `yield*`, `.next()`, `.return()`, `.throw()`
 - ✅ Async iterator protocol via `Symbol.asyncIterator`
 - ❌ Compiler support for async generators (pending)
+
+### Phase 31 Features (ES2025 Set Operations & WeakMap/WeakSet)
+- ✅ ES2025 Set operations: `union(other)`, `intersection(other)`, `difference(other)`, `symmetricDifference(other)`
+- ✅ ES2025 Set predicates: `isSubsetOf(other)`, `isSupersetOf(other)`, `isDisjointFrom(other)`
+- ✅ All Set operations return new Set instances (immutable pattern)
+- ✅ `WeakMap<K, V>` with object-only keys using `ConditionalWeakTable`
+- ✅ WeakMap methods: `get(key)`, `set(key, value)`, `has(key)`, `delete(key)`
+- ✅ `WeakSet<T>` with object-only values using `ConditionalWeakTable`
+- ✅ WeakSet methods: `add(value)`, `has(value)`, `delete(value)`
+- ✅ Compile-time primitive key/value rejection for WeakMap/WeakSet
+- ✅ Runtime primitive validation with descriptive error messages
+- ✅ TypeInfo records: `WeakMap(KeyType, ValueType)`, `WeakSet(ElementType)`
+- ✅ .NET interop: WeakMap/WeakSet map to `object` (opaque type)
+- ✅ Full interpreter and IL compiler support with 90 test cases (48 Set operations + 42 WeakMap/WeakSet)

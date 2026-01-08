@@ -110,6 +110,146 @@ public class SharpTSSet
     /// </summary>
     internal IEnumerable<object> InternalValues => _set;
 
+    #region ES2025 Set Operations
+
+    /// <summary>
+    /// Returns a new Set containing all elements from both this Set and the other Set.
+    /// ES2025: Set.prototype.union()
+    /// </summary>
+    public SharpTSSet Union(SharpTSSet other)
+    {
+        var result = new SharpTSSet(_set);
+        foreach (var value in other._set)
+        {
+            result._set.Add(value);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing only elements present in both this Set and the other Set.
+    /// ES2025: Set.prototype.intersection()
+    /// </summary>
+    public SharpTSSet Intersection(SharpTSSet other)
+    {
+        var result = new SharpTSSet();
+        foreach (var value in _set)
+        {
+            if (other._set.Contains(value))
+            {
+                result._set.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing elements in this Set but not in the other Set.
+    /// ES2025: Set.prototype.difference()
+    /// </summary>
+    public SharpTSSet Difference(SharpTSSet other)
+    {
+        var result = new SharpTSSet();
+        foreach (var value in _set)
+        {
+            if (!other._set.Contains(value))
+            {
+                result._set.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing elements in either Set but not in both.
+    /// ES2025: Set.prototype.symmetricDifference()
+    /// </summary>
+    public SharpTSSet SymmetricDifference(SharpTSSet other)
+    {
+        var result = new SharpTSSet();
+        // Add elements in this but not in other
+        foreach (var value in _set)
+        {
+            if (!other._set.Contains(value))
+            {
+                result._set.Add(value);
+            }
+        }
+        // Add elements in other but not in this
+        foreach (var value in other._set)
+        {
+            if (!_set.Contains(value))
+            {
+                result._set.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns true if every element in this Set is also in the other Set.
+    /// ES2025: Set.prototype.isSubsetOf()
+    /// </summary>
+    public bool IsSubsetOf(SharpTSSet other)
+    {
+        foreach (var value in _set)
+        {
+            if (!other._set.Contains(value))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true if every element in the other Set is also in this Set.
+    /// ES2025: Set.prototype.isSupersetOf()
+    /// </summary>
+    public bool IsSupersetOf(SharpTSSet other)
+    {
+        foreach (var value in other._set)
+        {
+            if (!_set.Contains(value))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true if this Set and the other Set have no elements in common.
+    /// ES2025: Set.prototype.isDisjointFrom()
+    /// </summary>
+    public bool IsDisjointFrom(SharpTSSet other)
+    {
+        // Iterate over the smaller set for efficiency
+        if (_set.Count <= other._set.Count)
+        {
+            foreach (var value in _set)
+            {
+                if (other._set.Contains(value))
+                {
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            foreach (var value in other._set)
+            {
+                if (_set.Contains(value))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    #endregion
+
     private IEnumerable<object?> EnumerateValues()
     {
         foreach (var value in _set)

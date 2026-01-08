@@ -284,11 +284,12 @@ public static class BuiltInTypes
     /// </summary>
     public static TypeInfo? GetSetMemberType(string name, TypeInfo elementType)
     {
+        var setType = new TypeInfo.Set(elementType);
+
         return name switch
         {
             "size" => NumberType,
-            "add" => new TypeInfo.Function([elementType],
-                new TypeInfo.Set(elementType)),  // Returns this for chaining
+            "add" => new TypeInfo.Function([elementType], setType),  // Returns this for chaining
             "has" => new TypeInfo.Function([elementType], BooleanType),
             "delete" => new TypeInfo.Function([elementType], BooleanType),
             "clear" => new TypeInfo.Function([], VoidType),
@@ -301,6 +302,50 @@ public static class BuiltInTypes
             "forEach" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType, elementType], VoidType)],
                 VoidType),
+
+            // ES2025 Set Operations
+            "union" => new TypeInfo.Function([setType], setType),
+            "intersection" => new TypeInfo.Function([setType], setType),
+            "difference" => new TypeInfo.Function([setType], setType),
+            "symmetricDifference" => new TypeInfo.Function([setType], setType),
+            "isSubsetOf" => new TypeInfo.Function([setType], BooleanType),
+            "isSupersetOf" => new TypeInfo.Function([setType], BooleanType),
+            "isDisjointFrom" => new TypeInfo.Function([setType], BooleanType),
+
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance methods on WeakMap objects.
+    /// WeakMap has no size property and no iteration methods.
+    /// </summary>
+    public static TypeInfo? GetWeakMapMemberType(string name, TypeInfo keyType, TypeInfo valueType)
+    {
+        return name switch
+        {
+            "get" => new TypeInfo.Function([keyType],
+                new TypeInfo.Union([valueType, new TypeInfo.Null()])),
+            "set" => new TypeInfo.Function([keyType, valueType],
+                new TypeInfo.WeakMap(keyType, valueType)),  // Returns this for chaining
+            "has" => new TypeInfo.Function([keyType], BooleanType),
+            "delete" => new TypeInfo.Function([keyType], BooleanType),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance methods on WeakSet objects.
+    /// WeakSet has no size property and no iteration methods.
+    /// </summary>
+    public static TypeInfo? GetWeakSetMemberType(string name, TypeInfo elementType)
+    {
+        return name switch
+        {
+            "add" => new TypeInfo.Function([elementType],
+                new TypeInfo.WeakSet(elementType)),  // Returns this for chaining
+            "has" => new TypeInfo.Function([elementType], BooleanType),
+            "delete" => new TypeInfo.Function([elementType], BooleanType),
             _ => null
         };
     }

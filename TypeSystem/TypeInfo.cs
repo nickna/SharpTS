@@ -202,6 +202,24 @@ public abstract record TypeInfo
         public override string ToString() => $"IterableIterator<{ElementType}>";
     }
 
+    /// <summary>
+    /// Represents the WeakMap&lt;K, V&gt; built-in type for weak key-value collections.
+    /// Keys must be objects (not primitives). No size property, no iteration.
+    /// </summary>
+    public record WeakMap(TypeInfo KeyType, TypeInfo ValueType) : TypeInfo
+    {
+        public override string ToString() => $"WeakMap<{KeyType}, {ValueType}>";
+    }
+
+    /// <summary>
+    /// Represents the WeakSet&lt;T&gt; built-in type for weak value collections.
+    /// Values must be objects (not primitives). No size property, no iteration.
+    /// </summary>
+    public record WeakSet(TypeInfo ElementType) : TypeInfo
+    {
+        public override string ToString() => $"WeakSet<{ElementType}>";
+    }
+
     public record Tuple(
         List<TypeInfo> ElementTypes,
         int RequiredCount,

@@ -210,6 +210,32 @@ public partial class TypeChecker
             return IsCompatible(expPromise.ValueType, actPromise.ValueType);
         }
 
+        // Map type compatibility - Map<K1, V1> is compatible with Map<K2, V2> if K1=K2 and V1=V2
+        if (expected is TypeInfo.Map expMap && actual is TypeInfo.Map actMap)
+        {
+            return IsCompatible(expMap.KeyType, actMap.KeyType) &&
+                   IsCompatible(expMap.ValueType, actMap.ValueType);
+        }
+
+        // Set type compatibility - Set<T1> is compatible with Set<T2> if T1=T2
+        if (expected is TypeInfo.Set expSet && actual is TypeInfo.Set actSet)
+        {
+            return IsCompatible(expSet.ElementType, actSet.ElementType);
+        }
+
+        // WeakMap type compatibility - WeakMap<K1, V1> is compatible with WeakMap<K2, V2> if K1=K2 and V1=V2
+        if (expected is TypeInfo.WeakMap expWeakMap && actual is TypeInfo.WeakMap actWeakMap)
+        {
+            return IsCompatible(expWeakMap.KeyType, actWeakMap.KeyType) &&
+                   IsCompatible(expWeakMap.ValueType, actWeakMap.ValueType);
+        }
+
+        // WeakSet type compatibility - WeakSet<T1> is compatible with WeakSet<T2> if T1=T2
+        if (expected is TypeInfo.WeakSet expWeakSet && actual is TypeInfo.WeakSet actWeakSet)
+        {
+            return IsCompatible(expWeakSet.ElementType, actWeakSet.ElementType);
+        }
+
         if (expected is TypeInfo.Instance i1 && actual is TypeInfo.Instance i2)
         {
             // Handle InstantiatedGeneric comparison
@@ -501,6 +527,11 @@ public partial class TypeChecker
     private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any;
     private bool IsString(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING || t is TypeInfo.StringLiteral || t is TypeInfo.Any;
     private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any;
+
+    /// <summary>
+    /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
+    /// </summary>
+    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol;
 
     private bool IsSubclassOf(TypeInfo.Class? subclass, TypeInfo.Class target)
     {

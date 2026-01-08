@@ -138,5 +138,162 @@ public static partial class RuntimeTypes
         }
     }
 
+    #region ES2025 Set Operations
+
+    /// <summary>
+    /// Returns a new Set containing all elements from both Sets.
+    /// ES2025: Set.prototype.union()
+    /// </summary>
+    public static object SetUnion(object? set1, object? set2)
+    {
+        var result = new HashSet<object>(SharpTS.Runtime.Types.ReferenceEqualityComparer.Instance);
+        if (set1 is HashSet<object> hashSet1)
+        {
+            foreach (var value in hashSet1)
+                result.Add(value);
+        }
+        if (set2 is HashSet<object> hashSet2)
+        {
+            foreach (var value in hashSet2)
+                result.Add(value);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing only elements present in both Sets.
+    /// ES2025: Set.prototype.intersection()
+    /// </summary>
+    public static object SetIntersection(object? set1, object? set2)
+    {
+        var result = new HashSet<object>(SharpTS.Runtime.Types.ReferenceEqualityComparer.Instance);
+        if (set1 is HashSet<object> hashSet1 && set2 is HashSet<object> hashSet2)
+        {
+            foreach (var value in hashSet1)
+            {
+                if (hashSet2.Contains(value))
+                    result.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing elements in set1 but not in set2.
+    /// ES2025: Set.prototype.difference()
+    /// </summary>
+    public static object SetDifference(object? set1, object? set2)
+    {
+        var result = new HashSet<object>(SharpTS.Runtime.Types.ReferenceEqualityComparer.Instance);
+        if (set1 is HashSet<object> hashSet1)
+        {
+            var hashSet2 = set2 as HashSet<object>;
+            foreach (var value in hashSet1)
+            {
+                if (hashSet2 == null || !hashSet2.Contains(value))
+                    result.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns a new Set containing elements in either Set but not in both.
+    /// ES2025: Set.prototype.symmetricDifference()
+    /// </summary>
+    public static object SetSymmetricDifference(object? set1, object? set2)
+    {
+        var result = new HashSet<object>(SharpTS.Runtime.Types.ReferenceEqualityComparer.Instance);
+        var hashSet1 = set1 as HashSet<object>;
+        var hashSet2 = set2 as HashSet<object>;
+
+        if (hashSet1 != null)
+        {
+            foreach (var value in hashSet1)
+            {
+                if (hashSet2 == null || !hashSet2.Contains(value))
+                    result.Add(value);
+            }
+        }
+        if (hashSet2 != null)
+        {
+            foreach (var value in hashSet2)
+            {
+                if (hashSet1 == null || !hashSet1.Contains(value))
+                    result.Add(value);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Returns true if every element in set1 is also in set2.
+    /// ES2025: Set.prototype.isSubsetOf()
+    /// </summary>
+    public static bool SetIsSubsetOf(object? set1, object? set2)
+    {
+        if (set1 is not HashSet<object> hashSet1)
+            return true;  // Empty set is subset of everything
+        if (set2 is not HashSet<object> hashSet2)
+            return hashSet1.Count == 0;
+
+        foreach (var value in hashSet1)
+        {
+            if (!hashSet2.Contains(value))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true if every element in set2 is also in set1.
+    /// ES2025: Set.prototype.isSupersetOf()
+    /// </summary>
+    public static bool SetIsSupersetOf(object? set1, object? set2)
+    {
+        if (set2 is not HashSet<object> hashSet2)
+            return true;  // Everything is superset of empty set
+        if (set1 is not HashSet<object> hashSet1)
+            return hashSet2.Count == 0;
+
+        foreach (var value in hashSet2)
+        {
+            if (!hashSet1.Contains(value))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true if set1 and set2 have no elements in common.
+    /// ES2025: Set.prototype.isDisjointFrom()
+    /// </summary>
+    public static bool SetIsDisjointFrom(object? set1, object? set2)
+    {
+        if (set1 is not HashSet<object> hashSet1 || set2 is not HashSet<object> hashSet2)
+            return true;  // Empty sets are disjoint from everything
+
+        // Iterate over the smaller set for efficiency
+        if (hashSet1.Count <= hashSet2.Count)
+        {
+            foreach (var value in hashSet1)
+            {
+                if (hashSet2.Contains(value))
+                    return false;
+            }
+        }
+        else
+        {
+            foreach (var value in hashSet2)
+            {
+                if (hashSet1.Contains(value))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    #endregion
+
     #endregion
 }

@@ -19,6 +19,15 @@ public static partial class RuntimeEmitter
         EmitSetValues(typeBuilder, runtime);
         EmitSetEntries(typeBuilder, runtime);
         EmitSetForEach(typeBuilder, runtime);
+
+        // ES2025 Set Operations
+        EmitSetUnion(typeBuilder, runtime);
+        EmitSetIntersection(typeBuilder, runtime);
+        EmitSetDifference(typeBuilder, runtime);
+        EmitSetSymmetricDifference(typeBuilder, runtime);
+        EmitSetIsSubsetOf(typeBuilder, runtime);
+        EmitSetIsSupersetOf(typeBuilder, runtime);
+        EmitSetIsDisjointFrom(typeBuilder, runtime);
     }
 
     private static void EmitCreateSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -199,4 +208,127 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetForEach")!);
         il.Emit(OpCodes.Ret);
     }
+
+    #region ES2025 Set Operations
+
+    private static void EmitSetUnion(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetUnion",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetUnion = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetUnion")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetIntersection(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetIntersection",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetIntersection = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetIntersection")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetDifference",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetDifference = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetDifference")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetSymmetricDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetSymmetricDifference",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetSymmetricDifference = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetSymmetricDifference")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetIsSubsetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetIsSubsetOf",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetIsSubsetOf = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetIsSubsetOf")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetIsSupersetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetIsSupersetOf",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetIsSupersetOf = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetIsSupersetOf")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitSetIsDisjointFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetIsDisjointFrom",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]
+        );
+        runtime.SetIsDisjointFrom = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("SetIsDisjointFrom")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
 }

@@ -228,6 +228,28 @@ public class EmittedRuntime
     public MethodBuilder SetEntries { get; set; } = null!;
     public MethodBuilder SetForEach { get; set; } = null!;
 
+    // ES2025 Set Operations
+    public MethodBuilder SetUnion { get; set; } = null!;
+    public MethodBuilder SetIntersection { get; set; } = null!;
+    public MethodBuilder SetDifference { get; set; } = null!;
+    public MethodBuilder SetSymmetricDifference { get; set; } = null!;
+    public MethodBuilder SetIsSubsetOf { get; set; } = null!;
+    public MethodBuilder SetIsSupersetOf { get; set; } = null!;
+    public MethodBuilder SetIsDisjointFrom { get; set; } = null!;
+
+    // WeakMap support
+    public MethodBuilder CreateWeakMap { get; set; } = null!;
+    public MethodBuilder WeakMapGet { get; set; } = null!;
+    public MethodBuilder WeakMapSet { get; set; } = null!;
+    public MethodBuilder WeakMapHas { get; set; } = null!;
+    public MethodBuilder WeakMapDelete { get; set; } = null!;
+
+    // WeakSet support
+    public MethodBuilder CreateWeakSet { get; set; } = null!;
+    public MethodBuilder WeakSetAdd { get; set; } = null!;
+    public MethodBuilder WeakSetHas { get; set; } = null!;
+    public MethodBuilder WeakSetDelete { get; set; } = null!;
+
     // Date support
     public MethodBuilder DateNow { get; set; } = null!;
     public MethodBuilder CreateDateNoArgs { get; set; } = null!;

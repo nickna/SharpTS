@@ -137,6 +137,8 @@ public class TypeMapper
         TypeInfo.Never => _types.Void,
         TypeInfo.Map m => MapMapTypeStrict(m),
         TypeInfo.Set s => MapSetTypeStrict(s),
+        TypeInfo.WeakMap => _types.Object, // WeakMap is opaque in .NET interop
+        TypeInfo.WeakSet => _types.Object, // WeakSet is opaque in .NET interop
         TypeInfo.Date => _types.DateTime,
         TypeInfo.RegExp => _types.Regex,
         TypeInfo.Symbol => _types.String, // Symbols map to string keys

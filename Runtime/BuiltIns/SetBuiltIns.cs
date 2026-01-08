@@ -85,6 +85,63 @@ public static class SetBuiltIns
                 return null;
             }),
 
+            // ES2025 Set Operations
+            "union" => new BuiltInMethod("union", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: union requires a Set argument.");
+                return set.Union(other);
+            }),
+
+            "intersection" => new BuiltInMethod("intersection", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: intersection requires a Set argument.");
+                return set.Intersection(other);
+            }),
+
+            "difference" => new BuiltInMethod("difference", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: difference requires a Set argument.");
+                return set.Difference(other);
+            }),
+
+            "symmetricDifference" => new BuiltInMethod("symmetricDifference", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: symmetricDifference requires a Set argument.");
+                return set.SymmetricDifference(other);
+            }),
+
+            "isSubsetOf" => new BuiltInMethod("isSubsetOf", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: isSubsetOf requires a Set argument.");
+                return set.IsSubsetOf(other);
+            }),
+
+            "isSupersetOf" => new BuiltInMethod("isSupersetOf", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: isSupersetOf requires a Set argument.");
+                return set.IsSupersetOf(other);
+            }),
+
+            "isDisjointFrom" => new BuiltInMethod("isDisjointFrom", 1, (_, recv, args) =>
+            {
+                var set = (SharpTSSet)recv!;
+                var other = args[0] as SharpTSSet
+                    ?? throw new Exception("Runtime Error: isDisjointFrom requires a Set argument.");
+                return set.IsDisjointFrom(other);
+            }),
+
             _ => null
         };
     }

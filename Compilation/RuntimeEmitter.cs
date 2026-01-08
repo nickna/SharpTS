@@ -683,6 +683,10 @@ public static partial class RuntimeEmitter
         EmitMapMethods(typeBuilder, runtime);
         // Set methods
         EmitSetMethods(typeBuilder, runtime);
+        // WeakMap methods
+        EmitWeakMapMethods(typeBuilder, runtime);
+        // WeakSet methods
+        EmitWeakSetMethods(typeBuilder, runtime);
         // Dynamic import methods
         EmitDynamicImportMethods(typeBuilder, runtime);
         // Iterator protocol methods

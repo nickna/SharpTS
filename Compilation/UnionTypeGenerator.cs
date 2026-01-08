@@ -76,6 +76,8 @@ public class UnionTypeGenerator
         TSTypeInfo.Record => "Object",
         TSTypeInfo.Map => "Map",
         TSTypeInfo.Set => "Set",
+        TSTypeInfo.WeakMap => "WeakMap",
+        TSTypeInfo.WeakSet => "WeakSet",
         _ => type.GetType().Name
     };
 
