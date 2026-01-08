@@ -185,7 +185,7 @@ var person = new Person("Alice", 30.0);  // Direct instantiation
 Console.WriteLine(person.name);          // Direct property access
 string greeting = person.greet();        // Typed return values
 ```
-[Example code](Examples\Interop\README.md)
+[Example code](Examples/Interop/README.md)
 ## Documentation
 
 - [**Architecture Guide**](ARCHITECTURE.md) - Deep dive into the compiler/interpreter internals
