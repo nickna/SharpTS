@@ -2000,8 +2000,6 @@ class Calculator
 
 SharpTS focuses on core TypeScript features. The following are not currently supported:
 
-- **Namespaces** (use modules instead)
-- **Declaration merging**
 - **Ambient declarations** (`.d.ts` files)
 - **JSX/TSX**
 - **Decorators on parameters** (class and method decorators only)
