@@ -1,0 +1,516 @@
+using SharpTS.Parsing;
+
+namespace SharpTS.TypeSystem;
+
+/// <summary>
+/// Class declaration type checking - handles class statements including methods, fields, accessors, and generics.
+/// </summary>
+public partial class TypeChecker
+{
+    private void CheckClassDeclaration(Stmt.Class classStmt)
+    {
+        // Check class decorators
+        CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
+
+        TypeInfo.Class? superclass = null;
+        if (classStmt.Superclass != null)
+        {
+            TypeInfo superType = LookupVariable(classStmt.Superclass);
+            if (superType is TypeInfo.Instance si && si.ClassType is TypeInfo.Class sic)
+                superclass = sic;
+            else if (superType is TypeInfo.Class sc)
+                superclass = sc;
+            else
+                throw new Exception("Superclass must be a class.");
+        }
+
+        // Handle generic type parameters
+        List<TypeInfo.TypeParameter>? classTypeParams = null;
+        TypeEnvironment classTypeEnv = new(_environment);
+        if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
+        {
+            classTypeParams = [];
+            foreach (var tp in classStmt.TypeParams)
+            {
+                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                classTypeParams.Add(typeParam);
+                classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+        }
+
+        // Use classTypeEnv for type resolution so T resolves correctly
+        TypeEnvironment savedEnvForClass = _environment;
+        _environment = classTypeEnv;
+
+        Dictionary<string, TypeInfo> declaredMethods = [];
+        Dictionary<string, TypeInfo> declaredStaticMethods = [];
+        Dictionary<string, TypeInfo> declaredStaticProperties = [];
+        Dictionary<string, AccessModifier> methodAccess = [];
+        Dictionary<string, AccessModifier> fieldAccess = [];
+        HashSet<string> readonlyFields = [];
+        HashSet<string> abstractMethods = [];
+        HashSet<string> abstractGetters = [];
+        HashSet<string> abstractSetters = [];
+
+        // Helper to build a TypeInfo.Function from a method declaration
+        TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
+        {
+            List<TypeInfo> methodParamTypes = [];
+            TypeInfo methodReturnType = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Void();
+
+            int methodRequiredParams = 0;
+            bool methodSeenDefault = false;
+
+            foreach (var param in method.Parameters)
+            {
+                methodParamTypes.Add(param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any());
+
+                if (param.IsRest) continue;
+
+                if (param.DefaultValue != null || param.IsOptional)
+                {
+                    methodSeenDefault = true;
+                }
+                else
+                {
+                    if (methodSeenDefault)
+                    {
+                        throw new Exception($"Type Error: Required parameter cannot follow optional parameter in method '{method.Name.Lexeme}'.");
+                    }
+                    methodRequiredParams++;
+                }
+            }
+
+            bool methodHasRest = method.Parameters.Any(p => p.IsRest);
+            return new TypeInfo.Function(methodParamTypes, methodReturnType, methodRequiredParams, methodHasRest);
+        }
+
+        // First pass: collect signatures, grouping overloads
+        // Group methods by name to detect overloads
+        var methodGroups = classStmt.Methods.GroupBy(m => m.Name.Lexeme).ToList();
+
+        foreach (var group in methodGroups)
+        {
+            string methodName = group.Key;
+            var methods = group.ToList();
+
+            // Separate overload signatures (null body) from implementations
+            var signatures = methods.Where(m => m.Body == null && !m.IsAbstract).ToList();
+            var implementations = methods.Where(m => m.Body != null).ToList();
+            var abstractDecls = methods.Where(m => m.IsAbstract).ToList();
+
+            // Handle abstract methods (no body, but marked abstract)
+            if (abstractDecls.Count > 0)
+            {
+                if (abstractDecls.Count > 1)
+                {
+                    throw new Exception($"Type Error: Cannot have multiple abstract declarations for method '{methodName}'.");
+                }
+                var abstractMethod = abstractDecls[0];
+                var funcType = BuildMethodFuncType(abstractMethod);
+
+                if (abstractMethod.IsStatic)
+                    declaredStaticMethods[methodName] = funcType;
+                else
+                    declaredMethods[methodName] = funcType;
+
+                methodAccess[methodName] = abstractMethod.Access;
+                abstractMethods.Add(methodName);
+                continue;
+            }
+
+            // Handle overloaded methods
+            if (signatures.Count > 0)
+            {
+                if (implementations.Count == 0)
+                {
+                    throw new Exception($"Type Error: Overloaded method '{methodName}' has no implementation.");
+                }
+                if (implementations.Count > 1)
+                {
+                    throw new Exception($"Type Error: Overloaded method '{methodName}' has multiple implementations.");
+                }
+
+                var implementation = implementations[0];
+                var signatureTypes = signatures.Select(BuildMethodFuncType).ToList();
+                var implType = BuildMethodFuncType(implementation);
+
+                // Validate implementation is compatible with all signatures
+                foreach (var sig in signatureTypes)
+                {
+                    if (implType.MinArity > sig.MinArity)
+                    {
+                        throw new Exception($"Type Error: Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                    }
+                }
+
+                var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+
+                if (implementation.IsStatic)
+                    declaredStaticMethods[methodName] = overloadedFunc;
+                else
+                    declaredMethods[methodName] = overloadedFunc;
+
+                methodAccess[methodName] = implementation.Access;
+            }
+            else if (implementations.Count == 1)
+            {
+                // Single non-overloaded method
+                var method = implementations[0];
+                var funcType = BuildMethodFuncType(method);
+
+                if (method.IsStatic)
+                    declaredStaticMethods[methodName] = funcType;
+                else
+                    declaredMethods[methodName] = funcType;
+
+                methodAccess[methodName] = method.Access;
+            }
+            else if (implementations.Count > 1)
+            {
+                throw new Exception($"Type Error: Multiple implementations of method '{methodName}' without overload signatures.");
+            }
+        }
+
+        // Collect static property types, field access modifiers, and non-static field types
+        Dictionary<string, TypeInfo> declaredFieldTypes = [];
+        foreach (var field in classStmt.Fields)
+        {
+            // Check field decorators
+            DecoratorTarget fieldTarget = field.IsStatic ? DecoratorTarget.StaticField : DecoratorTarget.Field;
+            CheckDecorators(field.Decorators, fieldTarget);
+
+            string fieldName = field.Name.Lexeme;
+            TypeInfo fieldType = field.TypeAnnotation != null
+                ? ToTypeInfo(field.TypeAnnotation)
+                : new TypeInfo.Any();
+
+            if (field.IsStatic)
+            {
+                declaredStaticProperties[fieldName] = fieldType;
+            }
+            else
+            {
+                declaredFieldTypes[fieldName] = fieldType;
+            }
+            fieldAccess[fieldName] = field.Access;
+            if (field.IsReadonly)
+            {
+                readonlyFields.Add(fieldName);
+            }
+        }
+
+        // Collect accessor types
+        Dictionary<string, TypeInfo> getters = [];
+        Dictionary<string, TypeInfo> setters = [];
+
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                // Check accessor decorators
+                DecoratorTarget accessorTarget = accessor.Kind.Type == TokenType.GET
+                    ? DecoratorTarget.Getter
+                    : DecoratorTarget.Setter;
+                CheckDecorators(accessor.Decorators, accessorTarget);
+
+                string propName = accessor.Name.Lexeme;
+
+                if (accessor.Kind.Type == TokenType.GET)
+                {
+                    TypeInfo getterRetType = accessor.ReturnType != null
+                        ? ToTypeInfo(accessor.ReturnType)
+                        : new TypeInfo.Any();
+                    getters[propName] = getterRetType;
+
+                    // Track abstract getters
+                    if (accessor.IsAbstract)
+                    {
+                        abstractGetters.Add(propName);
+                    }
+                }
+                else // SET
+                {
+                    TypeInfo paramType = accessor.SetterParam?.Type != null
+                        ? ToTypeInfo(accessor.SetterParam.Type)
+                        : new TypeInfo.Any();
+                    setters[propName] = paramType;
+
+                    // Track abstract setters
+                    if (accessor.IsAbstract)
+                    {
+                        abstractSetters.Add(propName);
+                    }
+                }
+            }
+
+            // Validate that getter/setter pairs have matching types
+            foreach (var propName in getters.Keys.Intersect(setters.Keys))
+            {
+                if (!IsCompatible(getters[propName], setters[propName]))
+                {
+                    throw new Exception($"Type Error: Getter and setter for '{propName}' have incompatible types.");
+                }
+            }
+        }
+
+        // Restore environment before defining class type (define in outer scope)
+        _environment = savedEnvForClass;
+
+        // Create GenericClass or regular Class based on type parameters
+        TypeInfo.Class classTypeForBody;
+        if (classTypeParams != null && classTypeParams.Count > 0)
+        {
+            var genericClassType = new TypeInfo.GenericClass(
+                classStmt.Name.Lexeme,
+                classTypeParams,
+                superclass,
+                declaredMethods,
+                declaredStaticMethods,
+                declaredStaticProperties,
+                methodAccess,
+                fieldAccess,
+                readonlyFields,
+                getters,
+                setters,
+                declaredFieldTypes,
+                classStmt.IsAbstract,
+                abstractMethods.Count > 0 ? abstractMethods : null,
+                abstractGetters.Count > 0 ? abstractGetters : null,
+                abstractSetters.Count > 0 ? abstractSetters : null
+            );
+            _environment.Define(classStmt.Name.Lexeme, genericClassType);
+            // For body check, create a Class type (methods/fields have TypeParameter types)
+            classTypeForBody = new TypeInfo.Class(
+                classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
+                methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
+                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
+                abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
+            _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
+        }
+        else
+        {
+            var classType = new TypeInfo.Class(
+                classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
+                methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
+                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
+                abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
+            _environment.Define(classStmt.Name.Lexeme, classType);
+            _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+            classTypeForBody = classType;
+        }
+
+        // Validate implemented interfaces (skip for generic classes - validated at instantiation)
+        if (classStmt.Interfaces != null && classTypeParams == null)
+        {
+            foreach (var interfaceToken in classStmt.Interfaces)
+            {
+                TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
+                if (itfTypeInfo is not TypeInfo.Interface interfaceType)
+                {
+                    throw new Exception($"Type Error: '{interfaceToken.Lexeme}' is not an interface.");
+                }
+                ValidateInterfaceImplementation(classTypeForBody, interfaceType, classStmt.Name.Lexeme);
+            }
+        }
+
+        // Validate abstract member implementation (skip for generic classes - validated at instantiation)
+        if (!classStmt.IsAbstract && classTypeParams == null)
+        {
+            ValidateAbstractMemberImplementation(classTypeForBody, classStmt.Name.Lexeme);
+        }
+
+        // Validate override members (skip for generic classes - validated at instantiation)
+        if (classTypeParams == null)
+        {
+            ValidateOverrideMembers(classStmt, classTypeForBody);
+        }
+
+        // Second pass: check static property initializers at class scope
+        foreach (var field in classStmt.Fields)
+        {
+            if (field.IsStatic && field.Initializer != null)
+            {
+                TypeInfo initType = CheckExpr(field.Initializer);
+                TypeInfo staticFieldDeclaredType = declaredStaticProperties[field.Name.Lexeme];
+                if (!IsCompatible(staticFieldDeclaredType, initType))
+                {
+                    throw new Exception($"Type Error: Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
+                }
+            }
+        }
+
+        // Third pass: body check
+        TypeEnvironment classEnv = new(_environment);
+        // For generic classes, add type parameters to class scope
+        if (classTypeParams != null)
+        {
+            foreach (var tp in classTypeParams)
+                classEnv.DefineTypeParameter(tp.Name, tp);
+        }
+        classEnv.Define("this", new TypeInfo.Instance(classTypeForBody));
+        if (superclass != null)
+        {
+            classEnv.Define("super", superclass);
+        }
+
+        TypeEnvironment prevEnv = _environment;
+        TypeInfo.Class? prevClass = _currentClass;
+
+        _environment = classEnv;
+        _currentClass = classTypeForBody;
+
+        try
+        {
+            // Only check methods that have bodies (skip overload signatures)
+            foreach (var method in classStmt.Methods.Where(m => m.Body != null))
+            {
+                // Check method decorators
+                DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
+                CheckDecorators(method.Decorators, methodTarget);
+
+                // Check parameter decorators
+                foreach (var param in method.Parameters)
+                {
+                    CheckDecorators(param.Decorators, DecoratorTarget.Parameter);
+                }
+
+                // For static methods, use a different environment without this/super
+                TypeEnvironment methodEnv;
+                if (method.IsStatic)
+                {
+                    methodEnv = new TypeEnvironment(prevEnv); // No this/super
+                }
+                else
+                {
+                    methodEnv = new TypeEnvironment(_environment);
+                }
+
+                // Get the method type (could be Function or OverloadedFunction)
+                var declaredMethodType = method.IsStatic
+                    ? declaredStaticMethods[method.Name.Lexeme]
+                    : declaredMethods[method.Name.Lexeme];
+
+                // Get the actual function type (implementation for overloads)
+                TypeInfo.Function methodType = declaredMethodType switch
+                {
+                    TypeInfo.OverloadedFunction of => of.Implementation,
+                    TypeInfo.Function f => f,
+                    _ => throw new Exception($"Type Error: Unexpected method type for '{method.Name.Lexeme}'.")
+                };
+
+                for (int i = 0; i < method.Parameters.Count; i++)
+                {
+                    methodEnv.Define(method.Parameters[i].Name.Lexeme, methodType.ParamTypes[i]);
+                }
+
+                // Save and set context - method bodies are isolated from outer loop/switch/label context
+                TypeEnvironment previousEnvFunc = _environment;
+                TypeInfo? previousReturnFunc = _currentFunctionReturnType;
+                bool previousInStatic = _inStaticMethod;
+                bool previousInAsyncFunc = _inAsyncFunction;
+                bool previousInGeneratorFunc = _inGeneratorFunction;
+                int previousLoopDepthFunc = _loopDepth;
+                int previousSwitchDepthFunc = _switchDepth;
+                var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
+
+                _environment = methodEnv;
+                _currentFunctionReturnType = methodType.ReturnType;
+                _inStaticMethod = method.IsStatic;
+                _inAsyncFunction = method.IsAsync;
+                _inGeneratorFunction = method.IsGenerator;
+                _loopDepth = 0;
+                _switchDepth = 0;
+                _activeLabels.Clear();
+
+                try
+                {
+                    // Abstract methods have no body to check
+                    if (method.Body != null)
+                    {
+                        foreach (var bodyStmt in method.Body)
+                        {
+                            CheckStmt(bodyStmt);
+                        }
+                    }
+                }
+                finally
+                {
+                    _environment = previousEnvFunc;
+                    _currentFunctionReturnType = previousReturnFunc;
+                    _inStaticMethod = previousInStatic;
+                    _inAsyncFunction = previousInAsyncFunc;
+                    _inGeneratorFunction = previousInGeneratorFunc;
+                    _loopDepth = previousLoopDepthFunc;
+                    _switchDepth = previousSwitchDepthFunc;
+                    _activeLabels.Clear();
+                    foreach (var kvp in previousActiveLabelsFunc)
+                        _activeLabels[kvp.Key] = kvp.Value;
+                }
+            }
+
+            // Check accessor bodies
+            if (classStmt.Accessors != null)
+            {
+                foreach (var accessor in classStmt.Accessors)
+                {
+                    TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+
+                    TypeInfo accessorReturnType;
+                    if (accessor.Kind.Type == TokenType.GET)
+                    {
+                        accessorReturnType = getters[accessor.Name.Lexeme];
+                    }
+                    else
+                    {
+                        // Setter has void return type
+                        accessorReturnType = new TypeInfo.Void();
+                        // Add setter parameter to environment
+                        if (accessor.SetterParam != null)
+                        {
+                            TypeInfo setterParamType = setters[accessor.Name.Lexeme];
+                            accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
+                        }
+                    }
+
+                    // Save and set context - accessor bodies are isolated from outer loop/switch/label context
+                    TypeEnvironment previousEnvAcc = _environment;
+                    TypeInfo? previousReturnAcc = _currentFunctionReturnType;
+                    int previousLoopDepthAcc = _loopDepth;
+                    int previousSwitchDepthAcc = _switchDepth;
+                    var previousActiveLabelsAcc = new Dictionary<string, bool>(_activeLabels);
+
+                    _environment = accessorEnv;
+                    _currentFunctionReturnType = accessorReturnType;
+                    _loopDepth = 0;
+                    _switchDepth = 0;
+                    _activeLabels.Clear();
+
+                    try
+                    {
+                        foreach (var bodyStmt in accessor.Body)
+                        {
+                            CheckStmt(bodyStmt);
+                        }
+                    }
+                    finally
+                    {
+                        _environment = previousEnvAcc;
+                        _currentFunctionReturnType = previousReturnAcc;
+                        _loopDepth = previousLoopDepthAcc;
+                        _switchDepth = previousSwitchDepthAcc;
+                        _activeLabels.Clear();
+                        foreach (var kvp in previousActiveLabelsAcc)
+                            _activeLabels[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _environment = prevEnv;
+            _currentClass = prevClass;
+        }
+    }
+}

@@ -17,7 +17,13 @@ namespace SharpTS.TypeSystem;
 /// This class is split across partial files:
 /// <list type="bullet">
 ///   <item><description><c>TypeChecker.cs</c> - Core infrastructure, fields, entry points, module helpers</description></item>
-///   <item><description><c>TypeChecker.Statements.cs</c> - Statement checking (CheckStmt, blocks, loops, functions, classes, enums)</description></item>
+///   <item><description><c>TypeChecker.Statements.cs</c> - Main CheckStmt dispatch and simple statement handlers</description></item>
+///   <item><description><c>TypeChecker.Statements.Classes.cs</c> - Class declaration checking</description></item>
+///   <item><description><c>TypeChecker.Statements.Interfaces.cs</c> - Interface declaration checking</description></item>
+///   <item><description><c>TypeChecker.Statements.Functions.cs</c> - Function declaration and overload handling</description></item>
+///   <item><description><c>TypeChecker.Statements.Enums.cs</c> - Enum declaration with const enum support</description></item>
+///   <item><description><c>TypeChecker.Statements.ControlFlow.cs</c> - Block, switch, try/catch checking</description></item>
+///   <item><description><c>TypeChecker.Statements.Modules.cs</c> - Export statement checking</description></item>
 ///   <item><description><c>TypeChecker.Expressions.cs</c> - Expression checking (CheckExpr, literals, arrays, objects, arrow functions)</description></item>
 ///   <item><description><c>TypeChecker.Properties.cs</c> - Property access (CheckGet, CheckSet, CheckNew, CheckThis, CheckSuper, indexing)</description></item>
 ///   <item><description><c>TypeChecker.Calls.cs</c> - Function calls (CheckCall, overload resolution)</description></item>
