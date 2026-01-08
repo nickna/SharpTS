@@ -11,10 +11,67 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    /// <summary>
+    /// Gets the fully qualified name for error messages.
+    /// </summary>
+    private static string GetQualifiedClassName(Expr.New newExpr)
+    {
+        if (newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0)
+            return newExpr.ClassName.Lexeme;
+        return string.Join(".", newExpr.NamespacePath.Select(t => t.Lexeme)) + "." + newExpr.ClassName.Lexeme;
+    }
+
+    /// <summary>
+    /// Resolves a qualified name (Namespace.SubNs.ClassName) to a TypeInfo.
+    /// </summary>
+    private TypeInfo ResolveQualifiedType(List<Token>? namespacePath, Token className)
+    {
+        if (namespacePath == null || namespacePath.Count == 0)
+        {
+            // Simple class name - use existing lookup
+            return LookupVariable(className);
+        }
+
+        // Start from first namespace
+        TypeInfo current = LookupVariable(namespacePath[0]);
+
+        // Traverse namespace chain
+        for (int i = 1; i < namespacePath.Count; i++)
+        {
+            if (current is not TypeInfo.Namespace ns)
+            {
+                throw new Exception($"Type Error: '{namespacePath[i - 1].Lexeme}' is not a namespace.");
+            }
+            var member = ns.GetMember(namespacePath[i].Lexeme);
+            if (member == null)
+            {
+                throw new Exception($"Type Error: '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
+            }
+            current = member;
+        }
+
+        // Now get the class from the final namespace
+        if (current is not TypeInfo.Namespace finalNs)
+        {
+            throw new Exception($"Type Error: '{namespacePath[^1].Lexeme}' is not a namespace.");
+        }
+
+        var classType = finalNs.GetMember(className.Lexeme);
+        if (classType == null)
+        {
+            throw new Exception($"Type Error: Class '{className.Lexeme}' does not exist in namespace '{finalNs.Name}'.");
+        }
+
+        return classType;
+    }
+
     private TypeInfo CheckNew(Expr.New newExpr)
     {
+        // Built-in types only apply when there's no namespace path
+        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+
         // Handle new Date() constructor
-        if (newExpr.ClassName.Lexeme == "Date")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Date")
         {
             // Date() accepts 0-7 arguments
             if (newExpr.Arguments.Count > 7)
@@ -45,7 +102,7 @@ public partial class TypeChecker
         }
 
         // Handle new RegExp() constructor
-        if (newExpr.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "RegExp")
         {
             // RegExp() accepts 0-2 arguments (pattern, flags)
             if (newExpr.Arguments.Count > 2)
@@ -76,7 +133,7 @@ public partial class TypeChecker
         }
 
         // Handle new Map() and new Map<K, V>() constructor
-        if (newExpr.ClassName.Lexeme == "Map")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Map")
         {
             // Map() accepts 0-1 arguments (optional iterable of entries)
             if (newExpr.Arguments.Count > 1)
@@ -108,7 +165,7 @@ public partial class TypeChecker
         }
 
         // Handle new Set() and new Set<T>() constructor
-        if (newExpr.ClassName.Lexeme == "Set")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Set")
         {
             // Set() accepts 0-1 arguments (optional iterable of values)
             if (newExpr.Arguments.Count > 1)
@@ -138,7 +195,7 @@ public partial class TypeChecker
         }
 
         // Handle new WeakMap() and new WeakMap<K, V>() constructor
-        if (newExpr.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakMap")
         {
             // WeakMap() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
@@ -170,7 +227,7 @@ public partial class TypeChecker
         }
 
         // Handle new WeakSet() and new WeakSet<T>() constructor
-        if (newExpr.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakSet")
         {
             // WeakSet() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
@@ -199,16 +256,17 @@ public partial class TypeChecker
             return new TypeInfo.WeakSet(elementType);
         }
 
-        TypeInfo type = LookupVariable(newExpr.ClassName);
+        string qualifiedName = GetQualifiedClassName(newExpr);
+        TypeInfo type = ResolveQualifiedType(newExpr.NamespacePath, newExpr.ClassName);
 
         // Check for abstract class instantiation
         if (type is TypeInfo.GenericClass gc && gc.IsAbstract)
         {
-            throw new Exception($"Type Error: Cannot create an instance of abstract class '{newExpr.ClassName.Lexeme}'.");
+            throw new Exception($"Type Error: Cannot create an instance of abstract class '{qualifiedName}'.");
         }
         if (type is TypeInfo.Class c && c.IsAbstract)
         {
-            throw new Exception($"Type Error: Cannot create an instance of abstract class '{newExpr.ClassName.Lexeme}'.");
+            throw new Exception($"Type Error: Cannot create an instance of abstract class '{qualifiedName}'.");
         }
 
         // Handle generic class instantiation
@@ -216,7 +274,7 @@ public partial class TypeChecker
         {
             if (newExpr.TypeArgs == null || newExpr.TypeArgs.Count == 0)
             {
-                throw new Exception($"Type Error: Generic class '{newExpr.ClassName.Lexeme}' requires type arguments.");
+                throw new Exception($"Type Error: Generic class '{qualifiedName}' requires type arguments.");
             }
 
             var typeArgs = newExpr.TypeArgs.Select(ToTypeInfo).ToList();
@@ -247,7 +305,7 @@ public partial class TypeChecker
                     }
                     if (!matched)
                     {
-                        throw new Exception($"Type Error: No constructor overload matches the call for '{newExpr.ClassName.Lexeme}'.");
+                        throw new Exception($"Type Error: No constructor overload matches the call for '{qualifiedName}'.");
                     }
                 }
                 else if (ctorTypeInfo is TypeInfo.Function ctorType)
@@ -256,11 +314,11 @@ public partial class TypeChecker
 
                     if (newExpr.Arguments.Count < ctorType.MinArity)
                     {
-                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
                     }
                     if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
                     {
-                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
                     }
 
                     for (int i = 0; i < newExpr.Arguments.Count; i++)
@@ -275,7 +333,7 @@ public partial class TypeChecker
             }
             else if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected 0 arguments but got {newExpr.Arguments.Count}.");
+                throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
             }
 
             return new TypeInfo.Instance(instantiated);
@@ -301,7 +359,7 @@ public partial class TypeChecker
                     }
                     if (!matched)
                     {
-                        throw new Exception($"Type Error: No constructor overload matches the call for '{newExpr.ClassName.Lexeme}'.");
+                        throw new Exception($"Type Error: No constructor overload matches the call for '{qualifiedName}'.");
                     }
                 }
                 else if (ctorTypeInfo is TypeInfo.Function ctorType)
@@ -309,11 +367,11 @@ public partial class TypeChecker
                     // Use MinArity to allow optional parameters
                     if (newExpr.Arguments.Count < ctorType.MinArity)
                     {
-                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
                     }
                     if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
                     {
-                        throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
                     }
 
                     for (int i = 0; i < newExpr.Arguments.Count; i++)
@@ -328,11 +386,11 @@ public partial class TypeChecker
             }
             else if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception($"Type Error: Constructor for '{newExpr.ClassName.Lexeme}' expected 0 arguments but got {newExpr.Arguments.Count}.");
+                throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
             }
 
             return new TypeInfo.Instance(classType);
         }
-        throw new Exception($"Type Error: '{newExpr.ClassName.Lexeme}' is not a class.");
+        throw new Exception($"Type Error: '{qualifiedName}' is not a class.");
     }
 }

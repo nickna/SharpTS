@@ -36,7 +36,7 @@ public abstract record Expr
     public record Get(Expr Object, Token Name, bool Optional = false) : Expr;
     public record Set(Expr Object, Token Name, Expr Value) : Expr;
     public record This(Token Keyword) : Expr;
-    public record New(Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
+    public record New(List<Token>? NamespacePath, Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record ArrayLiteral(List<Expr> Elements) : Expr;
     public record ObjectLiteral(List<Property> Properties) : Expr;
     // Property key types for object literals: identifier, string/number literal, or computed [expr]

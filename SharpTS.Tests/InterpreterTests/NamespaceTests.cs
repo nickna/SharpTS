@@ -82,7 +82,7 @@ public class NamespaceTests
         Assert.Equal("3\n", TestHarness.RunInterpreted(code));
     }
 
-    [Fact(Skip = "Requires parser support for 'new Namespace.ClassName()' syntax")]
+    [Fact]
     public void NamespaceWithClass()
     {
         var code = @"
@@ -100,6 +100,60 @@ public class NamespaceTests
         ";
         // PI * 2 * 2 = 12.56636
         Assert.StartsWith("12.566", TestHarness.RunInterpreted(code));
+    }
+
+    [Fact]
+    public void DeepNestedNamespaceClass()
+    {
+        var code = @"
+            namespace Company.Products.Widgets {
+                export class Button {
+                    label: string;
+                    constructor(l: string) { this.label = l; }
+                }
+            }
+            let btn = new Company.Products.Widgets.Button(""Click me"");
+            console.log(btn.label);
+        ";
+        Assert.Equal("Click me\n", TestHarness.RunInterpreted(code));
+    }
+
+    [Fact]
+    public void NamespaceWithGenericClass()
+    {
+        var code = @"
+            namespace Collections {
+                export class Box<T> {
+                    value: T;
+                    constructor(v: T) { this.value = v; }
+                }
+            }
+            let numBox = new Collections.Box<number>(42);
+            console.log(numBox.value);
+            let strBox = new Collections.Box<string>(""hello"");
+            console.log(strBox.value);
+        ";
+        Assert.Equal("42\nhello\n", TestHarness.RunInterpreted(code));
+    }
+
+    [Fact]
+    public void NamespaceClassInheritance()
+    {
+        var code = @"
+            namespace Animals {
+                export class Animal {
+                    name: string;
+                    constructor(n: string) { this.name = n; }
+                }
+                export class Dog extends Animal {
+                    constructor(n: string) { super(n); }
+                    bark(): string { return this.name + "" says woof!""; }
+                }
+            }
+            let dog = new Animals.Dog(""Rex"");
+            console.log(dog.bark());
+        ";
+        Assert.Equal("Rex says woof!\n", TestHarness.RunInterpreted(code));
     }
 
     [Fact]

@@ -8,10 +8,20 @@ public partial class AsyncMoveNextEmitter
 {
     private void EmitNew(Expr.New n)
     {
-        // Resolve class name (may be qualified in multi-module compilation)
-        string resolvedClassName = _ctx!.ResolveClassName(n.ClassName.Lexeme);
+        // Resolve class name (may be qualified for namespace classes or multi-module compilation)
+        string resolvedClassName;
+        if (n.NamespacePath != null && n.NamespacePath.Count > 0)
+        {
+            // Build qualified name for namespace classes: Namespace_SubNs_ClassName
+            string nsPath = string.Join("_", n.NamespacePath.Select(t => t.Lexeme));
+            resolvedClassName = $"{nsPath}_{n.ClassName.Lexeme}";
+        }
+        else
+        {
+            resolvedClassName = _ctx!.ResolveClassName(n.ClassName.Lexeme);
+        }
 
-        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
+        if (_ctx!.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
             _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
         {

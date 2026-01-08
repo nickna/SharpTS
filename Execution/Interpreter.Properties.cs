@@ -9,6 +9,43 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     /// <summary>
+    /// Resolves a qualified class name (Namespace.SubNs.ClassName) to a runtime class.
+    /// </summary>
+    private object? ResolveQualifiedClass(List<Token>? namespacePath, Token className)
+    {
+        if (namespacePath == null || namespacePath.Count == 0)
+        {
+            // Simple class name - use existing lookup
+            return _environment.Get(className);
+        }
+
+        // Start from first namespace
+        object? current = _environment.Get(namespacePath[0]);
+
+        // Traverse namespace chain
+        for (int i = 1; i < namespacePath.Count; i++)
+        {
+            if (current is not SharpTSNamespace ns)
+            {
+                throw new Exception($"Runtime Error: '{namespacePath[i - 1].Lexeme}' is not a namespace.");
+            }
+            current = ns.Get(namespacePath[i].Lexeme);
+            if (current == null)
+            {
+                throw new Exception($"Runtime Error: '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
+            }
+        }
+
+        // Now get the class from the final namespace
+        if (current is not SharpTSNamespace finalNs)
+        {
+            throw new Exception($"Runtime Error: '{namespacePath[^1].Lexeme}' is not a namespace.");
+        }
+
+        return finalNs.Get(className.Lexeme);
+    }
+
+    /// <summary>
     /// Evaluates a <c>new</c> expression, instantiating a class.
     /// </summary>
     /// <param name="newExpr">The new expression AST node.</param>
@@ -20,15 +57,18 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
     private object? EvaluateNew(Expr.New newExpr)
     {
+        // Built-in types only apply when there's no namespace path
+        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+
         // Handle new Date(...) constructor
-        if (newExpr.ClassName.Lexeme == "Date")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Date")
         {
             List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
             return CreateDate(args);
         }
 
         // Handle new RegExp(...) constructor
-        if (newExpr.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "RegExp")
         {
             List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
             var pattern = args.Count > 0 ? args[0]?.ToString() ?? "" : "";
@@ -37,7 +77,7 @@ public partial class Interpreter
         }
 
         // Handle new Map(...) constructor
-        if (newExpr.ClassName.Lexeme == "Map")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Map")
         {
             if (newExpr.Arguments.Count == 0)
             {
@@ -53,7 +93,7 @@ public partial class Interpreter
         }
 
         // Handle new Set(...) constructor
-        if (newExpr.ClassName.Lexeme == "Set")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "Set")
         {
             if (newExpr.Arguments.Count == 0)
             {
@@ -69,18 +109,18 @@ public partial class Interpreter
         }
 
         // Handle new WeakMap() constructor (empty only)
-        if (newExpr.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakMap")
         {
             return new SharpTSWeakMap();
         }
 
         // Handle new WeakSet() constructor (empty only)
-        if (newExpr.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakSet")
         {
             return new SharpTSWeakSet();
         }
 
-        object? klass = _environment.Get(newExpr.ClassName);
+        object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {
              throw new Exception("Type Error: Can only instantiate classes.");

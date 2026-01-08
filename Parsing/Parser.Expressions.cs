@@ -296,7 +296,22 @@ public partial class Parser
 
         if (Match(TokenType.NEW))
         {
-            Token className = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
+            Token firstIdent = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
+            List<Token> nameParts = [firstIdent];
+
+            // Collect dot-separated identifiers (e.g., Namespace.SubNamespace.ClassName)
+            while (Match(TokenType.DOT))
+            {
+                Token nextIdent = Consume(TokenType.IDENTIFIER, "Expect identifier after '.'.");
+                nameParts.Add(nextIdent);
+            }
+
+            // Last part is the class name, previous parts are the namespace path
+            List<Token>? namespacePath = nameParts.Count > 1
+                ? nameParts.GetRange(0, nameParts.Count - 1)
+                : null;
+            Token className = nameParts[^1];
+
             List<string>? typeArgs = TryParseTypeArguments();
             Consume(TokenType.LEFT_PAREN, "Expect '(' after class name.");
             List<Expr> arguments = [];
@@ -308,7 +323,7 @@ public partial class Parser
                 } while (Match(TokenType.COMMA));
             }
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-            return new Expr.New(className, typeArgs, arguments);
+            return new Expr.New(namespacePath, className, typeArgs, arguments);
         }
 
         return Call();

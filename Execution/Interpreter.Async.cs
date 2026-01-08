@@ -689,7 +689,7 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateNewAsync(Expr.New newExpr)
     {
-        object? klass = _environment.Get(newExpr.ClassName);
+        object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {
             throw new Exception("Can only instantiate classes.");

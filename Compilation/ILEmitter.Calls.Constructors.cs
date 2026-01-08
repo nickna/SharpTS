@@ -12,50 +12,63 @@ public partial class ILEmitter
 {
     private void EmitNew(Expr.New n)
     {
+        // Built-in types only apply when there's no namespace path
+        bool isSimpleName = n.NamespacePath == null || n.NamespacePath.Count == 0;
+
         // Special case: new Date(...) constructor
-        if (n.ClassName.Lexeme == "Date")
+        if (isSimpleName && n.ClassName.Lexeme == "Date")
         {
             EmitNewDate(n.Arguments);
             return;
         }
 
         // Special case: new Map(...) constructor
-        if (n.ClassName.Lexeme == "Map")
+        if (isSimpleName && n.ClassName.Lexeme == "Map")
         {
             EmitNewMap(n.Arguments);
             return;
         }
 
         // Special case: new Set(...) constructor
-        if (n.ClassName.Lexeme == "Set")
+        if (isSimpleName && n.ClassName.Lexeme == "Set")
         {
             EmitNewSet(n.Arguments);
             return;
         }
 
         // Special case: new WeakMap() constructor
-        if (n.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && n.ClassName.Lexeme == "WeakMap")
         {
             EmitNewWeakMap();
             return;
         }
 
         // Special case: new WeakSet() constructor
-        if (n.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && n.ClassName.Lexeme == "WeakSet")
         {
             EmitNewWeakSet();
             return;
         }
 
         // Special case: new RegExp(...) constructor
-        if (n.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && n.ClassName.Lexeme == "RegExp")
         {
             EmitNewRegExp(n.Arguments);
             return;
         }
 
-        // Resolve class name (may be qualified in multi-module compilation)
-        string resolvedClassName = _ctx.ResolveClassName(n.ClassName.Lexeme);
+        // Resolve class name (may be qualified for namespace classes or multi-module compilation)
+        string resolvedClassName;
+        if (n.NamespacePath != null && n.NamespacePath.Count > 0)
+        {
+            // Build qualified name for namespace classes: Namespace_SubNs_ClassName
+            string nsPath = string.Join("_", n.NamespacePath.Select(t => t.Lexeme));
+            resolvedClassName = $"{nsPath}_{n.ClassName.Lexeme}";
+        }
+        else
+        {
+            resolvedClassName = _ctx.ResolveClassName(n.ClassName.Lexeme);
+        }
 
         if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
