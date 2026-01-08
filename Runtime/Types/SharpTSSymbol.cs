@@ -13,6 +13,48 @@ public class SharpTSSymbol
     private readonly int _id;
     private readonly string? _description;
 
+    #region Well-Known Symbols
+    /// <summary>
+    /// Symbol.iterator - Used by for...of to get an iterator from an object.
+    /// </summary>
+    public static readonly SharpTSSymbol Iterator = new("Symbol.iterator");
+
+    /// <summary>
+    /// Symbol.asyncIterator - Used by for await...of to get an async iterator.
+    /// </summary>
+    public static readonly SharpTSSymbol AsyncIterator = new("Symbol.asyncIterator");
+
+    /// <summary>
+    /// Symbol.toStringTag - Used by Object.prototype.toString() to get a custom type tag.
+    /// </summary>
+    public static readonly SharpTSSymbol ToStringTag = new("Symbol.toStringTag");
+
+    /// <summary>
+    /// Symbol.hasInstance - Used by instanceof to determine if an object is an instance.
+    /// </summary>
+    public static readonly SharpTSSymbol HasInstance = new("Symbol.hasInstance");
+
+    /// <summary>
+    /// Symbol.isConcatSpreadable - Used by Array.prototype.concat() to determine spreading.
+    /// </summary>
+    public static readonly SharpTSSymbol IsConcatSpreadable = new("Symbol.isConcatSpreadable");
+
+    /// <summary>
+    /// Symbol.toPrimitive - Used for type coercion to a primitive value.
+    /// </summary>
+    public static readonly SharpTSSymbol ToPrimitive = new("Symbol.toPrimitive");
+
+    /// <summary>
+    /// Symbol.species - Used to identify a constructor function for derived objects.
+    /// </summary>
+    public static readonly SharpTSSymbol Species = new("Symbol.species");
+
+    /// <summary>
+    /// Symbol.unscopables - Used to exclude properties from with statement bindings.
+    /// </summary>
+    public static readonly SharpTSSymbol Unscopables = new("Symbol.unscopables");
+    #endregion
+
     public SharpTSSymbol(string? description = null)
     {
         _id = Interlocked.Increment(ref _nextId);

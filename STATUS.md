@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-06 (Bug fixes: Math.round JS parity, object method this binding in IL compiler)
+**Last Updated:** 2026-01-07 (Async generators, for await...of, async iterator protocol)
 
 ## Legend
 - ✅ Implemented
@@ -214,8 +214,13 @@ This document tracks TypeScript language features and their implementation statu
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API |
-| Generators (`function*`) | ❌ | Iterable generators |
-| Iterators (Symbol.iterator) | ❌ | Custom iteration |
+| Generators (`function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; for...of integration |
+| Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of` (interpreter) |
+| Well-known Symbols | ✅ | `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables` |
+| Iterator Protocol | ✅ | Custom iterables via `[Symbol.iterator]()` method (interpreter only) |
+| Async Iterator Protocol | ✅ | Custom async iterables via `[Symbol.asyncIterator]()` method (interpreter) |
+| `for await...of` | ✅ | Async iteration over async iterators and generators (interpreter) |
+| `Symbol.for`/`Symbol.keyFor` | ✅ | Global symbol registry |
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
 | `bigint` type | ✅ | Arbitrary precision integers with full operation support |
 | Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
@@ -541,3 +546,20 @@ _No known bugs at this time._
 - ⚠️ Classes in namespaces (declared but `new Namespace.Class()` not yet supported)
 - ❌ `import X = Namespace.Member` alias syntax (intentionally skipped)
 - ✅ Full interpreter and IL compiler support with 8 test cases
+
+### Phase 30 Features (Well-Known Symbols & Iterator Protocol)
+- ✅ Well-known symbols: `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables`
+- ✅ `Symbol.for(key)` - global symbol registry
+- ✅ `Symbol.keyFor(symbol)` - reverse lookup in global registry
+- ✅ Custom iterables via `[Symbol.iterator]()` method (interpreter)
+- ✅ Iterator protocol: calls `next()` until `done: true`
+- ✅ Computed property method shorthand: `{ [Symbol.iterator]() { } }`
+- ✅ Generator `.return(value)` - closes generator early
+- ✅ Generator `.throw(error)` - throws into generator
+- ✅ Fixed `SharpTSIteratorResult.ToString()` to show value when done
+- ✅ Compiler support for well-known symbol access (`Symbol.iterator`)
+- ⚠️ Compiler iterator protocol: foundation in place, full implementation pending
+- ✅ `for await...of` syntax (parsing and interpreter execution)
+- ✅ Async generators (`async function*`) with `yield`, `yield*`, `.next()`, `.return()`, `.throw()`
+- ✅ Async iterator protocol via `Symbol.asyncIterator`
+- ❌ Compiler support for async generators (pending)

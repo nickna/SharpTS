@@ -486,11 +486,60 @@ public partial class Parser
                         continue;
                     }
 
-                    // Check for computed property key: { [expr]: value }
+                    // Check for computed property key: { [expr]: value } or method shorthand { [expr]() {} }
                     if (Match(TokenType.LEFT_BRACKET))
                     {
                         Expr keyExpr = Expression();
                         Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed property key.");
+
+                        // Check for method shorthand: { [Symbol.iterator]() {} }
+                        if (Match(TokenType.LEFT_PAREN))
+                        {
+                            List<Stmt.Parameter> parameters = [];
+
+                            if (!Check(TokenType.RIGHT_PAREN))
+                            {
+                                do
+                                {
+                                    Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+                                    string? paramType = null;
+                                    if (Match(TokenType.COLON))
+                                    {
+                                        paramType = ParseTypeAnnotation();
+                                    }
+                                    Expr? defaultValue = null;
+                                    if (Match(TokenType.EQUAL))
+                                    {
+                                        defaultValue = Expression();
+                                    }
+                                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue));
+                                } while (Match(TokenType.COMMA));
+                            }
+                            Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");
+
+                            string? returnType = null;
+                            if (Match(TokenType.COLON))
+                            {
+                                returnType = ParseTypeAnnotation();
+                            }
+
+                            Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
+                            List<Stmt> body = Block();
+
+                            var methodExpr = new Expr.ArrowFunction(
+                                TypeParams: null,
+                                ThisType: null,
+                                Parameters: parameters,
+                                ExpressionBody: null,
+                                BlockBody: body,
+                                ReturnType: returnType,
+                                IsObjectMethod: true
+                            );
+                            properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), methodExpr));
+                            continue;
+                        }
+
+                        // Regular computed property: { [expr]: value }
                         Consume(TokenType.COLON, "Expect ':' after computed property key.");
                         Expr computedValue = Expression();
                         properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), computedValue));

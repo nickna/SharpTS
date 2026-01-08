@@ -25,6 +25,9 @@ public static partial class RuntimeEmitter
         // Emit TSSymbol class for symbol support
         EmitTSSymbolClass(moduleBuilder, runtime);
 
+        // Emit $IGenerator interface for generator return/throw support
+        EmitGeneratorInterface(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -399,6 +402,74 @@ public static partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stfld, descriptionField);
         ctorIL.Emit(OpCodes.Ret);
 
+        // Well-known symbol static fields
+        var iteratorField = typeBuilder.DefineField("iterator", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolIterator = iteratorField;
+        var asyncIteratorField = typeBuilder.DefineField("asyncIterator", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolAsyncIterator = asyncIteratorField;
+        var toStringTagField = typeBuilder.DefineField("toStringTag", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolToStringTag = toStringTagField;
+        var hasInstanceField = typeBuilder.DefineField("hasInstance", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolHasInstance = hasInstanceField;
+        var isConcatSpreadableField = typeBuilder.DefineField("isConcatSpreadable", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolIsConcatSpreadable = isConcatSpreadableField;
+        var toPrimitiveField = typeBuilder.DefineField("toPrimitive", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolToPrimitive = toPrimitiveField;
+        var speciesField = typeBuilder.DefineField("species", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolSpecies = speciesField;
+        var unscopablesField = typeBuilder.DefineField("unscopables", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolUnscopables = unscopablesField;
+
+        // Static constructor to initialize well-known symbols
+        var cctorBuilder = typeBuilder.DefineConstructor(
+            MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            CallingConventions.Standard,
+            Type.EmptyTypes
+        );
+        var cctorIL = cctorBuilder.GetILGenerator();
+
+        // iterator = new $TSSymbol("Symbol.iterator")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.iterator");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, iteratorField);
+
+        // asyncIterator = new $TSSymbol("Symbol.asyncIterator")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.asyncIterator");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, asyncIteratorField);
+
+        // toStringTag = new $TSSymbol("Symbol.toStringTag")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.toStringTag");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, toStringTagField);
+
+        // hasInstance = new $TSSymbol("Symbol.hasInstance")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.hasInstance");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, hasInstanceField);
+
+        // isConcatSpreadable = new $TSSymbol("Symbol.isConcatSpreadable")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.isConcatSpreadable");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, isConcatSpreadableField);
+
+        // toPrimitive = new $TSSymbol("Symbol.toPrimitive")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.toPrimitive");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, toPrimitiveField);
+
+        // species = new $TSSymbol("Symbol.species")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.species");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, speciesField);
+
+        // unscopables = new $TSSymbol("Symbol.unscopables")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.unscopables");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, unscopablesField);
+
+        cctorIL.Emit(OpCodes.Ret);
+
         // Equals method: public override bool Equals(object? obj)
         var equalsBuilder = typeBuilder.DefineMethod(
             "Equals",
@@ -614,6 +685,8 @@ public static partial class RuntimeEmitter
         EmitSetMethods(typeBuilder, runtime);
         // Dynamic import methods
         EmitDynamicImportMethods(typeBuilder, runtime);
+        // Iterator protocol methods
+        EmitIteratorMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

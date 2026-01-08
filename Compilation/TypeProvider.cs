@@ -106,6 +106,7 @@ public class TypeProvider
     public Type Attribute => Resolve("System.Attribute");
     public Type Exception => Resolve("System.Exception");
     public Type NotSupportedException => Resolve("System.NotSupportedException");
+    public Type TargetInvocationException => Resolve("System.Reflection.TargetInvocationException");
     public Type DateTime => Resolve("System.DateTime");
     public Type TimeSpan => Resolve("System.TimeSpan");
     public Type Guid => Resolve("System.Guid");

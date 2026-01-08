@@ -431,7 +431,13 @@ public partial class Interpreter
             case Stmt.Function functionStmt:
                 // Skip overload signatures (no body) - they're type-checking only
                 if (functionStmt.Body == null) break;
-                if (functionStmt.IsGenerator)
+                if (functionStmt.IsGenerator && functionStmt.IsAsync)
+                {
+                    // Async generator: async function* foo() { yield await ... }
+                    SharpTSAsyncGeneratorFunction asyncGenFunction = new(functionStmt, _environment);
+                    _environment.Define(functionStmt.Name.Lexeme, asyncGenFunction);
+                }
+                else if (functionStmt.IsGenerator)
                 {
                     SharpTSGeneratorFunction generatorFunction = new(functionStmt, _environment);
                     _environment.Define(functionStmt.Name.Lexeme, generatorFunction);

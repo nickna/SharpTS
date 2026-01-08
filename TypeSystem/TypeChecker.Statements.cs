@@ -742,7 +742,14 @@ public partial class TypeChecker
                             expectedReturnType = promiseType.ValueType;
                         }
 
-                        if (!IsCompatible(expectedReturnType, actualReturnType))
+                        // For generator functions, the return value becomes the final iterator result value.
+                        // If no explicit return type is declared (void), allow any return value.
+                        // The return type in generators is separate from the yield type.
+                        if (_inGeneratorFunction && expectedReturnType is TypeInfo.Void)
+                        {
+                            // Allow any return value in generators with no explicit return type
+                        }
+                        else if (!IsCompatible(expectedReturnType, actualReturnType))
                         {
                              throw new Exception($"Type Error: Function declared to return '{_currentFunctionReturnType}' but returned '{actualReturnType}'.");
                         }

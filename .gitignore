@@ -81,3 +81,5 @@ TestResults/
 /.copilot/
 /.chatgpt/
 /.openai/
+/SharpTS.dll
+/NUL

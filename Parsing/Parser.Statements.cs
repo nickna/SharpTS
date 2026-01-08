@@ -65,7 +65,10 @@ public partial class Parser
 
     private Stmt ForStatement()
     {
-        Consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+        // Check for 'for await' pattern: for await (let/const varName of asyncIterable)
+        bool isAsync = Match(TokenType.AWAIT);
+
+        Consume(TokenType.LEFT_PAREN, "Expect '(' after 'for" + (isAsync ? " await" : "") + "'.");
 
         // Check for for...of pattern: for (let/const varName of iterable)
         if (Match(TokenType.LET, TokenType.CONST))
@@ -85,7 +88,13 @@ public partial class Parser
                 Expr iterable = Expression();
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after for...of expression.");
                 Stmt body = Statement();
-                return new Stmt.ForOf(varName, typeAnnotation, iterable, body);
+                return new Stmt.ForOf(varName, typeAnnotation, iterable, body, isAsync);
+            }
+
+            // 'for await' must be followed by 'of', not 'in' or traditional for
+            if (isAsync)
+            {
+                throw new Exception("'for await' can only be used with 'for...of' loops.");
             }
 
             // If we see 'in', this is a for...in loop

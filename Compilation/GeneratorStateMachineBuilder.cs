@@ -47,6 +47,14 @@ public class GeneratorStateMachineBuilder
     public MethodBuilder GetEnumeratorMethod { get; private set; } = null!;
     public MethodBuilder NonGenericGetEnumeratorMethod { get; private set; } = null!;
 
+    // $IGenerator methods for return/throw support
+    public MethodBuilder NextMethod { get; private set; } = null!;
+    public MethodBuilder ReturnMethod { get; private set; } = null!;
+    public MethodBuilder ThrowMethod { get; private set; } = null!;
+
+    // Runtime reference for $IGenerator interface
+    private EmittedRuntime? _runtime;
+
     public GeneratorStateMachineBuilder(ModuleBuilder moduleBuilder, TypeProvider types, int counter = 0)
     {
         _moduleBuilder = moduleBuilder;
@@ -60,19 +68,35 @@ public class GeneratorStateMachineBuilder
     /// <param name="methodName">Name of the generator method (used in type name)</param>
     /// <param name="analysis">Analysis results from GeneratorStateAnalyzer</param>
     /// <param name="isInstanceMethod">True if this is an instance method (needs 'this' hoisting)</param>
+    /// <param name="runtime">Optional runtime reference for $IGenerator interface</param>
     public void DefineStateMachine(
         string methodName,
         GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis,
-        bool isInstanceMethod = false)
+        bool isInstanceMethod = false,
+        EmittedRuntime? runtime = null)
     {
+        _runtime = runtime;
+
+        // Build list of interfaces to implement
+        var interfaces = new List<Type>
+        {
+            _types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
+            _types.IEnumerableOfObject, _types.IEnumerable
+        };
+
+        // Add $IGenerator interface if runtime is available
+        if (runtime?.GeneratorInterfaceType != null)
+        {
+            interfaces.Add(runtime.GeneratorInterfaceType);
+        }
+
         // Define the state machine class (using class for reference semantics with IEnumerable)
         // Name follows C# compiler convention: <MethodName>d__N
         _stateMachineType = _moduleBuilder.DefineType(
             $"<{methodName}>d__{_counter}",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
-            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
-             _types.IEnumerableOfObject, _types.IEnumerable]
+            interfaces.ToArray()
         );
 
         // Define core fields
@@ -132,6 +156,12 @@ public class GeneratorStateMachineBuilder
 
         // Define IEnumerable methods
         DefineGetEnumeratorMethods();
+
+        // Define $IGenerator methods if runtime is available
+        if (_runtime?.GeneratorInterfaceType != null)
+        {
+            DefineGeneratorMethods();
+        }
     }
 
     private void DefineStateField()
@@ -340,5 +370,133 @@ public class GeneratorStateMachineBuilder
     public Type CreateType()
     {
         return _stateMachineType.CreateType()!;
+    }
+
+    /// <summary>
+    /// Defines the $IGenerator interface methods: Next, Return, Throw.
+    /// </summary>
+    private void DefineGeneratorMethods()
+    {
+        // We need to emit an iterator result object with { value, done } properties
+        // For simplicity, we'll use a Dictionary<string, object> as the result
+
+        // next() method - wraps MoveNext/Current into iterator result
+        // Using lowercase to match JavaScript API
+        NextMethod = _stateMachineType.DefineMethod(
+            "next",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            Type.EmptyTypes
+        );
+
+        var nextIL = NextMethod.GetILGenerator();
+        var doneLabel = nextIL.DefineLabel();
+        var endLabel = nextIL.DefineLabel();
+
+        // Call MoveNext()
+        nextIL.Emit(OpCodes.Ldarg_0);
+        nextIL.Emit(OpCodes.Call, MoveNextMethod);
+        nextIL.Emit(OpCodes.Brfalse, doneLabel);
+
+        // Not done: create { value: Current, done: false }
+        nextIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        nextIL.Emit(OpCodes.Dup);
+        nextIL.Emit(OpCodes.Ldstr, "value");
+        nextIL.Emit(OpCodes.Ldarg_0);
+        nextIL.Emit(OpCodes.Ldfld, CurrentField);
+        nextIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        nextIL.Emit(OpCodes.Dup);
+        nextIL.Emit(OpCodes.Ldstr, "done");
+        nextIL.Emit(OpCodes.Ldc_I4_0);
+        nextIL.Emit(OpCodes.Box, _types.Boolean);
+        nextIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        nextIL.Emit(OpCodes.Br, endLabel);
+
+        // Done: create { value: undefined, done: true }
+        nextIL.MarkLabel(doneLabel);
+        nextIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        nextIL.Emit(OpCodes.Dup);
+        nextIL.Emit(OpCodes.Ldstr, "value");
+        nextIL.Emit(OpCodes.Ldnull);
+        nextIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        nextIL.Emit(OpCodes.Dup);
+        nextIL.Emit(OpCodes.Ldstr, "done");
+        nextIL.Emit(OpCodes.Ldc_I4_1);
+        nextIL.Emit(OpCodes.Box, _types.Boolean);
+        nextIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+
+        nextIL.MarkLabel(endLabel);
+        nextIL.Emit(OpCodes.Ret);
+
+        _stateMachineType.DefineMethodOverride(NextMethod, _runtime!.GeneratorNextMethod);
+
+        // return(value) method - closes generator and returns { value, done: true }
+        // Using lowercase to match JavaScript API
+        ReturnMethod = _stateMachineType.DefineMethod(
+            "return",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            [_types.Object]
+        );
+
+        var returnIL = ReturnMethod.GetILGenerator();
+
+        // Set state to -2 (completed)
+        returnIL.Emit(OpCodes.Ldarg_0);
+        returnIL.Emit(OpCodes.Ldc_I4, -2);
+        returnIL.Emit(OpCodes.Stfld, StateField);
+
+        // Create { value: arg, done: true }
+        returnIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        returnIL.Emit(OpCodes.Dup);
+        returnIL.Emit(OpCodes.Ldstr, "value");
+        returnIL.Emit(OpCodes.Ldarg_1);
+        returnIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        returnIL.Emit(OpCodes.Dup);
+        returnIL.Emit(OpCodes.Ldstr, "done");
+        returnIL.Emit(OpCodes.Ldc_I4_1);
+        returnIL.Emit(OpCodes.Box, _types.Boolean);
+        returnIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        returnIL.Emit(OpCodes.Ret);
+
+        _stateMachineType.DefineMethodOverride(ReturnMethod, _runtime!.GeneratorReturnMethod);
+
+        // throw(error) method - closes generator and throws
+        // Using lowercase to match JavaScript API
+        ThrowMethod = _stateMachineType.DefineMethod(
+            "throw",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            [_types.Object]
+        );
+
+        var throwIL = ThrowMethod.GetILGenerator();
+
+        // Set state to -2 (completed)
+        throwIL.Emit(OpCodes.Ldarg_0);
+        throwIL.Emit(OpCodes.Ldc_I4, -2);
+        throwIL.Emit(OpCodes.Stfld, StateField);
+
+        // If error is already an Exception, rethrow it directly
+        // Otherwise, use CreateException to properly wrap the value with __tsValue
+        var isExceptionLabel = throwIL.DefineLabel();
+        var createExceptionLabel = throwIL.DefineLabel();
+
+        throwIL.Emit(OpCodes.Ldarg_1);
+        throwIL.Emit(OpCodes.Isinst, _types.Exception);
+        throwIL.Emit(OpCodes.Dup);
+        throwIL.Emit(OpCodes.Brtrue, isExceptionLabel);
+
+        // Not an exception - use CreateException to wrap with __tsValue
+        throwIL.Emit(OpCodes.Pop);
+        throwIL.Emit(OpCodes.Ldarg_1);
+        throwIL.Emit(OpCodes.Call, _runtime!.CreateException);
+        throwIL.Emit(OpCodes.Throw);
+
+        // Already an exception - rethrow it
+        throwIL.MarkLabel(isExceptionLabel);
+        throwIL.Emit(OpCodes.Throw);
+
+        _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.GeneratorThrowMethod);
     }
 }

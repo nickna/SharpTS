@@ -540,6 +540,7 @@ public partial class TypeChecker
         if (name.Lexeme == "JSON") return new TypeInfo.Any(); // JSON is a special global object
         if (name.Lexeme == "Promise") return new TypeInfo.Any(); // Promise is a special global object
         if (name.Lexeme == "Number") return new TypeInfo.Any(); // Number is a special global object
+        if (name.Lexeme == "Symbol") return new TypeInfo.Any(); // Symbol is a special global object
         if (name.Lexeme == "parseInt") return new TypeInfo.Any(); // Global parseInt function
         if (name.Lexeme == "parseFloat") return new TypeInfo.Any(); // Global parseFloat function
         if (name.Lexeme == "isNaN") return new TypeInfo.Any(); // Global isNaN function

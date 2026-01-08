@@ -304,4 +304,32 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for static members on the Symbol namespace
+    /// </summary>
+    public static TypeInfo? GetSymbolStaticMemberType(string name)
+    {
+        var symbolType = new TypeInfo.Symbol();
+
+        return name switch
+        {
+            // Well-known symbols (properties returning symbol)
+            "iterator" => symbolType,
+            "asyncIterator" => symbolType,
+            "toStringTag" => symbolType,
+            "hasInstance" => symbolType,
+            "isConcatSpreadable" => symbolType,
+            "toPrimitive" => symbolType,
+            "species" => symbolType,
+            "unscopables" => symbolType,
+
+            // Static methods
+            "for" => new TypeInfo.Function([StringType], symbolType),
+            "keyFor" => new TypeInfo.Function([symbolType],
+                new TypeInfo.Union([StringType, new TypeInfo.Null()])),
+
+            _ => null
+        };
+    }
 }

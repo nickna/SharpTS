@@ -391,6 +391,14 @@ public partial class Interpreter
     {
         object? iterable = Evaluate(forOf.Iterable);
 
+        // First, check for Symbol.iterator protocol on objects/instances
+        IEnumerable<object?>? customIterator = TryGetSymbolIterator(iterable);
+        if (customIterator != null)
+        {
+            IterateWithBreakContinue(customIterator, forOf.Variable.Lexeme, forOf.Body);
+            return;
+        }
+
         // Get elements based on iterable type
         IEnumerable<object?> elements = iterable switch
         {
@@ -464,6 +472,175 @@ public partial class Interpreter
             try
             {
                 Execute(forIn.Body);
+            }
+            catch (BreakException ex) when (ex.TargetLabel == null)
+            {
+                _environment = previous;
+                break;
+            }
+            catch (ContinueException ex) when (ex.TargetLabel == null)
+            {
+                _environment = previous;
+                continue;
+            }
+            finally
+            {
+                _environment = previous;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Attempts to get an iterator from an object using the Symbol.iterator protocol.
+    /// </summary>
+    /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
+    private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
+    {
+        // Check for Symbol.iterator on SharpTSObject
+        if (iterable is SharpTSObject obj)
+        {
+            var iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
+            if (iteratorFn != null)
+            {
+                // Bind 'this' to the object if it's an arrow function
+                if (iteratorFn is SharpTSArrowFunction arrowFunc)
+                {
+                    iteratorFn = arrowFunc.Bind(obj);
+                }
+                return EnumerateWithIteratorProtocol(iteratorFn);
+            }
+        }
+
+        // Check for Symbol.iterator on SharpTSInstance
+        if (iterable is SharpTSInstance inst)
+        {
+            var iteratorFn = inst.GetBySymbol(SharpTSSymbol.Iterator);
+            if (iteratorFn != null)
+            {
+                // Bind 'this' to the instance if it's an arrow function
+                if (iteratorFn is SharpTSArrowFunction arrowFunc)
+                {
+                    iteratorFn = arrowFunc.Bind(inst);
+                }
+                return EnumerateWithIteratorProtocol(iteratorFn);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Iterates using the JavaScript iterator protocol: calls next() until done is true.
+    /// </summary>
+    private IEnumerable<object?> EnumerateWithIteratorProtocol(object iteratorFn)
+    {
+        // Call the iterator function to get the iterator object
+        object? iterator;
+        if (iteratorFn is ISharpTSCallable callable)
+        {
+            iterator = callable.Call(this, []);
+        }
+        else if (iteratorFn is SharpTSFunction fn)
+        {
+            iterator = fn.Call(this, []);
+        }
+        else
+        {
+            throw new Exception("Runtime Error: [Symbol.iterator] must be a function.");
+        }
+
+        // Iterate using the iterator protocol
+        while (true)
+        {
+            // Get the next() method
+            object? nextMethod = null;
+            if (iterator is SharpTSObject iterObj)
+            {
+                nextMethod = iterObj.Get("next");
+            }
+            else if (iterator is SharpTSInstance iterInst)
+            {
+                nextMethod = iterInst.GetFieldValue("next");
+                if (nextMethod == null)
+                {
+                    // Try getting a method from the class
+                    var tok = new Token(TokenType.IDENTIFIER, "next", null, 0);
+                    try { nextMethod = iterInst.Get(tok); } catch { }
+                }
+            }
+
+            if (nextMethod == null)
+            {
+                throw new Exception("Runtime Error: Iterator must have a next() method.");
+            }
+
+            // Call next()
+            object? result;
+            if (nextMethod is ISharpTSCallable nextCallable)
+            {
+                result = nextCallable.Call(this, []);
+            }
+            else if (nextMethod is SharpTSFunction nextFn)
+            {
+                result = nextFn.Call(this, []);
+            }
+            else
+            {
+                throw new Exception("Runtime Error: Iterator.next must be a function.");
+            }
+
+            // Get done and value from result
+            bool done = false;
+            object? value = null;
+
+            if (result is SharpTSObject resultObj)
+            {
+                var doneVal = resultObj.Get("done");
+                done = IsTruthy(doneVal);
+                value = resultObj.Get("value");
+            }
+            else if (result is SharpTSInstance resultInst)
+            {
+                var doneTok = new Token(TokenType.IDENTIFIER, "done", null, 0);
+                var valueTok = new Token(TokenType.IDENTIFIER, "value", null, 0);
+                try
+                {
+                    done = IsTruthy(resultInst.Get(doneTok));
+                    value = resultInst.Get(valueTok);
+                }
+                catch
+                {
+                    // Fall back to field access
+                    done = IsTruthy(resultInst.GetFieldValue("done"));
+                    value = resultInst.GetFieldValue("value");
+                }
+            }
+
+            if (done)
+            {
+                yield break;
+            }
+
+            yield return value;
+        }
+    }
+
+    /// <summary>
+    /// Iterates over elements with proper break/continue handling.
+    /// </summary>
+    private void IterateWithBreakContinue(IEnumerable<object?> elements, string variableName, Stmt body)
+    {
+        foreach (var element in elements)
+        {
+            RuntimeEnvironment loopEnv = new(_environment);
+            loopEnv.Define(variableName, element);
+
+            RuntimeEnvironment previous = _environment;
+            _environment = loopEnv;
+
+            try
+            {
+                Execute(body);
             }
             catch (BreakException ex) when (ex.TargetLabel == null)
             {

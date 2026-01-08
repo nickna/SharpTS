@@ -1,4 +1,3 @@
-using System.Collections;
 using SharpTS.Parsing;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Execution;
@@ -6,20 +5,16 @@ using SharpTS.Execution;
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
-/// Runtime object representing an active generator instance.
+/// Runtime object representing an active async generator instance.
 /// </summary>
 /// <remarks>
-/// Created by <see cref="SharpTSGeneratorFunction"/> when called. Implements
-/// execution of the generator body, collecting yielded values.
-/// Also implements IEnumerable for seamless for...of integration.
-///
-/// This implementation uses eager evaluation - the entire generator body is
-/// executed on the first call to Next(), collecting all yielded values into
-/// a list. Subsequent Next() calls return values from this list.
+/// Created by <see cref="SharpTSAsyncGeneratorFunction"/> when called.
+/// Combines async execution (await) with generator semantics (yield).
+/// Each call to next() returns a Promise that resolves to { value, done }.
 /// </remarks>
-/// <seealso cref="SharpTSGeneratorFunction"/>
-/// <seealso cref="SharpTSIteratorResult"/>
-public class SharpTSGenerator : IEnumerable<object?>
+/// <seealso cref="SharpTSAsyncGeneratorFunction"/>
+/// <seealso cref="SharpTSGenerator"/>
+public class SharpTSAsyncGenerator
 {
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _environment;
@@ -28,9 +23,9 @@ public class SharpTSGenerator : IEnumerable<object?>
     private List<object?>? _values = null;  // Collected yielded values (null = not yet executed)
     private int _index = 0;
     private object? _returnValue = null;
-    private bool _closed = false;  // True if generator has been closed via .return()
+    private bool _closed = false;
 
-    public SharpTSGenerator(Stmt.Function declaration, RuntimeEnvironment environment, Interpreter interpreter)
+    public SharpTSAsyncGenerator(Stmt.Function declaration, RuntimeEnvironment environment, Interpreter interpreter)
     {
         _declaration = declaration;
         _environment = environment;
@@ -38,10 +33,18 @@ public class SharpTSGenerator : IEnumerable<object?>
     }
 
     /// <summary>
-    /// Advances the generator to the next yield point.
-    /// Returns { value, done } result object.
+    /// Advances the async generator to the next yield point.
+    /// Returns a Promise that resolves to { value, done } result object.
     /// </summary>
-    public SharpTSIteratorResult Next()
+    public Task<object?> Next()
+    {
+        return Task.FromResult<object?>(NextSync());
+    }
+
+    /// <summary>
+    /// Synchronous implementation of next() for simpler cases.
+    /// </summary>
+    private SharpTSIteratorResult NextSync()
     {
         // If generator is closed, always return done
         if (_closed)
@@ -64,36 +67,29 @@ public class SharpTSGenerator : IEnumerable<object?>
     }
 
     /// <summary>
-    /// Closes the generator and returns a result with the given value.
+    /// Closes the async generator and returns a Promise resolving to { value, done: true }.
     /// </summary>
-    /// <remarks>
-    /// Note: In JavaScript, .return() would trigger finally blocks. This simplified
-    /// implementation just closes the generator. Finally block support would require
-    /// a full lazy evaluation model with proper state machine semantics.
-    /// </remarks>
-    public SharpTSIteratorResult Return(object? value = null)
+    public Task<object?> Return(object? value = null)
     {
         _closed = true;
         _returnValue = value;
-        return new SharpTSIteratorResult(value, done: true);
+        return Task.FromResult<object?>(new SharpTSIteratorResult(value, done: true));
     }
 
     /// <summary>
     /// Throws an exception at the current yield point.
+    /// Returns a Promise that rejects with the error.
     /// </summary>
-    /// <remarks>
-    /// Since this generator uses eager evaluation, the throw happens after
-    /// all values are already collected. The exception propagates to the caller.
-    /// </remarks>
-    public SharpTSIteratorResult Throw(object? error = null)
+    public Task<object?> Throw(object? error = null)
     {
         _closed = true;
-        string message = error?.ToString() ?? "Generator.throw() called";
+        string message = error?.ToString() ?? "AsyncGenerator.throw() called";
         throw new ThrowException(error ?? message);
     }
 
     /// <summary>
-    /// Executes the generator body, collecting all yielded values.
+    /// Executes the async generator body, collecting all yielded values.
+    /// Handles both yield and await expressions.
     /// </summary>
     private void ExecuteBody()
     {
@@ -110,7 +106,7 @@ public class SharpTSGenerator : IEnumerable<object?>
 
         try
         {
-            ExecuteStatements(_declaration.Body);
+            ExecuteStatementsAsync(_declaration.Body).GetAwaiter().GetResult();
         }
         catch (ReturnException ret)
         {
@@ -123,31 +119,31 @@ public class SharpTSGenerator : IEnumerable<object?>
     }
 
     /// <summary>
-    /// Recursively executes statements, collecting yields.
+    /// Recursively executes statements asynchronously, collecting yields.
     /// </summary>
-    private void ExecuteStatements(List<Stmt> statements)
+    private async Task ExecuteStatementsAsync(List<Stmt> statements)
     {
         foreach (var stmt in statements)
         {
-            ExecuteStatement(stmt);
+            await ExecuteStatementAsync(stmt);
         }
     }
 
     /// <summary>
-    /// Executes a single statement, handling yield expressions specially.
+    /// Executes a single statement asynchronously, handling yield and await expressions.
     /// </summary>
-    private void ExecuteStatement(Stmt stmt)
+    private async Task ExecuteStatementAsync(Stmt stmt)
     {
         switch (stmt)
         {
             case Stmt.Expression exprStmt:
                 try
                 {
-                    _interpreter.Evaluate(exprStmt.Expr);
+                    await EvaluateAsync(exprStmt.Expr);
                 }
                 catch (YieldException yield)
                 {
-                    HandleYield(yield);
+                    await HandleYieldAsync(yield);
                 }
                 break;
 
@@ -159,7 +155,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                     _interpreter.SetEnvironment(blockEnv);
                     try
                     {
-                        ExecuteStatements(block.Statements);
+                        await ExecuteStatementsAsync(block.Statements);
                     }
                     finally
                     {
@@ -174,12 +170,12 @@ public class SharpTSGenerator : IEnumerable<object?>
                 {
                     try
                     {
-                        value = _interpreter.Evaluate(varStmt.Initializer);
+                        value = await EvaluateAsync(varStmt.Initializer);
                     }
                     catch (YieldException yield)
                     {
-                        HandleYield(yield);
-                        value = null;  // After yield, variable gets undefined
+                        await HandleYieldAsync(yield);
+                        value = null;
                     }
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
@@ -189,21 +185,21 @@ public class SharpTSGenerator : IEnumerable<object?>
                 object? condition;
                 try
                 {
-                    condition = _interpreter.Evaluate(ifStmt.Condition);
+                    condition = await EvaluateAsync(ifStmt.Condition);
                 }
                 catch (YieldException yield)
                 {
-                    HandleYield(yield);
+                    await HandleYieldAsync(yield);
                     condition = false;
                 }
 
                 if (IsTruthy(condition))
                 {
-                    ExecuteStatement(ifStmt.ThenBranch);
+                    await ExecuteStatementAsync(ifStmt.ThenBranch);
                 }
                 else if (ifStmt.ElseBranch != null)
                 {
-                    ExecuteStatement(ifStmt.ElseBranch);
+                    await ExecuteStatementAsync(ifStmt.ElseBranch);
                 }
                 break;
 
@@ -213,11 +209,11 @@ public class SharpTSGenerator : IEnumerable<object?>
                     object? whileCond;
                     try
                     {
-                        whileCond = _interpreter.Evaluate(whileStmt.Condition);
+                        whileCond = await EvaluateAsync(whileStmt.Condition);
                     }
                     catch (YieldException yield)
                     {
-                        HandleYield(yield);
+                        await HandleYieldAsync(yield);
                         whileCond = false;
                     }
 
@@ -225,7 +221,7 @@ public class SharpTSGenerator : IEnumerable<object?>
 
                     try
                     {
-                        ExecuteStatement(whileStmt.Body);
+                        await ExecuteStatementAsync(whileStmt.Body);
                     }
                     catch (BreakException ex) when (ex.TargetLabel == null)
                     {
@@ -242,11 +238,11 @@ public class SharpTSGenerator : IEnumerable<object?>
                 object? iterable;
                 try
                 {
-                    iterable = _interpreter.Evaluate(forOf.Iterable);
+                    iterable = await EvaluateAsync(forOf.Iterable);
                 }
                 catch (YieldException yield)
                 {
-                    HandleYield(yield);
+                    await HandleYieldAsync(yield);
                     iterable = new SharpTSArray([]);
                 }
 
@@ -260,7 +256,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                     _interpreter.SetEnvironment(loopEnv);
                     try
                     {
-                        ExecuteStatement(forOf.Body);
+                        await ExecuteStatementAsync(forOf.Body);
                     }
                     catch (BreakException ex) when (ex.TargetLabel == null)
                     {
@@ -285,11 +281,11 @@ public class SharpTSGenerator : IEnumerable<object?>
                 {
                     try
                     {
-                        returnValue = _interpreter.Evaluate(returnStmt.Value);
+                        returnValue = await EvaluateAsync(returnStmt.Value);
                     }
                     catch (YieldException yield)
                     {
-                        HandleYield(yield);
+                        await HandleYieldAsync(yield);
                     }
                 }
                 _returnValue = returnValue;
@@ -298,7 +294,7 @@ public class SharpTSGenerator : IEnumerable<object?>
             case Stmt.TryCatch tryCatch:
                 try
                 {
-                    ExecuteStatements(tryCatch.TryBlock);
+                    await ExecuteStatementsAsync(tryCatch.TryBlock);
                 }
                 catch (ThrowException ex)
                 {
@@ -310,7 +306,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                         _interpreter.SetEnvironment(catchEnv);
                         try
                         {
-                            ExecuteStatements(tryCatch.CatchBlock);
+                            await ExecuteStatementsAsync(tryCatch.CatchBlock);
                         }
                         finally
                         {
@@ -322,43 +318,95 @@ public class SharpTSGenerator : IEnumerable<object?>
                 {
                     if (tryCatch.FinallyBlock != null)
                     {
-                        ExecuteStatements(tryCatch.FinallyBlock);
+                        await ExecuteStatementsAsync(tryCatch.FinallyBlock);
                     }
                 }
                 break;
 
             default:
-                // For other statements, delegate to the interpreter
-                // but catch any yields that might occur
+                // For other statements, delegate to the interpreter's async handler
                 try
                 {
-                    _interpreter.ExecuteBlock([stmt], _environment);
+                    await _interpreter.ExecuteBlockAsync([stmt], _environment);
                 }
                 catch (YieldException yield)
                 {
-                    HandleYield(yield);
+                    await HandleYieldAsync(yield);
                 }
                 break;
         }
     }
 
     /// <summary>
+    /// Evaluates an expression asynchronously, handling await expressions.
+    /// </summary>
+    private async Task<object?> EvaluateAsync(Expr expr)
+    {
+        // Check for await expression
+        if (expr is Expr.Await awaitExpr)
+        {
+            var value = _interpreter.Evaluate(awaitExpr.Expression);
+            // Handle SharpTSPromise (wraps Task<object?>)
+            if (value is SharpTSPromise promise)
+            {
+                return await promise.Task;
+            }
+            if (value is Task<object?> task)
+            {
+                return await task;
+            }
+            return value;
+        }
+
+        // For other expressions, evaluate synchronously but check for yield
+        return _interpreter.Evaluate(expr);
+    }
+
+    /// <summary>
     /// Handles a yield exception by collecting the value.
     /// </summary>
-    private void HandleYield(YieldException yield)
+    private async Task HandleYieldAsync(YieldException yield)
     {
         if (yield.IsDelegating)
         {
             // yield* - delegate to another iterable
-            var elements = GetIterableElements(yield.Value);
-            foreach (var element in elements)
+            var value = yield.Value;
+
+            // If delegating to an async iterable, await each value
+            if (value is SharpTSAsyncGenerator asyncGen)
             {
-                _values!.Add(element);
+                while (true)
+                {
+                    var result = await asyncGen.Next();
+                    if (result is SharpTSIteratorResult ir)
+                    {
+                        if (ir.Done) break;
+                        _values!.Add(ir.Value);
+                    }
+                    else
+                    {
+                        _values!.Add(result);
+                    }
+                }
+            }
+            else
+            {
+                var elements = GetIterableElements(value);
+                foreach (var element in elements)
+                {
+                    _values!.Add(element);
+                }
             }
         }
         else
         {
-            _values!.Add(yield.Value);
+            // If yielding a promise, await it first
+            var value = yield.Value;
+            if (value is Task<object?> task)
+            {
+                value = await task;
+            }
+            _values!.Add(value);
         }
     }
 
@@ -393,18 +441,5 @@ public class SharpTSGenerator : IEnumerable<object?>
         return true;
     }
 
-    // IEnumerable implementation for for...of integration
-    public IEnumerator<object?> GetEnumerator()
-    {
-        while (true)
-        {
-            var result = Next();
-            if (result.Done) yield break;
-            yield return result.Value;
-        }
-    }
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-    public override string ToString() => "[object Generator]";
+    public override string ToString() => "[object AsyncGenerator]";
 }

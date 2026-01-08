@@ -77,6 +77,46 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: Symbol well-known symbols
+        if (g.Object is Expr.Variable symV && symV.Name.Lexeme == "Symbol")
+        {
+            switch (g.Name.Lexeme)
+            {
+                case "iterator":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
+                    SetStackUnknown();
+                    return;
+                case "asyncIterator":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolAsyncIterator);
+                    SetStackUnknown();
+                    return;
+                case "toStringTag":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolToStringTag);
+                    SetStackUnknown();
+                    return;
+                case "hasInstance":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolHasInstance);
+                    SetStackUnknown();
+                    return;
+                case "isConcatSpreadable":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIsConcatSpreadable);
+                    SetStackUnknown();
+                    return;
+                case "toPrimitive":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolToPrimitive);
+                    SetStackUnknown();
+                    return;
+                case "species":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolSpecies);
+                    SetStackUnknown();
+                    return;
+                case "unscopables":
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolUnscopables);
+                    SetStackUnknown();
+                    return;
+            }
+        }
+
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
         if (g.Object is Expr.Variable enumVar &&
             _ctx.EnumMembers?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var members) == true &&

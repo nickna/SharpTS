@@ -133,6 +133,16 @@ public class EmittedRuntime
     public ConstructorBuilder TSSymbolCtor { get; set; } = null!;
     public MethodBuilder CreateSymbol { get; set; } = null!;
 
+    // Well-known symbols (static fields on $TSSymbol)
+    public FieldBuilder SymbolIterator { get; set; } = null!;
+    public FieldBuilder SymbolAsyncIterator { get; set; } = null!;
+    public FieldBuilder SymbolToStringTag { get; set; } = null!;
+    public FieldBuilder SymbolHasInstance { get; set; } = null!;
+    public FieldBuilder SymbolIsConcatSpreadable { get; set; } = null!;
+    public FieldBuilder SymbolToPrimitive { get; set; } = null!;
+    public FieldBuilder SymbolSpecies { get; set; } = null!;
+    public FieldBuilder SymbolUnscopables { get; set; } = null!;
+
     // Symbol storage for compiled objects (symbol as object key)
     public FieldBuilder SymbolStorageField { get; set; } = null!;
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
@@ -268,4 +278,13 @@ public class EmittedRuntime
     // Dynamic import support
     public MethodBuilder DynamicImportModule { get; set; } = null!;
     public MethodBuilder WrapTaskAsPromise { get; set; } = null!;
+
+    // Iterator protocol support
+    public MethodBuilder GetIterator { get; set; } = null!;
+
+    // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)
+    public TypeBuilder GeneratorInterfaceType { get; set; } = null!;
+    public MethodBuilder GeneratorReturnMethod { get; set; } = null!;
+    public MethodBuilder GeneratorThrowMethod { get; set; } = null!;
+    public MethodBuilder GeneratorNextMethod { get; set; } = null!;
 }

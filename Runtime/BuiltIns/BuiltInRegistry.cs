@@ -132,6 +132,7 @@ public sealed class BuiltInRegistry
         RegisterNumberNamespace(registry);
         RegisterDateNamespace(registry);
         RegisterReflectNamespace(registry);
+        RegisterSymbolNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
@@ -145,6 +146,7 @@ public sealed class BuiltInRegistry
         RegisterSetType(registry);
         RegisterIteratorType(registry);
         RegisterGeneratorType(registry);
+        RegisterAsyncGeneratorType(registry);
 
         return registry;
     }
@@ -282,6 +284,16 @@ public sealed class BuiltInRegistry
         ));
     }
 
+    private static void RegisterSymbolNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Symbol",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => SymbolBuiltIns.GetStaticMember(name) as BuiltInMethod
+        ));
+    }
+
     private static void RegisterDateType(BuiltInRegistry registry)
     {
         registry.RegisterInstanceType(typeof(SharpTSDate), (instance, name) =>
@@ -317,6 +329,12 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSGenerator), (instance, name) =>
             GeneratorBuiltIns.GetMember((SharpTSGenerator)instance, name));
+    }
+
+    private static void RegisterAsyncGeneratorType(BuiltInRegistry registry)
+    {
+        registry.RegisterInstanceType(typeof(SharpTSAsyncGenerator), (instance, name) =>
+            AsyncGeneratorBuiltIns.GetMember((SharpTSAsyncGenerator)instance, name));
     }
 
     private static string Stringify(object? obj)

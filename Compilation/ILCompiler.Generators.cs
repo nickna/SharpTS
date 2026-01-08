@@ -23,7 +23,7 @@ public partial class ILCompiler
 
         // Create the state machine builder
         var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _types, _generatorStateMachineCounter++);
-        smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false);
+        smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false, runtime: _runtime);
 
         _generatorStateMachines[funcName] = smBuilder;
         _generatorFunctions[funcName] = funcStmt;

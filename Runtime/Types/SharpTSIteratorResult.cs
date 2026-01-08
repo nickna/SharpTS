@@ -23,7 +23,6 @@ public class SharpTSIteratorResult : SharpTSObject
         Done = done;
     }
 
-    public override string ToString() => Done
-        ? "{ value: undefined, done: true }"
-        : $"{{ value: {Value ?? "undefined"}, done: false }}";
+    public override string ToString() =>
+        $"{{ value: {Value ?? "undefined"}, done: {(Done ? "true" : "false")} }}";
 }

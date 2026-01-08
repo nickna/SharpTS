@@ -42,7 +42,9 @@ public partial class Parser
         if (Match(TokenType.ASYNC))
         {
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
-            return FunctionDeclaration("function", isAsync: true);
+            // Check for async generator: async function* name() {}
+            bool isGenerator = Match(TokenType.STAR);
+            return FunctionDeclaration("function", isAsync: true, isGenerator: isGenerator);
         }
         if (Match(TokenType.FUNCTION))
         {
