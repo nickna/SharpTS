@@ -167,7 +167,7 @@ public partial class Interpreter
     /// then restores the previous environment. Used for block scoping in control structures.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html#block-scoping">TypeScript Block Scoping</seealso>
-    public void ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
+    public ExecutionResult ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
     {
         RuntimeEnvironment previous = _environment;
         try
@@ -175,8 +175,10 @@ public partial class Interpreter
             _environment = environment;
             foreach (Stmt statement in statements)
             {
-                Execute(statement);
+                var result = Execute(statement);
+                if (result.IsAbrupt) return result;
             }
+            return ExecutionResult.Success();
         }
         finally
         {
@@ -193,7 +195,7 @@ public partial class Interpreter
     /// For loops, both break and continue are handled. For non-loop statements (blocks),
     /// only break is valid. Labeled exceptions targeting this label are caught; others propagate.
     /// </remarks>
-    private void ExecuteLabeledStatement(Stmt.LabeledStatement labeledStmt)
+    private ExecutionResult ExecuteLabeledStatement(Stmt.LabeledStatement labeledStmt)
     {
         string labelName = labeledStmt.Label.Lexeme;
         bool isLoop = labeledStmt.Statement is Stmt.While
@@ -207,37 +209,28 @@ public partial class Interpreter
             // For loops, labeled continue means restart the loop
             while (true)
             {
-                try
+                var result = Execute(labeledStmt.Statement);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == labelName)
                 {
-                    Execute(labeledStmt.Statement);
-                    return; // Statement completed normally
+                    return ExecutionResult.Success();
                 }
-                catch (BreakException ex) when (ex.TargetLabel == labelName)
+                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == labelName)
                 {
-                    // Break targeting this label - exit
-                    return;
-                }
-                catch (ContinueException ex) when (ex.TargetLabel == labelName)
-                {
-                    // Continue targeting this label - restart the loop
                     continue;
                 }
-                // Unlabeled or differently-labeled exceptions propagate up
+                if (result.IsAbrupt) return result;
+                return ExecutionResult.Success();
             }
         }
         else
         {
             // For non-loop statements, only handle break
-            try
+            var result = Execute(labeledStmt.Statement);
+            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == labelName)
             {
-                Execute(labeledStmt.Statement);
+                return ExecutionResult.Success();
             }
-            catch (BreakException ex) when (ex.TargetLabel == labelName)
-            {
-                // Break targeting this label - exit
-                return;
-            }
-            // Unlabeled or differently-labeled exceptions propagate up
+            return result;
         }
     }
 
@@ -250,38 +243,37 @@ public partial class Interpreter
     /// and default case handling. Uses <see cref="BreakException"/> for break statements.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
-    private void ExecuteSwitch(Stmt.Switch switchStmt)
+    private ExecutionResult ExecuteSwitch(Stmt.Switch switchStmt)
     {
         object? subject = Evaluate(switchStmt.Subject);
         bool fallen = false;
         bool matched = false;
 
-        try
+        foreach (var caseItem in switchStmt.Cases)
         {
-            foreach (var caseItem in switchStmt.Cases)
+            if (fallen || IsEqual(subject, Evaluate(caseItem.Value)))
             {
-                if (fallen || IsEqual(subject, Evaluate(caseItem.Value)))
+                matched = fallen = true;
+                foreach (var stmt in caseItem.Body)
                 {
-                    matched = fallen = true;
-                    foreach (var stmt in caseItem.Body)
-                    {
-                        Execute(stmt);
-                    }
+                    var result = Execute(stmt);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                    if (result.IsAbrupt) return result;
                 }
             }
+        }
 
-            if (switchStmt.DefaultBody != null && (fallen || !matched))
+        if (switchStmt.DefaultBody != null && (fallen || !matched))
+        {
+            foreach (var stmt in switchStmt.DefaultBody)
             {
-                foreach (var stmt in switchStmt.DefaultBody)
-                {
-                    Execute(stmt);
-                }
+                var result = Execute(stmt);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                if (result.IsAbrupt) return result;
             }
         }
-        catch (BreakException ex) when (ex.TargetLabel == null)
-        {
-            // Exit switch (only unlabeled breaks)
-        }
+        
+        return ExecutionResult.Success();
     }
 
     /// <summary>
@@ -294,68 +286,95 @@ public partial class Interpreter
     /// is bound in a new scope.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch">MDN try...catch</seealso>
-    private void ExecuteTryCatch(Stmt.TryCatch tryCatch)
+    private ExecutionResult ExecuteTryCatch(Stmt.TryCatch tryCatch)
     {
-        Exception? pendingException = null;
+        ExecutionResult pendingResult = ExecutionResult.Success();
         bool exceptionHandled = false;
 
         try
         {
             foreach (var stmt in tryCatch.TryBlock)
             {
-                Execute(stmt);
+                var result = Execute(stmt);
+                if (result.Type == ExecutionResult.ResultType.Throw)
+                {
+                    pendingResult = result;
+                    exceptionHandled = HandleCatchBlock(tryCatch, result.Value, out pendingResult);
+                    break;
+                }
+                else if (result.IsAbrupt)
+                {
+                    pendingResult = result;
+                    break;
+                }
             }
         }
-        catch (ThrowException ex)
+        catch (Exception ex)
         {
-            pendingException = ex;
+            // Treat host exceptions as guest throws
+            object? errorValue = ex is ThrowException tex ? tex.Value : ex.Message;
+            pendingResult = ExecutionResult.Throw(errorValue);
+            exceptionHandled = HandleCatchBlock(tryCatch, errorValue, out pendingResult);
+        }
 
-            if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
+        // Always execute finally
+        if (tryCatch.FinallyBlock != null)
+        {
+            var finallyResult = ExecuteFinally(tryCatch.FinallyBlock);
+            if (finallyResult.IsAbrupt)
             {
-                exceptionHandled = true;
-                RuntimeEnvironment catchEnv = new(_environment);
-                catchEnv.Define(tryCatch.CatchParam.Lexeme, ex.Value);
+                // Finally block overrides previous jump/throw
+                return finallyResult;
+            }
+        }
 
-                RuntimeEnvironment previous = _environment;
-                _environment = catchEnv;
-                try
+        if (pendingResult.Type == ExecutionResult.ResultType.Throw && !exceptionHandled)
+        {
+            return pendingResult;
+        }
+
+        return pendingResult;
+    }
+
+    private bool HandleCatchBlock(Stmt.TryCatch tryCatch, object? errorValue, out ExecutionResult result)
+    {
+        result = ExecutionResult.Success();
+        if (tryCatch.CatchBlock != null)
+        {
+            RuntimeEnvironment catchEnv = new(_environment);
+            if (tryCatch.CatchParam != null)
+            {
+                catchEnv.Define(tryCatch.CatchParam.Lexeme, errorValue);
+            }
+
+            RuntimeEnvironment previous = _environment;
+            _environment = catchEnv;
+            try
+            {
+                foreach (var catchStmt in tryCatch.CatchBlock)
                 {
-                    foreach (var stmt in tryCatch.CatchBlock)
+                    var catchResult = Execute(catchStmt);
+                    if (catchResult.IsAbrupt)
                     {
-                        Execute(stmt);
+                        result = catchResult;
+                        return true;
                     }
                 }
-                finally
-                {
-                    _environment = previous;
-                }
+                result = ExecutionResult.Success();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                result = ExecutionResult.Throw(catchError);
+                return true;
+            }
+            finally
+            {
+                _environment = previous;
             }
         }
-        catch (ReturnException)
-        {
-            // Execute finally before propagating return
-            ExecuteFinally(tryCatch.FinallyBlock);
-            throw;
-        }
-        catch (BreakException)
-        {
-            ExecuteFinally(tryCatch.FinallyBlock);
-            throw;
-        }
-        catch (ContinueException)
-        {
-            ExecuteFinally(tryCatch.FinallyBlock);
-            throw;
-        }
-
-        // Always execute finally for normal completion
-        ExecuteFinally(tryCatch.FinallyBlock);
-
-        // Re-throw if exception wasn't handled
-        if (pendingException != null && !exceptionHandled)
-        {
-            throw pendingException;
-        }
+        return false;
     }
 
     /// <summary>
@@ -367,15 +386,14 @@ public partial class Interpreter
     /// runs regardless of how the try block exits.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch#the_finally_block">MDN finally Block</seealso>
-    private void ExecuteFinally(List<Stmt>? finallyBlock)
+    private ExecutionResult ExecuteFinally(List<Stmt> finallyBlock)
     {
-        if (finallyBlock != null)
+        foreach (var stmt in finallyBlock)
         {
-            foreach (var stmt in finallyBlock)
-            {
-                Execute(stmt);
-            }
+            var result = Execute(stmt);
+            if (result.IsAbrupt) return result;
         }
+        return ExecutionResult.Success();
     }
 
     /// <summary>
@@ -387,7 +405,7 @@ public partial class Interpreter
     /// Supports break and continue via <see cref="BreakException"/> and <see cref="ContinueException"/>.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/iterators-and-generators.html#forof-statements">TypeScript for...of</seealso>
-    private void ExecuteForOf(Stmt.ForOf forOf)
+    private ExecutionResult ExecuteForOf(Stmt.ForOf forOf)
     {
         object? iterable = Evaluate(forOf.Iterable);
 
@@ -395,8 +413,7 @@ public partial class Interpreter
         IEnumerable<object?>? customIterator = TryGetSymbolIterator(iterable);
         if (customIterator != null)
         {
-            IterateWithBreakContinue(customIterator, forOf.Variable.Lexeme, forOf.Body);
-            return;
+            return IterateWithBreakContinue(customIterator, forOf.Variable.Lexeme, forOf.Body);
         }
 
         // Get elements based on iterable type
@@ -411,33 +428,7 @@ public partial class Interpreter
             _ => throw new Exception("Runtime Error: for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
-        foreach (var element in elements)
-        {
-            RuntimeEnvironment loopEnv = new(_environment);
-            loopEnv.Define(forOf.Variable.Lexeme, element);
-
-            RuntimeEnvironment previous = _environment;
-            _environment = loopEnv;
-
-            try
-            {
-                Execute(forOf.Body);
-            }
-            catch (BreakException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                break;
-            }
-            catch (ContinueException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                continue;
-            }
-            finally
-            {
-                _environment = previous;
-            }
-        }
+        return IterateWithBreakContinue(elements, forOf.Variable.Lexeme, forOf.Body);
     }
 
     /// <summary>
@@ -449,7 +440,7 @@ public partial class Interpreter
     /// Creates a new scope for each iteration. Supports break and continue.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for...in">MDN for...in</seealso>
-    private void ExecuteForIn(Stmt.ForIn forIn)
+    private ExecutionResult ExecuteForIn(Stmt.ForIn forIn)
     {
         object? obj = Evaluate(forIn.Object);
 
@@ -461,33 +452,7 @@ public partial class Interpreter
             _ => throw new Exception("Runtime Error: for...in requires an object.")
         };
 
-        foreach (string key in keys)
-        {
-            RuntimeEnvironment loopEnv = new(_environment);
-            loopEnv.Define(forIn.Variable.Lexeme, key);
-
-            RuntimeEnvironment previous = _environment;
-            _environment = loopEnv;
-
-            try
-            {
-                Execute(forIn.Body);
-            }
-            catch (BreakException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                break;
-            }
-            catch (ContinueException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                continue;
-            }
-            finally
-            {
-                _environment = previous;
-            }
-        }
+        return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable.Lexeme, forIn.Body);
     }
 
     /// <summary>
@@ -628,7 +593,7 @@ public partial class Interpreter
     /// <summary>
     /// Iterates over elements with proper break/continue handling.
     /// </summary>
-    private void IterateWithBreakContinue(IEnumerable<object?> elements, string variableName, Stmt body)
+    private ExecutionResult IterateWithBreakContinue(IEnumerable<object?> elements, string variableName, Stmt body)
     {
         foreach (var element in elements)
         {
@@ -640,22 +605,16 @@ public partial class Interpreter
 
             try
             {
-                Execute(body);
-            }
-            catch (BreakException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                break;
-            }
-            catch (ContinueException ex) when (ex.TargetLabel == null)
-            {
-                _environment = previous;
-                continue;
+                var result = Execute(body);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                if (result.IsAbrupt) return result;
             }
             finally
             {
                 _environment = previous;
             }
         }
+        return ExecutionResult.Success();
     }
 }

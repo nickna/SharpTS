@@ -375,7 +375,16 @@ public partial class Interpreter
     private object? EvaluateAssign(Expr.Assign assign)
     {
         object? value = Evaluate(assign.Value);
-        _environment.Assign(assign.Name, value);
+        
+        if (_locals.TryGetValue(assign, out int distance))
+        {
+            _environment.AssignAt(distance, assign.Name, value);
+        }
+        else
+        {
+            _environment.Assign(assign.Name, value);
+        }
+        
         return value;
     }
 }

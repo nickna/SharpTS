@@ -14,10 +14,10 @@ namespace SharpTS.Execution;
 /// <remarks>
 /// One of two execution paths after type checking (the other being <see cref="ILCompiler"/>).
 /// Traverses the AST recursively, evaluating expressions and executing statements. Uses
-/// <see cref="RuntimeEnvironment"/> for variable scopes and control flow exceptions
-/// (<see cref="ReturnException"/>, <see cref="BreakException"/>, <see cref="ContinueException"/>)
-/// for unwinding. Runtime values include <see cref="SharpTSClass"/>, <see cref="SharpTSInstance"/>,
-/// <see cref="SharpTSFunction"/>, <see cref="SharpTSArray"/>, and <see cref="SharpTSObject"/>.
+/// <see cref="RuntimeEnvironment"/> for variable scopes and <see cref="ExecutionResult"/>
+/// for lightweight flow control (return, break, continue, throw). Runtime values include
+/// <see cref="SharpTSClass"/>, <see cref="SharpTSInstance"/>, <see cref="SharpTSFunction"/>,
+/// <see cref="SharpTSArray"/>, and <see cref="SharpTSObject"/>.
 ///
 /// This class is split across multiple partial class files:
 /// <list type="bullet">
@@ -34,6 +34,7 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     private RuntimeEnvironment _environment = new();
+    private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
     private TypeMap? _typeMap;
 
     // Module support
@@ -45,6 +46,29 @@ public partial class Interpreter
     internal RuntimeEnvironment Environment => _environment;
     internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
+
+    public void Resolve(Expr expr, int depth)
+    {
+        _locals[expr] = depth;
+    }
+
+    private object? LookupVariable(Token name, Expr expr)
+    {
+        if (_locals.TryGetValue(expr, out int distance))
+        {
+            return _environment.GetAt(distance, name.Lexeme);
+        }
+        
+        // Check for built-in singleton namespaces (e.g., Math)
+        var singleton = BuiltInRegistry.Instance.GetSingleton(name.Lexeme);
+        if (singleton != null)
+        {
+            return singleton;
+        }
+
+        // Fallback to global/dynamic lookup if not resolved (or global)
+        return _environment.Get(name);
+    }
 
     /// <summary>
     /// Executes a list of statements as the main entry point for interpretation.
@@ -75,7 +99,18 @@ public partial class Interpreter
                 }
                 else
                 {
-                    Execute(statement);
+                    var result = Execute(statement);
+                    if (result.Type == ExecutionResult.ResultType.Throw)
+                    {
+                        Console.WriteLine($"Runtime Error: {Stringify(result.Value)}");
+                        return;
+                    }
+                    if (result.IsAbrupt)
+                    {
+                        // Top-level break/continue/return is usually a syntax error handled by parser
+                        // but if it reaches here, we stop execution.
+                        return;
+                    }
                 }
             }
         }
@@ -156,7 +191,12 @@ public partial class Interpreter
                 }
                 else
                 {
-                    Execute(stmt);
+                    var result = Execute(stmt);
+                    if (result.Type == ExecutionResult.ResultType.Throw)
+                    {
+                        throw new Exception(Stringify(result.Value));
+                    }
+                    if (result.IsAbrupt) break;
                 }
             }
             moduleInstance.IsExecuted = true;
@@ -216,13 +256,15 @@ public partial class Interpreter
     /// <summary>
     /// Executes an export statement, registering exports in the current module.
     /// </summary>
-    private void ExecuteExport(Stmt.Export export)
+    private ExecutionResult ExecuteExport(Stmt.Export export)
     {
         if (export.IsDefaultExport)
         {
             if (export.Declaration != null)
             {
-                Execute(export.Declaration);
+                var result = Execute(export.Declaration);
+                if (result.IsAbrupt) return result;
+                
                 if (_currentModuleInstance != null)
                 {
                     _currentModuleInstance.DefaultExport = GetDeclaredValue(export.Declaration);
@@ -239,7 +281,9 @@ public partial class Interpreter
         }
         else if (export.Declaration != null)
         {
-            Execute(export.Declaration);
+            var result = Execute(export.Declaration);
+            if (result.IsAbrupt) return result;
+
             // Skip type-only declarations (interface, type alias) - they have no runtime value
             if (_currentModuleInstance != null && !IsTypeOnlyDeclaration(export.Declaration))
             {
@@ -290,6 +334,8 @@ public partial class Interpreter
                 }
             }
         }
+        
+        return ExecutionResult.Success();
     }
 
     /// <summary>
@@ -337,89 +383,69 @@ public partial class Interpreter
     /// <remarks>
     /// Handles all statement types including control flow (if, while, for, switch),
     /// declarations (var, function, class, enum), and control transfer (return, break, continue, throw).
-    /// Control flow uses exceptions (<see cref="ReturnException"/>, <see cref="BreakException"/>,
-    /// <see cref="ContinueException"/>, <see cref="ThrowException"/>) for stack unwinding.
+    /// Control flow uses <see cref="ExecutionResult"/> for non-local jumps.
     /// </remarks>
-    private void Execute(Stmt stmt)
+    private ExecutionResult Execute(Stmt stmt)
     {
         switch (stmt)
         {
             case Stmt.Block block:
-                ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));
-                break;
+                return ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));
             case Stmt.LabeledStatement labeledStmt:
-                ExecuteLabeledStatement(labeledStmt);
-                break;
+                return ExecuteLabeledStatement(labeledStmt);
             case Stmt.Sequence seq:
                 // Execute in current scope (no new environment)
                 foreach (var s in seq.Statements)
-                    Execute(s);
-                break;
+                {
+                    var result = Execute(s);
+                    if (result.IsAbrupt) return result;
+                }
+                return ExecutionResult.Success();
             case Stmt.Expression exprStmt:
                 Evaluate(exprStmt.Expr);
-                break;
+                return ExecutionResult.Success();
             case Stmt.If ifStmt:
                 if (IsTruthy(Evaluate(ifStmt.Condition)))
                 {
-                    Execute(ifStmt.ThenBranch);
+                    return Execute(ifStmt.ThenBranch);
                 }
                 else if (ifStmt.ElseBranch != null)
                 {
-                    Execute(ifStmt.ElseBranch);
+                    return Execute(ifStmt.ElseBranch);
                 }
-                break;
+                return ExecutionResult.Success();
             case Stmt.While whileStmt:
                 while (IsTruthy(Evaluate(whileStmt.Condition)))
                 {
-                    try
-                    {
-                        Execute(whileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = Execute(whileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 }
-                break;
+                return ExecutionResult.Success();
             case Stmt.DoWhile doWhileStmt:
                 do
                 {
-                    try
-                    {
-                        Execute(doWhileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = Execute(doWhileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
-                break;
+                return ExecutionResult.Success();
             case Stmt.ForOf forOf:
-                ExecuteForOf(forOf);
-                break;
+                return ExecuteForOf(forOf);
             case Stmt.ForIn forIn:
-                ExecuteForIn(forIn);
-                break;
+                return ExecuteForIn(forIn);
             case Stmt.Break breakStmt:
-                throw new BreakException(breakStmt.Label?.Lexeme);
+                return ExecutionResult.Break(breakStmt.Label?.Lexeme);
             case Stmt.Continue continueStmt:
-                throw new ContinueException(continueStmt.Label?.Lexeme);
+                return ExecutionResult.Continue(continueStmt.Label?.Lexeme);
             case Stmt.Switch switchStmt:
-                ExecuteSwitch(switchStmt);
-                break;
+                return ExecuteSwitch(switchStmt);
             case Stmt.TryCatch tryCatch:
-                ExecuteTryCatch(tryCatch);
-                break;
+                return ExecuteTryCatch(tryCatch);
             case Stmt.Throw throwStmt:
-                throw new ThrowException(Evaluate(throwStmt.Value));
+                return ExecutionResult.Throw(Evaluate(throwStmt.Value));
             case Stmt.Var varStmt:
                 object? value = null;
                 if (varStmt.Initializer != null)
@@ -427,10 +453,10 @@ public partial class Interpreter
                     value = Evaluate(varStmt.Initializer);
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
-                break;
+                return ExecutionResult.Success();
             case Stmt.Function functionStmt:
                 // Skip overload signatures (no body) - they're type-checking only
-                if (functionStmt.Body == null) break;
+                if (functionStmt.Body == null) return ExecutionResult.Success();
                 if (functionStmt.IsGenerator && functionStmt.IsAsync)
                 {
                     // Async generator: async function* foo() { yield await ... }
@@ -452,7 +478,7 @@ public partial class Interpreter
                     SharpTSFunction function = new(functionStmt, _environment);
                     _environment.Define(functionStmt.Name.Lexeme, function);
                 }
-                break;
+                return ExecutionResult.Success();
             case Stmt.Class classStmt:
                 object? superclass = null;
                 if (classStmt.Superclass != null)
@@ -558,30 +584,31 @@ public partial class Interpreter
                 }
 
                 _environment.Assign(classStmt.Name, klass);
-                break;
+                return ExecutionResult.Success();
             case Stmt.TypeAlias:
                 // Type aliases are compile-time only, no runtime effect
-                break;
+                return ExecutionResult.Success();
             case Stmt.Enum enumStmt:
                 ExecuteEnumDeclaration(enumStmt);
-                break;
+                return ExecutionResult.Success();
             case Stmt.Namespace ns:
-                ExecuteNamespace(ns);
-                break;
+                return ExecuteNamespace(ns);
             case Stmt.Return returnStmt:
                 object? returnValue = null;
                 if (returnStmt.Value != null) returnValue = Evaluate(returnStmt.Value);
-                throw new ReturnException(returnValue);
+                return ExecutionResult.Return(returnValue);
             case Stmt.Print printStmt:
                 Console.WriteLine(Stringify(Evaluate(printStmt.Expr)));
-                break;
+                return ExecutionResult.Success();
             case Stmt.Import:
                 // Imports are handled in BindModuleImports before execution
                 // In single-file mode, imports are a no-op (type checker would have errored)
-                break;
+                return ExecutionResult.Success();
             case Stmt.Export exportStmt:
-                ExecuteExport(exportStmt);
-                break;
+                return ExecuteExport(exportStmt);
+            default:
+                return ExecutionResult.Success();
         }
     }
+
 }

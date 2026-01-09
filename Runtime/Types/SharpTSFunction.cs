@@ -88,13 +88,14 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
             throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
         }
 
-        try
+        var result = interpreter.ExecuteBlock(_declaration.Body, environment);
+        if (result.Type == ExecutionResult.ResultType.Return)
         {
-            interpreter.ExecuteBlock(_declaration.Body, environment);
+            return result.Value;
         }
-        catch (ReturnException returnValue)
+        if (result.Type == ExecutionResult.ResultType.Throw)
         {
-            return returnValue.Value;
+            throw new Exception(interpreter.Stringify(result.Value));
         }
 
         return null;
@@ -197,13 +198,14 @@ public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnviron
         else if (_declaration.BlockBody != null)
         {
             // Block body - execute statements, catch return
-            try
+            var result = interpreter.ExecuteBlock(_declaration.BlockBody, environment);
+            if (result.Type == ExecutionResult.ResultType.Return)
             {
-                interpreter.ExecuteBlock(_declaration.BlockBody, environment);
+                return result.Value;
             }
-            catch (ReturnException returnValue)
+            if (result.Type == ExecutionResult.ResultType.Throw)
             {
-                return returnValue.Value;
+                throw new Exception(interpreter.Stringify(result.Value));
             }
         }
 

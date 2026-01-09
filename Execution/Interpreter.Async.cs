@@ -16,7 +16,7 @@ public partial class Interpreter
     /// <summary>
     /// Asynchronously executes a block of statements.
     /// </summary>
-    internal async Task ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
+    internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
         RuntimeEnvironment previous = _environment;
         try
@@ -24,8 +24,10 @@ public partial class Interpreter
             _environment = environment;
             foreach (Stmt statement in statements)
             {
-                await ExecuteAsync(statement);
+                var result = await ExecuteAsync(statement);
+                if (result.IsAbrupt) return result;
             }
+            return ExecutionResult.Success();
         }
         finally
         {
@@ -36,82 +38,64 @@ public partial class Interpreter
     /// <summary>
     /// Asynchronously dispatches a statement to the appropriate execution handler.
     /// </summary>
-    private async Task ExecuteAsync(Stmt stmt)
+    private async Task<ExecutionResult> ExecuteAsync(Stmt stmt)
     {
         switch (stmt)
         {
             case Stmt.Block block:
-                await ExecuteBlockAsync(block.Statements, new RuntimeEnvironment(_environment));
-                break;
+                return await ExecuteBlockAsync(block.Statements, new RuntimeEnvironment(_environment));
             case Stmt.Sequence seq:
                 foreach (var s in seq.Statements)
-                    await ExecuteAsync(s);
-                break;
+                {
+                    var result = await ExecuteAsync(s);
+                    if (result.IsAbrupt) return result;
+                }
+                return ExecutionResult.Success();
             case Stmt.Expression exprStmt:
                 await EvaluateAsync(exprStmt.Expr);
-                break;
+                return ExecutionResult.Success();
             case Stmt.If ifStmt:
                 if (IsTruthy(await EvaluateAsync(ifStmt.Condition)))
                 {
-                    await ExecuteAsync(ifStmt.ThenBranch);
+                    return await ExecuteAsync(ifStmt.ThenBranch);
                 }
                 else if (ifStmt.ElseBranch != null)
                 {
-                    await ExecuteAsync(ifStmt.ElseBranch);
+                    return await ExecuteAsync(ifStmt.ElseBranch);
                 }
-                break;
+                return ExecutionResult.Success();
             case Stmt.While whileStmt:
                 while (IsTruthy(await EvaluateAsync(whileStmt.Condition)))
                 {
-                    try
-                    {
-                        await ExecuteAsync(whileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = await ExecuteAsync(whileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 }
-                break;
+                return ExecutionResult.Success();
             case Stmt.DoWhile doWhileStmt:
                 do
                 {
-                    try
-                    {
-                        await ExecuteAsync(doWhileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = await ExecuteAsync(doWhileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
-                break;
+                return ExecutionResult.Success();
             case Stmt.ForOf forOf:
-                await ExecuteForOfAsync(forOf);
-                break;
+                return await ExecuteForOfAsync(forOf);
             case Stmt.ForIn forIn:
-                await ExecuteForInAsync(forIn);
-                break;
+                return await ExecuteForInAsync(forIn);
             case Stmt.Break breakStmt:
-                throw new BreakException(breakStmt.Label?.Lexeme);
+                return ExecutionResult.Break(breakStmt.Label?.Lexeme);
             case Stmt.Continue continueStmt:
-                throw new ContinueException(continueStmt.Label?.Lexeme);
+                return ExecutionResult.Continue(continueStmt.Label?.Lexeme);
             case Stmt.Switch switchStmt:
-                await ExecuteSwitchAsync(switchStmt);
-                break;
+                return await ExecuteSwitchAsync(switchStmt);
             case Stmt.TryCatch tryCatch:
-                await ExecuteTryCatchAsync(tryCatch);
-                break;
+                return await ExecuteTryCatchAsync(tryCatch);
             case Stmt.Throw throwStmt:
-                throw new ThrowException(await EvaluateAsync(throwStmt.Value));
+                return ExecutionResult.Throw(await EvaluateAsync(throwStmt.Value));
             case Stmt.Var varStmt:
                 object? value = null;
                 if (varStmt.Initializer != null)
@@ -119,22 +103,21 @@ public partial class Interpreter
                     value = await EvaluateAsync(varStmt.Initializer);
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
-                break;
+                return ExecutionResult.Success();
             case Stmt.Return returnStmt:
                 object? returnValue = null;
                 if (returnStmt.Value != null) returnValue = await EvaluateAsync(returnStmt.Value);
-                throw new ReturnException(returnValue);
+                return ExecutionResult.Return(returnValue);
             case Stmt.Print printStmt:
                 Console.WriteLine(Stringify(await EvaluateAsync(printStmt.Expr)));
-                break;
+                return ExecutionResult.Success();
             default:
                 // Fall back to sync execution for other statements
-                Execute(stmt);
-                break;
+                return Execute(stmt);
         }
     }
 
-    private async Task ExecuteForOfAsync(Stmt.ForOf forOf)
+    private async Task<ExecutionResult> ExecuteForOfAsync(Stmt.ForOf forOf)
     {
         object? iterable = await EvaluateAsync(forOf.Iterable);
 
@@ -144,8 +127,7 @@ public partial class Interpreter
             var asyncIterator = TryGetAsyncIterator(iterable);
             if (asyncIterator != null)
             {
-                await IterateAsyncIterator(asyncIterator, forOf);
-                return;
+                return await IterateAsyncIterator(asyncIterator, forOf);
             }
             // Fall through to sync iterator with async unwrap
         }
@@ -159,9 +141,12 @@ public partial class Interpreter
                 // For 'for await...of', unwrap promises from sync iterators
                 object? value = forOf.IsAsync && item is Task<object?> t ? await t : item;
 
-                await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
+                var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                if (result.IsAbrupt) return result;
             }
-            return;
+            return ExecutionResult.Success();
         }
 
         // Get elements based on iterable type
@@ -181,35 +166,29 @@ public partial class Interpreter
             // For 'for await...of' with sync iterables, unwrap promises
             object? value = forOf.IsAsync && item is Task<object?> t ? await t : item;
 
-            await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
+            var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
+            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+            if (result.IsAbrupt) return result;
         }
+        
+        return ExecutionResult.Success();
     }
 
-    private async Task ExecuteLoopBodyAsync(string varName, object? value, Stmt body)
+    private async Task<ExecutionResult> ExecuteLoopBodyAsync(string varName, object? value, Stmt body)
     {
         RuntimeEnvironment loopEnv = new(_environment);
         loopEnv.Define(varName, value);
 
+        RuntimeEnvironment prev = _environment;
+        _environment = loopEnv;
         try
         {
-            RuntimeEnvironment prev = _environment;
-            _environment = loopEnv;
-            try
-            {
-                await ExecuteAsync(body);
-            }
-            finally
-            {
-                _environment = prev;
-            }
+            return await ExecuteAsync(body);
         }
-        catch (BreakException ex) when (ex.TargetLabel == null)
+        finally
         {
-            throw; // Re-throw to break outer loop
-        }
-        catch (ContinueException ex) when (ex.TargetLabel == null)
-        {
-            // Continue is handled by returning normally
+            _environment = prev;
         }
     }
 
@@ -254,7 +233,7 @@ public partial class Interpreter
     /// <summary>
     /// Iterates an async iterator by repeatedly calling .next() and awaiting results.
     /// </summary>
-    private async Task IterateAsyncIterator(object asyncIterator, Stmt.ForOf forOf)
+    private async Task<ExecutionResult> IterateAsyncIterator(object asyncIterator, Stmt.ForOf forOf)
     {
         while (true)
         {
@@ -285,16 +264,13 @@ public partial class Interpreter
 
             if (done) break;
 
-            try
-            {
-                await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
-            }
-            catch (BreakException ex) when (ex.TargetLabel == null)
-            {
-                break;
-            }
-            // ContinueException is handled by ExecuteLoopBodyAsync
+            var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
+            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+            if (result.IsAbrupt) return result;
         }
+        
+        return ExecutionResult.Success();
     }
 
     /// <summary>
@@ -349,7 +325,7 @@ public partial class Interpreter
         throw new Exception($"Runtime Error: Cannot call method '{methodName}' on {target?.GetType().Name ?? "null"}.");
     }
 
-    private async Task ExecuteForInAsync(Stmt.ForIn forIn)
+    private async Task<ExecutionResult> ExecuteForInAsync(Stmt.ForIn forIn)
     {
         object? obj = await EvaluateAsync(forIn.Object);
 
@@ -363,112 +339,122 @@ public partial class Interpreter
 
         foreach (var key in keys)
         {
-            RuntimeEnvironment loopEnv = new(_environment);
-            loopEnv.Define(forIn.Variable.Lexeme, key);
-
-            try
-            {
-                RuntimeEnvironment prev = _environment;
-                _environment = loopEnv;
-                try
-                {
-                    await ExecuteAsync(forIn.Body);
-                }
-                finally
-                {
-                    _environment = prev;
-                }
-            }
-            catch (BreakException ex) when (ex.TargetLabel == null)
-            {
-                break;
-            }
-            catch (ContinueException ex) when (ex.TargetLabel == null)
-            {
-                continue;
-            }
+            var result = await ExecuteLoopBodyAsync(forIn.Variable.Lexeme, key, forIn.Body);
+            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+            if (result.IsAbrupt) return result;
         }
+        
+        return ExecutionResult.Success();
     }
 
-    private async Task ExecuteSwitchAsync(Stmt.Switch switchStmt)
+    private async Task<ExecutionResult> ExecuteSwitchAsync(Stmt.Switch switchStmt)
     {
         object? subject = await EvaluateAsync(switchStmt.Subject);
         bool matched = false;
         bool fallThrough = false;
 
-        try
+        foreach (var caseItem in switchStmt.Cases)
         {
-            foreach (var caseItem in switchStmt.Cases)
+            if (!matched && !fallThrough)
             {
-                if (!matched && !fallThrough)
+                object? caseValue = await EvaluateAsync(caseItem.Value);
+                if (IsEqual(subject, caseValue))
                 {
-                    object? caseValue = await EvaluateAsync(caseItem.Value);
-                    if (IsEqual(subject, caseValue))
-                    {
-                        matched = true;
-                    }
-                }
-
-                if (matched || fallThrough)
-                {
-                    foreach (var caseStmt in caseItem.Body)
-                    {
-                        await ExecuteAsync(caseStmt);
-                    }
-                    fallThrough = true;
+                    matched = true;
                 }
             }
 
-            if (!matched && switchStmt.DefaultBody != null)
+            if (matched || fallThrough)
             {
-                foreach (var defaultStmt in switchStmt.DefaultBody)
+                foreach (var caseStmt in caseItem.Body)
                 {
-                    await ExecuteAsync(defaultStmt);
+                    var result = await ExecuteAsync(caseStmt);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                    if (result.IsAbrupt) return result;
                 }
+                fallThrough = true;
             }
         }
-        catch (BreakException ex) when (ex.TargetLabel == null)
+
+        if (!matched && switchStmt.DefaultBody != null)
         {
-            // Break from switch
+            foreach (var defaultStmt in switchStmt.DefaultBody)
+            {
+                var result = await ExecuteAsync(defaultStmt);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                if (result.IsAbrupt) return result;
+            }
         }
+        
+        return ExecutionResult.Success();
     }
 
-    private async Task ExecuteTryCatchAsync(Stmt.TryCatch tryCatch)
+    private async Task<ExecutionResult> ExecuteTryCatchAsync(Stmt.TryCatch tryCatch)
     {
+        ExecutionResult pendingResult = ExecutionResult.Success();
+        bool exceptionHandled = false;
+
         try
         {
             foreach (var stmt in tryCatch.TryBlock)
             {
-                await ExecuteAsync(stmt);
-            }
-        }
-        catch (ThrowException ex)
-        {
-            await HandleCatchBlockAsync(tryCatch, ex.Value);
-        }
-        catch (SharpTSPromiseRejectedException ex)
-        {
-            // Handle rejected promise exceptions the same as ThrowException
-            await HandleCatchBlockAsync(tryCatch, ex.Reason);
-        }
-        catch (AggregateException aggEx) when (aggEx.InnerException is SharpTSPromiseRejectedException rejEx)
-        {
-            // Handle wrapped rejection exception
-            await HandleCatchBlockAsync(tryCatch, rejEx.Reason);
-        }
-        finally
-        {
-            if (tryCatch.FinallyBlock != null)
-            {
-                foreach (var stmt in tryCatch.FinallyBlock)
+                var result = await ExecuteAsync(stmt);
+                if (result.Type == ExecutionResult.ResultType.Throw)
                 {
-                    await ExecuteAsync(stmt);
+                    pendingResult = result;
+                    var catchOutcome = await HandleCatchBlockAsync(tryCatch, result.Value);
+                    exceptionHandled = catchOutcome.Handled;
+                    if (exceptionHandled) pendingResult = catchOutcome.Result;
+                    break;
+                }
+                else if (result.IsAbrupt)
+                {
+                    pendingResult = result;
+                    break;
                 }
             }
         }
+        catch (Exception ex)
+        {
+            object? errorValue = ex switch
+            {
+                ThrowException tex => tex.Value,
+                SharpTSPromiseRejectedException rex => rex.Reason,
+                AggregateException agg when agg.InnerException is SharpTSPromiseRejectedException rex => rex.Reason,
+                _ => ex.Message
+            };
+            
+            var catchOutcome = await HandleCatchBlockAsync(tryCatch, errorValue);
+            exceptionHandled = catchOutcome.Handled;
+            pendingResult = exceptionHandled ? catchOutcome.Result : ExecutionResult.Throw(errorValue);
+        }
+
+        if (tryCatch.FinallyBlock != null)
+        {
+            var finallyResult = await ExecuteFinallyAsync(tryCatch.FinallyBlock);
+            if (finallyResult.IsAbrupt) return finallyResult;
+        }
+
+        if (pendingResult.Type == ExecutionResult.ResultType.Throw && !exceptionHandled)
+        {
+            return pendingResult;
+        }
+
+        return pendingResult;
     }
 
-    private async Task HandleCatchBlockAsync(Stmt.TryCatch tryCatch, object? value)
+    private async Task<ExecutionResult> ExecuteFinallyAsync(List<Stmt> finallyBlock)
+    {
+        foreach (var stmt in finallyBlock)
+        {
+            var result = await ExecuteAsync(stmt);
+            if (result.IsAbrupt) return result;
+        }
+        return ExecutionResult.Success();
+    }
+
+    private async Task<(bool Handled, ExecutionResult Result)> HandleCatchBlockAsync(Stmt.TryCatch tryCatch, object? value)
     {
         if (tryCatch.CatchBlock != null)
         {
@@ -484,14 +470,28 @@ public partial class Interpreter
             {
                 foreach (var stmt in tryCatch.CatchBlock)
                 {
-                    await ExecuteAsync(stmt);
+                    var result = await ExecuteAsync(stmt);
+                    if (result.IsAbrupt) return (true, result);
                 }
+                return (true, ExecutionResult.Success());
+            }
+            catch (Exception ex)
+            {
+                object? errorValue = ex switch
+                {
+                    ThrowException tex => tex.Value,
+                    SharpTSPromiseRejectedException rex => rex.Reason,
+                    AggregateException agg when agg.InnerException is SharpTSPromiseRejectedException rex => rex.Reason,
+                    _ => ex.Message
+                };
+                return (true, ExecutionResult.Throw(errorValue));
             }
             finally
             {
                 _environment = prev;
             }
         }
+        return (false, ExecutionResult.Success());
     }
 
     // ===================== Async Expression Helpers =====================
@@ -539,10 +539,19 @@ public partial class Interpreter
         return EvaluateUnaryOperation(unary.Operator, right);
     }
 
-    private async Task<object?> EvaluateAssignAsync(Expr.Assign assign)
+    private async ValueTask<object?> EvaluateAssignAsync(Expr.Assign assign)
     {
         object? value = await EvaluateAsync(assign.Value);
-        _environment.Assign(assign.Name, value);
+        
+        if (_locals.TryGetValue(assign, out int distance))
+        {
+            _environment.AssignAt(distance, assign.Name, value);
+        }
+        else
+        {
+            _environment.Assign(assign.Name, value);
+        }
+        
         return value;
     }
 

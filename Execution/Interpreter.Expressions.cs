@@ -69,44 +69,53 @@ public partial class Interpreter
     /// Async version of Evaluate that properly handles await expressions without blocking.
     /// Used by async functions and arrow functions.
     /// </remarks>
+    /// <summary>
+    /// Asynchronously dispatches an expression to the appropriate evaluator.
+    /// </summary>
+    /// <param name="expr">The expression AST node to evaluate.</param>
+    /// <returns>A task that resolves to the runtime value produced by evaluating the expression.</returns>
+    /// <remarks>
+    /// Async version of Evaluate that properly handles await expressions without blocking.
+    /// Used by async functions and arrow functions.
+    /// </remarks>
     internal async Task<object?> EvaluateAsync(Expr expr)
     {
-        return expr switch
+        switch (expr)
         {
-            Expr.Binary binary => await EvaluateBinaryAsync(binary),
-            Expr.Logical logical => await EvaluateLogicalAsync(logical),
-            Expr.NullishCoalescing nc => await EvaluateNullishCoalescingAsync(nc),
-            Expr.Ternary ternary => await EvaluateTernaryAsync(ternary),
-            Expr.Grouping grouping => await EvaluateAsync(grouping.Expression),
-            Expr.Literal literal => EvaluateLiteral(literal),
-            Expr.Unary unary => await EvaluateUnaryAsync(unary),
-            Expr.Variable variable => EvaluateVariable(variable),
-            Expr.Assign assign => await EvaluateAssignAsync(assign),
-            Expr.Call call => await EvaluateCallAsync(call),
-            Expr.Get get => await EvaluateGetAsync(get),
-            Expr.Set set => await EvaluateSetAsync(set),
-            Expr.This thisExpr => EvaluateThis(thisExpr),
-            Expr.New newExpr => await EvaluateNewAsync(newExpr),
-            Expr.ArrayLiteral array => await EvaluateArrayAsync(array),
-            Expr.ObjectLiteral obj => await EvaluateObjectAsync(obj),
-            Expr.GetIndex getIndex => await EvaluateGetIndexAsync(getIndex),
-            Expr.SetIndex setIndex => await EvaluateSetIndexAsync(setIndex),
-            Expr.Super super => EvaluateSuper(super),
-            Expr.CompoundAssign compound => await EvaluateCompoundAssignAsync(compound),
-            Expr.CompoundSet compoundSet => await EvaluateCompoundSetAsync(compoundSet),
-            Expr.CompoundSetIndex compoundSetIndex => await EvaluateCompoundSetIndexAsync(compoundSetIndex),
-            Expr.PrefixIncrement prefix => await EvaluatePrefixIncrementAsync(prefix),
-            Expr.PostfixIncrement postfix => await EvaluatePostfixIncrementAsync(postfix),
-            Expr.ArrowFunction arrow => EvaluateArrowFunction(arrow),
-            Expr.TemplateLiteral template => await EvaluateTemplateLiteralAsync(template),
-            Expr.Spread spread => await EvaluateAsync(spread.Expression),
-            Expr.TypeAssertion ta => await EvaluateAsync(ta.Expression),
-            Expr.Await awaitExpr => await EvaluateAwaitAsync(awaitExpr),
-            Expr.DynamicImport di => EvaluateDynamicImport(di),
-            Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
-            Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
-            _ => throw new Exception("Unknown expression type.")
-        };
+            case Expr.Binary binary: return await EvaluateBinaryAsync(binary);
+            case Expr.Logical logical: return await EvaluateLogicalAsync(logical);
+            case Expr.NullishCoalescing nc: return await EvaluateNullishCoalescingAsync(nc);
+            case Expr.Ternary ternary: return await EvaluateTernaryAsync(ternary);
+            case Expr.Grouping grouping: return await EvaluateAsync(grouping.Expression);
+            case Expr.Literal literal: return EvaluateLiteral(literal);
+            case Expr.Unary unary: return await EvaluateUnaryAsync(unary);
+            case Expr.Variable variable: return EvaluateVariable(variable);
+            case Expr.Assign assign: return await EvaluateAssignAsync(assign);
+            case Expr.Call call: return await EvaluateCallAsync(call);
+            case Expr.Get get: return await EvaluateGetAsync(get);
+            case Expr.Set set: return await EvaluateSetAsync(set);
+            case Expr.This thisExpr: return EvaluateThis(thisExpr);
+            case Expr.New newExpr: return await EvaluateNewAsync(newExpr);
+            case Expr.ArrayLiteral array: return await EvaluateArrayAsync(array);
+            case Expr.ObjectLiteral obj: return await EvaluateObjectAsync(obj);
+            case Expr.GetIndex getIndex: return await EvaluateGetIndexAsync(getIndex);
+            case Expr.SetIndex setIndex: return await EvaluateSetIndexAsync(setIndex);
+            case Expr.Super super: return EvaluateSuper(super);
+            case Expr.CompoundAssign compound: return await EvaluateCompoundAssignAsync(compound);
+            case Expr.CompoundSet compoundSet: return await EvaluateCompoundSetAsync(compoundSet);
+            case Expr.CompoundSetIndex compoundSetIndex: return await EvaluateCompoundSetIndexAsync(compoundSetIndex);
+            case Expr.PrefixIncrement prefix: return await EvaluatePrefixIncrementAsync(prefix);
+            case Expr.PostfixIncrement postfix: return await EvaluatePostfixIncrementAsync(postfix);
+            case Expr.ArrowFunction arrow: return EvaluateArrowFunction(arrow);
+            case Expr.TemplateLiteral template: return await EvaluateTemplateLiteralAsync(template);
+            case Expr.Spread spread: return await EvaluateAsync(spread.Expression);
+            case Expr.TypeAssertion ta: return await EvaluateAsync(ta.Expression);
+            case Expr.Await awaitExpr: return await EvaluateAwaitAsync(awaitExpr);
+            case Expr.DynamicImport di: return EvaluateDynamicImport(di);
+            case Expr.Yield yieldExpr: return EvaluateYield(yieldExpr);
+            case Expr.RegexLiteral regex: return new SharpTSRegExp(regex.Pattern, regex.Flags);
+            default: throw new Exception("Unknown expression type.");
+        }
     }
 
     /// <summary>
@@ -163,19 +172,13 @@ public partial class Interpreter
     /// <param name="variable">The variable expression AST node.</param>
     /// <returns>The current value of the variable.</returns>
     /// <remarks>
-    /// Special-cases the Math global object. All other variables are resolved
-    /// through the <see cref="RuntimeEnvironment"/> scope chain.
+    /// Uses side-channel resolution information if available, otherwise falls back
+    /// to dynamic lookup via <see cref="RuntimeEnvironment"/>.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
     private object? EvaluateVariable(Expr.Variable variable)
     {
-        // Check for built-in singleton namespaces (e.g., Math)
-        var singleton = BuiltInRegistry.Instance.GetSingleton(variable.Name.Lexeme);
-        if (singleton != null)
-        {
-            return singleton;
-        }
-        return _environment.Get(variable.Name);
+        return LookupVariable(variable.Name, variable);
     }
 
     /// <summary>

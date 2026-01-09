@@ -278,14 +278,17 @@ public partial class Interpreter
     /// <param name="obj">The value to check.</param>
     /// <returns><c>true</c> if the value is truthy; otherwise <c>false</c>.</returns>
     /// <remarks>
-    /// Null is falsy, booleans use their value, all other values are truthy.
-    /// Note: This simplified implementation doesn't handle 0, "", NaN as falsy.
+    /// Falsy values include null, undefined, false, 0, NaN, and "".
+    /// All other values are truthy.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Glossary/Truthy">MDN Truthy</seealso>
     private bool IsTruthy(object? obj)
     {
         if (obj == null) return false;
         if (obj is bool b) return b;
+        if (obj is double d) return d != 0 && !double.IsNaN(d);
+        if (obj is string s) return s.Length > 0;
+        if (obj is SharpTSBigInt bi) return bi.Value != 0;
         return true;
     }
 
@@ -369,14 +372,35 @@ public partial class Interpreter
     /// </summary>
     /// <param name="obj">The value to stringify.</param>
     /// <returns>The string representation of the value.</returns>
-    /// <remarks>
-    /// Null becomes "null", booleans are lowercase, other values use <c>ToString()</c>.
-    /// </remarks>
-    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String#string_coercion">MDN String Coercion</seealso>
-    private string Stringify(object? obj)
+    internal string Stringify(object? obj)
     {
         if (obj == null) return "null";
-        if (obj is bool b) return b.ToString().ToLower();
+        if (obj is bool b) return b ? "true" : "false";
+        if (obj is double d)
+        {
+            string text = d.ToString();
+            if (text.EndsWith(".0"))
+            {
+                text = text.Substring(0, text.Length - 2);
+            }
+            return text;
+        }
+
+        if (obj is SharpTSArray array)
+        {
+            return "[" + string.Join(", ", array.Elements.Select(Stringify)) + "]";
+        }
+
+        if (obj is SharpTSObject sharpObj)
+        {
+            return "[object Object]";
+        }
+
+        if (obj is SharpTSInstance instance)
+        {
+            return "[object " + instance.GetClass().Name + "]";
+        }
+
         return obj.ToString()!;
     }
 }

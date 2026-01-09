@@ -54,6 +54,35 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
     }
 
     /// <summary>
+    /// Gets a variable value at a specific scope distance.
+    /// </summary>
+    public object? GetAt(int distance, string name)
+    {
+        return Ancestor(distance)._values.GetValueOrDefault(name);
+    }
+
+    /// <summary>
+    /// Assigns a variable at a specific scope distance.
+    /// </summary>
+    public void AssignAt(int distance, Token name, object? value)
+    {
+        Ancestor(distance)._values[name.Lexeme] = value;
+    }
+
+    /// <summary>
+    /// Traverses up the scope chain a specific number of steps.
+    /// </summary>
+    private RuntimeEnvironment Ancestor(int distance)
+    {
+        RuntimeEnvironment environment = this;
+        for (int i = 0; i < distance; i++)
+        {
+            environment = environment.Enclosing!; 
+        }
+        return environment;
+    }
+
+    /// <summary>
     /// Defines or merges a namespace in the current scope.
     /// If a namespace with the same name already exists, merges the members.
     /// </summary>

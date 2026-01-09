@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Runtime.Types;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -49,8 +50,22 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         ValidateArguments(arguments);
-        var task = _implementation(interpreter, _receiver, arguments);
-        return new SharpTSPromise(task);
+        try
+        {
+            var task = _implementation(interpreter, _receiver, arguments);
+            return new SharpTSPromise(task);
+        }
+        catch (Exception ex)
+        {
+            // If the implementation throws synchronously, return a rejected Promise
+            object? errorValue = ex switch
+            {
+                ThrowException tex => tex.Value,
+                SharpTSPromiseRejectedException rex => rex.Reason,
+                _ => ex.Message
+            };
+            return SharpTSPromise.Reject(errorValue);
+        }
     }
 
     /// <summary>

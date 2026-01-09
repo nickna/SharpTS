@@ -106,11 +106,15 @@ public class SharpTSAsyncGenerator
 
         try
         {
-            ExecuteStatementsAsync(_declaration.Body).GetAwaiter().GetResult();
-        }
-        catch (ReturnException ret)
-        {
-            _returnValue = ret.Value;
+            var result = ExecuteStatementsAsync(_declaration.Body).GetAwaiter().GetResult();
+            if (result.Type == ExecutionResult.ResultType.Return)
+            {
+                _returnValue = result.Value;
+            }
+            else if (result.Type == ExecutionResult.ResultType.Throw)
+            {
+                throw new Exception(_interpreter.Stringify(result.Value));
+            }
         }
         finally
         {
@@ -121,18 +125,20 @@ public class SharpTSAsyncGenerator
     /// <summary>
     /// Recursively executes statements asynchronously, collecting yields.
     /// </summary>
-    private async Task ExecuteStatementsAsync(List<Stmt> statements)
+    private async Task<ExecutionResult> ExecuteStatementsAsync(List<Stmt> statements)
     {
         foreach (var stmt in statements)
         {
-            await ExecuteStatementAsync(stmt);
+            var result = await ExecuteStatementAsync(stmt);
+            if (result.IsAbrupt) return result;
         }
+        return ExecutionResult.Success();
     }
 
     /// <summary>
     /// Executes a single statement asynchronously, handling yield and await expressions.
     /// </summary>
-    private async Task ExecuteStatementAsync(Stmt stmt)
+    private async Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt)
     {
         switch (stmt)
         {
@@ -145,7 +151,7 @@ public class SharpTSAsyncGenerator
                 {
                     await HandleYieldAsync(yield);
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Block block:
                 if (block.Statements != null)
@@ -155,31 +161,31 @@ public class SharpTSAsyncGenerator
                     _interpreter.SetEnvironment(blockEnv);
                     try
                     {
-                        await ExecuteStatementsAsync(block.Statements);
+                        return await ExecuteStatementsAsync(block.Statements);
                     }
                     finally
                     {
                         _interpreter.SetEnvironment(prevEnv);
                     }
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Var varStmt:
                 object? value = null;
-                if (varStmt.Initializer != null)
+                try
                 {
-                    try
+                    if (varStmt.Initializer != null)
                     {
                         value = await EvaluateAsync(varStmt.Initializer);
                     }
-                    catch (YieldException yield)
-                    {
-                        await HandleYieldAsync(yield);
-                        value = null;
-                    }
+                }
+                catch (YieldException yield)
+                {
+                    await HandleYieldAsync(yield);
+                    value = null;
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.If ifStmt:
                 object? condition;
@@ -195,13 +201,13 @@ public class SharpTSAsyncGenerator
 
                 if (IsTruthy(condition))
                 {
-                    await ExecuteStatementAsync(ifStmt.ThenBranch);
+                    return await ExecuteStatementAsync(ifStmt.ThenBranch);
                 }
                 else if (ifStmt.ElseBranch != null)
                 {
-                    await ExecuteStatementAsync(ifStmt.ElseBranch);
+                    return await ExecuteStatementAsync(ifStmt.ElseBranch);
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.While whileStmt:
                 while (true)
@@ -219,20 +225,12 @@ public class SharpTSAsyncGenerator
 
                     if (!IsTruthy(whileCond)) break;
 
-                    try
-                    {
-                        await ExecuteStatementAsync(whileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = await ExecuteStatementAsync(whileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.ForOf forOf:
                 object? iterable;
@@ -256,24 +254,17 @@ public class SharpTSAsyncGenerator
                     _interpreter.SetEnvironment(loopEnv);
                     try
                     {
-                        await ExecuteStatementAsync(forOf.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        _interpreter.SetEnvironment(prevEnv);
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        _interpreter.SetEnvironment(prevEnv);
-                        continue;
+                        var result = await ExecuteStatementAsync(forOf.Body);
+                        if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                        if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                        if (result.IsAbrupt) return result;
                     }
                     finally
                     {
                         _interpreter.SetEnvironment(prevEnv);
                     }
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Return returnStmt:
                 object? returnValue = null;
@@ -288,25 +279,21 @@ public class SharpTSAsyncGenerator
                         await HandleYieldAsync(yield);
                     }
                 }
-                _returnValue = returnValue;
-                throw new ReturnException(returnValue);
+                return ExecutionResult.Return(returnValue);
 
             case Stmt.TryCatch tryCatch:
-                try
-                {
-                    await ExecuteStatementsAsync(tryCatch.TryBlock);
-                }
-                catch (ThrowException ex)
+                ExecutionResult tryResult = await ExecuteStatementsAsync(tryCatch.TryBlock);
+                if (tryResult.Type == ExecutionResult.ResultType.Throw)
                 {
                     if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
                     {
                         var catchEnv = new RuntimeEnvironment(_environment);
-                        catchEnv.Define(tryCatch.CatchParam.Lexeme, ex.Value);
+                        catchEnv.Define(tryCatch.CatchParam.Lexeme, tryResult.Value);
                         RuntimeEnvironment prevEnv = _interpreter.Environment;
                         _interpreter.SetEnvironment(catchEnv);
                         try
                         {
-                            await ExecuteStatementsAsync(tryCatch.CatchBlock);
+                            tryResult = await ExecuteStatementsAsync(tryCatch.CatchBlock);
                         }
                         finally
                         {
@@ -314,26 +301,25 @@ public class SharpTSAsyncGenerator
                         }
                     }
                 }
-                finally
+
+                if (tryCatch.FinallyBlock != null)
                 {
-                    if (tryCatch.FinallyBlock != null)
-                    {
-                        await ExecuteStatementsAsync(tryCatch.FinallyBlock);
-                    }
+                    var finallyResult = await ExecuteStatementsAsync(tryCatch.FinallyBlock);
+                    if (finallyResult.IsAbrupt) return finallyResult;
                 }
-                break;
+                return tryResult;
 
             default:
                 // For other statements, delegate to the interpreter's async handler
                 try
                 {
-                    await _interpreter.ExecuteBlockAsync([stmt], _environment);
+                    return await _interpreter.ExecuteBlockAsync([stmt], _environment);
                 }
                 catch (YieldException yield)
                 {
                     await HandleYieldAsync(yield);
+                    return ExecutionResult.Success();
                 }
-                break;
         }
     }
 

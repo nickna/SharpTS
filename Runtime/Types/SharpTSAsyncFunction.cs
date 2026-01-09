@@ -42,7 +42,7 @@ public class SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Start async execution and wrap in Promise
-        Task<object?> task = CallAsync(interpreter, arguments);
+        var task = CallAsync(interpreter, arguments);
         return new SharpTSPromise(task);
     }
 
@@ -99,19 +99,20 @@ public class SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment 
             throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
         }
 
-        try
-        {
-            await interpreter.ExecuteBlockAsync(_declaration.Body, environment);
-        }
-        catch (ReturnException returnValue)
+        var result = await interpreter.ExecuteBlockAsync(_declaration.Body, environment);
+        if (result.Type == ExecutionResult.ResultType.Return)
         {
             // Unwrap Promise if returning a Promise from async function
-            object? result = returnValue.Value;
-            if (result is SharpTSPromise promise)
+            object? val = result.Value;
+            if (val is SharpTSPromise promise)
             {
-                result = await promise.GetValueAsync();
+                val = await promise.GetValueAsync();
             }
-            return result;
+            return val;
+        }
+        if (result.Type == ExecutionResult.ResultType.Throw)
+        {
+            throw new Exception(interpreter.Stringify(result.Value));
         }
 
         return null;
@@ -149,7 +150,7 @@ public class SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEn
     /// </summary>
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        Task<object?> task = CallAsync(interpreter, arguments);
+        var task = CallAsync(interpreter, arguments);
         return new SharpTSPromise(task);
     }
 
@@ -205,7 +206,7 @@ public class SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEn
         {
             RuntimeEnvironment previous = interpreter.Environment;
             try
-            {
+                {
                 interpreter.SetEnvironment(environment);
                 object? result = await interpreter.EvaluateAsync(_declaration.ExpressionBody);
                 // Unwrap Promise if returning a Promise from async arrow
@@ -222,18 +223,19 @@ public class SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEn
         }
         else if (_declaration.BlockBody != null)
         {
-            try
+            var result = await interpreter.ExecuteBlockAsync(_declaration.BlockBody, environment);
+            if (result.Type == ExecutionResult.ResultType.Return)
             {
-                await interpreter.ExecuteBlockAsync(_declaration.BlockBody, environment);
-            }
-            catch (ReturnException returnValue)
-            {
-                object? result = returnValue.Value;
-                if (result is SharpTSPromise promise)
+                object? val = result.Value;
+                if (val is SharpTSPromise promise)
                 {
-                    result = await promise.GetValueAsync();
+                    val = await promise.GetValueAsync();
                 }
-                return result;
+                return val;
+            }
+            if (result.Type == ExecutionResult.ResultType.Throw)
+            {
+                throw new Exception(interpreter.Stringify(result.Value));
             }
         }
 

@@ -110,11 +110,15 @@ public class SharpTSGenerator : IEnumerable<object?>
 
         try
         {
-            ExecuteStatements(_declaration.Body);
-        }
-        catch (ReturnException ret)
-        {
-            _returnValue = ret.Value;
+            var result = ExecuteStatements(_declaration.Body);
+            if (result.Type == ExecutionResult.ResultType.Return)
+            {
+                _returnValue = result.Value;
+            }
+            else if (result.Type == ExecutionResult.ResultType.Throw)
+            {
+                throw new Exception(_interpreter.Stringify(result.Value));
+            }
         }
         finally
         {
@@ -125,18 +129,20 @@ public class SharpTSGenerator : IEnumerable<object?>
     /// <summary>
     /// Recursively executes statements, collecting yields.
     /// </summary>
-    private void ExecuteStatements(List<Stmt> statements)
+    private ExecutionResult ExecuteStatements(List<Stmt> statements)
     {
         foreach (var stmt in statements)
         {
-            ExecuteStatement(stmt);
+            var result = ExecuteStatement(stmt);
+            if (result.IsAbrupt) return result;
         }
+        return ExecutionResult.Success();
     }
 
     /// <summary>
     /// Executes a single statement, handling yield expressions specially.
     /// </summary>
-    private void ExecuteStatement(Stmt stmt)
+    private ExecutionResult ExecuteStatement(Stmt stmt)
     {
         switch (stmt)
         {
@@ -149,7 +155,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                 {
                     HandleYield(yield);
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Block block:
                 if (block.Statements != null)
@@ -159,31 +165,31 @@ public class SharpTSGenerator : IEnumerable<object?>
                     _interpreter.SetEnvironment(blockEnv);
                     try
                     {
-                        ExecuteStatements(block.Statements);
+                        return ExecuteStatements(block.Statements);
                     }
                     finally
                     {
                         _interpreter.SetEnvironment(prevEnv);
                     }
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Var varStmt:
                 object? value = null;
-                if (varStmt.Initializer != null)
+                try
                 {
-                    try
+                    if (varStmt.Initializer != null)
                     {
                         value = _interpreter.Evaluate(varStmt.Initializer);
                     }
-                    catch (YieldException yield)
-                    {
-                        HandleYield(yield);
-                        value = null;  // After yield, variable gets undefined
-                    }
+                }
+                catch (YieldException yield)
+                {
+                    HandleYield(yield);
+                    value = null;  // After yield, variable gets undefined
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.If ifStmt:
                 object? condition;
@@ -199,13 +205,13 @@ public class SharpTSGenerator : IEnumerable<object?>
 
                 if (IsTruthy(condition))
                 {
-                    ExecuteStatement(ifStmt.ThenBranch);
+                    return ExecuteStatement(ifStmt.ThenBranch);
                 }
                 else if (ifStmt.ElseBranch != null)
                 {
-                    ExecuteStatement(ifStmt.ElseBranch);
+                    return ExecuteStatement(ifStmt.ElseBranch);
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.While whileStmt:
                 while (true)
@@ -223,20 +229,12 @@ public class SharpTSGenerator : IEnumerable<object?>
 
                     if (!IsTruthy(whileCond)) break;
 
-                    try
-                    {
-                        ExecuteStatement(whileStmt.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        continue;
-                    }
+                    var result = ExecuteStatement(whileStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                    if (result.IsAbrupt) return result;
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.ForOf forOf:
                 object? iterable;
@@ -260,24 +258,17 @@ public class SharpTSGenerator : IEnumerable<object?>
                     _interpreter.SetEnvironment(loopEnv);
                     try
                     {
-                        ExecuteStatement(forOf.Body);
-                    }
-                    catch (BreakException ex) when (ex.TargetLabel == null)
-                    {
-                        _interpreter.SetEnvironment(prevEnv);
-                        break;
-                    }
-                    catch (ContinueException ex) when (ex.TargetLabel == null)
-                    {
-                        _interpreter.SetEnvironment(prevEnv);
-                        continue;
+                        var result = ExecuteStatement(forOf.Body);
+                        if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                        if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
+                        if (result.IsAbrupt) return result;
                     }
                     finally
                     {
                         _interpreter.SetEnvironment(prevEnv);
                     }
                 }
-                break;
+                return ExecutionResult.Success();
 
             case Stmt.Return returnStmt:
                 object? returnValue = null;
@@ -292,25 +283,21 @@ public class SharpTSGenerator : IEnumerable<object?>
                         HandleYield(yield);
                     }
                 }
-                _returnValue = returnValue;
-                throw new ReturnException(returnValue);
+                return ExecutionResult.Return(returnValue);
 
             case Stmt.TryCatch tryCatch:
-                try
-                {
-                    ExecuteStatements(tryCatch.TryBlock);
-                }
-                catch (ThrowException ex)
+                ExecutionResult tryResult = ExecuteStatements(tryCatch.TryBlock);
+                if (tryResult.Type == ExecutionResult.ResultType.Throw)
                 {
                     if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
                     {
                         var catchEnv = new RuntimeEnvironment(_environment);
-                        catchEnv.Define(tryCatch.CatchParam.Lexeme, ex.Value);
+                        catchEnv.Define(tryCatch.CatchParam.Lexeme, tryResult.Value);
                         RuntimeEnvironment prevEnv = _interpreter.Environment;
                         _interpreter.SetEnvironment(catchEnv);
                         try
                         {
-                            ExecuteStatements(tryCatch.CatchBlock);
+                            tryResult = ExecuteStatements(tryCatch.CatchBlock);
                         }
                         finally
                         {
@@ -318,27 +305,26 @@ public class SharpTSGenerator : IEnumerable<object?>
                         }
                     }
                 }
-                finally
+
+                if (tryCatch.FinallyBlock != null)
                 {
-                    if (tryCatch.FinallyBlock != null)
-                    {
-                        ExecuteStatements(tryCatch.FinallyBlock);
-                    }
+                    var finallyResult = ExecuteStatements(tryCatch.FinallyBlock);
+                    if (finallyResult.IsAbrupt) return finallyResult;
                 }
-                break;
+                return tryResult;
 
             default:
                 // For other statements, delegate to the interpreter
                 // but catch any yields that might occur
                 try
                 {
-                    _interpreter.ExecuteBlock([stmt], _environment);
+                    return _interpreter.ExecuteBlock([stmt], _environment);
                 }
                 catch (YieldException yield)
                 {
                     HandleYield(yield);
+                    return ExecutionResult.Success();
                 }
-                break;
         }
     }
 

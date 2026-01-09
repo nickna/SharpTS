@@ -12,7 +12,7 @@ public partial class Interpreter
     /// <summary>
     /// Executes a namespace declaration, creating or merging the runtime namespace object.
     /// </summary>
-    private void ExecuteNamespace(Stmt.Namespace ns)
+    private ExecutionResult ExecuteNamespace(Stmt.Namespace ns)
     {
         string name = ns.Name.Lexeme;
 
@@ -40,19 +40,22 @@ public partial class Interpreter
         {
             foreach (var member in ns.Members)
             {
-                ExecuteNamespaceMember(member, nsObj);
+                var result = ExecuteNamespaceMember(member, nsObj);
+                if (result.IsAbrupt) return result;
             }
         }
         finally
         {
             _environment = savedEnv;
         }
+        
+        return ExecutionResult.Success();
     }
 
     /// <summary>
     /// Executes a namespace member and adds it to the namespace object.
     /// </summary>
-    private void ExecuteNamespaceMember(Stmt member, SharpTSNamespace nsObj)
+    private ExecutionResult ExecuteNamespaceMember(Stmt member, SharpTSNamespace nsObj)
     {
         bool isExported = false;
 
@@ -64,7 +67,8 @@ public partial class Interpreter
         }
 
         // Execute the member
-        Execute(member);
+        var result = Execute(member);
+        if (result.IsAbrupt) return result;
 
         // Add exported members to namespace object (or nested namespaces)
         // In TypeScript, only exported members are accessible via the namespace object
@@ -86,25 +90,24 @@ public partial class Interpreter
             if (memberName != null)
             {
                 // Get the value from the namespace scope
-                try
+                var token = member switch
                 {
-                    var token = member switch
-                    {
-                        Stmt.Function f => f.Name,
-                        Stmt.Class c => c.Name,
-                        Stmt.Var v => v.Name,
-                        Stmt.Enum e => e.Name,
-                        Stmt.Namespace n => n.Name,
-                        _ => throw new Exception()
-                    };
+                    Stmt.Function f => f.Name,
+                    Stmt.Class c => c.Name,
+                    Stmt.Var v => v.Name,
+                    Stmt.Enum e => e.Name,
+                    Stmt.Namespace n => n.Name,
+                    _ => null
+                };
+
+                if (token != null)
+                {
                     object? value = _environment.Get(token);
                     nsObj.Set(memberName, value);
                 }
-                catch
-                {
-                    // Ignore lookup errors for type-only declarations
-                }
             }
         }
+        
+        return ExecutionResult.Success();
     }
 }
