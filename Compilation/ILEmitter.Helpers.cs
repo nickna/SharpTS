@@ -151,6 +151,12 @@ public partial class ILEmitter
 
     private void EmitTruthyCheck()
     {
+        if (_ctx.Runtime?.IsTruthy != null)
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime.IsTruthy);
+            return;
+        }
+
         // Truthy check for boxed value:
         // - null => false
         // - boxed false => false

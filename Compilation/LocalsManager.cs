@@ -13,22 +13,15 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="CompilationContext"/>
 /// <seealso cref="ILEmitter"/>
-public class LocalsManager
+public class LocalsManager(ILGenerator il)
 {
-    private readonly ILGenerator _il;
     private readonly Dictionary<string, LocalBuilder> _locals = [];
     private readonly Dictionary<string, Type> _localTypes = [];
-    private readonly Stack<HashSet<string>> _scopes = new();
-
-    public LocalsManager(ILGenerator il)
-    {
-        _il = il;
-        _scopes.Push([]); // Global scope
-    }
+    private readonly Stack<List<string>> _scopes = new([[]]);
 
     public LocalBuilder DeclareLocal(string name, Type type)
     {
-        var local = _il.DeclareLocal(type);
+        var local = il.DeclareLocal(type);
         _locals[name] = local;
         _localTypes[name] = type;
         _scopes.Peek().Add(name);
@@ -37,7 +30,7 @@ public class LocalsManager
 
     public LocalBuilder? GetLocal(string name)
     {
-        return _locals.TryGetValue(name, out var local) ? local : null;
+        return _locals.GetValueOrDefault(name);
     }
 
     public bool TryGetLocal(string name, out LocalBuilder local)

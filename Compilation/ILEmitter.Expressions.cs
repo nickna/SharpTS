@@ -23,9 +23,18 @@ public partial class ILEmitter
                 EmitBoolConstant(b);
                 break;
             case System.Numerics.BigInteger bi:
-                // Emit BigInteger by parsing from string at runtime
-                IL.Emit(OpCodes.Ldstr, bi.ToString());
-                IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.BigInteger, "Parse", _ctx.Types.String));
+                if (bi >= long.MinValue && bi <= long.MaxValue)
+                {
+                    // Optimization: Use BigInteger(long) constructor for small values
+                    IL.Emit(OpCodes.Ldc_I8, (long)bi);
+                    IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.BigInteger, _ctx.Types.Int64));
+                }
+                else
+                {
+                    // Fallback: Parse from string for large values
+                    IL.Emit(OpCodes.Ldstr, bi.ToString());
+                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.BigInteger, "Parse", _ctx.Types.String));
+                }
                 IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
                 SetStackUnknown();
                 break;

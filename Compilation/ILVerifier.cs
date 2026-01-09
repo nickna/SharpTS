@@ -25,7 +25,7 @@ public class ILVerifier : IResolver, IDisposable
     /// <returns>List of verification error messages</returns>
     public List<string> Verify(Stream assemblyStream)
     {
-        var errors = new List<string>();
+        List<string> errors = [];
 
         assemblyStream.Position = 0;
         using var peReader = new PEReader(assemblyStream, PEStreamOptions.LeaveOpen);
