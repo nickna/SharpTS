@@ -22,7 +22,7 @@ Thank you for your interest in contributing to SharpTS! This project is a TypeSc
 
 1. Fork and clone the repository:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/SharpTS.git
+   git clone https://github.com/nickna/SharpTS.git
    cd SharpTS
    ```
 
@@ -214,8 +214,8 @@ We especially welcome contributions in these areas:
 
 ### Performance
 - Lexer/parser optimization
-- Interpreter evaluation speed
 - Compiled code performance
+- Interpreter evaluation speed
 
 ### Test Coverage
 - Add tests for edge cases

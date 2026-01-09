@@ -2,11 +2,13 @@
 
 SharpTS offers two execution modes for running TypeScript code: **interpreted** (default) and **compiled** (ahead-of-time IL compilation). This guide helps you understand when to use each mode.
 
+> **Note for Contributors**: This guide uses the `sharpts` command assuming SharpTS is installed as a global .NET tool (`dotnet tool install -g SharpTS`). If you're developing from source, replace `sharpts` with `dotnet run --` in all commands.
+
 ## Quick Comparison
 
 | Aspect | Interpreted | Compiled |
 |--------|-------------|----------|
-| Command | `dotnet run -- file.ts` | `dotnet run -- --compile file.ts` |
+| Command | `sharpts file.ts` | `sharpts --compile file.ts` |
 | Output | Console output | `.dll` executable |
 | Startup | Instant | Requires build step |
 | Execution speed | Slower | Faster |
@@ -24,10 +26,10 @@ Interpreted mode executes TypeScript directly using a tree-walking interpreter. 
 
 ```bash
 # Run a file
-dotnet run -- myapp.ts
+sharpts myapp.ts
 
 # Start interactive REPL
-dotnet run
+sharpts
 ```
 
 ### How It Works
@@ -67,11 +69,11 @@ Compiled mode generates a .NET IL assembly that runs natively on the .NET runtim
 
 ```bash
 # Basic compilation
-dotnet run -- --compile myapp.ts
+sharpts --compile myapp.ts
 # Output: myapp.dll, myapp.runtimeconfig.json
 
 # Custom output path
-dotnet run -- --compile myapp.ts -o build/app.dll
+sharpts --compile myapp.ts -o build/app.dll
 
 # Run the compiled output
 dotnet myapp.dll
@@ -125,29 +127,33 @@ Both modes support the full SharpTS language. The key differences are in executi
 
 | Feature | Interpreted | Compiled |
 |---------|-------------|----------|
-| Variables and types | Yes | Yes |
-| Functions and closures | Yes | Yes |
-| Classes and inheritance | Yes | Yes |
-| Interfaces | Yes | Yes |
-| Async/await | Yes | Yes (native state machines) |
-| Generators | Yes | Yes (native state machines) |
-| Modules (import/export) | Yes | Yes |
-| Decorators | Yes | Yes |
-| Enums | Yes | Yes |
-| Template literals | Yes | Yes |
-| Spread/rest operators | Yes | Yes |
-| Optional chaining (?.) | Yes | Yes |
-| Nullish coalescing (??) | Yes | Yes |
+| Variables and types | Runtime type checking | Static IL with type metadata |
+| Functions and closures | Environment chain capture | Display classes with field captures |
+| Classes and inheritance | Dynamic SharpTSClass objects with composition | Real .NET types with native inheritance |
+| Interfaces | Type-erased (compile-time only) | Type-erased (compile-time only) |
+| Async/await | Direct Task delegation | Native IAsyncStateMachine structs |
+| Generators | Eager evaluation with YieldException | Lazy IEnumerator state machines |
+| Modules (import/export) | Dynamic late-bound loading | Static types with topological init |
+| Decorators | Full execution (Stage 2 & 3) | .NET attributes (no runtime execution) |
+| Enums | Runtime objects with dynamic lookup | Compile-time metadata (zero-cost) |
+| Template literals | StringBuilder concatenation | Array building + concat helper |
+| Spread/rest operators | Single-pass inline expansion | Two-phase with runtime helpers |
+| Optional chaining (?.) | Short-circuit evaluation | IL conditional branches |
+| Nullish coalescing (??) | Null/undefined checks at runtime | IL null checks with branch optimization |
 
 ### Implementation Differences
 
 While both modes support the same features, the implementation differs:
 
-- **Closures**: Interpreter uses environment chain; compiler generates display classes
-- **Async/await**: Interpreter uses exception-based unwinding; compiler generates IL state machines
-- **Generators**: Interpreter walks tree with suspension; compiler generates IL state machines
+- **Closures**: Interpreter uses environment chain (linked list of scopes); compiler generates display classes with field captures for only referenced variables
+- **Async/await**: Interpreter delegates directly to .NET Task system; compiler generates `IAsyncStateMachine` structs (same mechanism as C#)
+- **Generators**: Interpreter uses eager evaluation (collects all yields on first `next()`); compiler generates lazy `IEnumerator` state machines
+- **Classes**: Interpreter uses dynamic `SharpTSClass` objects with composition-based inheritance; compiler emits real .NET types with native type hierarchy
+- **Enums**: Interpreter creates runtime objects with dictionary lookup; compiler evaluates to compile-time metadata (zero runtime overhead)
+- **Decorators**: Interpreter executes decorator functions with full TypeScript semantics; compiler maps to .NET attributes (no runtime execution)
+- **Modules**: Interpreter resolves imports dynamically at runtime; compiler generates static types initialized in topological dependency order
 
-These differences are internal and don't affect your code's behavior.
+These differences are internal optimizations. For most features, your code's behavior is identical between modes. However, **decorators** lose runtime execution capability when compiled (they become static .NET attributes), and **generators** change from eager to lazy evaluation.
 
 ---
 
@@ -157,22 +163,22 @@ These differences are internal and don't affect your code's behavior.
 
 ```bash
 # Run a TypeScript file
-dotnet run -- <file.ts>
+sharpts <file.ts>
 
 # Start REPL
-dotnet run
+sharpts
 
 # With decorator support
-dotnet run -- <file.ts> --experimentalDecorators    # Stage 2 decorators
-dotnet run -- <file.ts> --decorators                # Stage 3 decorators
-dotnet run -- <file.ts> --emitDecoratorMetadata     # Emit type metadata
+sharpts <file.ts> --experimentalDecorators    # Stage 2 decorators
+sharpts <file.ts> --decorators                # Stage 3 decorators
+sharpts <file.ts> --emitDecoratorMetadata     # Emit type metadata
 ```
 
 ### Compiled Mode
 
 ```bash
-dotnet run -- --compile <file.ts> [options]
-dotnet run -- -c <file.ts> [options]
+sharpts --compile <file.ts> [options]
+sharpts -c <file.ts> [options]
 ```
 
 **Options:**
@@ -206,10 +212,10 @@ During development, use interpreted mode for quick iteration:
 code myapp.ts
 
 # Run immediately
-dotnet run -- myapp.ts
+sharpts myapp.ts
 
 # Or use REPL for testing snippets
-dotnet run
+sharpts
 > let x = 5 * 10
 > console.log(x)
 50
@@ -221,7 +227,7 @@ For production deployment, compile your application:
 
 ```bash
 # Compile with verification
-dotnet run -- --compile myapp.ts --verify
+sharpts --compile myapp.ts --verify
 
 # Test the compiled output
 dotnet myapp.dll
@@ -235,7 +241,7 @@ In CI/CD pipelines, compile and verify:
 
 ```bash
 # Build step
-dotnet run -- --compile src/app.ts -o dist/app.dll --verify
+sharpts --compile src/app.ts -o dist/app.dll --verify
 
 # Test step
 dotnet dist/app.dll --run-tests
@@ -250,10 +256,10 @@ Use interpreted mode during development, then compile for release:
 
 ```bash
 # Development: fast iteration
-dotnet run -- myapp.ts
+sharpts myapp.ts
 
 # Before release: compile and verify
-dotnet run -- --compile myapp.ts --verify
+sharpts --compile myapp.ts --verify
 
 # Distribution
 dotnet myapp.dll
