@@ -7,11 +7,41 @@ public static partial class RuntimeTypes
 {
     #region Objects
 
+    // Helper to safely cast object to Dictionary<string, object?>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryGetDictionary(object? obj, out Dictionary<string, object?>? dict)
+    {
+        if (obj is Dictionary<string, object?> d)
+        {
+            dict = d;
+            return true;
+        }
+        dict = null;
+        return false;
+    }
+
+    // Helper to get _fields from a class instance using ReflectionCache
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Dictionary<string, object?>? TryGetFields(object obj)
+    {
+        // Try to get cached field info
+        var field = ReflectionCache.GetField(obj.GetType(), "_fields");
+        if (field != null)
+        {
+            var val = field.GetValue(obj);
+            // Safe unsafe cast because we only read/write compatible types (object)
+            // _fields is emitted as Dictionary<string, object>, we treat it as Dictionary<string, object?>
+            // effectively the same at runtime for reference types
+            return Unsafe.As<Dictionary<string, object?>>(val);
+        }
+        return null;
+    }
+
     public static void MergeIntoObject(Dictionary<string, object?> target, object? source)
     {
-        if (source is Dictionary<string, object?> dict)
+        if (TryGetDictionary(source, out var dict))
         {
-            foreach (var kv in dict)
+            foreach (var kv in dict!)
             {
                 target[kv.Key] = kv.Value;
             }
@@ -19,9 +49,7 @@ public static partial class RuntimeTypes
         else if (source != null)
         {
             // For class instances, get their fields
-            var type = source.GetType();
-            var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (field != null && field.GetValue(source) is Dictionary<string, object> fields)
+            if (TryGetFields(source) is { } fields)
             {
                 foreach (var kv in fields)
                 {
@@ -46,9 +74,9 @@ public static partial class RuntimeTypes
         if (obj == null) return null;
 
         // Dictionary (object literal)
-        if (obj is Dictionary<string, object?> dict)
+        if (TryGetDictionary(obj, out var dict))
         {
-            if (dict.TryGetValue(name, out var value))
+            if (dict!.TryGetValue(name, out var value))
             {
                 // If it's a TSFunction with a display class, bind 'this' to the dictionary
                 // This handles object method shorthand: { fn() { return this.x; } }
@@ -77,25 +105,21 @@ public static partial class RuntimeTypes
         var type = obj.GetType();
 
         // Check for getter method first (get_<PascalCaseName>)
-        string pascalName = char.ToUpperInvariant(name[0]) + name[1..];
-        var getterMethod = type.GetMethod($"get_{pascalName}");
+        var getterMethod = ReflectionCache.GetGetter(type, name);
         if (getterMethod != null)
         {
-            return getterMethod.Invoke(obj, null);
+            var invoker = ReflectionCache.GetInvoker(getterMethod);
+            return invoker.Invoke(obj, default(Span<object?>));
         }
 
-        var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-        if (field != null)
+        // Check _fields dictionary
+        if (TryGetFields(obj) is { } fields && fields.TryGetValue(name, out var val))
         {
-            var fields = field.GetValue(obj) as Dictionary<string, object>;
-            if (fields != null && fields.TryGetValue(name, out var value))
-            {
-                return value;
-            }
+            return val;
         }
 
         // Try method
-        var method = type.GetMethod(name);
+        var method = ReflectionCache.GetMethod(type, name);
         if (method != null)
         {
             return CreateBoundMethod(obj, method);
@@ -109,9 +133,9 @@ public static partial class RuntimeTypes
         if (obj == null) return;
 
         // Dictionary
-        if (obj is Dictionary<string, object?> dict)
+        if (TryGetDictionary(obj, out var dict))
         {
-            dict[name] = value;
+            dict![name] = value;
             return;
         }
 
@@ -119,22 +143,18 @@ public static partial class RuntimeTypes
         var type = obj.GetType();
 
         // Check for setter method first (set_<PascalCaseName>)
-        string pascalName = char.ToUpperInvariant(name[0]) + name[1..];
-        var setterMethod = type.GetMethod($"set_{pascalName}");
+        var setterMethod = ReflectionCache.GetSetter(type, name);
         if (setterMethod != null)
         {
-            setterMethod.Invoke(obj, [value]);
+            var invoker = ReflectionCache.GetInvoker(setterMethod);
+            invoker.Invoke(obj, new Span<object?>([value]));
             return;
         }
 
-        var field = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-        if (field != null)
+        // Check _fields dictionary
+        if (TryGetFields(obj) is { } fields)
         {
-            var fields = field.GetValue(obj) as Dictionary<string, object>;
-            if (fields != null)
-            {
-                fields[name] = value!;
-            }
+            fields[name] = value!;
         }
     }
 
@@ -143,9 +163,9 @@ public static partial class RuntimeTypes
         if (obj == null) return null;
 
         // Object/Dictionary with string key
-        if (obj is Dictionary<string, object?> dict && index is string key)
+        if (TryGetDictionary(obj, out var dict) && index is string key)
         {
-            if (dict.TryGetValue(key, out var value))
+            if (dict!.TryGetValue(key, out var value))
             {
                 // Bind 'this' for object method shorthand functions
                 if (value is TSFunction func)
@@ -158,9 +178,9 @@ public static partial class RuntimeTypes
         }
 
         // Number key on dictionary (convert to string)
-        if (obj is Dictionary<string, object?> numDict && index is double numKey)
+        if (TryGetDictionary(obj, out var numDict) && index is double numKey)
         {
-            return numDict.TryGetValue(numKey.ToString(), out var numValue) ? numValue : null;
+            return numDict!.TryGetValue(numKey.ToString(), out var numValue) ? numValue : null;
         }
 
         // Symbol key - use separate storage
@@ -191,7 +211,9 @@ public static partial class RuntimeTypes
 
     private static bool IsSymbol(object obj)
     {
-        return obj.GetType().Name == "TSSymbol" || obj.GetType().Name == "$TSSymbol";
+        // Optimized check
+        var name = obj.GetType().Name;
+        return name is "TSSymbol" or "$TSSymbol";
     }
 
     public static void SetIndex(object? obj, object? index, object? value)
@@ -199,16 +221,16 @@ public static partial class RuntimeTypes
         if (obj == null) return;
 
         // Object/Dictionary with string key
-        if (obj is Dictionary<string, object?> dict && index is string key)
+        if (TryGetDictionary(obj, out var dict) && index is string key)
         {
-            dict[key] = value;
+            dict![key] = value;
             return;
         }
 
         // Number key on dictionary (convert to string)
-        if (obj is Dictionary<string, object?> numDict && index is double numKey)
+        if (TryGetDictionary(obj, out var numDict) && index is double numKey)
         {
-            numDict[numKey.ToString()] = value;
+            numDict![numKey.ToString()] = value;
             return;
         }
 
@@ -238,9 +260,9 @@ public static partial class RuntimeTypes
 
     public static List<object?> GetValues(object? obj)
     {
-        if (obj is Dictionary<string, object?> dict)
+        if (TryGetDictionary(obj, out var dict))
         {
-            return dict.Values.ToList();
+            return dict!.Values.ToList();
         }
         // For compiled class instances, get values from typed backing fields AND _fields dictionary
         if (obj != null)
@@ -250,19 +272,15 @@ public static partial class RuntimeTypes
             var seenKeys = new HashSet<string>();
 
             // Get values from typed backing fields (fields starting with __)
-            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var backingField in ReflectionCache.GetBackingFields(type))
             {
-                if (backingField.Name.StartsWith("__"))
-                {
-                    string propName = backingField.Name[2..];
-                    seenKeys.Add(propName);
-                    values.Add(backingField.GetValue(obj));
-                }
+                string propName = backingField.Name[2..];
+                seenKeys.Add(propName);
+                values.Add(backingField.GetValue(obj));
             }
 
             // Also get values from _fields dictionary (for dynamic properties and generic type fields)
-            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
+            if (TryGetFields(obj) is { } fields)
             {
                 foreach (var kv in fields)
                 {
@@ -280,9 +298,9 @@ public static partial class RuntimeTypes
 
     public static List<object?> GetEntries(object? obj)
     {
-        if (obj is Dictionary<string, object?> dict)
+        if (TryGetDictionary(obj, out var dict))
         {
-            return dict.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
+            return dict!.Select(kv => (object?)new List<object?> { kv.Key, kv.Value }).ToList();
         }
         // For compiled class instances, get entries from typed backing fields AND _fields dictionary
         if (obj != null)
@@ -292,19 +310,15 @@ public static partial class RuntimeTypes
             var seenKeys = new HashSet<string>();
 
             // Get entries from typed backing fields (fields starting with __)
-            foreach (var backingField in type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var backingField in ReflectionCache.GetBackingFields(type))
             {
-                if (backingField.Name.StartsWith("__"))
-                {
-                    string propName = backingField.Name[2..];
-                    seenKeys.Add(propName);
-                    entries.Add(new List<object?> { propName, backingField.GetValue(obj) });
-                }
+                string propName = backingField.Name[2..];
+                seenKeys.Add(propName);
+                entries.Add(new List<object?> { propName, backingField.GetValue(obj) });
             }
 
             // Also get entries from _fields dictionary (for dynamic properties and generic type fields)
-            var fieldsField = type.GetField("_fields", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (fieldsField != null && fieldsField.GetValue(obj) is Dictionary<string, object?> fields)
+            if (TryGetFields(obj) is { } fields)
             {
                 foreach (var kv in fields)
                 {

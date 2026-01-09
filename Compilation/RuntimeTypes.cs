@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
@@ -18,11 +19,13 @@ public class TSFunction
 {
     private readonly object? _target;      // Display class instance (null for static)
     private readonly System.Reflection.MethodInfo _method;   // The actual method to invoke
+    private readonly System.Reflection.MethodInvoker _invoker; // Optimized invoker
 
     public TSFunction(object? target, System.Reflection.MethodInfo method)
     {
         _target = target;
         _method = method;
+        _invoker = RuntimeTypes.ReflectionCache.GetInvoker(method);
     }
 
     /// <summary>
@@ -42,41 +45,46 @@ public class TSFunction
         try
         {
             var paramCount = _method.GetParameters().Length;
+            object?[] finalArgs;
+            object? invokeTarget;
 
+            // 1. Handle "this" binding / static closure target
             // For static methods with a bound target (closures, async arrows),
             // prepend the target to the arguments
-            object?[] effectiveArgs;
-            object? invokeTarget;
             if (_method.IsStatic && _target != null)
             {
                 // Static method with bound first argument
-                effectiveArgs = new object?[args.Length + 1];
-                effectiveArgs[0] = _target;
-                Array.Copy(args, 0, effectiveArgs, 1, args.Length);
+                // We need to create a new array to prepend the target
+                // TODO: Optimize with ArrayPool if this becomes a bottleneck
+                finalArgs = new object?[args.Length + 1];
+                finalArgs[0] = _target;
+                Array.Copy(args, 0, finalArgs, 1, args.Length);
                 invokeTarget = null;
             }
             else
             {
-                effectiveArgs = args;
+                finalArgs = args;
                 invokeTarget = _target;
             }
 
-            if (effectiveArgs.Length < paramCount)
+            // 2. Handle Argument Count Mismatch (Padding / Trimming)
+            if (finalArgs.Length != paramCount)
             {
-                // Pad with nulls for default parameters
-                var paddedArgs = new object?[paramCount];
-                Array.Copy(effectiveArgs, paddedArgs, effectiveArgs.Length);
-                return _method.Invoke(invokeTarget, paddedArgs);
-            }
-            else if (effectiveArgs.Length > paramCount)
-            {
-                // More args than params - JavaScript semantics: ignore excess args
-                var trimmedArgs = new object?[paramCount];
-                Array.Copy(effectiveArgs, trimmedArgs, paramCount);
-                return _method.Invoke(invokeTarget, trimmedArgs);
+                var adjustedArgs = new object?[paramCount];
+                // Copy what we have, up to the limit
+                int copyCount = Math.Min(finalArgs.Length, paramCount);
+                if (copyCount > 0)
+                {
+                    Array.Copy(finalArgs, adjustedArgs, copyCount);
+                }
+                // Remaining slots are already null (default)
+                
+                // Use the adjusted array
+                return _invoker.Invoke(invokeTarget, new Span<object?>(adjustedArgs));
             }
 
-            return _method.Invoke(invokeTarget, effectiveArgs);
+            // 3. Perfect Match
+            return _invoker.Invoke(invokeTarget, new Span<object?>(finalArgs));
         }
         catch (System.Reflection.TargetInvocationException ex)
         {
@@ -105,8 +113,7 @@ public class TSFunction
         if (_target == null) return false;
 
         // Find the 'this' field in the display class
-        var thisField = _target.GetType().GetField("this",
-            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var thisField = RuntimeTypes.ReflectionCache.GetField(_target.GetType(), "this");
         if (thisField != null)
         {
             thisField.SetValue(_target, thisValue);

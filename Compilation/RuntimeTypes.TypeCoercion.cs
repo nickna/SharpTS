@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace SharpTS.Compilation;
 
 public static partial class RuntimeTypes
@@ -34,6 +36,7 @@ public static partial class RuntimeTypes
         return "{ " + string.Join(", ", props) + " }";
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static double ToNumber(object? value) => value switch
     {
         double d => d,
@@ -45,6 +48,7 @@ public static partial class RuntimeTypes
         _ => double.NaN
     };
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsTruthy(object? value) => value switch
     {
         null => false,
@@ -54,6 +58,7 @@ public static partial class RuntimeTypes
         _ => true
     };
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static string TypeOf(object? value) => value switch
     {
         null => "object", // typeof null === "object" in JS
@@ -66,6 +71,7 @@ public static partial class RuntimeTypes
         _ => "object"
     };
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool InstanceOf(object? instance, object? classType)
     {
         if (instance == null || classType == null) return false;

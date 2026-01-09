@@ -57,6 +57,7 @@ public static partial class RuntimeTypes
         // Handle Delegate types (for bound methods created dynamically)
         if (value is Delegate del)
         {
+            // DynamicInvoke is slow, but we can't easily optimize arbitrary delegates
             return del.DynamicInvoke(new object[] { args });
         }
 
@@ -72,10 +73,14 @@ public static partial class RuntimeTypes
 
     private static object CreateBoundMethod(object receiver, MethodInfo method)
     {
-        // Create a delegate bound to the receiver
+        // Create a delegate bound to the receiver using MethodInvoker
+        // We cache the invoker for this method
+        var invoker = ReflectionCache.GetInvoker(method);
+        
         return new Func<object?[], object?>(args =>
         {
-            return method.Invoke(receiver, args);
+            // Invoke directly using the optimized invoker
+            return invoker.Invoke(receiver, new Span<object?>(args));
         });
     }
 
@@ -87,7 +92,7 @@ public static partial class RuntimeTypes
         var baseType = type.BaseType;
         if (baseType == null || baseType == typeof(object)) return null;
 
-        var method = baseType.GetMethod(methodName);
+        var method = ReflectionCache.GetMethod(baseType, methodName);
         if (method != null)
         {
             return CreateBoundMethod(instance, method);
@@ -107,19 +112,22 @@ public static partial class RuntimeTypes
             try
             {
                 // Find the constructor and pad args with nulls for default parameters
-                var ctors = type.GetConstructors();
-                if (ctors.Length > 0)
+                var ctor = ReflectionCache.GetConstructor(type);
+                if (ctor != null)
                 {
-                    var ctor = ctors[0];
                     var paramCount = ctor.GetParameters().Length;
+                    var invoker = ReflectionCache.GetInvoker(ctor);
 
                     if (args.Length < paramCount)
                     {
                         var paddedArgs = new object?[paramCount];
                         Array.Copy(args, paddedArgs, args.Length);
-                        return ctor.Invoke(paddedArgs);
+                        return invoker.Invoke(null, new Span<object?>(paddedArgs));
                     }
-                    return ctor.Invoke(args);
+                    
+                    // Invoker for constructor handles "obj" as null (for static ctors) or unused?
+                    // Actually for ConstructorInfo, invoker.Invoke returns the new instance
+                    return invoker.Invoke(null, new Span<object?>(args));
                 }
                 return Activator.CreateInstance(type);
             }
