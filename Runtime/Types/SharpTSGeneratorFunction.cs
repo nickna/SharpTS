@@ -14,12 +14,20 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSGenerator"/>
 /// <seealso cref="SharpTSFunction"/>
-public class SharpTSGeneratorFunction(Stmt.Function declaration, RuntimeEnvironment closure) : ISharpTSCallable
+public class SharpTSGeneratorFunction : ISharpTSCallable
 {
-    private readonly Stmt.Function _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Stmt.Function _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    public SharpTSGeneratorFunction(Stmt.Function declaration, RuntimeEnvironment closure)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    }
+
+    public int Arity() => _arity;
 
     /// <summary>
     /// Creates a new generator instance. Does NOT execute the function body.

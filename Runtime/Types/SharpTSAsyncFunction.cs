@@ -28,12 +28,20 @@ public interface ISharpTSAsyncCallable : ISharpTSCallable
 /// The synchronous Call method returns a <see cref="SharpTSPromise"/> immediately,
 /// while CallAsync executes the function body asynchronously.
 /// </remarks>
-public class SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment closure) : ISharpTSAsyncCallable
+public class SharpTSAsyncFunction : ISharpTSAsyncCallable
 {
-    private readonly Stmt.Function _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Stmt.Function _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    public SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment closure)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    }
+
+    public int Arity() => _arity;
 
     /// <summary>
     /// Invokes the async function, returning a Promise immediately.
@@ -136,14 +144,23 @@ public class SharpTSAsyncFunction(Stmt.Function declaration, RuntimeEnvironment 
 /// Supports both expression bodies and block bodies.
 /// Like regular arrow functions, async arrows capture 'this' from the enclosing scope.
 /// </remarks>
-public class SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false) : ISharpTSAsyncCallable
+public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
 {
-    private readonly Expr.ArrowFunction _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Expr.ArrowFunction _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
-    public bool IsObjectMethod { get; } = isObjectMethod;
+    public bool IsObjectMethod { get; }
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    public SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        IsObjectMethod = isObjectMethod;
+        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    }
+
+    public int Arity() => _arity;
 
     /// <summary>
     /// Invokes the async arrow function, returning a Promise immediately.

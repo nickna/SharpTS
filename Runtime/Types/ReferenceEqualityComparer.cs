@@ -38,19 +38,14 @@ public class ReferenceEqualityComparer : IEqualityComparer<object>
         return ReferenceEquals(x, y);
     }
 
-    public int GetHashCode(object obj)
-    {
-        if (obj is null) return 0;
-
-        // Primitives use value-based hash
-        if (obj is string || obj is double || obj is bool)
-            return obj.GetHashCode();
-
-        // BigInt uses value-based hash
-        if (obj is SharpTSBigInt bigInt)
-            return bigInt.Value.GetHashCode();
-
-        // All other objects use identity hash (reference-based)
-        return RuntimeHelpers.GetHashCode(obj);
-    }
+    public int GetHashCode(object obj) =>
+        obj switch
+        {
+            null => 0,
+            string s => s.GetHashCode(),
+            double d => d.GetHashCode(),
+            bool b => b.GetHashCode(),
+            SharpTSBigInt bigInt => bigInt.Value.GetHashCode(),
+            _ => RuntimeHelpers.GetHashCode(obj)
+        };
 }

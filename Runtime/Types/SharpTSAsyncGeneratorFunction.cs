@@ -13,12 +13,20 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSAsyncGenerator"/>
 /// <seealso cref="SharpTSGeneratorFunction"/>
-public class SharpTSAsyncGeneratorFunction(Stmt.Function declaration, RuntimeEnvironment closure) : ISharpTSCallable
+public class SharpTSAsyncGeneratorFunction : ISharpTSCallable
 {
-    private readonly Stmt.Function _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Stmt.Function _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
-    public int Arity() => _declaration.Parameters?.Count ?? 0;
+    public SharpTSAsyncGeneratorFunction(Stmt.Function declaration, RuntimeEnvironment closure)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        _arity = declaration.Parameters?.Count ?? 0;
+    }
+
+    public int Arity() => _arity;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {

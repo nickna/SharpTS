@@ -30,12 +30,20 @@ public interface ISharpTSCallable
 /// </remarks>
 /// <seealso cref="SharpTSArrowFunction"/>
 /// <seealso cref="RuntimeEnvironment"/>
-public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closure) : ISharpTSCallable
+public class SharpTSFunction : ISharpTSCallable
 {
-    private readonly Stmt.Function _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Stmt.Function _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    public SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closure)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    }
+
+    public int Arity() => _arity;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
@@ -122,18 +130,27 @@ public class SharpTSFunction(Stmt.Function declaration, RuntimeEnvironment closu
 /// Object method arrow functions (IsObjectMethod=true) support binding <c>this</c> when accessed as object properties.
 /// </remarks>
 /// <seealso cref="SharpTSFunction"/>
-public class SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false) : ISharpTSCallable
+public class SharpTSArrowFunction : ISharpTSCallable
 {
-    private readonly Expr.ArrowFunction _declaration = declaration;
-    private readonly RuntimeEnvironment _closure = closure;
+    private readonly Expr.ArrowFunction _declaration;
+    private readonly RuntimeEnvironment _closure;
+    private readonly int _arity;
 
     /// <summary>
     /// Indicates whether this arrow function was created from object method shorthand
     /// and should bind 'this' when accessed as a property.
     /// </summary>
-    public bool IsObjectMethod { get; } = isObjectMethod;
+    public bool IsObjectMethod { get; }
 
-    public int Arity() => _declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    public SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false)
+    {
+        _declaration = declaration;
+        _closure = closure;
+        IsObjectMethod = isObjectMethod;
+        _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+    }
+
+    public int Arity() => _arity;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
