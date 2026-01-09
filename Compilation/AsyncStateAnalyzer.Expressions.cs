@@ -158,12 +158,14 @@ public partial class AsyncStateAnalyzer
             case Expr.ArrowFunction af:
                 // Arrow functions capture 'this' from lexical scope, so we need to
                 // analyze if they use 'this' and if so, hoist it for the async method
-                AnalyzeArrowForThis(af);
+                _thisUsageVisitor.Analyze(af);
+                if (_thisUsageVisitor.UsesThis)
+                    _usesThis = true;
 
                 // If this is an async arrow, collect it for separate state machine generation
                 if (af.IsAsync)
                 {
-                    var captures = AnalyzeAsyncArrowCaptures(af);
+                    var captures = AnalyzeAsyncArrowCapturesWithVisitor(af);
                     var capturesThis = captures.Contains("this");
                     _asyncArrows.Add(new AsyncArrowInfo(af, captures, capturesThis, _asyncArrowNestingLevel, _currentParentArrow));
 
@@ -181,7 +183,7 @@ public partial class AsyncStateAnalyzer
                     var previousParent = _currentParentArrow;
                     _currentParentArrow = af;
                     _asyncArrowNestingLevel++;
-                    AnalyzeAsyncArrowBody(af);
+                    AnalyzeAsyncArrowBodyWithVisitor(af);
                     _asyncArrowNestingLevel--;
                     _currentParentArrow = previousParent;
                 }

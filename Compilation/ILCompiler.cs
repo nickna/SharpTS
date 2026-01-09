@@ -94,6 +94,11 @@ public partial class ILCompiler
     // For nested async arrows, maps to the parent arrow's builder (not the function's builder)
     private readonly Dictionary<Expr.ArrowFunction, AsyncArrowStateMachineBuilder> _asyncArrowParentBuilders = new(ReferenceEqualityComparer.Instance);
 
+    // Pooled HashSets for async arrow analysis (reduces allocation churn)
+    private readonly HashSet<string> _asyncArrowDeclaredVars = [];
+    private readonly HashSet<string> _asyncArrowUsedAfterAwait = [];
+    private readonly HashSet<string> _asyncArrowDeclaredBeforeAwait = [];
+
     // Module support
     private readonly Dictionary<string, TypeBuilder> _moduleTypes = [];
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _moduleExportFields = [];

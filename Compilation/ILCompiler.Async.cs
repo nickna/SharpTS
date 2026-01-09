@@ -157,40 +157,44 @@ public partial class ILCompiler
 
     /// <summary>
     /// Analyzes an async arrow function to determine its await points and hoisted variables.
+    /// Uses pooled HashSets for intermediate analysis to reduce allocations.
     /// </summary>
     private (int AwaitCount, HashSet<string> HoistedLocals) AnalyzeAsyncArrow(Expr.ArrowFunction arrow)
     {
         var awaitCount = 0;
-        var declaredVariables = new HashSet<string>();
-        var variablesUsedAfterAwait = new HashSet<string>();
-        var variablesDeclaredBeforeAwait = new HashSet<string>();
         var seenAwait = false;
+
+        // Clear and reuse pooled HashSets
+        _asyncArrowDeclaredVars.Clear();
+        _asyncArrowUsedAfterAwait.Clear();
+        _asyncArrowDeclaredBeforeAwait.Clear();
 
         // Add parameters as declared variables
         foreach (var param in arrow.Parameters)
         {
-            declaredVariables.Add(param.Name.Lexeme);
-            variablesDeclaredBeforeAwait.Add(param.Name.Lexeme);
+            _asyncArrowDeclaredVars.Add(param.Name.Lexeme);
+            _asyncArrowDeclaredBeforeAwait.Add(param.Name.Lexeme);
         }
 
         // Analyze expression body or block body
         if (arrow.ExpressionBody != null)
         {
             AnalyzeArrowExprForAwaits(arrow.ExpressionBody, ref awaitCount, ref seenAwait,
-                declaredVariables, variablesUsedAfterAwait, variablesDeclaredBeforeAwait);
+                _asyncArrowDeclaredVars, _asyncArrowUsedAfterAwait, _asyncArrowDeclaredBeforeAwait);
         }
         else if (arrow.BlockBody != null)
         {
             foreach (var stmt in arrow.BlockBody)
             {
                 AnalyzeArrowStmtForAwaits(stmt, ref awaitCount, ref seenAwait,
-                    declaredVariables, variablesUsedAfterAwait, variablesDeclaredBeforeAwait);
+                    _asyncArrowDeclaredVars, _asyncArrowUsedAfterAwait, _asyncArrowDeclaredBeforeAwait);
             }
         }
 
         // Variables that need hoisting: declared before await AND used after await
-        var hoistedLocals = new HashSet<string>(variablesDeclaredBeforeAwait);
-        hoistedLocals.IntersectWith(variablesUsedAfterAwait);
+        // This result must be a new allocation since ownership is transferred to caller
+        var hoistedLocals = new HashSet<string>(_asyncArrowDeclaredBeforeAwait);
+        hoistedLocals.IntersectWith(_asyncArrowUsedAfterAwait);
 
         // Remove parameters from hoisted locals (they're stored separately)
         foreach (var param in arrow.Parameters)

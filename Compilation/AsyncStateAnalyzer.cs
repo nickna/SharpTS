@@ -1,3 +1,4 @@
+using SharpTS.Compilation.Visitors;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -87,6 +88,15 @@ public partial class AsyncStateAnalyzer
     private enum TryRegion { None, Try, Catch, Finally }
     private TryRegion _currentTryRegion = TryRegion.None;
     private readonly Dictionary<int, (bool InTry, bool InCatch, bool InFinally)> _tryBlockAwaitFlags = [];
+
+    // Reusable visitor for detecting 'this' usage in arrow functions
+    private readonly ThisUsageVisitor _thisUsageVisitor = new();
+
+    // Reusable visitor for finding nested async arrows
+    private readonly NestedAsyncArrowVisitor _nestedArrowVisitor = new();
+
+    // Reusable visitor for analyzing arrow function captures
+    private readonly CaptureAnalysisVisitor _captureVisitor = new();
 
     /// <summary>
     /// Analyzes an async function to determine await points and hoisted variables.
@@ -181,5 +191,46 @@ public partial class AsyncStateAnalyzer
         _tryBlockIdStack.Clear();
         _currentTryRegion = TryRegion.None;
         _tryBlockAwaitFlags.Clear();
+    }
+
+    /// <summary>
+    /// Analyzes an async arrow function to determine which variables it captures
+    /// from the enclosing scope using the reusable capture analysis visitor.
+    /// </summary>
+    private HashSet<string> AnalyzeAsyncArrowCapturesWithVisitor(Expr.ArrowFunction af)
+    {
+        _captureVisitor.Reset(_declaredVariables);
+        return _captureVisitor.Analyze(af);
+    }
+
+    /// <summary>
+    /// Recursively analyzes an async arrow body for nested async arrows using the visitor.
+    /// </summary>
+    private void AnalyzeAsyncArrowBodyWithVisitor(Expr.ArrowFunction af)
+    {
+        // Set up callbacks for the visitor
+        _nestedArrowVisitor.OnAsyncArrowFound = nestedArrow =>
+        {
+            // Found a nested async arrow - analyze its captures
+            var captures = AnalyzeAsyncArrowCapturesWithVisitor(nestedArrow);
+            var capturesThis = captures.Contains("this");
+            _asyncArrows.Add(new AsyncArrowInfo(nestedArrow, captures, capturesThis, _asyncArrowNestingLevel, _currentParentArrow));
+
+            // Recursively look for deeper nested async arrows
+            var previousParent = _currentParentArrow;
+            _currentParentArrow = nestedArrow;
+            _asyncArrowNestingLevel++;
+            AnalyzeAsyncArrowBodyWithVisitor(nestedArrow);
+            _asyncArrowNestingLevel--;
+            _currentParentArrow = previousParent;
+        };
+
+        _nestedArrowVisitor.OnNonAsyncArrowFound = nestedArrow =>
+        {
+            // Non-async nested arrow - still check for nested async arrows inside
+            AnalyzeAsyncArrowBodyWithVisitor(nestedArrow);
+        };
+
+        _nestedArrowVisitor.Analyze(af);
     }
 }

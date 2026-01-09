@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Compilation;
 
@@ -14,7 +15,7 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="ILCompiler"/>
 /// <seealso cref="CompilationContext"/>
-public class ClosureAnalyzer
+public class ClosureAnalyzer : AstVisitorBase
 {
     // Maps each function AST node to the set of variable names it captures
     private readonly Dictionary<object, HashSet<string>> _captures = [];
@@ -56,382 +57,23 @@ public class ClosureAnalyzer
     {
         _scopeStack.Push([]);
         foreach (var stmt in statements)
-        {
-            AnalyzeStmt(stmt);
-        }
+            Visit(stmt);
         _scopeStack.Pop();
     }
 
-    private void AnalyzeStmt(Stmt stmt)
-    {
-        switch (stmt)
-        {
-            case Stmt.Var v:
-                DeclareVariable(v.Name.Lexeme);
-                if (v.Initializer != null)
-                    AnalyzeExpr(v.Initializer);
-                break;
+    #region Scope management
 
-            case Stmt.Function f:
-                DeclareVariable(f.Name.Lexeme);
-                // Skip overload signatures (no body)
-                if (f.Body != null)
-                    AnalyzeFunction(f, f.Parameters, f.Body);
-                break;
-
-            case Stmt.Class c:
-                DeclareVariable(c.Name.Lexeme);
-                foreach (var method in c.Methods)
-                {
-                    // Skip overload signatures (no body)
-                    if (method.Body != null)
-                        AnalyzeFunction(method, method.Parameters, method.Body);
-                }
-                break;
-
-            case Stmt.Expression e:
-                AnalyzeExpr(e.Expr);
-                break;
-
-            case Stmt.If i:
-                AnalyzeExpr(i.Condition);
-                AnalyzeStmt(i.ThenBranch);
-                if (i.ElseBranch != null)
-                    AnalyzeStmt(i.ElseBranch);
-                break;
-
-            case Stmt.While w:
-                AnalyzeExpr(w.Condition);
-                AnalyzeStmt(w.Body);
-                break;
-
-            case Stmt.ForOf f:
-                EnterScope();
-                DeclareVariable(f.Variable.Lexeme);
-                AnalyzeExpr(f.Iterable);
-                AnalyzeStmt(f.Body);
-                ExitScope();
-                break;
-
-            case Stmt.Block b:
-                EnterScope();
-                foreach (var s in b.Statements)
-                    AnalyzeStmt(s);
-                ExitScope();
-                break;
-
-            case Stmt.Sequence seq:
-                // No new scope for Sequence
-                foreach (var s in seq.Statements)
-                    AnalyzeStmt(s);
-                break;
-
-            case Stmt.Return r:
-                if (r.Value != null)
-                    AnalyzeExpr(r.Value);
-                break;
-
-            case Stmt.Switch s:
-                AnalyzeExpr(s.Subject);
-                foreach (var c in s.Cases)
-                {
-                    AnalyzeExpr(c.Value);
-                    foreach (var cs in c.Body)
-                        AnalyzeStmt(cs);
-                }
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        AnalyzeStmt(ds);
-                break;
-
-            case Stmt.TryCatch t:
-                foreach (var ts in t.TryBlock)
-                    AnalyzeStmt(ts);
-                if (t.CatchBlock != null)
-                {
-                    EnterScope();
-                    if (t.CatchParam != null)
-                        DeclareVariable(t.CatchParam.Lexeme);
-                    foreach (var cs in t.CatchBlock)
-                        AnalyzeStmt(cs);
-                    ExitScope();
-                }
-                if (t.FinallyBlock != null)
-                    foreach (var fs in t.FinallyBlock)
-                        AnalyzeStmt(fs);
-                break;
-
-            case Stmt.Throw th:
-                AnalyzeExpr(th.Value);
-                break;
-
-            case Stmt.Print p:
-                AnalyzeExpr(p.Expr);
-                break;
-
-            case Stmt.Break:
-            case Stmt.Continue:
-            case Stmt.Interface:
-                // No analysis needed
-                break;
-
-            case Stmt.LabeledStatement labeledStmt:
-                AnalyzeStmt(labeledStmt.Statement);
-                break;
-        }
-    }
-
-    private void AnalyzeExpr(Expr expr)
-    {
-        switch (expr)
-        {
-            case Expr.Variable v:
-                ReferenceVariable(v.Name.Lexeme);
-                break;
-
-            case Expr.Assign a:
-                ReferenceVariable(a.Name.Lexeme);
-                AnalyzeExpr(a.Value);
-                break;
-
-            case Expr.Binary b:
-                AnalyzeExpr(b.Left);
-                AnalyzeExpr(b.Right);
-                break;
-
-            case Expr.Logical l:
-                AnalyzeExpr(l.Left);
-                AnalyzeExpr(l.Right);
-                break;
-
-            case Expr.Unary u:
-                AnalyzeExpr(u.Right);
-                break;
-
-            case Expr.Grouping g:
-                AnalyzeExpr(g.Expression);
-                break;
-
-            case Expr.Call c:
-                AnalyzeExpr(c.Callee);
-                foreach (var arg in c.Arguments)
-                    AnalyzeExpr(arg);
-                break;
-
-            case Expr.Get g:
-                AnalyzeExpr(g.Object);
-                break;
-
-            case Expr.Set s:
-                AnalyzeExpr(s.Object);
-                AnalyzeExpr(s.Value);
-                break;
-
-            case Expr.GetIndex gi:
-                AnalyzeExpr(gi.Object);
-                AnalyzeExpr(gi.Index);
-                break;
-
-            case Expr.SetIndex si:
-                AnalyzeExpr(si.Object);
-                AnalyzeExpr(si.Index);
-                AnalyzeExpr(si.Value);
-                break;
-
-            case Expr.New n:
-                foreach (var arg in n.Arguments)
-                    AnalyzeExpr(arg);
-                break;
-
-            case Expr.ArrayLiteral a:
-                foreach (var elem in a.Elements)
-                    AnalyzeExpr(elem);
-                break;
-
-            case Expr.ObjectLiteral o:
-                foreach (var prop in o.Properties)
-                {
-                    // Analyze computed key expressions for captured variables
-                    if (prop.Key is Expr.ComputedKey ck)
-                        AnalyzeExpr(ck.Expression);
-                    AnalyzeExpr(prop.Value);
-                }
-                break;
-
-            case Expr.Ternary t:
-                AnalyzeExpr(t.Condition);
-                AnalyzeExpr(t.ThenBranch);
-                AnalyzeExpr(t.ElseBranch);
-                break;
-
-            case Expr.NullishCoalescing nc:
-                AnalyzeExpr(nc.Left);
-                AnalyzeExpr(nc.Right);
-                break;
-
-            case Expr.TemplateLiteral tl:
-                foreach (var e in tl.Expressions)
-                    AnalyzeExpr(e);
-                break;
-
-            case Expr.CompoundAssign ca:
-                ReferenceVariable(ca.Name.Lexeme);
-                AnalyzeExpr(ca.Value);
-                break;
-
-            case Expr.CompoundSet cs:
-                AnalyzeExpr(cs.Object);
-                AnalyzeExpr(cs.Value);
-                break;
-
-            case Expr.CompoundSetIndex csi:
-                AnalyzeExpr(csi.Object);
-                AnalyzeExpr(csi.Index);
-                AnalyzeExpr(csi.Value);
-                break;
-
-            case Expr.PrefixIncrement pi:
-                AnalyzeExpr(pi.Operand);
-                break;
-
-            case Expr.PostfixIncrement poi:
-                AnalyzeExpr(poi.Operand);
-                break;
-
-            case Expr.ArrowFunction af:
-                AnalyzeArrowFunction(af);
-                break;
-
-            case Expr.This:
-                // Arrow functions capture 'this' from their lexical scope
-                // Track this as a captured variable so display classes include a field for it
-                // EXCEPT for object methods which receive 'this' via the __this parameter
-                if (_currentFunction != null && _currentFunction is Expr.ArrowFunction thisArrowFunc && !thisArrowFunc.IsObjectMethod)
-                {
-                    _captures[_currentFunction].Add("this");
-                }
-                break;
-
-            case Expr.Super:
-            case Expr.Literal:
-                // No analysis needed
-                break;
-        }
-    }
-
-    private void AnalyzeFunction(object funcNode, List<Stmt.Parameter> parameters, List<Stmt> body)
-    {
-        // Save current context
-        var previousFunction = _currentFunction;
-        var previousOuter = new HashSet<string>(_outerVariables);
-
-        // Build set of outer variables for this function
-        _outerVariables.Clear();
-        foreach (var scope in _scopeStack)
-        {
-            foreach (var name in scope)
-            {
-                _outerVariables.Add(name);
-            }
-        }
-
-        // Set up new function context
-        _currentFunction = funcNode;
-        _captures[funcNode] = [];
-        _localVars[funcNode] = [];
-
-        // Enter function scope and declare parameters
-        EnterScope();
-        foreach (var param in parameters)
-        {
-            DeclareVariable(param.Name.Lexeme);
-            if (param.DefaultValue != null)
-                AnalyzeExpr(param.DefaultValue);
-        }
-
-        // Analyze body
-        foreach (var stmt in body)
-        {
-            AnalyzeStmt(stmt);
-        }
-
-        ExitScope();
-
-        // Restore context
-        _currentFunction = previousFunction;
-        _outerVariables.Clear();
-        foreach (var name in previousOuter)
-        {
-            _outerVariables.Add(name);
-        }
-    }
-
-    private void AnalyzeArrowFunction(Expr.ArrowFunction af)
-    {
-        // Save current context
-        var previousFunction = _currentFunction;
-        var previousOuter = new HashSet<string>(_outerVariables);
-
-        // Build set of outer variables for this function
-        _outerVariables.Clear();
-        foreach (var scope in _scopeStack)
-        {
-            foreach (var name in scope)
-            {
-                _outerVariables.Add(name);
-            }
-        }
-
-        // Set up new function context
-        _currentFunction = af;
-        _captures[af] = [];
-        _localVars[af] = [];
-
-        // Enter function scope and declare parameters
-        EnterScope();
-        foreach (var param in af.Parameters)
-        {
-            DeclareVariable(param.Name.Lexeme);
-            if (param.DefaultValue != null)
-                AnalyzeExpr(param.DefaultValue);
-        }
-
-        // Analyze body
-        if (af.ExpressionBody != null)
-        {
-            AnalyzeExpr(af.ExpressionBody);
-        }
-        else if (af.BlockBody != null)
-        {
-            foreach (var stmt in af.BlockBody)
-            {
-                AnalyzeStmt(stmt);
-            }
-        }
-
-        ExitScope();
-
-        // Restore context
-        _currentFunction = previousFunction;
-        _outerVariables.Clear();
-        foreach (var name in previousOuter)
-        {
-            _outerVariables.Add(name);
-        }
-    }
+    private void EnterScope() => _scopeStack.Push([]);
+    private void ExitScope() => _scopeStack.Pop();
 
     private void DeclareVariable(string name)
     {
         if (_scopeStack.Count > 0)
-        {
             _scopeStack.Peek().Add(name);
-        }
 
         // Track local variables for the current function
         if (_currentFunction != null && _localVars.TryGetValue(_currentFunction, out var locals))
-        {
             locals.Add(name);
-        }
     }
 
     private void ReferenceVariable(string name)
@@ -447,20 +89,205 @@ public class ClosureAnalyzer
             return;
 
         // Check if it's an outer variable - this means it's captured
-        // Note: _outerVariables is set to all variables from outer scopes when we enter a function
         if (_outerVariables.Contains(name))
-        {
             _captures[_currentFunction].Add(name);
+    }
+
+    #endregion
+
+    #region Statement visitors
+
+    protected override void VisitVar(Stmt.Var stmt)
+    {
+        DeclareVariable(stmt.Name.Lexeme);
+        base.VisitVar(stmt);
+    }
+
+    protected override void VisitFunction(Stmt.Function stmt)
+    {
+        DeclareVariable(stmt.Name.Lexeme);
+        // Skip overload signatures (no body)
+        if (stmt.Body != null)
+            AnalyzeFunctionBody(stmt, stmt.Parameters, stmt.Body);
+    }
+
+    protected override void VisitClass(Stmt.Class stmt)
+    {
+        DeclareVariable(stmt.Name.Lexeme);
+        foreach (var method in stmt.Methods)
+        {
+            // Skip overload signatures (no body)
+            if (method.Body != null)
+                AnalyzeFunctionBody(method, method.Parameters, method.Body);
         }
     }
 
-    private void EnterScope()
+    protected override void VisitBlock(Stmt.Block stmt)
     {
-        _scopeStack.Push([]);
+        EnterScope();
+        base.VisitBlock(stmt);
+        ExitScope();
     }
 
-    private void ExitScope()
+    // Sequence intentionally uses base implementation (no new scope)
+
+    protected override void VisitForOf(Stmt.ForOf stmt)
     {
-        _scopeStack.Pop();
+        EnterScope();
+        DeclareVariable(stmt.Variable.Lexeme);
+        Visit(stmt.Iterable);
+        Visit(stmt.Body);
+        ExitScope();
     }
+
+    protected override void VisitForIn(Stmt.ForIn stmt)
+    {
+        EnterScope();
+        DeclareVariable(stmt.Variable.Lexeme);
+        Visit(stmt.Object);
+        Visit(stmt.Body);
+        ExitScope();
+    }
+
+    protected override void VisitTryCatch(Stmt.TryCatch stmt)
+    {
+        foreach (var s in stmt.TryBlock)
+            Visit(s);
+
+        if (stmt.CatchBlock != null)
+        {
+            EnterScope();
+            if (stmt.CatchParam != null)
+                DeclareVariable(stmt.CatchParam.Lexeme);
+            foreach (var s in stmt.CatchBlock)
+                Visit(s);
+            ExitScope();
+        }
+
+        if (stmt.FinallyBlock != null)
+            foreach (var s in stmt.FinallyBlock)
+                Visit(s);
+    }
+
+    #endregion
+
+    #region Expression visitors
+
+    protected override void VisitVariable(Expr.Variable expr)
+    {
+        ReferenceVariable(expr.Name.Lexeme);
+    }
+
+    protected override void VisitAssign(Expr.Assign expr)
+    {
+        ReferenceVariable(expr.Name.Lexeme);
+        base.VisitAssign(expr);
+    }
+
+    protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
+    {
+        ReferenceVariable(expr.Name.Lexeme);
+        base.VisitCompoundAssign(expr);
+    }
+
+    protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+    {
+        AnalyzeArrowFunctionBody(expr);
+    }
+
+    protected override void VisitThis(Expr.This expr)
+    {
+        // Arrow functions capture 'this' from their lexical scope
+        // Track this as a captured variable so display classes include a field for it
+        // EXCEPT for object methods which receive 'this' via the __this parameter
+        if (_currentFunction != null && _currentFunction is Expr.ArrowFunction arrowFunc && !arrowFunc.IsObjectMethod)
+            _captures[_currentFunction].Add("this");
+    }
+
+    #endregion
+
+    #region Function/Arrow body analysis
+
+    private void AnalyzeFunctionBody(object funcNode, List<Stmt.Parameter> parameters, List<Stmt> body)
+    {
+        // Save current context
+        var previousFunction = _currentFunction;
+        var previousOuter = new HashSet<string>(_outerVariables);
+
+        // Build set of outer variables for this function
+        _outerVariables.Clear();
+        foreach (var scope in _scopeStack)
+            foreach (var name in scope)
+                _outerVariables.Add(name);
+
+        // Set up new function context
+        _currentFunction = funcNode;
+        _captures[funcNode] = [];
+        _localVars[funcNode] = [];
+
+        // Enter function scope and declare parameters
+        EnterScope();
+        foreach (var param in parameters)
+        {
+            DeclareVariable(param.Name.Lexeme);
+            if (param.DefaultValue != null)
+                Visit(param.DefaultValue);
+        }
+
+        // Analyze body
+        foreach (var stmt in body)
+            Visit(stmt);
+
+        ExitScope();
+
+        // Restore context
+        _currentFunction = previousFunction;
+        _outerVariables.Clear();
+        foreach (var name in previousOuter)
+            _outerVariables.Add(name);
+    }
+
+    private void AnalyzeArrowFunctionBody(Expr.ArrowFunction af)
+    {
+        // Save current context
+        var previousFunction = _currentFunction;
+        var previousOuter = new HashSet<string>(_outerVariables);
+
+        // Build set of outer variables for this function
+        _outerVariables.Clear();
+        foreach (var scope in _scopeStack)
+            foreach (var name in scope)
+                _outerVariables.Add(name);
+
+        // Set up new function context
+        _currentFunction = af;
+        _captures[af] = [];
+        _localVars[af] = [];
+
+        // Enter function scope and declare parameters
+        EnterScope();
+        foreach (var param in af.Parameters)
+        {
+            DeclareVariable(param.Name.Lexeme);
+            if (param.DefaultValue != null)
+                Visit(param.DefaultValue);
+        }
+
+        // Analyze body
+        if (af.ExpressionBody != null)
+            Visit(af.ExpressionBody);
+        else if (af.BlockBody != null)
+            foreach (var stmt in af.BlockBody)
+                Visit(stmt);
+
+        ExitScope();
+
+        // Restore context
+        _currentFunction = previousFunction;
+        _outerVariables.Clear();
+        foreach (var name in previousOuter)
+            _outerVariables.Add(name);
+    }
+
+    #endregion
 }
