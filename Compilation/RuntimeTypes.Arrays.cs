@@ -40,7 +40,7 @@ public static partial class RuntimeTypes
         // For compiled class instances, get keys from typed backing fields AND _fields dictionary
         if (obj != null)
         {
-            var keys = new List<object?>();
+            List<object?> keys = [];
             var type = obj.GetType();
 
             // Get typed backing fields (fields starting with __)
@@ -83,7 +83,7 @@ public static partial class RuntimeTypes
 
     public static List<object?> ConcatArrays(params object?[] arrays)
     {
-        var result = new List<object?>();
+        List<object?> result = [];
         foreach (var arr in arrays)
         {
             if (arr is List<object?> list)
@@ -96,7 +96,7 @@ public static partial class RuntimeTypes
 
     public static object?[] ExpandCallArgs(object?[] argsWithSpreads, bool[] isSpread)
     {
-        var result = new List<object?>();
+        List<object?> result = [];
         for (int i = 0; i < argsWithSpreads.Length; i++)
         {
             if (isSpread[i] && argsWithSpreads[i] is List<object?> list)
@@ -150,7 +150,7 @@ public static partial class RuntimeTypes
 
     public static List<object?> ArrayMap(List<object?> list, object? callback)
     {
-        var result = new List<object?>();
+        List<object?> result = [];
         for (int i = 0; i < list.Count; i++)
         {
             var callResult = InvokeValue(callback, [list[i], (double)i, list]);
@@ -161,7 +161,7 @@ public static partial class RuntimeTypes
 
     public static List<object?> ArrayFilter(List<object?> list, object? callback)
     {
-        var result = new List<object?>();
+        List<object?> result = [];
         for (int i = 0; i < list.Count; i++)
         {
             var callResult = InvokeValue(callback, [list[i], (double)i, list]);

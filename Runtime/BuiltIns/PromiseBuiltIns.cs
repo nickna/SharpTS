@@ -296,7 +296,7 @@ public static class PromiseBuiltIns
             return new SharpTSArray([]);
         }
 
-        var results = new List<object?>();
+        List<object?> results = [];
 
         foreach (var element in array.Elements)
         {

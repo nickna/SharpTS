@@ -47,7 +47,7 @@ public partial class AsyncMoveNextEmitter
 
             // IMPORTANT: In async, await can happen in arguments
             // Emit all arguments first and store to temps
-            var argTemps = new List<LocalBuilder>();
+            List<LocalBuilder> argTemps = [];
             foreach (var arg in n.Arguments)
             {
                 EmitExpression(arg);

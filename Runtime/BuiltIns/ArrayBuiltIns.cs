@@ -66,7 +66,7 @@ public static class ArrayBuiltIns
                 var callback = args[0] as ISharpTSCallable
                     ?? throw new Exception("Runtime Error: map requires a function argument.");
 
-                var result = new List<object?>();
+                List<object?> result = [];
                 for (int i = 0; i < arr.Elements.Count; i++)
                 {
                     var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
@@ -81,7 +81,7 @@ public static class ArrayBuiltIns
                 var callback = args[0] as ISharpTSCallable
                     ?? throw new Exception("Runtime Error: filter requires a function argument.");
 
-                var result = new List<object?>();
+                List<object?> result = [];
                 for (int i = 0; i < arr.Elements.Count; i++)
                 {
                     var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);

@@ -646,7 +646,7 @@ public partial class AsyncMoveNextEmitter
             // IMPORTANT: In async context, await can happen in arguments
             // Emit all arguments first and store to temps
             var parameters = funcMethod.GetParameters();
-            var directArgTemps = new List<LocalBuilder>();
+            List<LocalBuilder> directArgTemps = [];
 
             for (int i = 0; i < parameters.Length; i++)
             {
@@ -685,7 +685,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Stloc, calleeTemp);
 
         // Emit all arguments and save to temps
-        var argTemps = new List<LocalBuilder>();
+        List<LocalBuilder> argTemps = [];
         foreach (var arg in c.Arguments)
         {
             EmitExpression(arg);

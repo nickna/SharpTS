@@ -1,13 +1,14 @@
 using SharpTS.Compilation.Visitors;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Compilation;
 
 /// <summary>
 /// Analyzes async functions to identify await points and variables that must be hoisted
-/// to the state machine struct.
+/// to the state machine struct. Uses the visitor pattern for AST traversal.
 /// </summary>
-public partial class AsyncStateAnalyzer
+public partial class AsyncStateAnalyzer : AstVisitorBase
 {
     /// <summary>
     /// Represents a single await point in an async function.
@@ -89,9 +90,6 @@ public partial class AsyncStateAnalyzer
     private TryRegion _currentTryRegion = TryRegion.None;
     private readonly Dictionary<int, (bool InTry, bool InCatch, bool InFinally)> _tryBlockAwaitFlags = [];
 
-    // Reusable visitor for detecting 'this' usage in arrow functions
-    private readonly ThisUsageVisitor _thisUsageVisitor = new();
-
     // Reusable visitor for finding nested async arrows
     private readonly NestedAsyncArrowVisitor _nestedArrowVisitor = new();
 
@@ -106,7 +104,7 @@ public partial class AsyncStateAnalyzer
         Reset();
 
         // Collect parameters as variables that need hoisting
-        var parameters = new HashSet<string>();
+        HashSet<string> parameters = [];
         foreach (var param in func.Parameters)
         {
             parameters.Add(param.Name.Lexeme);
@@ -114,12 +112,12 @@ public partial class AsyncStateAnalyzer
             _variablesDeclaredBeforeAwait.Add(param.Name.Lexeme);
         }
 
-        // Analyze the function body
+        // Analyze the function body using visitor pattern
         if (func.Body != null)
         {
             foreach (var stmt in func.Body)
             {
-                AnalyzeStmt(stmt);
+                Visit(stmt);
             }
         }
 
@@ -145,7 +143,7 @@ public partial class AsyncStateAnalyzer
 
     private List<TryBlockInfo> BuildTryBlockInfoList()
     {
-        var result = new List<TryBlockInfo>();
+        List<TryBlockInfo> result = [];
         foreach (var (tryId, flags) in _tryBlockAwaitFlags)
         {
             // Find the corresponding try statement from _tryBlocks

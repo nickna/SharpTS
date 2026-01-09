@@ -121,7 +121,7 @@ public partial class TypeChecker
                 ig.GenericDefinition is TypeInfo.GenericClass gc)
             {
                 // Build substitution map from type parameters to type arguments
-                var subs = new Dictionary<string, TypeInfo>();
+                Dictionary<string, TypeInfo> subs = [];
                 for (int i = 0; i < gc.TypeParams.Count; i++)
                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
 
@@ -353,7 +353,7 @@ public partial class TypeChecker
                  ig.GenericDefinition is TypeInfo.GenericClass gc)
              {
                  // Build substitution map
-                 var subs = new Dictionary<string, TypeInfo>();
+                 Dictionary<string, TypeInfo> subs = [];
                  for (int i = 0; i < gc.TypeParams.Count; i++)
                      subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
 

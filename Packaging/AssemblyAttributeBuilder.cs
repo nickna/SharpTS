@@ -13,7 +13,7 @@ public static class AssemblyAttributeBuilder
     /// </summary>
     public static List<CustomAttributeBuilder> BuildAll(AssemblyMetadata metadata)
     {
-        var attributes = new List<CustomAttributeBuilder>();
+        List<CustomAttributeBuilder> attributes = [];
 
         if (!string.IsNullOrEmpty(metadata.Title))
             attributes.Add(BuildStringAttribute<AssemblyTitleAttribute>(metadata.Title));

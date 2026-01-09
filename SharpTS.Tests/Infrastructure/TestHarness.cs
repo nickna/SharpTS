@@ -13,8 +13,11 @@ namespace SharpTS.Tests.Infrastructure;
 /// </summary>
 public static class TestHarness
 {
-    // Lock to prevent concurrent Console.Out manipulation
-    private static readonly object ConsoleLock = new();
+    /// <summary>
+    /// Lock to prevent concurrent Console.Out/Error manipulation across parallel tests.
+    /// Any test that redirects Console.Out or Console.Error should acquire this lock.
+    /// </summary>
+    internal static readonly object ConsoleLock = new();
 
     /// <summary>
     /// Runs TypeScript source through the interpreter and captures console output.

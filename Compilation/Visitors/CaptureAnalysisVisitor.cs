@@ -6,8 +6,9 @@ namespace SharpTS.Compilation.Visitors;
 /// <summary>
 /// Visitor that analyzes an arrow function to determine which variables it captures
 /// from the enclosing scope. This visitor is reusable - call Reset() before each analysis.
+/// Also provides efficient 'this' detection with early termination.
 /// </summary>
-internal class CaptureAnalysisVisitor : AstVisitorBase
+internal class CaptureAnalysisVisitor : ControlledAstVisitor
 {
     private HashSet<string> _outerScopeVariables = [];
     private HashSet<string> _locals = [];
@@ -15,6 +16,10 @@ internal class CaptureAnalysisVisitor : AstVisitorBase
 
     // Stack for re-entrancy when analyzing nested arrows
     private readonly Stack<(HashSet<string> Outer, HashSet<string> Locals, HashSet<string> Captures)> _stateStack = new();
+
+    // For efficient 'this' detection with early termination
+    private bool _detectingThisOnly;
+    private bool _thisDetected;
 
     /// <summary>
     /// Gets the set of captured variable names after analysis.
@@ -27,15 +32,51 @@ internal class CaptureAnalysisVisitor : AstVisitorBase
     public bool CapturesThis => _captures.Contains("this");
 
     /// <summary>
+    /// Quick check if arrow function uses 'this' or 'super' (stops at first occurrence).
+    /// </summary>
+    public bool UsesThis(Expr.ArrowFunction af)
+    {
+        Reset();
+        _detectingThisOnly = true;
+        _thisDetected = false;
+
+        if (af.ExpressionBody != null)
+            Visit(af.ExpressionBody);
+        if (!_thisDetected && af.BlockBody != null)
+        {
+            foreach (var s in af.BlockBody)
+            {
+                Visit(s);
+                if (_thisDetected) break;
+            }
+        }
+
+        _detectingThisOnly = false;
+        return _thisDetected;
+    }
+
+    /// <summary>
+    /// Resets the visitor to initial state (for UsesThis checks).
+    /// </summary>
+    protected override void Reset()
+    {
+        base.Reset();
+        _outerScopeVariables = [];
+        _locals.Clear();
+        _captures.Clear();
+        _stateStack.Clear();
+        _detectingThisOnly = false;
+        _thisDetected = false;
+    }
+
+    /// <summary>
     /// Resets the visitor for analyzing an arrow with the given outer scope variables.
     /// </summary>
     /// <param name="outerScopeVariables">Variables declared in the enclosing scope that can be captured.</param>
     public void Reset(HashSet<string> outerScopeVariables)
     {
+        Reset();
         _outerScopeVariables = outerScopeVariables;
-        _locals.Clear();
-        _captures.Clear();
-        _stateStack.Clear();
     }
 
     /// <summary>
@@ -136,6 +177,22 @@ internal class CaptureAnalysisVisitor : AstVisitorBase
     protected override void VisitThis(Expr.This expr)
     {
         _captures.Add("this");
+        if (_detectingThisOnly)
+        {
+            _thisDetected = true;
+            StopTraversal();
+        }
+    }
+
+    protected override void VisitSuper(Expr.Super expr)
+    {
+        // 'super' implicitly uses 'this'
+        _captures.Add("this");
+        if (_detectingThisOnly)
+        {
+            _thisDetected = true;
+            StopTraversal();
+        }
     }
 
     protected override void VisitArrowFunction(Expr.ArrowFunction expr)

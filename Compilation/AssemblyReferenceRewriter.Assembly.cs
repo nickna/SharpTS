@@ -33,7 +33,7 @@ public partial class AssemblyReferenceRewriter
     private void CreateAssemblyReferences()
     {
         // Determine which target assemblies we need based on types used
-        var neededAssemblies = new HashSet<string>();
+        HashSet<string> neededAssemblies = [];
 
         foreach (var typeRefHandle in _reader.TypeReferences)
         {

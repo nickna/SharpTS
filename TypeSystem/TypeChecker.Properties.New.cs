@@ -281,7 +281,7 @@ public partial class TypeChecker
             var instantiated = InstantiateGenericClass(genericClass, typeArgs);
 
             // Build substitution map for constructor parameter types
-            var subs = new Dictionary<string, TypeInfo>();
+            Dictionary<string, TypeInfo> subs = [];
             for (int i = 0; i < genericClass.TypeParams.Count; i++)
                 subs[genericClass.TypeParams[i].Name] = typeArgs[i];
 

@@ -4,102 +4,54 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncStateAnalyzer
 {
-    private void AnalyzeStmt(Stmt stmt)
+    #region Statement Visitor Overrides
+
+    protected override void VisitVar(Stmt.Var stmt)
     {
-        switch (stmt)
-        {
-            case Stmt.Var v:
-                // Track variable declaration
-                _declaredVariables.Add(v.Name.Lexeme);
-                if (!_seenAwait)
-                    _variablesDeclaredBeforeAwait.Add(v.Name.Lexeme);
+        // Track variable declaration
+        _declaredVariables.Add(stmt.Name.Lexeme);
+        if (!_seenAwait)
+            _variablesDeclaredBeforeAwait.Add(stmt.Name.Lexeme);
 
-                if (v.Initializer != null)
-                    AnalyzeExpr(v.Initializer);
-                break;
-
-            case Stmt.Expression e:
-                AnalyzeExpr(e.Expr);
-                break;
-
-            case Stmt.Return r:
-                if (r.Value != null)
-                    AnalyzeExpr(r.Value);
-                break;
-
-            case Stmt.If i:
-                AnalyzeExpr(i.Condition);
-                AnalyzeStmt(i.ThenBranch);
-                if (i.ElseBranch != null)
-                    AnalyzeStmt(i.ElseBranch);
-                break;
-
-            case Stmt.While w:
-                AnalyzeExpr(w.Condition);
-                AnalyzeStmt(w.Body);
-                break;
-
-            case Stmt.ForOf f:
-                // Loop variable is declared and potentially survives await
-                _declaredVariables.Add(f.Variable.Lexeme);
-                if (!_seenAwait)
-                    _variablesDeclaredBeforeAwait.Add(f.Variable.Lexeme);
-
-                AnalyzeExpr(f.Iterable);
-                AnalyzeStmt(f.Body);
-                break;
-
-            case Stmt.Block b:
-                foreach (var s in b.Statements)
-                    AnalyzeStmt(s);
-                break;
-
-            case Stmt.Sequence seq:
-                foreach (var s in seq.Statements)
-                    AnalyzeStmt(s);
-                break;
-
-            case Stmt.TryCatch t:
-                _hasTryCatch = true;
-                AnalyzeTryCatchWithTracking(t);
-                break;
-
-            case Stmt.Switch s:
-                AnalyzeExpr(s.Subject);
-                foreach (var c in s.Cases)
-                {
-                    AnalyzeExpr(c.Value);
-                    foreach (var cs in c.Body)
-                        AnalyzeStmt(cs);
-                }
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        AnalyzeStmt(ds);
-                break;
-
-            case Stmt.Throw th:
-                AnalyzeExpr(th.Value);
-                break;
-
-            case Stmt.Print p:
-                AnalyzeExpr(p.Expr);
-                break;
-
-            case Stmt.LabeledStatement ls:
-                AnalyzeStmt(ls.Statement);
-                break;
-
-            case Stmt.Break:
-            case Stmt.Continue:
-            case Stmt.Function: // Nested functions don't affect our analysis
-            case Stmt.Class:
-            case Stmt.Interface:
-            case Stmt.TypeAlias:
-            case Stmt.Enum:
-            case Stmt.Namespace:
-                break;
-        }
+        base.VisitVar(stmt);
     }
+
+    protected override void VisitForOf(Stmt.ForOf stmt)
+    {
+        // Loop variable is declared and potentially survives await
+        _declaredVariables.Add(stmt.Variable.Lexeme);
+        if (!_seenAwait)
+            _variablesDeclaredBeforeAwait.Add(stmt.Variable.Lexeme);
+
+        base.VisitForOf(stmt);
+    }
+
+    protected override void VisitForIn(Stmt.ForIn stmt)
+    {
+        // Loop variable is declared and potentially survives await
+        _declaredVariables.Add(stmt.Variable.Lexeme);
+        if (!_seenAwait)
+            _variablesDeclaredBeforeAwait.Add(stmt.Variable.Lexeme);
+
+        base.VisitForIn(stmt);
+    }
+
+    protected override void VisitTryCatch(Stmt.TryCatch stmt)
+    {
+        _hasTryCatch = true;
+        AnalyzeTryCatchWithTracking(stmt);
+        // Don't call base - AnalyzeTryCatchWithTracking handles all traversal
+    }
+
+    // Don't traverse into nested declarations - they don't affect our analysis
+    protected override void VisitFunction(Stmt.Function stmt) { }
+    protected override void VisitClass(Stmt.Class stmt) { }
+    protected override void VisitInterface(Stmt.Interface stmt) { }
+    protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
+    protected override void VisitEnum(Stmt.Enum stmt) { }
+    protected override void VisitNamespace(Stmt.Namespace stmt) { }
+
+    #endregion
 
     private void AnalyzeTryCatchWithTracking(Stmt.TryCatch t)
     {
@@ -127,7 +79,7 @@ public partial class AsyncStateAnalyzer
         var previousRegion = _currentTryRegion;
         _currentTryRegion = TryRegion.Try;
         foreach (var ts in t.TryBlock)
-            AnalyzeStmt(ts);
+            Visit(ts);
 
         // Analyze catch block
         if (t.CatchBlock != null)
@@ -140,7 +92,7 @@ public partial class AsyncStateAnalyzer
                     _variablesDeclaredBeforeAwait.Add(t.CatchParam.Lexeme);
             }
             foreach (var cs in t.CatchBlock)
-                AnalyzeStmt(cs);
+                Visit(cs);
         }
 
         // Analyze finally block
@@ -148,7 +100,7 @@ public partial class AsyncStateAnalyzer
         {
             _currentTryRegion = TryRegion.Finally;
             foreach (var fs in t.FinallyBlock)
-                AnalyzeStmt(fs);
+                Visit(fs);
         }
 
         // Restore context

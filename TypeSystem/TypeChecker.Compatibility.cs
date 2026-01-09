@@ -284,12 +284,12 @@ public partial class TypeChecker
             expectedInterfaceIG.GenericDefinition is TypeInfo.GenericInterface gi)
         {
             // Build substitution map
-            var subs = new Dictionary<string, TypeInfo>();
+            Dictionary<string, TypeInfo> subs = [];
             for (int i = 0; i < gi.TypeParams.Count; i++)
                 subs[gi.TypeParams[i].Name] = expectedInterfaceIG.TypeArguments[i];
 
             // Substitute type parameters in interface members
-            var substitutedMembers = new Dictionary<string, TypeInfo>();
+            Dictionary<string, TypeInfo> substitutedMembers = [];
             foreach (var kvp in gi.Members)
                 substitutedMembers[kvp.Key] = Substitute(kvp.Value, subs);
 

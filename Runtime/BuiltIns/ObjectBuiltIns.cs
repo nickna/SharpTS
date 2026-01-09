@@ -65,8 +65,8 @@ public static class ObjectBuiltIns
     /// </summary>
     public static SharpTSObject ObjectRest(object? source, List<object?> excludeKeys)
     {
-        var excludeSet = new HashSet<string>(excludeKeys.Where(k => k != null).Select(k => k!.ToString()!));
-        var result = new Dictionary<string, object?>();
+        HashSet<string> excludeSet = new(excludeKeys.Where(k => k != null).Select(k => k!.ToString()!));
+        Dictionary<string, object?> result = [];
 
         if (source is SharpTSObject obj)
         {

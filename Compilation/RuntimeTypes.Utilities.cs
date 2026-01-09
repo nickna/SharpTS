@@ -21,7 +21,7 @@ public static partial class RuntimeTypes
     {
         if (!_enumReverseCache.TryGetValue(enumName, out var reverse))
         {
-            reverse = new Dictionary<double, string>();
+            reverse = [];
             for (int i = 0; i < keys.Length; i++)
             {
                 reverse[keys[i]] = values[i];

@@ -1,12 +1,13 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Compilation;
 
 /// <summary>
 /// Analyzes generator functions to identify yield points and variables that must be hoisted
-/// to the state machine struct.
+/// to the state machine struct. Uses the visitor pattern for AST traversal.
 /// </summary>
-public class GeneratorStateAnalyzer
+public class GeneratorStateAnalyzer : AstVisitorBase
 {
     /// <summary>
     /// Represents a single yield point in a generator function.
@@ -47,7 +48,7 @@ public class GeneratorStateAnalyzer
         Reset();
 
         // Collect parameters as variables that need hoisting
-        var parameters = new HashSet<string>();
+        HashSet<string> parameters = [];
         foreach (var param in func.Parameters)
         {
             parameters.Add(param.Name.Lexeme);
@@ -55,12 +56,12 @@ public class GeneratorStateAnalyzer
             _variablesDeclaredBeforeYield.Add(param.Name.Lexeme);
         }
 
-        // Analyze the function body
+        // Analyze the function body using visitor pattern
         if (func.Body != null)
         {
             foreach (var stmt in func.Body)
             {
-                AnalyzeStmt(stmt);
+                Visit(stmt);
             }
         }
 
@@ -91,257 +92,117 @@ public class GeneratorStateAnalyzer
         _hasYieldStar = false;
     }
 
-    private void AnalyzeStmt(Stmt stmt)
+    #region Statement Visitor Overrides
+
+    protected override void VisitVar(Stmt.Var stmt)
     {
-        switch (stmt)
-        {
-            case Stmt.Var v:
-                _declaredVariables.Add(v.Name.Lexeme);
-                if (!_seenYield)
-                    _variablesDeclaredBeforeYield.Add(v.Name.Lexeme);
-                if (v.Initializer != null)
-                    AnalyzeExpr(v.Initializer);
-                break;
-
-            case Stmt.Expression e:
-                AnalyzeExpr(e.Expr);
-                break;
-
-            case Stmt.Return r:
-                if (r.Value != null)
-                    AnalyzeExpr(r.Value);
-                break;
-
-            case Stmt.If i:
-                AnalyzeExpr(i.Condition);
-                AnalyzeStmt(i.ThenBranch);
-                if (i.ElseBranch != null)
-                    AnalyzeStmt(i.ElseBranch);
-                break;
-
-            case Stmt.While w:
-                AnalyzeExpr(w.Condition);
-                AnalyzeStmt(w.Body);
-                break;
-
-            case Stmt.ForOf f:
-                _declaredVariables.Add(f.Variable.Lexeme);
-                if (!_seenYield)
-                    _variablesDeclaredBeforeYield.Add(f.Variable.Lexeme);
-                AnalyzeExpr(f.Iterable);
-                AnalyzeStmt(f.Body);
-                break;
-
-            case Stmt.Block b:
-                if (b.Statements != null)
-                    foreach (var s in b.Statements)
-                        AnalyzeStmt(s);
-                break;
-
-            case Stmt.Sequence seq:
-                foreach (var s in seq.Statements)
-                    AnalyzeStmt(s);
-                break;
-
-            case Stmt.TryCatch t:
-                foreach (var ts in t.TryBlock)
-                    AnalyzeStmt(ts);
-                if (t.CatchBlock != null)
-                {
-                    if (t.CatchParam != null)
-                    {
-                        _declaredVariables.Add(t.CatchParam.Lexeme);
-                        if (!_seenYield)
-                            _variablesDeclaredBeforeYield.Add(t.CatchParam.Lexeme);
-                    }
-                    foreach (var cs in t.CatchBlock)
-                        AnalyzeStmt(cs);
-                }
-                if (t.FinallyBlock != null)
-                    foreach (var fs in t.FinallyBlock)
-                        AnalyzeStmt(fs);
-                break;
-
-            case Stmt.Switch s:
-                AnalyzeExpr(s.Subject);
-                foreach (var c in s.Cases)
-                {
-                    AnalyzeExpr(c.Value);
-                    foreach (var cs in c.Body)
-                        AnalyzeStmt(cs);
-                }
-                if (s.DefaultBody != null)
-                    foreach (var ds in s.DefaultBody)
-                        AnalyzeStmt(ds);
-                break;
-
-            case Stmt.Throw th:
-                AnalyzeExpr(th.Value);
-                break;
-
-            case Stmt.Print p:
-                AnalyzeExpr(p.Expr);
-                break;
-
-            case Stmt.LabeledStatement ls:
-                AnalyzeStmt(ls.Statement);
-                break;
-
-            case Stmt.Break:
-            case Stmt.Continue:
-            case Stmt.Function:
-            case Stmt.Class:
-            case Stmt.Interface:
-            case Stmt.TypeAlias:
-            case Stmt.Enum:
-            case Stmt.Namespace:
-                break;
-        }
+        _declaredVariables.Add(stmt.Name.Lexeme);
+        if (!_seenYield)
+            _variablesDeclaredBeforeYield.Add(stmt.Name.Lexeme);
+        base.VisitVar(stmt);
     }
 
-    private void AnalyzeExpr(Expr expr)
+    protected override void VisitForOf(Stmt.ForOf stmt)
     {
-        switch (expr)
-        {
-            case Expr.Yield y:
-                var liveVars = new HashSet<string>(_declaredVariables);
-                _yieldPoints.Add(new YieldPoint(_yieldCounter++, y, liveVars));
-                _seenYield = true;
-                if (y.IsDelegating)
-                    _hasYieldStar = true;
-                if (y.Value != null)
-                    AnalyzeExpr(y.Value);
-                break;
-
-            case Expr.Variable v:
-                if (_seenYield && _declaredVariables.Contains(v.Name.Lexeme))
-                    _variablesUsedAfterYield.Add(v.Name.Lexeme);
-                break;
-
-            case Expr.Assign a:
-                if (_seenYield && _declaredVariables.Contains(a.Name.Lexeme))
-                    _variablesUsedAfterYield.Add(a.Name.Lexeme);
-                AnalyzeExpr(a.Value);
-                break;
-
-            case Expr.Binary b:
-                AnalyzeExpr(b.Left);
-                AnalyzeExpr(b.Right);
-                break;
-
-            case Expr.Logical l:
-                AnalyzeExpr(l.Left);
-                AnalyzeExpr(l.Right);
-                break;
-
-            case Expr.Unary u:
-                AnalyzeExpr(u.Right);
-                break;
-
-            case Expr.Grouping g:
-                AnalyzeExpr(g.Expression);
-                break;
-
-            case Expr.Call c:
-                AnalyzeExpr(c.Callee);
-                foreach (var arg in c.Arguments)
-                    AnalyzeExpr(arg);
-                break;
-
-            case Expr.Get g:
-                AnalyzeExpr(g.Object);
-                break;
-
-            case Expr.Set s:
-                AnalyzeExpr(s.Object);
-                AnalyzeExpr(s.Value);
-                break;
-
-            case Expr.GetIndex gi:
-                AnalyzeExpr(gi.Object);
-                AnalyzeExpr(gi.Index);
-                break;
-
-            case Expr.SetIndex si:
-                AnalyzeExpr(si.Object);
-                AnalyzeExpr(si.Index);
-                AnalyzeExpr(si.Value);
-                break;
-
-            case Expr.New n:
-                foreach (var arg in n.Arguments)
-                    AnalyzeExpr(arg);
-                break;
-
-            case Expr.ArrayLiteral a:
-                foreach (var elem in a.Elements)
-                    AnalyzeExpr(elem);
-                break;
-
-            case Expr.ObjectLiteral o:
-                foreach (var prop in o.Properties)
-                    AnalyzeExpr(prop.Value);
-                break;
-
-            case Expr.Ternary t:
-                AnalyzeExpr(t.Condition);
-                AnalyzeExpr(t.ThenBranch);
-                AnalyzeExpr(t.ElseBranch);
-                break;
-
-            case Expr.NullishCoalescing nc:
-                AnalyzeExpr(nc.Left);
-                AnalyzeExpr(nc.Right);
-                break;
-
-            case Expr.TemplateLiteral tl:
-                foreach (var e in tl.Expressions)
-                    AnalyzeExpr(e);
-                break;
-
-            case Expr.CompoundAssign ca:
-                if (_seenYield && _declaredVariables.Contains(ca.Name.Lexeme))
-                    _variablesUsedAfterYield.Add(ca.Name.Lexeme);
-                AnalyzeExpr(ca.Value);
-                break;
-
-            case Expr.CompoundSet cs:
-                AnalyzeExpr(cs.Object);
-                AnalyzeExpr(cs.Value);
-                break;
-
-            case Expr.CompoundSetIndex csi:
-                AnalyzeExpr(csi.Object);
-                AnalyzeExpr(csi.Index);
-                AnalyzeExpr(csi.Value);
-                break;
-
-            case Expr.PrefixIncrement pi:
-                AnalyzeExpr(pi.Operand);
-                break;
-
-            case Expr.PostfixIncrement poi:
-                AnalyzeExpr(poi.Operand);
-                break;
-
-            case Expr.ArrowFunction:
-                // Arrow functions inside generators don't affect yield analysis
-                break;
-
-            case Expr.This:
-                _usesThis = true;
-                break;
-
-            case Expr.Super:
-                _usesThis = true;
-                break;
-
-            case Expr.Literal:
-            case Expr.Spread:
-            case Expr.TypeAssertion:
-            case Expr.Await:
-            case Expr.RegexLiteral:
-                break;
-        }
+        _declaredVariables.Add(stmt.Variable.Lexeme);
+        if (!_seenYield)
+            _variablesDeclaredBeforeYield.Add(stmt.Variable.Lexeme);
+        base.VisitForOf(stmt);
     }
+
+    protected override void VisitForIn(Stmt.ForIn stmt)
+    {
+        _declaredVariables.Add(stmt.Variable.Lexeme);
+        if (!_seenYield)
+            _variablesDeclaredBeforeYield.Add(stmt.Variable.Lexeme);
+        base.VisitForIn(stmt);
+    }
+
+    protected override void VisitTryCatch(Stmt.TryCatch stmt)
+    {
+        // Visit try block
+        foreach (var ts in stmt.TryBlock)
+            Visit(ts);
+
+        // Track catch parameter and visit catch block
+        if (stmt.CatchBlock != null)
+        {
+            if (stmt.CatchParam != null)
+            {
+                _declaredVariables.Add(stmt.CatchParam.Lexeme);
+                if (!_seenYield)
+                    _variablesDeclaredBeforeYield.Add(stmt.CatchParam.Lexeme);
+            }
+            foreach (var cs in stmt.CatchBlock)
+                Visit(cs);
+        }
+
+        // Visit finally block
+        if (stmt.FinallyBlock != null)
+            foreach (var fs in stmt.FinallyBlock)
+                Visit(fs);
+    }
+
+    // Don't traverse into nested declarations - they don't affect our analysis
+    protected override void VisitFunction(Stmt.Function stmt) { }
+    protected override void VisitClass(Stmt.Class stmt) { }
+    protected override void VisitInterface(Stmt.Interface stmt) { }
+    protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
+    protected override void VisitEnum(Stmt.Enum stmt) { }
+    protected override void VisitNamespace(Stmt.Namespace stmt) { }
+
+    #endregion
+
+    #region Expression Visitor Overrides
+
+    protected override void VisitYield(Expr.Yield expr)
+    {
+        var liveVars = new HashSet<string>(_declaredVariables);
+        _yieldPoints.Add(new YieldPoint(_yieldCounter++, expr, liveVars));
+        _seenYield = true;
+        if (expr.IsDelegating)
+            _hasYieldStar = true;
+        base.VisitYield(expr);
+    }
+
+    protected override void VisitVariable(Expr.Variable expr)
+    {
+        if (_seenYield && _declaredVariables.Contains(expr.Name.Lexeme))
+            _variablesUsedAfterYield.Add(expr.Name.Lexeme);
+        // No base call needed - leaf node
+    }
+
+    protected override void VisitAssign(Expr.Assign expr)
+    {
+        if (_seenYield && _declaredVariables.Contains(expr.Name.Lexeme))
+            _variablesUsedAfterYield.Add(expr.Name.Lexeme);
+        base.VisitAssign(expr);
+    }
+
+    protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
+    {
+        if (_seenYield && _declaredVariables.Contains(expr.Name.Lexeme))
+            _variablesUsedAfterYield.Add(expr.Name.Lexeme);
+        base.VisitCompoundAssign(expr);
+    }
+
+    protected override void VisitThis(Expr.This expr)
+    {
+        _usesThis = true;
+        // No base call needed - leaf node
+    }
+
+    protected override void VisitSuper(Expr.Super expr)
+    {
+        _usesThis = true;
+        // No base call needed - leaf node
+    }
+
+    protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+    {
+        // Arrow functions inside generators don't affect yield analysis
+        // Don't traverse into them
+    }
+
+    #endregion
 }

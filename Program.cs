@@ -145,7 +145,7 @@ static GlobalOptions ParseGlobalOptions(string[] args)
 {
     var decoratorMode = DecoratorMode.None;
     var emitDecoratorMetadata = false;
-    var remaining = new List<string>();
+    List<string> remaining = [];
 
     foreach (var arg in args)
     {

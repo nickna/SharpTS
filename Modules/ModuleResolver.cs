@@ -202,8 +202,8 @@ public class ModuleResolver
     /// <returns>List of modules in dependency order</returns>
     public List<ParsedModule> GetModulesInOrder(ParsedModule entryPoint)
     {
-        var result = new List<ParsedModule>();
-        var visited = new HashSet<string>();
+        List<ParsedModule> result = [];
+        HashSet<string> visited = [];
 
         void Visit(ParsedModule module)
         {

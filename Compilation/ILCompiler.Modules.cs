@@ -23,7 +23,7 @@ public partial class ILCompiler
         );
 
         _moduleTypes[module.Path] = moduleType;
-        var exportFields = new Dictionary<string, FieldBuilder>();
+        Dictionary<string, FieldBuilder> exportFields = [];
 
         // Create export fields
         foreach (var stmt in module.Statements)

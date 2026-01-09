@@ -65,7 +65,7 @@ public static partial class RuntimeTypes
         // First, recursively transform children (bottom-up)
         if (value is Dictionary<string, object?> dict)
         {
-            var newDict = new Dictionary<string, object?>();
+            Dictionary<string, object?> newDict = [];
             foreach (var kv in dict)
             {
                 // ApplyReviver already calls the reviver for each child
@@ -77,7 +77,7 @@ public static partial class RuntimeTypes
         }
         else if (value is List<object?> list)
         {
-            var newList = new List<object?>();
+            List<object?> newList = [];
             for (int i = 0; i < list.Count; i++)
             {
                 // ApplyReviver already calls the reviver for each element
@@ -209,8 +209,8 @@ public static partial class RuntimeTypes
     private static string StringifyClassInstance(object value, TSFunction? replacer, HashSet<string>? allowedKeys, string indentStr, int depth)
     {
         var type = value.GetType();
-        var allFields = new Dictionary<string, object?>();
-        var seenKeys = new HashSet<string>();
+        Dictionary<string, object?> allFields = [];
+        HashSet<string> seenKeys = [];
 
         // Get values from typed backing fields (fields starting with __)
         // Property names are stored as PascalCase but JSON output should use camelCase
@@ -243,7 +243,7 @@ public static partial class RuntimeTypes
 
         if (allFields.Count == 0) return "{}";
 
-        var parts = new List<string>();
+        List<string> parts = [];
         foreach (var kv in allFields)
         {
             var val = kv.Value;
@@ -282,7 +282,7 @@ public static partial class RuntimeTypes
     {
         if (arr.Count == 0) return "[]";
 
-        var parts = new List<string>();
+        List<string> parts = [];
         for (int i = 0; i < arr.Count; i++)
         {
             var val = arr[i];
@@ -314,7 +314,7 @@ public static partial class RuntimeTypes
 
         if (fields.Count == 0) return "{}";
 
-        var parts = new List<string>();
+        List<string> parts = [];
         foreach (var kv in fields)
         {
             var val = kv.Value;

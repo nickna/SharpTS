@@ -275,7 +275,7 @@ public partial class AsyncMoveNextEmitter
         _currentTryCatchExceptionLocal = caughtExceptionLocal;
         _currentTryCatchSkipLabel = afterTryLabel;
 
-        var stmtsBeforeAwait = new List<Stmt>();
+        List<Stmt> stmtsBeforeAwait = [];
 
         foreach (var stmt in tryBody)
         {

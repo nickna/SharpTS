@@ -157,7 +157,7 @@ public partial class TypeChecker
         }
 
         // Create substitution map
-        var substitutions = new Dictionary<string, TypeInfo>();
+        Dictionary<string, TypeInfo> substitutions = [];
         for (int i = 0; i < typeArgs.Count; i++)
         {
             substitutions[generic.TypeParams[i].Name] = typeArgs[i];
@@ -228,7 +228,7 @@ public partial class TypeChecker
     /// </summary>
     private List<TypeInfo> InferTypeArguments(TypeInfo.GenericFunction gf, List<TypeInfo> argTypes)
     {
-        var inferred = new Dictionary<string, TypeInfo>();
+        Dictionary<string, TypeInfo> inferred = [];
 
         // Try to infer each type parameter from the corresponding argument
         for (int i = 0; i < gf.ParamTypes.Count && i < argTypes.Count; i++)
@@ -237,7 +237,7 @@ public partial class TypeChecker
         }
 
         // Build result list in order of type parameters
-        var result = new List<TypeInfo>();
+        List<TypeInfo> result = [];
         foreach (var tp in gf.TypeParams)
         {
             if (inferred.TryGetValue(tp.Name, out var inferredType))
@@ -320,7 +320,7 @@ public partial class TypeChecker
     /// </summary>
     private List<TypeInfo> ExtractKeys(TypeInfo type)
     {
-        var keys = new List<TypeInfo>();
+        List<TypeInfo> keys = [];
 
         switch (type)
         {
@@ -445,7 +445,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandInstantiatedGenericForKeyOf(TypeInfo.InstantiatedGeneric ig)
     {
-        var subs = new Dictionary<string, TypeInfo>();
+        Dictionary<string, TypeInfo> subs = [];
 
         switch (ig.GenericDefinition)
         {
@@ -485,7 +485,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandMappedType(TypeInfo.MappedType mapped, Dictionary<string, TypeInfo>? outerSubstitutions = null)
     {
-        outerSubstitutions ??= new Dictionary<string, TypeInfo>();
+        outerSubstitutions ??= [];
 
         // Get the keys from the constraint
         TypeInfo constraint = Substitute(mapped.Constraint, outerSubstitutions);
@@ -508,8 +508,8 @@ public partial class TypeChecker
         };
 
         // Build the resulting object type
-        var fields = new Dictionary<string, TypeInfo>();
-        var optionalFields = new HashSet<string>();
+        Dictionary<string, TypeInfo> fields = [];
+        HashSet<string> optionalFields = [];
 
         foreach (var key in keys)
         {
@@ -700,7 +700,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? GetPropertyTypeFromInstantiatedGeneric(TypeInfo.InstantiatedGeneric ig, string propertyName)
     {
-        var subs = new Dictionary<string, TypeInfo>();
+        Dictionary<string, TypeInfo> subs = [];
 
         switch (ig.GenericDefinition)
         {

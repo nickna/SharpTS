@@ -306,7 +306,7 @@ public static partial class RuntimeTypes
             return new List<object?>();
         }
 
-        var results = new List<object?>();
+        List<object?> results = [];
 
         foreach (var element in list)
         {

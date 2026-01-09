@@ -225,33 +225,41 @@ public class DiagnosticReporterTests
 
     private static string CaptureStdOut(Action action)
     {
-        var originalOut = Console.Out;
-        try
+        // Use shared console lock to prevent race conditions with parallel tests
+        lock (Infrastructure.TestHarness.ConsoleLock)
         {
-            using var sw = new StringWriter();
-            Console.SetOut(sw);
-            action();
-            return sw.ToString();
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
+            var originalOut = Console.Out;
+            try
+            {
+                using var sw = new StringWriter();
+                Console.SetOut(sw);
+                action();
+                return sw.ToString();
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+            }
         }
     }
 
     private static string CaptureStdErr(Action action)
     {
-        var originalErr = Console.Error;
-        try
+        // Use shared console lock to prevent race conditions with parallel tests
+        lock (Infrastructure.TestHarness.ConsoleLock)
         {
-            using var sw = new StringWriter();
-            Console.SetError(sw);
-            action();
-            return sw.ToString();
-        }
-        finally
-        {
-            Console.SetError(originalErr);
+            var originalErr = Console.Error;
+            try
+            {
+                using var sw = new StringWriter();
+                Console.SetError(sw);
+                action();
+                return sw.ToString();
+            }
+            finally
+            {
+                Console.SetError(originalErr);
+            }
         }
     }
 }

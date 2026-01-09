@@ -27,8 +27,8 @@ public static class PackageValidator
         string? packageIdOverride = null,
         string? versionOverride = null)
     {
-        var errors = new List<string>();
-        var warnings = new List<string>();
+        List<string> errors = [];
+        List<string> warnings = [];
 
         // Check assembly exists
         if (!File.Exists(assemblyPath))

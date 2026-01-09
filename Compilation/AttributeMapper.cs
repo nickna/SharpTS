@@ -145,7 +145,7 @@ public static class AttributeMapper
         if (decorator.Expression is not Expr.Call call)
             return [];
 
-        var args = new List<object?>();
+        List<object?> args = [];
         foreach (var arg in call.Arguments)
         {
             if (arg is Expr.Literal literal)

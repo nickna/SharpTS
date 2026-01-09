@@ -158,7 +158,7 @@ public class SharpTSRegExp
         }
 
         // Build result array: [fullMatch, ...groups]
-        var elements = new List<object?>();
+        List<object?> elements = [];
         elements.Add(match.Value);
 
         // Add capture groups (skip group 0 which is the full match)
@@ -193,7 +193,7 @@ public class SharpTSRegExp
     internal List<string> MatchAll(string input)
     {
         var matches = _regex.Matches(input);
-        var result = new List<string>();
+        List<string> result = [];
         foreach (Match m in matches)
         {
             result.Add(m.Value);

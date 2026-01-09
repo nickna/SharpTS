@@ -232,7 +232,7 @@ public abstract record TypeInfo
 
         public override string ToString()
         {
-            var parts = new List<string>();
+            List<string> parts = [];
             for (int i = 0; i < ElementTypes.Count; i++)
             {
                 bool isOptional = i >= RequiredCount;

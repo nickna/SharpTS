@@ -102,8 +102,8 @@ public class UnionTypeGenerator
         var tagField = typeBuilder.DefineField("_tag", typeof(byte), FieldAttributes.Private | FieldAttributes.InitOnly);
 
         // Define value fields for each type
-        var valueFields = new List<FieldBuilder>();
-        var mappedTypes = new List<Type>();
+        List<FieldBuilder> valueFields = [];
+        List<Type> mappedTypes = [];
 
         for (int i = 0; i < types.Count; i++)
         {

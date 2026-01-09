@@ -94,8 +94,8 @@ public partial class AssemblyReferenceRewriter
         // This is needed to set correct FieldList and MethodList in TypeDefs
         int fieldRow = 1;
         int methodRow = 1;
-        var typeFirstField = new Dictionary<TypeDefinitionHandle, int>();
-        var typeFirstMethod = new Dictionary<TypeDefinitionHandle, int>();
+        Dictionary<TypeDefinitionHandle, int> typeFirstField = [];
+        Dictionary<TypeDefinitionHandle, int> typeFirstMethod = [];
 
         foreach (var typeDefHandle in typeDefHandles)
         {

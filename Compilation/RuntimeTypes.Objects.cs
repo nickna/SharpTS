@@ -61,7 +61,7 @@ public static partial class RuntimeTypes
 
     public static Dictionary<string, object?> CreateObject(Dictionary<string, object> fields)
     {
-        var result = new Dictionary<string, object?>();
+        Dictionary<string, object?> result = [];
         foreach (var kv in fields)
         {
             result[kv.Key] = kv.Value;
@@ -267,9 +267,9 @@ public static partial class RuntimeTypes
         // For compiled class instances, get values from typed backing fields AND _fields dictionary
         if (obj != null)
         {
-            var values = new List<object?>();
+            List<object?> values = [];
             var type = obj.GetType();
-            var seenKeys = new HashSet<string>();
+            HashSet<string> seenKeys = [];
 
             // Get values from typed backing fields (fields starting with __)
             foreach (var backingField in ReflectionCache.GetBackingFields(type))
@@ -305,9 +305,9 @@ public static partial class RuntimeTypes
         // For compiled class instances, get entries from typed backing fields AND _fields dictionary
         if (obj != null)
         {
-            var entries = new List<object?>();
+            List<object?> entries = [];
             var type = obj.GetType();
-            var seenKeys = new HashSet<string>();
+            HashSet<string> seenKeys = [];
 
             // Get entries from typed backing fields (fields starting with __)
             foreach (var backingField in ReflectionCache.GetBackingFields(type))

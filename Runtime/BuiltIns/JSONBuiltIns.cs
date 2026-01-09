@@ -68,7 +68,7 @@ public static class JSONBuiltIns
         // First, recursively transform children (bottom-up)
         if (value is SharpTSObject obj)
         {
-            var newFields = new Dictionary<string, object?>();
+            Dictionary<string, object?> newFields = [];
             foreach (var kv in obj.Fields)
             {
                 // ApplyReviver already calls the reviver for each child
@@ -80,7 +80,7 @@ public static class JSONBuiltIns
         }
         else if (value is SharpTSArray arr)
         {
-            var newElements = new List<object?>();
+            List<object?> newElements = [];
             for (int i = 0; i < arr.Elements.Count; i++)
             {
                 // ApplyReviver already calls the reviver for each element
@@ -184,7 +184,7 @@ public static class JSONBuiltIns
     {
         if (arr.Elements.Count == 0) return "[]";
 
-        var parts = new List<string>();
+        List<string> parts = [];
         for (int i = 0; i < arr.Elements.Count; i++)
         {
             var str = StringifyValue(interp, arr.Elements[i], (double)i, replacer, allowedKeys, indentStr, depth + 1);
@@ -212,7 +212,7 @@ public static class JSONBuiltIns
 
         if (fields.Count == 0) return "{}";
 
-        var parts = new List<string>();
+        List<string> parts = [];
         foreach (var kv in fields)
         {
             var str = StringifyValue(interp, kv.Value, kv.Key, replacer, allowedKeys, indentStr, depth + 1);
@@ -241,7 +241,7 @@ public static class JSONBuiltIns
             fieldNames = fieldNames.Where(k => allowedKeys.Contains(k));
         }
 
-        var parts = new List<string>();
+        List<string> parts = [];
         foreach (var name in fieldNames)
         {
             var fieldValue = inst.GetFieldValue(name);

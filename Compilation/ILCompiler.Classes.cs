@@ -125,7 +125,7 @@ public partial class ILCompiler
         }
 
         // Add static fields for static properties (use object type for backward compatibility)
-        var staticFieldBuilders = new Dictionary<string, FieldBuilder>();
+        Dictionary<string, FieldBuilder> staticFieldBuilders = [];
         foreach (var field in classStmt.Fields)
         {
             if (field.IsStatic)

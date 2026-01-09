@@ -71,7 +71,7 @@ public partial class ILCompiler
                 );
 
                 // Add fields for captured variables
-                var fieldMap = new Dictionary<string, FieldBuilder>();
+                Dictionary<string, FieldBuilder> fieldMap = [];
                 foreach (var capturedVar in captures)
                 {
                     var field = displayClass.DefineField(capturedVar, typeof(object), FieldAttributes.Public);

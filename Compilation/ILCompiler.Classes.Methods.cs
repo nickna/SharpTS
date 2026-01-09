@@ -328,7 +328,7 @@ public partial class ILCompiler
         // Initialize static methods dictionary for this class
         if (!_staticMethods.ContainsKey(qualifiedClassName))
         {
-            _staticMethods[qualifiedClassName] = new Dictionary<string, MethodBuilder>();
+            _staticMethods[qualifiedClassName] = [];
         }
 
         // Define static methods first (so we can reference them in the static constructor)

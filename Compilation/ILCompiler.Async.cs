@@ -42,7 +42,7 @@ public partial class ILCompiler
         AsyncStateMachineBuilder outerBuilder)
     {
         // Get all hoisted fields from the function's state machine
-        var functionHoistedFields = new Dictionary<string, FieldBuilder>();
+        Dictionary<string, FieldBuilder> functionHoistedFields = [];
         foreach (var (name, field) in outerBuilder.HoistedParameters)
             functionHoistedFields[name] = field;
         foreach (var (name, field) in outerBuilder.HoistedLocals)

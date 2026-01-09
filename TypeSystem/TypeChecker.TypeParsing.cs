@@ -245,10 +245,10 @@ public partial class TypeChecker
         if (records.Count > 0 || interfaces.Count > 0 || classes.Count > 0 || instances.Count > 0)
         {
             // Merge all object-like types
-            var mergedFields = new Dictionary<string, TypeInfo>();
-            var optionalFields = new HashSet<string>();
-            var requiredInAny = new HashSet<string>(); // Track if property is required in any type
-            var nonObjectTypes = new List<TypeInfo>();
+            Dictionary<string, TypeInfo> mergedFields = [];
+            HashSet<string> optionalFields = [];
+            HashSet<string> requiredInAny = []; // Track if property is required in any type
+            List<TypeInfo> nonObjectTypes = [];
 
             foreach (var type in types)
             {
@@ -518,7 +518,7 @@ public partial class TypeChecker
             return ParseMappedTypeInfo(inner);
         }
 
-        var fields = new Dictionary<string, TypeInfo>();
+        Dictionary<string, TypeInfo> fields = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
