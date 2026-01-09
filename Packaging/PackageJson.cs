@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SharpTS.Packaging;
@@ -30,34 +31,8 @@ public class PackageJson
     /// Author name or "Name &lt;email&gt;" format.
     /// </summary>
     [JsonPropertyName("author")]
-    public object? AuthorRaw { get; set; }
-
-    /// <summary>
-    /// Gets the author as a string, handling both string and object formats.
-    /// </summary>
-    [JsonIgnore]
-    public string? Author
-    {
-        get
-        {
-            if (AuthorRaw is string s)
-                return s;
-            if (AuthorRaw is System.Text.Json.JsonElement element)
-            {
-                if (element.ValueKind == System.Text.Json.JsonValueKind.String)
-                    return element.GetString();
-                if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
-                {
-                    var name = element.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    var email = element.TryGetProperty("email", out var e) ? e.GetString() : null;
-                    if (name != null && email != null)
-                        return $"{name} <{email}>";
-                    return name;
-                }
-            }
-            return null;
-        }
-    }
+    [JsonConverter(typeof(PackageAuthorConverter))]
+    public string? Author { get; set; }
 
     /// <summary>
     /// SPDX license identifier (e.g., "MIT", "Apache-2.0").
@@ -66,34 +41,11 @@ public class PackageJson
     public string? License { get; set; }
 
     /// <summary>
-    /// Repository information.
+    /// Repository URL.
     /// </summary>
     [JsonPropertyName("repository")]
-    public object? RepositoryRaw { get; set; }
-
-    /// <summary>
-    /// Gets the repository URL, handling both string and object formats.
-    /// </summary>
-    [JsonIgnore]
-    public string? RepositoryUrl
-    {
-        get
-        {
-            if (RepositoryRaw is string s)
-                return s;
-            if (RepositoryRaw is System.Text.Json.JsonElement element)
-            {
-                if (element.ValueKind == System.Text.Json.JsonValueKind.String)
-                    return element.GetString();
-                if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
-                {
-                    if (element.TryGetProperty("url", out var url))
-                        return url.GetString();
-                }
-            }
-            return null;
-        }
-    }
+    [JsonConverter(typeof(PackageRepositoryConverter))]
+    public string? RepositoryUrl { get; set; }
 
     /// <summary>
     /// Package keywords/tags.
@@ -127,5 +79,65 @@ public class PackageJson
             errors.Add("package.json 'version' field is required");
 
         return errors.Count == 0;
+    }
+}
+
+/// <summary>
+/// Handles "author" field which can be a string or an object.
+/// </summary>
+public class PackageAuthorConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return reader.GetString();
+        }
+        else if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+            var name = root.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var email = root.TryGetProperty("email", out var e) ? e.GetString() : null;
+            
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(email))
+                return $"{name} <{email}>";
+                
+            return name;
+        }
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value);
+    }
+}
+
+/// <summary>
+/// Handles "repository" field which can be a string or an object.
+/// </summary>
+public class PackageRepositoryConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return reader.GetString();
+        }
+        else if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            if (doc.RootElement.TryGetProperty("url", out var url))
+            {
+                return url.GetString();
+            }
+        }
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value);
     }
 }

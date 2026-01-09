@@ -8,34 +8,20 @@ namespace SharpTS.Packaging;
 /// <summary>
 /// Generates NuGet packages (.nupkg) from compiled SharpTS assemblies.
 /// </summary>
-public class NuGetPackager
+/// <param name="packageJson">Package metadata from package.json.</param>
+/// <param name="packageIdOverride">Optional package ID override from CLI.</param>
+/// <param name="versionOverride">Optional version override from CLI.</param>
+public class NuGetPackager(PackageJson packageJson, string? packageIdOverride = null, string? versionOverride = null)
 {
-    private readonly PackageJson _packageJson;
-    private readonly string? _packageIdOverride;
-    private readonly string? _versionOverride;
-
-    /// <summary>
-    /// Creates a new NuGet packager.
-    /// </summary>
-    /// <param name="packageJson">Package metadata from package.json.</param>
-    /// <param name="packageIdOverride">Optional package ID override from CLI.</param>
-    /// <param name="versionOverride">Optional version override from CLI.</param>
-    public NuGetPackager(PackageJson packageJson, string? packageIdOverride = null, string? versionOverride = null)
-    {
-        _packageJson = packageJson;
-        _packageIdOverride = packageIdOverride;
-        _versionOverride = versionOverride;
-    }
-
     /// <summary>
     /// Gets the effective package ID (CLI override or package.json name).
     /// </summary>
-    public string PackageId => _packageIdOverride ?? _packageJson.Name ?? "UnnamedPackage";
+    public string PackageId => packageIdOverride ?? packageJson.Name ?? "UnnamedPackage";
 
     /// <summary>
     /// Gets the effective version (CLI override or package.json version).
     /// </summary>
-    public string Version => _versionOverride ?? _packageJson.Version ?? "1.0.0";
+    public string Version => versionOverride ?? packageJson.Version ?? "1.0.0";
 
     /// <summary>
     /// Creates a NuGet package from the compiled assembly.
@@ -53,11 +39,11 @@ public class NuGetPackager
         {
             Id = packageId,
             Version = version,
-            Description = _packageJson.Description ?? $"TypeScript library compiled with SharpTS"
+            Description = packageJson.Description ?? $"TypeScript library compiled with SharpTS"
         };
 
         // Add authors
-        var author = _packageJson.Author;
+        var author = packageJson.Author;
         if (!string.IsNullOrEmpty(author))
         {
             builder.Authors.Add(author);
@@ -68,36 +54,36 @@ public class NuGetPackager
         }
 
         // Add tags/keywords
-        if (_packageJson.Keywords?.Count > 0)
+        if (packageJson.Keywords?.Count > 0)
         {
-            foreach (var keyword in _packageJson.Keywords)
+            foreach (var keyword in packageJson.Keywords)
             {
                 builder.Tags.Add(keyword);
             }
         }
 
         // Add project URL
-        if (!string.IsNullOrEmpty(_packageJson.ProjectUrl))
+        if (!string.IsNullOrEmpty(packageJson.ProjectUrl))
         {
-            builder.ProjectUrl = new Uri(_packageJson.ProjectUrl);
+            builder.ProjectUrl = new Uri(packageJson.ProjectUrl);
         }
 
         // Add repository URL
-        if (!string.IsNullOrEmpty(_packageJson.RepositoryUrl))
+        if (!string.IsNullOrEmpty(packageJson.RepositoryUrl))
         {
             builder.Repository = new RepositoryMetadata
             {
                 Type = "git",
-                Url = _packageJson.RepositoryUrl
+                Url = packageJson.RepositoryUrl
             };
         }
 
         // Add license
-        if (!string.IsNullOrEmpty(_packageJson.License))
+        if (!string.IsNullOrEmpty(packageJson.License))
         {
             builder.LicenseMetadata = new LicenseMetadata(
                 LicenseType.Expression,
-                _packageJson.License,
+                packageJson.License,
                 null,
                 null,
                 LicenseMetadata.CurrentVersion);

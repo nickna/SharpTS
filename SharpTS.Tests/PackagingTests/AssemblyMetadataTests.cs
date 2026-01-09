@@ -47,9 +47,7 @@ public class AssemblyMetadataTests
     [Fact]
     public void FromPackageJson_Author_MapsToCompany()
     {
-        var package = new PackageJson { Name = "test", Version = "1.0.0" };
-        // Set author via raw property
-        package.GetType().GetProperty("AuthorRaw")!.SetValue(package, "John Doe");
+        var package = new PackageJson { Name = "test", Version = "1.0.0", Author = "John Doe" };
 
         var metadata = AssemblyMetadata.FromPackageJson(package);
 

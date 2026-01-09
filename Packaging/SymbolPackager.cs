@@ -8,25 +8,11 @@ namespace SharpTS.Packaging;
 /// <summary>
 /// Generates symbol packages (.snupkg) for debugging support.
 /// </summary>
-public class SymbolPackager
+/// <param name="packageId">Package ID (must match the main package).</param>
+/// <param name="version">Version (must match the main package).</param>
+/// <param name="author">Author name.</param>
+public class SymbolPackager(string packageId, string version, string? author = null)
 {
-    private readonly string _packageId;
-    private readonly string _version;
-    private readonly string? _author;
-
-    /// <summary>
-    /// Creates a new symbol packager.
-    /// </summary>
-    /// <param name="packageId">Package ID (must match the main package).</param>
-    /// <param name="version">Version (must match the main package).</param>
-    /// <param name="author">Author name.</param>
-    public SymbolPackager(string packageId, string version, string? author = null)
-    {
-        _packageId = packageId;
-        _version = version;
-        _author = author;
-    }
-
     /// <summary>
     /// Creates a symbol package (.snupkg) from PDB files.
     /// </summary>
@@ -44,18 +30,18 @@ public class SymbolPackager
             return null;
         }
 
-        var version = NuGetVersion.Parse(_version);
+        var parsedVersion = NuGetVersion.Parse(version);
 
         var builder = new PackageBuilder
         {
-            Id = _packageId,
-            Version = version,
-            Description = $"Symbol package for {_packageId}",
+            Id = packageId,
+            Version = parsedVersion,
+            Description = $"Symbol package for {packageId}",
             PackageTypes = { PackageType.SymbolsPackage }
         };
 
         // Add author
-        builder.Authors.Add(_author ?? "Unknown");
+        builder.Authors.Add(author ?? "Unknown");
 
         // Add the PDB file
         var targetFramework = NuGetFramework.Parse("net10.0");
@@ -66,7 +52,7 @@ public class SymbolPackager
         });
 
         // Build and save the symbol package
-        var snupkgPath = Path.Combine(outputDirectory, $"{_packageId}.{version}.snupkg");
+        var snupkgPath = Path.Combine(outputDirectory, $"{packageId}.{parsedVersion}.snupkg");
         using var stream = File.Create(snupkgPath);
         builder.Save(stream);
 

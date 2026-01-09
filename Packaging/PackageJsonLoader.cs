@@ -48,8 +48,8 @@ public static class PackageJsonLoader
         if (!File.Exists(path))
             throw new FileNotFoundException($"package.json not found at: {path}", path);
 
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<PackageJson>(json, JsonOptions)
+        using var stream = File.OpenRead(path);
+        return JsonSerializer.Deserialize<PackageJson>(stream, JsonOptions)
             ?? throw new JsonException($"Failed to parse package.json at: {path}");
     }
 

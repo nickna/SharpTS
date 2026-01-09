@@ -8,25 +8,14 @@ namespace SharpTS.Packaging;
 /// <summary>
 /// Publishes NuGet packages to a NuGet feed.
 /// </summary>
-public class NuGetPublisher
+/// <param name="apiKey">API key for authentication.</param>
+/// <param name="source">NuGet source URL (defaults to nuget.org).</param>
+public class NuGetPublisher(string apiKey, string? source = null)
 {
     private const string DefaultNuGetSource = "https://api.nuget.org/v3/index.json";
 
-    private readonly string _source;
-    private readonly string _apiKey;
-    private readonly ILogger _logger;
-
-    /// <summary>
-    /// Creates a new NuGet publisher.
-    /// </summary>
-    /// <param name="apiKey">API key for authentication.</param>
-    /// <param name="source">NuGet source URL (defaults to nuget.org).</param>
-    public NuGetPublisher(string apiKey, string? source = null)
-    {
-        _apiKey = apiKey;
-        _source = source ?? DefaultNuGetSource;
-        _logger = new ConsoleLogger();
-    }
+    private readonly string _source = source ?? DefaultNuGetSource;
+    private readonly ILogger _logger = new ConsoleLogger();
 
     /// <summary>
     /// Pushes a package to the NuGet feed.
@@ -53,7 +42,7 @@ public class NuGetPublisher
                 symbolSource: null,
                 timeoutInSecond: 300,
                 disableBuffering: false,
-                getApiKey: _ => _apiKey,
+                getApiKey: _ => apiKey,
                 getSymbolApiKey: null,
                 noServiceEndpoint: false,
                 skipDuplicate: false,
