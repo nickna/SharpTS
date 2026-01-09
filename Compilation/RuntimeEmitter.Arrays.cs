@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitCreateArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateArray",
@@ -23,7 +23,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetLength(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetLength",
@@ -65,7 +65,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetElement",
@@ -109,7 +109,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetKeys",
@@ -127,7 +127,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSpreadArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSpreadArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SpreadArray",
@@ -156,7 +156,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitConcatArrays(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConcatArrays(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConcatArrays",
@@ -219,7 +219,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitExpandCallArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitExpandCallArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ExpandCallArgs",
@@ -297,3 +297,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

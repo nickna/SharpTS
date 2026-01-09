@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private static void EmitNumberMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitNumberParseInt(typeBuilder, runtime);
         EmitNumberParseFloat(typeBuilder, runtime);
@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         EmitNumberToStringRadix(typeBuilder, runtime);
     }
 
-    private static void EmitNumberParseInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberParseInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberParseInt",
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberParseFloat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberParseFloat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberParseFloat",
@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberIsNaN",
@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberIsFinite",
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberIsInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberIsInteger",
@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberIsSafeInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberIsSafeInteger(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberIsSafeInteger",
@@ -130,7 +130,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalIsNaN(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GlobalIsNaN",
@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGlobalIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGlobalIsFinite(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GlobalIsFinite",
@@ -164,7 +164,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberToFixed(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToFixed(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToFixed",
@@ -182,7 +182,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberToPrecision(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToPrecision(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToPrecision",
@@ -200,7 +200,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberToExponential(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToExponential(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToExponential",
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitNumberToStringRadix(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNumberToStringRadix(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "NumberToStringRadix",
@@ -556,3 +556,4 @@ public static class NumberRuntimeHelpers
         return result.ToString();
     }
 }
+

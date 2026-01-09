@@ -4,9 +4,9 @@ using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitSetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCreateSet(typeBuilder, runtime);
         EmitCreateSetFromArray(typeBuilder, runtime);
@@ -30,7 +30,7 @@ public static partial class RuntimeEmitter
         EmitSetIsDisjointFrom(typeBuilder, runtime);
     }
 
-    private static void EmitCreateSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateSet",
@@ -45,7 +45,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateSetFromArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateSetFromArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateSetFromArray",
@@ -61,7 +61,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetSize",
@@ -77,7 +77,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetAdd",
@@ -94,7 +94,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetHas",
@@ -111,7 +111,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetDelete",
@@ -128,7 +128,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetClear",
@@ -144,7 +144,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetKeys",
@@ -160,7 +160,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetValues",
@@ -176,7 +176,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetEntries",
@@ -192,7 +192,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetForEach",
@@ -211,7 +211,7 @@ public static partial class RuntimeEmitter
 
     #region ES2025 Set Operations
 
-    private static void EmitSetUnion(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetUnion(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetUnion",
@@ -228,7 +228,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetIntersection(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIntersection(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetIntersection",
@@ -245,7 +245,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetDifference",
@@ -262,7 +262,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetSymmetricDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetSymmetricDifference(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetSymmetricDifference",
@@ -279,7 +279,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetIsSubsetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIsSubsetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetIsSubsetOf",
@@ -296,7 +296,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetIsSupersetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIsSupersetOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetIsSupersetOf",
@@ -313,7 +313,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetIsDisjointFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIsDisjointFrom(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetIsDisjointFrom",
@@ -332,3 +332,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

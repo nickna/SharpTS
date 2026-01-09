@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitWeakMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCreateWeakMap(typeBuilder, runtime);
         EmitWeakMapGet(typeBuilder, runtime);
@@ -14,7 +14,7 @@ public static partial class RuntimeEmitter
         EmitWeakMapDelete(typeBuilder, runtime);
     }
 
-    private static void EmitCreateWeakMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateWeakMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateWeakMap",
@@ -29,7 +29,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapGet",
@@ -46,7 +46,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapSet",
@@ -64,7 +64,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapHas",
@@ -81,7 +81,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakMapDelete",
@@ -98,3 +98,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

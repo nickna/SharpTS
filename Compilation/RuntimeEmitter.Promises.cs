@@ -133,14 +133,14 @@ internal class PromiseAnyStateMachine
     public required Type AwaiterType { get; init; }
 }
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits Promise static methods with full async state machine support.
     /// These methods return Task&lt;object?&gt; and are awaited by the compiled code.
     /// State machines are emitted directly, eliminating the need for SharpTS.dll at runtime.
     /// </summary>
-    private static void EmitPromiseMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitPromiseMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var taskType = _types.TaskOfObject;
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
@@ -305,7 +305,7 @@ public static partial class RuntimeEmitter
     /// Emits callback invocation helpers that directly call $TSFunction.Invoke
     /// without using reflection. These are used by the emitted Promise methods.
     /// </summary>
-    private static void EmitCallbackHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCallbackHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // InvokeCallback(object? func, object? arg) -> object?
         // Equivalent to: if (func == null) return null; return (($TSFunction)func).Invoke(new object[] { arg });
@@ -388,3 +388,4 @@ public static partial class RuntimeEmitter
         }
     }
 }
+

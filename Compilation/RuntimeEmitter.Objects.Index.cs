@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitGetIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetIndex",
@@ -151,7 +151,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetIndex",
@@ -257,3 +257,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

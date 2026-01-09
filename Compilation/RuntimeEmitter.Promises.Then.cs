@@ -4,14 +4,14 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region PromiseThen State Machine
 
     /// <summary>
     /// Defines the PromiseThen state machine type structure.
     /// </summary>
-    private static PromiseThenStateMachine DefinePromiseThenStateMachine(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private PromiseThenStateMachine DefinePromiseThenStateMachine(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -75,7 +75,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the PromiseThen wrapper method that creates and starts the state machine.
     /// </summary>
-    private static void EmitPromiseThenWrapper(ILGenerator il, PromiseThenStateMachine sm)
+    private void EmitPromiseThenWrapper(ILGenerator il, PromiseThenStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -130,7 +130,7 @@ public static partial class RuntimeEmitter
     /// Emits the MoveNext body for PromiseThen state machine.
     /// Implements: await promise, invoke callback, flatten nested tasks.
     /// </summary>
-    private static void EmitPromiseThenMoveNext(PromiseThenStateMachine sm, EmittedRuntime runtime)
+    private void EmitPromiseThenMoveNext(PromiseThenStateMachine sm, EmittedRuntime runtime)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -354,3 +354,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

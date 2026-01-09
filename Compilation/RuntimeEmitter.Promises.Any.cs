@@ -4,14 +4,14 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region PromiseAny State Machine
 
     /// <summary>
     /// Defines the $AnyState class for PromiseAny.
     /// </summary>
-    private static AnyStateClass DefineAnyStateClass(ModuleBuilder moduleBuilder)
+    private AnyStateClass DefineAnyStateClass(ModuleBuilder moduleBuilder)
     {
         var typeBuilder = moduleBuilder.DefineType(
             "$AnyState",
@@ -75,7 +75,7 @@ public static partial class RuntimeEmitter
     /// Emits the HandleAnyCompletion static method.
     /// Called by ContinueWith for each task in PromiseAny.
     /// </summary>
-    private static void EmitHandleAnyCompletion(ILGenerator il, AnyStateClass anyState)
+    private void EmitHandleAnyCompletion(ILGenerator il, AnyStateClass anyState)
     {
         // Parameters: arg0 = Task<object?>, arg1 = $AnyState
 
@@ -168,7 +168,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Defines the PromiseAny state machine type structure.
     /// </summary>
-    private static PromiseAnyStateMachine DefinePromiseAnyStateMachine(ModuleBuilder moduleBuilder, AnyStateClass anyState)
+    private PromiseAnyStateMachine DefinePromiseAnyStateMachine(ModuleBuilder moduleBuilder, AnyStateClass anyState)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -224,7 +224,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the wrapper method for PromiseAny.
     /// </summary>
-    private static void EmitPromiseAnyWrapper(ILGenerator il, PromiseAnyStateMachine sm)
+    private void EmitPromiseAnyWrapper(ILGenerator il, PromiseAnyStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -269,7 +269,7 @@ public static partial class RuntimeEmitter
     /// Emits the MoveNext body for PromiseAny state machine.
     /// Creates state, fires ContinueWith per element, awaits Tcs.Task.
     /// </summary>
-    private static void EmitPromiseAnyMoveNext(PromiseAnyStateMachine sm, AnyStateClass anyState, MethodBuilder handleAnyCompletion)
+    private void EmitPromiseAnyMoveNext(PromiseAnyStateMachine sm, AnyStateClass anyState, MethodBuilder handleAnyCompletion)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
@@ -549,3 +549,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

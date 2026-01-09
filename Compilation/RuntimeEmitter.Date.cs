@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private static void EmitDateMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitDateNow(typeBuilder, runtime);
         EmitCreateDateNoArgs(typeBuilder, runtime);
@@ -40,7 +40,7 @@ public partial class RuntimeEmitter
         EmitDateValueOf(typeBuilder, runtime);
     }
 
-    private static void EmitDateNow(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateNow(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateNow",
@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateDateNoArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateDateNoArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateDateNoArgs",
@@ -70,7 +70,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateDateFromValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateDateFromValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateDateFromValue",
@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateDateFromComponents(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateDateFromComponents(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateDateFromComponents",
@@ -108,7 +108,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateToString",
@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetTime",
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetFullYear",
@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetMonth(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetMonth(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetMonth",
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetDate",
@@ -188,7 +188,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetDay(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetDay(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetDay",
@@ -204,7 +204,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetHours",
@@ -220,7 +220,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetMinutes",
@@ -236,7 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetSeconds",
@@ -252,7 +252,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetMilliseconds",
@@ -268,7 +268,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateGetTimezoneOffset(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateGetTimezoneOffset(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateGetTimezoneOffset",
@@ -284,7 +284,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetTime",
@@ -301,7 +301,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetFullYear",
@@ -318,7 +318,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetMonth(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetMonth(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetMonth",
@@ -335,7 +335,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetDate",
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetHours",
@@ -369,7 +369,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetMinutes",
@@ -386,7 +386,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetSeconds",
@@ -403,7 +403,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateSetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateSetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateSetMilliseconds",
@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateToISOString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateToISOString(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateToISOString",
@@ -436,7 +436,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateToDateString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateToDateString(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateToDateString",
@@ -452,7 +452,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateToTimeString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateToTimeString(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateToTimeString",
@@ -468,7 +468,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitDateValueOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDateValueOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DateValueOf",
@@ -663,3 +663,4 @@ public static class DateRuntimeHelpers
         return double.NaN;
     }
 }
+

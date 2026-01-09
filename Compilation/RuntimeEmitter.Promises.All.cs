@@ -3,14 +3,14 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region PromiseAll State Machine
 
     /// <summary>
     /// Defines the PromiseAll state machine type structure.
     /// </summary>
-    private static EmittedStateMachine DefinePromiseAllStateMachine(ModuleBuilder moduleBuilder)
+    private EmittedStateMachine DefinePromiseAllStateMachine(ModuleBuilder moduleBuilder)
     {
         var builderType = _types.AsyncTaskMethodBuilderOfObject;
         var awaiterType = _types.TaskAwaiterOfObjectArray;
@@ -65,7 +65,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the PromiseAll wrapper method that creates and starts the state machine.
     /// </summary>
-    private static void EmitPromiseAllWrapper(ILGenerator il, EmittedStateMachine sm)
+    private void EmitPromiseAllWrapper(ILGenerator il, EmittedStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -110,7 +110,7 @@ public static partial class RuntimeEmitter
     /// Emits the MoveNext body for PromiseAll state machine.
     /// Implements: convert list to tasks, await Task.WhenAll, return List.
     /// </summary>
-    private static void EmitPromiseAllMoveNext(EmittedStateMachine sm)
+    private void EmitPromiseAllMoveNext(EmittedStateMachine sm)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
@@ -338,3 +338,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

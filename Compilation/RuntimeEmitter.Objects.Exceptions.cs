@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitCreateException(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateException(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateException",
@@ -36,7 +36,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWrapException(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWrapException(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WrapException",
@@ -108,3 +108,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

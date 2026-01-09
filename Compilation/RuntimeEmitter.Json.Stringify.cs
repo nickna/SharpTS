@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitJsonStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "JsonStringify",
@@ -24,7 +24,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "StringifyValue",
@@ -119,7 +119,7 @@ public static partial class RuntimeEmitter
         return method;
     }
 
-    private static void EmitFormatNumber(ILGenerator il)
+    private void EmitFormatNumber(ILGenerator il)
     {
         var local = il.DeclareLocal(_types.Double);
         var isIntLabel = il.DefineLabel();
@@ -167,7 +167,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringifyArray(ILGenerator il, MethodBuilder stringifyMethod)
+    private void EmitStringifyArray(ILGenerator il, MethodBuilder stringifyMethod)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
@@ -248,7 +248,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod)
+    private void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -363,3 +363,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

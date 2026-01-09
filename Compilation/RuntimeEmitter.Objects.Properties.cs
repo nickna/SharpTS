@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    internal static void EmitToPascalCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    internal void EmitToPascalCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ToPascalCase(string name) -> string
         // Converts "camelCase" to "PascalCase" by upper-casing first character
@@ -49,7 +49,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetFieldsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetFieldsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // GetFieldsProperty(object obj, string name) -> object
         // Uses reflection to access _fields dictionary on class instances
@@ -209,7 +209,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetFieldsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetFieldsProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // SetFieldsProperty(object obj, string name, object value) -> void
         // Uses reflection to access _fields dictionary on class instances
@@ -338,7 +338,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetProperty",
@@ -464,7 +464,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitSetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitSetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "SetProperty",
@@ -506,3 +506,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

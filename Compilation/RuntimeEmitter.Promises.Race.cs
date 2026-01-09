@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region PromiseRace State Machine
 
@@ -12,7 +12,7 @@ public static partial class RuntimeEmitter
     /// Defines the PromiseRace state machine type structure.
     /// Requires two awaiter fields: one for WhenAny, one for the winning task.
     /// </summary>
-    private static PromiseRaceStateMachine DefinePromiseRaceStateMachine(ModuleBuilder moduleBuilder)
+    private PromiseRaceStateMachine DefinePromiseRaceStateMachine(ModuleBuilder moduleBuilder)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var whenAnyAwaiterType = typeof(TaskAwaiter<Task<object?>>);
@@ -71,7 +71,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the PromiseRace wrapper method that creates and starts the state machine.
     /// </summary>
-    private static void EmitPromiseRaceWrapper(ILGenerator il, PromiseRaceStateMachine sm)
+    private void EmitPromiseRaceWrapper(ILGenerator il, PromiseRaceStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -116,7 +116,7 @@ public static partial class RuntimeEmitter
     /// Emits the MoveNext body for PromiseRace state machine.
     /// Implements: convert list to tasks, await Task.WhenAny, await winning task.
     /// </summary>
-    private static void EmitPromiseRaceMoveNext(PromiseRaceStateMachine sm)
+    private void EmitPromiseRaceMoveNext(PromiseRaceStateMachine sm)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
@@ -374,3 +374,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

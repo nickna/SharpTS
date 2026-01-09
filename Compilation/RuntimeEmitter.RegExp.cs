@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private static void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCreateRegExp(typeBuilder, runtime);
         EmitCreateRegExpWithFlags(typeBuilder, runtime);
@@ -29,7 +29,7 @@ public partial class RuntimeEmitter
         EmitStringSplitRegExp(typeBuilder, runtime);
     }
 
-    private static void EmitCreateRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateRegExp",
@@ -45,7 +45,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateRegExpWithFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateRegExpWithFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateRegExpWithFlags",
@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpTest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpTest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpTest",
@@ -79,7 +79,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpExec(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpExec(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpExec",
@@ -96,7 +96,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpToString",
@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetSource(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetSource(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetSource",
@@ -128,7 +128,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetFlags(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetFlags",
@@ -144,7 +144,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetGlobal(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetGlobal(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetGlobal",
@@ -160,7 +160,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetIgnoreCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetIgnoreCase(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetIgnoreCase",
@@ -176,7 +176,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetMultiline(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetMultiline(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetMultiline",
@@ -192,7 +192,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpGetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpGetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpGetLastIndex",
@@ -208,7 +208,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRegExpSetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitRegExpSetLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "RegExpSetLastIndex",
@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringMatchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringMatchRegExp",
@@ -242,7 +242,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringReplaceRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringReplaceRegExp",
@@ -260,7 +260,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringSearchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSearchRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringSearchRegExp",
@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringSplitRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSplitRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringSplitRegExp",
@@ -379,3 +379,4 @@ public static class RegExpRuntimeHelpers
         return parts.Select(s => (object)s).ToList();
     }
 }
+

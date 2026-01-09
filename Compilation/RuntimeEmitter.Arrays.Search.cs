@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitArrayIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayIncludes",
@@ -57,7 +57,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayIndexOf",
@@ -106,7 +106,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayJoin(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayJoin(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayJoin",
@@ -182,7 +182,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayConcat",
@@ -225,3 +225,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

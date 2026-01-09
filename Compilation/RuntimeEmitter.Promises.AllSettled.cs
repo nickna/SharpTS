@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region ProcessElementSettled State Machine
 
@@ -12,7 +12,7 @@ public static partial class RuntimeEmitter
     /// Defines the ProcessElementSettled helper state machine type structure.
     /// This helper handles a single element for PromiseAllSettled with try/catch.
     /// </summary>
-    private static ProcessElementSettledStateMachine DefineProcessElementSettledStateMachine(ModuleBuilder moduleBuilder)
+    private ProcessElementSettledStateMachine DefineProcessElementSettledStateMachine(ModuleBuilder moduleBuilder)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -66,7 +66,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the wrapper method that creates the state machine and starts it.
     /// </summary>
-    private static void EmitProcessElementSettledWrapper(ILGenerator il, ProcessElementSettledStateMachine sm)
+    private void EmitProcessElementSettledWrapper(ILGenerator il, ProcessElementSettledStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -112,7 +112,7 @@ public static partial class RuntimeEmitter
     /// Handles a single element with try/catch, returns {status, value/reason} dictionary.
     /// Uses a single try/catch and converts all exceptions to "rejected" dictionaries.
     /// </summary>
-    private static void EmitProcessElementSettledMoveNext(ProcessElementSettledStateMachine sm)
+    private void EmitProcessElementSettledMoveNext(ProcessElementSettledStateMachine sm)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var dictType = typeof(Dictionary<string, object?>);
@@ -273,7 +273,7 @@ public static partial class RuntimeEmitter
     /// Defines the PromiseAllSettled main state machine type structure.
     /// Uses ProcessElementSettled helper + WhenAll pattern.
     /// </summary>
-    private static PromiseAllSettledStateMachine DefinePromiseAllSettledStateMachine(ModuleBuilder moduleBuilder)
+    private PromiseAllSettledStateMachine DefinePromiseAllSettledStateMachine(ModuleBuilder moduleBuilder)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?[]>);
@@ -327,7 +327,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the wrapper method for PromiseAllSettled.
     /// </summary>
-    private static void EmitPromiseAllSettledWrapper(ILGenerator il, PromiseAllSettledStateMachine sm, MethodBuilder processElementSettled)
+    private void EmitPromiseAllSettledWrapper(ILGenerator il, PromiseAllSettledStateMachine sm, MethodBuilder processElementSettled)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -372,7 +372,7 @@ public static partial class RuntimeEmitter
     /// Emits the MoveNext body for PromiseAllSettled state machine.
     /// Maps elements to ProcessElementSettled helper, uses WhenAll pattern.
     /// </summary>
-    private static void EmitPromiseAllSettledMoveNext(PromiseAllSettledStateMachine sm, MethodBuilder processElementSettled)
+    private void EmitPromiseAllSettledMoveNext(PromiseAllSettledStateMachine sm, MethodBuilder processElementSettled)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
@@ -564,3 +564,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

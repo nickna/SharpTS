@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Stringify",
@@ -174,7 +174,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitConsoleLog(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleLog(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleLog",
@@ -192,7 +192,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitConsoleLogMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleLogMultiple(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleLogMultiple",
@@ -212,7 +212,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ToNumber",
@@ -237,7 +237,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitIsTruthy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsTruthy(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "IsTruthy",
@@ -275,7 +275,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitTypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitTypeOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "TypeOf",
@@ -370,7 +370,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitInstanceOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInstanceOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "InstanceOf",
@@ -417,7 +417,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Add",
@@ -455,7 +455,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitEquals(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "Equals",
@@ -473,3 +473,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

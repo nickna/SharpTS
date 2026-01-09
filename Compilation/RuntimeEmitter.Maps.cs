@@ -4,9 +4,9 @@ using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCreateMap(typeBuilder, runtime);
         EmitCreateMapFromEntries(typeBuilder, runtime);
@@ -22,7 +22,7 @@ public static partial class RuntimeEmitter
         EmitMapForEach(typeBuilder, runtime);
     }
 
-    private static void EmitCreateMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateMap",
@@ -38,7 +38,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitCreateMapFromEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateMapFromEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateMapFromEntries",
@@ -54,7 +54,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapSize(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapSize",
@@ -70,7 +70,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapGet",
@@ -87,7 +87,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapSet",
@@ -105,7 +105,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapHas",
@@ -122,7 +122,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapDelete",
@@ -139,7 +139,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapClear(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapClear",
@@ -155,7 +155,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapKeys",
@@ -171,7 +171,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapValues",
@@ -187,7 +187,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapEntries",
@@ -203,7 +203,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MapForEach",
@@ -220,3 +220,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

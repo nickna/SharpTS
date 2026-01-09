@@ -256,7 +256,9 @@ public partial class ILCompiler
 
         // Phase 1: Emit runtime support types into the generated assembly
         // This makes compiled DLLs standalone without requiring SharpTS.dll
-        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder, _types);
+        // Phase 1: Emit runtime support types into the generated assembly
+        // This makes compiled DLLs standalone without requiring SharpTS.dll
+        _runtime = new RuntimeEmitter(_types).EmitAll(_moduleBuilder);
 
         // Phase 2: Analyze closures
         _closureAnalyzer = new ClosureAnalyzer();
@@ -358,7 +360,9 @@ public partial class ILCompiler
         }
 
         // Phase 1: Emit runtime support types
-        _runtime = RuntimeEmitter.EmitAll(_moduleBuilder, _types);
+        // Phase 1: Emit runtime support types into the generated assembly
+        // This makes compiled DLLs standalone without requiring SharpTS.dll
+        _runtime = new RuntimeEmitter(_types).EmitAll(_moduleBuilder);
 
         // Phase 2: Collect all statements for closure analysis
         var allStatements = modules.SelectMany(m => m.Statements).ToList();

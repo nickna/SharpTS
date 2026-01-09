@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitArrayMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayMap",
@@ -94,7 +94,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayFilter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayFilter(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayFilter",
@@ -188,7 +188,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayForEach",
@@ -261,7 +261,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayFind(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayFind(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayFind",
@@ -338,7 +338,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayFindIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayFindIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayFindIndex",
@@ -411,7 +411,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArraySome(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArraySome(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArraySome",
@@ -485,7 +485,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayEvery(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayEvery(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayEvery",
@@ -559,7 +559,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayReduce(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayReduce(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayReduce",
@@ -674,3 +674,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

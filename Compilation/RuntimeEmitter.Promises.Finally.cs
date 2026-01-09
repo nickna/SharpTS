@@ -4,14 +4,14 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     #region PromiseFinally State Machine
 
     /// <summary>
     /// Defines the PromiseFinally state machine type structure.
     /// </summary>
-    private static PromiseFinallyStateMachine DefinePromiseFinallyStateMachine(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private PromiseFinallyStateMachine DefinePromiseFinallyStateMachine(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -73,7 +73,7 @@ public static partial class RuntimeEmitter
     /// <summary>
     /// Emits the PromiseFinally wrapper method that creates and starts the state machine.
     /// </summary>
-    private static void EmitPromiseFinallyWrapper(ILGenerator il, PromiseFinallyStateMachine sm)
+    private void EmitPromiseFinallyWrapper(ILGenerator il, PromiseFinallyStateMachine sm)
     {
         var smLocal = il.DeclareLocal(sm.Type);
 
@@ -124,7 +124,7 @@ public static partial class RuntimeEmitter
     /// Simplified: await promise, invoke callback, return original value.
     /// Note: Exception capture from original promise is not fully implemented.
     /// </summary>
-    private static void EmitPromiseFinallyMoveNext(PromiseFinallyStateMachine sm, EmittedRuntime runtime)
+    private void EmitPromiseFinallyMoveNext(PromiseFinallyStateMachine sm, EmittedRuntime runtime)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -307,3 +307,4 @@ public static partial class RuntimeEmitter
 
     #endregion
 }
+

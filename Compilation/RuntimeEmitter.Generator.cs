@@ -7,12 +7,12 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Emits generator interface and support methods into the generated assembly.
 /// </summary>
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits the $IGenerator interface that extends IEnumerator&lt;object&gt; with Return/Throw methods.
     /// </summary>
-    private static void EmitGeneratorInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitGeneratorInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define interface: public interface $IGenerator : IEnumerator<object>, IEnumerable<object>
         var interfaceBuilder = moduleBuilder.DefineType(
@@ -57,3 +57,4 @@ public static partial class RuntimeEmitter
         interfaceBuilder.CreateType();
     }
 }
+

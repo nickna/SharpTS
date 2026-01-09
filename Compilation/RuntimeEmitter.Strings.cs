@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitStringCharAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringCharAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringCharAt",
@@ -55,7 +55,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringSubstring(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSubstring(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringSubstring",
@@ -134,7 +134,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringIndexOf",
@@ -154,7 +154,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringReplace",
@@ -202,7 +202,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringSplit(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSplit(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringSplit",
@@ -302,7 +302,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringIncludes",
@@ -319,7 +319,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringStartsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringStartsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringStartsWith",
@@ -336,7 +336,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringEndsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringEndsWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "StringEndsWith",
@@ -353,7 +353,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringSlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringSlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringSlice(string str, int argCount, object[] args) -> string
         // Handles negative indices and optional end parameter
@@ -462,7 +462,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringRepeat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringRepeat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringRepeat(string str, double count) -> string
         var method = typeBuilder.DefineMethod(
@@ -527,7 +527,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringPadStart(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringPadStart(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringPadStart(string str, int argCount, object[] args) -> string
         var method = typeBuilder.DefineMethod(
@@ -624,7 +624,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringPadEnd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringPadEnd(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringPadEnd(string str, int argCount, object[] args) -> string
         var method = typeBuilder.DefineMethod(
@@ -718,7 +718,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringCharCodeAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringCharCodeAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringCharCodeAt(string str, double index) -> double
         var method = typeBuilder.DefineMethod(
@@ -761,7 +761,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringConcat(string str, object[] args) -> string
         var method = typeBuilder.DefineMethod(
@@ -821,7 +821,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringLastIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringLastIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringLastIndexOf(string str, string search) -> double
         var method = typeBuilder.DefineMethod(
@@ -840,7 +840,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringReplaceAll(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringReplaceAll(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringReplaceAll(string str, string search, string replacement) -> string
         var method = typeBuilder.DefineMethod(
@@ -873,7 +873,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitStringAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringAt(string str, double index) -> object (string or null)
         var method = typeBuilder.DefineMethod(
@@ -934,3 +934,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

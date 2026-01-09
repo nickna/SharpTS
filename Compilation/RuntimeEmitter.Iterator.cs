@@ -6,12 +6,12 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Emits iterator protocol support methods into the generated assembly.
 /// </summary>
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits methods for iterator protocol support.
     /// </summary>
-    private static void EmitIteratorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitGetIterator(typeBuilder, runtime);
     }
@@ -27,7 +27,7 @@ public static partial class RuntimeEmitter
     ///
     /// For objects without Symbol.iterator, falls back to treating as array/string.
     /// </summary>
-    private static void EmitGetIterator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetIterator(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // This is a complex method that would be difficult to emit entirely in IL.
         // Instead, we'll create a simpler wrapper that leverages existing runtime helpers.
@@ -67,3 +67,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

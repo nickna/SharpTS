@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitWeakSetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCreateWeakSet(typeBuilder, runtime);
         EmitWeakSetAdd(typeBuilder, runtime);
@@ -13,7 +13,7 @@ public static partial class RuntimeEmitter
         EmitWeakSetDelete(typeBuilder, runtime);
     }
 
-    private static void EmitCreateWeakSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateWeakSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateWeakSet",
@@ -28,7 +28,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakSetAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetAdd",
@@ -45,7 +45,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakSetHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetHas(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetHas",
@@ -62,7 +62,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitWeakSetDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWeakSetDelete(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WeakSetDelete",
@@ -79,3 +79,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

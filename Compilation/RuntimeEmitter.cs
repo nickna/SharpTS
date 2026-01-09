@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -10,13 +11,17 @@ namespace SharpTS.Compilation;
 /// Emits the runtime support types into the generated assembly.
 /// This makes compiled DLLs standalone without requiring SharpTS.dll.
 /// </summary>
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static TypeProvider _types = null!;
+    private readonly TypeProvider _types;
 
-    public static EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, TypeProvider? types = null)
+    public RuntimeEmitter(TypeProvider types)
     {
-        _types = types ?? TypeProvider.Runtime;
+        _types = types;
+    }
+
+    public EmittedRuntime EmitAll(ModuleBuilder moduleBuilder)
+    {
         var runtime = new EmittedRuntime();
 
         // Emit TSFunction class first (other methods depend on it)
@@ -34,7 +39,7 @@ public static partial class RuntimeEmitter
         return runtime;
     }
 
-    private static void EmitTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TSFunction
         var typeBuilder = moduleBuilder.DefineType(
@@ -47,6 +52,22 @@ public static partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
+
+        // Static cache for "this" fields: ConcurrentDictionary<Type, FieldInfo>
+        // used to avoid reflection overhead in BindThis
+        var fieldCacheType = _types.MakeGenericType(_types.ConcurrentDictionaryOpen, _types.Type, _types.FieldInfo);
+        var fieldCacheField = typeBuilder.DefineField("_thisFieldCache", fieldCacheType, FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+
+        // Static Constructor
+        var cctorBuilder = typeBuilder.DefineConstructor(
+            MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            CallingConventions.Standard,
+            Type.EmptyTypes
+        );
+        var cctorIL = cctorBuilder.GetILGenerator();
+        cctorIL.Emit(OpCodes.Newobj, fieldCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Stsfld, fieldCacheField);
+        cctorIL.Emit(OpCodes.Ret);
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -328,20 +349,53 @@ public static partial class RuntimeEmitter
         var noTargetLabel = bindThisIL.DefineLabel();
         var endLabel = bindThisIL.DefineLabel();
         var thisFieldLocal = bindThisIL.DeclareLocal(_types.FieldInfo);
+        var targetTypeLocal = bindThisIL.DeclareLocal(_types.Type);
 
         // if (_target == null) return;
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
         bindThisIL.Emit(OpCodes.Brfalse, noTargetLabel);
 
-        // var thisField = _target.GetType().GetField("this", BindingFlags.Public | BindingFlags.Instance);
+        // targetType = _target.GetType();
         bindThisIL.Emit(OpCodes.Ldarg_0);
         bindThisIL.Emit(OpCodes.Ldfld, targetField);
         bindThisIL.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
+        bindThisIL.Emit(OpCodes.Stloc, targetTypeLocal);
+
+        // Try get from cache
+        // if (!_thisFieldCache.TryGetValue(targetType, out thisField))
+        bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
+        bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
+        bindThisIL.Emit(OpCodes.Ldloca, thisFieldLocal);
+        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryGetValue", [_types.Type, _types.FieldInfo.MakeByRefType()])!);
+        var cacheHitLabel = bindThisIL.DefineLabel();
+        bindThisIL.Emit(OpCodes.Brtrue, cacheHitLabel);
+
+        // Cache miss: lookup field
+        // thisField = targetType.GetField("this", BindingFlags.Public | BindingFlags.Instance);
+        bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
         bindThisIL.Emit(OpCodes.Ldstr, "this");
         bindThisIL.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Instance));
         bindThisIL.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
         bindThisIL.Emit(OpCodes.Stloc, thisFieldLocal);
+
+        // Store in cache (even if null, but ConcurrentDictionary doesn't allow null values if we used that, but here we can just skip if null)
+        // Actually, if null, we shouldn't cache null if we use TryGetValue. 
+        // Let's simplify: if field is found, cache it. If not found, we don't cache (or cache a dummy? no need to overcomplicate).
+        
+        var fieldNullLabel = bindThisIL.DefineLabel();
+        bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
+        bindThisIL.Emit(OpCodes.Brfalse, fieldNullLabel);
+
+        // Cache it
+        bindThisIL.Emit(OpCodes.Ldsfld, fieldCacheField);
+        bindThisIL.Emit(OpCodes.Ldloc, targetTypeLocal);
+        bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
+        bindThisIL.Emit(OpCodes.Callvirt, fieldCacheType.GetMethod("TryAdd", [_types.Type, _types.FieldInfo])!);
+        bindThisIL.Emit(OpCodes.Pop); // discard bool result
+
+        bindThisIL.MarkLabel(fieldNullLabel);
+        bindThisIL.MarkLabel(cacheHitLabel);
 
         // if (thisField == null) return;
         bindThisIL.Emit(OpCodes.Ldloc, thisFieldLocal);
@@ -362,7 +416,7 @@ public static partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    private static void EmitTSSymbolClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitTSSymbolClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public sealed class $TSSymbol
         var typeBuilder = moduleBuilder.DefineType(
@@ -538,7 +592,7 @@ public static partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
-    private static void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private void EmitRuntimeClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
         // Define class: public static class $Runtime
         var typeBuilder = moduleBuilder.DefineType(
@@ -696,3 +750,4 @@ public static partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 }
+

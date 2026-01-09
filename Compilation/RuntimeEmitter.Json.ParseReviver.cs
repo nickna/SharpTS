@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitJsonParseWithReviver(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonParseWithReviver(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // First emit the ApplyReviver helper
         var applyReviver = EmitApplyReviverHelper(typeBuilder, runtime);
@@ -45,7 +45,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ApplyReviver(object value, object key, object reviver) -> object
         var method = typeBuilder.DefineMethod(
@@ -218,3 +218,4 @@ public static partial class RuntimeEmitter
         return method;
     }
 }
+

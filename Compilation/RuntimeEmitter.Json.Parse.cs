@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitJsonParse(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonParse(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "JsonParse",
@@ -25,7 +25,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder)
     {
         // Parse JSON using RuntimeTypes helper
         var method = typeBuilder.DefineMethod(
@@ -45,7 +45,7 @@ public static partial class RuntimeEmitter
         return method;
     }
 
-    private static MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder)
     {
         var method = typeBuilder.DefineMethod(
             "ParseJsonValue",
@@ -105,7 +105,7 @@ public static partial class RuntimeEmitter
         return method;
     }
 
-    private static MethodBuilder EmitConvertJsonElementHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitConvertJsonElementHelper(TypeBuilder typeBuilder)
     {
         // Convert JsonElement to appropriate runtime type
         var method = typeBuilder.DefineMethod(
@@ -269,3 +269,4 @@ public static partial class RuntimeEmitter
         return method;
     }
 }
+

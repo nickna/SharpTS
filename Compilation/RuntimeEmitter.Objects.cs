@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitCreateObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "CreateObject",
@@ -22,7 +22,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitMergeIntoObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitMergeIntoObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "MergeIntoObject",
@@ -44,32 +44,38 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
-        // Iterate and copy - use typeof() for nested enumerator types as they're complex
-        var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
+        // Iterate and copy
+        // We need the Enumerator type for Dictionary<string, object>
+        // Since TypeProvider might not expose nested types directly, we resolve it from the Dictionary type
+        var dictType = _types.DictionaryStringObject;
+        var enumeratorType = typeof(Dictionary<string, object>.Enumerator);
+        var keyValuePairType = _types.KeyValuePairStringObject;
+
+        var enumeratorLocal = il.DeclareLocal(enumeratorType);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Castclass, dictType);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(dictType, "GetEnumerator"));
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumeratorType, "MoveNext"));
         il.Emit(OpCodes.Brfalse, loopEnd);
 
         // Get current and add to target
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetProperty("Current")!.GetGetMethod()!);
-        var kvpLocal = il.DeclareLocal(typeof(KeyValuePair<string, object>));
+        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
+        var kvpLocal = il.DeclareLocal(keyValuePairType);
         il.Emit(OpCodes.Stloc, kvpLocal);
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, typeof(KeyValuePair<string, object>).GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
 
         il.Emit(OpCodes.Br, loopStart);
 
@@ -77,7 +83,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitRandom(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder randomField)
+    private void EmitRandom(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder randomField)
     {
         var method = typeBuilder.DefineMethod(
             "Random",
@@ -93,7 +99,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetEnumMemberName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetEnumMemberName(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetEnumMemberName",
@@ -148,7 +154,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private static void EmitConcatTemplate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConcatTemplate(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConcatTemplate",
@@ -211,7 +217,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitObjectRest(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitObjectRest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Accept object instead of Dictionary to support both object literals and class instances
         var method = typeBuilder.DefineMethod(
@@ -342,11 +348,15 @@ public static partial class RuntimeEmitter
 
         il.MarkLabel(excludeLoopEnd);
 
-        // Iterate over source dictionary keys using sourceDictLocal - use typeof() for nested enumerator types
-        var keysEnumLocal = il.DeclareLocal(typeof(Dictionary<string, object>.KeyCollection.Enumerator));
+        // Iterate over source dictionary keys using sourceDictLocal
+        // We need the KeyCollection.Enumerator
+        var keyCollectionType = typeof(Dictionary<string, object>.KeyCollection);
+        var keysEnumType = typeof(Dictionary<string, object>.KeyCollection.Enumerator);
+
+        var keysEnumLocal = il.DeclareLocal(keysEnumType);
         il.Emit(OpCodes.Ldloc, sourceDictLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>.KeyCollection).GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(keyCollectionType, "GetEnumerator"));
         il.Emit(OpCodes.Stloc, keysEnumLocal);
 
         var dictLoopStart = il.DefineLabel();
@@ -355,12 +365,12 @@ public static partial class RuntimeEmitter
         il.MarkLabel(dictLoopStart);
         // MoveNext
         il.Emit(OpCodes.Ldloca, keysEnumLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.KeyCollection.Enumerator).GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(keysEnumType, "MoveNext"));
         il.Emit(OpCodes.Brfalse, dictLoopEnd);
 
         // Get Current key
         il.Emit(OpCodes.Ldloca, keysEnumLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.KeyCollection.Enumerator).GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(keysEnumType, "Current")!.GetGetMethod()!);
         var currentKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, currentKeyLocal);
 
@@ -376,8 +386,8 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
         il.Emit(OpCodes.Ldloc, sourceDictLocal);
         il.Emit(OpCodes.Ldloc, currentKeyLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Item")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetProperty("Item")!.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetSetMethod()!);
 
         il.MarkLabel(skipKey);
         il.Emit(OpCodes.Br, dictLoopStart);
@@ -386,14 +396,14 @@ public static partial class RuntimeEmitter
 
         // Dispose enumerator
         il.Emit(OpCodes.Ldloca, keysEnumLocal);
-        il.Emit(OpCodes.Constrained, typeof(Dictionary<string, object>.KeyCollection.Enumerator));
-        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Constrained, keysEnumType);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetValues(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetValues",
@@ -411,7 +421,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetEntries",
@@ -429,7 +439,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitIsArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "IsArray",
@@ -460,3 +470,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

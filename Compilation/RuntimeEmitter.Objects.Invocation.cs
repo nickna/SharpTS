@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitGetArrayMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetArrayMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // GetArrayMethod(object arr, string methodName) -> TSFunction or null
         // Maps TypeScript array method names to .NET List methods
@@ -71,7 +71,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitInvokeValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeValue",
@@ -115,7 +115,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitInvokeMethodValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitInvokeMethodValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "InvokeMethodValue",
@@ -162,7 +162,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitGetSuperMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitGetSuperMethod(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "GetSuperMethod",
@@ -212,3 +212,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

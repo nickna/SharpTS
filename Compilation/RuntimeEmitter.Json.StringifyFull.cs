@@ -4,9 +4,9 @@ using System.Text;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "JsonStringifyFull",
@@ -26,7 +26,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static MethodBuilder EmitJsonStringifyWithKeysHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonStringifyWithKeysHelper(TypeBuilder typeBuilder)
     {
         // StringifyWithKeys(object value, HashSet<string> allowedKeys, int indent, int depth) -> string
         var method = typeBuilder.DefineMethod(
@@ -121,7 +121,7 @@ public static partial class RuntimeEmitter
         return method;
     }
 
-    private static void EmitFormatNumberForFullStringify(ILGenerator il)
+    private void EmitFormatNumberForFullStringify(ILGenerator il)
     {
         var local = il.DeclareLocal(_types.Double);
         var isIntLabel = il.DefineLabel();
@@ -164,7 +164,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringifyArrayWithIndent(ILGenerator il, MethodBuilder stringifyMethod)
+    private void EmitStringifyArrayWithIndent(ILGenerator il, MethodBuilder stringifyMethod)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
@@ -298,7 +298,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitStringifyObjectWithKeysAndIndent(ILGenerator il, MethodBuilder stringifyMethod)
+    private void EmitStringifyObjectWithKeysAndIndent(ILGenerator il, MethodBuilder stringifyMethod)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -489,3 +489,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

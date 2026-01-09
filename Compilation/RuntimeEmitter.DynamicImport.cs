@@ -7,12 +7,12 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Emits dynamic import support methods into the generated assembly.
 /// </summary>
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits methods for dynamic import support.
     /// </summary>
-    private static void EmitDynamicImportMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDynamicImportMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitWrapTaskAsPromise(typeBuilder, runtime);
         EmitDynamicImportModule(typeBuilder, runtime);
@@ -22,7 +22,7 @@ public static partial class RuntimeEmitter
     /// Emits WrapTaskAsPromise: wraps Task&lt;object?&gt; in SharpTSPromise.
     /// Signature: SharpTSPromise WrapTaskAsPromise(Task&lt;object?&gt; task)
     /// </summary>
-    private static void EmitWrapTaskAsPromise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitWrapTaskAsPromise(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WrapTaskAsPromise",
@@ -48,7 +48,7 @@ public static partial class RuntimeEmitter
     /// This implementation returns a rejected task since the module was not pre-compiled.
     /// For string literal paths, the compiler should optimize to use the pre-compiled module directly.
     /// </summary>
-    private static void EmitDynamicImportModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitDynamicImportModule(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "DynamicImportModule",
@@ -90,3 +90,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

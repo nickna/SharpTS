@@ -4,13 +4,13 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits: private static Dictionary&lt;object, object?&gt; GetSymbolDict(object obj)
     /// Returns the symbol dictionary for an object from the ConditionalWeakTable.
     /// </summary>
-    private static void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder symbolStorageField)
+    private void EmitGetSymbolDict(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder symbolStorageField)
     {
         var symbolDictType = _types.DictionaryObjectObject;
         var symbolStorageType = _types.MakeGenericType(_types.ConditionalWeakTableOpen, _types.Object, symbolDictType);
@@ -36,7 +36,7 @@ public static partial class RuntimeEmitter
     /// Emits: private static bool IsSymbol(object obj)
     /// Returns true if the object is a TSSymbol.
     /// </summary>
-    private static void EmitIsSymbol(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIsSymbol(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "IsSymbol",
@@ -69,3 +69,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

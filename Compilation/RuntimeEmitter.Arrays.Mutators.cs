@@ -3,9 +3,9 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayPop",
@@ -51,7 +51,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayShift(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayShift(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayShift",
@@ -91,7 +91,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayUnshift(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayUnshift(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayUnshift",
@@ -116,7 +116,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayPush(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayPush(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayPush",
@@ -140,7 +140,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArraySlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArraySlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArraySlice",
@@ -271,7 +271,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private static void EmitArrayReverse(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitArrayReverse(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ArrayReverse",
@@ -292,3 +292,4 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 }
+

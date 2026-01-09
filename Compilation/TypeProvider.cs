@@ -154,6 +154,7 @@ public class TypeProvider
     public Type IEnumerable => Resolve("System.Collections.IEnumerable");
     public Type IEnumerator => Resolve("System.Collections.IEnumerator");
     public Type ConditionalWeakTableOpen => Resolve("System.Runtime.CompilerServices.ConditionalWeakTable`2");
+    public Type ConcurrentDictionaryOpen => Resolve("System.Collections.Concurrent.ConcurrentDictionary`2");
 
     public Type ListOfObject => MakeGenericType(ListOpen, Object);
     public Type DictionaryObjectObject => MakeGenericType(DictionaryOpen, Object, Object);
@@ -276,6 +277,7 @@ public class TypeProvider
             type = typeof(object).Assembly.GetType(fullName)
                 ?? typeof(List<>).Assembly.GetType(fullName)
                 ?? typeof(Task).Assembly.GetType(fullName)
+                ?? typeof(System.Collections.Concurrent.ConcurrentDictionary<,>).Assembly.GetType(fullName)
                 ?? typeof(System.Text.RegularExpressions.Regex).Assembly.GetType(fullName)
                 ?? typeof(System.Numerics.BigInteger).Assembly.GetType(fullName)
                 ?? typeof(System.Console).Assembly.GetType(fullName)

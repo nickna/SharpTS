@@ -4,9 +4,9 @@ using System.Numerics;
 
 namespace SharpTS.Compilation;
 
-public static partial class RuntimeEmitter
+public partial class RuntimeEmitter
 {
-    private static void EmitCreateBigInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitCreateBigInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // CreateBigInt: object -> BigInteger (boxed)
         var method = typeBuilder.DefineMethod(
@@ -85,7 +85,7 @@ public static partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private static void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var bigIntType = _types.BigInteger;
 
@@ -166,7 +166,7 @@ public static partial class RuntimeEmitter
         }
     }
 
-    private static void EmitBigIntComparison(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntComparison(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var bigIntType = _types.BigInteger;
 
@@ -200,7 +200,7 @@ public static partial class RuntimeEmitter
         EmitCompare("BigIntGreaterThanOrEqual", "op_GreaterThanOrEqual", null!);
     }
 
-    private static void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitBigIntBitwise(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var bigIntType = _types.BigInteger;
 
@@ -300,3 +300,4 @@ public static partial class RuntimeEmitter
         }
     }
 }
+
