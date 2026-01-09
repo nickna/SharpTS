@@ -21,46 +21,118 @@ public class SharpTSInstance(SharpTSClass klass)
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Interpreter? _interpreter;
 
+    // Property lookup caches to avoid expensive inheritance chain walks
+    private readonly Dictionary<string, PropertyResolution> _lookupCache = [];
+    private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
+
+    private enum ResolutionType
+    {
+        Getter,      // Resolved to a getter (invoke on each access)
+        Field,       // Resolved to an instance field (read from _fields)
+        Method,      // Resolved to a method (bind on access)
+        NotFound     // Property doesn't exist (cache negative lookups)
+    }
+
+    private sealed class PropertyResolution
+    {
+        public required ResolutionType Type { get; init; }
+        public SharpTSFunction? Function { get; init; }
+    }
+
     public void SetInterpreter(Interpreter interpreter) => _interpreter = interpreter;
+
+    private PropertyResolution ResolveProperty(string name)
+    {
+        // Check for getter first
+        SharpTSFunction? getter = _klass.FindGetter(name);
+        if (getter != null)
+        {
+            return new PropertyResolution
+            {
+                Type = ResolutionType.Getter,
+                Function = getter
+            };
+        }
+
+        // Check if it's a field (don't cache the value!)
+        if (_fields.ContainsKey(name))
+        {
+            return new PropertyResolution { Type = ResolutionType.Field };
+        }
+
+        // Check for method
+        SharpTSFunction? method = _klass.FindMethod(name);
+        if (method != null)
+        {
+            return new PropertyResolution
+            {
+                Type = ResolutionType.Method,
+                Function = method
+            };
+        }
+
+        // Cache negative result to avoid repeated failed lookups
+        return new PropertyResolution { Type = ResolutionType.NotFound };
+    }
 
     public object? Get(Token name)
     {
-        // Check for getter first
-        SharpTSFunction? getter = _klass.FindGetter(name.Lexeme);
-        if (getter != null && _interpreter != null)
+        string propName = name.Lexeme;
+
+        // Check cache first
+        if (!_lookupCache.TryGetValue(propName, out PropertyResolution? resolution))
         {
-            return getter.Bind(this).Call(_interpreter, []);
+            // Cache miss - perform full lookup and cache the resolution
+            resolution = ResolveProperty(propName);
+            _lookupCache[propName] = resolution;
         }
 
-        if (_fields.TryGetValue(name.Lexeme, out object? value))
+        // Use cached resolution
+        return resolution.Type switch
         {
-            return value;
-        }
-
-        SharpTSFunction? method = _klass.FindMethod(name.Lexeme);
-        if (method != null) return method.Bind(this);
-
-        throw new Exception($"Undefined property '{name.Lexeme}'.");
+            ResolutionType.Getter => resolution.Function!.Bind(this).Call(_interpreter!, []),
+            ResolutionType.Field => _fields[propName],
+            ResolutionType.Method => resolution.Function!.Bind(this),
+            ResolutionType.NotFound => throw new Exception($"Undefined property '{propName}'."),
+            _ => throw new InvalidOperationException("Unknown resolution type")
+        };
     }
 
     public void Set(Token name, object? value)
     {
-        // Check for setter first
-        SharpTSFunction? setter = _klass.FindSetter(name.Lexeme);
-        if (setter != null && _interpreter != null)
+        string propName = name.Lexeme;
+
+        // Check cache for setter resolution
+        if (!_setterCache.TryGetValue(propName, out SharpTSFunction? cachedSetter))
         {
-            setter.Bind(this).Call(_interpreter, [value]);
+            cachedSetter = _klass.FindSetter(propName);
+            _setterCache[propName] = cachedSetter; // Cache null if no setter exists
+        }
+
+        if (cachedSetter != null && _interpreter != null)
+        {
+            cachedSetter.Bind(this).Call(_interpreter, [value]);
             return;
         }
 
-        _fields[name.Lexeme] = value;
+        // No cache invalidation needed - we update _fields, Get() reads fresh value
+        _fields[propName] = value;
+
+        // Ensure property is in lookup cache as a field for dynamic property addition
+        if (!_lookupCache.ContainsKey(propName))
+        {
+            _lookupCache[propName] = new PropertyResolution { Type = ResolutionType.Field };
+        }
     }
 
     public bool HasProperty(string name)
     {
-        if (_fields.ContainsKey(name)) return true;
-        if (_klass.HasGetter(name)) return true;
-        return _klass.FindMethod(name) != null;
+        if (!_lookupCache.TryGetValue(name, out PropertyResolution? resolution))
+        {
+            resolution = ResolveProperty(name);
+            _lookupCache[name] = resolution;
+        }
+        return resolution.Type != ResolutionType.NotFound;
     }
 
     public SharpTSClass GetClass() => _klass;
