@@ -1,4 +1,5 @@
 using SharpTS.TypeSystem;
+using System.Collections.Frozen;
 
 namespace SharpTS.Runtime.Types;
 
@@ -14,12 +15,12 @@ public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKi
 {
     public string Name { get; } = name;
     public EnumKind Kind { get; } = kind;
-    private readonly Dictionary<string, object> _members = members;
+    private readonly FrozenDictionary<string, object> _members = members.ToFrozenDictionary();
 
     // Only build reverse mapping for numeric members
-    private readonly Dictionary<double, string> _reverse =
+    private readonly FrozenDictionary<double, string> _reverse =
         members.Where(kvp => kvp.Value is double)
-               .ToDictionary(kvp => (double)kvp.Value!, kvp => kvp.Key);
+               .ToFrozenDictionary(kvp => (double)kvp.Value!, kvp => kvp.Key);
 
     public object GetMember(string name) =>
         _members.TryGetValue(name, out var v) ? v

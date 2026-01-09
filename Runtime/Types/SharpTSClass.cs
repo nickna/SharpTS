@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
+using System.Collections.Frozen;
 
 namespace SharpTS.Runtime.Types;
 
@@ -28,11 +29,11 @@ public class SharpTSClass(
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
     public bool IsAbstract { get; } = isAbstract;
-    private readonly Dictionary<string, SharpTSFunction> _methods = methods;
-    private readonly Dictionary<string, SharpTSFunction> _staticMethods = staticMethods;
+    private readonly FrozenDictionary<string, SharpTSFunction> _methods = methods.ToFrozenDictionary();
+    private readonly FrozenDictionary<string, SharpTSFunction> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
-    private readonly Dictionary<string, SharpTSFunction> _getters = getters ?? [];
-    private readonly Dictionary<string, SharpTSFunction> _setters = setters ?? [];
+    private readonly FrozenDictionary<string, SharpTSFunction> _getters = getters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
+    private readonly FrozenDictionary<string, SharpTSFunction> _setters = setters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly List<Stmt.Field> _instanceFields = instanceFields ?? [];
 
     public int Arity()
