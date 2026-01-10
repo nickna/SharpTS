@@ -540,7 +540,13 @@ public partial class ILCompiler
         arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
     }
 
-    private void EmitAsyncStubMethod(MethodBuilder stubMethod, AsyncStateMachineBuilder smBuilder, List<Stmt.Parameter> parameters, bool isInstanceMethod = false)
+    private void EmitAsyncStubMethod(
+        MethodBuilder stubMethod,
+        AsyncStateMachineBuilder smBuilder,
+        List<Stmt.Parameter> parameters,
+        bool isInstanceMethod = false,
+        FieldBuilder? asyncLockField = null,
+        FieldBuilder? lockReentrancyField = null)
     {
         var il = stubMethod.GetILGenerator();
         var smLocal = il.DeclareLocal(smBuilder.StateMachineType);
@@ -555,6 +561,23 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloca, smLocal);
             il.Emit(OpCodes.Ldarg_0);  // 'this' is arg 0 for instance methods
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
+        }
+
+        // Copy @lock field references to state machine if this method has @lock decorator
+        // We copy these directly here so MoveNext doesn't need to cast ThisField
+        if (smBuilder.HasLockDecorator && asyncLockField != null && lockReentrancyField != null)
+        {
+            // sm.<>__asyncLockRef = this._asyncLock;
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldarg_0);  // 'this'
+            il.Emit(OpCodes.Ldfld, asyncLockField);
+            il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
+
+            // sm.<>__lockReentrancyRef = this._lockReentrancy;
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldarg_0);  // 'this'
+            il.Emit(OpCodes.Ldfld, lockReentrancyField);
+            il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
         }
 
         // Copy parameters to state machine fields
@@ -636,6 +659,9 @@ public partial class ILCompiler
         // Analyze async function to determine await points and hoisted variables
         var analysis = _asyncAnalyzer.Analyze(method);
 
+        // Check if method has @lock decorator
+        bool hasLock = HasLockDecorator(method);
+
         // Build state machine type
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
@@ -644,14 +670,31 @@ public partial class ILCompiler
             analysis,
             _types.Object,
             isInstanceMethod: true,  // This is an instance method
-            hasAsyncArrows: hasAsyncArrows
+            hasAsyncArrows: hasAsyncArrows,
+            hasLock: hasLock
         );
 
         // Build state machines for any async arrows found in this method
         DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
 
+        // Get lock fields if @lock decorator is present
+        FieldBuilder? asyncLockField = null;
+        FieldBuilder? lockReentrancyField = null;
+        if (hasLock)
+        {
+            var className = methodBuilder.DeclaringType!.Name;
+            _asyncLockFields.TryGetValue(className, out asyncLockField);
+            _lockReentrancyFields.TryGetValue(className, out lockReentrancyField);
+        }
+
         // Emit stub method body (creates state machine and starts it)
-        EmitAsyncStubMethod(methodBuilder, smBuilder, method.Parameters, isInstanceMethod: true);
+        EmitAsyncStubMethod(
+            methodBuilder,
+            smBuilder,
+            method.Parameters,
+            isInstanceMethod: true,
+            asyncLockField,
+            lockReentrancyField);
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -690,10 +733,19 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            // @lock decorator support
+            SyncLockFields = _syncLockFields,
+            AsyncLockFields = _asyncLockFields,
+            LockReentrancyFields = _lockReentrancyFields,
+            StaticSyncLockFields = _staticSyncLockFields,
+            StaticAsyncLockFields = _staticAsyncLockFields,
+            StaticLockReentrancyFields = _staticLockReentrancyFields
         };
 
         // Emit MoveNext body
+        // Note: @lock fields are stored directly in the state machine (AsyncLockRefField, LockReentrancyRefField)
+        // so the emitter doesn't need external references to the class's lock fields
         var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
         moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object);
 

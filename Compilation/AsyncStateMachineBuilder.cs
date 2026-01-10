@@ -39,6 +39,14 @@ public class AsyncStateMachineBuilder
     // Self-reference field (boxed) for passing to nested async arrows
     public FieldBuilder? SelfBoxedField { get; private set; }
 
+    // @lock decorator support for async methods
+    public FieldBuilder? LockPrevReentrancyField { get; private set; }  // <>__prevReentrancy (int)
+    public FieldBuilder? LockAcquiredField { get; private set; }         // <>__lockAcquired (bool)
+    public FieldBuilder? LockAwaiterField { get; private set; }          // Awaiter for SemaphoreSlim.WaitAsync()
+    public FieldBuilder? AsyncLockRefField { get; private set; }         // <>__asyncLockRef (SemaphoreSlim)
+    public FieldBuilder? LockReentrancyRefField { get; private set; }    // <>__lockReentrancyRef (AsyncLocal<int>)
+    public bool HasLockDecorator { get; private set; }                   // Whether this method has @lock
+
     // Methods
     public MethodBuilder MoveNextMethod { get; private set; } = null!;
     public MethodBuilder SetStateMachineMethod { get; private set; } = null!;
@@ -64,12 +72,14 @@ public class AsyncStateMachineBuilder
     /// <param name="returnType">The inner type of Task&lt;T&gt; (use typeof(object) for Task&lt;object&gt;)</param>
     /// <param name="isInstanceMethod">True if this is an instance method (needs 'this' hoisting)</param>
     /// <param name="hasAsyncArrows">True if this function contains async arrow functions (needs self-boxed field)</param>
+    /// <param name="hasLock">True if this method has @lock decorator (needs lock fields)</param>
     public void DefineStateMachine(
         string methodName,
         AsyncStateAnalyzer.AsyncFunctionAnalysis analysis,
         Type returnType,
         bool isInstanceMethod = false,
-        bool hasAsyncArrows = false)
+        bool hasAsyncArrows = false,
+        bool hasLock = false)
     {
         // Determine builder and task types based on return type
         if (returnType == _types.Void)
@@ -130,7 +140,8 @@ public class AsyncStateMachineBuilder
         }
 
         // Define 'this' field for instance methods that use 'this'
-        if (isInstanceMethod && analysis.UsesThis)
+        // Also needed for @lock to access _asyncLock and _lockReentrancy fields
+        if (isInstanceMethod && (analysis.UsesThis || hasLock))
         {
             ThisField = _stateMachineType.DefineField(
                 "<>4__this",
@@ -147,6 +158,51 @@ public class AsyncStateMachineBuilder
             SelfBoxedField = _stateMachineType.DefineField(
                 "<>__selfBoxed",
                 _types.Object,
+                FieldAttributes.Public
+            );
+        }
+
+        // Define @lock decorator fields for async methods
+        // These are used to track reentrancy and lock acquisition state across await points
+        if (hasLock)
+        {
+            HasLockDecorator = true;
+
+            // <>__prevReentrancy - stores the reentrancy count at method entry
+            LockPrevReentrancyField = _stateMachineType.DefineField(
+                "<>__prevReentrancy",
+                _types.Int32,
+                FieldAttributes.Public
+            );
+
+            // <>__lockAcquired - whether we acquired the lock (true if prevReentrancy was 0)
+            LockAcquiredField = _stateMachineType.DefineField(
+                "<>__lockAcquired",
+                typeof(bool),
+                FieldAttributes.Public
+            );
+
+            // <>__lockAwaiter - awaiter for SemaphoreSlim.WaitAsync()
+            // This uses TaskAwaiter (for Task, not Task<T>) since WaitAsync() returns Task
+            LockAwaiterField = _stateMachineType.DefineField(
+                "<>__lockAwaiter",
+                typeof(TaskAwaiter),
+                FieldAttributes.Private
+            );
+
+            // <>__asyncLockRef - reference to the outer class's SemaphoreSlim
+            // Stored here to avoid casting ThisField to concrete class type
+            AsyncLockRefField = _stateMachineType.DefineField(
+                "<>__asyncLockRef",
+                typeof(SemaphoreSlim),
+                FieldAttributes.Public
+            );
+
+            // <>__lockReentrancyRef - reference to the outer class's AsyncLocal<int>
+            // Stored here to avoid casting ThisField to concrete class type
+            LockReentrancyRefField = _stateMachineType.DefineField(
+                "<>__lockReentrancyRef",
+                typeof(AsyncLocal<int>),
                 FieldAttributes.Public
             );
         }
@@ -325,6 +381,60 @@ public class AsyncStateMachineBuilder
     public MethodInfo GetTaskGetAwaiterMethod()
     {
         return _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
+    }
+
+    #endregion
+
+    #region Lock Helper Methods
+
+    /// <summary>
+    /// Gets the AwaitUnsafeOnCompleted method specialized for TaskAwaiter (for lock acquisition).
+    /// </summary>
+    public MethodInfo GetBuilderAwaitUnsafeOnCompletedMethodForLock()
+    {
+        var methods = BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+        var awaitMethod = methods.First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod);
+        return awaitMethod.MakeGenericMethod(typeof(TaskAwaiter), _stateMachineType);
+    }
+
+    /// <summary>
+    /// Gets the IsCompleted property getter for TaskAwaiter (non-generic).
+    /// </summary>
+    public static MethodInfo GetLockAwaiterIsCompletedGetter()
+    {
+        return typeof(TaskAwaiter).GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+    }
+
+    /// <summary>
+    /// Gets the GetResult method for TaskAwaiter (non-generic).
+    /// </summary>
+    public static MethodInfo GetLockAwaiterGetResultMethod()
+    {
+        return typeof(TaskAwaiter).GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance)!;
+    }
+
+    /// <summary>
+    /// Gets the GetAwaiter method for Task (non-generic).
+    /// </summary>
+    public static MethodInfo GetTaskAwaiterMethod()
+    {
+        return typeof(Task).GetMethod("GetAwaiter", BindingFlags.Public | BindingFlags.Instance)!;
+    }
+
+    /// <summary>
+    /// Gets the WaitAsync method for SemaphoreSlim.
+    /// </summary>
+    public static MethodInfo GetSemaphoreWaitAsyncMethod()
+    {
+        return typeof(SemaphoreSlim).GetMethod("WaitAsync", Type.EmptyTypes)!;
+    }
+
+    /// <summary>
+    /// Gets the Release method for SemaphoreSlim.
+    /// </summary>
+    public static MethodInfo GetSemaphoreReleaseMethod()
+    {
+        return typeof(SemaphoreSlim).GetMethod("Release", Type.EmptyTypes)!;
     }
 
     #endregion
