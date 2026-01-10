@@ -24,9 +24,12 @@ public partial class ILCompiler
 
     private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
-        // Only emit if there are static fields with initializers
+        // Check if we need a static constructor
         var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.Initializer != null).ToList();
-        if (staticFieldsWithInit.Count == 0) return;
+        bool hasStaticLockFields = _staticSyncLockFields.ContainsKey(qualifiedClassName);
+
+        // Only emit if there are static fields with initializers OR static lock fields
+        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields) return;
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -70,6 +73,31 @@ public partial class ILCompiler
 
         var emitter = new ILEmitter(ctx);
 
+        // Initialize static @lock decorator fields
+        if (_staticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
+        {
+            // _staticSyncLock = new object();
+            il.Emit(OpCodes.Newobj, typeof(object).GetConstructor([])!);
+            il.Emit(OpCodes.Stsfld, staticSyncLockField);
+        }
+
+        if (_staticAsyncLockFields.TryGetValue(qualifiedClassName, out var staticAsyncLockField))
+        {
+            // _staticAsyncLock = new SemaphoreSlim(1, 1);
+            il.Emit(OpCodes.Ldc_I4_1);  // initialCount = 1
+            il.Emit(OpCodes.Ldc_I4_1);  // maxCount = 1
+            il.Emit(OpCodes.Newobj, typeof(SemaphoreSlim).GetConstructor([typeof(int), typeof(int)])!);
+            il.Emit(OpCodes.Stsfld, staticAsyncLockField);
+        }
+
+        if (_staticLockReentrancyFields.TryGetValue(qualifiedClassName, out var staticReentrancyField))
+        {
+            // _staticLockReentrancy = new AsyncLocal<int>();
+            il.Emit(OpCodes.Newobj, typeof(AsyncLocal<int>).GetConstructor([])!);
+            il.Emit(OpCodes.Stsfld, staticReentrancyField);
+        }
+
+        // Initialize static field initializers
         var classStaticFields = _staticFields[qualifiedClassName];
         foreach (var field in staticFieldsWithInit)
         {
@@ -89,6 +117,9 @@ public partial class ILCompiler
     {
         var typeBuilder = _classBuilders[className];
         var methodBuilder = _staticMethods[className][method.Name.Lexeme];
+
+        // Check if method has @lock decorator
+        bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
         var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
@@ -123,7 +154,14 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            // @lock decorator support
+            SyncLockFields = _syncLockFields,
+            AsyncLockFields = _asyncLockFields,
+            LockReentrancyFields = _lockReentrancyFields,
+            StaticSyncLockFields = _staticSyncLockFields,
+            StaticAsyncLockFields = _staticAsyncLockFields,
+            StaticLockReentrancyFields = _staticLockReentrancyFields
         };
 
         // Define parameters (starting at index 0, not 1 since no 'this')
@@ -137,6 +175,57 @@ public partial class ILCompiler
         // Emit default parameter checks (static method)
         emitter.EmitDefaultParameters(method.Parameters, false);
 
+        // Variables for @lock decorator support
+        LocalBuilder? prevReentrancyLocal = null;
+        LocalBuilder? lockTakenLocal = null;
+        FieldBuilder? staticSyncLockField = null;
+        FieldBuilder? staticReentrancyField = null;
+
+        // Set up @lock decorator - reentrancy-aware Monitor pattern for static methods
+        if (hasLock && _staticSyncLockFields.TryGetValue(className, out staticSyncLockField) &&
+            _staticLockReentrancyFields.TryGetValue(className, out staticReentrancyField))
+        {
+            prevReentrancyLocal = il.DeclareLocal(typeof(int));     // int __prevReentrancy
+            lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken
+
+            // Set up deferred return handling for the lock's exception block
+            ctx.ReturnValueLocal = il.DeclareLocal(typeof(object));
+            ctx.ReturnLabel = il.DefineLabel();
+            ctx.ExceptionBlockDepth++;
+
+            // int __prevReentrancy = _staticLockReentrancy.Value;
+            il.Emit(OpCodes.Ldsfld, staticReentrancyField);         // _staticLockReentrancy
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.GetMethod!);
+            il.Emit(OpCodes.Stloc, prevReentrancyLocal);
+
+            // _staticLockReentrancy.Value = __prevReentrancy + 1;
+            il.Emit(OpCodes.Ldsfld, staticReentrancyField);         // _staticLockReentrancy
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.SetMethod!);
+
+            // bool __lockTaken = false;
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, lockTakenLocal);
+
+            // if (__prevReentrancy == 0) { Monitor.Enter(_staticSyncLock, ref __lockTaken); }
+            var skipEnterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Bne_Un, skipEnterLabel);
+
+            // Monitor.Enter(_staticSyncLock, ref __lockTaken);
+            il.Emit(OpCodes.Ldsfld, staticSyncLockField);           // _staticSyncLock
+            il.Emit(OpCodes.Ldloca, lockTakenLocal);                // ref __lockTaken
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [typeof(object), typeof(bool).MakeByRefType()])!);
+
+            il.MarkLabel(skipEnterLabel);
+
+            // Begin try block
+            il.BeginExceptionBlock();
+        }
+
         // Abstract methods have no body to emit
         if (method.Body != null)
         {
@@ -146,8 +235,46 @@ public partial class ILCompiler
             }
         }
 
-        // Finalize any deferred returns from exception blocks
-        if (emitter.HasDeferredReturns)
+        // Close @lock decorator - finally block for static methods
+        if (hasLock && prevReentrancyLocal != null && lockTakenLocal != null &&
+            staticSyncLockField != null && staticReentrancyField != null)
+        {
+            // Store default return value if no explicit return was emitted
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Leave, ctx.ReturnLabel);
+
+            // Begin finally block
+            il.BeginFinallyBlock();
+
+            // _staticLockReentrancy.Value = __prevReentrancy;
+            il.Emit(OpCodes.Ldsfld, staticReentrancyField);         // _staticLockReentrancy
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.SetMethod!);
+
+            // if (__lockTaken) { Monitor.Exit(_staticSyncLock); }
+            var skipExitLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, lockTakenLocal);
+            il.Emit(OpCodes.Brfalse, skipExitLabel);
+
+            // Monitor.Exit(_staticSyncLock);
+            il.Emit(OpCodes.Ldsfld, staticSyncLockField);           // _staticSyncLock
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [typeof(object)])!);
+
+            il.MarkLabel(skipExitLabel);
+
+            // End try/finally block
+            il.EndExceptionBlock();
+
+            ctx.ExceptionBlockDepth--;
+
+            // Mark return label and emit actual return
+            il.MarkLabel(ctx.ReturnLabel);
+            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Ret);
+        }
+        // Finalize any deferred returns from exception blocks (non-@lock path)
+        else if (emitter.HasDeferredReturns)
         {
             emitter.FinalizeReturns();
         }

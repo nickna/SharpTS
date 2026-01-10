@@ -92,6 +92,33 @@ public partial class ILCompiler
         il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
         il.Emit(OpCodes.Stfld, fieldsField);
 
+        // Initialize @lock decorator fields if present
+        if (_syncLockFields.TryGetValue(className, out var syncLockField))
+        {
+            // this._syncLock = new object();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, typeof(object).GetConstructor([])!);
+            il.Emit(OpCodes.Stfld, syncLockField);
+        }
+
+        if (_asyncLockFields.TryGetValue(className, out var asyncLockField))
+        {
+            // this._asyncLock = new SemaphoreSlim(1, 1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);  // initialCount = 1
+            il.Emit(OpCodes.Ldc_I4_1);  // maxCount = 1
+            il.Emit(OpCodes.Newobj, typeof(SemaphoreSlim).GetConstructor([typeof(int), typeof(int)])!);
+            il.Emit(OpCodes.Stfld, asyncLockField);
+        }
+
+        if (_lockReentrancyFields.TryGetValue(className, out var reentrancyField))
+        {
+            // this._lockReentrancy = new AsyncLocal<int>();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, typeof(AsyncLocal<int>).GetConstructor([])!);
+            il.Emit(OpCodes.Stfld, reentrancyField);
+        }
+
         // Call parent constructor
         // If the class has an explicit constructor with super(), the super() in body will handle it.
         // If the class has no explicit constructor but has a superclass, we must call the parent constructor.

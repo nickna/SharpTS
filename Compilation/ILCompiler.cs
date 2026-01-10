@@ -120,6 +120,14 @@ public partial class ILCompiler
     private readonly Dictionary<string, HashSet<string>> _readonlyPropertyNames = [];
     private readonly Dictionary<string, Dictionary<string, Type>> _propertyTypes = [];
     private readonly Dictionary<string, FieldBuilder> _extrasFields = []; // _extras dict field for dynamic properties
+
+    // @lock decorator support: Thread-safe method execution
+    private readonly Dictionary<string, FieldBuilder> _syncLockFields = [];           // class -> _syncLock field (object for Monitor)
+    private readonly Dictionary<string, FieldBuilder> _asyncLockFields = [];          // class -> _asyncLock field (SemaphoreSlim)
+    private readonly Dictionary<string, FieldBuilder> _lockReentrancyFields = [];     // class -> _lockReentrancy field (AsyncLocal<int>)
+    private readonly Dictionary<string, FieldBuilder> _staticSyncLockFields = [];     // class -> static _syncLock field
+    private readonly Dictionary<string, FieldBuilder> _staticAsyncLockFields = [];    // class -> static _asyncLock field
+    private readonly Dictionary<string, FieldBuilder> _staticLockReentrancyFields = []; // class -> static _lockReentrancy field
     private UnionTypeGenerator? _unionGenerator;
     // Explicit accessor tracking for PropertyBuilder creation (TypeScript get/set syntax)
     private readonly Dictionary<string, Dictionary<string, (MethodBuilder? Getter, MethodBuilder? Setter, Type PropertyType)>> _explicitAccessors = [];

@@ -425,6 +425,9 @@ public partial class ILCompiler
             return;
         }
 
+        // Check if method has @lock decorator
+        bool hasLock = HasLockDecorator(method);
+
         var il = methodBuilder.GetILGenerator();
         var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
         {
@@ -458,7 +461,14 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            // @lock decorator support
+            SyncLockFields = _syncLockFields,
+            AsyncLockFields = _asyncLockFields,
+            LockReentrancyFields = _lockReentrancyFields,
+            StaticSyncLockFields = _staticSyncLockFields,
+            StaticAsyncLockFields = _staticAsyncLockFields,
+            StaticLockReentrancyFields = _staticLockReentrancyFields
         };
 
         // Add class generic type parameters to context
@@ -479,6 +489,60 @@ public partial class ILCompiler
         // Emit default parameter checks (instance method)
         emitter.EmitDefaultParameters(method.Parameters, true);
 
+        // Variables for @lock decorator support
+        LocalBuilder? prevReentrancyLocal = null;
+        LocalBuilder? lockTakenLocal = null;
+        FieldBuilder? syncLockField = null;
+        FieldBuilder? reentrancyField = null;
+
+        // Set up @lock decorator - reentrancy-aware Monitor pattern
+        if (hasLock && _syncLockFields.TryGetValue(typeBuilder.Name, out syncLockField) &&
+            _lockReentrancyFields.TryGetValue(typeBuilder.Name, out reentrancyField))
+        {
+            prevReentrancyLocal = il.DeclareLocal(typeof(int));     // int __prevReentrancy
+            lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken
+
+            // Set up deferred return handling for the lock's exception block
+            ctx.ReturnValueLocal = il.DeclareLocal(typeof(object));
+            ctx.ReturnLabel = il.DefineLabel();
+            ctx.ExceptionBlockDepth++;
+
+            // int __prevReentrancy = _lockReentrancy.Value;
+            il.Emit(OpCodes.Ldarg_0);                               // this
+            il.Emit(OpCodes.Ldfld, reentrancyField);                // this._lockReentrancy
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.GetMethod!);
+            il.Emit(OpCodes.Stloc, prevReentrancyLocal);
+
+            // _lockReentrancy.Value = __prevReentrancy + 1;
+            il.Emit(OpCodes.Ldarg_0);                               // this
+            il.Emit(OpCodes.Ldfld, reentrancyField);                // this._lockReentrancy
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.SetMethod!);
+
+            // bool __lockTaken = false;
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, lockTakenLocal);
+
+            // if (__prevReentrancy == 0) { Monitor.Enter(_syncLock, ref __lockTaken); }
+            var skipEnterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Bne_Un, skipEnterLabel);
+
+            // Monitor.Enter(this._syncLock, ref __lockTaken);
+            il.Emit(OpCodes.Ldarg_0);                               // this
+            il.Emit(OpCodes.Ldfld, syncLockField);                  // this._syncLock
+            il.Emit(OpCodes.Ldloca, lockTakenLocal);                // ref __lockTaken
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [typeof(object), typeof(bool).MakeByRefType()])!);
+
+            il.MarkLabel(skipEnterLabel);
+
+            // Begin try block
+            il.BeginExceptionBlock();
+        }
+
         // Abstract methods have no body to emit
         if (method.Body != null)
         {
@@ -488,8 +552,48 @@ public partial class ILCompiler
             }
         }
 
-        // Finalize any deferred returns from exception blocks
-        if (emitter.HasDeferredReturns)
+        // Close @lock decorator - finally block
+        if (hasLock && prevReentrancyLocal != null && lockTakenLocal != null &&
+            syncLockField != null && reentrancyField != null)
+        {
+            // Store default return value if no explicit return was emitted
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Leave, ctx.ReturnLabel);
+
+            // Begin finally block
+            il.BeginFinallyBlock();
+
+            // _lockReentrancy.Value = __prevReentrancy;
+            il.Emit(OpCodes.Ldarg_0);                               // this
+            il.Emit(OpCodes.Ldfld, reentrancyField);                // this._lockReentrancy
+            il.Emit(OpCodes.Ldloc, prevReentrancyLocal);
+            il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.SetMethod!);
+
+            // if (__lockTaken) { Monitor.Exit(_syncLock); }
+            var skipExitLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, lockTakenLocal);
+            il.Emit(OpCodes.Brfalse, skipExitLabel);
+
+            // Monitor.Exit(this._syncLock);
+            il.Emit(OpCodes.Ldarg_0);                               // this
+            il.Emit(OpCodes.Ldfld, syncLockField);                  // this._syncLock
+            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [typeof(object)])!);
+
+            il.MarkLabel(skipExitLabel);
+
+            // End try/finally block
+            il.EndExceptionBlock();
+
+            ctx.ExceptionBlockDepth--;
+
+            // Mark return label and emit actual return
+            il.MarkLabel(ctx.ReturnLabel);
+            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Ret);
+        }
+        // Finalize any deferred returns from exception blocks (non-@lock path)
+        else if (emitter.HasDeferredReturns)
         {
             emitter.FinalizeReturns();
         }

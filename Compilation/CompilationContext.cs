@@ -200,6 +200,28 @@ public class CompilationContext
     // .NET namespace from @Namespace directive (for typed interop)
     public string? DotNetNamespace { get; set; }
 
+    // ============================================
+    // @lock Decorator Support: Thread-safe Method Execution
+    // ============================================
+
+    // Instance sync lock fields (class name -> FieldBuilder for _syncLock)
+    public Dictionary<string, FieldBuilder>? SyncLockFields { get; set; }
+
+    // Instance async lock fields (class name -> FieldBuilder for _asyncLock)
+    public Dictionary<string, FieldBuilder>? AsyncLockFields { get; set; }
+
+    // Instance reentrancy tracking fields (class name -> FieldBuilder for _lockReentrancy)
+    public Dictionary<string, FieldBuilder>? LockReentrancyFields { get; set; }
+
+    // Static sync lock fields (class name -> FieldBuilder for _staticSyncLock)
+    public Dictionary<string, FieldBuilder>? StaticSyncLockFields { get; set; }
+
+    // Static async lock fields (class name -> FieldBuilder for _staticAsyncLock)
+    public Dictionary<string, FieldBuilder>? StaticAsyncLockFields { get; set; }
+
+    // Static reentrancy tracking fields (class name -> FieldBuilder for _staticLockReentrancy)
+    public Dictionary<string, FieldBuilder>? StaticLockReentrancyFields { get; set; }
+
     // Class to module mapping (simple class name -> module path)
     // Used to resolve qualified class names in multi-module compilation
     public Dictionary<string, string>? ClassToModule { get; set; }

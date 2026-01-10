@@ -25,10 +25,41 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Built-in compiler decorators that don't need to be defined as variables.
+    /// These are handled directly by the compiler.
+    /// </summary>
+    private static readonly HashSet<string> BuiltInDecorators =
+    [
+        "lock",  // Thread-safe method execution
+    ];
+
+    /// <summary>
+    /// Gets the name of a decorator from its expression.
+    /// </summary>
+    private static string? GetDecoratorName(Decorator decorator)
+    {
+        return decorator.Expression switch
+        {
+            Expr.Variable v => v.Name.Lexeme,
+            Expr.Call call when call.Callee is Expr.Variable v2 => v2.Name.Lexeme,
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Type-checks a single decorator application.
     /// </summary>
     private void CheckDecorator(Decorator decorator, DecoratorTarget target, TypeInfo? contextType)
     {
+        // Check for built-in compiler decorators (like @lock)
+        var decoratorName = GetDecoratorName(decorator);
+        if (decoratorName != null && BuiltInDecorators.Contains(decoratorName))
+        {
+            // Built-in decorators are valid - no further type checking needed
+            // The compiler will handle them directly
+            return;
+        }
+
         // Evaluate the decorator expression type
         TypeInfo decoratorType = CheckExpr(decorator.Expression);
 

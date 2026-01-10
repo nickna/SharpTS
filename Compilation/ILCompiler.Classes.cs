@@ -103,6 +103,65 @@ public partial class ILCompiler
         _extrasFields[className] = fieldsField;
         _instanceFieldsField[className] = fieldsField;
 
+        // Analyze @lock decorator requirements and emit lock fields
+        var (needsSyncLock, needsAsyncLock, needsStaticSyncLock, needsStaticAsyncLock) = AnalyzeLockRequirements(classStmt);
+
+        // Emit instance lock fields
+        if (needsSyncLock || needsAsyncLock)
+        {
+            // Sync lock object for Monitor
+            var syncLockField = typeBuilder.DefineField(
+                "_syncLock",
+                typeof(object),
+                FieldAttributes.Private | FieldAttributes.InitOnly
+            );
+            _syncLockFields[className] = syncLockField;
+
+            // Async lock using SemaphoreSlim (permits: 1, max: 1)
+            var asyncLockField = typeBuilder.DefineField(
+                "_asyncLock",
+                typeof(SemaphoreSlim),
+                FieldAttributes.Private | FieldAttributes.InitOnly
+            );
+            _asyncLockFields[className] = asyncLockField;
+
+            // Reentrancy tracking using AsyncLocal<int>
+            var reentrancyField = typeBuilder.DefineField(
+                "_lockReentrancy",
+                typeof(AsyncLocal<int>),
+                FieldAttributes.Private | FieldAttributes.InitOnly
+            );
+            _lockReentrancyFields[className] = reentrancyField;
+        }
+
+        // Emit static lock fields
+        if (needsStaticSyncLock || needsStaticAsyncLock)
+        {
+            // Static sync lock object
+            var staticSyncLockField = typeBuilder.DefineField(
+                "_staticSyncLock",
+                typeof(object),
+                FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            );
+            _staticSyncLockFields[className] = staticSyncLockField;
+
+            // Static async lock
+            var staticAsyncLockField = typeBuilder.DefineField(
+                "_staticAsyncLock",
+                typeof(SemaphoreSlim),
+                FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            );
+            _staticAsyncLockFields[className] = staticAsyncLockField;
+
+            // Static reentrancy tracking
+            var staticReentrancyField = typeBuilder.DefineField(
+                "_staticLockReentrancy",
+                typeof(AsyncLocal<int>),
+                FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            );
+            _staticLockReentrancyFields[className] = staticReentrancyField;
+        }
+
         // Get class generic params if any
         _classGenericParams.TryGetValue(className, out var classGenericParams);
 

@@ -117,4 +117,88 @@ public partial class ILCompiler
             }
         }
     }
+
+    /// <summary>
+    /// Gets the name of a decorator from its expression.
+    /// </summary>
+    private static string? GetDecoratorName(Decorator decorator)
+    {
+        return decorator.Expression switch
+        {
+            Expr.Variable variable => variable.Name.Lexeme,
+            Expr.Call call when call.Callee is Expr.Variable v => v.Name.Lexeme,
+            Expr.Get get => get.Name.Lexeme,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Checks if a method has the @lock decorator.
+    /// </summary>
+    private static bool HasLockDecorator(Stmt.Function method)
+    {
+        if (method.Decorators == null || method.Decorators.Count == 0)
+            return false;
+
+        return method.Decorators.Any(d => GetDecoratorName(d) == "lock");
+    }
+
+    /// <summary>
+    /// Checks if an accessor has the @lock decorator.
+    /// </summary>
+    private static bool HasLockDecorator(Stmt.Accessor accessor)
+    {
+        if (accessor.Decorators == null || accessor.Decorators.Count == 0)
+            return false;
+
+        return accessor.Decorators.Any(d => GetDecoratorName(d) == "lock");
+    }
+
+    /// <summary>
+    /// Analyzes a class to determine what lock fields are needed.
+    /// </summary>
+    private static (bool NeedsSyncLock, bool NeedsAsyncLock, bool NeedsStaticSyncLock, bool NeedsStaticAsyncLock) AnalyzeLockRequirements(Stmt.Class classStmt)
+    {
+        bool needsSyncLock = false;
+        bool needsAsyncLock = false;
+        bool needsStaticSyncLock = false;
+        bool needsStaticAsyncLock = false;
+
+        // Check all methods
+        foreach (var method in classStmt.Methods)
+        {
+            if (!HasLockDecorator(method))
+                continue;
+
+            if (method.IsStatic)
+            {
+                if (method.IsAsync)
+                    needsStaticAsyncLock = true;
+                else
+                    needsStaticSyncLock = true;
+            }
+            else
+            {
+                if (method.IsAsync)
+                    needsAsyncLock = true;
+                else
+                    needsSyncLock = true;
+            }
+        }
+
+        // Check accessors
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                if (!HasLockDecorator(accessor))
+                    continue;
+
+                // Accessors are never async, so only sync locks
+                needsSyncLock = true;
+            }
+        }
+
+        return (needsSyncLock, needsAsyncLock, needsStaticSyncLock, needsStaticAsyncLock);
+    }
 }
