@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -401,7 +402,7 @@ public class EnumTests
             console.log(Direction[0]);
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("const enum", ex.Message);
     }
 }

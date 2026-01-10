@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -352,7 +353,7 @@ public class BigIntTests
             let x = 10n + 5;
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -363,7 +364,7 @@ public class BigIntTests
             let x = 10n >>> 2n;
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Type Error", ex.Message);
     }
 

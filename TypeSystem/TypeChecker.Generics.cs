@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 
 namespace SharpTS.TypeSystem;
@@ -31,7 +32,7 @@ public partial class TypeChecker
         {
             if (typeArgs.Count != 1)
             {
-                throw new Exception($"Type Error: Promise requires exactly 1 type argument, got {typeArgs.Count}.");
+                throw new TypeCheckException($" Promise requires exactly 1 type argument, got {typeArgs.Count}.");
             }
             // Flatten nested Promises: Promise<Promise<T>> -> Promise<T>
             TypeInfo valueType = typeArgs[0];
@@ -46,7 +47,7 @@ public partial class TypeChecker
         {
             if (typeArgs.Count != 1)
             {
-                throw new Exception($"Type Error: Generator requires exactly 1 type argument, got {typeArgs.Count}.");
+                throw new TypeCheckException($" Generator requires exactly 1 type argument, got {typeArgs.Count}.");
             }
             return new TypeInfo.Generator(typeArgs[0]);
         }
@@ -99,7 +100,7 @@ public partial class TypeChecker
     {
         if (typeArgs.Count != generic.TypeParams.Count)
         {
-            throw new Exception($"Type Error: Generic class '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
+            throw new TypeCheckException($" Generic class '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
         }
 
         // Validate constraints
@@ -108,7 +109,7 @@ public partial class TypeChecker
             var tp = generic.TypeParams[i];
             if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
             {
-                throw new Exception($"Type Error: Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
@@ -122,7 +123,7 @@ public partial class TypeChecker
     {
         if (typeArgs.Count != generic.TypeParams.Count)
         {
-            throw new Exception($"Type Error: Generic interface '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
+            throw new TypeCheckException($" Generic interface '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
         }
 
         // Validate constraints
@@ -131,7 +132,7 @@ public partial class TypeChecker
             var tp = generic.TypeParams[i];
             if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
             {
-                throw new Exception($"Type Error: Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
@@ -145,7 +146,7 @@ public partial class TypeChecker
     {
         if (typeArgs.Count != generic.TypeParams.Count)
         {
-            throw new Exception($"Type Error: Generic function requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
+            throw new TypeCheckException($" Generic function requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
         }
 
         // Validate constraints
@@ -154,7 +155,7 @@ public partial class TypeChecker
             var tp = generic.TypeParams[i];
             if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
             {
-                throw new Exception($"Type Error: Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
@@ -248,7 +249,7 @@ public partial class TypeChecker
                 // Validate constraint
                 if (tp.Constraint != null && !IsCompatible(tp.Constraint, inferredType))
                 {
-                    throw new Exception($"Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                    throw new TypeCheckException($" Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
                 }
                 result.Add(inferredType);
             }

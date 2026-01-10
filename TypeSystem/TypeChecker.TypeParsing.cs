@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 
@@ -462,10 +463,10 @@ public partial class TypeChecker
             if (elem.StartsWith("..."))
             {
                 if (i != elements.Count - 1)
-                    throw new Exception("Type Error: Rest element must be last in tuple type.");
+                    throw new TypeCheckException(" Rest element must be last in tuple type.");
                 string arrayType = elem[3..];
                 if (!arrayType.EndsWith("[]"))
-                    throw new Exception("Type Error: Rest element must be an array type.");
+                    throw new TypeCheckException(" Rest element must be an array type.");
                 restType = ToTypeInfo(arrayType[..^2]);
                 break;
             }
@@ -479,7 +480,7 @@ public partial class TypeChecker
             }
             else if (seenOptional)
             {
-                throw new Exception("Type Error: Required element cannot follow optional element in tuple.");
+                throw new TypeCheckException(" Required element cannot follow optional element in tuple.");
             }
 
             elementTypes.Add(ToTypeInfo(elem));
@@ -731,7 +732,7 @@ public partial class TypeChecker
         int closeBracket = FindMatchingBracket(inner, openBracket);
 
         if (openBracket < 0 || closeBracket < 0)
-            throw new Exception("Type Error: Invalid mapped type syntax.");
+            throw new TypeCheckException(" Invalid mapped type syntax.");
 
         string bracketContent = inner[(openBracket + 1)..closeBracket];
         string afterBracket = inner[(closeBracket + 1)..].Trim();
@@ -739,7 +740,7 @@ public partial class TypeChecker
         // Parse [K in Constraint as RemapType]
         int inIndex = bracketContent.IndexOf(" in ");
         if (inIndex < 0)
-            throw new Exception("Type Error: Mapped type must contain 'in' keyword.");
+            throw new TypeCheckException(" Mapped type must contain 'in' keyword.");
 
         string paramName = bracketContent[..inIndex].Trim();
         string afterIn = bracketContent[(inIndex + 4)..].Trim();
@@ -779,7 +780,7 @@ public partial class TypeChecker
 
         // Parse : ValueType
         if (!afterBracket.StartsWith(":"))
-            throw new Exception("Type Error: Expected ':' after mapped type parameter.");
+            throw new TypeCheckException(" Expected ':' after mapped type parameter.");
 
         string valueTypeStr = afterBracket[1..].Trim();
         TypeInfo valueType = ToTypeInfo(valueTypeStr);

@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -14,8 +15,7 @@ public partial class TypeChecker
 
         if (_decoratorMode == DecoratorMode.None)
         {
-            throw new Exception($"Type Error at line {decorators[0].AtToken.Line}: " +
-                               "Decorators require --experimentalDecorators or --decorators flag.");
+            throw new TypeCheckException("Decorators require --experimentalDecorators or --decorators flag", decorators[0].AtToken.Line);
         }
 
         foreach (var decorator in decorators)
@@ -39,8 +39,7 @@ public partial class TypeChecker
             // Direct decorator: must be callable
             if (decoratorType is not (TypeInfo.Function or TypeInfo.Any))
             {
-                throw new Exception($"Type Error at line {decorator.AtToken.Line}: " +
-                                   $"Decorator must be a function, got '{decoratorType}'.");
+                throw new TypeCheckException($"Decorator must be a function, got '{decoratorType}'", decorator.AtToken.Line);
             }
         }
 
@@ -84,8 +83,7 @@ public partial class TypeChecker
 
             if (funcType.MinArity > expectedArity)
             {
-                throw new Exception($"Type Error at line {decorator.AtToken.Line}: " +
-                                   $"Decorator expects {funcType.MinArity} arguments but {target} decorators receive {expectedArity}.");
+                throw new TypeCheckException($"Decorator expects {funcType.MinArity} arguments but {target} decorators receive {expectedArity}", decorator.AtToken.Line);
             }
         }
     }
@@ -105,16 +103,14 @@ public partial class TypeChecker
             // Stage 3 decorators always receive exactly 2 arguments: (value, context)
             if (funcType.MinArity > 2)
             {
-                throw new Exception($"Type Error at line {decorator.AtToken.Line}: " +
-                                   $"Stage 3 decorator expects at most 2 arguments but requires {funcType.MinArity}.");
+                throw new TypeCheckException($"Stage 3 decorator expects at most 2 arguments but requires {funcType.MinArity}", decorator.AtToken.Line);
             }
         }
 
         // Note: Parameter decorators are not part of TC39 Stage 3 spec
         if (target == DecoratorTarget.Parameter)
         {
-            throw new Exception($"Type Error at line {decorator.AtToken.Line}: " +
-                               "Parameter decorators are not supported in Stage 3 decorators. Use --experimentalDecorators for legacy parameter decorators.");
+            throw new TypeCheckException("Parameter decorators are not supported in Stage 3 decorators. Use --experimentalDecorators for legacy parameter decorators", decorator.AtToken.Line);
         }
     }
 }

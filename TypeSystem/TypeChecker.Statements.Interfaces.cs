@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -26,11 +27,14 @@ public partial class TypeChecker
         }
 
         // Use interfaceTypeEnv for member type resolution so T resolves correctly
-        TypeEnvironment savedEnvForInterface = _environment;
-        _environment = interfaceTypeEnv;
-
         Dictionary<string, TypeInfo> members = [];
         HashSet<string> optionalMembers = [];
+        TypeInfo? stringIndexType = null;
+        TypeInfo? numberIndexType = null;
+        TypeInfo? symbolIndexType = null;
+
+        using (new EnvironmentScope(this, interfaceTypeEnv))
+        {
         foreach (var member in interfaceStmt.Members)
         {
             members[member.Name.Lexeme] = ToTypeInfo(member.Type);
@@ -41,9 +45,6 @@ public partial class TypeChecker
         }
 
         // Process index signatures
-        TypeInfo? stringIndexType = null;
-        TypeInfo? numberIndexType = null;
-        TypeInfo? symbolIndexType = null;
         if (interfaceStmt.IndexSignatures != null)
         {
             foreach (var indexSig in interfaceStmt.IndexSignatures)
@@ -53,17 +54,17 @@ public partial class TypeChecker
                 {
                     case TokenType.TYPE_STRING:
                         if (stringIndexType != null)
-                            throw new Exception($"Type Error: Duplicate string index signature in interface '{interfaceStmt.Name.Lexeme}'.");
+                            throw new TypeCheckException($" Duplicate string index signature in interface '{interfaceStmt.Name.Lexeme}'.");
                         stringIndexType = valueType;
                         break;
                     case TokenType.TYPE_NUMBER:
                         if (numberIndexType != null)
-                            throw new Exception($"Type Error: Duplicate number index signature in interface '{interfaceStmt.Name.Lexeme}'.");
+                            throw new TypeCheckException($" Duplicate number index signature in interface '{interfaceStmt.Name.Lexeme}'.");
                         numberIndexType = valueType;
                         break;
                     case TokenType.TYPE_SYMBOL:
                         if (symbolIndexType != null)
-                            throw new Exception($"Type Error: Duplicate symbol index signature in interface '{interfaceStmt.Name.Lexeme}'.");
+                            throw new TypeCheckException($" Duplicate symbol index signature in interface '{interfaceStmt.Name.Lexeme}'.");
                         symbolIndexType = valueType;
                         break;
                 }
@@ -74,7 +75,7 @@ public partial class TypeChecker
             {
                 if (!IsCompatible(stringIndexType, numberIndexType))
                 {
-                    throw new Exception($"Type Error: Number index type '{numberIndexType}' is not assignable to string index type '{stringIndexType}' in interface '{interfaceStmt.Name.Lexeme}'.");
+                    throw new TypeCheckException($" Number index type '{numberIndexType}' is not assignable to string index type '{stringIndexType}' in interface '{interfaceStmt.Name.Lexeme}'.");
                 }
             }
 
@@ -85,14 +86,12 @@ public partial class TypeChecker
                 {
                     if (!IsCompatible(stringIndexType, type))
                     {
-                        throw new Exception($"Type Error: Property '{name}' of type '{type}' is not assignable to string index type '{stringIndexType}' in interface '{interfaceStmt.Name.Lexeme}'.");
+                        throw new TypeCheckException($" Property '{name}' of type '{type}' is not assignable to string index type '{stringIndexType}' in interface '{interfaceStmt.Name.Lexeme}'.");
                     }
                 }
             }
         }
-
-        // Restore environment
-        _environment = savedEnvForInterface;
+        }
 
         // Create GenericInterface or regular Interface
         if (interfaceTypeParams != null && interfaceTypeParams.Count > 0)

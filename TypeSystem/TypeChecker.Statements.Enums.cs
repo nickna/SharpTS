@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 
@@ -41,7 +42,7 @@ public partial class TypeChecker
                     }
                     else
                     {
-                        throw new Exception($"Type Error: Enum member '{member.Name.Lexeme}' must be a string or number literal.");
+                        throw new TypeCheckException($" Enum member '{member.Name.Lexeme}' must be a string or number literal.");
                     }
                 }
                 else if (enumStmt.IsConst)
@@ -63,12 +64,12 @@ public partial class TypeChecker
                     }
                     else
                     {
-                        throw new Exception($"Type Error: Const enum member '{member.Name.Lexeme}' must evaluate to a string or number.");
+                        throw new TypeCheckException($" Const enum member '{member.Name.Lexeme}' must evaluate to a string or number.");
                     }
                 }
                 else
                 {
-                    throw new Exception($"Type Error: Enum member '{member.Name.Lexeme}' must be a literal value.");
+                    throw new TypeCheckException($" Enum member '{member.Name.Lexeme}' must be a literal value.");
                 }
             }
             else
@@ -76,7 +77,7 @@ public partial class TypeChecker
                 // No initializer - use auto-increment if active
                 if (!autoIncrementActive)
                 {
-                    throw new Exception($"Type Error: Enum member '{member.Name.Lexeme}' must have an initializer " +
+                    throw new TypeCheckException($" Enum member '{member.Name.Lexeme}' must have an initializer " +
                                         "(string enum members cannot use auto-increment).");
                 }
 
@@ -107,12 +108,12 @@ public partial class TypeChecker
     {
         return expr switch
         {
-            Expr.Literal lit => lit.Value ?? throw new Exception($"Type Error: Const enum expression cannot be null."),
+            Expr.Literal lit => lit.Value ?? throw new TypeCheckException($" Const enum expression cannot be null."),
 
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
                 resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
                     ? val
-                    : throw new Exception($"Type Error: Const enum member '{g.Name.Lexeme}' referenced before definition."),
+                    : throw new TypeCheckException($" Const enum member '{g.Name.Lexeme}' referenced before definition."),
 
             Expr.Grouping gr => EvaluateConstEnumExpression(gr.Expression, resolvedMembers, enumName),
 
@@ -120,7 +121,7 @@ public partial class TypeChecker
 
             Expr.Binary b => EvaluateConstEnumBinary(b, resolvedMembers, enumName),
 
-            _ => throw new Exception($"Type Error: Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
+            _ => throw new TypeCheckException($" Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
         };
     }
 
@@ -133,7 +134,7 @@ public partial class TypeChecker
             TokenType.MINUS when operand is double d => -d,
             TokenType.PLUS when operand is double d => d,
             TokenType.TILDE when operand is double d => (double)(~(int)d),
-            _ => throw new Exception($"Type Error: Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
+            _ => throw new TypeCheckException($" Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
         };
     }
 
@@ -157,7 +158,7 @@ public partial class TypeChecker
                 TokenType.CARET => (double)((int)l ^ (int)r),
                 TokenType.LESS_LESS => (double)((int)l << (int)r),
                 TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
-                _ => throw new Exception($"Type Error: Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
+                _ => throw new TypeCheckException($" Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
             };
         }
 
@@ -166,6 +167,6 @@ public partial class TypeChecker
             return ls + rs;
         }
 
-        throw new Exception($"Type Error: Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
+        throw new TypeCheckException($" Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
     }
 }

@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
@@ -138,7 +139,7 @@ public class NamespaceDecoratorTests
             class Test {}
             """;
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
             TestHarness.RunCompiled(source, DecoratorMode.Legacy));
         Assert.Contains("@Namespace argument must be a string literal", ex.Message);
     }
@@ -151,7 +152,7 @@ public class NamespaceDecoratorTests
             class Test {}
             """;
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
             TestHarness.RunCompiled(source, DecoratorMode.Legacy));
         Assert.Contains("@Namespace requires exactly one string argument", ex.Message);
     }

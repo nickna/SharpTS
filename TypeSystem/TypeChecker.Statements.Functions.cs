@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -83,7 +84,7 @@ public partial class TypeChecker
             {
                 if (thisFuncType.MinArity > sig.MinArity)
                 {
-                    throw new Exception($"Type Error: Implementation of '{funcName}' requires {thisFuncType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                    throw new TypeCheckException($" Implementation of '{funcName}' requires {thisFuncType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
                 }
             }
 

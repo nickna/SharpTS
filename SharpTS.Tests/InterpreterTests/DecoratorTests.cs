@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
@@ -339,7 +340,7 @@ public class DecoratorTests
             """;
 
         // Without decorator mode, the parser won't recognize @ as a decorator
-        // It will throw an error about unexpected token
+        // It will throw an error about unexpected token (Parser error, not TypeChecker error)
         var exception = Assert.Throws<Exception>(() =>
             TestHarness.RunInterpreted(source, DecoratorMode.None));
         // Parser throws "Expect expression." because @ is not expected
@@ -358,7 +359,7 @@ public class DecoratorTests
             """;
 
         // Parameter decorators are not supported in Stage 3
-        var exception = Assert.Throws<Exception>(() =>
+        var exception = Assert.ThrowsAny<TypeCheckException>(() =>
             TestHarness.RunInterpreted(source, DecoratorMode.Stage3));
         Assert.Contains("Parameter decorators are not supported in Stage 3", exception.Message);
     }

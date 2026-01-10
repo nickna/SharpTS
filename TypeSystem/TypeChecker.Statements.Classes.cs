@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -22,7 +23,7 @@ public partial class TypeChecker
             else if (superType is TypeInfo.Class sc)
                 superclass = sc;
             else
-                throw new Exception("Superclass must be a class.");
+                throw new TypeCheckException("Superclass must be a class");
         }
 
         // Handle generic type parameters
@@ -41,9 +42,6 @@ public partial class TypeChecker
         }
 
         // Use classTypeEnv for type resolution so T resolves correctly
-        TypeEnvironment savedEnvForClass = _environment;
-        _environment = classTypeEnv;
-
         Dictionary<string, TypeInfo> declaredMethods = [];
         Dictionary<string, TypeInfo> declaredStaticMethods = [];
         Dictionary<string, TypeInfo> declaredStaticProperties = [];
@@ -53,6 +51,12 @@ public partial class TypeChecker
         HashSet<string> abstractMethods = [];
         HashSet<string> abstractGetters = [];
         HashSet<string> abstractSetters = [];
+        Dictionary<string, TypeInfo> declaredFieldTypes = [];
+        Dictionary<string, TypeInfo> getters = [];
+        Dictionary<string, TypeInfo> setters = [];
+
+        using (new EnvironmentScope(this, classTypeEnv))
+        {
 
         // Helper to build a TypeInfo.Function from a method declaration
         TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
@@ -89,7 +93,7 @@ public partial class TypeChecker
             {
                 if (abstractDecls.Count > 1)
                 {
-                    throw new Exception($"Type Error: Cannot have multiple abstract declarations for method '{methodName}'.");
+                    throw new TypeCheckException($" Cannot have multiple abstract declarations for method '{methodName}'.");
                 }
                 var abstractMethod = abstractDecls[0];
                 var funcType = BuildMethodFuncType(abstractMethod);
@@ -109,11 +113,11 @@ public partial class TypeChecker
             {
                 if (implementations.Count == 0)
                 {
-                    throw new Exception($"Type Error: Overloaded method '{methodName}' has no implementation.");
+                    throw new TypeCheckException($" Overloaded method '{methodName}' has no implementation.");
                 }
                 if (implementations.Count > 1)
                 {
-                    throw new Exception($"Type Error: Overloaded method '{methodName}' has multiple implementations.");
+                    throw new TypeCheckException($" Overloaded method '{methodName}' has multiple implementations.");
                 }
 
                 var implementation = implementations[0];
@@ -125,7 +129,7 @@ public partial class TypeChecker
                 {
                     if (implType.MinArity > sig.MinArity)
                     {
-                        throw new Exception($"Type Error: Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                        throw new TypeCheckException($" Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
                     }
                 }
 
@@ -153,12 +157,11 @@ public partial class TypeChecker
             }
             else if (implementations.Count > 1)
             {
-                throw new Exception($"Type Error: Multiple implementations of method '{methodName}' without overload signatures.");
+                throw new TypeCheckException($" Multiple implementations of method '{methodName}' without overload signatures.");
             }
         }
 
         // Collect static property types, field access modifiers, and non-static field types
-        Dictionary<string, TypeInfo> declaredFieldTypes = [];
         foreach (var field in classStmt.Fields)
         {
             // Check field decorators
@@ -186,9 +189,6 @@ public partial class TypeChecker
         }
 
         // Collect accessor types
-        Dictionary<string, TypeInfo> getters = [];
-        Dictionary<string, TypeInfo> setters = [];
-
         if (classStmt.Accessors != null)
         {
             foreach (var accessor in classStmt.Accessors)
@@ -234,13 +234,11 @@ public partial class TypeChecker
             {
                 if (!IsCompatible(getters[propName], setters[propName]))
                 {
-                    throw new Exception($"Type Error: Getter and setter for '{propName}' have incompatible types.");
+                    throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.");
                 }
             }
         }
-
-        // Restore environment before defining class type (define in outer scope)
-        _environment = savedEnvForClass;
+        }
 
         // Create GenericClass or regular Class based on type parameters
         TypeInfo.Class classTypeForBody;
@@ -293,7 +291,7 @@ public partial class TypeChecker
                 TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
                 if (itfTypeInfo is not TypeInfo.Interface interfaceType)
                 {
-                    throw new Exception($"Type Error: '{interfaceToken.Lexeme}' is not an interface.");
+                    throw new TypeCheckException($" '{interfaceToken.Lexeme}' is not an interface.");
                 }
                 ValidateInterfaceImplementation(classTypeForBody, interfaceType, classStmt.Name.Lexeme);
             }
@@ -320,7 +318,7 @@ public partial class TypeChecker
                 TypeInfo staticFieldDeclaredType = declaredStaticProperties[field.Name.Lexeme];
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
-                    throw new Exception($"Type Error: Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
+                    throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
                 }
             }
         }
@@ -381,7 +379,7 @@ public partial class TypeChecker
                 {
                     TypeInfo.OverloadedFunction of => of.Implementation,
                     TypeInfo.Function f => f,
-                    _ => throw new Exception($"Type Error: Unexpected method type for '{method.Name.Lexeme}'.")
+                    _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
                 };
 
                 for (int i = 0; i < method.Parameters.Count; i++)

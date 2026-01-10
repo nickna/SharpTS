@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
@@ -17,11 +18,11 @@ public partial class TypeChecker
     {
         if (_currentClass == null)
         {
-            throw new Exception("Type Error: Cannot use 'super' outside of a class.");
+            throw new TypeCheckException(" Cannot use 'super' outside of a class.");
         }
         if (_currentClass.Superclass == null)
         {
-            throw new Exception($"Type Error: Class '{_currentClass.Name}' does not have a superclass.");
+            throw new TypeCheckException($" Class '{_currentClass.Name}' does not have a superclass.");
         }
 
         // super() constructor call - Method is null
@@ -40,7 +41,7 @@ public partial class TypeChecker
             return methodType;
         }
 
-        throw new Exception($"Type Error: Property '{expr.Method.Lexeme}' does not exist on superclass '{_currentClass.Superclass.Name}'.");
+        throw new TypeCheckException($" Property '{expr.Method.Lexeme}' does not exist on superclass '{_currentClass.Superclass.Name}'.");
     }
 
     private TypeInfo CheckThis(Expr.This expr)
@@ -53,11 +54,11 @@ public partial class TypeChecker
 
         if (_currentClass == null)
         {
-            throw new Exception("Type Error: Cannot use 'this' outside of a class.");
+            throw new TypeCheckException(" Cannot use 'this' outside of a class.");
         }
         if (_inStaticMethod)
         {
-            throw new Exception("Type Error: Cannot use 'this' in a static method.");
+            throw new TypeCheckException(" Cannot use 'this' in a static method.");
         }
         return new TypeInfo.Instance(_currentClass);
     }
@@ -94,7 +95,7 @@ public partial class TypeChecker
             {
                 return memberType;
             }
-            throw new Exception($"Type Error: '{get.Name.Lexeme}' does not exist on namespace '{nsType.Name}'.");
+            throw new TypeCheckException($" '{get.Name.Lexeme}' does not exist on namespace '{nsType.Name}'.");
         }
 
         // Handle enum member access (e.g., Direction.Up or Status.Success)
@@ -107,10 +108,10 @@ public partial class TypeChecker
                 {
                     double => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
                     string => new TypeInfo.Primitive(TokenType.TYPE_STRING),
-                    _ => throw new Exception($"Type Error: Unexpected enum member type for '{get.Name.Lexeme}'.")
+                    _ => throw new TypeCheckException($" Unexpected enum member type for '{get.Name.Lexeme}'.")
                 };
             }
-            throw new Exception($"Type Error: '{get.Name.Lexeme}' does not exist on enum '{enumTypeInfo.Name}'.");
+            throw new TypeCheckException($" '{get.Name.Lexeme}' does not exist on enum '{enumTypeInfo.Name}'.");
         }
 
         if (objType is TypeInfo.Instance instance)
@@ -205,11 +206,11 @@ public partial class TypeChecker
 
                     if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
                     {
-                        throw new Exception($"Type Error: Property '{memberName}' is private and only accessible within class '{current.Name}'.");
+                        throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{current.Name}'.");
                     }
                     if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, current))
                     {
-                        throw new Exception($"Type Error: Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
+                        throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
                     }
 
                     if (current.Methods.TryGetValue(memberName, out var methodType))
@@ -237,7 +238,7 @@ public partial class TypeChecker
             {
                 return memberType;
             }
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on interface '{itf.Name}'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on interface '{itf.Name}'.");
         }
         if (objType is TypeInfo.Record record)
         {
@@ -245,21 +246,21 @@ public partial class TypeChecker
             {
                 return fieldType;
             }
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type '{record}'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{record}'.");
         }
         // Handle string methods
         if (objType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING)
         {
             var memberType = BuiltInTypes.GetStringMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'string'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'string'.");
         }
         // Handle array methods
         if (objType is TypeInfo.Array arrayType)
         {
             var memberType = BuiltInTypes.GetArrayMemberType(get.Name.Lexeme, arrayType.ElementType);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'array'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'array'.");
         }
         // Handle tuple methods (tuples support array methods)
         if (objType is TypeInfo.Tuple tupleType)
@@ -274,49 +275,49 @@ public partial class TypeChecker
                 : (unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique));
             var memberType = BuiltInTypes.GetArrayMemberType(get.Name.Lexeme, unionElem);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on tuple type.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on tuple type.");
         }
         // Handle Date instance methods
         if (objType is TypeInfo.Date)
         {
             var memberType = BuiltInTypes.GetDateInstanceMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
         }
         // Handle RegExp instance members
         if (objType is TypeInfo.RegExp)
         {
             var memberType = BuiltInTypes.GetRegExpMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'RegExp'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'RegExp'.");
         }
         // Handle Map instance methods
         if (objType is TypeInfo.Map mapType)
         {
             var memberType = BuiltInTypes.GetMapMemberType(get.Name.Lexeme, mapType.KeyType, mapType.ValueType);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Map'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Map'.");
         }
         // Handle Set instance methods
         if (objType is TypeInfo.Set setType)
         {
             var memberType = BuiltInTypes.GetSetMemberType(get.Name.Lexeme, setType.ElementType);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'Set'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Set'.");
         }
         // Handle WeakMap instance methods
         if (objType is TypeInfo.WeakMap weakMapType)
         {
             var memberType = BuiltInTypes.GetWeakMapMemberType(get.Name.Lexeme, weakMapType.KeyType, weakMapType.ValueType);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'WeakMap'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'WeakMap'.");
         }
         // Handle WeakSet instance methods
         if (objType is TypeInfo.WeakSet weakSetType)
         {
             var memberType = BuiltInTypes.GetWeakSetMemberType(get.Name.Lexeme, weakSetType.ElementType);
             if (memberType != null) return memberType;
-            throw new Exception($"Type Error: Property '{get.Name.Lexeme}' does not exist on type 'WeakSet'.");
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'WeakSet'.");
         }
         return new TypeInfo.Any();
     }
@@ -336,7 +337,7 @@ public partial class TypeChecker
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticPropType, valueType))
                     {
-                        throw new Exception($"Type Error: Cannot assign '{valueType}' to static property '{set.Name.Lexeme}' of type '{staticPropType}'.");
+                        throw new TypeCheckException($" Cannot assign '{valueType}' to static property '{set.Name.Lexeme}' of type '{staticPropType}'.");
                     }
                     return valueType;
                 }
@@ -365,7 +366,7 @@ public partial class TypeChecker
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
-                         throw new Exception($"Type Error: Cannot assign '{valueType}' to property '{memberName}' expecting '{substitutedType}'.");
+                         throw new TypeCheckException($" Cannot assign '{valueType}' to property '{memberName}' expecting '{substitutedType}'.");
                      }
                      return valueType;
                  }
@@ -377,7 +378,7 @@ public partial class TypeChecker
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(substitutedType, valueType))
                      {
-                         throw new Exception($"Type Error: Cannot assign '{valueType}' to field '{memberName}' of type '{substitutedType}'.");
+                         throw new TypeCheckException($" Cannot assign '{valueType}' to field '{memberName}' of type '{substitutedType}'.");
                      }
                      return valueType;
                  }
@@ -399,7 +400,7 @@ public partial class TypeChecker
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(setterType, valueType))
                      {
-                         throw new Exception($"Type Error: Cannot assign '{valueType}' to property '{memberName}' expecting '{setterType}'.");
+                         throw new TypeCheckException($" Cannot assign '{valueType}' to property '{memberName}' expecting '{setterType}'.");
                      }
                      return valueType;
                  }
@@ -407,7 +408,7 @@ public partial class TypeChecker
                  // Check if there's a getter but no setter (read-only property)
                  if (current.Getters.ContainsKey(memberName) && !current.Setters.ContainsKey(memberName))
                  {
-                     throw new Exception($"Type Error: Cannot assign to '{memberName}' because it is a read-only property (has getter but no setter).");
+                     throw new TypeCheckException($" Cannot assign to '{memberName}' because it is a read-only property (has getter but no setter).");
                  }
 
                  current = current.Superclass;
@@ -426,11 +427,11 @@ public partial class TypeChecker
 
                  if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
                  {
-                     throw new Exception($"Type Error: Property '{memberName}' is private and only accessible within class '{current.Name}'.");
+                     throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{current.Name}'.");
                  }
                  if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, current))
                  {
-                     throw new Exception($"Type Error: Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
+                     throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
                  }
 
                  // Check readonly - only allow assignment in constructor
@@ -442,7 +443,7 @@ public partial class TypeChecker
                      // Simplified check - just allow if we're in the same class
                      if (_currentClass?.Name != current.Name)
                      {
-                         throw new Exception($"Type Error: Cannot assign to '{memberName}' because it is a read-only property.");
+                         throw new TypeCheckException($" Cannot assign to '{memberName}' because it is a read-only property.");
                      }
                  }
 
@@ -458,18 +459,18 @@ public partial class TypeChecker
                  TypeInfo valueType = CheckExpr(set.Value);
                  if (!IsCompatible(fieldType, valueType))
                  {
-                     throw new Exception($"Type Error: Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{fieldType}'.");
+                     throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{fieldType}'.");
                  }
                  return valueType;
              }
              // For now, disallow adding new properties to records via assignment to mimic strictness
-             throw new Exception($"Type Error: Property '{set.Name.Lexeme}' does not exist on type '{record}'.");
+             throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{record}'.");
         }
         // Allow property assignment on Any type (e.g., 'this' in object method shorthand)
         if (objType is TypeInfo.Any)
         {
             return CheckExpr(set.Value);
         }
-        throw new Exception("Type Error: Only instances and objects have properties.");
+        throw new TypeCheckException(" Only instances and objects have properties.");
     }
 }

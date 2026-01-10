@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -50,6 +51,30 @@ public partial class TypeChecker
     private TypeInfo? _currentFunctionThisType = null;
 
     /// <summary>
+    /// RAII-style helper for safely managing TypeEnvironment scope changes.
+    /// Automatically restores the previous environment on disposal, even if an exception is thrown.
+    /// </summary>
+    /// <remarks>
+    /// Usage: using var _ = new EnvironmentScope(this, newEnvironment);
+    /// This ensures _environment is always restored when the scope exits, preventing corruption
+    /// if type checking throws an exception during the scope's lifetime.
+    /// </remarks>
+    private readonly struct EnvironmentScope : IDisposable
+    {
+        private readonly TypeChecker _checker;
+        private readonly TypeEnvironment _previous;
+
+        public EnvironmentScope(TypeChecker checker, TypeEnvironment newEnv)
+        {
+            _checker = checker;
+            _previous = checker._environment;
+            checker._environment = newEnv;
+        }
+
+        public void Dispose() => _checker._environment = _previous;
+    }
+
+    /// <summary>
     /// Builds a function signature by parsing parameters and validating optional/required ordering.
     /// </summary>
     /// <param name="parameters">Function/method parameters to parse</param>
@@ -82,7 +107,7 @@ public partial class TypeChecker
                     TypeInfo defaultType = CheckExpr(param.DefaultValue);
                     if (!IsCompatible(paramType, defaultType))
                     {
-                        throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}' in {contextName}.");
+                        throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}", paramType, defaultType);
                     }
                 }
             }
@@ -94,7 +119,7 @@ public partial class TypeChecker
             {
                 if (seenDefault)
                 {
-                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter in {contextName}.");
+                    throw new TypeCheckException($"Required parameter cannot follow optional parameter in {contextName}");
                 }
                 requiredParams++;
             }
@@ -228,15 +253,14 @@ public partial class TypeChecker
             BindModuleImports(module, moduleEnv);
 
             // Type-check module body
-            var savedEnv = _environment;
-            _environment = moduleEnv;
-
-            foreach (var stmt in module.Statements)
+            using (new EnvironmentScope(this, moduleEnv))
             {
-                CheckStmt(stmt);
+                foreach (var stmt in module.Statements)
+                {
+                    CheckStmt(stmt);
+                }
             }
 
-            _environment = savedEnv;
             module.IsTypeChecked = true;
         }
 
@@ -250,14 +274,14 @@ public partial class TypeChecker
     private void CollectModuleExports(ParsedModule module)
     {
         var moduleEnv = new TypeEnvironment(_environment);
-        var savedEnv = _environment;
-        _environment = moduleEnv;
 
-        // First, bind imports so we can reference imported types in our declarations
-        BindModuleImports(module, moduleEnv);
+        using (new EnvironmentScope(this, moduleEnv))
+        {
+            // First, bind imports so we can reference imported types in our declarations
+            BindModuleImports(module, moduleEnv);
 
-        // Then, process all declarations to populate the environment
-        foreach (var stmt in module.Statements)
+            // Then, process all declarations to populate the environment
+            foreach (var stmt in module.Statements)
         {
             // Skip imports - already bound above
             if (stmt is Stmt.Import)
@@ -353,8 +377,7 @@ public partial class TypeChecker
                 }
             }
         }
-
-        _environment = savedEnv;
+        }
     }
 
     /// <summary>
@@ -371,7 +394,7 @@ public partial class TypeChecker
 
                 if (importedModule == null)
                 {
-                    throw new Exception($"Type Error at line {import.Keyword.Line}: Cannot find module '{import.ModulePath}'.");
+                    throw new TypeCheckException($"Cannot find module '{import.ModulePath}'", import.Keyword.Line);
                 }
 
                 // Default import
@@ -379,7 +402,7 @@ public partial class TypeChecker
                 {
                     if (importedModule.DefaultExportType == null)
                     {
-                        throw new Exception($"Type Error at line {import.Keyword.Line}: Module '{import.ModulePath}' has no default export.");
+                        throw new TypeCheckException($"Module '{import.ModulePath}' has no default export", import.Keyword.Line);
                     }
                     env.Define(import.DefaultImport.Lexeme, importedModule.DefaultExportType);
                 }
@@ -404,7 +427,7 @@ public partial class TypeChecker
 
                         if (!importedModule.ExportedTypes.TryGetValue(importedName, out var type))
                         {
-                            throw new Exception($"Type Error at line {import.Keyword.Line}: Module '{import.ModulePath}' has no export named '{importedName}'.");
+                            throw new TypeCheckException($"Module '{import.ModulePath}' has no export named '{importedName}'", import.Keyword.Line);
                         }
 
                         env.Define(localName, type);
@@ -427,7 +450,7 @@ public partial class TypeChecker
             Stmt.Interface i => i.Name.Lexeme,
             Stmt.TypeAlias t => t.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
-            _ => throw new Exception($"Type Error: Cannot get name of declaration type {decl.GetType().Name}")
+            _ => throw new TypeCheckException($" Cannot get name of declaration type {decl.GetType().Name}")
         };
     }
 

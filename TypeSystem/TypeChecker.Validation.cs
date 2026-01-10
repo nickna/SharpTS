@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -27,12 +28,12 @@ public partial class TypeChecker
 
             if (actualType == null && !isOptional)
             {
-                throw new Exception($"Type Error: Class '{className}' does not implement '{memberName}' from interface '{interfaceType.Name}'.");
+                throw new TypeCheckException($" Class '{className}' does not implement '{memberName}' from interface '{interfaceType.Name}'.");
             }
 
             if (actualType != null && !IsCompatible(expectedType, actualType))
             {
-                throw new Exception($"Type Error: '{className}.{memberName}' has incompatible type. Expected '{expectedType}', got '{actualType}'.");
+                throw new TypeCheckException($" '{className}.{memberName}' has incompatible type. Expected '{expectedType}', got '{actualType}'.");
             }
         }
     }
@@ -81,7 +82,7 @@ public partial class TypeChecker
 
         if (missingMembers.Count > 0)
         {
-            throw new Exception($"Type Error: Class '{className}' must implement the following abstract members: {string.Join(", ", missingMembers)}");
+            throw new TypeCheckException($" Class '{className}' must implement the following abstract members: {string.Join(", ", missingMembers)}");
         }
     }
 
@@ -157,7 +158,7 @@ public partial class TypeChecker
                 string methodName = method.Name.Lexeme;
                 if (!HasParentMethod(classType.Superclass, methodName))
                 {
-                    throw new Exception($"Type Error: Method '{methodName}' is marked as override but does not override any method in a base class.");
+                    throw new TypeCheckException($" Method '{methodName}' is marked as override but does not override any method in a base class.");
                 }
             }
         }
@@ -176,14 +177,14 @@ public partial class TypeChecker
                     {
                         if (!HasParentGetter(classType.Superclass, propertyName))
                         {
-                            throw new Exception($"Type Error: Getter '{propertyName}' is marked as override but does not override any getter in a base class.");
+                            throw new TypeCheckException($" Getter '{propertyName}' is marked as override but does not override any getter in a base class.");
                         }
                     }
                     else
                     {
                         if (!HasParentSetter(classType.Superclass, propertyName))
                         {
-                            throw new Exception($"Type Error: Setter '{propertyName}' is marked as override but does not override any setter in a base class.");
+                            throw new TypeCheckException($" Setter '{propertyName}' is marked as override but does not override any setter in a base class.");
                         }
                     }
                 }

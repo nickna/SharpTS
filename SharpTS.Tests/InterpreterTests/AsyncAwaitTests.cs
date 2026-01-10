@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -361,7 +362,7 @@ public class AsyncAwaitTests
             }
             """;
 
-        var exception = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var exception = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("await", exception.Message.ToLower());
     }
 

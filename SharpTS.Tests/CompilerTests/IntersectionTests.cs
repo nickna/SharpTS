@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -290,7 +291,7 @@ public class IntersectionTests
             let obj: A & B = { x: 1 };
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -302,7 +303,7 @@ public class IntersectionTests
             let x: Impossible = "test";
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -317,7 +318,7 @@ public class IntersectionTests
             let x: AB = { prop: "test" };
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -329,7 +330,7 @@ public class IntersectionTests
             let x: T = "test";
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -346,7 +347,7 @@ public class IntersectionTests
             ];
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 
@@ -364,7 +365,7 @@ public class IntersectionTests
             process({ name: "Alice" });
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Type Error", ex.Message);
     }
 

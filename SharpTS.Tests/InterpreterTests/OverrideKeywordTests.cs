@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -220,7 +221,7 @@ public class OverrideKeywordTests
                 override speak(): string { return "Woof"; }
             }
             """;
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Type Error", ex.Message);
         Assert.Contains("override", ex.Message);
         Assert.Contains("speak", ex.Message);
@@ -281,7 +282,7 @@ public class OverrideKeywordTests
                 override get value(): number { return 42; }
             }
             """;
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Type Error", ex.Message);
         Assert.Contains("Getter", ex.Message);
         Assert.Contains("value", ex.Message);
@@ -300,7 +301,7 @@ public class OverrideKeywordTests
                 override set value(v: number) { this._val = v; }
             }
             """;
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Type Error", ex.Message);
         Assert.Contains("Setter", ex.Message);
         Assert.Contains("value", ex.Message);

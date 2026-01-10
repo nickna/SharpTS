@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -443,7 +444,7 @@ public class ModuleTests
                 """
         };
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
             TestHarness.RunModulesInterpreted(files, "./a.ts"));
         // Can be "Circular dependency" or a type error about missing exports
         Assert.True(
@@ -472,7 +473,7 @@ public class ModuleTests
                 """
         };
 
-        var ex = Assert.Throws<Exception>(() =>
+        var ex = Assert.ThrowsAny<TypeCheckException>(() =>
             TestHarness.RunModulesInterpreted(files, "./a.ts"));
         // Can be "Circular dependency" or a type error about missing exports
         Assert.True(

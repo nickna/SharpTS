@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -39,7 +40,7 @@ public partial class TypeChecker
                     // Check for label shadowing
                     if (_activeLabels.ContainsKey(labelName))
                     {
-                        throw new Exception($"Type Error: Label '{labelName}' already declared in this scope.");
+                        throw new TypeCheckException($"Label '{labelName}' already declared in this scope");
                     }
 
                     // Determine if this label is on a loop (for continue validation)
@@ -127,7 +128,7 @@ public partial class TypeChecker
 
                             if (!IsCompatible(declaredType, initializerType))
                             {
-                                throw new Exception($"Type Error: Cannot assign type '{initializerType}' to variable '{varStmt.Name.Lexeme}' of type '{declaredType}'.");
+                                throw new TypeMismatchException(declaredType, initializerType, varStmt.Name.Line);
                             }
                         }
                         else
@@ -180,7 +181,7 @@ public partial class TypeChecker
                         }
                         else if (!IsCompatible(expectedReturnType, actualReturnType))
                         {
-                             throw new Exception($"Type Error: Function declared to return '{_currentFunctionReturnType}' but returned '{actualReturnType}'.");
+                             throw new TypeMismatchException(_currentFunctionReturnType, actualReturnType, returnStmt.Keyword.Line);
                         }
                     }
                 }
@@ -203,19 +204,20 @@ public partial class TypeChecker
                     // Then branch with narrowed type
                     var thenEnv = new TypeEnvironment(_environment);
                     thenEnv.Define(guard.VarName, guard.NarrowedType!);
-                    var savedEnv = _environment;
-                    _environment = thenEnv;
-                    CheckStmt(ifStmt.ThenBranch);
-                    _environment = savedEnv;
+                    using (new EnvironmentScope(this, thenEnv))
+                    {
+                        CheckStmt(ifStmt.ThenBranch);
+                    }
 
                     // Else branch with excluded type
                     if (ifStmt.ElseBranch != null && guard.ExcludedType != null)
                     {
                         var elseEnv = new TypeEnvironment(_environment);
                         elseEnv.Define(guard.VarName, guard.ExcludedType);
-                        _environment = elseEnv;
-                        CheckStmt(ifStmt.ElseBranch);
-                        _environment = savedEnv;
+                        using (new EnvironmentScope(this, elseEnv))
+                        {
+                            CheckStmt(ifStmt.ElseBranch);
+                        }
                     }
                     else if (ifStmt.ElseBranch != null)
                     {
@@ -307,7 +309,7 @@ public partial class TypeChecker
                 // Validate that the iterable is an object-like type
                 if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
                 {
-                    throw new Exception($"Type Error: 'for...in' requires an object, got {objType}.");
+                    throw new TypeCheckException($"'for...in' requires an object, got {objType}");
                 }
 
                 // Create new scope and define the loop variable
@@ -335,7 +337,7 @@ public partial class TypeChecker
                     string labelName = breakStmt.Label.Lexeme;
                     if (!_activeLabels.ContainsKey(labelName))
                     {
-                        throw new Exception($"Type Error: Label '{labelName}' not found.");
+                        throw new TypeCheckException($"Label '{labelName}' not found");
                     }
                 }
                 else
@@ -343,7 +345,7 @@ public partial class TypeChecker
                     // Unlabeled break: must be inside a loop or switch
                     if (_loopDepth == 0 && _switchDepth == 0)
                     {
-                        throw new Exception("Type Error: 'break' can only be used inside a loop or switch.");
+                        throw new TypeOperationException("'break' can only be used inside a loop or switch");
                     }
                 }
                 break;
@@ -367,11 +369,11 @@ public partial class TypeChecker
                     string labelName = continueStmt.Label.Lexeme;
                     if (!_activeLabels.TryGetValue(labelName, out bool isOnLoop))
                     {
-                        throw new Exception($"Type Error: Label '{labelName}' not found.");
+                        throw new TypeCheckException($"Label '{labelName}' not found");
                     }
                     if (!isOnLoop)
                     {
-                        throw new Exception($"Type Error: Cannot continue to non-loop label '{labelName}'.");
+                        throw new TypeOperationException($"Cannot continue to non-loop label '{labelName}'");
                     }
                 }
                 else
@@ -379,7 +381,7 @@ public partial class TypeChecker
                     // Unlabeled continue: must be inside a loop
                     if (_loopDepth == 0)
                     {
-                        throw new Exception("Type Error: 'continue' can only be used inside a loop.");
+                        throw new TypeOperationException("'continue' can only be used inside a loop");
                     }
                 }
                 break;
@@ -393,8 +395,8 @@ public partial class TypeChecker
                 // In single-file mode, imports are an error since there's no module to import from.
                 if (_currentModule == null)
                 {
-                    throw new Exception($"Type Error at line {importStmt.Keyword.Line}: Import statements require module mode. " +
-                                       "Use 'dotnet run -- --compile' with multi-file support.");
+                    throw new TypeCheckException("Import statements require module mode. " +
+                                       "Use 'dotnet run -- --compile' with multi-file support", importStmt.Keyword.Line);
                 }
                 // When in module mode, imports are resolved and bound in BindModuleImports()
                 break;
@@ -424,16 +426,16 @@ public partial class TypeChecker
             {
                 if (call.Arguments.Count != 1)
                 {
-                    throw new Exception($"Type Error at line {decorator.AtToken.Line}: @Namespace requires exactly one string argument.");
+                    throw new TypeCheckException("@Namespace requires exactly one string argument", decorator.AtToken.Line);
                 }
                 if (call.Arguments[0] is not Expr.Literal { Value: string })
                 {
-                    throw new Exception($"Type Error at line {decorator.AtToken.Line}: @Namespace argument must be a string literal.");
+                    throw new TypeCheckException("@Namespace argument must be a string literal", decorator.AtToken.Line);
                 }
             }
             else
             {
-                throw new Exception($"Type Error at line {decorator.AtToken.Line}: Unknown file-level directive. Only @Namespace is supported.");
+                throw new TypeCheckException("Unknown file-level directive. Only @Namespace is supported", decorator.AtToken.Line);
             }
         }
     }

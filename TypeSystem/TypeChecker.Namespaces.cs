@@ -36,10 +36,8 @@ public partial class TypeChecker
 
         // Create new scope for namespace body
         var namespaceEnv = new TypeEnvironment(_environment);
-        var savedEnv = _environment;
-        _environment = namespaceEnv;
 
-        try
+        using (new EnvironmentScope(this, namespaceEnv))
         {
             // First pass: collect all type declarations (classes, interfaces, enums, nested namespaces)
             foreach (var member in ns.Members)
@@ -52,10 +50,6 @@ public partial class TypeChecker
             {
                 CheckNamespaceMember(member, values);
             }
-        }
-        finally
-        {
-            _environment = savedEnv;
         }
 
         // Create namespace with frozen collections

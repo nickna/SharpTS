@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -31,7 +32,7 @@ public class InterfaceTests
             let obj: Named = { name: "test", extra: 42 };
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunInterpreted(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
         Assert.Contains("Excess property: 'extra'", ex.Message);
     }
 

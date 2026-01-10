@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 
@@ -62,7 +63,7 @@ public partial class TypeChecker
     {
         if (!_inAsyncFunction)
         {
-            throw new Exception("Type Error: 'await' is only valid inside an async function.");
+            throw new TypeCheckException(" 'await' is only valid inside an async function.");
         }
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
@@ -80,7 +81,7 @@ public partial class TypeChecker
 
         if (!isValidPath)
         {
-            throw new Exception($"Type Error: Dynamic import path must be a string, got '{pathType}'.");
+            throw new TypeCheckException($" Dynamic import path must be a string, got '{pathType}'.");
         }
 
         // Dynamic import returns Promise<any> since module type is unknown at compile time
@@ -91,7 +92,7 @@ public partial class TypeChecker
     {
         if (!_inGeneratorFunction)
         {
-            throw new Exception("Type Error: 'yield' is only valid inside a generator function.");
+            throw new TypeCheckException(" 'yield' is only valid inside a generator function.");
         }
 
         if (yieldExpr.Value != null)
@@ -125,7 +126,7 @@ public partial class TypeChecker
         TypeInfo.Primitive p when p.Type == Parsing.TokenType.TYPE_STRING => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String yields characters
         TypeInfo.StringLiteral => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String literal also yields characters
         TypeInfo.Any => new TypeInfo.Any(),
-        _ => throw new Exception($"Type Error: Type '{type}' is not iterable for yield*.")
+        _ => throw new TypeCheckException($" Type '{type}' is not iterable for yield*.")
     };
 
     /// <summary>
@@ -153,7 +154,7 @@ public partial class TypeChecker
         if (IsCompatible(targetType, sourceType) || IsCompatible(sourceType, targetType))
             return targetType;
 
-        throw new Exception($"Type Error: Cannot assert type '{sourceType}' to '{targetType}'.");
+        throw new TypeCheckException($" Cannot assert type '{sourceType}' to '{targetType}'.");
     }
 
     private TypeInfo CheckTemplateLiteral(Expr.TemplateLiteral template)
@@ -197,7 +198,7 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    throw new Exception($"Type Error: Spread in object literal requires an object, got '{spreadType}'.");
+                    throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.");
                 }
             }
             else
@@ -239,7 +240,7 @@ public partial class TypeChecker
                             // Union of string/number types - use string index signature
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else
-                            throw new Exception($"Type Error: Computed property key must be string, number, or symbol, got '{keyType}'.");
+                            throw new TypeCheckException($" Computed property key must be string, number, or symbol, got '{keyType}'.");
                         break;
                 }
             }
@@ -289,7 +290,7 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    throw new Exception($"Type Error: Spread expression must be an array or tuple, got '{spreadType}'.");
+                    throw new TypeCheckException($" Spread expression must be an array or tuple, got '{spreadType}'.");
                 }
             }
             else
@@ -337,11 +338,11 @@ public partial class TypeChecker
         // Check element count
         if (elemCount < requiredCount)
         {
-            throw new Exception($"Type Error: Tuple requires at least {requiredCount} elements, but got {elemCount} for variable '{varName}'.");
+            throw new TypeCheckException($" Tuple requires at least {requiredCount} elements, but got {elemCount} for variable '{varName}'.");
         }
         if (tupleType.RestElementType == null && elemCount > tupleType.ElementTypes.Count)
         {
-            throw new Exception($"Type Error: Tuple expects at most {tupleType.ElementTypes.Count} elements, but got {elemCount} for variable '{varName}'.");
+            throw new TypeCheckException($" Tuple expects at most {tupleType.ElementTypes.Count} elements, but got {elemCount} for variable '{varName}'.");
         }
 
         // Check each element type
@@ -360,7 +361,7 @@ public partial class TypeChecker
             }
             else
             {
-                throw new Exception($"Type Error: Tuple index {i} is out of bounds for variable '{varName}'.");
+                throw new TypeCheckException($" Tuple index {i} is out of bounds for variable '{varName}'.");
             }
 
             // Recursively apply contextual typing for nested array literals with tuple types
@@ -373,7 +374,7 @@ public partial class TypeChecker
                 TypeInfo elemType = CheckExpr(element);
                 if (!IsCompatible(expectedType, elemType))
                 {
-                    throw new Exception($"Type Error: Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
+                    throw new TypeCheckException($" Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
                 }
             }
         }
@@ -415,7 +416,7 @@ public partial class TypeChecker
                 TypeInfo defaultType = CheckExpr(param.DefaultValue);
                 if (!IsCompatible(paramType, defaultType))
                 {
-                    throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
+                    throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
                 }
             }
             else if (param.IsOptional)
@@ -426,7 +427,7 @@ public partial class TypeChecker
             {
                 if (seenDefault)
                 {
-                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter.");
+                    throw new TypeCheckException($" Required parameter cannot follow optional parameter.");
                 }
                 requiredParams++;
             }
@@ -490,7 +491,7 @@ public partial class TypeChecker
 
                     if (!IsCompatible(expectedType, exprType))
                     {
-                        throw new Exception($"Type Error: Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
+                        throw new TypeCheckException($" Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
                     }
                 }
             }
@@ -527,7 +528,7 @@ public partial class TypeChecker
 
         if (!IsCompatible(varType, valueType))
         {
-            throw new Exception($"Type Error: Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{varType}'.");
+            throw new TypeCheckException($" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{varType}'.");
         }
         return valueType;
     }
@@ -550,7 +551,7 @@ public partial class TypeChecker
         var type = _environment.Get(name.Lexeme);
         if (type == null)
         {
-             throw new Exception($"Type Error: Undefined variable '{name.Lexeme}'.");
+             throw new TypeCheckException($" Undefined variable '{name.Lexeme}'.");
         }
         return type;
     }

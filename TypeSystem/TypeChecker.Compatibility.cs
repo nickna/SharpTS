@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 
@@ -570,8 +571,8 @@ public partial class TypeChecker
         if (excessKeys.Count > 0)
         {
             string excessList = string.Join(", ", excessKeys.Select(k => $"'{k}'"));
-            throw new Exception(
-                $"Type Error: Object literal may only specify known properties. " +
+            throw new TypeCheckException(
+                $"Object literal may only specify known properties. " +
                 $"Excess {(excessKeys.Count == 1 ? "property" : "properties")}: {excessList}"
             );
         }

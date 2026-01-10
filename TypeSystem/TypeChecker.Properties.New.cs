@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -40,12 +41,12 @@ public partial class TypeChecker
         {
             if (current is not TypeInfo.Namespace ns)
             {
-                throw new Exception($"Type Error: '{namespacePath[i - 1].Lexeme}' is not a namespace.");
+                throw new TypeCheckException($" '{namespacePath[i - 1].Lexeme}' is not a namespace.");
             }
             var member = ns.GetMember(namespacePath[i].Lexeme);
             if (member == null)
             {
-                throw new Exception($"Type Error: '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
+                throw new TypeCheckException($" '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
             }
             current = member;
         }
@@ -53,13 +54,13 @@ public partial class TypeChecker
         // Now get the class from the final namespace
         if (current is not TypeInfo.Namespace finalNs)
         {
-            throw new Exception($"Type Error: '{namespacePath[^1].Lexeme}' is not a namespace.");
+            throw new TypeCheckException($" '{namespacePath[^1].Lexeme}' is not a namespace.");
         }
 
         var classType = finalNs.GetMember(className.Lexeme);
         if (classType == null)
         {
-            throw new Exception($"Type Error: Class '{className.Lexeme}' does not exist in namespace '{finalNs.Name}'.");
+            throw new TypeCheckException($" Class '{className.Lexeme}' does not exist in namespace '{finalNs.Name}'.");
         }
 
         return classType;
@@ -76,7 +77,7 @@ public partial class TypeChecker
             // Date() accepts 0-7 arguments
             if (newExpr.Arguments.Count > 7)
             {
-                throw new Exception("Type Error: Date constructor accepts at most 7 arguments.");
+                throw new TypeCheckException(" Date constructor accepts at most 7 arguments.");
             }
 
             // Validate argument types
@@ -89,12 +90,12 @@ public partial class TypeChecker
                 {
                     if (!IsNumber(argType) && !IsString(argType) && argType is not TypeInfo.Any)
                     {
-                        throw new Exception($"Type Error: Date constructor single argument must be a number or string, got '{argType}'.");
+                        throw new TypeCheckException($" Date constructor single argument must be a number or string, got '{argType}'.");
                     }
                 }
                 else if (!IsNumber(argType) && argType is not TypeInfo.Any)
                 {
-                    throw new Exception($"Type Error: Date constructor arguments must be numbers, got '{argType}'.");
+                    throw new TypeCheckException($" Date constructor arguments must be numbers, got '{argType}'.");
                 }
             }
 
@@ -107,7 +108,7 @@ public partial class TypeChecker
             // RegExp() accepts 0-2 arguments (pattern, flags)
             if (newExpr.Arguments.Count > 2)
             {
-                throw new Exception("Type Error: RegExp constructor accepts at most 2 arguments.");
+                throw new TypeCheckException(" RegExp constructor accepts at most 2 arguments.");
             }
 
             // Validate argument types
@@ -116,7 +117,7 @@ public partial class TypeChecker
                 var patternType = CheckExpr(newExpr.Arguments[0]);
                 if (!IsString(patternType) && patternType is not TypeInfo.Any)
                 {
-                    throw new Exception($"Type Error: RegExp pattern must be a string, got '{patternType}'.");
+                    throw new TypeCheckException($" RegExp pattern must be a string, got '{patternType}'.");
                 }
             }
 
@@ -125,7 +126,7 @@ public partial class TypeChecker
                 var flagsType = CheckExpr(newExpr.Arguments[1]);
                 if (!IsString(flagsType) && flagsType is not TypeInfo.Any)
                 {
-                    throw new Exception($"Type Error: RegExp flags must be a string, got '{flagsType}'.");
+                    throw new TypeCheckException($" RegExp flags must be a string, got '{flagsType}'.");
                 }
             }
 
@@ -138,7 +139,7 @@ public partial class TypeChecker
             // Map() accepts 0-1 arguments (optional iterable of entries)
             if (newExpr.Arguments.Count > 1)
             {
-                throw new Exception("Type Error: Map constructor accepts at most 1 argument.");
+                throw new TypeCheckException(" Map constructor accepts at most 1 argument.");
             }
 
             // Validate argument if provided
@@ -158,7 +159,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new Exception("Type Error: Map requires exactly 2 type arguments: Map<K, V>");
+                throw new TypeCheckException(" Map requires exactly 2 type arguments: Map<K, V>");
             }
 
             return new TypeInfo.Map(keyType, valueType);
@@ -170,7 +171,7 @@ public partial class TypeChecker
             // Set() accepts 0-1 arguments (optional iterable of values)
             if (newExpr.Arguments.Count > 1)
             {
-                throw new Exception("Type Error: Set constructor accepts at most 1 argument.");
+                throw new TypeCheckException(" Set constructor accepts at most 1 argument.");
             }
 
             // Validate argument if provided
@@ -188,7 +189,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new Exception("Type Error: Set requires exactly 1 type argument: Set<T>");
+                throw new TypeCheckException(" Set requires exactly 1 type argument: Set<T>");
             }
 
             return new TypeInfo.Set(elementType);
@@ -200,7 +201,7 @@ public partial class TypeChecker
             // WeakMap() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception("Type Error: WeakMap constructor does not accept arguments.");
+                throw new TypeCheckException(" WeakMap constructor does not accept arguments.");
             }
 
             // Determine key and value types from type arguments or default to any
@@ -215,12 +216,12 @@ public partial class TypeChecker
                 // Validate that key type is not a primitive
                 if (IsPrimitiveType(keyType))
                 {
-                    throw new Exception($"Type Error: WeakMap keys must be objects, not '{keyType}'.");
+                    throw new TypeCheckException($" WeakMap keys must be objects, not '{keyType}'.");
                 }
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new Exception("Type Error: WeakMap requires exactly 2 type arguments: WeakMap<K, V>");
+                throw new TypeCheckException(" WeakMap requires exactly 2 type arguments: WeakMap<K, V>");
             }
 
             return new TypeInfo.WeakMap(keyType, valueType);
@@ -232,7 +233,7 @@ public partial class TypeChecker
             // WeakSet() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception("Type Error: WeakSet constructor does not accept arguments.");
+                throw new TypeCheckException(" WeakSet constructor does not accept arguments.");
             }
 
             // Determine element type from type argument or default to any
@@ -245,12 +246,12 @@ public partial class TypeChecker
                 // Validate that element type is not a primitive
                 if (IsPrimitiveType(elementType))
                 {
-                    throw new Exception($"Type Error: WeakSet values must be objects, not '{elementType}'.");
+                    throw new TypeCheckException($" WeakSet values must be objects, not '{elementType}'.");
                 }
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new Exception("Type Error: WeakSet requires exactly 1 type argument: WeakSet<T>");
+                throw new TypeCheckException(" WeakSet requires exactly 1 type argument: WeakSet<T>");
             }
 
             return new TypeInfo.WeakSet(elementType);
@@ -262,11 +263,11 @@ public partial class TypeChecker
         // Check for abstract class instantiation
         if (type is TypeInfo.GenericClass gc && gc.IsAbstract)
         {
-            throw new Exception($"Type Error: Cannot create an instance of abstract class '{qualifiedName}'.");
+            throw new TypeCheckException($" Cannot create an instance of abstract class '{qualifiedName}'.");
         }
         if (type is TypeInfo.Class c && c.IsAbstract)
         {
-            throw new Exception($"Type Error: Cannot create an instance of abstract class '{qualifiedName}'.");
+            throw new TypeCheckException($" Cannot create an instance of abstract class '{qualifiedName}'.");
         }
 
         // Handle generic class instantiation
@@ -274,7 +275,7 @@ public partial class TypeChecker
         {
             if (newExpr.TypeArgs == null || newExpr.TypeArgs.Count == 0)
             {
-                throw new Exception($"Type Error: Generic class '{qualifiedName}' requires type arguments.");
+                throw new TypeCheckException($" Generic class '{qualifiedName}' requires type arguments.");
             }
 
             var typeArgs = newExpr.TypeArgs.Select(ToTypeInfo).ToList();
@@ -305,7 +306,7 @@ public partial class TypeChecker
                     }
                     if (!matched)
                     {
-                        throw new Exception($"Type Error: No constructor overload matches the call for '{qualifiedName}'.");
+                        throw new TypeCheckException($" No constructor overload matches the call for '{qualifiedName}'.");
                     }
                 }
                 else if (ctorTypeInfo is TypeInfo.Function ctorType)
@@ -314,11 +315,11 @@ public partial class TypeChecker
 
                     if (newExpr.Arguments.Count < ctorType.MinArity)
                     {
-                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                        throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
                     }
                     if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
                     {
-                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                        throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
                     }
 
                     for (int i = 0; i < newExpr.Arguments.Count; i++)
@@ -326,14 +327,14 @@ public partial class TypeChecker
                         TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
                         if (!IsCompatible(substitutedParamTypes[i], argType))
                         {
-                            throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{substitutedParamTypes[i]}' but got '{argType}'.");
+                            throw new TypeCheckException($" Constructor argument {i + 1} expected type '{substitutedParamTypes[i]}' but got '{argType}'.");
                         }
                     }
                 }
             }
             else if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
+                throw new TypeCheckException($" Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
             }
 
             return new TypeInfo.Instance(instantiated);
@@ -359,7 +360,7 @@ public partial class TypeChecker
                     }
                     if (!matched)
                     {
-                        throw new Exception($"Type Error: No constructor overload matches the call for '{qualifiedName}'.");
+                        throw new TypeCheckException($" No constructor overload matches the call for '{qualifiedName}'.");
                     }
                 }
                 else if (ctorTypeInfo is TypeInfo.Function ctorType)
@@ -367,11 +368,11 @@ public partial class TypeChecker
                     // Use MinArity to allow optional parameters
                     if (newExpr.Arguments.Count < ctorType.MinArity)
                     {
-                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
+                        throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.");
                     }
                     if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
                     {
-                        throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
+                        throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.");
                     }
 
                     for (int i = 0; i < newExpr.Arguments.Count; i++)
@@ -379,18 +380,18 @@ public partial class TypeChecker
                         TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
                         if (!IsCompatible(ctorType.ParamTypes[i], argType))
                         {
-                            throw new Exception($"Type Error: Constructor argument {i + 1} expected type '{ctorType.ParamTypes[i]}' but got '{argType}'.");
+                            throw new TypeCheckException($" Constructor argument {i + 1} expected type '{ctorType.ParamTypes[i]}' but got '{argType}'.");
                         }
                     }
                 }
             }
             else if (newExpr.Arguments.Count > 0)
             {
-                throw new Exception($"Type Error: Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
+                throw new TypeCheckException($" Constructor for '{qualifiedName}' expected 0 arguments but got {newExpr.Arguments.Count}.");
             }
 
             return new TypeInfo.Instance(classType);
         }
-        throw new Exception($"Type Error: '{qualifiedName}' is not a class.");
+        throw new TypeCheckException($" '{qualifiedName}' is not a class.");
     }
 }

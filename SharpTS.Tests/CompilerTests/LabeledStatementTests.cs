@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -331,7 +332,7 @@ public class LabeledStatementTests
             }
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Label 'missing' not found", ex.Message);
     }
 
@@ -344,7 +345,7 @@ public class LabeledStatementTests
             }
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Label 'missing' not found", ex.Message);
     }
 
@@ -357,7 +358,7 @@ public class LabeledStatementTests
             }
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Cannot continue to non-loop label", ex.Message);
     }
 
@@ -373,7 +374,7 @@ public class LabeledStatementTests
             }
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Label 'outer' already declared", ex.Message);
     }
 }
