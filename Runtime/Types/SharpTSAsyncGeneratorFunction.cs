@@ -34,22 +34,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable
         RuntimeEnvironment environment = new(_closure);
 
         // Bind parameters to arguments
-        if (_declaration.Parameters != null)
-        {
-            for (int i = 0; i < _declaration.Parameters.Count; i++)
-            {
-                var param = _declaration.Parameters[i];
-                object? value = i < arguments.Count ? arguments[i] : param.DefaultValue;
-
-                // Evaluate default value if needed
-                if (value == null && param.DefaultValue != null)
-                {
-                    value = interpreter.Evaluate(param.DefaultValue);
-                }
-
-                environment.Define(param.Name.Lexeme, value);
-            }
-        }
+        ParameterBinder.Bind(_declaration.Parameters ?? [], arguments, environment, interpreter);
 
         // Return the async generator object (not yet started)
         return new SharpTSAsyncGenerator(_declaration, environment, interpreter);

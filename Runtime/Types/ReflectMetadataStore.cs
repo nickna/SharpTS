@@ -1,9 +1,14 @@
+using System.Runtime.CompilerServices;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
 /// Global metadata store implementing the reflect-metadata polyfill API.
 /// Stores metadata associated with targets and optional property keys.
 /// Used for TypeScript decorator metadata (design:type, design:paramtypes, design:returntype).
+///
+/// IMPORTANT: Uses weak references matching JavaScript WeakMap semantics.
+/// When a target object is garbage collected, all associated metadata is automatically removed.
 /// </summary>
 public class ReflectMetadataStore
 {
@@ -11,30 +16,38 @@ public class ReflectMetadataStore
     public static ReflectMetadataStore Instance { get; } = new();
 
     /// <summary>
-    /// Metadata storage: (target, propertyKey, metadataKey) -> value
+    /// Metadata storage with weak references to target objects.
+    /// Structure: Target (weak) -> [(PropertyKey, MetadataKey) -> Value]
     /// PropertyKey is null for class-level metadata.
     /// </summary>
-    private readonly Dictionary<(object Target, string? PropertyKey, string MetadataKey), object?> _metadata = new();
+    private readonly ConditionalWeakTable<object, Dictionary<(string? PropertyKey, string MetadataKey), object?>> _metadata = new();
 
     /// <summary>
     /// Defines metadata for a target with an optional property key.
     /// Implements: Reflect.defineMetadata(metadataKey, metadataValue, target [, propertyKey])
     /// </summary>
+    /// <remarks>
+    /// Metadata is stored with weak references to the target object.
+    /// If the target is garbage collected, the metadata will be lost.
+    /// This matches JavaScript reflect-metadata WeakMap behavior.
+    /// </remarks>
     public void DefineMetadata(string metadataKey, object? metadataValue, object target, string? propertyKey = null)
     {
-        var key = (target, propertyKey, metadataKey);
-        _metadata[key] = metadataValue;
+        var innerDict = _metadata.GetValue(target, _ => new Dictionary<(string?, string), object?>());
+        innerDict[(propertyKey, metadataKey)] = metadataValue;
     }
 
     /// <summary>
     /// Gets metadata for a target with an optional property key.
     /// Implements: Reflect.getMetadata(metadataKey, target [, propertyKey])
-    /// Returns null if metadata is not defined.
+    /// Returns null if metadata is not defined or target has been garbage collected.
     /// </summary>
     public object? GetMetadata(string metadataKey, object target, string? propertyKey = null)
     {
-        var key = (target, propertyKey, metadataKey);
-        return _metadata.TryGetValue(key, out var value) ? value : null;
+        if (!_metadata.TryGetValue(target, out var innerDict))
+            return null;
+
+        return innerDict.TryGetValue((propertyKey, metadataKey), out var value) ? value : null;
     }
 
     /// <summary>
@@ -51,11 +64,14 @@ public class ReflectMetadataStore
     /// <summary>
     /// Checks if metadata exists for a target with an optional property key.
     /// Implements: Reflect.hasMetadata(metadataKey, target [, propertyKey])
+    /// Returns false if target has been garbage collected.
     /// </summary>
     public bool HasMetadata(string metadataKey, object target, string? propertyKey = null)
     {
-        var key = (target, propertyKey, metadataKey);
-        return _metadata.ContainsKey(key);
+        if (!_metadata.TryGetValue(target, out var innerDict))
+            return false;
+
+        return innerDict.ContainsKey((propertyKey, metadataKey));
     }
 
     /// <summary>
@@ -70,11 +86,15 @@ public class ReflectMetadataStore
     /// <summary>
     /// Gets all metadata keys for a target with an optional property key.
     /// Implements: Reflect.getMetadataKeys(target [, propertyKey])
+    /// Returns empty list if target has been garbage collected.
     /// </summary>
     public List<string> GetMetadataKeys(object target, string? propertyKey = null)
     {
-        return _metadata.Keys
-            .Where(k => ReferenceEquals(k.Target, target) && k.PropertyKey == propertyKey)
+        if (!_metadata.TryGetValue(target, out var innerDict))
+            return new List<string>();
+
+        return innerDict.Keys
+            .Where(k => k.PropertyKey == propertyKey)
             .Select(k => k.MetadataKey)
             .Distinct()
             .ToList();
@@ -92,12 +112,14 @@ public class ReflectMetadataStore
     /// <summary>
     /// Deletes metadata for a target with an optional property key.
     /// Implements: Reflect.deleteMetadata(metadataKey, target [, propertyKey])
-    /// Returns true if metadata was deleted, false if it didn't exist.
+    /// Returns true if metadata was deleted, false if it didn't exist or target was garbage collected.
     /// </summary>
     public bool DeleteMetadata(string metadataKey, object target, string? propertyKey = null)
     {
-        var key = (target, propertyKey, metadataKey);
-        return _metadata.Remove(key);
+        if (!_metadata.TryGetValue(target, out var innerDict))
+            return false;
+
+        return innerDict.Remove((propertyKey, metadataKey));
     }
 
     /// <summary>

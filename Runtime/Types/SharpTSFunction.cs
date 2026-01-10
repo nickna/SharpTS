@@ -48,48 +48,7 @@ public class SharpTSFunction : ISharpTSCallable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         RuntimeEnvironment environment = new(_closure);
-        for (int i = 0; i < _declaration.Parameters.Count; i++)
-        {
-            var param = _declaration.Parameters[i];
-
-            if (param.IsRest)
-            {
-                // Rest parameter - collect all remaining arguments
-                var restArgs = arguments.Skip(i).ToList();
-                environment.Define(param.Name.Lexeme, new SharpTSArray(restArgs));
-                break; // Rest is always last
-            }
-
-            object? value;
-            if (i < arguments.Count)
-            {
-                value = arguments[i];
-            }
-            else if (param.DefaultValue != null)
-            {
-                // Evaluate default value in the function's environment
-                RuntimeEnvironment previous = interpreter.Environment;
-                try
-                {
-                    interpreter.SetEnvironment(environment);
-                    value = interpreter.Evaluate(param.DefaultValue!);
-                }
-                finally
-                {
-                    interpreter.SetEnvironment(previous);
-                }
-            }
-            else if (param.IsOptional)
-            {
-                // Optional parameter with no argument and no default - use null
-                value = null;
-            }
-            else
-            {
-                throw new Exception($"Missing required argument for parameter '{param.Name.Lexeme}'.");
-            }
-            environment.Define(param.Name.Lexeme, value);
-        }
+        ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.Body == null)
         {
@@ -155,48 +114,7 @@ public class SharpTSArrowFunction : ISharpTSCallable
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         RuntimeEnvironment environment = new(_closure);
-        for (int i = 0; i < _declaration.Parameters.Count; i++)
-        {
-            var param = _declaration.Parameters[i];
-
-            if (param.IsRest)
-            {
-                // Rest parameter - collect all remaining arguments
-                var restArgs = arguments.Skip(i).ToList();
-                environment.Define(param.Name.Lexeme, new SharpTSArray(restArgs));
-                break; // Rest is always last
-            }
-
-            object? value;
-            if (i < arguments.Count)
-            {
-                value = arguments[i];
-            }
-            else if (param.DefaultValue != null)
-            {
-                // Evaluate default value in the function's environment
-                RuntimeEnvironment previous = interpreter.Environment;
-                try
-                {
-                    interpreter.SetEnvironment(environment);
-                    value = interpreter.Evaluate(param.DefaultValue!);
-                }
-                finally
-                {
-                    interpreter.SetEnvironment(previous);
-                }
-            }
-            else if (param.IsOptional)
-            {
-                // Optional parameter with no argument and no default - use null
-                value = null;
-            }
-            else
-            {
-                throw new Exception($"Missing required argument for parameter '{param.Name.Lexeme}'.");
-            }
-            environment.Define(param.Name.Lexeme, value);
-        }
+        ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.ExpressionBody != null)
         {

@@ -36,45 +36,7 @@ public class SharpTSGeneratorFunction : ISharpTSCallable
     {
         // Create environment and bind parameters (like a regular function)
         RuntimeEnvironment environment = new(_closure);
-        for (int i = 0; i < _declaration.Parameters.Count; i++)
-        {
-            var param = _declaration.Parameters[i];
-
-            if (param.IsRest)
-            {
-                var restArgs = arguments.Skip(i).ToList();
-                environment.Define(param.Name.Lexeme, new SharpTSArray(restArgs));
-                break;
-            }
-
-            object? value;
-            if (i < arguments.Count)
-            {
-                value = arguments[i];
-            }
-            else if (param.DefaultValue != null)
-            {
-                RuntimeEnvironment previous = interpreter.Environment;
-                try
-                {
-                    interpreter.SetEnvironment(environment);
-                    value = interpreter.Evaluate(param.DefaultValue!);
-                }
-                finally
-                {
-                    interpreter.SetEnvironment(previous);
-                }
-            }
-            else if (param.IsOptional)
-            {
-                value = null;
-            }
-            else
-            {
-                throw new Exception($"Missing required argument for parameter '{param.Name.Lexeme}'.");
-            }
-            environment.Define(param.Name.Lexeme, value);
-        }
+        ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         // Return a generator that will execute the body lazily
         return new SharpTSGenerator(_declaration, environment, interpreter);

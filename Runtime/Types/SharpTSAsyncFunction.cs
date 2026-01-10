@@ -60,47 +60,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable
     public async Task<object?> CallAsync(Interpreter interpreter, List<object?> arguments)
     {
         RuntimeEnvironment environment = new(_closure);
-
-        // Bind parameters
-        for (int i = 0; i < _declaration.Parameters.Count; i++)
-        {
-            var param = _declaration.Parameters[i];
-
-            if (param.IsRest)
-            {
-                var restArgs = arguments.Skip(i).ToList();
-                environment.Define(param.Name.Lexeme, new SharpTSArray(restArgs));
-                break;
-            }
-
-            object? value;
-            if (i < arguments.Count)
-            {
-                value = arguments[i];
-            }
-            else if (param.DefaultValue != null)
-            {
-                RuntimeEnvironment previous = interpreter.Environment;
-                try
-                {
-                    interpreter.SetEnvironment(environment);
-                    value = await interpreter.EvaluateAsync(param.DefaultValue!);
-                }
-                finally
-                {
-                    interpreter.SetEnvironment(previous);
-                }
-            }
-            else if (param.IsOptional)
-            {
-                value = null;
-            }
-            else
-            {
-                throw new Exception($"Missing required argument for parameter '{param.Name.Lexeme}'.");
-            }
-            environment.Define(param.Name.Lexeme, value);
-        }
+        await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.Body == null)
         {
@@ -177,47 +137,7 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
     public async Task<object?> CallAsync(Interpreter interpreter, List<object?> arguments)
     {
         RuntimeEnvironment environment = new(_closure);
-
-        // Bind parameters
-        for (int i = 0; i < _declaration.Parameters.Count; i++)
-        {
-            var param = _declaration.Parameters[i];
-
-            if (param.IsRest)
-            {
-                var restArgs = arguments.Skip(i).ToList();
-                environment.Define(param.Name.Lexeme, new SharpTSArray(restArgs));
-                break;
-            }
-
-            object? value;
-            if (i < arguments.Count)
-            {
-                value = arguments[i];
-            }
-            else if (param.DefaultValue != null)
-            {
-                RuntimeEnvironment previous = interpreter.Environment;
-                try
-                {
-                    interpreter.SetEnvironment(environment);
-                    value = await interpreter.EvaluateAsync(param.DefaultValue!);
-                }
-                finally
-                {
-                    interpreter.SetEnvironment(previous);
-                }
-            }
-            else if (param.IsOptional)
-            {
-                value = null;
-            }
-            else
-            {
-                throw new Exception($"Missing required argument for parameter '{param.Name.Lexeme}'.");
-            }
-            environment.Define(param.Name.Lexeme, value);
-        }
+        await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.ExpressionBody != null)
         {
