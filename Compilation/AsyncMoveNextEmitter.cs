@@ -195,7 +195,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, _builder.LockReentrancyRefField!);  // Use state machine's reference
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.LockPrevReentrancyField);
+        _il.Emit(OpCodes.Ldfld, _builder.LockPrevReentrancyField!);  // Non-null when HasLockDecorator
         _il.Emit(OpCodes.Ldc_I4_1);
         _il.Emit(OpCodes.Add);
         _il.Emit(OpCodes.Callvirt, typeof(AsyncLocal<int>).GetProperty("Value")!.SetMethod!);
@@ -207,7 +207,7 @@ public partial class AsyncMoveNextEmitter
 
         // if (prevReentrancy == 0) { await _asyncLock.WaitAsync(); }
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.LockPrevReentrancyField);
+        _il.Emit(OpCodes.Ldfld, _builder.LockPrevReentrancyField!);  // Non-null when HasLockDecorator
         _il.Emit(OpCodes.Ldc_I4_0);
         _il.Emit(OpCodes.Bne_Un, afterLockCheckLabel);  // Skip lock acquisition if reentrant
 
@@ -226,7 +226,7 @@ public partial class AsyncMoveNextEmitter
 
         // Check if already completed
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField);
+        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField!);  // Non-null when HasLockDecorator
         _il.Emit(OpCodes.Call, AsyncStateMachineBuilder.GetLockAwaiterIsCompletedGetter());
         _il.Emit(OpCodes.Brtrue, lockAcquiredLabel);
 
@@ -240,7 +240,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldflda, _builder.BuilderField);
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField);
+        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField!);  // Non-null when HasLockDecorator
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Call, _builder.GetBuilderAwaitUnsafeOnCompletedMethodForLock());
 
@@ -258,13 +258,13 @@ public partial class AsyncMoveNextEmitter
         // lockAcquiredLabel: awaiter.GetResult() to propagate any exceptions
         _il.MarkLabel(lockAcquiredLabel);
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField);
+        _il.Emit(OpCodes.Ldflda, _builder.LockAwaiterField!);  // Non-null when HasLockDecorator
         _il.Emit(OpCodes.Call, AsyncStateMachineBuilder.GetLockAwaiterGetResultMethod());
 
         // Mark lock as acquired
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldc_I4_1);
-        _il.Emit(OpCodes.Stfld, _builder.LockAcquiredField);
+        _il.Emit(OpCodes.Stfld, _builder.LockAcquiredField!);  // Non-null when HasLockDecorator
 
         // afterLockCheckLabel: continue with user code
         _il.MarkLabel(afterLockCheckLabel);

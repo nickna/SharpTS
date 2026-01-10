@@ -11,14 +11,28 @@ public partial class ILCompiler
 {
     private void DefineStaticMethod(TypeBuilder typeBuilder, string className, Stmt.Function method)
     {
+        // Skip if already pre-defined in DefineClassMethodsOnly
+        if (_staticMethods.TryGetValue(className, out var existingMethods) &&
+            existingMethods.ContainsKey(method.Name.Lexeme))
+        {
+            return;
+        }
+
         var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+        // Async methods return Task<object>, sync methods return object
+        var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
         var methodBuilder = typeBuilder.DefineMethod(
             method.Name.Lexeme,
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
+            returnType,
             paramTypes
         );
 
+        // Initialize dictionary if needed
+        if (!_staticMethods.ContainsKey(className))
+        {
+            _staticMethods[className] = [];
+        }
         _staticMethods[className][method.Name.Lexeme] = methodBuilder;
     }
 
@@ -115,6 +129,13 @@ public partial class ILCompiler
 
     private void EmitStaticMethodBody(string className, Stmt.Function method)
     {
+        // Async static methods use state machine generation
+        if (method.IsAsync)
+        {
+            EmitStaticAsyncMethodBody(className, method);
+            return;
+        }
+
         var typeBuilder = _classBuilders[className];
         var methodBuilder = _staticMethods[className][method.Name.Lexeme];
 
@@ -240,8 +261,9 @@ public partial class ILCompiler
             staticSyncLockField != null && staticReentrancyField != null)
         {
             // Store default return value if no explicit return was emitted
+            // ReturnValueLocal is guaranteed non-null here (set up earlier in hasLock block)
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal!);
             il.Emit(OpCodes.Leave, ctx.ReturnLabel);
 
             // Begin finally block
@@ -270,7 +292,7 @@ public partial class ILCompiler
 
             // Mark return label and emit actual return
             il.MarkLabel(ctx.ReturnLabel);
-            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal!);  // Non-null in hasLock path
             il.Emit(OpCodes.Ret);
         }
         // Finalize any deferred returns from exception blocks (non-@lock path)
@@ -284,5 +306,151 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
+    }
+
+    private void EmitStaticAsyncMethodBody(string className, Stmt.Function method)
+    {
+        var typeBuilder = _classBuilders[className];
+        var methodBuilder = _staticMethods[className][method.Name.Lexeme];
+
+        // Analyze async function to determine await points and hoisted variables
+        var analysis = _asyncAnalyzer.Analyze(method);
+
+        // Check if method has @lock decorator
+        bool hasLock = HasLockDecorator(method);
+
+        // Build state machine type
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
+        var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
+        smBuilder.DefineStateMachine(
+            $"{className}_{method.Name.Lexeme}",
+            analysis,
+            _types.Object,
+            isInstanceMethod: false,  // Static method!
+            hasAsyncArrows: hasAsyncArrows,
+            hasLock: hasLock
+        );
+
+        // Build state machines for any async arrows found in this method
+        DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
+
+        // Get static lock fields if @lock decorator is present
+        FieldBuilder? staticAsyncLockField = null;
+        FieldBuilder? staticLockReentrancyField = null;
+        if (hasLock)
+        {
+            _staticAsyncLockFields.TryGetValue(className, out staticAsyncLockField);
+            _staticLockReentrancyFields.TryGetValue(className, out staticLockReentrancyField);
+        }
+
+        // Emit stub method body (creates state machine and starts it)
+        // Pass isInstanceMethod: false and static lock fields
+        EmitAsyncStubMethod(
+            methodBuilder,
+            smBuilder,
+            method.Parameters,
+            isInstanceMethod: false,  // Static method!
+            staticAsyncLockField,
+            staticLockReentrancyField);
+
+        // Create context for MoveNext emission
+        var il = smBuilder.MoveNextMethod.GetILGenerator();
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        {
+            IsInstanceMethod = false,  // Static method!
+            ClosureAnalyzer = _closureAnalyzer,
+            ArrowMethods = _arrowMethods,
+            DisplayClasses = _displayClasses,
+            DisplayClassFields = _displayClassFields,
+            DisplayClassConstructors = _displayClassConstructors,
+            CurrentClassBuilder = typeBuilder,
+            StaticFields = _staticFields,
+            StaticMethods = _staticMethods,
+            ClassConstructors = _classConstructors,
+            FunctionRestParams = _functionRestParams,
+            EnumMembers = _enumMembers,
+            EnumReverse = _enumReverse,
+            EnumKinds = _enumKinds,
+            Runtime = _runtime,
+            ClassGenericParams = _classGenericParams,
+            FunctionGenericParams = _functionGenericParams,
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass,
+            AsyncMethods = null,
+            AsyncArrowBuilders = _asyncArrowBuilders,
+            AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
+            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            // Module support for multi-module compilation
+            CurrentModulePath = _currentModulePath,
+            ClassToModule = _classToModule,
+            FunctionToModule = _functionToModule,
+            EnumToModule = _enumToModule,
+            DotNetNamespace = _currentDotNetNamespace,
+            // @lock decorator support
+            SyncLockFields = _syncLockFields,
+            AsyncLockFields = _asyncLockFields,
+            LockReentrancyFields = _lockReentrancyFields,
+            StaticSyncLockFields = _staticSyncLockFields,
+            StaticAsyncLockFields = _staticAsyncLockFields,
+            StaticLockReentrancyFields = _staticLockReentrancyFields
+        };
+
+        // Emit MoveNext body
+        var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
+        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object);
+
+        // Emit MoveNext bodies for async arrows
+        foreach (var arrowInfo in analysis.AsyncArrows)
+        {
+            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            {
+                var arrowAnalysis = AnalyzeAsyncArrow(arrowInfo.Arrow);
+                var arrow = arrowInfo.Arrow;
+
+                List<Stmt> bodyStatements;
+                if (arrow.BlockBody != null)
+                {
+                    bodyStatements = arrow.BlockBody;
+                }
+                else if (arrow.ExpressionBody != null)
+                {
+                    var returnToken = new Token(TokenType.RETURN, "return", null, 0);
+                    bodyStatements = [new Stmt.Return(returnToken, arrow.ExpressionBody)];
+                }
+                else
+                {
+                    bodyStatements = [];
+                }
+
+                var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder,
+                    new AsyncStateAnalyzer.AsyncFunctionAnalysis(
+                        arrowAnalysis.AwaitCount,
+                        [],  // AwaitPoints not needed for emission
+                        arrowAnalysis.HoistedLocals,
+                        [],  // HoistedParameters - arrow params are in ParameterFields
+                        false, // HasTryCatch
+                        false, // UsesThis
+                        []     // AsyncArrows - handled separately via _asyncArrowBuilders
+                    ), _types);
+                arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
+            }
+        }
+
+        // Finalize async arrow state machine types
+        foreach (var arrowInfo in analysis.AsyncArrows)
+        {
+            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            {
+                arrowBuilder.CreateType();
+            }
+        }
+
+        // Finalize state machine type
+        smBuilder.CreateType();
     }
 }

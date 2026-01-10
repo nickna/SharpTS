@@ -67,6 +67,30 @@ public partial class AsyncMoveNextEmitter
 
     private void EmitSet(Expr.Set s)
     {
+        // Handle static field assignment: Class.field = value
+        if (s.Object is Expr.Variable classVar &&
+            _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            if (_ctx.StaticFields != null &&
+                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
+                classFields.TryGetValue(s.Name.Lexeme, out var staticField))
+            {
+                // Emit value
+                EmitExpression(s.Value);
+                EnsureBoxed();
+
+                // Dup for expression result (assignment returns the value)
+                _il.Emit(OpCodes.Dup);
+
+                // Store to static field
+                _il.Emit(OpCodes.Stsfld, staticField);
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Default: dynamic property assignment
         // Build stack for SetProperty(obj, name, value)
         EmitExpression(s.Object);
         EnsureBoxed();
@@ -94,11 +118,44 @@ public partial class AsyncMoveNextEmitter
         // 2. Apply operation
         // 3. Store back
 
+        // Handle static field compound assignment: Class.field += x
+        if (cs.Object is Expr.Variable classVar &&
+            _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            if (_ctx.StaticFields != null &&
+                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
+                classFields.TryGetValue(cs.Name.Lexeme, out var staticField))
+            {
+                // IMPORTANT: Emit value first (may contain await which clears stack)
+                EmitExpression(cs.Value);
+                EnsureBoxed();
+                var valueTemp = _il.DeclareLocal(typeof(object));
+                _il.Emit(OpCodes.Stloc, valueTemp);
+
+                // Get current value from static field
+                _il.Emit(OpCodes.Ldsfld, staticField);
+
+                // Load value and apply operation
+                _il.Emit(OpCodes.Ldloc, valueTemp);
+                EmitCompoundOperation(cs.Operator.Type);
+
+                // Dup for expression result (assignment returns the value)
+                _il.Emit(OpCodes.Dup);
+
+                // Store to static field
+                _il.Emit(OpCodes.Stsfld, staticField);
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Default: dynamic property compound assignment
         // IMPORTANT: Emit value first (may contain await which clears stack)
         EmitExpression(cs.Value);
         EnsureBoxed();
-        var valueTemp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, valueTemp);
+        var valueTemp2 = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, valueTemp2);
 
         // Get current value: GetProperty(obj, name)
         EmitExpression(cs.Object);
@@ -111,7 +168,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetProperty);
 
         // Load value and apply operation
-        _il.Emit(OpCodes.Ldloc, valueTemp);
+        _il.Emit(OpCodes.Ldloc, valueTemp2);
         EmitCompoundOperation(cs.Operator.Type);
 
         // Store result: SetProperty(obj, name, value)

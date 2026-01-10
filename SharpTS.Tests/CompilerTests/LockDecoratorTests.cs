@@ -617,4 +617,219 @@ public class LockDecoratorTests
         var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
         Assert.Equal("12\n", output);
     }
+
+    // ==================== Static Async @lock Tests ====================
+
+    [Fact]
+    public void LockDecorator_StaticAsyncMethod_BasicUsage_Works()
+    {
+        // Basic test that @lock decorator works on static async methods
+        var source = """
+            async function asyncValue(): Promise<number> {
+                return 1;
+            }
+
+            class Counter {
+                static value: number = 0;
+
+                @lock
+                static async increment(): Promise<void> {
+                    let v = await asyncValue();
+                    Counter.value = Counter.value + v;
+                }
+            }
+
+            async function main(): Promise<void> {
+                await Counter.increment();
+                await Counter.increment();
+                await Counter.increment();
+                console.log(Counter.value);
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void LockDecorator_StaticAsyncMethod_WithReturnValue_Works()
+    {
+        // Test that static async @lock method can return values correctly
+        var source = """
+            async function asyncValue(n: number): Promise<number> {
+                return n;
+            }
+
+            class Calculator {
+                static result: number = 0;
+
+                @lock
+                static async addAndGet(n: number): Promise<number> {
+                    let v = await asyncValue(n);
+                    Calculator.result = Calculator.result + v;
+                    return Calculator.result;
+                }
+            }
+
+            async function main(): Promise<void> {
+                console.log(await Calculator.addAndGet(5));
+                console.log(await Calculator.addAndGet(10));
+                console.log(await Calculator.addAndGet(3));
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("5\n15\n18\n", output);
+    }
+
+    [Fact]
+    public void LockDecorator_StaticAsyncMethod_Reentrancy_AllowsNestedCalls()
+    {
+        // Test that a static async @lock method calling another static async @lock method doesn't deadlock
+        var source = """
+            async function asyncValue(): Promise<number> {
+                return 1;
+            }
+
+            class Counter {
+                static value: number = 0;
+
+                @lock
+                static async innerIncrement(): Promise<void> {
+                    let v = await asyncValue();
+                    Counter.value = Counter.value + v;
+                }
+
+                @lock
+                static async outerIncrement(): Promise<void> {
+                    await Counter.innerIncrement();
+                    await Counter.innerIncrement();
+                }
+            }
+
+            async function main(): Promise<void> {
+                await Counter.outerIncrement();
+                console.log(Counter.value);
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("2\n", output);
+    }
+
+    [Fact]
+    public void LockDecorator_StaticAsyncMethod_ExceptionInMethod_ReleasesLock()
+    {
+        // Test that exceptions inside static async @lock methods still release the lock
+        var source = """
+            async function asyncValue(): Promise<number> {
+                return 1;
+            }
+
+            class Counter {
+                static value: number = 0;
+                static shouldThrow: boolean = false;
+
+                @lock
+                static async increment(): Promise<void> {
+                    let v = await asyncValue();
+                    if (Counter.shouldThrow) {
+                        throw "Error!";
+                    }
+                    Counter.value = Counter.value + v;
+                }
+            }
+
+            async function main(): Promise<void> {
+                await Counter.increment();
+                Counter.shouldThrow = true;
+
+                try {
+                    await Counter.increment();
+                } catch (e) {
+                    console.log("caught");
+                }
+
+                Counter.shouldThrow = false;
+                await Counter.increment();
+                console.log(Counter.value);
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("caught\n2\n", output);
+    }
+
+    [Fact]
+    public void LockDecorator_StaticAsyncMethod_NoAwait_Works()
+    {
+        // Test that static async @lock method without actual await still works
+        var source = """
+            class Counter {
+                static value: number = 0;
+
+                @lock
+                static async increment(): Promise<void> {
+                    Counter.value = Counter.value + 1;
+                }
+            }
+
+            async function main(): Promise<void> {
+                await Counter.increment();
+                await Counter.increment();
+                console.log(Counter.value);
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("2\n", output);
+    }
+
+    [Fact]
+    public void LockDecorator_MixedStaticSyncAndAsync_Works()
+    {
+        // Test that static sync @lock and static async @lock methods work together
+        var source = """
+            async function asyncValue(): Promise<number> {
+                return 10;
+            }
+
+            class Counter {
+                static value: number = 0;
+
+                @lock
+                static syncIncrement(): void {
+                    Counter.value = Counter.value + 1;
+                }
+
+                @lock
+                static async asyncIncrement(): Promise<void> {
+                    let v = await asyncValue();
+                    Counter.value = Counter.value + v;
+                }
+            }
+
+            async function main(): Promise<void> {
+                Counter.syncIncrement();
+                await Counter.asyncIncrement();
+                Counter.syncIncrement();
+                console.log(Counter.value);
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Stage3);
+        Assert.Equal("12\n", output);
+    }
 }

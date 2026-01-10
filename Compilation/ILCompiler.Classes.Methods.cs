@@ -139,6 +139,29 @@ public partial class ILCompiler
             _classConstructors[qualifiedClassName] = ctorBuilder;
         }
 
+        // Initialize static methods dictionary for this class
+        if (!_staticMethods.ContainsKey(qualifiedClassName))
+        {
+            _staticMethods[qualifiedClassName] = [];
+        }
+
+        // Pre-define static methods (so they're available during async MoveNext emission)
+        foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.IsStatic && m.Name.Lexeme != "constructor"))
+        {
+            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            // Async methods return Task<object>, sync methods return object
+            var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
+
+            var methodBuilder = typeBuilder.DefineMethod(
+                method.Name.Lexeme,
+                MethodAttributes.Public | MethodAttributes.Static,
+                returnType,
+                paramTypes
+            );
+
+            _staticMethods[qualifiedClassName][method.Name.Lexeme] = methodBuilder;
+        }
+
         // Define instance methods (skip overload signatures with no body)
         foreach (var method in classStmt.Methods.Where(m => m.Body != null))
         {
@@ -557,8 +580,9 @@ public partial class ILCompiler
             syncLockField != null && reentrancyField != null)
         {
             // Store default return value if no explicit return was emitted
+            // ReturnValueLocal is guaranteed non-null here (set up earlier in hasLock block)
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal!);
             il.Emit(OpCodes.Leave, ctx.ReturnLabel);
 
             // Begin finally block
@@ -589,7 +613,7 @@ public partial class ILCompiler
 
             // Mark return label and emit actual return
             il.MarkLabel(ctx.ReturnLabel);
-            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal);
+            il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal!);  // Non-null in hasLock path
             il.Emit(OpCodes.Ret);
         }
         // Finalize any deferred returns from exception blocks (non-@lock path)

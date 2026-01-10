@@ -584,6 +584,47 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
+        // Handle Class.staticMethod() calls
+        if (c.Callee is Expr.Get staticGet &&
+            staticGet.Object is Expr.Variable classVar &&
+            _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            if (_ctx.StaticMethods != null &&
+                _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
+                classMethods.TryGetValue(staticGet.Name.Lexeme, out var staticMethod))
+            {
+                var paramCount = staticMethod.GetParameters().Length;
+
+                // Emit all arguments and save to temps (await may occur in arguments)
+                List<LocalBuilder> staticArgTemps = [];
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    EmitExpression(c.Arguments[i]);
+                    EnsureBoxed();
+                    var temp = _il.DeclareLocal(typeof(object));
+                    _il.Emit(OpCodes.Stloc, temp);
+                    staticArgTemps.Add(temp);
+                }
+
+                // Load args from temps
+                foreach (var temp in staticArgTemps)
+                {
+                    _il.Emit(OpCodes.Ldloc, temp);
+                }
+
+                // Pad with nulls for missing arguments (for default parameters)
+                for (int i = c.Arguments.Count; i < paramCount; i++)
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+
+                _il.Emit(OpCodes.Call, staticMethod);
+                SetStackUnknown();
+                return;
+            }
+        }
+
         // Handle Promise instance methods: promise.then(onFulfilled?, onRejected?)
         // promise.catch(onRejected), promise.finally(onFinally)
         if (c.Callee is Expr.Get methodGet)
@@ -715,6 +756,23 @@ public partial class AsyncMoveNextEmitter
 
     private void EmitGet(Expr.Get g)
     {
+        // Handle static field access: Class.field
+        if (g.Object is Expr.Variable classVar &&
+            _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        {
+            string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+            // Try to find static field using stored FieldBuilders
+            if (_ctx.StaticFields != null &&
+                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
+                classFields.TryGetValue(g.Name.Lexeme, out var staticField))
+            {
+                _il.Emit(OpCodes.Ldsfld, staticField);
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Default: dynamic property access
         EmitExpression(g.Object);
         EnsureBoxed();
         _il.Emit(OpCodes.Ldstr, g.Name.Lexeme);

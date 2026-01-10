@@ -567,17 +567,32 @@ public partial class ILCompiler
         // We copy these directly here so MoveNext doesn't need to cast ThisField
         if (smBuilder.HasLockDecorator && asyncLockField != null && lockReentrancyField != null)
         {
-            // sm.<>__asyncLockRef = this._asyncLock;
-            il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg_0);  // 'this'
-            il.Emit(OpCodes.Ldfld, asyncLockField);
-            il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
+            if (isInstanceMethod)
+            {
+                // Instance method: sm.<>__asyncLockRef = this._asyncLock;
+                il.Emit(OpCodes.Ldloca, smLocal);
+                il.Emit(OpCodes.Ldarg_0);  // 'this'
+                il.Emit(OpCodes.Ldfld, asyncLockField);
+                il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
 
-            // sm.<>__lockReentrancyRef = this._lockReentrancy;
-            il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg_0);  // 'this'
-            il.Emit(OpCodes.Ldfld, lockReentrancyField);
-            il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
+                // sm.<>__lockReentrancyRef = this._lockReentrancy;
+                il.Emit(OpCodes.Ldloca, smLocal);
+                il.Emit(OpCodes.Ldarg_0);  // 'this'
+                il.Emit(OpCodes.Ldfld, lockReentrancyField);
+                il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
+            }
+            else
+            {
+                // Static method: sm.<>__asyncLockRef = ClassName._staticAsyncLock;
+                il.Emit(OpCodes.Ldloca, smLocal);
+                il.Emit(OpCodes.Ldsfld, asyncLockField);  // Static field - no 'this'
+                il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
+
+                // sm.<>__lockReentrancyRef = ClassName._staticLockReentrancy;
+                il.Emit(OpCodes.Ldloca, smLocal);
+                il.Emit(OpCodes.Ldsfld, lockReentrancyField);  // Static field - no 'this'
+                il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
+            }
         }
 
         // Copy parameters to state machine fields
