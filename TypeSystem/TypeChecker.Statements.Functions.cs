@@ -35,9 +35,12 @@ public partial class TypeChecker
         TypeEnvironment previousEnvForParsing = _environment;
         _environment = funcEnv;
 
-        List<TypeInfo> paramTypes = [];
-        int requiredParams = 0;
-        bool seenDefault = false;
+        var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+            funcStmt.Parameters,
+            validateDefaults: true,
+            contextName: $"function '{funcStmt.Name.Lexeme}'"
+        );
+
         TypeInfo returnType = funcStmt.ReturnType != null
             ? ToTypeInfo(funcStmt.ReturnType)
             : new TypeInfo.Void();
@@ -45,42 +48,7 @@ public partial class TypeChecker
         // Parse explicit 'this' type if present
         TypeInfo? thisType = funcStmt.ThisType != null ? ToTypeInfo(funcStmt.ThisType) : null;
 
-        foreach (var param in funcStmt.Parameters)
-        {
-            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
-            paramTypes.Add(paramType);
-
-            if (param.IsRest) continue;
-
-            // A parameter is optional if it has a default value OR is marked with ?
-            bool isOptional = param.DefaultValue != null || param.IsOptional;
-
-            if (param.DefaultValue != null)
-            {
-                seenDefault = true;
-                TypeInfo defaultType = CheckExpr(param.DefaultValue);
-                if (!IsCompatible(paramType, defaultType))
-                {
-                    throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.");
-                }
-            }
-            else if (param.IsOptional)
-            {
-                seenDefault = true; // Optional parameters are like having a default
-            }
-            else
-            {
-                if (seenDefault)
-                {
-                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter.");
-                }
-                requiredParams++;
-            }
-        }
-
         _environment = previousEnvForParsing;
-
-        bool hasRest = funcStmt.Parameters.Any(p => p.IsRest);
 
         // For generator functions, wrap the return type in Generator<> if not already
         TypeInfo funcReturnType = returnType;

@@ -38,7 +38,14 @@ public abstract record Expr
     public record This(Token Keyword) : Expr;
     public record New(List<Token>? NamespacePath, Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record ArrayLiteral(List<Expr> Elements) : Expr;
-    public record ObjectLiteral(List<Property> Properties) : Expr;
+    public record ObjectLiteral(List<Property> Properties) : Expr
+    {
+        /// <summary>
+        /// Marks whether this is a "fresh" object literal (created directly in assignment context).
+        /// Fresh literals are subject to excess property checking in TypeScript strict mode.
+        /// </summary>
+        public bool IsFresh { get; init; } = false;
+    }
     // Property key types for object literals: identifier, string/number literal, or computed [expr]
     public abstract record PropertyKey;
     public record IdentifierKey(Token Name) : PropertyKey;

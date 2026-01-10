@@ -491,6 +491,92 @@ public partial class TypeChecker
         return true;
     }
 
+    /// <summary>
+    /// Checks for excess properties in fresh object literals assigned to typed variables.
+    /// TypeScript performs this check to catch typos and enforce exact object shapes.
+    /// </summary>
+    /// <param name="actual">The actual object record type from the literal</param>
+    /// <param name="expected">The expected type from the variable declaration</param>
+    /// <param name="sourceExpr">The source expression for error context</param>
+    private void CheckExcessProperties(TypeInfo.Record actual, TypeInfo expected, Expr sourceExpr)
+    {
+        // Get all valid property names and check for index signatures
+        HashSet<string> expectedKeys = [];
+        bool hasStringIndex = false;
+        bool hasNumberIndex = false;
+
+        if (expected is TypeInfo.Record expRecord)
+        {
+            foreach (var key in expRecord.Fields.Keys)
+            {
+                expectedKeys.Add(key);
+            }
+            // Check for index signatures
+            hasStringIndex = expRecord.StringIndexType != null;
+            hasNumberIndex = expRecord.NumberIndexType != null;
+        }
+        else if (expected is TypeInfo.Interface iface)
+        {
+            foreach (var member in iface.Members)
+            {
+                expectedKeys.Add(member.Key);
+            }
+            // Check for index signatures in interfaces
+            hasStringIndex = iface.StringIndexType != null;
+            hasNumberIndex = iface.NumberIndexType != null;
+        }
+        else if (expected is TypeInfo.Class cls)
+        {
+            foreach (var field in cls.FieldTypes)
+            {
+                expectedKeys.Add(field.Key);
+            }
+            foreach (var method in cls.Methods)
+            {
+                expectedKeys.Add(method.Key);
+            }
+            foreach (var getter in cls.Getters)
+            {
+                expectedKeys.Add(getter.Key);
+            }
+            foreach (var setter in cls.Setters)
+            {
+                expectedKeys.Add(setter.Key);
+            }
+        }
+        else
+        {
+            // For other types (primitives, unions, etc.), skip excess property check
+            return;
+        }
+
+        // If type has index signatures, all properties are valid
+        if (hasStringIndex || hasNumberIndex)
+        {
+            return;
+        }
+
+        // Find properties in actual that are not in expected
+        List<string> excessKeys = [];
+        foreach (var actualKey in actual.Fields.Keys)
+        {
+            if (!expectedKeys.Contains(actualKey))
+            {
+                excessKeys.Add(actualKey);
+            }
+        }
+
+        // Throw error if excess properties found
+        if (excessKeys.Count > 0)
+        {
+            string excessList = string.Join(", ", excessKeys.Select(k => $"'{k}'"));
+            throw new Exception(
+                $"Type Error: Object literal may only specify known properties. " +
+                $"Excess {(excessKeys.Count == 1 ? "property" : "properties")}: {excessList}"
+            );
+        }
+    }
+
     private TypeInfo? GetMemberType(TypeInfo type, string name)
     {
         if (type is TypeInfo.Record record)

@@ -48,6 +48,106 @@ public partial class TypeChecker
     private bool _inStaticMethod = false;
     // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
     private TypeInfo? _currentFunctionThisType = null;
+
+    /// <summary>
+    /// Builds a function signature by parsing parameters and validating optional/required ordering.
+    /// </summary>
+    /// <param name="parameters">Function/method parameters to parse</param>
+    /// <param name="validateDefaults">Whether to type-check default parameter values</param>
+    /// <param name="contextName">Context name for error messages (e.g., "method 'foo'" or "function 'bar'")</param>
+    /// <returns>Tuple of (parameter types, required parameter count, has rest parameter)</returns>
+    private (List<TypeInfo> paramTypes, int requiredParams, bool hasRest) BuildFunctionSignature(
+        List<Stmt.Parameter> parameters,
+        bool validateDefaults,
+        string contextName)
+    {
+        List<TypeInfo> paramTypes = [];
+        int requiredParams = 0;
+        bool seenDefault = false;
+
+        foreach (var param in parameters)
+        {
+            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
+            paramTypes.Add(paramType);
+
+            if (param.IsRest) continue;
+
+            bool isOptional = param.DefaultValue != null || param.IsOptional;
+
+            if (param.DefaultValue != null)
+            {
+                seenDefault = true;
+                if (validateDefaults)
+                {
+                    TypeInfo defaultType = CheckExpr(param.DefaultValue);
+                    if (!IsCompatible(paramType, defaultType))
+                    {
+                        throw new Exception($"Type Error: Default value type '{defaultType}' is not assignable to parameter type '{paramType}' in {contextName}.");
+                    }
+                }
+            }
+            else if (param.IsOptional)
+            {
+                seenDefault = true;
+            }
+            else
+            {
+                if (seenDefault)
+                {
+                    throw new Exception($"Type Error: Required parameter cannot follow optional parameter in {contextName}.");
+                }
+                requiredParams++;
+            }
+        }
+
+        bool hasRest = parameters.Any(p => p.IsRest);
+        return (paramTypes, requiredParams, hasRest);
+    }
+
+    /// <summary>
+    /// Widens literal types to their base primitive types for mutable variable inference.
+    /// In TypeScript, `let x = 1` infers `number`, not literal type `1`.
+    /// Const bindings preserve narrower types (handled separately).
+    /// </summary>
+    /// <param name="type">The type to potentially widen</param>
+    /// <param name="isConst">Whether this is a const binding (preserves literals)</param>
+    /// <returns>Widened type or original if not a literal</returns>
+    private TypeInfo WidenLiteralType(TypeInfo type, bool isConst = false)
+    {
+        // Const bindings preserve literal types
+        if (isConst) return type;
+
+        return type switch
+        {
+            // Widen literal primitives to base types
+            TypeInfo.StringLiteral => new TypeInfo.Primitive(TokenType.TYPE_STRING),
+            TypeInfo.NumberLiteral => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
+            TypeInfo.BooleanLiteral => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+
+            // Widen array element types recursively
+            TypeInfo.Array a => new TypeInfo.Array(WidenLiteralType(a.ElementType, false)),
+
+            // Widen object property types recursively
+            TypeInfo.Record r => new TypeInfo.Record(
+                r.Fields.ToFrozenDictionary(
+                    kv => kv.Key,
+                    kv => WidenLiteralType(kv.Value, false)
+                ),
+                r.StringIndexType != null ? WidenLiteralType(r.StringIndexType, false) : null,
+                r.NumberIndexType != null ? WidenLiteralType(r.NumberIndexType, false) : null,
+                r.SymbolIndexType
+            ),
+
+            // Widen union members
+            TypeInfo.Union u => new TypeInfo.Union(
+                u.Types.Select(t => WidenLiteralType(t, false)).Distinct().ToList()
+            ),
+
+            // Other types pass through unchanged
+            _ => type
+        };
+    }
+
     private int _loopDepth = 0;
     private int _switchDepth = 0;
     // Track if we're inside an async function (for validating 'await' usage)

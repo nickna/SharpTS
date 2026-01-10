@@ -57,34 +57,17 @@ public partial class TypeChecker
         // Helper to build a TypeInfo.Function from a method declaration
         TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
         {
-            List<TypeInfo> methodParamTypes = [];
-            TypeInfo methodReturnType = method.ReturnType != null ? ToTypeInfo(method.ReturnType) : new TypeInfo.Void();
+            var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+                method.Parameters,
+                validateDefaults: true,
+                contextName: $"method '{method.Name.Lexeme}'"
+            );
 
-            int methodRequiredParams = 0;
-            bool methodSeenDefault = false;
+            TypeInfo returnType = method.ReturnType != null
+                ? ToTypeInfo(method.ReturnType)
+                : new TypeInfo.Void();
 
-            foreach (var param in method.Parameters)
-            {
-                methodParamTypes.Add(param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any());
-
-                if (param.IsRest) continue;
-
-                if (param.DefaultValue != null || param.IsOptional)
-                {
-                    methodSeenDefault = true;
-                }
-                else
-                {
-                    if (methodSeenDefault)
-                    {
-                        throw new Exception($"Type Error: Required parameter cannot follow optional parameter in method '{method.Name.Lexeme}'.");
-                    }
-                    methodRequiredParams++;
-                }
-            }
-
-            bool methodHasRest = method.Parameters.Any(p => p.IsRest);
-            return new TypeInfo.Function(methodParamTypes, methodReturnType, methodRequiredParams, methodHasRest);
+            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
         }
 
         // First pass: collect signatures, grouping overloads

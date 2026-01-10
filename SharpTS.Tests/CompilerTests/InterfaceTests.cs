@@ -24,13 +24,24 @@ public class InterfaceTests
     }
 
     [Fact]
-    public void Interface_ExtraProperties_Allowed()
+    public void Interface_ExcessProperties_FreshLiteral_Rejected()
     {
         var source = """
-            interface Named {
-                name: string;
-            }
+            interface Named { name: string; }
             let obj: Named = { name: "test", extra: 42 };
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Excess property: 'extra'", ex.Message);
+    }
+
+    [Fact]
+    public void Interface_ExcessProperties_NonFreshLiteral_Allowed()
+    {
+        var source = """
+            interface Named { name: string; }
+            let tmp = { name: "test", extra: 42 };
+            let obj: Named = tmp;  // Structural typing - non-fresh
             console.log(obj.name);
             """;
 

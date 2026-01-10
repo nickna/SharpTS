@@ -105,11 +105,37 @@ public partial class TypeChecker
                     }
                     else
                     {
-                        TypeInfo initializerType = CheckExpr(varStmt.Initializer);
-                        if (declaredType != null && !IsCompatible(declaredType, initializerType))
+                        // Mark object literals as fresh if directly assigned with type annotation
+                        Expr initializer = varStmt.Initializer;
+                        bool checkExcessProps = false;
+
+                        if (declaredType != null && initializer is Expr.ObjectLiteral objLit)
                         {
-                            throw new Exception($"Type Error: Cannot assign type '{initializerType}' to variable '{varStmt.Name.Lexeme}' of type '{declaredType}'.");
+                            initializer = objLit with { IsFresh = true };
+                            checkExcessProps = true;
                         }
+
+                        TypeInfo initializerType = CheckExpr(initializer);
+
+                        if (declaredType != null)
+                        {
+                            // Perform excess property check for fresh object literals
+                            if (checkExcessProps && initializerType is TypeInfo.Record actualRecord)
+                            {
+                                CheckExcessProperties(actualRecord, declaredType, varStmt.Initializer);
+                            }
+
+                            if (!IsCompatible(declaredType, initializerType))
+                            {
+                                throw new Exception($"Type Error: Cannot assign type '{initializerType}' to variable '{varStmt.Name.Lexeme}' of type '{declaredType}'.");
+                            }
+                        }
+                        else
+                        {
+                            // No type annotation - widen literal types for inference
+                            initializerType = WidenLiteralType(initializerType);
+                        }
+
                         declaredType ??= initializerType;
                     }
                 }
