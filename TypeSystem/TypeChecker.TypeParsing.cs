@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -47,7 +48,7 @@ public partial class TypeChecker
         // Union has lower precedence than intersection, check it first at top level
         if (typeName.Contains(" | "))
         {
-            var parts = SplitUnionParts(typeName);
+            var parts = SplitUnionParts(typeName.AsSpan());
             if (parts.Count > 1)  // Only create union if we actually split at top level
             {
                 var types = parts.Select(ToTypeInfo).ToList();
@@ -59,7 +60,7 @@ public partial class TypeChecker
         // Intersection has higher precedence than union
         if (typeName.Contains(" & "))
         {
-            var parts = SplitIntersectionParts(typeName);
+            var parts = SplitIntersectionParts(typeName.AsSpan());
             if (parts.Count > 1)  // Only create intersection if we actually split at top level
             {
                 var types = parts.Select(ToTypeInfo).ToList();
@@ -154,7 +155,7 @@ public partial class TypeChecker
         return new TypeInfo.Any();
     }
 
-    private List<string> SplitUnionParts(string typeName)
+    private List<string> SplitUnionParts(ReadOnlySpan<char> typeName)
     {
         List<string> parts = [];
         int depth = 0;
@@ -167,11 +168,13 @@ public partial class TypeChecker
             else if (c == ')') depth--;
             else if (c == '|' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
             {
-                parts.Add(typeName[start..(i - 1)].Trim());
+                ReadOnlySpan<char> segment = typeName[start..(i - 1)].Trim();
+                parts.Add(segment.ToString());
                 start = i + 2;
             }
         }
-        parts.Add(typeName[start..].Trim());
+        ReadOnlySpan<char> lastSegment = typeName[start..].Trim();
+        parts.Add(lastSegment.ToString());
         return parts;
     }
 
@@ -179,7 +182,7 @@ public partial class TypeChecker
     /// Splits an intersection type string into its component parts, respecting nesting.
     /// E.g., "A &amp; B &amp; C" becomes ["A", "B", "C"]
     /// </summary>
-    private List<string> SplitIntersectionParts(string typeName)
+    private List<string> SplitIntersectionParts(ReadOnlySpan<char> typeName)
     {
         List<string> parts = [];
         int depth = 0;
@@ -192,11 +195,13 @@ public partial class TypeChecker
             else if (c == ')' || c == '>' || c == ']' || c == '}') depth--;
             else if (c == '&' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
             {
-                parts.Add(typeName[start..(i - 1)].Trim());
+                ReadOnlySpan<char> segment = typeName[start..(i - 1)].Trim();
+                parts.Add(segment.ToString());
                 start = i + 2;
             }
         }
-        parts.Add(typeName[start..].Trim());
+        ReadOnlySpan<char> lastSegment = typeName[start..].Trim();
+        parts.Add(lastSegment.ToString());
         return parts;
     }
 
@@ -252,22 +257,22 @@ public partial class TypeChecker
 
             foreach (var type in types)
             {
-                Dictionary<string, TypeInfo>? fields = type switch
+                IReadOnlyDictionary<string, TypeInfo>? fields = type switch
                 {
                     TypeInfo.Record r => r.Fields,
                     TypeInfo.Interface i => i.Members,
-                    TypeInfo.Class c => c.DeclaredFieldTypes,
+                    TypeInfo.Class c => c.FieldTypes,
                     TypeInfo.Instance inst => inst.ClassType switch
                     {
-                        TypeInfo.Class c => c.DeclaredFieldTypes,
+                        TypeInfo.Class c => c.FieldTypes,
                         _ => null
                     },
                     _ => null
                 };
 
-                HashSet<string>? optionals = type switch
+                IReadOnlySet<string>? optionals = type switch
                 {
-                    TypeInfo.Interface i => i.OptionalMemberSet,
+                    TypeInfo.Interface i => i.OptionalMembers,
                     _ => null
                 };
 
@@ -332,13 +337,13 @@ public partial class TypeChecker
                 // Use Interface if we have optional fields, otherwise Record
                 if (optionalFields.Count > 0)
                 {
-                    return new TypeInfo.Interface("", mergedFields, optionalFields);
+                    return new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet());
                 }
-                return new TypeInfo.Record(mergedFields);
+                return new TypeInfo.Record(mergedFields.ToFrozenDictionary());
             }
 
             // Otherwise, return intersection with merged record/interface
-            var resultTypes = new List<TypeInfo>(nonObjectTypes) { new TypeInfo.Record(mergedFields) };
+            var resultTypes = new List<TypeInfo>(nonObjectTypes) { new TypeInfo.Record(mergedFields.ToFrozenDictionary()) };
             return new TypeInfo.Intersection(resultTypes);
         }
 
@@ -382,7 +387,7 @@ public partial class TypeChecker
 
         if (!string.IsNullOrWhiteSpace(paramsSection))
         {
-            var parts = SplitFunctionParams(paramsSection);
+            var parts = SplitFunctionParams(paramsSection.AsSpan());
             foreach (var part in parts)
             {
                 var param = part.Trim();
@@ -407,7 +412,7 @@ public partial class TypeChecker
     /// <summary>
     /// Split function parameters respecting nested brackets and generics.
     /// </summary>
-    private List<string> SplitFunctionParams(string paramsStr)
+    private List<string> SplitFunctionParams(ReadOnlySpan<char> paramsStr)
     {
         List<string> parts = [];
         int depth = 0;
@@ -422,13 +427,17 @@ public partial class TypeChecker
                 depth--;
             else if (c == ',' && depth == 0)
             {
-                parts.Add(paramsStr[start..i]);
+                ReadOnlySpan<char> segment = paramsStr[start..i];
+                parts.Add(segment.ToString());
                 start = i + 1;
             }
         }
 
         if (start < paramsStr.Length)
-            parts.Add(paramsStr[start..]);
+        {
+            ReadOnlySpan<char> lastSegment = paramsStr[start..];
+            parts.Add(lastSegment.ToString());
+        }
 
         return parts;
     }
@@ -439,7 +448,7 @@ public partial class TypeChecker
         if (string.IsNullOrEmpty(inner))
             return new TypeInfo.Tuple([], 0, null);
 
-        var elements = SplitTupleElements(inner);
+        var elements = SplitTupleElements(inner.AsSpan());
         List<TypeInfo> elementTypes = [];
         int requiredCount = 0;
         bool seenOptional = false;
@@ -480,7 +489,7 @@ public partial class TypeChecker
         return new TypeInfo.Tuple(elementTypes, requiredCount, restType);
     }
 
-    private List<string> SplitTupleElements(string inner)
+    private List<string> SplitTupleElements(ReadOnlySpan<char> inner)
     {
         List<string> parts = [];
         int depth = 0;
@@ -493,11 +502,13 @@ public partial class TypeChecker
             else if (c == ')' || c == ']' || c == '>') depth--;
             else if (c == ',' && depth == 0)
             {
-                parts.Add(inner[start..i]);
+                ReadOnlySpan<char> segment = inner[start..i];
+                parts.Add(segment.ToString());
                 start = i + 1;
             }
         }
-        parts.Add(inner[start..]);
+        ReadOnlySpan<char> lastSegment = inner[start..];
+        parts.Add(lastSegment.ToString());
         return parts;
     }
 
@@ -510,7 +521,7 @@ public partial class TypeChecker
         // Remove "{ " and " }" from the string
         string inner = objStr[2..^2].Trim();
         if (string.IsNullOrEmpty(inner))
-            return new TypeInfo.Record(new Dictionary<string, TypeInfo>());
+            return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
 
         // Check if this is a mapped type
         if (IsMappedTypeString(inner))
@@ -524,7 +535,7 @@ public partial class TypeChecker
         TypeInfo? symbolIndexType = null;
 
         // Split by semicolon (the separator used in ParseInlineObjectType)
-        var members = SplitObjectMembers(inner);
+        var members = SplitObjectMembers(inner.AsSpan());
 
         foreach (var member in members)
         {
@@ -577,10 +588,10 @@ public partial class TypeChecker
             fields[propName] = ToTypeInfo(propType);
         }
 
-        return new TypeInfo.Record(fields, stringIndexType, numberIndexType, symbolIndexType);
+        return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType);
     }
 
-    private List<string> SplitObjectMembers(string inner)
+    private List<string> SplitObjectMembers(ReadOnlySpan<char> inner)
     {
         List<string> parts = [];
         int depth = 0;
@@ -593,12 +604,16 @@ public partial class TypeChecker
             else if (c == ')' || c == ']' || c == '>' || c == '}') depth--;
             else if (c == ';' && depth == 0)
             {
-                parts.Add(inner[start..i]);
+                ReadOnlySpan<char> segment = inner[start..i];
+                parts.Add(segment.ToString());
                 start = i + 1;
             }
         }
         if (start < inner.Length)
-            parts.Add(inner[start..]);
+        {
+            ReadOnlySpan<char> lastSegment = inner[start..];
+            parts.Add(lastSegment.ToString());
+        }
         return parts;
     }
 

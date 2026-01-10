@@ -20,7 +20,7 @@ public partial class TypeChecker
         {
             string memberName = member.Key;
             TypeInfo expectedType = member.Value;
-            bool isOptional = interfaceType.OptionalMemberSet.Contains(memberName);
+            bool isOptional = interfaceType.OptionalMembers.Contains(memberName);
 
             // Check: field, getter, or method (including inheritance chain)
             TypeInfo? actualType = FindMemberInClass(classType, memberName);
@@ -108,7 +108,7 @@ public partial class TypeChecker
         TypeInfo.Class? current = classType;
         while (current != null && current != abstractSuperclass)
         {
-            if (current.GetterTypes.ContainsKey(propertyName) && !current.AbstractGetterSet.Contains(propertyName))
+            if (current.Getters.ContainsKey(propertyName) && !current.AbstractGetterSet.Contains(propertyName))
             {
                 return true;
             }
@@ -122,7 +122,7 @@ public partial class TypeChecker
         TypeInfo.Class? current = classType;
         while (current != null && current != abstractSuperclass)
         {
-            if (current.SetterTypes.ContainsKey(propertyName) && !current.AbstractSetterSet.Contains(propertyName))
+            if (current.Setters.ContainsKey(propertyName) && !current.AbstractSetterSet.Contains(propertyName))
             {
                 return true;
             }
@@ -136,8 +136,8 @@ public partial class TypeChecker
         TypeInfo.Class? current = classType;
         while (current != null)
         {
-            if (current.DeclaredFieldTypes.TryGetValue(name, out var ft)) return ft;
-            if (current.GetterTypes.TryGetValue(name, out var gt)) return gt;
+            if (current.FieldTypes.TryGetValue(name, out var ft)) return ft;
+            if (current.Getters.TryGetValue(name, out var gt)) return gt;
             if (current.Methods.TryGetValue(name, out var mt)) return mt;
             current = current.Superclass;
         }
@@ -216,7 +216,7 @@ public partial class TypeChecker
         TypeInfo.Class? current = superclass;
         while (current != null)
         {
-            if (current.GetterTypes.ContainsKey(propertyName))
+            if (current.Getters.ContainsKey(propertyName))
             {
                 return true;
             }
@@ -233,7 +233,7 @@ public partial class TypeChecker
         TypeInfo.Class? current = superclass;
         while (current != null)
         {
-            if (current.SetterTypes.ContainsKey(propertyName))
+            if (current.Setters.ContainsKey(propertyName))
             {
                 return true;
             }

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -16,10 +17,10 @@ namespace SharpTS.TypeSystem;
 /// <seealso cref="TypeInfo"/>
 public class TypeEnvironment(TypeEnvironment? enclosing = null)
 {
-    private readonly Dictionary<string, TypeInfo> _types = [];
-    private readonly Dictionary<string, string> _typeAliases = [];
-    private readonly Dictionary<string, TypeInfo> _typeParameters = [];
-    private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = [];
+    private readonly Dictionary<string, TypeInfo> _types = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _typeAliases = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly TypeEnvironment? _enclosing = enclosing;
 
     public void Define(string name, TypeInfo type)
@@ -107,10 +108,19 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
         if (_namespaces.TryGetValue(name, out var existing))
         {
             // Merge: combine types and values from both namespace declarations
+            // Create new merged dictionaries since FrozenDictionary is immutable
+            var mergedTypes = new Dictionary<string, TypeInfo>(existing.Types);
             foreach (var (k, v) in ns.Types)
-                existing.Types[k] = v;
+                mergedTypes[k] = v;
+
+            var mergedValues = new Dictionary<string, TypeInfo>(existing.Values);
             foreach (var (k, v) in ns.Values)
-                existing.Values[k] = v;
+                mergedValues[k] = v;
+
+            // Create new namespace with merged collections
+            var mergedNs = new TypeInfo.Namespace(name, mergedTypes.ToFrozenDictionary(), mergedValues.ToFrozenDictionary());
+            _namespaces[name] = mergedNs;
+            _types[name] = mergedNs;
         }
         else
         {

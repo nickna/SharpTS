@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -95,7 +96,7 @@ public partial class TypeChecker
             _ => EnumKind.Numeric  // Empty enum defaults to numeric
         };
 
-        _environment.Define(enumStmt.Name.Lexeme, new TypeInfo.Enum(enumStmt.Name.Lexeme, members, kind, enumStmt.IsConst));
+        _environment.Define(enumStmt.Name.Lexeme, new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst));
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -276,7 +277,7 @@ public partial class TypeChecker
 
         if (expected is TypeInfo.Interface itf)
         {
-            return CheckStructuralCompatibility(itf.Members, actual, itf.OptionalMemberSet);
+            return CheckStructuralCompatibility(itf.Members, actual, itf.OptionalMembers);
         }
 
         // Handle InstantiatedGeneric interface (e.g., Container<number>)
@@ -470,15 +471,14 @@ public partial class TypeChecker
         _ => false
     };
 
-    private bool CheckStructuralCompatibility(Dictionary<string, TypeInfo> requiredMembers, TypeInfo actual, HashSet<string>? optionalMembers = null)
+    private bool CheckStructuralCompatibility(IReadOnlyDictionary<string, TypeInfo> requiredMembers, TypeInfo actual, IReadOnlySet<string>? optionalMembers = null)
     {
-        optionalMembers ??= [];
         foreach (var member in requiredMembers)
         {
             TypeInfo? actualMemberType = GetMemberType(actual, member.Key);
 
             // If member is optional and not present, that's OK
-            if (actualMemberType == null && optionalMembers.Contains(member.Key))
+            if (actualMemberType == null && (optionalMembers?.Contains(member.Key) ?? false))
             {
                 continue;
             }

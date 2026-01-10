@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 
@@ -288,7 +289,7 @@ public partial class TypeChecker
                 {
                     // Create a record type with all exports
                     var namespaceType = new TypeInfo.Record(
-                        new Dictionary<string, TypeInfo>(importedModule.ExportedTypes)
+                        importedModule.ExportedTypes.ToFrozenDictionary()
                     );
                     env.Define(import.NamespaceImport.Lexeme, namespaceType);
                 }

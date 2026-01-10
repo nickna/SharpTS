@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
@@ -36,7 +37,7 @@ public partial class ILCompiler
         if (className != null)
         {
             var classType = _typeMap.GetClassType(className);
-            if (classType != null && classType.DeclaredFieldTypes.TryGetValue(field.Name.Lexeme, out var fieldTypeInfo))
+            if (classType != null && classType.FieldTypes.TryGetValue(field.Name.Lexeme, out var fieldTypeInfo))
             {
                 // Skip typed arrays for now - runtime creates List<object> which can't be cast to List<T>
                 // Union types, primitives, and classes are safe to type

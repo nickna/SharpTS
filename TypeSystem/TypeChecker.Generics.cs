@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+
 namespace SharpTS.TypeSystem;
 
 /// <summary>
@@ -197,9 +199,10 @@ public partial class TypeChecker
             TypeInfo.Union union =>
                 new TypeInfo.Union(union.Types.Select(t => Substitute(t, substitutions)).ToList()),
             TypeInfo.Record rec =>
-                new TypeInfo.Record(rec.Fields.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => Substitute(kvp.Value, substitutions))),
+                new TypeInfo.Record(
+                    rec.Fields.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => Substitute(kvp.Value, substitutions)).ToFrozenDictionary()),
             TypeInfo.InstantiatedGeneric ig =>
                 new TypeInfo.InstantiatedGeneric(
                     ig.GenericDefinition,
@@ -352,17 +355,17 @@ public partial class TypeChecker
                 // Public methods
                 foreach (var key in cls.Methods.Keys)
                 {
-                    if (cls.MethodAccessModifiers.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (cls.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 // Public fields
-                foreach (var key in cls.DeclaredFieldTypes.Keys)
+                foreach (var key in cls.FieldTypes.Keys)
                 {
-                    if (cls.FieldAccessModifiers.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (cls.FieldAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 // Public getters
-                foreach (var key in cls.GetterTypes.Keys)
+                foreach (var key in cls.Getters.Keys)
                     keys.Add(new TypeInfo.StringLiteral(key));
                 break;
 
@@ -385,12 +388,12 @@ public partial class TypeChecker
             case TypeInfo.GenericClass gc:
                 foreach (var key in gc.Methods.Keys)
                 {
-                    if (gc.MethodAccessModifiers.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (gc.MethodAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
-                foreach (var key in gc.DeclaredFieldTypes.Keys)
+                foreach (var key in gc.FieldTypes.Keys)
                 {
-                    if (gc.FieldAccessModifiers.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
+                    if (gc.FieldAccess.GetValueOrDefault(key, Parsing.AccessModifier.Public) == Parsing.AccessModifier.Public)
                         keys.Add(new TypeInfo.StringLiteral(key));
                 }
                 break;
@@ -456,7 +459,7 @@ public partial class TypeChecker
                 var substitutedMembers = gi.Members.ToDictionary(
                     kvp => kvp.Key,
                     kvp => Substitute(kvp.Value, subs));
-                return new TypeInfo.Interface(gi.Name, substitutedMembers, gi.OptionalMemberSet);
+                return new TypeInfo.Interface(gi.Name, substitutedMembers.ToFrozenDictionary(), gi.OptionalMembers);
 
             case TypeInfo.GenericClass gc:
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)
@@ -465,15 +468,15 @@ public partial class TypeChecker
                 return new TypeInfo.Class(
                     gc.Name,
                     gc.Superclass,
-                    gc.Methods.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)),
+                    gc.Methods.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary(),
                     gc.StaticMethods,
                     gc.StaticProperties,
                     gc.MethodAccess,
                     gc.FieldAccess,
                     gc.ReadonlyFields,
-                    gc.Getters?.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)),
-                    gc.Setters?.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)),
-                    gc.FieldTypes?.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)));
+                    gc.Getters.Count > 0 ? gc.Getters.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty,
+                    gc.Setters.Count > 0 ? gc.Setters.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty,
+                    gc.FieldTypes.Count > 0 ? gc.FieldTypes.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty);
         }
 
         return ig;
@@ -553,8 +556,8 @@ public partial class TypeChecker
 
         // Return as Interface to preserve optional info
         return optionalFields.Count > 0
-            ? new TypeInfo.Interface("", fields, optionalFields)
-            : new TypeInfo.Record(fields);
+            ? new TypeInfo.Interface("", fields.ToFrozenDictionary(), optionalFields.ToFrozenSet())
+            : new TypeInfo.Record(fields.ToFrozenDictionary());
     }
 
     /// <summary>
@@ -687,8 +690,8 @@ public partial class TypeChecker
             TypeInfo.Interface itf => itf.Members.GetValueOrDefault(propertyName),
             TypeInfo.Record rec => rec.Fields.GetValueOrDefault(propertyName),
             TypeInfo.Class cls => cls.Methods.GetValueOrDefault(propertyName)
-                               ?? cls.DeclaredFieldTypes.GetValueOrDefault(propertyName)
-                               ?? cls.GetterTypes.GetValueOrDefault(propertyName),
+                               ?? cls.FieldTypes.GetValueOrDefault(propertyName)
+                               ?? cls.Getters.GetValueOrDefault(propertyName),
             TypeInfo.Instance inst => GetPropertyType(inst.ClassType, propertyName),
             TypeInfo.InstantiatedGeneric ig => GetPropertyTypeFromInstantiatedGeneric(ig, propertyName),
             _ => null
@@ -716,9 +719,9 @@ public partial class TypeChecker
                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
                 if (gc.Methods.TryGetValue(propertyName, out var methodType))
                     return Substitute(methodType, subs);
-                if (gc.DeclaredFieldTypes.TryGetValue(propertyName, out var fieldType))
+                if (gc.FieldTypes.TryGetValue(propertyName, out var fieldType))
                     return Substitute(fieldType, subs);
-                if (gc.GetterTypes.TryGetValue(propertyName, out var getterType))
+                if (gc.Getters.TryGetValue(propertyName, out var getterType))
                     return Substitute(getterType, subs);
                 break;
         }

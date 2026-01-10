@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -15,24 +16,22 @@ public partial class TypeChecker
     {
         string name = ns.Name.Lexeme;
 
-        // Get or create namespace type
+        // Get or create namespace - use mutable dictionaries for construction
         TypeInfo.Namespace? existingNs = _environment.GetNamespace(name);
-        TypeInfo.Namespace nsType;
+        Dictionary<string, TypeInfo> types;
+        Dictionary<string, TypeInfo> values;
 
         if (existingNs != null)
         {
-            // Declaration merging - reuse existing namespace
-            nsType = existingNs;
+            // Declaration merging - start with existing members
+            types = new Dictionary<string, TypeInfo>(existingNs.Types);
+            values = new Dictionary<string, TypeInfo>(existingNs.Values);
         }
         else
         {
             // New namespace
-            nsType = new TypeInfo.Namespace(
-                name,
-                new Dictionary<string, TypeInfo>(),
-                new Dictionary<string, TypeInfo>()
-            );
-            _environment.DefineNamespace(name, nsType);
+            types = new Dictionary<string, TypeInfo>();
+            values = new Dictionary<string, TypeInfo>();
         }
 
         // Create new scope for namespace body
@@ -45,26 +44,30 @@ public partial class TypeChecker
             // First pass: collect all type declarations (classes, interfaces, enums, nested namespaces)
             foreach (var member in ns.Members)
             {
-                CollectNamespaceMemberType(member, nsType);
+                CollectNamespaceMemberType(member, types);
             }
 
             // Second pass: fully type-check all members
             foreach (var member in ns.Members)
             {
-                CheckNamespaceMember(member, nsType);
+                CheckNamespaceMember(member, values);
             }
         }
         finally
         {
             _environment = savedEnv;
         }
+
+        // Create namespace with frozen collections
+        var nsType = new TypeInfo.Namespace(name, types.ToFrozenDictionary(), values.ToFrozenDictionary());
+        _environment.DefineNamespace(name, nsType);
     }
 
     /// <summary>
     /// Collects type information from a namespace member (first pass).
     /// Registers classes, interfaces, enums, and nested namespaces.
     /// </summary>
-    private void CollectNamespaceMemberType(Stmt member, TypeInfo.Namespace nsType)
+    private void CollectNamespaceMemberType(Stmt member, Dictionary<string, TypeInfo> types)
     {
         // Unwrap export statements
         if (member is Stmt.Export export && export.Declaration != null)
@@ -80,13 +83,13 @@ public partial class TypeChecker
                 var nestedNsType = _environment.GetNamespace(nested.Name.Lexeme);
                 if (nestedNsType != null)
                 {
-                    nsType.Types[nested.Name.Lexeme] = nestedNsType;
+                    types[nested.Name.Lexeme] = nestedNsType;
                 }
                 break;
 
             case Stmt.Class classStmt:
                 // Register class type (full check in second pass)
-                CheckClassSignature(classStmt, nsType);
+                CheckClassSignature(classStmt, types);
                 break;
 
             case Stmt.Interface interfaceStmt:
@@ -94,7 +97,7 @@ public partial class TypeChecker
                 var ifaceType = _environment.Get(interfaceStmt.Name.Lexeme);
                 if (ifaceType != null)
                 {
-                    nsType.Types[interfaceStmt.Name.Lexeme] = ifaceType;
+                    types[interfaceStmt.Name.Lexeme] = ifaceType;
                 }
                 break;
 
@@ -103,14 +106,14 @@ public partial class TypeChecker
                 var enumType = _environment.Get(enumStmt.Name.Lexeme);
                 if (enumType != null)
                 {
-                    nsType.Types[enumStmt.Name.Lexeme] = enumType;
+                    types[enumStmt.Name.Lexeme] = enumType;
                 }
                 break;
 
             case Stmt.TypeAlias typeAlias:
                 CheckStmt(typeAlias);
                 var aliasType = ToTypeInfo(_environment.GetTypeAlias(typeAlias.Name.Lexeme)!);
-                nsType.Types[typeAlias.Name.Lexeme] = aliasType;
+                types[typeAlias.Name.Lexeme] = aliasType;
                 break;
         }
     }
@@ -118,14 +121,14 @@ public partial class TypeChecker
     /// <summary>
     /// Helper to check class signature and register in namespace without full body check.
     /// </summary>
-    private void CheckClassSignature(Stmt.Class classStmt, TypeInfo.Namespace nsType)
+    private void CheckClassSignature(Stmt.Class classStmt, Dictionary<string, TypeInfo> types)
     {
         // Full class check (will define the class type)
         CheckStmt(classStmt);
         var classType = _environment.Get(classStmt.Name.Lexeme);
         if (classType != null)
         {
-            nsType.Types[classStmt.Name.Lexeme] = classType;
+            types[classStmt.Name.Lexeme] = classType;
         }
     }
 
@@ -133,7 +136,7 @@ public partial class TypeChecker
     /// Type-checks a namespace member (second pass).
     /// Handles functions and variables that may reference types from first pass.
     /// </summary>
-    private void CheckNamespaceMember(Stmt member, TypeInfo.Namespace nsType)
+    private void CheckNamespaceMember(Stmt member, Dictionary<string, TypeInfo> values)
     {
         // Unwrap export statements
         bool isExported = false;
@@ -150,12 +153,12 @@ public partial class TypeChecker
                 var funcType = _environment.Get(funcStmt.Name.Lexeme);
                 if (funcType != null && isExported)
                 {
-                    nsType.Values[funcStmt.Name.Lexeme] = funcType;
+                    values[funcStmt.Name.Lexeme] = funcType;
                 }
                 else if (funcType != null)
                 {
                     // Non-exported members are still available within the namespace
-                    nsType.Values[funcStmt.Name.Lexeme] = funcType;
+                    values[funcStmt.Name.Lexeme] = funcType;
                 }
                 break;
 
@@ -164,11 +167,11 @@ public partial class TypeChecker
                 var varType = _environment.Get(varStmt.Name.Lexeme);
                 if (varType != null && isExported)
                 {
-                    nsType.Values[varStmt.Name.Lexeme] = varType;
+                    values[varStmt.Name.Lexeme] = varType;
                 }
                 else if (varType != null)
                 {
-                    nsType.Values[varStmt.Name.Lexeme] = varType;
+                    values[varStmt.Name.Lexeme] = varType;
                 }
                 break;
 

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -266,36 +267,36 @@ public partial class TypeChecker
                 classStmt.Name.Lexeme,
                 classTypeParams,
                 superclass,
-                declaredMethods,
-                declaredStaticMethods,
-                declaredStaticProperties,
-                methodAccess,
-                fieldAccess,
-                readonlyFields,
-                getters,
-                setters,
-                declaredFieldTypes,
+                declaredMethods.ToFrozenDictionary(),
+                declaredStaticMethods.ToFrozenDictionary(),
+                declaredStaticProperties.ToFrozenDictionary(),
+                methodAccess.ToFrozenDictionary(),
+                fieldAccess.ToFrozenDictionary(),
+                readonlyFields.ToFrozenSet(),
+                getters.ToFrozenDictionary(),
+                setters.ToFrozenDictionary(),
+                declaredFieldTypes.ToFrozenDictionary(),
                 classStmt.IsAbstract,
-                abstractMethods.Count > 0 ? abstractMethods : null,
-                abstractGetters.Count > 0 ? abstractGetters : null,
-                abstractSetters.Count > 0 ? abstractSetters : null
+                abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
+                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null,
+                abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null
             );
             _environment.Define(classStmt.Name.Lexeme, genericClassType);
             // For body check, create a Class type (methods/fields have TypeParameter types)
             classTypeForBody = new TypeInfo.Class(
-                classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
-                methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
-                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
-                abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
+                classStmt.Name.Lexeme, superclass, declaredMethods.ToFrozenDictionary(), declaredStaticMethods.ToFrozenDictionary(), declaredStaticProperties.ToFrozenDictionary(),
+                methodAccess.ToFrozenDictionary(), fieldAccess.ToFrozenDictionary(), readonlyFields.ToFrozenSet(), getters.ToFrozenDictionary(), setters.ToFrozenDictionary(), declaredFieldTypes.ToFrozenDictionary(),
+                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
+                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null, abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null);
             _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
         }
         else
         {
             var classType = new TypeInfo.Class(
-                classStmt.Name.Lexeme, superclass, declaredMethods, declaredStaticMethods, declaredStaticProperties,
-                methodAccess, fieldAccess, readonlyFields, getters, setters, declaredFieldTypes,
-                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods : null,
-                abstractGetters.Count > 0 ? abstractGetters : null, abstractSetters.Count > 0 ? abstractSetters : null);
+                classStmt.Name.Lexeme, superclass, declaredMethods.ToFrozenDictionary(), declaredStaticMethods.ToFrozenDictionary(), declaredStaticProperties.ToFrozenDictionary(),
+                methodAccess.ToFrozenDictionary(), fieldAccess.ToFrozenDictionary(), readonlyFields.ToFrozenSet(), getters.ToFrozenDictionary(), setters.ToFrozenDictionary(), declaredFieldTypes.ToFrozenDictionary(),
+                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
+                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null, abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null);
             _environment.Define(classStmt.Name.Lexeme, classType);
             _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
             classTypeForBody = classType;

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -99,8 +100,8 @@ public partial class TypeChecker
             var genericItfType = new TypeInfo.GenericInterface(
                 interfaceStmt.Name.Lexeme,
                 interfaceTypeParams,
-                members,
-                optionalMembers
+                members.ToFrozenDictionary(),
+                optionalMembers.ToFrozenSet()
             );
             _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
         }
@@ -108,8 +109,8 @@ public partial class TypeChecker
         {
             TypeInfo.Interface itfType = new(
                 interfaceStmt.Name.Lexeme,
-                members,
-                optionalMembers,
+                members.ToFrozenDictionary(),
+                optionalMembers.ToFrozenSet(),
                 stringIndexType,
                 numberIndexType,
                 symbolIndexType

@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -243,7 +244,7 @@ public partial class TypeChecker
                 }
             }
         }
-        return new TypeInfo.Record(fields, stringIndexType, numberIndexType, symbolIndexType);
+        return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType);
     }
 
     /// <summary>

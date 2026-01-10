@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -84,47 +85,41 @@ public abstract record TypeInfo
     public record Class(
         string Name,
         TypeInfo.Class? Superclass,
-        Dictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
-        Dictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
-        Dictionary<string, TypeInfo> StaticProperties,
-        Dictionary<string, AccessModifier>? MethodAccess = null,
-        Dictionary<string, AccessModifier>? FieldAccess = null,
-        HashSet<string>? ReadonlyFields = null,
-        Dictionary<string, TypeInfo>? Getters = null,
-        Dictionary<string, TypeInfo>? Setters = null,
-        Dictionary<string, TypeInfo>? FieldTypes = null,
+        FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
+        FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
+        FrozenDictionary<string, TypeInfo> StaticProperties,
+        FrozenDictionary<string, AccessModifier> MethodAccess,
+        FrozenDictionary<string, AccessModifier> FieldAccess,
+        FrozenSet<string> ReadonlyFields,
+        FrozenDictionary<string, TypeInfo> Getters,
+        FrozenDictionary<string, TypeInfo> Setters,
+        FrozenDictionary<string, TypeInfo> FieldTypes,
         bool IsAbstract = false,
-        HashSet<string>? AbstractMethods = null,
-        HashSet<string>? AbstractGetters = null,
-        HashSet<string>? AbstractSetters = null) : TypeInfo
+        FrozenSet<string>? AbstractMethods = null,
+        FrozenSet<string>? AbstractGetters = null,
+        FrozenSet<string>? AbstractSetters = null) : TypeInfo
     {
-        public Dictionary<string, AccessModifier> MethodAccessModifiers => MethodAccess ?? [];
-        public Dictionary<string, AccessModifier> FieldAccessModifiers => FieldAccess ?? [];
-        public HashSet<string> ReadonlyFieldSet => ReadonlyFields ?? [];
-        public Dictionary<string, TypeInfo> GetterTypes => Getters ?? [];
-        public Dictionary<string, TypeInfo> SetterTypes => Setters ?? [];
-        public Dictionary<string, TypeInfo> DeclaredFieldTypes => FieldTypes ?? [];
-        public HashSet<string> AbstractMethodSet => AbstractMethods ?? [];
-        public HashSet<string> AbstractGetterSet => AbstractGetters ?? [];
-        public HashSet<string> AbstractSetterSet => AbstractSetters ?? [];
+        // Keep nullable with defaults for backward compatibility during migration
+        public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
+        public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
+        public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
         public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
     public record Interface(
         string Name,
-        Dictionary<string, TypeInfo> Members,
-        HashSet<string>? OptionalMembers = null,
+        FrozenDictionary<string, TypeInfo> Members,
+        FrozenSet<string> OptionalMembers,
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
         TypeInfo? SymbolIndexType = null
     ) : TypeInfo
     {
-        public HashSet<string> OptionalMemberSet => OptionalMembers ?? [];
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
         public override string ToString() => $"interface {Name}";
     }
 
-    public record Enum(string Name, Dictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
+    public record Enum(string Name, FrozenDictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
     {
         // Only create reverse mapping for numeric members (not available for const enums)
         public Dictionary<double, string> ReverseMembers =>
@@ -140,8 +135,8 @@ public abstract record TypeInfo
     /// </summary>
     public record Namespace(
         string Name,
-        Dictionary<string, TypeInfo> Types,   // Classes, interfaces, enums, nested namespaces
-        Dictionary<string, TypeInfo> Values   // Functions, variables
+        FrozenDictionary<string, TypeInfo> Types,   // Classes, interfaces, enums, nested namespaces
+        FrozenDictionary<string, TypeInfo> Values   // Functions, variables
     ) : TypeInfo
     {
         /// <summary>
@@ -245,7 +240,7 @@ public abstract record TypeInfo
     }
 
     public record Record(
-        Dictionary<string, TypeInfo> Fields,
+        FrozenDictionary<string, TypeInfo> Fields,
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
         TypeInfo? SymbolIndexType = null
@@ -420,30 +415,25 @@ public abstract record TypeInfo
         string Name,
         List<TypeParameter> TypeParams,
         TypeInfo.Class? Superclass,
-        Dictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
-        Dictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
-        Dictionary<string, TypeInfo> StaticProperties,
-        Dictionary<string, AccessModifier>? MethodAccess = null,
-        Dictionary<string, AccessModifier>? FieldAccess = null,
-        HashSet<string>? ReadonlyFields = null,
-        Dictionary<string, TypeInfo>? Getters = null,
-        Dictionary<string, TypeInfo>? Setters = null,
-        Dictionary<string, TypeInfo>? FieldTypes = null,
+        FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
+        FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
+        FrozenDictionary<string, TypeInfo> StaticProperties,
+        FrozenDictionary<string, AccessModifier> MethodAccess,
+        FrozenDictionary<string, AccessModifier> FieldAccess,
+        FrozenSet<string> ReadonlyFields,
+        FrozenDictionary<string, TypeInfo> Getters,
+        FrozenDictionary<string, TypeInfo> Setters,
+        FrozenDictionary<string, TypeInfo> FieldTypes,
         bool IsAbstract = false,
-        HashSet<string>? AbstractMethods = null,
-        HashSet<string>? AbstractGetters = null,
-        HashSet<string>? AbstractSetters = null
+        FrozenSet<string>? AbstractMethods = null,
+        FrozenSet<string>? AbstractGetters = null,
+        FrozenSet<string>? AbstractSetters = null
     ) : TypeInfo
     {
-        public Dictionary<string, AccessModifier> MethodAccessModifiers => MethodAccess ?? [];
-        public Dictionary<string, AccessModifier> FieldAccessModifiers => FieldAccess ?? [];
-        public HashSet<string> ReadonlyFieldSet => ReadonlyFields ?? [];
-        public Dictionary<string, TypeInfo> GetterTypes => Getters ?? [];
-        public Dictionary<string, TypeInfo> SetterTypes => Setters ?? [];
-        public Dictionary<string, TypeInfo> DeclaredFieldTypes => FieldTypes ?? [];
-        public HashSet<string> AbstractMethodSet => AbstractMethods ?? [];
-        public HashSet<string> AbstractGetterSet => AbstractGetters ?? [];
-        public HashSet<string> AbstractSetterSet => AbstractSetters ?? [];
+        // Keep nullable with defaults for backward compatibility during migration
+        public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
+        public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
+        public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
         public override string ToString() => IsAbstract
             ? $"abstract class {Name}<{string.Join(", ", TypeParams)}>"
             : $"class {Name}<{string.Join(", ", TypeParams)}>";
@@ -453,11 +443,10 @@ public abstract record TypeInfo
     public record GenericInterface(
         string Name,
         List<TypeParameter> TypeParams,
-        Dictionary<string, TypeInfo> Members,
-        HashSet<string>? OptionalMembers = null
+        FrozenDictionary<string, TypeInfo> Members,
+        FrozenSet<string> OptionalMembers
     ) : TypeInfo
     {
-        public HashSet<string> OptionalMemberSet => OptionalMembers ?? [];
         public override string ToString() => $"interface {Name}<{string.Join(", ", TypeParams)}>";
     }
 

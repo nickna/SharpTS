@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
 
@@ -190,16 +191,16 @@ public partial class TypeChecker
                 while (current != null)
                 {
                     // Check for getter first
-                    if (current.GetterTypes.TryGetValue(memberName, out var getterType))
+                    if (current.Getters.TryGetValue(memberName, out var getterType))
                     {
                         return getterType;
                     }
 
                     // Check access modifier
                     AccessModifier access = AccessModifier.Public;
-                    if (current.MethodAccessModifiers.TryGetValue(memberName, out var ma))
+                    if (current.MethodAccess.TryGetValue(memberName, out var ma))
                         access = ma;
-                    else if (current.FieldAccessModifiers.TryGetValue(memberName, out var fa))
+                    else if (current.FieldAccess.TryGetValue(memberName, out var fa))
                         access = fa;
 
                     if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
@@ -393,7 +394,7 @@ public partial class TypeChecker
              // Check for setter first
              while (current != null)
              {
-                 if (current.SetterTypes.TryGetValue(memberName, out var setterType))
+                 if (current.Setters.TryGetValue(memberName, out var setterType))
                  {
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(setterType, valueType))
@@ -404,7 +405,7 @@ public partial class TypeChecker
                  }
 
                  // Check if there's a getter but no setter (read-only property)
-                 if (current.GetterTypes.ContainsKey(memberName) && !current.SetterTypes.ContainsKey(memberName))
+                 if (current.Getters.ContainsKey(memberName) && !current.Setters.ContainsKey(memberName))
                  {
                      throw new Exception($"Type Error: Cannot assign to '{memberName}' because it is a read-only property (has getter but no setter).");
                  }
@@ -420,7 +421,7 @@ public partial class TypeChecker
              {
                  // Check access modifier
                  AccessModifier access = AccessModifier.Public;
-                 if (current.FieldAccessModifiers.TryGetValue(memberName, out var fa))
+                 if (current.FieldAccess.TryGetValue(memberName, out var fa))
                      access = fa;
 
                  if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
@@ -433,7 +434,7 @@ public partial class TypeChecker
                  }
 
                  // Check readonly - only allow assignment in constructor
-                 if (current.ReadonlyFieldSet.Contains(memberName))
+                 if (current.ReadonlyFields.Contains(memberName))
                  {
                      // Allow in constructor
                      bool inConstructor = _currentClass?.Name == current.Name &&

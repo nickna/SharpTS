@@ -14,8 +14,8 @@ namespace SharpTS.TypeSystem;
 public class TypeMap
 {
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<string, TypeInfo.Class> _classTypes = [];
-    private readonly Dictionary<string, TypeInfo.Function> _functionTypes = [];
+    private readonly Dictionary<string, TypeInfo.Class> _classTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TypeInfo.Function> _functionTypes = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Associates an expression with its resolved type.
