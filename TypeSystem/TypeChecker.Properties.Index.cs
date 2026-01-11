@@ -88,7 +88,7 @@ public partial class TypeChecker
                 {
                     throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.");
                 }
-                return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+                return new TypeInfo.String();
             }
 
             // Number index signature on interface/record

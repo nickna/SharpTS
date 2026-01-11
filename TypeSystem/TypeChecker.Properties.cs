@@ -107,7 +107,7 @@ public partial class TypeChecker
                 return memberValue switch
                 {
                     double => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-                    string => new TypeInfo.Primitive(TokenType.TYPE_STRING),
+                    string => new TypeInfo.String(),
                     _ => throw new TypeCheckException($" Unexpected enum member type for '{get.Name.Lexeme}'.")
                 };
             }
@@ -248,8 +248,8 @@ public partial class TypeChecker
             }
             throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{record}'.");
         }
-        // Handle string methods
-        if (objType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING)
+        // Handle string methods (both String and StringLiteral types)
+        if (objType is TypeInfo.String or TypeInfo.StringLiteral)
         {
             var memberType = BuiltInTypes.GetStringMemberType(get.Name.Lexeme);
             if (memberType != null) return memberType;

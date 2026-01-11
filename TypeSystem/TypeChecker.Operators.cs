@@ -49,7 +49,7 @@ public partial class TypeChecker
             case TokenType.PLUS:
                 if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
                 if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-                if (IsString(left) || IsString(right)) return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+                if (IsString(left) || IsString(right)) return new TypeInfo.String();
                 if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
                     throw new TypeCheckException(" Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
                 throw new TypeCheckException(" Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.");
@@ -219,7 +219,7 @@ public partial class TypeChecker
     {
         TypeInfo right = CheckExpr(unary.Right);
         if (unary.Operator.Type == TokenType.TYPEOF)
-            return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+            return new TypeInfo.String();
         if (unary.Operator.Type == TokenType.MINUS)
         {
             if (IsBigInt(right)) return new TypeInfo.BigInt();

@@ -19,7 +19,7 @@ public partial class ILEmitter
         {
             TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => StackType.Double,
             TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => StackType.Boolean,
-            TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING } => StackType.String,
+            TypeSystem.TypeInfo.String => StackType.String,
             TypeSystem.TypeInfo.Null => StackType.Null,
             _ => StackType.Unknown
         };

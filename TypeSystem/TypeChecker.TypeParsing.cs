@@ -129,7 +129,7 @@ public partial class TypeChecker
             return new TypeInfo.NumberLiteral(numValue);
         }
 
-        if (typeName == "string") return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+        if (typeName == "string") return new TypeInfo.String();
         if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         if (typeName == "symbol") return new TypeInfo.Symbol();

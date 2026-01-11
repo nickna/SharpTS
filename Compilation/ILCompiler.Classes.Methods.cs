@@ -512,7 +512,8 @@ public partial class ILCompiler
             LockReentrancyFields = _lockReentrancyFields,
             StaticSyncLockFields = _staticSyncLockFields,
             StaticAsyncLockFields = _staticAsyncLockFields,
-            StaticLockReentrancyFields = _staticLockReentrancyFields
+            StaticLockReentrancyFields = _staticLockReentrancyFields,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
 
         // Add class generic type parameters to context

@@ -3,6 +3,7 @@ using System.Reflection.Emit;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
@@ -32,6 +33,7 @@ public partial class ILCompiler
     private readonly TypeMapper _typeMapper;
     private readonly Dictionary<string, TypeBuilder> _classBuilders = [];
     private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType classes mapped to .NET types
+    private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
     private readonly Dictionary<string, MethodBuilder> _functionBuilders = [];
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _staticFields = [];
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticMethods = [];
@@ -333,6 +335,35 @@ public partial class ILCompiler
         _typeMapper.SetClassBuilders(_classBuilders);
         _typeMapper.SetUnionGenerator(_unionGenerator);
 
+        // Phase 4.6: Initialize type emitter registry with external types for type-first dispatch
+        _typeEmitterRegistry.SetExternalTypes(_externalTypes);
+
+        // Register type-specific emitters
+        var stringEmitter = new StringEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
+
+        var arrayEmitter = new ArrayEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(arrayEmitter);
+
+        var dateEmitter = new DateEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(dateEmitter);
+
+        var mapEmitter = new MapEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(mapEmitter);
+
+        var setEmitter = new SetEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(setEmitter);
+
+        var weakMapEmitter = new WeakMapEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(weakMapEmitter);
+
+        var weakSetEmitter = new WeakSetEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(weakSetEmitter);
+
+        var regExpEmitter = new RegExpEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
+
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
 
@@ -464,6 +495,35 @@ public partial class ILCompiler
         _unionGenerator = new UnionTypeGenerator(_typeMapper);
         _typeMapper.SetClassBuilders(_classBuilders);
         _typeMapper.SetUnionGenerator(_unionGenerator);
+
+        // Phase 5.6: Initialize type emitter registry with external types for type-first dispatch
+        _typeEmitterRegistry.SetExternalTypes(_externalTypes);
+
+        // Register type-specific emitters
+        var stringEmitter = new StringEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
+
+        var arrayEmitter = new ArrayEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(arrayEmitter);
+
+        var dateEmitter = new DateEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(dateEmitter);
+
+        var mapEmitter = new MapEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(mapEmitter);
+
+        var setEmitter = new SetEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(setEmitter);
+
+        var weakMapEmitter = new WeakMapEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(weakMapEmitter);
+
+        var weakSetEmitter = new WeakSetEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(weakSetEmitter);
+
+        var regExpEmitter = new RegExpEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);

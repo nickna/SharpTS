@@ -127,7 +127,8 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -209,7 +210,8 @@ public partial class ILCompiler
             InstanceSetters = _instanceSetters,
             ClassSuperclass = _classSuperclass,
             AsyncMethods = null,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
         var emitter = new ILEmitter(ctx);
 

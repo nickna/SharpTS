@@ -55,7 +55,7 @@ public class TypeMap
     /// <summary>
     /// Checks if the expression is typed as a string.
     /// </summary>
-    public bool IsString(Expr expr) => Get(expr) is TypeInfo.Primitive { Type: TokenType.TYPE_STRING };
+    public bool IsString(Expr expr) => Get(expr) is TypeInfo.String or TypeInfo.StringLiteral;
 
     /// <summary>
     /// Checks if the expression is typed as an array.

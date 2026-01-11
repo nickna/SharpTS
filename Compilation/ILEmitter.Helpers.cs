@@ -78,7 +78,7 @@ public partial class ILEmitter
         if (type != null)
         {
             // Reference types never need boxing - skip the literal check entirely
-            if (type is TypeInfo.Primitive { Type: TokenType.TYPE_STRING }
+            if (type is TypeInfo.String
                 or TypeInfo.Array
                 or TypeInfo.Instance
                 or TypeInfo.Record
@@ -111,7 +111,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitExpressionAsDouble(Expr expr)
+    public void EmitExpressionAsDouble(Expr expr)
     {
         // Emit expression and ensure result is a double on the stack
         if (expr is Expr.Literal lit && lit.Value is double d)

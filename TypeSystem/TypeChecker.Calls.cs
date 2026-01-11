@@ -60,7 +60,7 @@ public partial class TypeChecker
         {
             // Date() called as a function (not with new) ignores arguments and returns a string
             foreach (var arg in call.Arguments) CheckExpr(arg);
-            return new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING);
+            return new TypeInfo.String();
         }
 
         // Handle Object.keys(), Object.values(), Object.entries()
@@ -495,7 +495,7 @@ public partial class TypeChecker
     private bool IsMoreSpecific(TypeInfo specific, TypeInfo general)
     {
         // Literal type > Primitive type
-        if (specific is TypeInfo.StringLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+        if (specific is TypeInfo.StringLiteral && general is TypeInfo.String)
             return true;
         if (specific is TypeInfo.NumberLiteral && general is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER })
             return true;

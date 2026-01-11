@@ -571,91 +571,45 @@ public partial class ILEmitter
         if (TryEmitDirectMethodCall(methodGet.Object, objType, methodName, arguments))
             return;
 
-        // Methods that exist on both strings and arrays - use TypeMap for static dispatch
+        // Type-first dispatch: Use TypeEmitterRegistry if we have type information
+        if (objType != null && _ctx.TypeEmitterRegistry != null)
+        {
+            var strategy = _ctx.TypeEmitterRegistry.GetStrategy(objType);
+            if (strategy != null && strategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                return;
+
+            // Handle union types - try emitters for member types
+            if (objType is TypeSystem.TypeInfo.Union union)
+            {
+                // Try string emitter if union contains string
+                bool hasStringMember = union.Types.Any(t => t is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral);
+                if (hasStringMember)
+                {
+                    var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
+                    if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                        return;
+                }
+
+                // Try array emitter if union contains array
+                bool hasArrayMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Array);
+                if (hasArrayMember)
+                {
+                    var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
+                    if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                        return;
+                }
+            }
+        }
+
+        // Methods that exist on both strings and arrays - runtime dispatch for any/unknown/union types
+        // Note: String and Array types are handled by TypeEmitterRegistry above
         if (methodName is "slice" or "concat" or "includes" or "indexOf")
         {
-            // Use static type information if available (already fetched above)
-            if (objType is TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
-            {
-                EmitStringMethodCall(methodGet.Object, methodName, arguments);
-                return;
-            }
-            if (objType is TypeSystem.TypeInfo.Array)
-            {
-                EmitArrayMethodCall(methodGet.Object, methodName, arguments);
-                return;
-            }
-
-            // Fallback: runtime dispatch for any/unknown/union types
             EmitAmbiguousMethodCall(methodGet.Object, methodName, arguments);
             return;
         }
 
-        // Special case: String-only method calls
-        if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
-            or "trim" or "replace" or "split" or "startsWith" or "endsWith"
-            or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
-            or "trimStart" or "trimEnd" or "replaceAll" or "at" or "match" or "search")
-        {
-            EmitStringMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: Array-only method calls
-        if (methodName is "pop" or "shift" or "unshift" or "map" or "filter" or "forEach"
-            or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join"
-            or "reverse")
-        {
-            EmitArrayMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: Date instance method calls
-        if (methodName is "getTime" or "getFullYear" or "getMonth" or "getDate" or "getDay"
-            or "getHours" or "getMinutes" or "getSeconds" or "getMilliseconds" or "getTimezoneOffset"
-            or "setTime" or "setFullYear" or "setMonth" or "setDate"
-            or "setHours" or "setMinutes" or "setSeconds" or "setMilliseconds"
-            or "toISOString" or "toDateString" or "toTimeString" or "valueOf"
-            or "toString")
-        {
-            EmitDateMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: Map method calls (based on type info)
-        if (objType is TypeSystem.TypeInfo.Map)
-        {
-            EmitMapMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: Set method calls (based on type info)
-        if (objType is TypeSystem.TypeInfo.Set)
-        {
-            EmitSetMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: WeakMap method calls (based on type info)
-        if (objType is TypeSystem.TypeInfo.WeakMap)
-        {
-            EmitWeakMapMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: WeakSet method calls (based on type info)
-        if (objType is TypeSystem.TypeInfo.WeakSet)
-        {
-            EmitWeakSetMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
-
-        // Special case: RegExp method calls
-        if (methodName is "test" or "exec")
-        {
-            EmitRegExpMethodCall(methodGet.Object, methodName, arguments);
-            return;
-        }
+        // Note: Date, Map, Set, WeakMap, WeakSet, RegExp methods are handled by TypeEmitterRegistry above
 
         // For object method calls, we need to pass the receiver as 'this'
         // Stack order: receiver, function, args

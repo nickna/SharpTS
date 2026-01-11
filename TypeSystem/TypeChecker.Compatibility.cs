@@ -69,7 +69,7 @@ public partial class TypeChecker
             return bl1.Value == bl2.Value;
 
         // Literal to primitive widening
-        if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_STRING } && actual is TypeInfo.StringLiteral)
+        if (expected is TypeInfo.String && actual is TypeInfo.StringLiteral)
             return true;
         if (expected is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } && actual is TypeInfo.NumberLiteral)
             return true;
@@ -158,14 +158,12 @@ public partial class TypeChecker
                 return true;
 
             // String enum accepts string
-            if (expectedEnum.Kind == EnumKind.String &&
-                actual is TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+            if (expectedEnum.Kind == EnumKind.String && actual is TypeInfo.String)
                 return true;
 
             // Heterogeneous enum accepts both
             if (expectedEnum.Kind == EnumKind.Heterogeneous &&
-                actual is TypeInfo.Primitive p &&
-                (p.Type == TokenType.TYPE_NUMBER || p.Type == TokenType.TYPE_STRING))
+                (actual is TypeInfo.String || actual is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }))
                 return true;
 
             return false;
@@ -179,19 +177,23 @@ public partial class TypeChecker
                 expected is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER })
                 return true;
 
-            if (actualEnumType.Kind == EnumKind.String &&
-                expected is TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+            if (actualEnumType.Kind == EnumKind.String && expected is TypeInfo.String)
                 return true;
 
             if (actualEnumType.Kind == EnumKind.Heterogeneous &&
-                expected is TypeInfo.Primitive ep &&
-                (ep.Type == TokenType.TYPE_NUMBER || ep.Type == TokenType.TYPE_STRING))
+                (expected is TypeInfo.String || expected is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }))
                 return true;
         }
 
         if (expected is TypeInfo.Primitive p1 && actual is TypeInfo.Primitive p2)
         {
             return p1.Type == p2.Type;
+        }
+
+        // String type compatibility
+        if (expected is TypeInfo.String && actual is TypeInfo.String)
+        {
+            return true;
         }
 
         // Symbol type compatibility
@@ -444,7 +446,7 @@ public partial class TypeChecker
             {
                 TypeInfo? narrowedType = typeStr switch
                 {
-                    "string" => new TypeInfo.Primitive(TokenType.TYPE_STRING),
+                    "string" => new TypeInfo.String(),
                     "number" => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
                     "boolean" => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
                     "bigint" => new TypeInfo.BigInt(),
@@ -472,9 +474,9 @@ public partial class TypeChecker
 
     private bool TypeMatchesTypeof(TypeInfo type, string typeofResult) => typeofResult switch
     {
-        "string" => type is TypeInfo.Primitive { Type: TokenType.TYPE_STRING },
-        "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER },
-        "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN },
+        "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
+        "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
+        "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "bigint" => type is TypeInfo.BigInt,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
         "function" => type is TypeInfo.Function,
@@ -636,13 +638,13 @@ public partial class TypeChecker
     }
 
     private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any;
-    private bool IsString(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING || t is TypeInfo.StringLiteral || t is TypeInfo.Any;
+    private bool IsString(TypeInfo t) => t is TypeInfo.String || t is TypeInfo.StringLiteral || t is TypeInfo.Any;
     private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any;
 
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
     /// </summary>
-    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol;
+    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol;
 
     private bool IsSubclassOf(TypeInfo.Class? subclass, TypeInfo.Class target)
     {

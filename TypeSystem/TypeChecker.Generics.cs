@@ -334,7 +334,7 @@ public partial class TypeChecker
                     keys.Add(new TypeInfo.StringLiteral(key));
                 // Add index signature key types
                 if (itf.StringIndexType != null)
-                    keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING));
+                    keys.Add(new TypeInfo.String());
                 if (itf.NumberIndexType != null)
                     keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                 if (itf.SymbolIndexType != null)
@@ -345,7 +345,7 @@ public partial class TypeChecker
                 foreach (var key in rec.Fields.Keys)
                     keys.Add(new TypeInfo.StringLiteral(key));
                 if (rec.StringIndexType != null)
-                    keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING));
+                    keys.Add(new TypeInfo.String());
                 if (rec.NumberIndexType != null)
                     keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                 if (rec.SymbolIndexType != null)
@@ -413,7 +413,7 @@ public partial class TypeChecker
                         if (keyStr.StartsWith("\"") && keyStr.EndsWith("\""))
                             keys.Add(new TypeInfo.StringLiteral(keyStr[1..^1]));
                         else if (keyStr == "string")
-                            keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING));
+                            keys.Add(new TypeInfo.String());
                         else if (keyStr == "number")
                             keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                         else if (keyStr == "symbol")
@@ -435,7 +435,7 @@ public partial class TypeChecker
 
             case TypeInfo.Any:
                 // keyof any = string | number | symbol
-                keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING));
+                keys.Add(new TypeInfo.String());
                 keys.Add(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
                 keys.Add(new TypeInfo.Symbol());
                 break;
@@ -668,7 +668,7 @@ public partial class TypeChecker
         }
 
         // For string index type, return the index signature type
-        if (indexType is TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_STRING })
+        if (indexType is TypeInfo.String)
         {
             return objectType switch
             {

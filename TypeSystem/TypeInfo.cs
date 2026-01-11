@@ -372,6 +372,12 @@ public abstract record TypeInfo
         public override string ToString() => "bigint";
     }
 
+    /// <summary>String type - represents the TypeScript string primitive.</summary>
+    public record String() : TypeInfo
+    {
+        public override string ToString() => "string";
+    }
+
     public record Date() : TypeInfo
     {
         public override string ToString() => "Date";

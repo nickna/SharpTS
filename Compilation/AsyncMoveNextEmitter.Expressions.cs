@@ -660,7 +660,7 @@ public partial class AsyncMoveNextEmitter
             {
                 // Try to get type info for better dispatch
                 var objType = _ctx?.TypeMap?.Get(methodGet.Object);
-                if (objType is TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_STRING })
+                if (objType is TypeSystem.TypeInfo.String)
                 {
                     EmitStringMethodCall(methodGet.Object, methodName, c.Arguments);
                     return;

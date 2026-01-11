@@ -304,7 +304,7 @@ public partial class TypeChecker
                 TypeInfo objType = CheckExpr(forIn.Object);
 
                 // for...in iterates over object keys, so element type is always string
-                TypeInfo keyType = new TypeInfo.Primitive(TokenType.TYPE_STRING);
+                TypeInfo keyType = new TypeInfo.String();
 
                 // Validate that the iterable is an object-like type
                 if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))

@@ -70,6 +70,7 @@ public class TypeMapper
     public Type MapTypeInfo(TypeInfo typeInfo) => typeInfo switch
     {
         TypeInfo.Primitive p => MapPrimitive(p),
+        TypeInfo.String => _types.String, // String type maps to System.String
         TypeInfo.BigInt => _types.BigInteger, // BigInt maps to BigInteger
         TypeInfo.Array => _types.Object, // Will be TSArray at runtime
         TypeInfo.Function => _types.Object, // Will be delegate at runtime
@@ -142,6 +143,7 @@ public class TypeMapper
     public Type MapTypeInfoStrict(TypeInfo typeInfo) => typeInfo switch
     {
         TypeInfo.Primitive p => MapPrimitive(p),
+        TypeInfo.String => _types.String, // String type maps to System.String
         TypeInfo.BigInt => _types.BigInteger,
         TypeInfo.Array arr => MapArrayTypeStrict(arr),
         TypeInfo.Function => _types.Delegate, // Functions map to Delegate for typed interop

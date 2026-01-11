@@ -76,7 +76,8 @@ public partial class ILCompiler
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
             // .NET namespace support
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
 
         // Add class generic type parameters to context

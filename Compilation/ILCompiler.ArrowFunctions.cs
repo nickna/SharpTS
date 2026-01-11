@@ -360,7 +360,8 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
 
         if (displayClass != null)

@@ -34,6 +34,11 @@ public partial class ILEmitter
     private ILGenerator IL => _ctx.IL;
 
     /// <summary>
+    /// Provides access to the compilation context for type emitter strategies.
+    /// </summary>
+    public CompilationContext Context => _ctx;
+
+    /// <summary>
     /// Current type on top of the IL evaluation stack.
     /// Used for unboxed numeric optimization.
     /// </summary>

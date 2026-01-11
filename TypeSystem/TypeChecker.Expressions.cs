@@ -75,7 +75,7 @@ public partial class TypeChecker
         TypeInfo pathType = CheckExpr(di.PathExpression);
 
         // Path must be string, string literal, or any
-        bool isValidPath = pathType is TypeInfo.Primitive { Type: TokenType.TYPE_STRING }
+        bool isValidPath = pathType is TypeInfo.String
                         || pathType is TypeInfo.StringLiteral
                         || pathType is TypeInfo.Any;
 
@@ -123,8 +123,8 @@ public partial class TypeChecker
         TypeInfo.Iterator iter => iter.ElementType,
         TypeInfo.Set set => set.ElementType,
         TypeInfo.Map map => new TypeInfo.Tuple([map.KeyType, map.ValueType], 2),  // [K, V] tuples
-        TypeInfo.Primitive p when p.Type == Parsing.TokenType.TYPE_STRING => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String yields characters
-        TypeInfo.StringLiteral => new TypeInfo.Primitive(Parsing.TokenType.TYPE_STRING),  // String literal also yields characters
+        TypeInfo.String => new TypeInfo.String(),  // String yields characters (as strings)
+        TypeInfo.StringLiteral => new TypeInfo.String(),  // String literal also yields characters
         TypeInfo.Any => new TypeInfo.Any(),
         _ => throw new TypeCheckException($" Type '{type}' is not iterable for yield*.")
     };
@@ -165,7 +165,7 @@ public partial class TypeChecker
             CheckExpr(expr);
         }
         // Template literals always result in string
-        return new TypeInfo.Primitive(TokenType.TYPE_STRING);
+        return new TypeInfo.String();
     }
 
     private TypeInfo CheckObject(Expr.ObjectLiteral obj)
@@ -224,7 +224,7 @@ public partial class TypeChecker
                     case Expr.ComputedKey ck:
                         TypeInfo keyType = CheckExpr(ck.Expression);
                         // Infer index signature based on key type
-                        if (keyType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_STRING)
+                        if (keyType is TypeInfo.String)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)
                             numberIndexType = UnifyIndexTypes(numberIndexType, valueType);

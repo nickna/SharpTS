@@ -61,6 +61,7 @@ public class UnionTypeGenerator
     private string GetTypeKey(TSTypeInfo type) => type switch
     {
         TSTypeInfo.Primitive p => p.Type.ToString().Replace("TYPE_", ""),
+        TSTypeInfo.String => "STRING", // New String type
         TSTypeInfo.Class c => c.Name,
         TSTypeInfo.Instance i when i.ClassType is TSTypeInfo.Class c => c.Name,
         TSTypeInfo.Array => "Array",
@@ -156,6 +157,7 @@ public class UnionTypeGenerator
 
     private string GetTypePropertyName(TSTypeInfo type, int index) => type switch
     {
+        TSTypeInfo.String => "String", // New String type
         TSTypeInfo.Primitive { Type: Parsing.TokenType.TYPE_STRING } => "String",
         TSTypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } => "Number",
         TSTypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN } => "Boolean",

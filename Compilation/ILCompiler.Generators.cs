@@ -138,7 +138,8 @@ public partial class ILCompiler
             ClassToModule = _classToModule,
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry
         };
 
         // Use the new emitter for full generator body emission

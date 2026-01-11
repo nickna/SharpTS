@@ -145,7 +145,7 @@ public partial class TypeChecker
         return type switch
         {
             // Widen literal primitives to base types
-            TypeInfo.StringLiteral => new TypeInfo.Primitive(TokenType.TYPE_STRING),
+            TypeInfo.StringLiteral => new TypeInfo.String(),
             TypeInfo.NumberLiteral => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
             TypeInfo.BooleanLiteral => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
 

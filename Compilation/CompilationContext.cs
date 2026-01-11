@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
@@ -165,6 +166,9 @@ public class CompilationContext
 
     // Union type generator for creating discriminated union types
     public UnionTypeGenerator? UnionGenerator { get; set; }
+
+    // Type emitter registry for type-first method dispatch
+    public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 
     // Dynamic property dictionary field (class name -> FieldBuilder for _extras)
     // Used for runtime-added properties that weren't declared in TypeScript

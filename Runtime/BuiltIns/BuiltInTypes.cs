@@ -6,7 +6,7 @@ namespace SharpTS.Runtime.BuiltIns;
 public static class BuiltInTypes
 {
     private static readonly TypeInfo NumberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-    private static readonly TypeInfo StringType = new TypeInfo.Primitive(TokenType.TYPE_STRING);
+    private static readonly TypeInfo StringType = new TypeInfo.String();
     private static readonly TypeInfo BooleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
     private static readonly TypeInfo VoidType = new TypeInfo.Void();
     private static readonly TypeInfo AnyType = new TypeInfo.Any();
@@ -32,7 +32,7 @@ public static class BuiltInTypes
             "padStart" => new TypeInfo.Function([NumberType], StringType), // padString is optional
             "padEnd" => new TypeInfo.Function([NumberType], StringType), // padString is optional
             "charCodeAt" => new TypeInfo.Function([NumberType], NumberType),
-            "concat" => new TypeInfo.Function([StringType], StringType), // variadic, simplified signature
+            "concat" => new TypeInfo.Function([], StringType), // variadic - takes 0 or more string arguments
             "lastIndexOf" => new TypeInfo.Function([StringType], NumberType),
             "trimStart" => new TypeInfo.Function([], StringType),
             "trimEnd" => new TypeInfo.Function([], StringType),

@@ -369,7 +369,7 @@ public class DeadCodeAnalyzer
     /// </summary>
     private static bool TypeMatchesTypeof(TypeInfo type, string typeofResult) => typeofResult switch
     {
-        "string" => type is TypeInfo.Primitive { Type: TokenType.TYPE_STRING } or TypeInfo.StringLiteral,
+        "string" => type is TypeInfo.String or TypeInfo.StringLiteral,
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
