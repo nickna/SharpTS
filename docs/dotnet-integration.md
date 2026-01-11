@@ -2,6 +2,8 @@
 
 This guide covers compiling TypeScript to .NET DLLs and consuming them from C# projects. Whether you're building TypeScript libraries for .NET applications or integrating TypeScript logic into existing C# codebases, this document provides practical workflows and patterns.
 
+> **Looking for the reverse?** To use existing .NET types (like `StringBuilder`, `Guid`, `DateTime`) from TypeScript, see [Using .NET Types from TypeScript](dotnet-types.md).
+
 ## Prerequisites
 
 - .NET 10.0 SDK
@@ -725,6 +727,7 @@ Calculator.PI = 3.14159
 
 ## See Also
 
+- [Using .NET Types from TypeScript](dotnet-types.md) - Use BCL and .NET libraries directly from TypeScript
 - [MSBuild SDK Guide](msbuild-sdk.md) - Integrate SharpTS into your .NET build process
 - [Execution Modes](execution-modes.md) - Interpreted vs compiled mode details
 - [Code Samples](code-samples.md) - TypeScript to C# mappings

@@ -50,6 +50,13 @@ SharpTS supports two execution modes:
 - Reference assembly output for C# interop (`--ref-asm`)
 - IL verification (`--verify`)
 
+### .NET Interop
+
+- **Use .NET types from TypeScript** via `@DotNetType` decorator
+- Access BCL classes like `StringBuilder`, `Guid`, `DateTime`, `TimeSpan`
+- Automatic type conversion and overload resolution
+- **Compile TypeScript for C# consumption** with reflection or direct reference
+
 ## Quick Start
 
 ### Prerequisites
@@ -198,6 +205,22 @@ $ dotnet functional.dll
 15
 ```
 
+### Use .NET Types from TypeScript
+
+```typescript
+// Use BCL types directly in TypeScript
+@DotNetType("System.Text.StringBuilder")
+declare class StringBuilder {
+    constructor();
+    append(value: string): StringBuilder;
+    toString(): string;
+}
+
+let sb = new StringBuilder();
+sb.append("Hello from .NET!");
+console.log(sb.toString());
+```
+
 ### Access TypeScript classes from .NET (C#)
 ```C#
 // Compile your TypeScript with --ref-asm:
@@ -209,9 +232,10 @@ string greeting = person.greet();        // Typed return values
 [Example code](Examples/Interop/README.md)
 ## Documentation
 
+- [**Using .NET Types**](docs/dotnet-types.md) - Use .NET BCL and libraries from TypeScript
+- [**.NET Integration**](docs/dotnet-integration.md) - Consume compiled TypeScript from C#
 - [**MSBuild SDK Guide**](docs/msbuild-sdk.md) - Integrate SharpTS into your .NET build process
 - [**Architecture Guide**](ARCHITECTURE.md) - Deep dive into the compiler/interpreter internals
-- [**.NET Integration**](docs/dotnet-integration.md) - Consume compiled TypeScript from C#
 - [**Contributing Guide**](CONTRIBUTING.md) - How to contribute to the project
 
 ## Project Status
