@@ -943,23 +943,10 @@ public partial class ILEmitter
         var method = methods.FirstOrDefault(m => m.GetParameters().Length == arguments.Count)
                   ?? methods.First(); // Fallback to first if no exact match
 
-        // Emit receiver - handle value types differently
+        // Emit receiver and prepare for member access
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-
-        LocalBuilder? valueLocal = null;
-        if (externalType.IsValueType)
-        {
-            // For value types, unbox to a local and load its address
-            IL.Emit(OpCodes.Unbox_Any, externalType);
-            valueLocal = IL.DeclareLocal(externalType);
-            IL.Emit(OpCodes.Stloc, valueLocal);
-            IL.Emit(OpCodes.Ldloca, valueLocal);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Castclass, externalType);
-        }
+        bool isValueType = PrepareReceiverForMemberAccess(externalType);
 
         // Emit arguments with type conversion
         var parameters = method.GetParameters();
@@ -970,23 +957,16 @@ public partial class ILEmitter
         }
 
         // Emit the call - use Call for value types (with address), Callvirt for reference types
-        if (externalType.IsValueType)
-        {
-            IL.Emit(OpCodes.Call, method);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Callvirt, method);
-        }
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, method);
 
         // Handle return value
         if (method.ReturnType == typeof(void))
         {
             IL.Emit(OpCodes.Ldnull); // void returns undefined
         }
-        else if (method.ReturnType.IsValueType)
+        else
         {
-            IL.Emit(OpCodes.Box, method.ReturnType);
+            BoxResultIfValueType(method.ReturnType);
         }
         SetStackUnknown();
     }

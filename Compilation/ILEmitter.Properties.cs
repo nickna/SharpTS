@@ -793,26 +793,9 @@ public partial class ILEmitter
                 // Emit field access
                 EmitExpression(receiver);
                 EmitBoxIfNeeded(receiver);
-
-                if (externalType.IsValueType)
-                {
-                    // For value types, unbox to a local and load its address for ldfld
-                    IL.Emit(OpCodes.Unbox_Any, externalType);
-                    var valueLocal = IL.DeclareLocal(externalType);
-                    IL.Emit(OpCodes.Stloc, valueLocal);
-                    IL.Emit(OpCodes.Ldloca, valueLocal);
-                    IL.Emit(OpCodes.Ldfld, field);
-                }
-                else
-                {
-                    IL.Emit(OpCodes.Castclass, externalType);
-                    IL.Emit(OpCodes.Ldfld, field);
-                }
-
-                if (field.FieldType.IsValueType)
-                {
-                    IL.Emit(OpCodes.Box, field.FieldType);
-                }
+                PrepareReceiverForMemberAccess(externalType);
+                IL.Emit(OpCodes.Ldfld, field);
+                BoxResultIfValueType(field.FieldType);
                 SetStackUnknown();
                 return;
             }
@@ -829,26 +812,9 @@ public partial class ILEmitter
         // Emit property access
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-
-        if (externalType.IsValueType)
-        {
-            // For value types, we need to unbox to a local and load its address
-            IL.Emit(OpCodes.Unbox_Any, externalType);
-            var valueLocal = IL.DeclareLocal(externalType);
-            IL.Emit(OpCodes.Stloc, valueLocal);
-            IL.Emit(OpCodes.Ldloca, valueLocal);
-            IL.Emit(OpCodes.Call, getter);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Castclass, externalType);
-            IL.Emit(OpCodes.Callvirt, getter);
-        }
-
-        if (property.PropertyType.IsValueType)
-        {
-            IL.Emit(OpCodes.Box, property.PropertyType);
-        }
+        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
+        BoxResultIfValueType(property.PropertyType);
         SetStackUnknown();
     }
 

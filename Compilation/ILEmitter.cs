@@ -17,6 +17,7 @@ namespace SharpTS.Compilation;
 /// - ILEmitter.cs: Core infrastructure and dispatchers
 /// - ILEmitter.StackTracking.cs: Stack type tracking and IL helper methods
 /// - ILEmitter.Helpers.cs: Boxing, return handling, and utility methods
+/// - ILEmitter.ValueTypes.cs: Value type handling (unboxing, address loading, result boxing)
 /// - ILEmitter.Modules.cs: Import/export and module support
 /// - ILEmitter.Statements.cs: Statement emission
 /// - ILEmitter.Expressions.cs: Expression emission
