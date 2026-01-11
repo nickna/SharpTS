@@ -893,22 +893,18 @@ public partial class ILEmitter
             throw new Exception($"Instance method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
 
-        // Find matching method by argument count (simple overload resolution for MVP)
-        var method = methods.FirstOrDefault(m => m.GetParameters().Length == arguments.Count)
-                  ?? methods.First(); // Fallback to first if no exact match
+        // Use type-aware overload resolution
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (MethodInfo)candidate.Method;
 
         // Emit receiver and prepare for member access
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
         bool isValueType = PrepareReceiverForMemberAccess(externalType);
 
-        // Emit arguments with type conversion
-        var parameters = method.GetParameters();
-        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
-        {
-            EmitExpression(arguments[i]);
-            EmitExternalTypeConversion(parameters[i].ParameterType);
-        }
+        // Emit arguments with type conversion (handles params arrays)
+        EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the call - use Call for value types (with address), Callvirt for reference types
         IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, method);
@@ -938,17 +934,13 @@ public partial class ILEmitter
             throw new Exception($"No public constructors found on external type {externalType.FullName}");
         }
 
-        // Find matching constructor by argument count (simple overload resolution for MVP)
-        var ctor = ctors.FirstOrDefault(c => c.GetParameters().Length == arguments.Count)
-                ?? ctors.OrderBy(c => c.GetParameters().Length).First(); // Fallback to shortest
+        // Use type-aware overload resolution
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveConstructor(ctors, arguments);
+        var ctor = (ConstructorInfo)candidate.Method;
 
-        // Emit arguments with type conversion
-        var parameters = ctor.GetParameters();
-        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
-        {
-            EmitExpression(arguments[i]);
-            EmitExternalTypeConversion(parameters[i].ParameterType);
-        }
+        // Emit arguments with type conversion (handles params arrays)
+        EmitExternalCallArguments(arguments, ctor, candidate);
 
         // Emit newobj instruction
         IL.Emit(OpCodes.Newobj, ctor);
@@ -971,17 +963,13 @@ public partial class ILEmitter
             throw new Exception($"Static method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
 
-        // Find matching method by argument count (simple overload resolution for MVP)
-        var method = methods.FirstOrDefault(m => m.GetParameters().Length == arguments.Count)
-                  ?? methods.First(); // Fallback to first if no exact match
+        // Use type-aware overload resolution
+        var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
+        var candidate = resolver.ResolveMethod(methods, arguments);
+        var method = (MethodInfo)candidate.Method;
 
-        // Emit arguments with type conversion
-        var parameters = method.GetParameters();
-        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
-        {
-            EmitExpression(arguments[i]);
-            EmitExternalTypeConversion(parameters[i].ParameterType);
-        }
+        // Emit arguments with type conversion (handles params arrays)
+        EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the static call
         IL.Emit(OpCodes.Call, method);
@@ -996,6 +984,75 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Box, method.ReturnType);
         }
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits arguments for an external method call, handling params arrays if present.
+    /// </summary>
+    private void EmitExternalCallArguments(List<Expr> arguments, MethodBase method, MethodCandidate candidate)
+    {
+        var parameters = method.GetParameters();
+
+        if (candidate.ParamsStartIndex < 0)
+        {
+            // No params array - emit arguments normally
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                EmitExpression(arguments[i]);
+                EmitExternalTypeConversion(parameters[i].ParameterType);
+            }
+        }
+        else
+        {
+            // Emit regular (non-params) arguments first
+            for (int i = 0; i < candidate.ParamsStartIndex; i++)
+            {
+                EmitExpression(arguments[i]);
+                EmitExternalTypeConversion(parameters[i].ParameterType);
+            }
+
+            // Create and fill the params array
+            var paramsParam = parameters[candidate.ParamsStartIndex];
+            var elementType = paramsParam.ParameterType.GetElementType()!;
+            int paramsCount = arguments.Count - candidate.ParamsStartIndex;
+
+            // Emit array creation: new T[paramsCount]
+            IL.Emit(OpCodes.Ldc_I4, paramsCount);
+            IL.Emit(OpCodes.Newarr, elementType);
+
+            // Fill array elements
+            bool isObjectArray = elementType == _ctx.Types.Object || elementType == typeof(object);
+            for (int i = 0; i < paramsCount; i++)
+            {
+                IL.Emit(OpCodes.Dup);                    // Duplicate array reference
+                IL.Emit(OpCodes.Ldc_I4, i);              // Push index
+                EmitExpression(arguments[candidate.ParamsStartIndex + i]);
+
+                // For object[], box value types but leave reference types as-is
+                if (isObjectArray)
+                {
+                    // Box unboxed value types on the stack (numbers, booleans)
+                    if (_stackType == StackType.Double)
+                    {
+                        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                    }
+                    else if (_stackType == StackType.Boolean)
+                    {
+                        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                    }
+                    // Reference types (strings, objects) are already boxed, no action needed
+                }
+                else
+                {
+                    EmitExternalTypeConversion(elementType);
+                    if (elementType.IsValueType)
+                        IL.Emit(OpCodes.Box, elementType);
+                }
+
+                IL.Emit(OpCodes.Stelem_Ref);             // Store in array
+            }
+            SetStackUnknown();
+        }
     }
 
     /// <summary>
@@ -1039,6 +1096,113 @@ public partial class ILEmitter
             EmitUnboxToDouble();
             IL.Emit(OpCodes.Conv_I8);
         }
+        else if (targetType == _ctx.Types.Single || targetType == typeof(float))
+        {
+            // Float (single precision)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_R4);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_R4);
+        }
+        else if (targetType == _ctx.Types.Int16 || targetType == typeof(short))
+        {
+            // Short (16-bit signed)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Conv_I2);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Conv_I2);
+        }
+        else if (targetType == _ctx.Types.Byte || targetType == typeof(byte))
+        {
+            // Byte (8-bit unsigned)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Conv_U1);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Conv_U1);
+        }
+        else if (targetType == _ctx.Types.SByte || targetType == typeof(sbyte))
+        {
+            // SByte (8-bit signed)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Conv_I1);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Conv_I1);
+        }
+        else if (targetType == _ctx.Types.UInt16 || targetType == typeof(ushort))
+        {
+            // UInt16 (16-bit unsigned)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Conv_U2);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Conv_U2);
+        }
+        else if (targetType == _ctx.Types.UInt32 || targetType == typeof(uint))
+        {
+            // UInt32 (32-bit unsigned)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_U4);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_U4);
+        }
+        else if (targetType == _ctx.Types.UInt64 || targetType == typeof(ulong))
+        {
+            // UInt64 (64-bit unsigned)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_U8);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_U8);
+        }
+        else if (targetType == _ctx.Types.Char || targetType == typeof(char))
+        {
+            // Char (16-bit Unicode character, treated as unsigned)
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Conv_U2);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Conv_U2);
+        }
+        else if (targetType == _ctx.Types.Decimal || targetType == typeof(decimal))
+        {
+            // Decimal requires calling the explicit conversion operator
+            if (_stackType != StackType.Double)
+                EmitUnboxToDouble();
+            var opExplicit = _ctx.Types.Decimal.GetMethod("op_Explicit",
+                BindingFlags.Public | BindingFlags.Static, [_ctx.Types.Double]);
+            IL.Emit(OpCodes.Call, opExplicit!);
+        }
         else if (targetType == _ctx.Types.String || targetType == typeof(string))
         {
             // If we already have a string on the stack, no conversion needed
@@ -1054,6 +1218,20 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Castclass, targetType);
         }
-        // For object type, no conversion needed
+        else
+        {
+            // For object type, box unboxed value types
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                SetStackUnknown();
+            }
+            else if (_stackType == StackType.Boolean)
+            {
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                SetStackUnknown();
+            }
+            // Reference types are already objects, no conversion needed
+        }
     }
 }
