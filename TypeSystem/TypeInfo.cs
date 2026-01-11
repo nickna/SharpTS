@@ -106,6 +106,66 @@ public abstract record TypeInfo
         public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
+    /// <summary>
+    /// Mutable class type used during class declaration checking.
+    /// Supports incremental building of methods/fields, then freezing to immutable Class.
+    /// This replaces the placeholder class pattern by providing a single object identity
+    /// that is registered early and populated during signature collection.
+    /// </summary>
+    /// <remarks>
+    /// Using a record with mutable properties (non-positional) to allow inheritance from TypeInfo.
+    /// The collections are mutable during construction and frozen when Freeze() is called.
+    /// </remarks>
+    public sealed record MutableClass(string Name) : TypeInfo
+    {
+        public TypeInfo.Class? Superclass { get; set; }
+        public Dictionary<string, TypeInfo> Methods { get; } = [];
+        public Dictionary<string, TypeInfo> StaticMethods { get; } = [];
+        public Dictionary<string, TypeInfo> StaticProperties { get; } = [];
+        public Dictionary<string, AccessModifier> MethodAccess { get; } = [];
+        public Dictionary<string, AccessModifier> FieldAccess { get; } = [];
+        public HashSet<string> ReadonlyFields { get; } = [];
+        public Dictionary<string, TypeInfo> Getters { get; } = [];
+        public Dictionary<string, TypeInfo> Setters { get; } = [];
+        public Dictionary<string, TypeInfo> FieldTypes { get; } = [];
+        public bool IsAbstract { get; set; }
+        public HashSet<string> AbstractMethods { get; } = [];
+        public HashSet<string> AbstractGetters { get; } = [];
+        public HashSet<string> AbstractSetters { get; } = [];
+
+        private TypeInfo.Class? _frozen;
+
+        /// <summary>
+        /// Freezes the mutable class into an immutable Class.
+        /// Idempotent - returns the same frozen instance on subsequent calls.
+        /// </summary>
+        public TypeInfo.Class Freeze()
+        {
+            if (_frozen != null) return _frozen;
+            _frozen = new TypeInfo.Class(
+                Name, Superclass,
+                Methods.ToFrozenDictionary(),
+                StaticMethods.ToFrozenDictionary(),
+                StaticProperties.ToFrozenDictionary(),
+                MethodAccess.ToFrozenDictionary(),
+                FieldAccess.ToFrozenDictionary(),
+                ReadonlyFields.ToFrozenSet(),
+                Getters.ToFrozenDictionary(),
+                Setters.ToFrozenDictionary(),
+                FieldTypes.ToFrozenDictionary(),
+                IsAbstract,
+                AbstractMethods.Count > 0 ? AbstractMethods.ToFrozenSet() : null,
+                AbstractGetters.Count > 0 ? AbstractGetters.ToFrozenSet() : null,
+                AbstractSetters.Count > 0 ? AbstractSetters.ToFrozenSet() : null);
+            return _frozen;
+        }
+
+        /// <summary>Gets the frozen class if available, otherwise null.</summary>
+        public TypeInfo.Class? Frozen => _frozen;
+
+        public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
+    }
+
     public record Interface(
         string Name,
         FrozenDictionary<string, TypeInfo> Members,
@@ -169,14 +229,25 @@ public abstract record TypeInfo
     }
 
     /// <summary>
-    /// Represents an instance of a class. ClassType can be either a regular Class
-    /// or an InstantiatedGeneric (for generic class instances like Box&lt;number&gt;).
+    /// Represents an instance of a class. ClassType can be either a regular Class,
+    /// a MutableClass (during signature collection), or an InstantiatedGeneric (for generic class instances).
     /// </summary>
     public record Instance(TypeInfo ClassType) : TypeInfo
     {
+        /// <summary>
+        /// Gets the resolved class type, handling MutableClass resolution.
+        /// If ClassType is a MutableClass, returns its frozen form if available, otherwise the MutableClass itself.
+        /// </summary>
+        public TypeInfo ResolvedClassType => ClassType switch
+        {
+            MutableClass mc => (TypeInfo?)mc.Frozen ?? mc,
+            _ => ClassType
+        };
+
         public override string ToString() => ClassType switch
         {
             Class c => c.Name,
+            MutableClass mc => mc.Name,
             InstantiatedGeneric ig => ig.ToString(),
             _ => "instance"
         };

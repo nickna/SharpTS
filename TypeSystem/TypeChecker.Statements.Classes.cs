@@ -49,19 +49,15 @@ public partial class TypeChecker
             }
         }
 
-        // Use classTypeEnv for type resolution so T resolves correctly
-        Dictionary<string, TypeInfo> declaredMethods = [];
-        Dictionary<string, TypeInfo> declaredStaticMethods = [];
-        Dictionary<string, TypeInfo> declaredStaticProperties = [];
-        Dictionary<string, AccessModifier> methodAccess = [];
-        Dictionary<string, AccessModifier> fieldAccess = [];
-        HashSet<string> readonlyFields = [];
-        HashSet<string> abstractMethods = [];
-        HashSet<string> abstractGetters = [];
-        HashSet<string> abstractSetters = [];
-        Dictionary<string, TypeInfo> declaredFieldTypes = [];
-        Dictionary<string, TypeInfo> getters = [];
-        Dictionary<string, TypeInfo> setters = [];
+        // Create mutable class early so self-references in method return types work.
+        // This allows methods like "next(): Node" to correctly resolve the return type.
+        // The mutable class is populated during signature collection and frozen at the end.
+        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme)
+        {
+            Superclass = superclass,
+            IsAbstract = classStmt.IsAbstract
+        };
+        classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
 
         using (new EnvironmentScope(this, classTypeEnv))
         {
@@ -107,12 +103,12 @@ public partial class TypeChecker
                 var funcType = BuildMethodFuncType(abstractMethod);
 
                 if (abstractMethod.IsStatic)
-                    declaredStaticMethods[methodName] = funcType;
+                    mutableClass.StaticMethods[methodName] = funcType;
                 else
-                    declaredMethods[methodName] = funcType;
+                    mutableClass.Methods[methodName] = funcType;
 
-                methodAccess[methodName] = abstractMethod.Access;
-                abstractMethods.Add(methodName);
+                mutableClass.MethodAccess[methodName] = abstractMethod.Access;
+                mutableClass.AbstractMethods.Add(methodName);
                 continue;
             }
 
@@ -144,11 +140,11 @@ public partial class TypeChecker
                 var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
 
                 if (implementation.IsStatic)
-                    declaredStaticMethods[methodName] = overloadedFunc;
+                    mutableClass.StaticMethods[methodName] = overloadedFunc;
                 else
-                    declaredMethods[methodName] = overloadedFunc;
+                    mutableClass.Methods[methodName] = overloadedFunc;
 
-                methodAccess[methodName] = implementation.Access;
+                mutableClass.MethodAccess[methodName] = implementation.Access;
             }
             else if (implementations.Count == 1)
             {
@@ -157,11 +153,11 @@ public partial class TypeChecker
                 var funcType = BuildMethodFuncType(method);
 
                 if (method.IsStatic)
-                    declaredStaticMethods[methodName] = funcType;
+                    mutableClass.StaticMethods[methodName] = funcType;
                 else
-                    declaredMethods[methodName] = funcType;
+                    mutableClass.Methods[methodName] = funcType;
 
-                methodAccess[methodName] = method.Access;
+                mutableClass.MethodAccess[methodName] = method.Access;
             }
             else if (implementations.Count > 1)
             {
@@ -183,16 +179,16 @@ public partial class TypeChecker
 
             if (field.IsStatic)
             {
-                declaredStaticProperties[fieldName] = fieldType;
+                mutableClass.StaticProperties[fieldName] = fieldType;
             }
             else
             {
-                declaredFieldTypes[fieldName] = fieldType;
+                mutableClass.FieldTypes[fieldName] = fieldType;
             }
-            fieldAccess[fieldName] = field.Access;
+            mutableClass.FieldAccess[fieldName] = field.Access;
             if (field.IsReadonly)
             {
-                readonlyFields.Add(fieldName);
+                mutableClass.ReadonlyFields.Add(fieldName);
             }
         }
 
@@ -214,12 +210,12 @@ public partial class TypeChecker
                     TypeInfo getterRetType = accessor.ReturnType != null
                         ? ToTypeInfo(accessor.ReturnType)
                         : new TypeInfo.Any();
-                    getters[propName] = getterRetType;
+                    mutableClass.Getters[propName] = getterRetType;
 
                     // Track abstract getters
                     if (accessor.IsAbstract)
                     {
-                        abstractGetters.Add(propName);
+                        mutableClass.AbstractGetters.Add(propName);
                     }
                 }
                 else // SET
@@ -227,20 +223,20 @@ public partial class TypeChecker
                     TypeInfo paramType = accessor.SetterParam?.Type != null
                         ? ToTypeInfo(accessor.SetterParam.Type)
                         : new TypeInfo.Any();
-                    setters[propName] = paramType;
+                    mutableClass.Setters[propName] = paramType;
 
                     // Track abstract setters
                     if (accessor.IsAbstract)
                     {
-                        abstractSetters.Add(propName);
+                        mutableClass.AbstractSetters.Add(propName);
                     }
                 }
             }
 
             // Validate that getter/setter pairs have matching types
-            foreach (var propName in getters.Keys.Intersect(setters.Keys))
+            foreach (var propName in mutableClass.Getters.Keys.Intersect(mutableClass.Setters.Keys))
             {
-                if (!IsCompatible(getters[propName], setters[propName]))
+                if (!IsCompatible(mutableClass.Getters[propName], mutableClass.Setters[propName]))
                 {
                     throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.");
                 }
@@ -248,7 +244,9 @@ public partial class TypeChecker
         }
         }
 
-        // Create GenericClass or regular Class based on type parameters
+        // Freeze the mutable class and create GenericClass or regular Class based on type parameters.
+        // Any TypeInfo.Instance created during signature collection (wrapping the MutableClass)
+        // will now resolve via ResolvedClassType to the frozen class.
         TypeInfo.Class classTypeForBody;
         if (classTypeParams != null && classTypeParams.Count > 0)
         {
@@ -256,36 +254,29 @@ public partial class TypeChecker
                 classStmt.Name.Lexeme,
                 classTypeParams,
                 superclass,
-                declaredMethods.ToFrozenDictionary(),
-                declaredStaticMethods.ToFrozenDictionary(),
-                declaredStaticProperties.ToFrozenDictionary(),
-                methodAccess.ToFrozenDictionary(),
-                fieldAccess.ToFrozenDictionary(),
-                readonlyFields.ToFrozenSet(),
-                getters.ToFrozenDictionary(),
-                setters.ToFrozenDictionary(),
-                declaredFieldTypes.ToFrozenDictionary(),
+                mutableClass.Methods.ToFrozenDictionary(),
+                mutableClass.StaticMethods.ToFrozenDictionary(),
+                mutableClass.StaticProperties.ToFrozenDictionary(),
+                mutableClass.MethodAccess.ToFrozenDictionary(),
+                mutableClass.FieldAccess.ToFrozenDictionary(),
+                mutableClass.ReadonlyFields.ToFrozenSet(),
+                mutableClass.Getters.ToFrozenDictionary(),
+                mutableClass.Setters.ToFrozenDictionary(),
+                mutableClass.FieldTypes.ToFrozenDictionary(),
                 classStmt.IsAbstract,
-                abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
-                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null,
-                abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null
+                mutableClass.AbstractMethods.Count > 0 ? mutableClass.AbstractMethods.ToFrozenSet() : null,
+                mutableClass.AbstractGetters.Count > 0 ? mutableClass.AbstractGetters.ToFrozenSet() : null,
+                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null
             );
             _environment.Define(classStmt.Name.Lexeme, genericClassType);
-            // For body check, create a Class type (methods/fields have TypeParameter types)
-            classTypeForBody = new TypeInfo.Class(
-                classStmt.Name.Lexeme, superclass, declaredMethods.ToFrozenDictionary(), declaredStaticMethods.ToFrozenDictionary(), declaredStaticProperties.ToFrozenDictionary(),
-                methodAccess.ToFrozenDictionary(), fieldAccess.ToFrozenDictionary(), readonlyFields.ToFrozenSet(), getters.ToFrozenDictionary(), setters.ToFrozenDictionary(), declaredFieldTypes.ToFrozenDictionary(),
-                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
-                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null, abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null);
+            // For body check, freeze the mutable class (methods/fields have TypeParameter types)
+            classTypeForBody = mutableClass.Freeze();
             _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForBody);
         }
         else
         {
-            var classType = new TypeInfo.Class(
-                classStmt.Name.Lexeme, superclass, declaredMethods.ToFrozenDictionary(), declaredStaticMethods.ToFrozenDictionary(), declaredStaticProperties.ToFrozenDictionary(),
-                methodAccess.ToFrozenDictionary(), fieldAccess.ToFrozenDictionary(), readonlyFields.ToFrozenSet(), getters.ToFrozenDictionary(), setters.ToFrozenDictionary(), declaredFieldTypes.ToFrozenDictionary(),
-                classStmt.IsAbstract, abstractMethods.Count > 0 ? abstractMethods.ToFrozenSet() : null,
-                abstractGetters.Count > 0 ? abstractGetters.ToFrozenSet() : null, abstractSetters.Count > 0 ? abstractSetters.ToFrozenSet() : null);
+            // Freeze the mutable class into an immutable class type
+            TypeInfo.Class classType = mutableClass.Freeze();
             _environment.Define(classStmt.Name.Lexeme, classType);
             _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
             classTypeForBody = classType;
@@ -323,7 +314,7 @@ public partial class TypeChecker
             if (field.IsStatic && field.Initializer != null)
             {
                 TypeInfo initType = CheckExpr(field.Initializer);
-                TypeInfo staticFieldDeclaredType = declaredStaticProperties[field.Name.Lexeme];
+                TypeInfo staticFieldDeclaredType = classTypeForBody.StaticProperties[field.Name.Lexeme];
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
@@ -379,8 +370,8 @@ public partial class TypeChecker
 
                 // Get the method type (could be Function or OverloadedFunction)
                 var declaredMethodType = method.IsStatic
-                    ? declaredStaticMethods[method.Name.Lexeme]
-                    : declaredMethods[method.Name.Lexeme];
+                    ? classTypeForBody.StaticMethods[method.Name.Lexeme]
+                    : classTypeForBody.Methods[method.Name.Lexeme];
 
                 // Get the actual function type (implementation for overloads)
                 TypeInfo.Function methodType = declaredMethodType switch
@@ -450,7 +441,7 @@ public partial class TypeChecker
                     TypeInfo accessorReturnType;
                     if (accessor.Kind.Type == TokenType.GET)
                     {
-                        accessorReturnType = getters[accessor.Name.Lexeme];
+                        accessorReturnType = classTypeForBody.Getters[accessor.Name.Lexeme];
                     }
                     else
                     {
@@ -459,7 +450,7 @@ public partial class TypeChecker
                         // Add setter parameter to environment
                         if (accessor.SetterParam != null)
                         {
-                            TypeInfo setterParamType = setters[accessor.Name.Lexeme];
+                            TypeInfo setterParamType = classTypeForBody.Setters[accessor.Name.Lexeme];
                             accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
                         }
                     }
@@ -526,33 +517,14 @@ public partial class TypeChecker
             }
         }
 
-        Dictionary<string, TypeInfo> declaredMethods = [];
-        Dictionary<string, TypeInfo> declaredStaticMethods = [];
-        Dictionary<string, TypeInfo> declaredStaticProperties = [];
-        Dictionary<string, AccessModifier> methodAccess = [];
-        Dictionary<string, AccessModifier> fieldAccess = [];
-        HashSet<string> readonlyFields = [];
-        Dictionary<string, TypeInfo> declaredFieldTypes = [];
-        Dictionary<string, TypeInfo> getters = [];
-        Dictionary<string, TypeInfo> setters = [];
-
-        // Create a placeholder class type early so self-references in method return types work
-        // This allows methods like "fromSeconds(): TimeSpan" to correctly resolve the return type
-        var placeholderClassType = new TypeInfo.Class(
-            classStmt.Name.Lexeme,
-            null,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            FrozenDictionary<string, AccessModifier>.Empty,
-            FrozenDictionary<string, AccessModifier>.Empty,
-            FrozenSet<string>.Empty,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            FrozenDictionary<string, TypeInfo>.Empty,
-            classStmt.IsAbstract
-        );
-        classTypeEnv.Define(classStmt.Name.Lexeme, placeholderClassType);
+        // Create mutable class early so self-references in method return types work.
+        // This allows methods like "fromSeconds(): TimeSpan" to correctly resolve the return type.
+        // The mutable class is populated during signature collection and frozen at the end.
+        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme)
+        {
+            IsAbstract = classStmt.IsAbstract
+        };
+        classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
 
         using (new EnvironmentScope(this, classTypeEnv))
         {
@@ -589,11 +561,11 @@ public partial class TypeChecker
                 var funcType = BuildMethodFuncType(method);
 
                 if (method.IsStatic)
-                    declaredStaticMethods[methodName] = funcType;
+                    mutableClass.StaticMethods[methodName] = funcType;
                 else
-                    declaredMethods[methodName] = funcType;
+                    mutableClass.Methods[methodName] = funcType;
 
-                methodAccess[methodName] = method.Access;
+                mutableClass.MethodAccess[methodName] = method.Access;
             }
             else
             {
@@ -602,11 +574,11 @@ public partial class TypeChecker
                 var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, signatureTypes[0]);
 
                 if (methods[0].IsStatic)
-                    declaredStaticMethods[methodName] = overloadedFunc;
+                    mutableClass.StaticMethods[methodName] = overloadedFunc;
                 else
-                    declaredMethods[methodName] = overloadedFunc;
+                    mutableClass.Methods[methodName] = overloadedFunc;
 
-                methodAccess[methodName] = methods[0].Access;
+                mutableClass.MethodAccess[methodName] = methods[0].Access;
             }
         }
 
@@ -619,17 +591,17 @@ public partial class TypeChecker
 
             if (field.IsStatic)
             {
-                declaredStaticProperties[field.Name.Lexeme] = fieldType;
+                mutableClass.StaticProperties[field.Name.Lexeme] = fieldType;
             }
             else
             {
-                declaredFieldTypes[field.Name.Lexeme] = fieldType;
+                mutableClass.FieldTypes[field.Name.Lexeme] = fieldType;
             }
 
-            fieldAccess[field.Name.Lexeme] = field.Access;
+            mutableClass.FieldAccess[field.Name.Lexeme] = field.Access;
             if (field.IsReadonly)
             {
-                readonlyFields.Add(field.Name.Lexeme);
+                mutableClass.ReadonlyFields.Add(field.Name.Lexeme);
             }
         }
 
@@ -644,30 +616,19 @@ public partial class TypeChecker
 
                 if (accessor.Kind.Type == TokenType.GET)
                 {
-                    getters[accessor.Name.Lexeme] = accessorType;
+                    mutableClass.Getters[accessor.Name.Lexeme] = accessorType;
                 }
                 else
                 {
-                    setters[accessor.Name.Lexeme] = accessorType;
+                    mutableClass.Setters[accessor.Name.Lexeme] = accessorType;
                 }
             }
         }
 
-        // Build the class type
-        var classType = new TypeInfo.Class(
-            classStmt.Name.Lexeme,
-            null, // No superclass for declare classes in MVP
-            declaredMethods.ToFrozenDictionary(),
-            declaredStaticMethods.ToFrozenDictionary(),
-            declaredStaticProperties.ToFrozenDictionary(),
-            methodAccess.ToFrozenDictionary(),
-            fieldAccess.ToFrozenDictionary(),
-            readonlyFields.ToFrozenSet(),
-            getters.ToFrozenDictionary(),
-            setters.ToFrozenDictionary(),
-            declaredFieldTypes.ToFrozenDictionary(),
-            classStmt.IsAbstract
-        );
+        // Freeze the mutable class into an immutable class type.
+        // Any TypeInfo.Instance that was created during signature collection
+        // (wrapping the MutableClass) will now resolve via ResolvedClassType.
+        TypeInfo.Class classType = mutableClass.Freeze();
 
         // Register class in parent environment (not the classTypeEnv)
         // This ensures the class is visible after the using block ends

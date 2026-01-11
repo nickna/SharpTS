@@ -140,6 +140,12 @@ public partial class TypeChecker
         if (typeName == "never") return new TypeInfo.Never();
 
         TypeInfo? type = _environment.Get(typeName);
+        if (type is TypeInfo.MutableClass mutableClass)
+        {
+            // MutableClass is used during signature collection for self-references.
+            // Instance wraps it; resolution to frozen class happens lazily via Instance.ResolvedClassType.
+            return new TypeInfo.Instance(mutableClass);
+        }
         if (type is TypeInfo.Class classType)
         {
             return new TypeInfo.Instance(classType);

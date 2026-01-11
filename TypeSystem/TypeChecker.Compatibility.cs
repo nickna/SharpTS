@@ -261,8 +261,12 @@ public partial class TypeChecker
                 return false;
             }
 
-            // Handle regular Class comparison
-            if (i1.ClassType is TypeInfo.Class expectedClass && i2.ClassType is TypeInfo.Class actualClass)
+            // Handle regular Class comparison (including MutableClass resolution)
+            // Use ResolvedClassType to handle MutableClass instances that may occur during signature collection
+            var resolvedExpected = i1.ResolvedClassType;
+            var resolvedActual = i2.ResolvedClassType;
+
+            if (resolvedExpected is TypeInfo.Class expectedClass && resolvedActual is TypeInfo.Class actualClass)
             {
                 TypeInfo.Class? current = actualClass;
                 while (current != null)
@@ -270,6 +274,11 @@ public partial class TypeChecker
                     if (current.Name == expectedClass.Name) return true;
                     current = current.Superclass;
                 }
+            }
+            // Handle MutableClass (unfrozen) comparison by name - occurs during signature collection
+            else if (resolvedExpected is TypeInfo.MutableClass mc1 && resolvedActual is TypeInfo.MutableClass mc2)
+            {
+                return mc1.Name == mc2.Name;
             }
 
             // Mixed case: InstantiatedGeneric vs regular Class - not compatible
@@ -605,6 +614,21 @@ public partial class TypeChecker
                 {
                     if (current.Methods.TryGetValue(name, out var methodType)) return methodType;
                     current = current.Superclass;
+                }
+            }
+            // Handle MutableClass (during signature collection)
+            else if (instance.ClassType is TypeInfo.MutableClass mutableClass)
+            {
+                if (mutableClass.Methods.TryGetValue(name, out var methodType)) return methodType;
+                // Check frozen version if available (may have superclass methods)
+                if (mutableClass.Frozen is TypeInfo.Class frozen)
+                {
+                    var current = frozen.Superclass;
+                    while (current != null)
+                    {
+                        if (current.Methods.TryGetValue(name, out var superMethod)) return superMethod;
+                        current = current.Superclass;
+                    }
                 }
             }
         }
