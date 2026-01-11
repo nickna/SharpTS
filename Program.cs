@@ -15,6 +15,7 @@
 //   --sdk-path <path>                    - Explicit path to .NET SDK reference assemblies
 //   --preserveConstEnums                 - Preserve const enum declarations
 //   --verify                             - Verify emitted IL using Microsoft.ILVerification
+//   -r, --reference <assembly.dll>       - Add assembly reference (can be repeated)
 //
 // Decorator flags:
 //   --experimentalDecorators             - Enable Legacy (Stage 2) decorators
@@ -33,6 +34,7 @@
 // =============================================================================
 
 using SharpTS.Compilation;
+using SharpTS.Declaration;
 using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Packaging;
@@ -51,7 +53,8 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
 {
     if (remainingArgs.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [-r <assembly.dll>]...");
+        Console.WriteLine("       [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
         Console.WriteLine("       [--msbuild-errors] [--quiet]");
         Console.WriteLine("       [--pack] [--push <source>] [--api-key <key>] [--package-id <id>] [--version <ver>]");
         Environment.Exit(64);
@@ -72,6 +75,9 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     string? apiKey = null;
     string? packageIdOverride = null;
     string? versionOverride = null;
+
+    // Assembly references
+    List<string> references = [];
 
     // Parse remaining arguments
     for (int i = 2; i < remainingArgs.Length; i++)
@@ -125,11 +131,41 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         {
             versionOverride = remainingArgs[++i];
         }
+        else if ((remainingArgs[i] == "-r" || remainingArgs[i] == "--reference") && i + 1 < remainingArgs.Length)
+        {
+            references.Add(remainingArgs[++i]);
+        }
     }
 
     var packOptions = new PackOptions(pack, pushSource, apiKey, packageIdOverride, versionOverride);
     var outputOptions = new OutputOptions(msbuildErrors, quietMode);
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions);
+    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions, references);
+}
+else if (remainingArgs[0] == "--gen-decl")
+{
+    if (remainingArgs.Length < 2)
+    {
+        Console.WriteLine("Usage: sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  sharpts --gen-decl System.Console              # Generate declaration for a type");
+        Console.WriteLine("  sharpts --gen-decl ./MyAssembly.dll            # Generate declarations for all types in assembly");
+        Console.WriteLine("  sharpts --gen-decl System.Console -o console.d.ts  # Write to file");
+        Environment.Exit(64);
+    }
+
+    string typeOrAssembly = remainingArgs[1];
+    string? outputPath = null;
+
+    // Parse options
+    for (int i = 2; i < remainingArgs.Length; i++)
+    {
+        if (remainingArgs[i] == "-o" && i + 1 < remainingArgs.Length)
+        {
+            outputPath = remainingArgs[++i];
+        }
+    }
+
+    GenerateDeclarations(typeOrAssembly, outputPath);
 }
 else if (remainingArgs.Length == 1)
 {
@@ -137,7 +173,7 @@ else if (remainingArgs.Length == 1)
 }
 else
 {
-    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] [--preserveConstEnums] [--experimentalDecorators] [--decorators]");
+    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] | sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
     Environment.Exit(64);
 }
 
@@ -255,7 +291,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references)
 {
     try
     {
@@ -317,11 +353,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references);
         }
 
         // Package if requested
@@ -345,7 +381,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata = null)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references)
 {
     // Load all dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -364,7 +400,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     // Compilation
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
     compiler.Save(outputPath);
@@ -383,7 +419,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata = null)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references)
 {
     // Static Analysis Phase
     TypeChecker checker = new();
@@ -396,7 +432,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
     // Compilation Phase
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.Compile(statements, typeMap, deadCodeInfo);
     compiler.Save(outputPath);
@@ -536,6 +572,48 @@ static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, Pa
             Console.WriteLine("Push failed.");
             Environment.Exit(1);
         }
+    }
+}
+
+static void GenerateDeclarations(string typeOrAssembly, string? outputPath)
+{
+    try
+    {
+        var generator = new DeclarationGenerator();
+        string result;
+
+        // Check if this is an assembly file path
+        if (typeOrAssembly.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+            typeOrAssembly.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(typeOrAssembly))
+            {
+                Console.WriteLine($"Error: Assembly not found: {typeOrAssembly}");
+                Environment.Exit(1);
+            }
+            result = generator.GenerateForAssembly(typeOrAssembly);
+        }
+        else
+        {
+            // Treat as a type name
+            result = generator.GenerateForType(typeOrAssembly);
+        }
+
+        // Output to file or console
+        if (outputPath != null)
+        {
+            File.WriteAllText(outputPath, result);
+            Console.WriteLine($"Generated declarations: {outputPath}");
+        }
+        else
+        {
+            Console.WriteLine(result);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(1);
     }
 }
 

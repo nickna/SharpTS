@@ -40,6 +40,7 @@ public class Lexer(string source)
         { "const", TokenType.CONST },
         { "constructor", TokenType.CONSTRUCTOR },
         { "continue", TokenType.CONTINUE },
+        { "declare", TokenType.DECLARE },
         { "default", TokenType.DEFAULT },
         { "do", TokenType.DO },
         { "else", TokenType.ELSE },

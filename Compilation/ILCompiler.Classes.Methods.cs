@@ -120,9 +120,20 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassMethodsOnly(Stmt.Class classStmt)
     {
+        // Skip @DotNetType external type classes - they don't have TypeBuilders
+        if (classStmt.IsDeclare)
+            return;
+
         var ctx = GetDefinitionContext();
         string qualifiedClassName = ctx.ResolveClassName(classStmt.Name.Lexeme);
-        var typeBuilder = _classBuilders[qualifiedClassName];
+
+        // Also skip if this is an external type (registered via @DotNetType decorator)
+        if (_externalTypes.ContainsKey(qualifiedClassName) ||
+            _externalTypes.ContainsKey(classStmt.Name.Lexeme))
+            return;
+
+        if (!_classBuilders.TryGetValue(qualifiedClassName, out var typeBuilder))
+            return;  // Skip if no TypeBuilder exists for this class
 
         // Pre-define constructor (if not already defined)
         if (!_classConstructors.ContainsKey(qualifiedClassName))
@@ -342,10 +353,20 @@ public partial class ILCompiler
 
     private void EmitClassMethods(Stmt.Class classStmt)
     {
+        // Skip @DotNetType external type classes - they don't have TypeBuilders
+        if (classStmt.IsDeclare)
+            return;
+
         // Get qualified class name (must match what DefineClass used)
         string qualifiedClassName = GetDefinitionContext().GetQualifiedClassName(classStmt.Name.Lexeme);
 
-        var typeBuilder = _classBuilders[qualifiedClassName];
+        // Also skip if this is an external type (registered via @DotNetType decorator)
+        if (_externalTypes.ContainsKey(qualifiedClassName) ||
+            _externalTypes.ContainsKey(classStmt.Name.Lexeme))
+            return;
+
+        if (!_classBuilders.TryGetValue(qualifiedClassName, out var typeBuilder))
+            return;  // Skip if no TypeBuilder exists for this class
         var fieldsField = _instanceFieldsField[qualifiedClassName];
 
         // Initialize static methods dictionary for this class

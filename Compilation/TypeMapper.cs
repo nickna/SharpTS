@@ -22,12 +22,27 @@ public class TypeMapper
     private readonly TypeProvider _types;
     private Dictionary<string, TypeBuilder>? _classBuilders;
     private UnionTypeGenerator? _unionGenerator;
+    private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType mappings
 
     public TypeMapper(ModuleBuilder moduleBuilder, TypeProvider? types = null)
     {
         _moduleBuilder = moduleBuilder;
         _types = types ?? TypeProvider.Runtime;
     }
+
+    /// <summary>
+    /// Registers an external .NET type for a TypeScript class name.
+    /// Used for @DotNetType decorator support.
+    /// </summary>
+    public void RegisterExternalType(string typeScriptName, Type dotNetType)
+    {
+        _externalTypes[typeScriptName] = dotNetType;
+    }
+
+    /// <summary>
+    /// Gets the external types dictionary for external access.
+    /// </summary>
+    public IReadOnlyDictionary<string, Type> ExternalTypes => _externalTypes;
 
     /// <summary>
     /// Gets the TypeProvider used for type resolution.
@@ -104,8 +119,14 @@ public class TypeMapper
     /// </summary>
     public Type GetClassType(string className)
     {
+        // Check external types first (from @DotNetType)
+        if (_externalTypes.TryGetValue(className, out var externalType))
+            return externalType;
+
+        // Then check TypeScript class builders
         if (_classBuilders != null && _classBuilders.TryGetValue(className, out var typeBuilder))
             return typeBuilder;
+
         return _types.Object;
     }
 

@@ -22,6 +22,17 @@ public partial class Parser
             return new Stmt.FileDirective(decorators);
         }
 
+        if (Match(TokenType.DECLARE))
+        {
+            // declare class is for ambient declarations (external types)
+            if (Match(TokenType.ABSTRACT))
+            {
+                Consume(TokenType.CLASS, "Expect 'class' after 'declare abstract'.");
+                return ClassDeclaration(isAbstract: true, classDecorators: decorators, isDeclare: true);
+            }
+            Consume(TokenType.CLASS, "Expect 'class' after 'declare'.");
+            return ClassDeclaration(isAbstract: false, classDecorators: decorators, isDeclare: true);
+        }
         if (Match(TokenType.ABSTRACT))
         {
             Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");

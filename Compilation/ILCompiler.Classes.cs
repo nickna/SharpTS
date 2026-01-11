@@ -31,6 +31,36 @@ public partial class ILCompiler
             _classToModule[classStmt.Name.Lexeme] = _currentModulePath;
         }
 
+        // Check for @DotNetType decorator - external .NET type mapping
+        string? dotNetTypeName = GetDotNetTypeMapping(classStmt);
+        if (dotNetTypeName != null)
+        {
+            // Convert friendly syntax to CLR name (e.g., "List<>" -> "List`1")
+            string clrTypeName = ToClrTypeName(dotNetTypeName);
+
+            // Try to resolve the external type
+            Type? externalType = TryResolveExternalType(clrTypeName);
+
+            if (externalType != null)
+            {
+                // Register the external type mapping
+                _externalTypes[qualifiedClassName] = externalType;
+                _externalTypes[classStmt.Name.Lexeme] = externalType; // Also register simple name
+
+                // Register in TypeMapper for type resolution during IL emission
+                _typeMapper.RegisterExternalType(qualifiedClassName, externalType);
+                _typeMapper.RegisterExternalType(classStmt.Name.Lexeme, externalType);
+            }
+            else
+            {
+                // Warning: type not found but continue compilation
+                Console.WriteLine($"Warning: External .NET type '{clrTypeName}' not found in loaded assemblies.");
+            }
+
+            // Skip DefineType - don't emit TypeBuilder for external types
+            return;
+        }
+
         Type? baseType = null;
         string? qualifiedSuperclassName = null;
         if (classStmt.Superclass != null)
@@ -206,6 +236,73 @@ public partial class ILCompiler
         if (_decoratorMode != DecoratorMode.None)
         {
             ApplyClassDecorators(classStmt, typeBuilder);
+        }
+    }
+
+    /// <summary>
+    /// Extracts the .NET type name from a @DotNetType decorator if present.
+    /// Returns null if the decorator is not present.
+    /// </summary>
+    private static string? GetDotNetTypeMapping(Stmt.Class classStmt)
+    {
+        if (classStmt.Decorators == null) return null;
+
+        foreach (var decorator in classStmt.Decorators)
+        {
+            if (decorator.Expression is Expr.Call call &&
+                call.Callee is Expr.Variable v &&
+                v.Name.Lexeme == "DotNetType" &&
+                call.Arguments.Count == 1 &&
+                call.Arguments[0] is Expr.Literal { Value: string typeName })
+            {
+                return typeName;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Converts friendly generic syntax to CLR syntax.
+    /// Examples: "List&lt;&gt;" -> "System.Collections.Generic.List`1"
+    ///           "Dictionary&lt;,&gt;" -> "System.Collections.Generic.Dictionary`2"
+    /// </summary>
+    private static string ToClrTypeName(string friendlyName)
+    {
+        int genericStart = friendlyName.IndexOf('<');
+        if (genericStart < 0) return friendlyName;
+
+        string baseName = friendlyName[..genericStart];
+        string genericPart = friendlyName[genericStart..];
+
+        // Count commas + 1 = number of type parameters
+        int paramCount = genericPart.Count(c => c == ',') + 1;
+
+        return $"{baseName}`{paramCount}";
+    }
+
+    /// <summary>
+    /// Attempts to resolve an external .NET type by name.
+    /// First tries the reference loader (for external assemblies),
+    /// then falls back to standard type resolution.
+    /// </summary>
+    private Type? TryResolveExternalType(string clrTypeName)
+    {
+        // Try reference loader first (external assemblies)
+        if (_referenceLoader != null)
+        {
+            var externalType = _referenceLoader.TryResolve(clrTypeName);
+            if (externalType != null) return externalType;
+        }
+
+        // Try TypeProvider (BCL types)
+        try
+        {
+            return _types.Resolve(clrTypeName);
+        }
+        catch
+        {
+            // Not found in TypeProvider, try Type.GetType
+            return Type.GetType(clrTypeName, throwOnError: false);
         }
     }
 }

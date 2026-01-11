@@ -253,6 +253,15 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Static method call on external .NET type (e.g., Console.WriteLine())
+        if (c.Callee is Expr.Get externalStaticGet &&
+            externalStaticGet.Object is Expr.Variable externalClassVar &&
+            _ctx.TypeMapper?.ExternalTypes.TryGetValue(externalClassVar.Name.Lexeme, out var externalType) == true)
+        {
+            EmitExternalStaticMethodCall(externalType, externalStaticGet.Name.Lexeme, c.Arguments);
+            return;
+        }
+
         // Special case: Static method call on class (e.g., Counter.increment())
         if (c.Callee is Expr.Get staticGet &&
             staticGet.Object is Expr.Variable classVar &&
@@ -861,8 +870,22 @@ public partial class ILEmitter
         if (simpleClassName == null)
             return false;
 
+        // Check if this is an external .NET type (@DotNetType)
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(simpleClassName, out var externalType))
+        {
+            EmitExternalInstanceMethodCall(receiver, externalType, methodName, arguments);
+            return true;
+        }
+
         // Resolve to qualified name for multi-module compilation
         string className = _ctx.ResolveClassName(simpleClassName);
+
+        // Also check if the qualified name is an external type
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out externalType))
+        {
+            EmitExternalInstanceMethodCall(receiver, externalType, methodName, arguments);
+            return true;
+        }
 
         // Look up the method in the class hierarchy
         var methodBuilder = _ctx.ResolveInstanceMethod(className, methodName);
@@ -898,5 +921,205 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt, methodBuilder);
         SetStackUnknown();
         return true;
+    }
+
+    /// <summary>
+    /// Emits an instance method call on an external .NET type (via @DotNetType).
+    /// </summary>
+    private void EmitExternalInstanceMethodCall(Expr receiver, Type externalType, string methodName, List<Expr> arguments)
+    {
+        // Try to find the instance method - first with original name, then with PascalCase
+        string pascalMethodName = NamingConventions.ToPascalCase(methodName);
+        var methods = externalType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+            .Where(m => m.Name == methodName || m.Name == pascalMethodName)
+            .ToArray();
+
+        if (methods.Length == 0)
+        {
+            throw new Exception($"Instance method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
+        }
+
+        // Find matching method by argument count (simple overload resolution for MVP)
+        var method = methods.FirstOrDefault(m => m.GetParameters().Length == arguments.Count)
+                  ?? methods.First(); // Fallback to first if no exact match
+
+        // Emit receiver - handle value types differently
+        EmitExpression(receiver);
+        EmitBoxIfNeeded(receiver);
+
+        LocalBuilder? valueLocal = null;
+        if (externalType.IsValueType)
+        {
+            // For value types, unbox to a local and load its address
+            IL.Emit(OpCodes.Unbox_Any, externalType);
+            valueLocal = IL.DeclareLocal(externalType);
+            IL.Emit(OpCodes.Stloc, valueLocal);
+            IL.Emit(OpCodes.Ldloca, valueLocal);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Castclass, externalType);
+        }
+
+        // Emit arguments with type conversion
+        var parameters = method.GetParameters();
+        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
+        {
+            EmitExpression(arguments[i]);
+            EmitExternalTypeConversion(parameters[i].ParameterType);
+        }
+
+        // Emit the call - use Call for value types (with address), Callvirt for reference types
+        if (externalType.IsValueType)
+        {
+            IL.Emit(OpCodes.Call, method);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Callvirt, method);
+        }
+
+        // Handle return value
+        if (method.ReturnType == typeof(void))
+        {
+            IL.Emit(OpCodes.Ldnull); // void returns undefined
+        }
+        else if (method.ReturnType.IsValueType)
+        {
+            IL.Emit(OpCodes.Box, method.ReturnType);
+        }
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits construction of an external .NET type (via @DotNetType).
+    /// </summary>
+    private void EmitExternalTypeConstruction(Type externalType, List<Expr> arguments)
+    {
+        // Find a constructor matching the argument count
+        var ctors = externalType.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
+
+        if (ctors.Length == 0)
+        {
+            throw new Exception($"No public constructors found on external type {externalType.FullName}");
+        }
+
+        // Find matching constructor by argument count (simple overload resolution for MVP)
+        var ctor = ctors.FirstOrDefault(c => c.GetParameters().Length == arguments.Count)
+                ?? ctors.OrderBy(c => c.GetParameters().Length).First(); // Fallback to shortest
+
+        // Emit arguments with type conversion
+        var parameters = ctor.GetParameters();
+        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
+        {
+            EmitExpression(arguments[i]);
+            EmitExternalTypeConversion(parameters[i].ParameterType);
+        }
+
+        // Emit newobj instruction
+        IL.Emit(OpCodes.Newobj, ctor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits a static method call on an external .NET type (via @DotNetType).
+    /// </summary>
+    private void EmitExternalStaticMethodCall(Type externalType, string methodName, List<Expr> arguments)
+    {
+        // Try to find the static method - first with original name, then with PascalCase
+        string pascalMethodName = NamingConventions.ToPascalCase(methodName);
+        var methods = externalType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == methodName || m.Name == pascalMethodName)
+            .ToArray();
+
+        if (methods.Length == 0)
+        {
+            throw new Exception($"Static method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
+        }
+
+        // Find matching method by argument count (simple overload resolution for MVP)
+        var method = methods.FirstOrDefault(m => m.GetParameters().Length == arguments.Count)
+                  ?? methods.First(); // Fallback to first if no exact match
+
+        // Emit arguments with type conversion
+        var parameters = method.GetParameters();
+        for (int i = 0; i < arguments.Count && i < parameters.Length; i++)
+        {
+            EmitExpression(arguments[i]);
+            EmitExternalTypeConversion(parameters[i].ParameterType);
+        }
+
+        // Emit the static call
+        IL.Emit(OpCodes.Call, method);
+
+        // Handle return value
+        if (method.ReturnType == typeof(void))
+        {
+            IL.Emit(OpCodes.Ldnull); // void returns undefined
+        }
+        else if (method.ReturnType.IsValueType)
+        {
+            IL.Emit(OpCodes.Box, method.ReturnType);
+        }
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits type conversion for passing arguments to external .NET methods.
+    /// </summary>
+    private void EmitExternalTypeConversion(Type targetType)
+    {
+        if (targetType == _ctx.Types.Double || targetType == typeof(double))
+        {
+            // If we already have a native double on the stack, no conversion needed
+            if (_stackType == StackType.Double)
+                return;
+            EmitUnboxToDouble();
+        }
+        else if (targetType == _ctx.Types.Boolean || targetType == typeof(bool))
+        {
+            // If we already have a native boolean on the stack, no conversion needed
+            if (_stackType == StackType.Boolean)
+                return;
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
+        }
+        else if (targetType == _ctx.Types.Int32 || targetType == typeof(int))
+        {
+            // If we already have a native double, just convert to int
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I4);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+        }
+        else if (targetType == _ctx.Types.Int64 || targetType == typeof(long))
+        {
+            // If we already have a native double, just convert to long
+            if (_stackType == StackType.Double)
+            {
+                IL.Emit(OpCodes.Conv_I8);
+                return;
+            }
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I8);
+        }
+        else if (targetType == _ctx.Types.String || targetType == typeof(string))
+        {
+            // If we already have a string on the stack, no conversion needed
+            if (_stackType == StackType.String)
+                return;
+            IL.Emit(OpCodes.Castclass, _ctx.Types.String);
+        }
+        else if (targetType.IsValueType)
+        {
+            IL.Emit(OpCodes.Unbox_Any, targetType);
+        }
+        else if (!_ctx.Types.IsObject(targetType))
+        {
+            IL.Emit(OpCodes.Castclass, targetType);
+        }
+        // For object type, no conversion needed
     }
 }

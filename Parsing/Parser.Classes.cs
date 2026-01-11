@@ -4,7 +4,7 @@ public partial class Parser
 {
     // ============== CLASS DECLARATION ==============
 
-    private Stmt ClassDeclaration(bool isAbstract, List<Decorator>? classDecorators = null)
+    private Stmt ClassDeclaration(bool isAbstract, List<Decorator>? classDecorators = null, bool isDeclare = false)
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect class name.");
         List<TypeParam>? typeParams = ParseTypeParameters();
@@ -234,6 +234,6 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators);
+        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
     }
 }

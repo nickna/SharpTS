@@ -70,6 +70,14 @@ public partial class ILEmitter
             resolvedClassName = _ctx.ResolveClassName(n.ClassName.Lexeme);
         }
 
+        // Check for external .NET type (@DotNetType)
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(n.ClassName.Lexeme, out var externalType) ||
+            _ctx.TypeMapper.ExternalTypes.TryGetValue(resolvedClassName, out externalType))
+        {
+            EmitExternalTypeConstruction(externalType, n.Arguments);
+            return;
+        }
+
         if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
             _ctx.ClassConstructors != null &&
             _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))

@@ -31,6 +31,7 @@ public partial class ILCompiler
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeMapper _typeMapper;
     private readonly Dictionary<string, TypeBuilder> _classBuilders = [];
+    private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType classes mapped to .NET types
     private readonly Dictionary<string, MethodBuilder> _functionBuilders = [];
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _staticFields = [];
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticMethods = [];
@@ -148,11 +149,15 @@ public partial class ILCompiler
     // Assembly metadata for version and attributes
     private readonly AssemblyMetadata? _metadata;
 
+    // External assembly references for @DotNetType support
+    private readonly IReadOnlyList<string>? _referenceAssemblies;
+    private AssemblyReferenceLoader? _referenceLoader;
+
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
     /// </summary>
     public ILCompiler(string assemblyName, bool preserveConstEnums = false)
-        : this(assemblyName, preserveConstEnums, useReferenceAssemblies: false, sdkPath: null, metadata: null)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies: false, sdkPath: null, metadata: null, references: null)
     {
     }
 
@@ -164,7 +169,7 @@ public partial class ILCompiler
     /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
     public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath)
-        : this(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata: null)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata: null, references: null)
     {
     }
 
@@ -177,12 +182,33 @@ public partial class ILCompiler
     /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
     /// <param name="metadata">Optional assembly metadata for version and attributes.</param>
     public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, AssemblyMetadata? metadata)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new IL compiler with optional reference assembly support, assembly metadata, and external references.
+    /// </summary>
+    /// <param name="assemblyName">Name for the output assembly.</param>
+    /// <param name="preserveConstEnums">Whether to preserve const enums in output.</param>
+    /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
+    /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    /// <param name="metadata">Optional assembly metadata for version and attributes.</param>
+    /// <param name="references">Optional list of external assembly paths for @DotNetType support.</param>
+    public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, AssemblyMetadata? metadata, IReadOnlyList<string>? references)
     {
         _assemblyName = assemblyName;
         _preserveConstEnums = preserveConstEnums;
         _useReferenceAssemblies = useReferenceAssemblies;
         _sdkPath = sdkPath;
         _metadata = metadata;
+        _referenceAssemblies = references;
+
+        // Initialize reference loader if external assemblies are provided
+        if (references != null && references.Count > 0)
+        {
+            _referenceLoader = new AssemblyReferenceLoader(references, sdkPath);
+        }
 
         // Always use runtime types for compilation.
         // When --ref-asm is enabled, the assembly will be post-processed in Save()

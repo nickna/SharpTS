@@ -30,7 +30,8 @@ public partial class TypeChecker
     /// </summary>
     private static readonly HashSet<string> BuiltInDecorators =
     [
-        "lock",  // Thread-safe method execution
+        "lock",        // Thread-safe method execution
+        "DotNetType",  // Maps TypeScript class to external .NET type
     ];
 
     /// <summary>

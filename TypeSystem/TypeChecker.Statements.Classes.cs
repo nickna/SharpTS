@@ -14,6 +14,14 @@ public partial class TypeChecker
         // Check class decorators
         CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
 
+        // For declare classes (ambient declarations), skip body checking
+        // These are external type declarations (e.g., @DotNetType)
+        if (classStmt.IsDeclare)
+        {
+            CheckDeclareClass(classStmt);
+            return;
+        }
+
         TypeInfo.Class? superclass = null;
         if (classStmt.Superclass != null)
         {
@@ -494,5 +502,178 @@ public partial class TypeChecker
             _environment = prevEnv;
             _currentClass = prevClass;
         }
+    }
+
+    /// <summary>
+    /// Type checks a declare class (ambient declaration).
+    /// For declare classes, we only validate signatures without requiring implementations.
+    /// Used for @DotNetType external type declarations.
+    /// </summary>
+    private void CheckDeclareClass(Stmt.Class classStmt)
+    {
+        // Save reference to current environment for later registration
+        TypeEnvironment parentEnv = _environment;
+
+        // Handle generic type parameters
+        TypeEnvironment classTypeEnv = new(_environment);
+        if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
+        {
+            foreach (var tp in classStmt.TypeParams)
+            {
+                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+        }
+
+        Dictionary<string, TypeInfo> declaredMethods = [];
+        Dictionary<string, TypeInfo> declaredStaticMethods = [];
+        Dictionary<string, TypeInfo> declaredStaticProperties = [];
+        Dictionary<string, AccessModifier> methodAccess = [];
+        Dictionary<string, AccessModifier> fieldAccess = [];
+        HashSet<string> readonlyFields = [];
+        Dictionary<string, TypeInfo> declaredFieldTypes = [];
+        Dictionary<string, TypeInfo> getters = [];
+        Dictionary<string, TypeInfo> setters = [];
+
+        // Create a placeholder class type early so self-references in method return types work
+        // This allows methods like "fromSeconds(): TimeSpan" to correctly resolve the return type
+        var placeholderClassType = new TypeInfo.Class(
+            classStmt.Name.Lexeme,
+            null,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            FrozenDictionary<string, AccessModifier>.Empty,
+            FrozenDictionary<string, AccessModifier>.Empty,
+            FrozenSet<string>.Empty,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            FrozenDictionary<string, TypeInfo>.Empty,
+            classStmt.IsAbstract
+        );
+        classTypeEnv.Define(classStmt.Name.Lexeme, placeholderClassType);
+
+        using (new EnvironmentScope(this, classTypeEnv))
+        {
+
+        // Helper to build a TypeInfo.Function from a method declaration
+        TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
+        {
+            var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+                method.Parameters,
+                validateDefaults: true,
+                contextName: $"method '{method.Name.Lexeme}'"
+            );
+
+            TypeInfo returnType = method.ReturnType != null
+                ? ToTypeInfo(method.ReturnType)
+                : new TypeInfo.Void();
+
+            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+        }
+
+        // Collect method signatures (all methods in declare class are treated as signatures)
+        // Constructor is included as a method named "constructor"
+        var methodGroups = classStmt.Methods.GroupBy(m => m.Name.Lexeme).ToList();
+
+        foreach (var group in methodGroups)
+        {
+            string methodName = group.Key;
+            var methods = group.ToList();
+
+            if (methods.Count == 1)
+            {
+                // Single method declaration
+                var method = methods[0];
+                var funcType = BuildMethodFuncType(method);
+
+                if (method.IsStatic)
+                    declaredStaticMethods[methodName] = funcType;
+                else
+                    declaredMethods[methodName] = funcType;
+
+                methodAccess[methodName] = method.Access;
+            }
+            else
+            {
+                // Multiple overloaded signatures - create OverloadedFunction
+                var signatureTypes = methods.Select(BuildMethodFuncType).ToList();
+                var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, signatureTypes[0]);
+
+                if (methods[0].IsStatic)
+                    declaredStaticMethods[methodName] = overloadedFunc;
+                else
+                    declaredMethods[methodName] = overloadedFunc;
+
+                methodAccess[methodName] = methods[0].Access;
+            }
+        }
+
+        // Collect field types
+        foreach (var field in classStmt.Fields)
+        {
+            TypeInfo fieldType = field.TypeAnnotation != null
+                ? ToTypeInfo(field.TypeAnnotation)
+                : new TypeInfo.Any();
+
+            if (field.IsStatic)
+            {
+                declaredStaticProperties[field.Name.Lexeme] = fieldType;
+            }
+            else
+            {
+                declaredFieldTypes[field.Name.Lexeme] = fieldType;
+            }
+
+            fieldAccess[field.Name.Lexeme] = field.Access;
+            if (field.IsReadonly)
+            {
+                readonlyFields.Add(field.Name.Lexeme);
+            }
+        }
+
+        // Collect getter/setter types from accessors (if any)
+        if (classStmt.Accessors != null)
+        {
+            foreach (var accessor in classStmt.Accessors)
+            {
+                TypeInfo accessorType = accessor.ReturnType != null
+                    ? ToTypeInfo(accessor.ReturnType)
+                    : new TypeInfo.Any();
+
+                if (accessor.Kind.Type == TokenType.GET)
+                {
+                    getters[accessor.Name.Lexeme] = accessorType;
+                }
+                else
+                {
+                    setters[accessor.Name.Lexeme] = accessorType;
+                }
+            }
+        }
+
+        // Build the class type
+        var classType = new TypeInfo.Class(
+            classStmt.Name.Lexeme,
+            null, // No superclass for declare classes in MVP
+            declaredMethods.ToFrozenDictionary(),
+            declaredStaticMethods.ToFrozenDictionary(),
+            declaredStaticProperties.ToFrozenDictionary(),
+            methodAccess.ToFrozenDictionary(),
+            fieldAccess.ToFrozenDictionary(),
+            readonlyFields.ToFrozenSet(),
+            getters.ToFrozenDictionary(),
+            setters.ToFrozenDictionary(),
+            declaredFieldTypes.ToFrozenDictionary(),
+            classStmt.IsAbstract
+        );
+
+        // Register class in parent environment (not the classTypeEnv)
+        // This ensures the class is visible after the using block ends
+        parentEnv.Define(classStmt.Name.Lexeme, classType);
+        _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+
+        } // End EnvironmentScope
     }
 }

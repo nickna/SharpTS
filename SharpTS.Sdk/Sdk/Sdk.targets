@@ -49,7 +49,7 @@
 
   <!-- Main compilation target -->
   <Target Name="SharpTSCompile"
-          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint"
+          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint;ResolveAssemblyReferences"
           BeforeTargets="CoreCompile"
           Outputs="$(SharpTSOutputPath)$(SharpTSOutputFileName)">
 
@@ -68,6 +68,8 @@
       <_SharpTSArgs Condition="'$(SharpTSEmitDecoratorMetadata)' == 'true'">$(_SharpTSArgs) --emitDecoratorMetadata</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSArgs) --verify</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSUseReferenceAssemblies)' == 'true'">$(_SharpTSArgs) --ref-asm</_SharpTSArgs>
+      <!-- Pass assembly references from ReferencePath (populated by ResolveAssemblyReferences) -->
+      <_SharpTSArgs>$(_SharpTSArgs) @(ReferencePath->'-r "%(Identity)"', ' ')</_SharpTSArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="SharpTS: Compiling $(SharpTSEntryPoint)" />

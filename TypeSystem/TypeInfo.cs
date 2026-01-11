@@ -153,6 +153,22 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents an external .NET type mapped via @DotNetType decorator.
+    /// Used for interop where TypeScript code declares shapes that map to existing .NET types.
+    /// </summary>
+    public record ExternalDotNetType(
+        string TypeScriptName,    // The TypeScript class name
+        string ClrTypeName,       // The full CLR type name (e.g., "System.Console")
+        Type? ResolvedType,       // The actual .NET Type if resolved
+        FrozenDictionary<string, TypeInfo> Methods,
+        FrozenDictionary<string, TypeInfo> StaticMethods,
+        FrozenDictionary<string, TypeInfo> Properties
+    ) : TypeInfo
+    {
+        public override string ToString() => $"external {TypeScriptName} -> {ClrTypeName}";
+    }
+
+    /// <summary>
     /// Represents an instance of a class. ClassType can be either a regular Class
     /// or an InstantiatedGeneric (for generic class instances like Box&lt;number&gt;).
     /// </summary>
