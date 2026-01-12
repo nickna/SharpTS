@@ -84,6 +84,12 @@ public partial class ILCompiler
         );
         _propertyBackingFields[className][pascalName] = backingField;
 
+        // Apply field-level decorators as .NET attributes
+        if (_decoratorMode != DecoratorMode.None)
+        {
+            ApplyFieldDecorators(field, backingField);
+        }
+
         // Define the property with PascalCase name (for C# interop)
         var property = typeBuilder.DefineProperty(
             pascalName,

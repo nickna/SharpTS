@@ -456,6 +456,12 @@ public partial class ILCompiler
             classMethods[method.Name.Lexeme] = methodBuilder;
         }
 
+        // Apply method-level decorators as .NET attributes
+        if (_decoratorMode != DecoratorMode.None)
+        {
+            ApplyMethodDecorators(method, methodBuilder);
+        }
+
         // Abstract methods have no body
         if (method.IsAbstract)
         {

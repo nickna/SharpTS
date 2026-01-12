@@ -226,6 +226,12 @@ public partial class ILCompiler
                     FieldAttributes.Public | FieldAttributes.Static
                 );
                 staticFieldBuilders[field.Name.Lexeme] = fieldBuilder;
+
+                // Apply field-level decorators as .NET attributes
+                if (_decoratorMode != DecoratorMode.None)
+                {
+                    ApplyFieldDecorators(field, fieldBuilder);
+                }
             }
         }
 

@@ -32,6 +32,8 @@ public partial class TypeChecker
     [
         "lock",        // Thread-safe method execution
         "DotNetType",  // Maps TypeScript class to external .NET type
+        "Obsolete",    // Marks a type or member as obsolete
+        "deprecated",  // Alias for Obsolete
     ];
 
     /// <summary>

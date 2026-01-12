@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Modules;
@@ -163,6 +164,65 @@ public static class TestHarness
             catch
             {
                 // Ignore cleanup errors
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source, loads the assembly in-process, executes it, and returns both the assembly and output.
+    /// This allows tests to perform reflection on the compiled types.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <returns>Tuple of (Assembly, console output)</returns>
+    public static (Assembly assembly, string output) CompileAndRun(string source, DecoratorMode decoratorMode)
+    {
+        // Use unique assembly name to avoid conflicts when loading multiple assemblies
+        var assemblyName = $"test_{Guid.NewGuid():N}";
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_{assemblyName}");
+        Directory.CreateDirectory(tempDir);
+
+        var dllPath = Path.Combine(tempDir, $"{assemblyName}.dll");
+
+        // Compile
+        var lexer = new Lexer(source);
+        var tokens = lexer.ScanTokens();
+        var parser = new Parser(tokens, decoratorMode);
+        var statements = parser.Parse();
+
+        var checker = new TypeChecker();
+        checker.SetDecoratorMode(decoratorMode);
+        var typeMap = checker.Check(statements);
+
+        var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+        var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+        var compiler = new ILCompiler(assemblyName);
+        compiler.SetDecoratorMode(decoratorMode);
+        compiler.Compile(statements, typeMap, deadCodeInfo);
+        compiler.Save(dllPath);
+
+        // Load assembly in-process for reflection
+        var assembly = Assembly.LoadFrom(dllPath);
+
+        // Execute Main and capture output
+        lock (ConsoleLock)
+        {
+            var sw = new StringWriter();
+            var originalOut = Console.Out;
+            Console.SetOut(sw);
+
+            try
+            {
+                var programType = assembly.GetType("$Program");
+                var mainMethod = programType?.GetMethod("Main", BindingFlags.Public | BindingFlags.Static);
+                mainMethod?.Invoke(null, null);
+
+                return (assembly, sw.ToString().Replace("\r\n", "\n"));
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
             }
         }
     }

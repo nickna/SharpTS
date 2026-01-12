@@ -67,6 +67,12 @@ public partial class ILCompiler
             }
         }
 
+        // Apply accessor-level decorators as .NET attributes
+        if (_decoratorMode != DecoratorMode.None)
+        {
+            ApplyAccessorDecorators(accessor, methodBuilder);
+        }
+
         // Abstract accessors have no body
         if (accessor.IsAbstract)
         {
