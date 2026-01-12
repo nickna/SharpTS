@@ -423,6 +423,13 @@ public static class TestHarness
             compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
             compiler.Save(dllPath);
 
+            // Copy SharpTS.dll for runtime dependency
+            var sharpTsDll = typeof(RuntimeTypes).Assembly.Location;
+            if (!string.IsNullOrEmpty(sharpTsDll) && File.Exists(sharpTsDll))
+            {
+                File.Copy(sharpTsDll, Path.Combine(tempDir, "SharpTS.dll"), overwrite: true);
+            }
+
             // Write runtimeconfig.json
             var configPath = Path.Combine(tempDir, "test.runtimeconfig.json");
             File.WriteAllText(configPath, """

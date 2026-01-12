@@ -106,6 +106,9 @@ public class CompilationContext
     // Enum kinds: enum name -> kind
     public Dictionary<string, EnumKind>? EnumKinds { get; set; }
 
+    // Namespace support: namespace path -> static field
+    public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
+
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }
 

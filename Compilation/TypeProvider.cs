@@ -200,6 +200,25 @@ public class TypeProvider
 
     #endregion
 
+    #region Async Enumerable Types (for async generators)
+
+    public Type IAsyncEnumerableOpen => Resolve("System.Collections.Generic.IAsyncEnumerable`1");
+    public Type IAsyncEnumeratorOpen => Resolve("System.Collections.Generic.IAsyncEnumerator`1");
+    public Type IAsyncDisposable => Resolve("System.IAsyncDisposable");
+    public Type ManualResetValueTaskSourceCoreOpen => Resolve("System.Threading.Tasks.Sources.ManualResetValueTaskSourceCore`1");
+    public Type IValueTaskSourceOpen => Resolve("System.Threading.Tasks.Sources.IValueTaskSource`1");
+    public Type ValueTaskSourceStatus => Resolve("System.Threading.Tasks.Sources.ValueTaskSourceStatus");
+
+    public Type IAsyncEnumerableOfObject => MakeGenericType(IAsyncEnumerableOpen, Object);
+    public Type IAsyncEnumeratorOfObject => MakeGenericType(IAsyncEnumeratorOpen, Object);
+    public Type ValueTaskOfBool => MakeGenericType(ValueTaskOpen, Boolean);
+    public Type ValueTaskAwaiterOpen => Resolve("System.Runtime.CompilerServices.ValueTaskAwaiter`1");
+    public Type ValueTaskAwaiterOfBool => MakeGenericType(ValueTaskAwaiterOpen, Boolean);
+    public Type ManualResetValueTaskSourceCoreOfBool => MakeGenericType(ManualResetValueTaskSourceCoreOpen, Boolean);
+    public Type IValueTaskSourceOfBool => MakeGenericType(IValueTaskSourceOpen, Boolean);
+
+    #endregion
+
     #region Reflection Types (extended)
 
     public Type PropertyInfo => Resolve("System.Reflection.PropertyInfo");

@@ -11,6 +11,14 @@ public partial class ILCompiler
 {
     private void DefineFunction(Stmt.Function funcStmt)
     {
+        // Check if this is an async generator function - use combined state machine
+        // Must check this FIRST since it has both IsAsync and IsGenerator true
+        if (funcStmt.IsAsync && funcStmt.IsGenerator)
+        {
+            DefineAsyncGeneratorFunction(funcStmt);
+            return;
+        }
+
         // Check if this is an async function - use native IL state machine
         if (funcStmt.IsAsync)
         {
@@ -199,6 +207,7 @@ public partial class ILCompiler
             EnumMembers = _enumMembers,
             EnumReverse = _enumReverse,
             EnumKinds = _enumKinds,
+            NamespaceFields = _namespaceFields,
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
@@ -213,11 +222,16 @@ public partial class ILCompiler
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry
         };
+
+        // Initialize namespace static fields before any code that might reference them
+        InitializeNamespaceFields(il);
+
         var emitter = new ILEmitter(ctx);
 
         foreach (var stmt in statements)
         {
             // Skip class, function, interface, and enum declarations (already handled)
+            // Note: Namespace statements are NOT skipped - they need to emit member storage
             if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.Enum)
             {
                 continue;

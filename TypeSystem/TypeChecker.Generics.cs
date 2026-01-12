@@ -52,6 +52,15 @@ public partial class TypeChecker
             return new TypeInfo.Generator(typeArgs[0]);
         }
 
+        if (baseName == "AsyncGenerator")
+        {
+            if (typeArgs.Count != 1)
+            {
+                throw new TypeCheckException($" AsyncGenerator requires exactly 1 type argument, got {typeArgs.Count}.");
+            }
+            return new TypeInfo.AsyncGenerator(typeArgs[0]);
+        }
+
         // Handle built-in utility types
         if (baseName == "Partial")
         {

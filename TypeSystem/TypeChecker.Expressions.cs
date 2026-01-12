@@ -121,6 +121,7 @@ public partial class TypeChecker
     {
         TypeInfo.Array arr => arr.ElementType,
         TypeInfo.Generator gen => gen.YieldType,
+        TypeInfo.AsyncGenerator asyncGen => asyncGen.YieldType,
         TypeInfo.Iterator iter => iter.ElementType,
         TypeInfo.Set set => set.ElementType,
         TypeInfo.Map map => new TypeInfo.Tuple([map.KeyType, map.ValueType], 2),  // [K, V] tuples

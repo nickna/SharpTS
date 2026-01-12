@@ -33,6 +33,9 @@ public partial class RuntimeEmitter
         // Emit $IGenerator interface for generator return/throw support
         EmitGeneratorInterface(moduleBuilder, runtime);
 
+        // Emit $IAsyncGenerator interface for async generator return/throw support
+        EmitAsyncGeneratorInterface(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 

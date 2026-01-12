@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-11 (Non-null assertion operator `x!`)
+**Last Updated:** 2026-01-11 (Async generator IL compiler)
 
 ## Legend
 - ✅ Implemented
@@ -217,11 +217,11 @@ This document tracks TypeScript language features and their implementation statu
 |---------|--------|-------|
 | Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API, `@Namespace` for .NET namespaces |
 | Generators (`function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; for...of integration |
-| Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of` (interpreter) |
+| Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of`; full IL compiler support |
 | Well-known Symbols | ✅ | `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables` |
 | Iterator Protocol | ✅ | Custom iterables via `[Symbol.iterator]()` method (interpreter only) |
-| Async Iterator Protocol | ✅ | Custom async iterables via `[Symbol.asyncIterator]()` method (interpreter) |
-| `for await...of` | ✅ | Async iteration over async iterators and generators (interpreter) |
+| Async Iterator Protocol | ✅ | Custom async iterables via `[Symbol.asyncIterator]()` method |
+| `for await...of` | ✅ | Async iteration over async iterators and generators |
 | `Symbol.for`/`Symbol.keyFor` | ✅ | Global symbol registry |
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
 | `bigint` type | ✅ | Arbitrary precision integers with full operation support |
@@ -569,10 +569,10 @@ _No known bugs at this time._
 - ✅ Fixed `SharpTSIteratorResult.ToString()` to show value when done
 - ✅ Compiler support for well-known symbol access (`Symbol.iterator`)
 - ⚠️ Compiler iterator protocol: foundation in place, full implementation pending
-- ✅ `for await...of` syntax (parsing and interpreter execution)
-- ✅ Async generators (`async function*`) with `yield`, `yield*`, `.next()`, `.return()`, `.throw()`
-- ✅ Async iterator protocol via `Symbol.asyncIterator`
-- ❌ Compiler support for async generators (pending)
+- ✅ `for await...of` syntax (parsing, interpreter, and IL compiler)
+- ✅ Async generators (`async function*`) with `yield`, `yield*`, `.next()`, `.return()`, `.throw()` (interpreter and IL compiler)
+- ✅ Async iterator protocol via `Symbol.asyncIterator` (interpreter and IL compiler)
+- ✅ Compiler support for async generators (full IL state machine with `IAsyncEnumerable<T>`)
 
 ### Phase 31 Features (ES2025 Set Operations & WeakMap/WeakSet)
 - ✅ ES2025 Set operations: `union(other)`, `intersection(other)`, `difference(other)`, `symmetricDifference(other)`

@@ -6,53 +6,47 @@ namespace SharpTS.Compilation;
 
 /// <summary>
 /// Namespace emission - EmitNamespace and related handlers.
+/// Uses static fields defined by ILCompiler for namespace objects.
 /// </summary>
 public partial class ILEmitter
 {
     /// <summary>
     /// Emits IL for a namespace declaration.
-    /// Creates a SharpTSNamespace object and stores members in it.
+    /// The namespace object has already been created and stored in a static field.
+    /// This method emits the code to store members in the namespace.
     /// </summary>
-    private void EmitNamespace(Stmt.Namespace ns)
+    private void EmitNamespace(Stmt.Namespace ns, string parentPath = "")
     {
-        string name = ns.Name.Lexeme;
+        string path = string.IsNullOrEmpty(parentPath)
+            ? ns.Name.Lexeme
+            : $"{parentPath}.{ns.Name.Lexeme}";
 
-        // Check if namespace already exists (declaration merging)
-        LocalBuilder? nsLocal = _ctx.Locals.GetLocal(name);
-
-        if (nsLocal == null)
+        // Get the namespace field (already defined and initialized)
+        if (_ctx.NamespaceFields == null || !_ctx.NamespaceFields.TryGetValue(path, out var nsField))
         {
-            // Create new SharpTSNamespace
-            nsLocal = _ctx.Locals.DeclareLocal(name, typeof(SharpTSNamespace));
-
-            // new SharpTSNamespace(name)
-            IL.Emit(OpCodes.Ldstr, name);
-            IL.Emit(OpCodes.Newobj, typeof(SharpTSNamespace).GetConstructor([typeof(string)])!);
-            IL.Emit(OpCodes.Stloc, nsLocal);
+            // Namespace field not defined - skip (shouldn't happen)
+            return;
         }
 
         // Emit namespace members
         foreach (var member in ns.Members)
         {
-            EmitNamespaceMember(member, nsLocal);
+            EmitNamespaceMember(member, nsField, path);
         }
     }
 
     /// <summary>
     /// Emits IL for a namespace member and stores it in the namespace object.
     /// </summary>
-    private void EmitNamespaceMember(Stmt member, LocalBuilder nsLocal)
+    private void EmitNamespaceMember(Stmt member, FieldBuilder nsField, string nsPath)
     {
-        bool isExported = false;
-
         // Unwrap export
         if (member is Stmt.Export export && export.Declaration != null)
         {
-            isExported = true;
             member = export.Declaration;
         }
 
-        // Get member name before execution
+        // Get member name
         string? memberName = member switch
         {
             Stmt.Function f => f.Name.Lexeme,
@@ -67,45 +61,50 @@ public partial class ILEmitter
         switch (member)
         {
             case Stmt.Function funcStmt:
-                // Emit function and store in namespace
-                EmitStatement(funcStmt);
-                if (isExported || true) // All members accessible in namespace
+                // Functions are defined at compile-time, not via EmitStatement
+                // Wrap as TSFunction and store in namespace
+                if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(funcStmt.Name.Lexeme), out var methodBuilder))
                 {
-                    StoreInNamespace(nsLocal, memberName!, funcStmt.Name.Lexeme);
+                    // nsField.Set(funcName, new TSFunction(null, methodInfo))
+                    IL.Emit(OpCodes.Ldsfld, nsField);
+                    IL.Emit(OpCodes.Ldstr, funcStmt.Name.Lexeme);
+                    // Create TSFunction(null, methodInfo)
+                    IL.Emit(OpCodes.Ldnull); // target (static method)
+                    IL.Emit(OpCodes.Ldtoken, methodBuilder);
+                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
+                    IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+                    IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
                 }
                 break;
 
             case Stmt.Var varStmt:
                 // Emit variable declaration
                 EmitStatement(varStmt);
-                if (isExported || true)
-                {
-                    StoreInNamespace(nsLocal, memberName!, varStmt.Name.Lexeme);
-                }
+                StoreLocalInNamespaceField(nsField, memberName!);
                 break;
 
             case Stmt.Class classStmt:
-                // Classes in namespaces need to be handled specially
-                // For now, just skip - class constructors are stored elsewhere
-                // The class will be accessible via the generated type
+                // Classes are defined separately - store the Type in namespace
+                if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(classStmt.Name.Lexeme), out var classType))
+                {
+                    IL.Emit(OpCodes.Ldsfld, nsField);
+                    IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);
+                    IL.Emit(OpCodes.Ldtoken, classType);
+                    IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
+                }
                 break;
 
             case Stmt.Enum enumStmt:
-                // Enums are handled at compile time - skip here
+                // Enums are handled at compile time - store the enum values object if available
+                // For now, skip - enums are accessed via special handling
                 break;
 
             case Stmt.Namespace nestedNs:
-                // Recursively emit nested namespace
-                EmitNamespace(nestedNs);
-                // Store nested namespace in parent
-                var nestedLocal = _ctx.Locals.GetLocal(nestedNs.Name.Lexeme);
-                if (nestedLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, nsLocal);
-                    IL.Emit(OpCodes.Ldstr, nestedNs.Name.Lexeme);
-                    IL.Emit(OpCodes.Ldloc, nestedLocal);
-                    IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
-                }
+                // Recursively emit nested namespace members
+                // The nested namespace field is already initialized and stored in parent by InitializeNamespaceFields
+                EmitNamespace(nestedNs, nsPath);
                 break;
 
             case Stmt.Interface:
@@ -116,15 +115,15 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Stores a value from a local variable into the namespace object.
+    /// Stores a value from a local variable into the namespace static field.
     /// </summary>
-    private void StoreInNamespace(LocalBuilder nsLocal, string memberName, string localName)
+    private void StoreLocalInNamespaceField(FieldBuilder nsField, string memberName)
     {
-        var memberLocal = _ctx.Locals.GetLocal(localName);
+        var memberLocal = _ctx.Locals.GetLocal(memberName);
         if (memberLocal != null)
         {
-            // nsLocal.Set(memberName, value)
-            IL.Emit(OpCodes.Ldloc, nsLocal);
+            // nsField.Set(memberName, value)
+            IL.Emit(OpCodes.Ldsfld, nsField);
             IL.Emit(OpCodes.Ldstr, memberName);
             IL.Emit(OpCodes.Ldloc, memberLocal);
             if (memberLocal.LocalType.IsValueType)

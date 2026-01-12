@@ -104,6 +104,14 @@ public partial class ILEmitter
             return;
         }
 
+        // Check if it's a namespace - load the static field
+        if (_ctx.NamespaceFields?.TryGetValue(name, out var nsField) == true)
+        {
+            IL.Emit(OpCodes.Ldsfld, nsField);
+            SetStackUnknown();
+            return;
+        }
+
         // Unknown variable - push null
         EmitNullConstant();
     }

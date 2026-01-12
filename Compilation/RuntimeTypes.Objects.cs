@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -72,6 +73,12 @@ public static partial class RuntimeTypes
     public static object? GetProperty(object? obj, string name)
     {
         if (obj == null) return null;
+
+        // Namespace (TypeScript namespace object)
+        if (obj is SharpTSNamespace ns)
+        {
+            return ns.Get(name);
+        }
 
         // Dictionary (object literal)
         if (TryGetDictionary(obj, out var dict))

@@ -64,6 +64,9 @@ public partial class ILCompiler
     private readonly HashSet<string> _constEnums = [];
     private readonly bool _preserveConstEnums;
 
+    // Namespace support: namespace path -> static field
+    private readonly Dictionary<string, FieldBuilder> _namespaceFields = [];
+
     // Generic type parameter support
     private readonly Dictionary<string, GenericTypeParameterBuilder[]> _classGenericParams = [];
     private readonly Dictionary<string, GenericTypeParameterBuilder[]> _functionGenericParams = [];
@@ -90,6 +93,12 @@ public partial class ILCompiler
     private readonly Dictionary<string, GeneratorStateMachineBuilder> _generatorStateMachines = [];
     private readonly Dictionary<string, Stmt.Function> _generatorFunctions = [];
     private int _generatorStateMachineCounter = 0;
+
+    // Async generator method compilation (combined async + generator state machine)
+    private readonly AsyncGeneratorStateAnalyzer _asyncGeneratorAnalyzer = new();
+    private readonly Dictionary<string, AsyncGeneratorStateMachineBuilder> _asyncGeneratorStateMachines = [];
+    private readonly Dictionary<string, Stmt.Function> _asyncGeneratorFunctions = [];
+    private int _asyncGeneratorStateMachineCounter = 0;
 
     // Async arrow function state machines (one per async arrow in async methods)
     private readonly Dictionary<Expr.ArrowFunction, AsyncArrowStateMachineBuilder> _asyncArrowBuilders = new(ReferenceEqualityComparer.Instance);
@@ -328,6 +337,10 @@ public partial class ILCompiler
             {
                 DefineEnum(enumStmt);
             }
+            else if (stmt is Stmt.Namespace nsStmt)
+            {
+                DefineNamespaceFields(nsStmt);
+            }
         }
 
         // Phase 4.5: Initialize typed interop support now that all classes are defined
@@ -364,6 +377,9 @@ public partial class ILCompiler
         var regExpEmitter = new RegExpEmitter();
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
 
+        var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
+
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
 
@@ -380,6 +396,9 @@ public partial class ILCompiler
         // Phase 6.6: Emit generator state machine bodies
         EmitGeneratorStateMachineBodies();
 
+        // Phase 6.7: Emit async generator state machine bodies
+        EmitAsyncGeneratorStateMachineBodies();
+
         // Phase 7: Emit method bodies for all classes and functions
         foreach (var stmt in statements)
         {
@@ -392,6 +411,10 @@ public partial class ILCompiler
                 // Skip overload signatures (no body)
                 if (funcStmt.Body == null) continue;
                 EmitFunctionBody(funcStmt);
+            }
+            else if (stmt is Stmt.Namespace nsStmt)
+            {
+                EmitNamespaceMemberBodies(nsStmt);
             }
         }
 
@@ -470,6 +493,10 @@ public partial class ILCompiler
                 {
                     DefineEnum(enumStmt);
                 }
+                else if (stmt is Stmt.Namespace nsStmt)
+                {
+                    DefineNamespaceFields(nsStmt);
+                }
                 else if (stmt is Stmt.Export export && export.Declaration != null)
                 {
                     // Handle exported declarations
@@ -484,6 +511,10 @@ public partial class ILCompiler
                     else if (export.Declaration is Stmt.Enum enumDecl)
                     {
                         DefineEnum(enumDecl);
+                    }
+                    else if (export.Declaration is Stmt.Namespace nsDecl)
+                    {
+                        DefineNamespaceFields(nsDecl);
                     }
                 }
             }
@@ -524,6 +555,9 @@ public partial class ILCompiler
 
         var regExpEmitter = new RegExpEmitter();
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
+
+        var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);

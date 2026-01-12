@@ -777,7 +777,6 @@ public partial class RuntimeEmitter
         var iLocal = il.DeclareLocal(_types.Int32);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
-        var notNullLabel = il.DefineLabel();
 
         // result = str
         il.Emit(OpCodes.Ldarg_0);
@@ -793,20 +792,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // result += args[i]?.ToString() ?? ""
+        // result += Stringify(args[i])  (handles null->"null", bool->"true"/"false")
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, notNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "");
-        var concatLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, concatLabel);
-        il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", _types.EmptyTypes));
-        il.MarkLabel(concatLabel);
+        il.Emit(OpCodes.Call, runtime.Stringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Stloc, resultLocal);
 

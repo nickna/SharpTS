@@ -51,11 +51,18 @@ public partial class TypeChecker
 
         _environment = previousEnvForParsing;
 
-        // For generator functions, wrap the return type in Generator<> if not already
+        // For generator functions, wrap the return type in Generator<> or AsyncGenerator<> if not already
         TypeInfo funcReturnType = returnType;
-        if (funcStmt.IsGenerator && returnType is not TypeInfo.Generator)
+        if (funcStmt.IsGenerator)
         {
-            funcReturnType = new TypeInfo.Generator(returnType);
+            if (funcStmt.IsAsync && returnType is not TypeInfo.AsyncGenerator)
+            {
+                funcReturnType = new TypeInfo.AsyncGenerator(returnType);
+            }
+            else if (!funcStmt.IsAsync && returnType is not TypeInfo.Generator)
+            {
+                funcReturnType = new TypeInfo.Generator(returnType);
+            }
         }
 
         var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType);

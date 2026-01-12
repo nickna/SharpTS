@@ -219,6 +219,7 @@ public partial class ILCompiler
             EnumMembers = _enumMembers,
             EnumReverse = _enumReverse,
             EnumKinds = _enumKinds,
+            NamespaceFields = _namespaceFields,
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,

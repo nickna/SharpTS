@@ -447,11 +447,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
-        // String concat
+        // String concat - use Stringify for JS-compatible conversion (null->"null", bool->"true"/"false")
         il.MarkLabel(stringConcatLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Stringify);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.Object, _types.Object));
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Ret);
     }
 

@@ -303,6 +303,14 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
+        // Check if it's a namespace - load the static field
+        if (_ctx.NamespaceFields?.TryGetValue(name, out var nsField) == true)
+        {
+            _il.Emit(OpCodes.Ldsfld, nsField);
+            SetStackUnknown();
+            return;
+        }
+
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();

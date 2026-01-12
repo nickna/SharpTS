@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -350,6 +351,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
+        var namespaceLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var listLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
@@ -357,6 +359,11 @@ public partial class RuntimeEmitter
         // null check
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // SharpTSNamespace - call ns.Get(name)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(SharpTSNamespace));
+        il.Emit(OpCodes.Brtrue, namespaceLabel);
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
@@ -383,6 +390,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Ret);
+
+        // Namespace handler - call ns.Get(name)
+        il.MarkLabel(namespaceLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, typeof(SharpTSNamespace));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSNamespace).GetMethod("Get")!);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

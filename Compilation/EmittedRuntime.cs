@@ -310,4 +310,10 @@ public class EmittedRuntime
     public MethodBuilder GeneratorReturnMethod { get; set; } = null!;
     public MethodBuilder GeneratorThrowMethod { get; set; } = null!;
     public MethodBuilder GeneratorNextMethod { get; set; } = null!;
+
+    // Async Generator interface ($IAsyncGenerator extends IAsyncEnumerator<object> with async Return/Throw)
+    public TypeBuilder AsyncGeneratorInterfaceType { get; set; } = null!;
+    public MethodBuilder AsyncGeneratorNextMethod { get; set; } = null!;
+    public MethodBuilder AsyncGeneratorReturnMethod { get; set; } = null!;
+    public MethodBuilder AsyncGeneratorThrowMethod { get; set; } = null!;
 }

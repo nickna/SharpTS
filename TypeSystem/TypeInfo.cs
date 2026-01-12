@@ -406,6 +406,15 @@ public abstract record TypeInfo
         public override string ToString() => $"Generator<{YieldType}>";
     }
 
+    /// <summary>
+    /// Represents an AsyncGenerator type (AsyncGenerator&lt;T&gt;).
+    /// Async generator functions return AsyncGenerator objects that yield values of type T asynchronously.
+    /// </summary>
+    public record AsyncGenerator(TypeInfo YieldType) : TypeInfo
+    {
+        public override string ToString() => $"AsyncGenerator<{YieldType}>";
+    }
+
     public record StringLiteral(string Value) : TypeInfo
     {
         public override string ToString() => $"\"{Value}\"";
