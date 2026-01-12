@@ -246,6 +246,11 @@ public partial class TypeChecker
             {
                 return fieldType;
             }
+            // Check for string index signature (e.g., Record<string, number>)
+            if (record.StringIndexType != null)
+            {
+                return record.StringIndexType;
+            }
             throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{record}'.");
         }
         // Handle string methods (both String and StringLiteral types)

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-07 (@Namespace decorator for custom .NET namespaces in compiled output)
+**Last Updated:** 2026-01-11 (Utility types: Partial, Required, Readonly, Record, Pick, Omit)
 
 ## Legend
 - ✅ Implemented
@@ -227,7 +227,7 @@ This document tracks TypeScript language features and their implementation statu
 | Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
 | Conditional types | ❌ | `T extends U ? X : Y` |
 | Template literal types | ❌ | `` `${string}ID` `` |
-| Utility types | ❌ | `Partial<T>`, `Required<T>`, etc. |
+| Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>` |
 
 ---
 
@@ -590,3 +590,16 @@ _No known bugs at this time._
 - ✅ Class inheritance (`extends`) works within namespaces
 - ✅ Backward compatible: no namespace = root namespace (existing behavior)
 - ✅ Full IL compiler support with 8 test cases
+
+### Phase 33 Features (Utility Types)
+- ✅ `Partial<T>` - makes all properties optional
+- ✅ `Required<T>` - makes all properties required (removes optional modifier)
+- ✅ `Readonly<T>` - makes all properties readonly
+- ✅ `Record<K, V>` - creates object type with keys K and values V
+- ✅ `Pick<T, K>` - picks subset of properties from T
+- ✅ `Omit<T, K>` - omits properties from T
+- ✅ Utility type composition: `Partial<Readonly<T>>`, `Required<Omit<T, K>>`, etc.
+- ✅ Works with interfaces, object types, and class types
+- ✅ Preserves optional property modifiers in Pick/Omit
+- ✅ Record supports string literal union keys and string index signatures
+- ✅ Full interpreter and IL compiler support with 74 test cases
