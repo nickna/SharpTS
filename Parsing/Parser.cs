@@ -176,4 +176,69 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         Check(TokenType.LEFT_PAREN) ||
         Check(TokenType.LEFT_BRACE) ||  // for inline object types: { x: number }
         Check(TokenType.LEFT_BRACKET);  // for tuple types: [string, number]
+
+    // ============== GENERIC TYPE CLOSING BRACKET HANDLING ==============
+    //
+    // The lexer tokenizes >> as GREATER_GREATER (right-shift operator) and >>> as
+    // GREATER_GREATER_GREATER (unsigned right-shift). This causes issues with nested
+    // generic types like Partial<Readonly<T>> where the >> should be two separate > tokens.
+    //
+    // Solution: When parsing type contexts, we handle compound greater-than tokens specially.
+    // If we need a single > but have >> or >>>, we "split" the token by replacing it with
+    // the remainder (>> becomes >, >>> becomes >>). This follows the approach used by
+    // C#, Java, and TypeScript compilers.
+
+    /// <summary>
+    /// Checks if the current token can provide a closing '>' for generic type syntax.
+    /// Returns true for GREATER, GREATER_GREATER, or GREATER_GREATER_GREATER.
+    /// </summary>
+    private bool CheckGreaterInTypeContext()
+    {
+        if (IsAtEnd()) return false;
+        return Peek().Type is TokenType.GREATER
+            or TokenType.GREATER_GREATER
+            or TokenType.GREATER_GREATER_GREATER;
+    }
+
+    /// <summary>
+    /// Consumes a single '>' from the current token in a type context.
+    /// For GREATER, advances normally. For GREATER_GREATER or GREATER_GREATER_GREATER,
+    /// splits the token by replacing it with the remainder.
+    /// </summary>
+    /// <returns>True if a '>' was consumed, false otherwise.</returns>
+    private bool MatchGreaterInTypeContext()
+    {
+        if (IsAtEnd()) return false;
+
+        Token current = Peek();
+        switch (current.Type)
+        {
+            case TokenType.GREATER:
+                Advance();
+                return true;
+
+            case TokenType.GREATER_GREATER:
+                // Split >> into > (consumed) and > (remaining)
+                _tokens[_current] = new Token(TokenType.GREATER, ">", null, current.Line);
+                return true;
+
+            case TokenType.GREATER_GREATER_GREATER:
+                // Split >>> into > (consumed) and >> (remaining)
+                _tokens[_current] = new Token(TokenType.GREATER_GREATER, ">>", null, current.Line);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Consumes a '>' in type context or throws an exception with the given message.
+    /// Handles compound tokens (>> and >>>) by splitting them.
+    /// </summary>
+    private void ConsumeGreaterInTypeContext(string message)
+    {
+        if (!MatchGreaterInTypeContext())
+            throw new Exception(message);
+    }
 }

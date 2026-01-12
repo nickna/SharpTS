@@ -134,6 +134,7 @@ This document tracks TypeScript language features and their implementation statu
 | `in` operator | ✅ | Property existence check |
 | Exponentiation (`**`) | ✅ | Right-associative |
 | Spread operator (`...`) | ✅ | In arrays/objects/calls |
+| Non-null assertion (`x!`) | ❌ | Postfix operator to assert non-null |
 
 ---
 
@@ -228,6 +229,15 @@ This document tracks TypeScript language features and their implementation statu
 | Conditional types | ❌ | `T extends U ? X : Y` |
 | Template literal types | ❌ | `` `${string}ID` `` |
 | Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>` |
+
+---
+
+## Known Limitations
+
+| Feature | Status | Workaround |
+|---------|--------|------------|
+| Non-null assertion operator (`x!`) | ❌ Not implemented | Use nullish coalescing: `x ?? defaultValue` |
+| Utility types with array suffix | ⚠️ Type checker bug | Use intermediate variable: `let t: Partial<T> = ...; let arr: typeof t[] = [t]` |
 
 ---
 

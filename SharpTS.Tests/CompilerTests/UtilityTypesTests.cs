@@ -354,10 +354,9 @@ public class UtilityTypesTests
     [Fact]
     public void Partial_Readonly_Composed()
     {
-        // Note: Space before > required due to lexer treating >> as right-shift operator
         var source = """
             interface Person { name: string; age: number; }
-            let p: Partial<Readonly<Person> > = { name: "Test" };
+            let p: Partial<Readonly<Person>> = { name: "Test" };
             console.log(p.name);
             """;
         var output = TestHarness.RunCompiled(source);
@@ -367,10 +366,9 @@ public class UtilityTypesTests
     [Fact]
     public void Readonly_Partial_Composed()
     {
-        // Note: Space before > required due to lexer treating >> as right-shift operator
         var source = """
             interface Person { name: string; age: number; }
-            let p: Readonly<Partial<Person> > = { age: 25 };
+            let p: Readonly<Partial<Person>> = { age: 25 };
             console.log(p.age);
             """;
         var output = TestHarness.RunCompiled(source);
@@ -380,10 +378,9 @@ public class UtilityTypesTests
     [Fact]
     public void Pick_Then_Partial()
     {
-        // Note: Space before > required due to lexer treating >> as right-shift operator
         var source = """
             interface Person { name: string; age: number; email: string; }
-            let p: Partial<Pick<Person, "name" | "age"> > = { name: "Alice" };
+            let p: Partial<Pick<Person, "name" | "age">> = { name: "Alice" };
             console.log(p.name);
             """;
         var output = TestHarness.RunCompiled(source);
@@ -393,15 +390,27 @@ public class UtilityTypesTests
     [Fact]
     public void Omit_Then_Required()
     {
-        // Note: Space before > required due to lexer treating >> as right-shift operator
         var source = """
             interface Config { name?: string; debug?: boolean; level?: number; }
-            let c: Required<Omit<Config, "level"> > = { name: "app", debug: true };
+            let c: Required<Omit<Config, "level">> = { name: "app", debug: true };
             console.log(c.name);
             console.log(c.debug);
             """;
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("app\ntrue\n", output);
+    }
+
+    [Fact]
+    public void TripleNestedGenerics_ClosingBrackets()
+    {
+        // Tests parsing of >>> which the lexer tokenizes as a single GREATER_GREATER_GREATER token
+        var source = """
+            interface Data { value: number; }
+            let x: Partial<Readonly<Required<Data>>> = { value: 42 };
+            console.log(x.value);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
     }
 
     #endregion

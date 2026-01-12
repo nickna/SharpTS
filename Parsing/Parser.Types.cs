@@ -166,6 +166,8 @@ public partial class Parser
         }
 
         // Handle generic type arguments: Container<number>, Map<string, number>
+        // Uses MatchGreaterInTypeContext() to handle nested generics like Partial<Readonly<T>>
+        // where the lexer produces >> as a single token that we need to split.
         if (Check(TokenType.LESS))
         {
             int saved = _current;
@@ -175,7 +177,7 @@ public partial class Parser
                 List<string> typeArgs = [ParseTypeAnnotation()];
                 while (Match(TokenType.COMMA))
                     typeArgs.Add(ParseTypeAnnotation());
-                if (Match(TokenType.GREATER))
+                if (MatchGreaterInTypeContext())
                     typeName = $"{typeName}<{string.Join(", ", typeArgs)}>";
                 else
                     _current = saved; // Backtrack if not a valid generic type
@@ -508,13 +510,14 @@ public partial class Parser
             typeParams.Add(new TypeParam(name, constraint));
         } while (Match(TokenType.COMMA));
 
-        Consume(TokenType.GREATER, "Expect '>' after type parameters.");
+        ConsumeGreaterInTypeContext("Expect '>' after type parameters.");
         return typeParams;
     }
 
     /// <summary>
     /// Tries to parse type arguments like &lt;number, string&gt;.
     /// Returns null if not valid type arguments (backtracking safe).
+    /// Uses CheckGreaterInTypeContext/MatchGreaterInTypeContext to handle nested generics.
     /// </summary>
     private List<string>? TryParseTypeArguments()
     {
@@ -532,8 +535,8 @@ public partial class Parser
                 args.Add(ParseTypeAnnotation());
             }
 
-            if (!Check(TokenType.GREATER)) { _current = saved; return null; }
-            Advance(); // consume >
+            if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
+            MatchGreaterInTypeContext(); // consume >
             return args;
         }
         catch
@@ -546,6 +549,7 @@ public partial class Parser
     /// <summary>
     /// Tries to parse type arguments for a function call (must be followed by '(').
     /// Returns null if not valid type arguments for a call (backtracking safe).
+    /// Uses CheckGreaterInTypeContext/MatchGreaterInTypeContext to handle nested generics.
     /// </summary>
     private List<string>? TryParseTypeArgumentsForCall()
     {
@@ -563,8 +567,8 @@ public partial class Parser
                 args.Add(ParseTypeAnnotation());
             }
 
-            if (!Check(TokenType.GREATER)) { _current = saved; return null; }
-            Advance(); // consume >
+            if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
+            MatchGreaterInTypeContext(); // consume >
 
             // Must be followed by '(' for a call
             if (!Check(TokenType.LEFT_PAREN)) { _current = saved; return null; }
