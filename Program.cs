@@ -36,6 +36,8 @@
 using SharpTS.Compilation;
 using SharpTS.Declaration;
 using SharpTS.Execution;
+using SharpTS.LspBridge;
+using SharpTS.LspBridge.Project;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
@@ -167,13 +169,42 @@ else if (remainingArgs[0] == "--gen-decl")
 
     GenerateDeclarations(typeOrAssembly, outputPath);
 }
+else if (remainingArgs[0] == "lsp-bridge")
+{
+    // LSP Bridge mode for IDE integration
+    string? projectFile = null;
+    string? sdkPath = null;
+    List<string> references = [];
+
+    // Parse lsp-bridge specific options
+    for (int i = 1; i < remainingArgs.Length; i++)
+    {
+        if (remainingArgs[i] == "--project" && i + 1 < remainingArgs.Length)
+        {
+            projectFile = remainingArgs[++i];
+        }
+        else if (remainingArgs[i] == "--sdk-path" && i + 1 < remainingArgs.Length)
+        {
+            sdkPath = remainingArgs[++i];
+        }
+        else if ((remainingArgs[i] == "-r" || remainingArgs[i] == "--reference") && i + 1 < remainingArgs.Length)
+        {
+            references.Add(remainingArgs[++i]);
+        }
+    }
+
+    RunLspBridge(projectFile, references, sdkPath);
+}
 else if (remainingArgs.Length == 1)
 {
     RunFile(remainingArgs[0], options.DecoratorMode, options.EmitDecoratorMetadata);
 }
 else
 {
-    Console.WriteLine("Usage: sharpts [script] | sharpts --compile <script.ts> [-o output.dll] | sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
+    Console.WriteLine("Usage: sharpts [script]");
+    Console.WriteLine("       sharpts --compile <script.ts> [-o output.dll]");
+    Console.WriteLine("       sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
+    Console.WriteLine("       sharpts lsp-bridge [--project <csproj>] [-r <assembly.dll>]");
     Environment.Exit(64);
 }
 
@@ -203,6 +234,27 @@ static GlobalOptions ParseGlobalOptions(string[] args)
     }
 
     return new GlobalOptions(decoratorMode, emitDecoratorMetadata, remaining.ToArray());
+}
+
+static void RunLspBridge(string? projectFile, List<string> references, string? sdkPath)
+{
+    try
+    {
+        // If a project file is specified, parse it for additional references
+        if (projectFile != null && File.Exists(projectFile))
+        {
+            var projectRefs = CsprojParser.Parse(projectFile);
+            references.AddRange(projectRefs);
+        }
+
+        using var bridge = new LspBridge(references, sdkPath);
+        bridge.Run();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[LspBridge Fatal] {ex.Message}");
+        Environment.Exit(1);
+    }
 }
 
 static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata)

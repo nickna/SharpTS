@@ -88,3 +88,10 @@ TestResults/
 BenchmarkDotNet.Artifacts/
 **/CompiledTS/
 *.benchmarklog
+# VS Code Extension / Node.js
+vscode-sharpts/node_modules/
+vscode-sharpts/out/
+vscode-sharpts/dist/
+vscode-sharpts/.eslintcache
+vscode-sharpts/.vscode-test/
+*.vsix

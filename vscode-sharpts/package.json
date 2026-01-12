@@ -1,0 +1,79 @@
+{
+  "name": "vscode-sharpts",
+  "displayName": "SharpTS",
+  "description": ".NET attribute support for TypeScript decorators",
+  "version": "0.1.0",
+  "publisher": "sharpts",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SharpTS",
+      "properties": {
+        "sharpts.executablePath": {
+          "type": "string",
+          "default": "dotnet",
+          "description": "Path to dotnet CLI or SharpTS executable"
+        },
+        "sharpts.projectPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to SharpTS project (directory containing SharpTS.csproj)"
+        },
+        "sharpts.projectFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to .csproj file for assembly references"
+        },
+        "sharpts.additionalReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional assembly paths to load"
+        },
+        "sharpts.restartOnCrash": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically restart the bridge if it crashes"
+        },
+        "sharpts.maxRestartAttempts": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum restart attempts within 1 minute"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "sharpts.restartBridge",
+        "title": "SharpTS: Restart Bridge"
+      },
+      {
+        "command": "sharpts.showBridgeStatus",
+        "title": "SharpTS: Show Bridge Status"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
