@@ -16,16 +16,44 @@ public partial class TypeChecker
 {
     /// <summary>
     /// Parses a generic type reference like "Box&lt;number&gt;" or "Map&lt;string, number&gt;".
+    /// Also handles array suffixes: "Partial&lt;T&gt;[]", "Box&lt;number&gt;[][]".
     /// </summary>
     private TypeInfo ParseGenericTypeReference(string typeName)
     {
         int openAngle = typeName.IndexOf('<');
         string baseName = typeName[..openAngle];
-        string argsStr = typeName[(openAngle + 1)..^1];
+
+        // Find matching closing '>' respecting nested angle brackets
+        // Skip `>` that is part of `=>` (arrow function syntax)
+        int angleDepth = 0;
+        int closeAngle = -1;
+        for (int i = openAngle; i < typeName.Length; i++)
+        {
+            char c = typeName[i];
+            if (c == '<') angleDepth++;
+            else if (c == '>')
+            {
+                // Skip `>` that is part of `=>` (arrow function return type)
+                if (i > 0 && typeName[i - 1] == '=')
+                    continue;
+
+                angleDepth--;
+                if (angleDepth == 0)
+                {
+                    closeAngle = i;
+                    break;
+                }
+            }
+        }
+
+        string argsStr = typeName[(openAngle + 1)..closeAngle];
+        string suffix = typeName[(closeAngle + 1)..];
 
         // Split type arguments respecting nesting
         var typeArgStrings = SplitTypeArguments(argsStr);
         var typeArgs = typeArgStrings.Select(ToTypeInfo).ToList();
+
+        TypeInfo result;
 
         // Handle built-in generic types
         if (baseName == "Promise")
@@ -40,80 +68,83 @@ public partial class TypeChecker
             {
                 valueType = nested.ValueType;
             }
-            return new TypeInfo.Promise(valueType);
+            result = new TypeInfo.Promise(valueType);
         }
-
-        if (baseName == "Generator")
+        else if (baseName == "Generator")
         {
             if (typeArgs.Count != 1)
             {
                 throw new TypeCheckException($" Generator requires exactly 1 type argument, got {typeArgs.Count}.");
             }
-            return new TypeInfo.Generator(typeArgs[0]);
+            result = new TypeInfo.Generator(typeArgs[0]);
         }
-
-        if (baseName == "AsyncGenerator")
+        else if (baseName == "AsyncGenerator")
         {
             if (typeArgs.Count != 1)
             {
                 throw new TypeCheckException($" AsyncGenerator requires exactly 1 type argument, got {typeArgs.Count}.");
             }
-            return new TypeInfo.AsyncGenerator(typeArgs[0]);
+            result = new TypeInfo.AsyncGenerator(typeArgs[0]);
         }
-
         // Handle built-in utility types
-        if (baseName == "Partial")
+        else if (baseName == "Partial")
         {
             if (typeArgs.Count != 1)
                 throw new TypeCheckException($" Partial<T> requires exactly 1 type argument, got {typeArgs.Count}.");
-            return ExpandPartial(typeArgs[0]);
+            result = ExpandPartial(typeArgs[0]);
         }
-
-        if (baseName == "Required")
+        else if (baseName == "Required")
         {
             if (typeArgs.Count != 1)
                 throw new TypeCheckException($" Required<T> requires exactly 1 type argument, got {typeArgs.Count}.");
-            return ExpandRequired(typeArgs[0]);
+            result = ExpandRequired(typeArgs[0]);
         }
-
-        if (baseName == "Readonly")
+        else if (baseName == "Readonly")
         {
             if (typeArgs.Count != 1)
                 throw new TypeCheckException($" Readonly<T> requires exactly 1 type argument, got {typeArgs.Count}.");
-            return ExpandReadonly(typeArgs[0]);
+            result = ExpandReadonly(typeArgs[0]);
         }
-
-        if (baseName == "Record")
+        else if (baseName == "Record")
         {
             if (typeArgs.Count != 2)
                 throw new TypeCheckException($" Record<K, V> requires exactly 2 type arguments, got {typeArgs.Count}.");
-            return ExpandRecordType(typeArgs[0], typeArgs[1]);
+            result = ExpandRecordType(typeArgs[0], typeArgs[1]);
         }
-
-        if (baseName == "Pick")
+        else if (baseName == "Pick")
         {
             if (typeArgs.Count != 2)
                 throw new TypeCheckException($" Pick<T, K> requires exactly 2 type arguments, got {typeArgs.Count}.");
-            return ExpandPick(typeArgs[0], typeArgs[1]);
+            result = ExpandPick(typeArgs[0], typeArgs[1]);
         }
-
-        if (baseName == "Omit")
+        else if (baseName == "Omit")
         {
             if (typeArgs.Count != 2)
                 throw new TypeCheckException($" Omit<T, K> requires exactly 2 type arguments, got {typeArgs.Count}.");
-            return ExpandOmit(typeArgs[0], typeArgs[1]);
+            result = ExpandOmit(typeArgs[0], typeArgs[1]);
+        }
+        else
+        {
+            // Look up the generic definition
+            TypeInfo? genericDef = _environment.Get(baseName);
+
+            result = genericDef switch
+            {
+                TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
+                TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
+                TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
+                _ => new TypeInfo.Any() // Unknown generic type - fallback to any
+            };
         }
 
-        // Look up the generic definition
-        TypeInfo? genericDef = _environment.Get(baseName);
-
-        return genericDef switch
+        // Handle array suffix(es) after the generic type
+        while (suffix.StartsWith("[]"))
         {
-            TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
-            TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
-            TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
-            _ => new TypeInfo.Any() // Unknown generic type - fallback to any
-        };
+            result = new TypeInfo.Array(result);
+            suffix = suffix[2..];
+        }
+
+        return result;
     }
 
     /// <summary>

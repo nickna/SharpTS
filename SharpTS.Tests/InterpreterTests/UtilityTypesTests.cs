@@ -523,4 +523,184 @@ public class UtilityTypesTests
     }
 
     #endregion
+
+    #region Array Suffix
+
+    [Fact]
+    public void Partial_WithArraySuffix()
+    {
+        var source = """
+            interface Item { name: string; value: number; }
+            let items: Partial<Item>[] = [
+                { name: "first" },
+                { value: 42 },
+                {}
+            ];
+            console.log(items.length);
+            console.log(items[0].name);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\nfirst\n", output);
+    }
+
+    [Fact]
+    public void Partial_WithMultiDimensionalArray()
+    {
+        var source = """
+            interface Point { x: number; y: number; }
+            let grid: Partial<Point>[][] = [
+                [{ x: 1 }, { y: 2 }],
+                [{ x: 3, y: 4 }]
+            ];
+            console.log(grid.length);
+            console.log(grid[0].length);
+            console.log(grid[1][0].x);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void NestedUtilityType_WithArraySuffix()
+    {
+        var source = """
+            interface Config { host: string; port: number; }
+            let configs: Partial<Readonly<Config>>[] = [
+                { host: "localhost" },
+                { port: 8080 }
+            ];
+            console.log(configs.length);
+            console.log(configs[0].host);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\nlocalhost\n", output);
+    }
+
+    [Fact]
+    public void Promise_WithArraySuffix()
+    {
+        var source = """
+            async function getValue(): Promise<number> {
+                return 42;
+            }
+            let promises: Promise<number>[] = [getValue(), getValue()];
+            console.log(promises.length);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n", output);
+    }
+
+    [Fact]
+    public void UserDefinedGeneric_WithArraySuffix()
+    {
+        var source = """
+            class Box<T> {
+                value: T;
+                constructor(v: T) { this.value = v; }
+            }
+            let boxes: Box<number>[] = [new Box<number>(1), new Box<number>(2), new Box<number>(3)];
+            console.log(boxes.length);
+            console.log(boxes[0].value);
+            console.log(boxes[2].value);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n1\n3\n", output);
+    }
+
+    [Fact]
+    public void Record_WithArraySuffix()
+    {
+        var source = """
+            type StringMap = Record<string, number>;
+            let maps: StringMap[] = [
+                { a: 1, b: 2 },
+                { x: 10 }
+            ];
+            console.log(maps.length);
+            console.log(maps[0].a);
+            console.log(maps[1].x);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n1\n10\n", output);
+    }
+
+    [Fact]
+    public void Pick_WithArraySuffix()
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let names: Pick<Person, "name">[] = [
+                { name: "Alice" },
+                { name: "Bob" }
+            ];
+            console.log(names.length);
+            console.log(names[1].name);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\nBob\n", output);
+    }
+
+    [Fact]
+    public void Omit_WithArraySuffix()
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let people: Omit<Person, "email">[] = [
+                { name: "Alice", age: 30 },
+                { name: "Bob", age: 25 }
+            ];
+            console.log(people.length);
+            console.log(people[0].name);
+            console.log(people[1].age);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\nAlice\n25\n", output);
+    }
+
+    [Fact]
+    public void Required_WithArraySuffix()
+    {
+        var source = """
+            interface Config { name?: string; debug?: boolean; }
+            let configs: Required<Config>[] = [
+                { name: "app1", debug: true },
+                { name: "app2", debug: false }
+            ];
+            console.log(configs.length);
+            console.log(configs[0].name);
+            console.log(configs[1].debug);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\napp1\nfalse\n", output);
+    }
+
+    [Fact]
+    public void Readonly_WithArraySuffix()
+    {
+        var source = """
+            interface Point { x: number; y: number; }
+            let points: Readonly<Point>[] = [
+                { x: 1, y: 2 },
+                { x: 3, y: 4 }
+            ];
+            console.log(points.length);
+            console.log(points[0].x);
+            console.log(points[1].y);
+            """;
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n1\n4\n", output);
+    }
+
+    [Fact]
+    public void GenericArray_TypeErrorStillDetected()
+    {
+        var source = """
+            interface Item { name: string; }
+            let items: Partial<Item>[] = [{ name: 123 }];
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted(source));
+        Assert.Contains("Type Error", ex.Message);
+    }
+
+    #endregion
 }

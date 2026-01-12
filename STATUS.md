@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-11 (Async generator IL compiler)
+**Last Updated:** 2026-01-12 (Fixed generic types with array suffix)
 
 ## Legend
 - ✅ Implemented
@@ -232,19 +232,14 @@ This document tracks TypeScript language features and their implementation statu
 
 ---
 
-## Known Limitations
-
-| Feature | Status | Workaround |
-|---------|--------|------------|
-| Utility types with array suffix | ⚠️ Type checker bug | Use intermediate variable: `let t: Partial<T> = ...; let arr: typeof t[] = [t]` |
-
----
-
 ## Known Bugs
 
 ### IL Compiler Bugs
 
 _No known bugs at this time._
+
+### Recently Fixed Bugs (2026-01-12)
+- ~~Generic types with array suffix~~ - Fixed: `ParseGenericTypeReference()` now properly finds matching `>` and handles array suffixes (`Partial<T>[]`, `Promise<number>[][]`, etc.)
 
 ### Recently Fixed Bugs (2026-01-06)
 - ~~Math.round() JS parity~~ - Fixed: Now uses `Math.Floor(x + 0.5)` for JavaScript-compatible rounding (half-values toward +∞)
