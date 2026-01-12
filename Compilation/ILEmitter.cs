@@ -270,6 +270,11 @@ public partial class ILEmitter
                 EmitExpression(ta.Expression);
                 break;
 
+            case Expr.NonNullAssertion nna:
+                // Non-null assertions are compile-time only, just emit the inner expression
+                EmitExpression(nna.Expression);
+                break;
+
             case Expr.RegexLiteral re:
                 EmitRegexLiteral(re);
                 break;

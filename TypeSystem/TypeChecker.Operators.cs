@@ -10,7 +10,7 @@ namespace SharpTS.TypeSystem;
 /// Contains operator handlers:
 /// CheckBinary, CheckLogical, CheckNullishCoalescing, CheckTernary,
 /// CheckCompoundAssign, CheckCompoundSet, CheckCompoundSetIndex,
-/// CheckPrefixIncrement, CheckPostfixIncrement, CheckUnary.
+/// CheckPrefixIncrement, CheckPostfixIncrement, CheckNonNullAssertion, CheckUnary.
 /// </remarks>
 public partial class TypeChecker
 {
@@ -213,6 +213,29 @@ public partial class TypeChecker
             throw new TypeCheckException(" Increment/decrement operand must be a number.");
         }
         return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+    }
+
+    private TypeInfo CheckNonNullAssertion(Expr.NonNullAssertion nna)
+    {
+        TypeInfo exprType = CheckExpr(nna.Expression);
+
+        // Remove null (and undefined if we had it) from the type
+        if (exprType is TypeInfo.Union u && u.ContainsNull)
+        {
+            var nonNullTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
+            return nonNullTypes.Count == 0 ? new TypeInfo.Never() :
+                nonNullTypes.Count == 1 ? nonNullTypes[0] :
+                new TypeInfo.Union(nonNullTypes);
+        }
+
+        // If the type is just null, return never (asserting null is not null is a type error in practice)
+        if (exprType is TypeInfo.Null)
+        {
+            return new TypeInfo.Never();
+        }
+
+        // Otherwise, return the type unchanged (it's already non-nullable)
+        return exprType;
     }
 
     private TypeInfo CheckUnary(Expr.Unary unary)

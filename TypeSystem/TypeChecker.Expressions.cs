@@ -46,6 +46,7 @@ public partial class TypeChecker
             Expr.TemplateLiteral template => CheckTemplateLiteral(template),
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
+            Expr.NonNullAssertion nna => CheckNonNullAssertion(nna),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
             Expr.DynamicImport di => CheckDynamicImport(di),
             Expr.Yield yieldExpr => CheckYield(yieldExpr),

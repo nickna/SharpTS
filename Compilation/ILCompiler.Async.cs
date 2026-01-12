@@ -388,6 +388,15 @@ public partial class ILCompiler
             case Expr.ArrowFunction:
                 // Nested arrows don't contribute to this arrow's await analysis
                 break;
+            case Expr.TypeAssertion ta:
+                AnalyzeArrowExprForAwaits(ta.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
+            case Expr.NonNullAssertion nna:
+                AnalyzeArrowExprForAwaits(nna.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
+            case Expr.Spread sp:
+                AnalyzeArrowExprForAwaits(sp.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
         }
     }
 

@@ -105,6 +105,10 @@ public partial class GeneratorMoveNextEmitter
                 EmitExpression(ta.Expression);
                 break;
 
+            case Expr.NonNullAssertion nna:
+                EmitExpression(nna.Expression);
+                break;
+
             case Expr.Spread sp:
                 EmitExpression(sp.Expression);
                 break;

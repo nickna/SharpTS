@@ -6,6 +6,32 @@ public partial class Parser
 
     private Expr Assignment()
     {
+        // Check for single-parameter arrow function without parentheses: x => expr
+        if (Check(TokenType.IDENTIFIER) && CheckNext(TokenType.ARROW))
+        {
+            Token paramName = Advance(); // consume identifier
+            Advance(); // consume '=>'
+
+            // Parse the body - either block or expression
+            List<Stmt>? body = null;
+            Expr? exprBody = null;
+
+            if (Match(TokenType.LEFT_BRACE))
+            {
+                body = Block();
+            }
+            else
+            {
+                exprBody = Assignment(); // Use Assignment for proper precedence (allows nested arrows)
+            }
+
+            var param = new Stmt.Parameter(paramName, null, null);
+            return new Expr.ArrowFunction(null, null, [param], exprBody, body, null);
+        }
+
+        // Check for single-parameter async arrow function: async x => expr
+        // This case is handled in Primary() for async (params) => but we need async x => too
+
         Expr expr = Ternary();
 
         if (Match(TokenType.EQUAL))
@@ -384,6 +410,12 @@ public partial class Parser
                 // Type assertion: expr as Type
                 string targetType = ParseTypeAnnotation();
                 expr = new Expr.TypeAssertion(expr, targetType);
+            }
+            else if (Match(TokenType.BANG))
+            {
+                // Non-null assertion: expr!
+                // Asserts the value is not null/undefined at compile time
+                expr = new Expr.NonNullAssertion(expr);
             }
             else
             {

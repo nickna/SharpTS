@@ -306,6 +306,15 @@ public partial class ILCompiler
             case Expr.DynamicImport di:
                 CollectArrowsFromExpr(di.PathExpression);
                 break;
+            case Expr.TypeAssertion ta:
+                CollectArrowsFromExpr(ta.Expression);
+                break;
+            case Expr.NonNullAssertion nna:
+                CollectArrowsFromExpr(nna.Expression);
+                break;
+            case Expr.Spread sp:
+                CollectArrowsFromExpr(sp.Expression);
+                break;
         }
     }
 

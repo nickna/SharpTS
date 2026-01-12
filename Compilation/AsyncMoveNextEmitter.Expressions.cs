@@ -107,6 +107,11 @@ public partial class AsyncMoveNextEmitter
                 EmitExpression(ta.Expression);
                 break;
 
+            case Expr.NonNullAssertion nna:
+                // Non-null assertions are compile-time only, just emit the inner expression
+                EmitExpression(nna.Expression);
+                break;
+
             case Expr.Spread sp:
                 // Spread expressions are handled in context (arrays, objects, calls)
                 // If we get here directly, just emit the inner expression

@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-11 (Utility types: Partial, Required, Readonly, Record, Pick, Omit)
+**Last Updated:** 2026-01-11 (Non-null assertion operator `x!`)
 
 ## Legend
 - ✅ Implemented
@@ -134,7 +134,7 @@ This document tracks TypeScript language features and their implementation statu
 | `in` operator | ✅ | Property existence check |
 | Exponentiation (`**`) | ✅ | Right-associative |
 | Spread operator (`...`) | ✅ | In arrays/objects/calls |
-| Non-null assertion (`x!`) | ❌ | Postfix operator to assert non-null |
+| Non-null assertion (`x!`) | ✅ | Postfix operator to assert non-null |
 
 ---
 
@@ -236,7 +236,6 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Workaround |
 |---------|--------|------------|
-| Non-null assertion operator (`x!`) | ❌ Not implemented | Use nullish coalescing: `x ?? defaultValue` |
 | Utility types with array suffix | ⚠️ Type checker bug | Use intermediate variable: `let t: Partial<T> = ...; let arr: typeof t[] = [t]` |
 
 ---

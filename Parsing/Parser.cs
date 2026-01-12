@@ -129,6 +129,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     private bool Check(TokenType type) => !IsAtEnd() && Peek().Type == type;
 
+    private bool CheckNext(TokenType type) => PeekNext().Type == type;
+
     private Token Advance()
     {
         if (!IsAtEnd()) _current++;

@@ -53,6 +53,7 @@ public abstract class AstVisitorBase
             case Expr.TemplateLiteral e: VisitTemplateLiteral(e); break;
             case Expr.Spread e: VisitSpread(e); break;
             case Expr.TypeAssertion e: VisitTypeAssertion(e); break;
+            case Expr.NonNullAssertion e: VisitNonNullAssertion(e); break;
             case Expr.Await e: VisitAwait(e); break;
             case Expr.DynamicImport e: VisitDynamicImport(e); break;
             case Expr.Yield e: VisitYield(e); break;
@@ -270,6 +271,11 @@ public abstract class AstVisitorBase
     }
 
     protected virtual void VisitTypeAssertion(Expr.TypeAssertion expr)
+    {
+        Visit(expr.Expression);
+    }
+
+    protected virtual void VisitNonNullAssertion(Expr.NonNullAssertion expr)
     {
         Visit(expr.Expression);
     }

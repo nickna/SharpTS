@@ -83,6 +83,8 @@ public abstract record Expr
     public record Yield(Token Keyword, Expr? Value, bool IsDelegating) : Expr;
     // Regex literal: /pattern/flags
     public record RegexLiteral(string Pattern, string Flags) : Expr;
+    // Non-null assertion: expr! (asserts value is not null/undefined at compile time)
+    public record NonNullAssertion(Expr Expression) : Expr;
 }
 
 /// <summary>
