@@ -174,15 +174,11 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitVariable(Expr.Variable v);
     protected abstract void EmitAssign(Expr.Assign a);
     protected abstract void EmitBinary(Expr.Binary b);
-    protected abstract void EmitLogical(Expr.Logical l);
-    protected abstract void EmitUnary(Expr.Unary u);
     protected abstract void EmitCall(Expr.Call c);
     protected abstract void EmitGet(Expr.Get g);
     protected abstract void EmitSet(Expr.Set s);
     protected abstract void EmitGetIndex(Expr.GetIndex gi);
     protected abstract void EmitSetIndex(Expr.SetIndex si);
-    protected abstract void EmitTernary(Expr.Ternary t);
-    protected abstract void EmitNullishCoalescing(Expr.NullishCoalescing nc);
     protected abstract void EmitTemplateLiteral(Expr.TemplateLiteral tl);
     protected abstract void EmitArrayLiteral(Expr.ArrayLiteral al);
     protected abstract void EmitObjectLiteral(Expr.ObjectLiteral ol);
@@ -195,13 +191,101 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitPrefixIncrement(Expr.PrefixIncrement pi);
     protected abstract void EmitPostfixIncrement(Expr.PostfixIncrement poi);
     protected abstract void EmitArrowFunction(Expr.ArrowFunction af);
-    protected abstract void EmitRegexLiteral(Expr.RegexLiteral re);
     protected abstract void EmitDynamicImport(Expr.DynamicImport di);
-    protected abstract void EmitGrouping(Expr.Grouping g);
-    protected abstract void EmitTypeAssertion(Expr.TypeAssertion ta);
-    protected abstract void EmitNonNullAssertion(Expr.NonNullAssertion nna);
-    protected abstract void EmitSpread(Expr.Spread sp);
     protected abstract void EmitUnknownExpression(Expr expr);
+    #endregion
+
+    #region Virtual Methods - Pass-through expressions
+    /// <summary>
+    /// Emits a grouping expression by evaluating its inner expression.
+    /// </summary>
+    protected virtual void EmitGrouping(Expr.Grouping g) => EmitExpression(g.Expression);
+
+    /// <summary>
+    /// Emits a type assertion. Type assertions are compile-time only, just emit the inner expression.
+    /// </summary>
+    protected virtual void EmitTypeAssertion(Expr.TypeAssertion ta) => EmitExpression(ta.Expression);
+
+    /// <summary>
+    /// Emits a non-null assertion. These are compile-time only, just emit the inner expression.
+    /// </summary>
+    protected virtual void EmitNonNullAssertion(Expr.NonNullAssertion nna) => EmitExpression(nna.Expression);
+
+    /// <summary>
+    /// Emits a spread expression. Spread is handled contextually in array/object literals.
+    /// When encountered standalone, just emit the expression.
+    /// </summary>
+    protected virtual void EmitSpread(Expr.Spread sp) => EmitExpression(sp.Expression);
+
+    /// <summary>
+    /// Emits a regex literal. Default implementation pushes null - override in ILEmitter for actual regex creation.
+    /// </summary>
+    protected virtual void EmitRegexLiteral(Expr.RegexLiteral re)
+    {
+        IL.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+    #endregion
+
+    #region Virtual Methods - Helper delegations
+    /// <summary>
+    /// Emits a logical AND/OR expression with short-circuit evaluation.
+    /// </summary>
+    protected virtual void EmitLogical(Expr.Logical l)
+    {
+        bool isAnd = l.Operator.Type == TokenType.AND_AND;
+        _helpers.EmitLogical(
+            isAnd,
+            () => { EmitExpression(l.Left); EnsureBoxed(); },
+            () => { EmitExpression(l.Right); EnsureBoxed(); },
+            Ctx.Runtime!.IsTruthy);
+    }
+
+    /// <summary>
+    /// Emits a unary expression (-, !, typeof, ~).
+    /// </summary>
+    protected virtual void EmitUnary(Expr.Unary u)
+    {
+        switch (u.Operator.Type)
+        {
+            case TokenType.MINUS:
+                _helpers.EmitUnaryMinus(() => EmitExpression(u.Right));
+                break;
+            case TokenType.BANG:
+                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), Ctx.Runtime!.IsTruthy);
+                break;
+            case TokenType.TYPEOF:
+                _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), Ctx.Runtime!.TypeOf);
+                break;
+            case TokenType.TILDE:
+                _helpers.EmitUnaryBitwiseNot(() => EmitExpression(u.Right));
+                break;
+            default:
+                throw new NotImplementedException($"Unary operator {u.Operator.Type} not implemented");
+        }
+    }
+
+    /// <summary>
+    /// Emits a ternary conditional expression (condition ? thenBranch : elseBranch).
+    /// </summary>
+    protected virtual void EmitTernary(Expr.Ternary t)
+    {
+        _helpers.EmitTernary(
+            () => { EmitExpression(t.Condition); EnsureBoxed(); },
+            () => { EmitExpression(t.ThenBranch); EnsureBoxed(); },
+            () => { EmitExpression(t.ElseBranch); EnsureBoxed(); },
+            Ctx.Runtime!.IsTruthy);
+    }
+
+    /// <summary>
+    /// Emits a nullish coalescing expression (left ?? right).
+    /// </summary>
+    protected virtual void EmitNullishCoalescing(Expr.NullishCoalescing nc)
+    {
+        _helpers.EmitNullishCoalescing(
+            () => { EmitExpression(nc.Left); EnsureBoxed(); },
+            () => { EmitExpression(nc.Right); EnsureBoxed(); });
+    }
     #endregion
 
     #region Virtual Methods (override in async/generator emitters)

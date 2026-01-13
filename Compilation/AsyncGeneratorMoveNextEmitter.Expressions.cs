@@ -631,43 +631,6 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    protected override void EmitLogical(Expr.Logical l)
-    {
-        bool isAnd = l.Operator.Type == TokenType.AND_AND;
-        _helpers.EmitLogical(
-            isAnd,
-            () => { EmitExpression(l.Left); EnsureBoxed(); },
-            () => { EmitExpression(l.Right); EnsureBoxed(); },
-            _ctx!.Runtime!.IsTruthy);
-    }
-
-    #endregion
-
-    #region Unary Expressions
-
-    protected override void EmitUnary(Expr.Unary u)
-    {
-        switch (u.Operator.Type)
-        {
-            case TokenType.MINUS:
-                _helpers.EmitUnaryMinus(() => EmitExpression(u.Right));
-                break;
-            case TokenType.BANG:
-                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), _ctx!.Runtime!.IsTruthy);
-                break;
-            case TokenType.TYPEOF:
-                _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), _ctx!.Runtime!.TypeOf);
-                break;
-            case TokenType.TILDE:
-                _helpers.EmitUnaryBitwiseNot(() => EmitExpression(u.Right));
-                break;
-            default:
-                EmitExpression(u.Right);
-                EnsureBoxed();
-                break;
-        }
-    }
-
     #endregion
 
     #region Call Expressions
@@ -819,25 +782,6 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #endregion
 
-    #region Ternary/Nullish Expressions
-
-    protected override void EmitTernary(Expr.Ternary t)
-    {
-        _helpers.EmitTernary(
-            () => EmitExpression(t.Condition),
-            () => EmitExpression(t.ThenBranch),
-            () => EmitExpression(t.ElseBranch),
-            _ctx!.Runtime!.IsTruthy);
-    }
-
-    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
-    {
-        _helpers.EmitNullishCoalescing(
-            () => EmitExpression(nc.Left),
-            () => EmitExpression(nc.Right));
-    }
-
-    #endregion
 
     #region Increment/Decrement Expressions
 
@@ -1468,43 +1412,11 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    protected override void EmitRegexLiteral(Expr.RegexLiteral re)
-    {
-        // Regex literals not yet implemented - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     protected override void EmitDynamicImport(Expr.DynamicImport di)
     {
         // Dynamic imports not yet implemented - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
-    }
-
-    protected override void EmitGrouping(Expr.Grouping g)
-    {
-        // Grouping just delegates to inner expression
-        EmitExpression(g.Expression);
-    }
-
-    protected override void EmitTypeAssertion(Expr.TypeAssertion ta)
-    {
-        // Type assertions are compile-time only - emit the expression
-        EmitExpression(ta.Expression);
-    }
-
-    protected override void EmitNonNullAssertion(Expr.NonNullAssertion nna)
-    {
-        // Non-null assertions are compile-time only - emit the expression
-        EmitExpression(nna.Expression);
-    }
-
-    protected override void EmitSpread(Expr.Spread sp)
-    {
-        // Spread is handled contextually in array/object literals
-        // When encountered standalone, just emit the expression
-        EmitExpression(sp.Expression);
     }
 
     protected override void EmitUnknownExpression(Expr expr)

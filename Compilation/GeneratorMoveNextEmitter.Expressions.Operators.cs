@@ -58,55 +58,6 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    protected override void EmitLogical(Expr.Logical l)
-    {
-        bool isAnd = l.Operator.Type == TokenType.AND_AND;
-        _helpers.EmitLogical(
-            isAnd,
-            () => { EmitExpression(l.Left); EnsureBoxed(); },
-            () => { EmitExpression(l.Right); EnsureBoxed(); },
-            _ctx!.Runtime!.IsTruthy);
-    }
-
-    protected override void EmitUnary(Expr.Unary u)
-    {
-        switch (u.Operator.Type)
-        {
-            case TokenType.MINUS:
-                _helpers.EmitUnaryMinus(() => EmitExpression(u.Right));
-                break;
-            case TokenType.BANG:
-                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), _ctx!.Runtime!.IsTruthy);
-                break;
-            case TokenType.TYPEOF:
-                _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), _ctx!.Runtime!.TypeOf);
-                break;
-            case TokenType.TILDE:
-                _helpers.EmitUnaryBitwiseNot(() => EmitExpression(u.Right));
-                break;
-            default:
-                EmitExpression(u.Right);
-                EnsureBoxed();
-                break;
-        }
-    }
-
-    protected override void EmitTernary(Expr.Ternary t)
-    {
-        _helpers.EmitTernary(
-            () => EmitExpression(t.Condition),
-            () => EmitExpression(t.ThenBranch),
-            () => EmitExpression(t.ElseBranch),
-            _ctx!.Runtime!.IsTruthy);
-    }
-
-    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
-    {
-        _helpers.EmitNullishCoalescing(
-            () => EmitExpression(nc.Left),
-            () => EmitExpression(nc.Right));
-    }
-
     private void EmitCompoundOperation(TokenType opType)
     {
         if (opType == TokenType.PLUS_EQUAL)

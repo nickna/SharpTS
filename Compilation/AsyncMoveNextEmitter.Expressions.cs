@@ -262,39 +262,6 @@ public partial class AsyncMoveNextEmitter
         }
     }
 
-    protected override void EmitLogical(Expr.Logical l)
-    {
-        bool isAnd = l.Operator.Type == TokenType.AND_AND;
-        _helpers.EmitLogical(
-            isAnd,
-            () => { EmitExpression(l.Left); EnsureBoxed(); },
-            () => { EmitExpression(l.Right); EnsureBoxed(); },
-            _ctx!.Runtime!.IsTruthy);
-    }
-
-    protected override void EmitUnary(Expr.Unary u)
-    {
-        switch (u.Operator.Type)
-        {
-            case TokenType.MINUS:
-                _helpers.EmitUnaryMinus(() => EmitExpression(u.Right));
-                break;
-            case TokenType.BANG:
-                _helpers.EmitUnaryNot(() => EmitExpression(u.Right), _ctx!.Runtime!.IsTruthy);
-                break;
-            case TokenType.TYPEOF:
-                _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), _ctx!.Runtime!.TypeOf);
-                break;
-            case TokenType.TILDE:
-                _helpers.EmitUnaryBitwiseNot(() => EmitExpression(u.Right));
-                break;
-            default:
-                EmitExpression(u.Right);
-                EnsureBoxed();
-                break;
-        }
-    }
-
     protected override void EmitCall(Expr.Call c)
     {
         // Handle console.log specially (handles both Variable and Get patterns)
@@ -510,15 +477,6 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    protected override void EmitTernary(Expr.Ternary t)
-    {
-        _helpers.EmitTernary(
-            () => EmitExpression(t.Condition),
-            () => EmitExpression(t.ThenBranch),
-            () => EmitExpression(t.ElseBranch),
-            _ctx!.Runtime!.IsTruthy);
-    }
-
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;
@@ -680,46 +638,10 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    #region Abstract Implementations - Pass-through expressions
-
-    protected override void EmitGrouping(Expr.Grouping g)
-    {
-        // Grouping just evaluates its inner expression
-        EmitExpression(g.Expression);
-    }
-
-    protected override void EmitTypeAssertion(Expr.TypeAssertion ta)
-    {
-        // Type assertions are compile-time only, just emit the inner expression
-        EmitExpression(ta.Expression);
-    }
-
-    protected override void EmitNonNullAssertion(Expr.NonNullAssertion nna)
-    {
-        // Non-null assertions are compile-time only, just emit the inner expression
-        EmitExpression(nna.Expression);
-    }
-
-    protected override void EmitSpread(Expr.Spread sp)
-    {
-        // Spread expressions are handled in context (arrays, objects, calls)
-        // If we get here directly, just emit the inner expression
-        EmitExpression(sp.Expression);
-    }
-
-    protected override void EmitRegexLiteral(Expr.RegexLiteral re)
-    {
-        // Not implemented in async context - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     protected override void EmitUnknownExpression(Expr expr)
     {
         // Unsupported expression - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
-
-    #endregion
 }

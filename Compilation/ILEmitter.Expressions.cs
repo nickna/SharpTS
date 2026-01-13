@@ -249,30 +249,6 @@ public partial class ILEmitter
         EmitCallUnknown(_ctx.Runtime!.CreateRegExpWithFlags);
     }
 
-    protected override void EmitGrouping(Expr.Grouping g)
-    {
-        EmitExpression(g.Expression);
-    }
-
-    protected override void EmitTypeAssertion(Expr.TypeAssertion ta)
-    {
-        // Type assertions are compile-time only, just emit the inner expression
-        EmitExpression(ta.Expression);
-    }
-
-    protected override void EmitNonNullAssertion(Expr.NonNullAssertion nna)
-    {
-        // Non-null assertions are compile-time only, just emit the inner expression
-        EmitExpression(nna.Expression);
-    }
-
-    protected override void EmitSpread(Expr.Spread sp)
-    {
-        // Spread expressions are handled in context (arrays, objects, calls)
-        // If we get here directly, just emit the inner expression
-        EmitExpression(sp.Expression);
-    }
-
     protected override void EmitUnknownExpression(Expr expr)
     {
         // Fallback: push null
