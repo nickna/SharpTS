@@ -32,6 +32,7 @@ public partial class ILEmitter
 {
     private readonly CompilationContext _ctx;
     private readonly StateMachineEmitHelpers _helpers;
+    private readonly LocalVariableResolver _resolver;
     private ILGenerator IL => _ctx.IL;
 
     /// <summary>
@@ -54,6 +55,7 @@ public partial class ILEmitter
     {
         _ctx = ctx;
         _helpers = new StateMachineEmitHelpers(ctx.IL, ctx.Types);
+        _resolver = new LocalVariableResolver(ctx.IL, ctx, ctx.Types);
     }
 
     public void EmitStatement(Stmt stmt)

@@ -51,31 +51,15 @@ public partial class ILEmitter
     {
         var name = v.Name.Lexeme;
 
-        // Check if it's a parameter
-        if (_ctx.TryGetParameter(name, out var argIndex))
+        // Try resolver first (user-defined variables: parameters, locals, captured)
+        var stackType = _resolver.TryLoadVariable(name);
+        if (stackType.HasValue)
         {
-            EmitLdargUnknown(argIndex);
+            SetStackType(stackType.Value);
             return;
         }
 
-        // Check if it's a local
-        var local = _ctx.Locals.GetLocal(name);
-        if (local != null)
-        {
-            var localType = _ctx.Locals.GetLocalType(name);
-            EmitLdloc(local, localType!);
-            return;
-        }
-
-        // Check if it's a captured variable (in closure)
-        if (_ctx.CapturedFields != null && _ctx.CapturedFields.TryGetValue(name, out var field))
-        {
-            IL.Emit(OpCodes.Ldarg_0); // this (display class instance)
-            EmitLdfldUnknown(field);
-            return;
-        }
-
-        // Check if it's Math
+        // Fallback: pseudo-variables (Math, classes, functions, namespaces)
         if (name == "Math")
         {
             EmitNullConstant(); // Math is handled specially in property access
@@ -85,7 +69,6 @@ public partial class ILEmitter
         // Check if it's a class - load the Type object
         if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
         {
-            // Load the Type object using typeof(ClassName)
             IL.Emit(OpCodes.Ldtoken, classType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
             SetStackUnknown();
@@ -95,7 +78,6 @@ public partial class ILEmitter
         // Check if it's a top-level function - wrap as TSFunction
         if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var methodBuilder))
         {
-            // Create TSFunction(null, methodInfo)
             IL.Emit(OpCodes.Ldnull); // target (static method)
             IL.Emit(OpCodes.Ldtoken, methodBuilder);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
@@ -160,28 +142,7 @@ public partial class ILEmitter
 
     private void EmitThis()
     {
-        // If we're inside a capturing arrow function, 'this' is stored in a captured field
-        if (_ctx.CapturedFields != null && _ctx.CapturedFields.TryGetValue("this", out var thisField))
-        {
-            // Load 'this' from the display class field
-            // arg_0 is the display class instance
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, thisField);
-        }
-        // Check if we have a __this parameter (object method shorthand)
-        else if (_ctx.TryGetParameter("__this", out var thisArgIndex))
-        {
-            // Load 'this' from the __this parameter
-            IL.Emit(OpCodes.Ldarg, thisArgIndex);
-        }
-        else if (_ctx.IsInstanceMethod)
-        {
-            IL.Emit(OpCodes.Ldarg_0);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Ldnull);
-        }
+        _resolver.LoadThis();
         SetStackUnknown();
     }
 
