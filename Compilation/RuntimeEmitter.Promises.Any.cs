@@ -72,6 +72,23 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits the HandleAnyCompletionShim static method.
+    /// This is a shim that casts the object? state parameter to $AnyState and calls HandleAnyCompletion.
+    /// Signature: void HandleAnyCompletionShim(Task&lt;object?&gt; task, object? state)
+    /// </summary>
+    private void EmitHandleAnyCompletionShim(ILGenerator il, AnyStateClass anyState, MethodBuilder handleAnyCompletion)
+    {
+        // Load task (arg0)
+        il.Emit(OpCodes.Ldarg_0);
+        // Load state (arg1) and cast to $AnyState
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, anyState.Type);
+        // Call HandleAnyCompletion(task, ($AnyState)state)
+        il.Emit(OpCodes.Call, handleAnyCompletion);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits the HandleAnyCompletion static method.
     /// Called by ContinueWith for each task in PromiseAny.
     /// </summary>
@@ -409,23 +426,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterTaskSetupLabel);
 
         il.MarkLabel(notCompletedLabel);
-        // Not completed - use ContinueWith
+        // Not completed - use ContinueWith with the shim delegate
 
-        // For ContinueWith, we need to box the $AnyState and create proper delegate
-        // Let's use a simpler approach: use Task.Factory.ContinueWhenAll pattern
-        // or just accept that we need more complex setup
-
-        // Actually, the easiest is to use ContinueWith with the continuation that just calls our method
-        // task.ContinueWith(t => HandleAnyCompletion(t, capturedState), TaskContinuationOptions.ExecuteSynchronously)
-
-        // To emit this, we need to create a display class that captures stateLocal
-        // That's complex. Let's use a workaround: re-emit a version of HandleAnyCompletion
-        // as a ContinueWith callback that takes (Task<object?>, object?) state
-
-        // For now, use reflection-based approach temporarily
+        // task.ContinueWith(Action<Task<object?>, object?>, object? state, TaskContinuationOptions)
+        // Load task
         il.Emit(OpCodes.Ldloc, taskLocal);
+
+        // Create Action<Task<object?>, object?> delegate pointing to handleAnyCompletion (which is the shim)
+        // For static method: ldnull, ldftn method, newobj Action::.ctor(object, IntPtr)
+        il.Emit(OpCodes.Ldnull);  // null target for static method
+        il.Emit(OpCodes.Ldftn, handleAnyCompletion);  // handleAnyCompletion is actually the shim
+        var actionType = typeof(Action<Task<object?>, object?>);
+        var actionCtor = actionType.GetConstructor([typeof(object), typeof(IntPtr)])!;
+        il.Emit(OpCodes.Newobj, actionCtor);
+
+        // Load boxed state
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Box, anyState.Type);
+
+        // Load TaskContinuationOptions.ExecuteSynchronously
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
 
         // Call ContinueWith(Action<Task<TResult>, object?>, object?, TaskContinuationOptions)
@@ -435,22 +454,8 @@ public partial class RuntimeEmitter
                        m.GetParameters()[0].ParameterType == typeof(Action<Task<object?>, object?>) &&
                        m.GetParameters()[1].ParameterType == typeof(object) &&
                        m.GetParameters()[2].ParameterType == typeof(TaskContinuationOptions));
-
-        // Create Action<Task<object?>, object?> delegate
-        // We need a method with signature: void Method(Task<object?> task, object? state)
-        // handleAnyCompletion has signature: void Method(Task<object?> task, $AnyState state)
-        // These don't match because $AnyState != object?
-
-        // We need a shim method. Let's emit one in the runtime type
-        // For now, skip ContinueWith and just use synchronous handling for completed tasks
-
-        // Pop the stuff we loaded
-        il.Emit(OpCodes.Pop);  // TaskContinuationOptions
-        il.Emit(OpCodes.Pop);  // boxed state
-        il.Emit(OpCodes.Pop);  // task
-
-        // For non-completed tasks, we'll need to handle differently
-        // This is getting complex - let's emit an adapter method
+        il.Emit(OpCodes.Callvirt, continueWithMethod);
+        il.Emit(OpCodes.Pop);  // Discard the continuation task returned by ContinueWith
 
         il.MarkLabel(afterTaskSetupLabel);
 

@@ -115,6 +115,8 @@ internal class AnyStateClass
     public required FieldBuilder TcsField { get; init; }              // TaskCompletionSource<object?>
     public required FieldBuilder LockField { get; init; }             // object
     public required ConstructorBuilder Constructor { get; init; }
+    public MethodBuilder? HandleCompletionMethod { get; set; }        // HandleAnyCompletion method
+    public MethodBuilder? HandleCompletionShim { get; set; }          // Shim for ContinueWith
 }
 
 /// <summary>
@@ -255,9 +257,35 @@ public partial class RuntimeEmitter
         EmitPromiseAllSettledMoveNext(promiseAllSettledSM, processElementSettled);
         promiseAllSettledSM.Type.CreateType();
 
-        // Promise.any(iterable) - delegates to RuntimeTypes for now
-        // NOTE: ContinueWith with state capture is complex to emit as pure IL.
-        // This method still requires SharpTS.dll at runtime.
+        // Promise.any(iterable) - pure IL implementation with state machine
+        // Define the $AnyState class and helper methods
+        var anyState = DefineAnyStateClass(moduleBuilder);
+
+        // Define HandleAnyCompletion(Task<object?>, $AnyState) method on runtime type
+        var handleAnyCompletion = typeBuilder.DefineMethod(
+            "HandleAnyCompletion",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(Task<object?>), anyState.Type]
+        );
+        anyState.HandleCompletionMethod = handleAnyCompletion;
+        EmitHandleAnyCompletion(handleAnyCompletion.GetILGenerator(), anyState);
+
+        // Define HandleAnyCompletionShim(Task<object?>, object?) - casts and calls the real method
+        var handleAnyCompletionShim = typeBuilder.DefineMethod(
+            "HandleAnyCompletionShim",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(Task<object?>), typeof(object)]
+        );
+        anyState.HandleCompletionShim = handleAnyCompletionShim;
+        EmitHandleAnyCompletionShim(handleAnyCompletionShim.GetILGenerator(), anyState, handleAnyCompletion);
+
+        // Create the $AnyState type
+        anyState.Type.CreateType();
+
+        // Define Promise.any wrapper and state machine
+        var promiseAnySM = DefinePromiseAnyStateMachine(moduleBuilder, anyState);
         var any = typeBuilder.DefineMethod(
             "PromiseAny",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -265,12 +293,9 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.PromiseAny = any;
-        {
-            var il = any.GetILGenerator();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("PromiseAny")!);
-            il.Emit(OpCodes.Ret);
-        }
+        EmitPromiseAnyWrapper(any.GetILGenerator(), promiseAnySM);
+        EmitPromiseAnyMoveNext(promiseAnySM, anyState, handleAnyCompletionShim);
+        promiseAnySM.Type.CreateType();
 
         // Callback invocation helpers must be emitted first (used by then/finally)
         EmitCallbackHelpers(typeBuilder, runtime);
