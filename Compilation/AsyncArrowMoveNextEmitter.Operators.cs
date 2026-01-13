@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncArrowMoveNextEmitter
 {
-    private void EmitBinary(Expr.Binary b)
+    protected override void EmitBinary(Expr.Binary b)
     {
         EmitExpression(b.Left);
         EnsureBoxed();
@@ -102,7 +102,7 @@ public partial class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Box, typeof(bool));
     }
 
-    private void EmitCall(Expr.Call c)
+    protected override void EmitCall(Expr.Call c)
     {
         // Emit callee
         EmitExpression(c.Callee);
@@ -126,7 +126,7 @@ public partial class AsyncArrowMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitAwait(Expr.Await aw)
+    protected override void EmitAwait(Expr.Await aw)
     {
         int stateNum = _currentState++;
         var continueLabel = _il.DefineLabel();

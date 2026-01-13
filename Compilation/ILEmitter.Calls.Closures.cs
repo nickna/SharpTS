@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitArrowFunction(Expr.ArrowFunction af)
+    protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
         // Get the method for this arrow function
         if (!_ctx.ArrowMethods.TryGetValue(af, out var method))

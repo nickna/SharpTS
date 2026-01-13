@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitNew(Expr.New n)
+    protected override void EmitNew(Expr.New n)
     {
         // Built-in types only apply when there's no namespace path
         bool isSimpleName = n.NamespacePath == null || n.NamespacePath.Count == 0;

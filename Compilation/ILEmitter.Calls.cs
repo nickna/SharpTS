@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitCall(Expr.Call c)
+    protected override void EmitCall(Expr.Call c)
     {
         // Special case: super() or super.constructor() call in derived class
         if (c.Callee is Expr.Super superExpr && (superExpr.Method == null || superExpr.Method.Lexeme == "constructor"))

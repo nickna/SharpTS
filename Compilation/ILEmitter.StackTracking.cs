@@ -30,21 +30,18 @@ public partial class ILEmitter
 
     #region Boxing and Type Conversion - Delegated to StateMachineEmitHelpers
 
-    private void EnsureBoxed() => _helpers.EnsureBoxed();
-    public void EnsureDouble() => _helpers.EnsureDouble();
-    public void EnsureBoolean() => _helpers.EnsureBoolean();
-    public void EnsureString() => _helpers.EnsureString();
+    // Note: EnsureBoxed is inherited from ExpressionEmitterBase
+    public new void EnsureDouble() => _helpers.EnsureDouble();
+    public new void EnsureBoolean() => _helpers.EnsureBoolean();
+    public new void EnsureString() => _helpers.EnsureString();
 
     #endregion
 
     #region Literal/Constant Helpers - Delegated to StateMachineEmitHelpers
 
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
-    private void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);
-    private void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
-    private void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
+    // Note: EmitStringConstant, EmitDoubleConstant, EmitBoolConstant, EmitNullConstant are inherited from ExpressionEmitterBase
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
-    private void EmitNullConstant() => _helpers.EmitNullConstant();
 
     #endregion
 
@@ -52,8 +49,7 @@ public partial class ILEmitter
 
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();
     private void EmitBoxBool() => _helpers.EmitBoxBool();
-    private void SetStackUnknown() => _helpers.SetStackUnknown();
-    private void SetStackType(StackType type) => _helpers.SetStackType(type);
+    // Note: SetStackUnknown, SetStackType are inherited from ExpressionEmitterBase
 
     #endregion
 

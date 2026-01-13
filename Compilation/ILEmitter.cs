@@ -28,12 +28,16 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="ILCompiler"/>
 /// <seealso cref="CompilationContext"/>
-public partial class ILEmitter
+public partial class ILEmitter : ExpressionEmitterBase
 {
     private readonly CompilationContext _ctx;
-    private readonly StateMachineEmitHelpers _helpers;
     private readonly LocalVariableResolver _resolver;
-    private ILGenerator IL => _ctx.IL;
+
+    // Abstract property implementations for ExpressionEmitterBase
+    protected override ILGenerator IL => _ctx.IL;
+    protected override CompilationContext Ctx => _ctx;
+    protected override TypeProvider Types => _ctx.Types;
+    protected override IVariableResolver Resolver => _resolver;
 
     /// <summary>
     /// Provides access to the compilation context for type emitter strategies.
@@ -52,9 +56,9 @@ public partial class ILEmitter
     }
 
     public ILEmitter(CompilationContext ctx)
+        : base(new StateMachineEmitHelpers(ctx.IL, ctx.Types))
     {
         _ctx = ctx;
-        _helpers = new StateMachineEmitHelpers(ctx.IL, ctx.Types);
         _resolver = new LocalVariableResolver(ctx.IL, ctx, ctx.Types);
     }
 
@@ -160,142 +164,5 @@ public partial class ILEmitter
         }
     }
 
-    public void EmitExpression(Expr expr)
-    {
-        switch (expr)
-        {
-            case Expr.Literal lit:
-                EmitLiteral(lit);
-                break;
-
-            case Expr.Variable v:
-                EmitVariable(v);
-                break;
-
-            case Expr.Assign a:
-                EmitAssign(a);
-                break;
-
-            case Expr.Binary b:
-                EmitBinary(b);
-                break;
-
-            case Expr.Logical l:
-                EmitLogical(l);
-                break;
-
-            case Expr.Unary u:
-                EmitUnary(u);
-                break;
-
-            case Expr.Grouping g:
-                EmitExpression(g.Expression);
-                break;
-
-            case Expr.Call c:
-                EmitCall(c);
-                break;
-
-            case Expr.New n:
-                EmitNew(n);
-                break;
-
-            case Expr.Get g:
-                EmitGet(g);
-                break;
-
-            case Expr.Set s:
-                EmitSet(s);
-                break;
-
-            case Expr.GetIndex gi:
-                EmitGetIndex(gi);
-                break;
-
-            case Expr.SetIndex si:
-                EmitSetIndex(si);
-                break;
-
-            case Expr.This:
-                EmitThis();
-                break;
-
-            case Expr.ArrayLiteral a:
-                EmitArrayLiteral(a);
-                break;
-
-            case Expr.ObjectLiteral o:
-                EmitObjectLiteral(o);
-                break;
-
-            case Expr.Ternary t:
-                EmitTernary(t);
-                break;
-
-            case Expr.NullishCoalescing nc:
-                EmitNullishCoalescing(nc);
-                break;
-
-            case Expr.TemplateLiteral tl:
-                EmitTemplateLiteral(tl);
-                break;
-
-            case Expr.CompoundAssign ca:
-                EmitCompoundAssign(ca);
-                break;
-
-            case Expr.CompoundSet cs:
-                EmitCompoundSet(cs);
-                break;
-
-            case Expr.CompoundSetIndex csi:
-                EmitCompoundSetIndex(csi);
-                break;
-
-            case Expr.PrefixIncrement pi:
-                EmitPrefixIncrement(pi);
-                break;
-
-            case Expr.PostfixIncrement pi:
-                EmitPostfixIncrement(pi);
-                break;
-
-            case Expr.ArrowFunction af:
-                EmitArrowFunction(af);
-                break;
-
-            case Expr.Super s:
-                EmitSuper(s);
-                break;
-
-            case Expr.Spread sp:
-                // Spread expressions are handled in context (arrays, objects, calls)
-                // If we get here directly, just emit the inner expression
-                EmitExpression(sp.Expression);
-                break;
-
-            case Expr.TypeAssertion ta:
-                // Type assertions are compile-time only, just emit the inner expression
-                EmitExpression(ta.Expression);
-                break;
-
-            case Expr.NonNullAssertion nna:
-                // Non-null assertions are compile-time only, just emit the inner expression
-                EmitExpression(nna.Expression);
-                break;
-
-            case Expr.RegexLiteral re:
-                EmitRegexLiteral(re);
-                break;
-
-            case Expr.DynamicImport di:
-                EmitDynamicImport(di);
-                break;
-
-            default:
-                // Fallback: push null
-                IL.Emit(OpCodes.Ldnull);
-                break;
-        }
-    }
+    // EmitExpression dispatch is inherited from ExpressionEmitterBase
 }

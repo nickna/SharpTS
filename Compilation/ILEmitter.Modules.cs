@@ -342,7 +342,7 @@ public partial class ILEmitter
     /// Emits a dynamic import expression.
     /// Dynamic import returns a Promise that resolves to the module namespace.
     /// </summary>
-    private void EmitDynamicImport(Expr.DynamicImport di)
+    protected override void EmitDynamicImport(Expr.DynamicImport di)
     {
         // Emit the path expression
         EmitExpression(di.PathExpression);

@@ -6,140 +6,11 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncGeneratorMoveNextEmitter
 {
-    private void EmitExpression(Expr expr)
-    {
-        switch (expr)
-        {
-            case Expr.Yield y:
-                EmitYield(y);
-                break;
-
-            case Expr.Await a:
-                EmitAwait(a);
-                break;
-
-            case Expr.Literal l:
-                EmitLiteral(l);
-                break;
-
-            case Expr.Variable v:
-                EmitVariable(v);
-                break;
-
-            case Expr.Assign a:
-                EmitAssign(a);
-                break;
-
-            case Expr.Binary b:
-                EmitBinary(b);
-                break;
-
-            case Expr.Logical l:
-                EmitLogical(l);
-                break;
-
-            case Expr.Unary u:
-                EmitUnary(u);
-                break;
-
-            case Expr.Call c:
-                EmitCall(c);
-                break;
-
-            case Expr.Get g:
-                EmitGet(g);
-                break;
-
-            case Expr.Grouping g:
-                EmitExpression(g.Expression);
-                break;
-
-            case Expr.Ternary t:
-                EmitTernary(t);
-                break;
-
-            case Expr.CompoundAssign ca:
-                EmitCompoundAssign(ca);
-                break;
-
-            case Expr.PrefixIncrement pi:
-                EmitPrefixIncrement(pi);
-                break;
-
-            case Expr.PostfixIncrement poi:
-                EmitPostfixIncrement(poi);
-                break;
-
-            case Expr.ArrayLiteral a:
-                EmitArrayLiteral(a);
-                break;
-
-            case Expr.ObjectLiteral o:
-                EmitObjectLiteral(o);
-                break;
-
-            case Expr.GetIndex gi:
-                EmitGetIndex(gi);
-                break;
-
-            case Expr.SetIndex si:
-                EmitSetIndex(si);
-                break;
-
-            case Expr.New n:
-                EmitNew(n);
-                break;
-
-            case Expr.This:
-                EmitThis();
-                break;
-
-            case Expr.NullishCoalescing nc:
-                EmitNullishCoalescing(nc);
-                break;
-
-            case Expr.TemplateLiteral tl:
-                EmitTemplateLiteral(tl);
-                break;
-
-            case Expr.Set s:
-                EmitSet(s);
-                break;
-
-            case Expr.TypeAssertion ta:
-                EmitExpression(ta.Expression);
-                break;
-
-            case Expr.NonNullAssertion nna:
-                EmitExpression(nna.Expression);
-                break;
-
-            case Expr.Spread sp:
-                EmitExpression(sp.Expression);
-                break;
-
-            case Expr.CompoundSet cs:
-                EmitCompoundSet(cs);
-                break;
-
-            case Expr.CompoundSetIndex csi:
-                EmitCompoundSetIndex(csi);
-                break;
-
-            case Expr.ArrowFunction af:
-                EmitArrowFunction(af);
-                break;
-
-            default:
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
-                break;
-        }
-    }
+    // EmitExpression dispatch is inherited from ExpressionEmitterBase
 
     #region Yield Expressions
 
-    private void EmitYield(Expr.Yield y)
+    protected override void EmitYield(Expr.Yield y)
     {
         int stateNumber = _currentSuspensionState++;
         var resumeLabel = _stateLabels[stateNumber];
@@ -526,7 +397,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Await Expressions
 
-    private void EmitAwait(Expr.Await a)
+    protected override void EmitAwait(Expr.Await a)
     {
         int stateNumber = _currentSuspensionState++;
         var resumeLabel = _stateLabels[stateNumber];
@@ -623,7 +494,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Literal Expressions
 
-    private void EmitLiteral(Expr.Literal l)
+    protected override void EmitLiteral(Expr.Literal l)
     {
         switch (l.Value)
         {
@@ -650,7 +521,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Variable Expressions
 
-    private void EmitVariable(Expr.Variable v)
+    protected override void EmitVariable(Expr.Variable v)
     {
         string name = v.Name.Lexeme;
 
@@ -687,7 +558,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitAssign(Expr.Assign a)
+    protected override void EmitAssign(Expr.Assign a)
     {
         string name = a.Name.Lexeme;
 
@@ -707,7 +578,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Binary/Logical Expressions
 
-    private void EmitBinary(Expr.Binary b)
+    protected override void EmitBinary(Expr.Binary b)
     {
         EmitExpression(b.Left);
         EnsureBoxed();
@@ -760,7 +631,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitLogical(Expr.Logical l)
+    protected override void EmitLogical(Expr.Logical l)
     {
         bool isAnd = l.Operator.Type == TokenType.AND_AND;
         _helpers.EmitLogical(
@@ -774,7 +645,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Unary Expressions
 
-    private void EmitUnary(Expr.Unary u)
+    protected override void EmitUnary(Expr.Unary u)
     {
         switch (u.Operator.Type)
         {
@@ -801,7 +672,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Call Expressions
 
-    private void EmitCall(Expr.Call c)
+    protected override void EmitCall(Expr.Call c)
     {
         // Handle console.log specially
         if (c.Callee is Expr.Variable consoleVar && consoleVar.Name.Lexeme == "console.log")
@@ -898,7 +769,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Member Access Expressions
 
-    private void EmitGet(Expr.Get g)
+    protected override void EmitGet(Expr.Get g)
     {
         // Handle static field access
         if (g.Object is Expr.Variable classVar &&
@@ -923,7 +794,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitSet(Expr.Set s)
+    protected override void EmitSet(Expr.Set s)
     {
         EmitExpression(s.Object);
         EnsureBoxed();
@@ -944,7 +815,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitGetIndex(Expr.GetIndex gi)
+    protected override void EmitGetIndex(Expr.GetIndex gi)
     {
         EmitExpression(gi.Object);
         EnsureBoxed();
@@ -954,7 +825,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitSetIndex(Expr.SetIndex si)
+    protected override void EmitSetIndex(Expr.SetIndex si)
     {
         EmitExpression(si.Object);
         EnsureBoxed();
@@ -970,7 +841,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Ternary/Nullish Expressions
 
-    private void EmitTernary(Expr.Ternary t)
+    protected override void EmitTernary(Expr.Ternary t)
     {
         _helpers.EmitTernary(
             () => EmitExpression(t.Condition),
@@ -979,7 +850,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             _ctx!.Runtime!.IsTruthy);
     }
 
-    private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
+    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
         _helpers.EmitNullishCoalescing(
             () => EmitExpression(nc.Left),
@@ -990,7 +861,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Increment/Decrement Expressions
 
-    private void EmitCompoundAssign(Expr.CompoundAssign ca)
+    protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;
 
@@ -1054,7 +925,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
+    protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)
         {
@@ -1086,7 +957,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitPostfixIncrement(Expr.PostfixIncrement poi)
+    protected override void EmitPostfixIncrement(Expr.PostfixIncrement poi)
     {
         if (poi.Operand is Expr.Variable v)
         {
@@ -1119,7 +990,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSet(Expr.CompoundSet cs)
+    protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
         EmitExpression(cs.Object);
         EnsureBoxed();
@@ -1176,7 +1047,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
+    protected override void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
     {
         EmitExpression(csi.Object);
         EnsureBoxed();
@@ -1242,7 +1113,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     #region Object/Array Expressions
 
-    private void EmitArrayLiteral(Expr.ArrayLiteral a)
+    protected override void EmitArrayLiteral(Expr.ArrayLiteral a)
     {
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
@@ -1300,7 +1171,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitObjectLiteral(Expr.ObjectLiteral o)
+    protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
         // Check if any property is a spread or computed key
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
@@ -1380,7 +1251,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitNew(Expr.New n)
+    protected override void EmitNew(Expr.New n)
     {
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
@@ -1458,7 +1329,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         };
     }
 
-    private void EmitThis()
+    protected override void EmitThis()
     {
         if (_builder.ThisField != null)
         {
@@ -1472,7 +1343,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
+    protected override void EmitTemplateLiteral(Expr.TemplateLiteral tl)
     {
         // TemplateLiteral has Strings (literal parts) and Expressions (interpolated parts)
         // Structure: strings[0] + expressions[0] + strings[1] + expressions[1] + ... + strings[n]
@@ -1503,7 +1374,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackString();
     }
 
-    private void EmitArrowFunction(Expr.ArrowFunction af)
+    protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
         // Check for async arrow functions first
         if (af.IsAsync)
@@ -1603,6 +1474,63 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
+        SetStackUnknown();
+    }
+
+    #endregion
+
+    #region Missing Abstract Implementations
+
+    protected override void EmitSuper(Expr.Super s)
+    {
+        // Super not supported in async generators - push null
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    protected override void EmitRegexLiteral(Expr.RegexLiteral re)
+    {
+        // Regex literals not yet implemented - push null
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    protected override void EmitDynamicImport(Expr.DynamicImport di)
+    {
+        // Dynamic imports not yet implemented - push null
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    protected override void EmitGrouping(Expr.Grouping g)
+    {
+        // Grouping just delegates to inner expression
+        EmitExpression(g.Expression);
+    }
+
+    protected override void EmitTypeAssertion(Expr.TypeAssertion ta)
+    {
+        // Type assertions are compile-time only - emit the expression
+        EmitExpression(ta.Expression);
+    }
+
+    protected override void EmitNonNullAssertion(Expr.NonNullAssertion nna)
+    {
+        // Non-null assertions are compile-time only - emit the expression
+        EmitExpression(nna.Expression);
+    }
+
+    protected override void EmitSpread(Expr.Spread sp)
+    {
+        // Spread is handled contextually in array/object literals
+        // When encountered standalone, just emit the expression
+        EmitExpression(sp.Expression);
+    }
+
+    protected override void EmitUnknownExpression(Expr expr)
+    {
+        // Unknown expression - push null
+        _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
 

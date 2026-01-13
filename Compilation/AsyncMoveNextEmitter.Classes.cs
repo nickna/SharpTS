@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitNew(Expr.New n)
+    protected override void EmitNew(Expr.New n)
     {
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
@@ -93,7 +93,7 @@ public partial class AsyncMoveNextEmitter
         };
     }
 
-    private void EmitThis()
+    protected override void EmitThis()
     {
         // 'this' in async methods - load from hoisted field if available
         if (_builder.ThisField != null)

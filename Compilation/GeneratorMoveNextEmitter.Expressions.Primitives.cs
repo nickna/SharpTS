@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class GeneratorMoveNextEmitter
 {
-    private void EmitLiteral(Expr.Literal l)
+    protected override void EmitLiteral(Expr.Literal l)
     {
         switch (l.Value)
         {
@@ -33,7 +33,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitVariable(Expr.Variable v)
+    protected override void EmitVariable(Expr.Variable v)
     {
         string name = v.Name.Lexeme;
 
@@ -68,7 +68,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitAssign(Expr.Assign a)
+    protected override void EmitAssign(Expr.Assign a)
     {
         string name = a.Name.Lexeme;
 
@@ -82,7 +82,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitArrowFunction(Expr.ArrowFunction af)
+    protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
         if (_ctx!.ArrowMethods == null || !_ctx.ArrowMethods.TryGetValue(af, out var method))
         {

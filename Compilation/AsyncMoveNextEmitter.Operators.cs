@@ -6,14 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
+    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
         _helpers.EmitNullishCoalescing(
             () => EmitExpression(nc.Left),
             () => EmitExpression(nc.Right));
     }
 
-    private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
+    protected override void EmitTemplateLiteral(Expr.TemplateLiteral tl)
     {
         // TemplateLiteral has Strings (literal parts) and Expressions (interpolated parts)
         // Structure: strings[0] + expressions[0] + strings[1] + expressions[1] + ... + strings[n]
@@ -46,7 +46,7 @@ public partial class AsyncMoveNextEmitter
         _stackType = StackType.String;
     }
 
-    private void EmitSet(Expr.Set s)
+    protected override void EmitSet(Expr.Set s)
     {
         // Handle static field assignment: Class.field = value
         if (s.Object is Expr.Variable classVar &&
@@ -92,7 +92,7 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSet(Expr.CompoundSet cs)
+    protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
         // Compound assignment on object property: obj.prop += x
         // 1. Get current value
@@ -166,7 +166,7 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
+    protected override void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
     {
         // Compound assignment on array element: arr[i] += x
         // 1. Get current value

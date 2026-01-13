@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitBinary(Expr.Binary b)
+    protected override void EmitBinary(Expr.Binary b)
     {
         // Check for bigint operations
         if (IsBigIntOperation(b))
@@ -154,7 +154,7 @@ public partial class ILEmitter
         return expr is Expr.Binary b && IsComparisonOp(b.Operator.Type);
     }
 
-    private void EmitLogical(Expr.Logical l)
+    protected override void EmitLogical(Expr.Logical l)
     {
         var endLabel = IL.DefineLabel();
 
@@ -182,7 +182,7 @@ public partial class ILEmitter
         SetStackUnknown(); // Logical operators return boxed object
     }
 
-    private void EmitUnary(Expr.Unary u)
+    protected override void EmitUnary(Expr.Unary u)
     {
         switch (u.Operator.Type)
         {
@@ -247,7 +247,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitCompoundAssign(Expr.CompoundAssign ca)
+    protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         var local = _ctx.Locals.GetLocal(ca.Name.Lexeme);
 
@@ -346,7 +346,7 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
+    protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)
         {
@@ -449,7 +449,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitPostfixIncrement(Expr.PostfixIncrement pi)
+    protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)
         {
@@ -567,7 +567,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitCompoundSet(Expr.CompoundSet cs)
+    protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
         // Compound assignment on object property: obj.prop += x
         // 1. Get current value
@@ -598,7 +598,7 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
+    protected override void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
     {
         // Compound assignment on array element: arr[i] += x
         // 1. Get current value

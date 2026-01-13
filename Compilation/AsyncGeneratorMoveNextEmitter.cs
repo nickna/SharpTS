@@ -8,13 +8,18 @@ namespace SharpTS.Compilation;
 /// Emits the MoveNextAsync method body for an async generator state machine.
 /// Handles state dispatch, yield points, await points, and generator completion.
 /// </summary>
-public partial class AsyncGeneratorMoveNextEmitter
+public partial class AsyncGeneratorMoveNextEmitter : ExpressionEmitterBase
 {
     private readonly AsyncGeneratorStateMachineBuilder _builder;
     private readonly AsyncGeneratorStateAnalyzer.AsyncGeneratorFunctionAnalysis _analysis;
     private readonly ILGenerator _il;
     private readonly TypeProvider _types;
-    private readonly StateMachineEmitHelpers _helpers;
+
+    // Abstract property implementations for ExpressionEmitterBase
+    protected override ILGenerator IL => _il;
+    protected override CompilationContext Ctx => _ctx!;
+    protected override TypeProvider Types => _types;
+    protected override IVariableResolver Resolver => _resolver!;
 
     // Labels for state dispatch
     private readonly Dictionary<int, Label> _stateLabels = [];
@@ -22,13 +27,6 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     // Current suspension point being processed
     private int _currentSuspensionState = 0;
-
-    // Stack type tracking via shared helpers
-    private StackType _stackType
-    {
-        get => _helpers.StackType;
-        set => _helpers.StackType = value;
-    }
 
     // Compilation context for access to functions, classes, etc.
     private CompilationContext? _ctx;
@@ -40,12 +38,12 @@ public partial class AsyncGeneratorMoveNextEmitter
     private readonly Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> _loopLabels = new();
 
     public AsyncGeneratorMoveNextEmitter(AsyncGeneratorStateMachineBuilder builder, AsyncGeneratorStateAnalyzer.AsyncGeneratorFunctionAnalysis analysis, TypeProvider types)
+        : base(new StateMachineEmitHelpers(builder.MoveNextAsyncMethod.GetILGenerator(), types))
     {
         _builder = builder;
         _analysis = analysis;
         _il = builder.MoveNextAsyncMethod.GetILGenerator();
         _types = types;
-        _helpers = new StateMachineEmitHelpers(_il, _types);
     }
 
     /// <summary>
@@ -152,20 +150,16 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ret);
     }
 
-    #region Helper Method Wrappers
+    #region Helper Method Wrappers - Not in ExpressionEmitterBase
 
-    private void EnsureBoxed() => _helpers.EnsureBoxed();
+    // Note: EnsureBoxed, SetStackUnknown, SetStackType, EmitNullConstant, EmitDoubleConstant,
+    // EmitBoolConstant, EmitStringConstant are inherited from ExpressionEmitterBase
+
     private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
-    private void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
-    private void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
-    private void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);
-    private void EmitNullConstant() => _helpers.EmitNullConstant();
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();
     private void EmitBoxBool() => _helpers.EmitBoxBool();
-    private void SetStackUnknown() => _helpers.SetStackUnknown();
-    private void SetStackType(StackType type) => _helpers.SetStackType(type);
     private void SetStackNumber() => _helpers.SetStackType(StackType.Double);
     private void SetStackString() => _helpers.SetStackType(StackType.String);
     private void SetStackBoolean() => _helpers.SetStackType(StackType.Boolean);

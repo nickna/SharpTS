@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class GeneratorMoveNextEmitter
 {
-    private void EmitBinary(Expr.Binary b)
+    protected override void EmitBinary(Expr.Binary b)
     {
         EmitExpression(b.Left);
         EnsureBoxed();
@@ -58,7 +58,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitLogical(Expr.Logical l)
+    protected override void EmitLogical(Expr.Logical l)
     {
         bool isAnd = l.Operator.Type == TokenType.AND_AND;
         _helpers.EmitLogical(
@@ -68,7 +68,7 @@ public partial class GeneratorMoveNextEmitter
             _ctx!.Runtime!.IsTruthy);
     }
 
-    private void EmitUnary(Expr.Unary u)
+    protected override void EmitUnary(Expr.Unary u)
     {
         switch (u.Operator.Type)
         {
@@ -91,7 +91,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitTernary(Expr.Ternary t)
+    protected override void EmitTernary(Expr.Ternary t)
     {
         _helpers.EmitTernary(
             () => EmitExpression(t.Condition),
@@ -100,7 +100,7 @@ public partial class GeneratorMoveNextEmitter
             _ctx!.Runtime!.IsTruthy);
     }
 
-    private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
+    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
         _helpers.EmitNullishCoalescing(
             () => EmitExpression(nc.Left),

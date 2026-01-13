@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class GeneratorMoveNextEmitter
 {
-    private void EmitYield(Expr.Yield y)
+    protected override void EmitYield(Expr.Yield y)
     {
         int stateNumber = _currentYieldState++;
         var resumeLabel = _stateLabels[stateNumber];

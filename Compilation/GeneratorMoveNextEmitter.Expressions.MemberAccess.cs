@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class GeneratorMoveNextEmitter
 {
-    private void EmitCall(Expr.Call c)
+    protected override void EmitCall(Expr.Call c)
     {
         // Handle console.log specially
         if (c.Callee is Expr.Variable consoleVar && consoleVar.Name.Lexeme == "console.log")
@@ -75,7 +75,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitGet(Expr.Get g)
+    protected override void EmitGet(Expr.Get g)
     {
         EmitExpression(g.Object);
         EnsureBoxed();
@@ -84,7 +84,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitSet(Expr.Set s)
+    protected override void EmitSet(Expr.Set s)
     {
         EmitExpression(s.Object);
         EnsureBoxed();
@@ -101,7 +101,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitNew(Expr.New n)
+    protected override void EmitNew(Expr.New n)
     {
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
@@ -143,7 +143,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitThis()
+    protected override void EmitThis()
     {
         if (_builder.ThisField != null)
         {
@@ -158,7 +158,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitArrayLiteral(Expr.ArrayLiteral a)
+    protected override void EmitArrayLiteral(Expr.ArrayLiteral a)
     {
         _il.Emit(OpCodes.Ldc_I4, a.Elements.Count);
         _il.Emit(OpCodes.Newarr, typeof(object));
@@ -176,7 +176,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitObjectLiteral(Expr.ObjectLiteral o)
+    protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
         _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
 
@@ -212,7 +212,7 @@ public partial class GeneratorMoveNextEmitter
         }
     }
 
-    private void EmitGetIndex(Expr.GetIndex gi)
+    protected override void EmitGetIndex(Expr.GetIndex gi)
     {
         EmitExpression(gi.Object);
         EnsureBoxed();
@@ -222,7 +222,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitSetIndex(Expr.SetIndex si)
+    protected override void EmitSetIndex(Expr.SetIndex si)
     {
         EmitExpression(si.Object);
         EnsureBoxed();
@@ -234,7 +234,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
+    protected override void EmitTemplateLiteral(Expr.TemplateLiteral tl)
     {
         if (tl.Strings.Count == 0 && tl.Expressions.Count == 0)
         {
@@ -261,7 +261,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackType(StackType.String);
     }
 
-    private void EmitCompoundAssign(Expr.CompoundAssign ca)
+    protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;
 
@@ -319,7 +319,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitPrefixIncrement(Expr.PrefixIncrement pi)
+    protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)
         {
@@ -351,7 +351,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitPostfixIncrement(Expr.PostfixIncrement poi)
+    protected override void EmitPostfixIncrement(Expr.PostfixIncrement poi)
     {
         if (poi.Operand is Expr.Variable v)
         {
@@ -384,7 +384,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSet(Expr.CompoundSet cs)
+    protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
         EmitExpression(cs.Object);
         EnsureBoxed();
@@ -411,7 +411,7 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
+    protected override void EmitCompoundSetIndex(Expr.CompoundSetIndex csi)
     {
         EmitExpression(csi.Object);
         EnsureBoxed();

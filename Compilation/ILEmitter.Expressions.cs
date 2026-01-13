@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitLiteral(Expr.Literal lit)
+    protected override void EmitLiteral(Expr.Literal lit)
     {
         switch (lit.Value)
         {
@@ -47,7 +47,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitVariable(Expr.Variable v)
+    protected override void EmitVariable(Expr.Variable v)
     {
         var name = v.Name.Lexeme;
 
@@ -98,7 +98,7 @@ public partial class ILEmitter
         EmitNullConstant();
     }
 
-    private void EmitAssign(Expr.Assign a)
+    protected override void EmitAssign(Expr.Assign a)
     {
         EmitExpression(a.Value);
 
@@ -140,13 +140,13 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitThis()
+    protected override void EmitThis()
     {
         _resolver.LoadThis();
         SetStackUnknown();
     }
 
-    private void EmitSuper(Expr.Super s)
+    protected override void EmitSuper(Expr.Super s)
     {
         // Load this and prepare for base method call
         // Note: super() constructor calls are handled in EmitCall, not here
@@ -155,7 +155,7 @@ public partial class ILEmitter
         EmitCallUnknown(_ctx.Runtime!.GetSuperMethod);
     }
 
-    private void EmitTernary(Expr.Ternary t)
+    protected override void EmitTernary(Expr.Ternary t)
     {
         var elseLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -196,7 +196,7 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
+    protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
         var endLabel = IL.DefineLabel();
 
@@ -214,7 +214,7 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
+    protected override void EmitTemplateLiteral(Expr.TemplateLiteral tl)
     {
         // Build array of parts
         var totalParts = tl.Strings.Count + tl.Expressions.Count;
@@ -242,10 +242,41 @@ public partial class ILEmitter
         EmitCallString(_ctx.Runtime!.ConcatTemplate);
     }
 
-    private void EmitRegexLiteral(Expr.RegexLiteral re)
+    protected override void EmitRegexLiteral(Expr.RegexLiteral re)
     {
         IL.Emit(OpCodes.Ldstr, re.Pattern);
         IL.Emit(OpCodes.Ldstr, re.Flags);
         EmitCallUnknown(_ctx.Runtime!.CreateRegExpWithFlags);
+    }
+
+    protected override void EmitGrouping(Expr.Grouping g)
+    {
+        EmitExpression(g.Expression);
+    }
+
+    protected override void EmitTypeAssertion(Expr.TypeAssertion ta)
+    {
+        // Type assertions are compile-time only, just emit the inner expression
+        EmitExpression(ta.Expression);
+    }
+
+    protected override void EmitNonNullAssertion(Expr.NonNullAssertion nna)
+    {
+        // Non-null assertions are compile-time only, just emit the inner expression
+        EmitExpression(nna.Expression);
+    }
+
+    protected override void EmitSpread(Expr.Spread sp)
+    {
+        // Spread expressions are handled in context (arrays, objects, calls)
+        // If we get here directly, just emit the inner expression
+        EmitExpression(sp.Expression);
+    }
+
+    protected override void EmitUnknownExpression(Expr expr)
+    {
+        // Fallback: push null
+        IL.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
     }
 }

@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitArrayLiteral(Expr.ArrayLiteral a)
+    protected override void EmitArrayLiteral(Expr.ArrayLiteral a)
     {
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
@@ -64,7 +64,7 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitObjectLiteral(Expr.ObjectLiteral o)
+    protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
         // Check if any property is a spread or computed key
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
@@ -147,7 +147,7 @@ public partial class AsyncMoveNextEmitter
         }
     }
 
-    private void EmitGetIndex(Expr.GetIndex gi)
+    protected override void EmitGetIndex(Expr.GetIndex gi)
     {
         EmitExpression(gi.Object);
         EnsureBoxed();
@@ -157,7 +157,7 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    private void EmitSetIndex(Expr.SetIndex si)
+    protected override void EmitSetIndex(Expr.SetIndex si)
     {
         EmitExpression(si.Object);
         EnsureBoxed();

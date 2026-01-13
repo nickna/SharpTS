@@ -9,13 +9,19 @@ namespace SharpTS.Compilation;
 /// Similar to AsyncMoveNextEmitter but handles captured variable access
 /// through the outer state machine reference.
 /// </summary>
-public partial class AsyncArrowMoveNextEmitter
+public partial class AsyncArrowMoveNextEmitter : ExpressionEmitterBase
 {
     private readonly AsyncArrowStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
     private readonly TypeProvider _types;
-    private ILGenerator _il = null!;
-    private StateMachineEmitHelpers _helpers = null!;
+    private readonly ILGenerator _il;
+
+    // Abstract property implementations for ExpressionEmitterBase
+    protected override ILGenerator IL => _il;
+    protected override CompilationContext Ctx => _ctx!;
+    protected override TypeProvider Types => _types;
+    protected override IVariableResolver Resolver => _resolver!;
+
     private CompilationContext? _ctx;
     private int _currentState = 0;
     private readonly List<Label> _stateLabels = [];
@@ -23,7 +29,7 @@ public partial class AsyncArrowMoveNextEmitter
     private LocalBuilder? _resultLocal;
     private LocalBuilder? _exceptionLocal;
 
-    // Stack type tracking via shared helpers
+    // Stack type tracking via shared helpers (use base class _helpers)
     private StackType _stackType
     {
         get => _helpers.StackType;
@@ -40,10 +46,12 @@ public partial class AsyncArrowMoveNextEmitter
         AsyncArrowStateMachineBuilder builder,
         AsyncStateAnalyzer.AsyncFunctionAnalysis analysis,
         TypeProvider types)
+        : base(new StateMachineEmitHelpers(builder.MoveNextMethod.GetILGenerator(), types))
     {
         _builder = builder;
         _analysis = analysis;
         _types = types;
+        _il = builder.MoveNextMethod.GetILGenerator();
     }
 
     /// <summary>
@@ -51,8 +59,7 @@ public partial class AsyncArrowMoveNextEmitter
     /// </summary>
     public void EmitMoveNext(List<Stmt> body, CompilationContext ctx, Type returnType)
     {
-        _il = _builder.MoveNextMethod.GetILGenerator();
-        _helpers = new StateMachineEmitHelpers(_il, _types);
+        // Note: _il is initialized in constructor via GetILGenerator()
         _ctx = ctx;
 
         // Create variable resolver for hoisted fields, locals, and captured variables
@@ -116,20 +123,16 @@ public partial class AsyncArrowMoveNextEmitter
         _il.MarkLabel(defaultLabel);
     }
 
-    #region Helper Method Wrappers
+    #region Helper Method Wrappers - Not in ExpressionEmitterBase
 
-    private void EnsureBoxed() => _helpers.EnsureBoxed();
+    // Note: EnsureBoxed, SetStackUnknown, SetStackType, EmitNullConstant, EmitDoubleConstant,
+    // EmitBoolConstant, EmitStringConstant are inherited from ExpressionEmitterBase
+
     private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
-    private void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
-    private void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
-    private void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);
-    private void EmitNullConstant() => _helpers.EmitNullConstant();
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();
     private void EmitBoxBool() => _helpers.EmitBoxBool();
-    private void SetStackUnknown() => _helpers.SetStackUnknown();
-    private void SetStackType(StackType type) => _helpers.SetStackType(type);
     private void EmitAdd_Double() => _helpers.EmitAdd_Double();
     private void EmitSub_Double() => _helpers.EmitSub_Double();
     private void EmitMul_Double() => _helpers.EmitMul_Double();

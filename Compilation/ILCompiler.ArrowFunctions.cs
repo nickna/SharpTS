@@ -322,6 +322,13 @@ public partial class ILCompiler
     {
         foreach (var (arrow, captures) in _collectedArrows)
         {
+            // Skip async arrows - they're handled separately via AsyncArrowMoveNextEmitter
+            // in ILCompiler.Async.cs
+            if (arrow.IsAsync)
+            {
+                continue;
+            }
+
             var methodBuilder = _arrowMethods[arrow];
 
             if (captures.Count == 0)

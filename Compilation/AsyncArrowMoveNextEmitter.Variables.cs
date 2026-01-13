@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncArrowMoveNextEmitter
 {
-    private void EmitVariable(Expr.Variable v)
+    protected override void EmitVariable(Expr.Variable v)
     {
         string name = v.Name.Lexeme;
 
@@ -35,7 +35,7 @@ public partial class AsyncArrowMoveNextEmitter
         SetStackType(StackType.Null);
     }
 
-    private void EmitAssign(Expr.Assign a)
+    protected override void EmitAssign(Expr.Assign a)
     {
         string name = a.Name.Lexeme;
 

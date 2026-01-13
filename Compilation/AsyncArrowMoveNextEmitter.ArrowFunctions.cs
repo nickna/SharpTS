@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncArrowMoveNextEmitter
 {
-    private void EmitArrowFunction(Expr.ArrowFunction af)
+    protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
         // Check if it's an async arrow (nested async arrow)
         if (af.IsAsync)

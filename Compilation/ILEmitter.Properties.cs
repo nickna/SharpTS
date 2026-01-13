@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitGet(Expr.Get g)
+    protected override void EmitGet(Expr.Get g)
     {
         // Special case: Math properties
         if (g.Object is Expr.Variable v && v.Name.Lexeme == "Math")
@@ -254,7 +254,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitSet(Expr.Set s)
+    protected override void EmitSet(Expr.Set s)
     {
         // Handle static property assignment via class name
         if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
@@ -315,7 +315,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, resultTemp);
     }
 
-    private void EmitGetIndex(Expr.GetIndex gi)
+    protected override void EmitGetIndex(Expr.GetIndex gi)
     {
         // Enum reverse mapping: Direction[0] -> "Up"
         if (gi.Object is Expr.Variable enumVar &&
@@ -375,7 +375,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
     }
 
-    private void EmitSetIndex(Expr.SetIndex si)
+    protected override void EmitSetIndex(Expr.SetIndex si)
     {
         // Store value in a temp local so we can use it twice:
         // once for SetIndex, once for the expression result
@@ -396,7 +396,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, valueLocal);
     }
 
-    private void EmitArrayLiteral(Expr.ArrayLiteral a)
+    protected override void EmitArrayLiteral(Expr.ArrayLiteral a)
     {
         // Check if any element is a spread
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
@@ -456,7 +456,7 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitObjectLiteral(Expr.ObjectLiteral o)
+    protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
         // Check if any property is a spread or computed key
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
