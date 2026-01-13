@@ -86,6 +86,21 @@ public class SharpTSPromise
     }
 
     /// <summary>
+    /// Unwraps a value if it's a Promise, otherwise returns it unchanged.
+    /// Used to reduce code duplication in async function return handling.
+    /// </summary>
+    /// <param name="value">The value that might be a Promise</param>
+    /// <returns>The unwrapped value if it was a Promise, or the original value</returns>
+    public static async Task<object?> UnwrapIfPromise(object? value)
+    {
+        if (value is SharpTSPromise promise)
+        {
+            return await promise.GetValueAsync();
+        }
+        return value;
+    }
+
+    /// <summary>
     /// Checks if the Promise is completed (resolved or rejected).
     /// </summary>
     public bool IsCompleted => _task.IsCompleted;

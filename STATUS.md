@@ -236,7 +236,7 @@ This document tracks TypeScript language features and their implementation statu
 
 ### IL Compiler Bugs
 
-_No known bugs at this time._
+- `yield await expr` in a single expression causes NullReferenceException in async generators. Workaround: use separate statements (`const val = await expr; yield val;`)
 
 ### Recently Fixed Bugs (2026-01-12)
 - ~~Generic types with array suffix~~ - Fixed: `ParseGenericTypeReference()` now properly finds matching `>` and handles array suffixes (`Partial<T>[]`, `Promise<number>[][]`, etc.)

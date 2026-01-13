@@ -71,12 +71,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable
         if (result.Type == ExecutionResult.ResultType.Return)
         {
             // Unwrap Promise if returning a Promise from async function
-            object? val = result.Value;
-            if (val is SharpTSPromise promise)
-            {
-                val = await promise.GetValueAsync();
-            }
-            return val;
+            return await SharpTSPromise.UnwrapIfPromise(result.Value);
         }
         if (result.Type == ExecutionResult.ResultType.Throw)
         {
@@ -143,15 +138,11 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
         {
             RuntimeEnvironment previous = interpreter.Environment;
             try
-                {
+            {
                 interpreter.SetEnvironment(environment);
                 object? result = await interpreter.EvaluateAsync(_declaration.ExpressionBody);
                 // Unwrap Promise if returning a Promise from async arrow
-                if (result is SharpTSPromise promise)
-                {
-                    result = await promise.GetValueAsync();
-                }
-                return result;
+                return await SharpTSPromise.UnwrapIfPromise(result);
             }
             finally
             {
@@ -163,12 +154,7 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
             var result = await interpreter.ExecuteBlockAsync(_declaration.BlockBody, environment);
             if (result.Type == ExecutionResult.ResultType.Return)
             {
-                object? val = result.Value;
-                if (val is SharpTSPromise promise)
-                {
-                    val = await promise.GetValueAsync();
-                }
-                return val;
+                return await SharpTSPromise.UnwrapIfPromise(result.Value);
             }
             if (result.Type == ExecutionResult.ResultType.Throw)
             {

@@ -508,12 +508,15 @@ public static class PromiseBuiltIns
     /// Unwraps a result that might be a Promise.
     /// If the result is a Promise, awaits it and flattens.
     /// </summary>
+    /// <remarks>
+    /// GetValueAsync() already contains a while-loop to flatten arbitrarily nested
+    /// Promises, so we only need a single check here.
+    /// </remarks>
     private static async Task<object?> UnwrapResult(object? result)
     {
-        // Flatten nested Promises
-        while (result is SharpTSPromise promise)
+        if (result is SharpTSPromise promise)
         {
-            result = await promise.GetValueAsync();
+            return await promise.GetValueAsync();
         }
         return result;
     }
