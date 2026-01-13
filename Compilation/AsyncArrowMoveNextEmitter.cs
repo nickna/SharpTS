@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// Similar to AsyncMoveNextEmitter but handles captured variable access
 /// through the outer state machine reference.
 /// </summary>
-public partial class AsyncArrowMoveNextEmitter : ExpressionEmitterBase
+public partial class AsyncArrowMoveNextEmitter : StatementEmitterBase
 {
     private readonly AsyncArrowStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
@@ -38,6 +38,9 @@ public partial class AsyncArrowMoveNextEmitter : ExpressionEmitterBase
 
     // Non-hoisted local variables (live within a single MoveNext invocation)
     private readonly Dictionary<string, LocalBuilder> _locals = [];
+
+    // Loop label management for break/continue statements
+    private readonly Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> _loopLabels = new();
 
     // Variable resolver for hoisted fields, locals, and captured variables
     private IVariableResolver? _resolver;
@@ -128,7 +131,7 @@ public partial class AsyncArrowMoveNextEmitter : ExpressionEmitterBase
     // Note: EnsureBoxed, SetStackUnknown, SetStackType, EmitNullConstant, EmitDoubleConstant,
     // EmitBoolConstant, EmitStringConstant are inherited from ExpressionEmitterBase
 
-    private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
+    protected override void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();
@@ -159,6 +162,123 @@ public partial class AsyncArrowMoveNextEmitter : ExpressionEmitterBase
     private void EmitConvR8AndBox() => _helpers.EmitConvR8AndBox();
     private void EmitObjectEqualsBoxed() => _helpers.EmitObjectEqualsBoxed();
     private void EmitObjectNotEqualsBoxed() => _helpers.EmitObjectNotEqualsBoxed();
+
+    #endregion
+
+    #region StatementEmitterBase Abstract Implementations
+
+    protected override void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)
+        => _loopLabels.Push((breakLabel, continueLabel, labelName));
+
+    protected override void ExitLoop()
+        => _loopLabels.Pop();
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? CurrentLoop
+        => _loopLabels.Count > 0 ? _loopLabels.Peek() : null;
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? FindLabeledLoop(string labelName)
+    {
+        foreach (var loop in _loopLabels)
+            if (loop.LabelName == labelName)
+                return loop;
+        return null;
+    }
+
+    protected override LocalBuilder? DeclareLoopVariable(string name)
+    {
+        var field = _builder.GetVariableField(name);
+        if (field != null)
+            return null;
+        var local = _il.DeclareLocal(_types.Object);
+        _locals[name] = local;
+        return local;
+    }
+
+    protected override void EmitStoreLoopVariable(LocalBuilder? local, string name, Action emitValue)
+    {
+        var field = _builder.GetVariableField(name);
+        if (field != null)
+        {
+            var temp = _il.DeclareLocal(_types.Object);
+            emitValue();
+            _il.Emit(OpCodes.Stloc, temp);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, field);
+        }
+        else if (local != null)
+        {
+            emitValue();
+            _il.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    protected override void EmitVarDeclaration(Stmt.Var v)
+    {
+        if (v.Initializer != null)
+        {
+            EmitExpression(v.Initializer);
+            EnsureBoxed();
+            StoreVariable(v.Name.Lexeme);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+            StoreVariable(v.Name.Lexeme);
+        }
+    }
+
+    protected override void EmitReturn(Stmt.Return r)
+    {
+        if (r.Value != null)
+        {
+            EmitExpression(r.Value);
+            EnsureBoxed();
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+        EmitSetResult();
+        _il.Emit(OpCodes.Leave, _exitLabel);
+    }
+
+    protected override void EmitTryCatch(Stmt.TryCatch t)
+    {
+        // Simple try/catch implementation (no await-aware handling yet)
+        _il.BeginExceptionBlock();
+
+        foreach (var stmt in t.TryBlock)
+            EmitStatement(stmt);
+
+        if (t.CatchBlock != null)
+        {
+            _il.BeginCatchBlock(_types.Exception);
+            if (t.CatchParam != null)
+            {
+                var exLocal = _il.DeclareLocal(_types.Object);
+                _locals[t.CatchParam.Lexeme] = exLocal;
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
+                _il.Emit(OpCodes.Stloc, exLocal);
+            }
+            else
+            {
+                _il.Emit(OpCodes.Pop);
+            }
+
+            foreach (var stmt in t.CatchBlock)
+                EmitStatement(stmt);
+        }
+
+        if (t.FinallyBlock != null)
+        {
+            _il.BeginFinallyBlock();
+            foreach (var stmt in t.FinallyBlock)
+                EmitStatement(stmt);
+        }
+
+        _il.EndExceptionBlock();
+    }
 
     #endregion
 }
