@@ -17,6 +17,7 @@ public class GeneratorStateMachineBuilder
     private readonly TypeProvider _types;
     private TypeBuilder _stateMachineType = null!;
     private int _counter;
+    private HoistingManager _hoisting = null!;
 
     // The type being built
     public TypeBuilder StateMachineType => _stateMachineType;
@@ -25,9 +26,9 @@ public class GeneratorStateMachineBuilder
     public FieldBuilder StateField { get; private set; } = null!;
     public FieldBuilder CurrentField { get; private set; } = null!;
 
-    // Hoisted variables (become struct fields)
-    public Dictionary<string, FieldBuilder> HoistedParameters { get; } = [];
-    public Dictionary<string, FieldBuilder> HoistedLocals { get; } = [];
+    // Hoisted variables (become struct fields) - delegated to HoistingManager
+    public Dictionary<string, FieldBuilder> HoistedParameters => _hoisting.HoistedParameters;
+    public Dictionary<string, FieldBuilder> HoistedLocals => _hoisting.HoistedLocals;
 
     // 'this' field for instance generator methods
     public FieldBuilder? ThisField { get; private set; }
@@ -103,27 +104,10 @@ public class GeneratorStateMachineBuilder
         DefineStateField();
         DefineCurrentField();
 
-        // Define hoisted parameter fields
-        foreach (var paramName in analysis.HoistedParameters)
-        {
-            var field = _stateMachineType.DefineField(
-                paramName,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            HoistedParameters[paramName] = field;
-        }
-
-        // Define hoisted local fields
-        foreach (var localName in analysis.HoistedLocals)
-        {
-            var field = _stateMachineType.DefineField(
-                localName,
-                _types.Object,
-                FieldAttributes.Public
-            );
-            HoistedLocals[localName] = field;
-        }
+        // Define hoisted variables using HoistingManager
+        _hoisting = new HoistingManager(_stateMachineType, _types.Object);
+        _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
+        _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
 
         // Define 'this' field for instance methods that use 'this'
         if (isInstanceMethod && analysis.UsesThis)
@@ -347,22 +331,12 @@ public class GeneratorStateMachineBuilder
     /// <summary>
     /// Gets a field for a variable by name, checking both parameters and locals.
     /// </summary>
-    public FieldBuilder? GetVariableField(string name)
-    {
-        if (HoistedParameters.TryGetValue(name, out var paramField))
-            return paramField;
-        if (HoistedLocals.TryGetValue(name, out var localField))
-            return localField;
-        return null;
-    }
+    public FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
 
     /// <summary>
     /// Checks if a variable is hoisted to the state machine.
     /// </summary>
-    public bool IsHoisted(string name)
-    {
-        return HoistedParameters.ContainsKey(name) || HoistedLocals.ContainsKey(name);
-    }
+    public bool IsHoisted(string name) => _hoisting.IsHoisted(name);
 
     /// <summary>
     /// Finalizes the type after MoveNext body has been emitted.
