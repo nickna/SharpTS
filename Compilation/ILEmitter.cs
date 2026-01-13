@@ -31,6 +31,7 @@ namespace SharpTS.Compilation;
 public partial class ILEmitter
 {
     private readonly CompilationContext _ctx;
+    private readonly StateMachineEmitHelpers _helpers;
     private ILGenerator IL => _ctx.IL;
 
     /// <summary>
@@ -41,12 +42,18 @@ public partial class ILEmitter
     /// <summary>
     /// Current type on top of the IL evaluation stack.
     /// Used for unboxed numeric optimization.
+    /// Delegates to the shared helpers instance for consistency.
     /// </summary>
-    private StackType _stackType = StackType.Unknown;
+    private StackType _stackType
+    {
+        get => _helpers.StackType;
+        set => _helpers.StackType = value;
+    }
 
     public ILEmitter(CompilationContext ctx)
     {
         _ctx = ctx;
+        _helpers = new StateMachineEmitHelpers(ctx.IL, ctx.Types);
     }
 
     public void EmitStatement(Stmt stmt)

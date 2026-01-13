@@ -38,7 +38,7 @@ public class StateMachineEmitHelpers
         _types = types;
     }
 
-    #region Boxing
+    #region Boxing and Type Conversion
 
     /// <summary>
     /// Box the value on the stack if it's an unboxed value type (Double or Boolean).
@@ -55,6 +55,45 @@ public class StateMachineEmitHelpers
                 break;
         }
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is an unboxed double.
+    /// Only emits conversion IL if stack is not already a double.
+    /// </summary>
+    public void EnsureDouble()
+    {
+        if (_stackType != StackType.Double)
+        {
+            _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", [_types.Object]));
+            _stackType = StackType.Double;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is an unboxed boolean (int32 0 or 1).
+    /// Only emits conversion IL if stack is not already a boolean.
+    /// </summary>
+    public void EnsureBoolean()
+    {
+        if (_stackType != StackType.Boolean)
+        {
+            _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToBoolean", [_types.Object]));
+            _stackType = StackType.Boolean;
+        }
+    }
+
+    /// <summary>
+    /// Ensures the value on stack is a string.
+    /// Converts to string if not already a string.
+    /// </summary>
+    public void EnsureString()
+    {
+        if (_stackType != StackType.String)
+        {
+            _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToString", [_types.Object]));
+            _stackType = StackType.String;
+        }
     }
 
     public void EmitBoxDouble()
@@ -161,6 +200,46 @@ public class StateMachineEmitHelpers
         _stackType = StackType.Double;
     }
 
+    /// <summary>
+    /// Emits Add and boxes result.
+    /// </summary>
+    public void EmitAddAndBox()
+    {
+        _il.Emit(OpCodes.Add);
+        _il.Emit(OpCodes.Box, _types.Double);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits Sub and boxes result.
+    /// </summary>
+    public void EmitSubAndBox()
+    {
+        _il.Emit(OpCodes.Sub);
+        _il.Emit(OpCodes.Box, _types.Double);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits Mul and boxes result.
+    /// </summary>
+    public void EmitMulAndBox()
+    {
+        _il.Emit(OpCodes.Mul);
+        _il.Emit(OpCodes.Box, _types.Double);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits Div and boxes result.
+    /// </summary>
+    public void EmitDivAndBox()
+    {
+        _il.Emit(OpCodes.Div);
+        _il.Emit(OpCodes.Box, _types.Double);
+        SetStackUnknown();
+    }
+
     #endregion
 
     #region Comparison Helpers
@@ -257,15 +336,44 @@ public class StateMachineEmitHelpers
         SetStackUnknown();
     }
 
+    /// <summary>
+    /// Loads a local variable and sets stack type based on local type.
+    /// </summary>
+    public void EmitLdloc(LocalBuilder local, Type localType)
+    {
+        _il.Emit(OpCodes.Ldloc, local);
+        _stackType = _types.IsDouble(localType) ? StackType.Double
+                   : _types.IsBoolean(localType) ? StackType.Boolean
+                   : StackType.Unknown;
+    }
+
     public void EmitLdargUnknown(int argIndex)
     {
         _il.Emit(OpCodes.Ldarg, argIndex);
         SetStackUnknown();
     }
 
+    /// <summary>
+    /// Loads argument 0 (this) with Unknown stack type.
+    /// </summary>
+    public void EmitLdarg0Unknown()
+    {
+        _il.Emit(OpCodes.Ldarg_0);
+        SetStackUnknown();
+    }
+
     public void EmitLdfldUnknown(FieldInfo field)
     {
         _il.Emit(OpCodes.Ldfld, field);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Loads a static field with Unknown stack type.
+    /// </summary>
+    public void EmitLdsfldUnknown(FieldInfo field)
+    {
+        _il.Emit(OpCodes.Ldsfld, field);
         SetStackUnknown();
     }
 
