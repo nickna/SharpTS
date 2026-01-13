@@ -69,10 +69,10 @@ public partial class AssemblyReferenceRewriter
         {
             var typeSpecHandle = MetadataTokens.TypeSpecificationHandle(row);
             var typeSpec = _reader.GetTypeSpecification(typeSpecHandle);
-            var signature = _reader.GetBlobBytes(typeSpec.Signature);
+            var reader = _reader.GetBlobReader(typeSpec.Signature);
 
             // Rewrite the signature blob to use new type tokens
-            var newSignature = RewriteTypeSignature(signature);
+            var newSignature = RewriteTypeSignature(reader);
 
             var newHandle = _metadata.AddTypeSpecification(
                 _metadata.GetOrAddBlob(newSignature));

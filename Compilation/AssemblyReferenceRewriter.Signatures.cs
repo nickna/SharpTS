@@ -7,79 +7,14 @@ public partial class AssemblyReferenceRewriter
 {
     #region Signature Rewriting
 
-    /// <summary>
-    /// Simple signature reader for parsing metadata signatures.
-    /// Avoids BlobReader which requires unsafe code.
-    /// </summary>
-    private ref struct SignatureReader
+    private byte[] RewriteTypeSignature(BlobReader reader)
     {
-        private readonly ReadOnlySpan<byte> _data;
-        private int _offset;
-
-        public SignatureReader(byte[] data)
-        {
-            _data = data;
-            _offset = 0;
-        }
-
-        public int RemainingBytes => _data.Length - _offset;
-
-        public byte ReadByte()
-        {
-            return _data[_offset++];
-        }
-
-        public int ReadCompressedInteger()
-        {
-            byte b0 = _data[_offset++];
-            if ((b0 & 0x80) == 0)
-            {
-                // 1-byte encoding
-                return b0;
-            }
-            else if ((b0 & 0xC0) == 0x80)
-            {
-                // 2-byte encoding
-                byte b1 = _data[_offset++];
-                return ((b0 & 0x3F) << 8) | b1;
-            }
-            else if ((b0 & 0xE0) == 0xC0)
-            {
-                // 4-byte encoding
-                byte b1 = _data[_offset++];
-                byte b2 = _data[_offset++];
-                byte b3 = _data[_offset++];
-                return ((b0 & 0x1F) << 24) | (b1 << 16) | (b2 << 8) | b3;
-            }
-            else
-            {
-                throw new InvalidOperationException("Invalid compressed integer encoding");
-            }
-        }
-
-        public int ReadCompressedSignedInteger()
-        {
-            int value = ReadCompressedInteger();
-            // Rotate right by 1 and sign-extend
-            bool isNegative = (value & 1) != 0;
-            value >>= 1;
-            if (isNegative)
-            {
-                value = -value - 1;
-            }
-            return value;
-        }
-    }
-
-    private byte[] RewriteTypeSignature(byte[] signature)
-    {
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
         RewriteTypeSignatureCore(ref reader, builder);
         return builder.ToArray();
     }
 
-    private void RewriteTypeSignatureCore(ref SignatureReader reader, BlobBuilder builder)
+    private void RewriteTypeSignatureCore(ref BlobReader reader, BlobBuilder builder)
     {
         var typeCode = reader.ReadCompressedInteger();
         builder.WriteCompressedInteger(typeCode);
@@ -249,12 +184,11 @@ public partial class AssemblyReferenceRewriter
         return (newRow << 2) | newTag;
     }
 
-    private byte[] RewriteMethodOrFieldSignature(byte[] signature)
+    private byte[] RewriteMethodOrFieldSignature(BlobReader reader)
     {
-        if (signature.Length == 0)
-            return signature;
+        if (reader.Length == 0)
+            return [];
 
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
 
         var header = reader.ReadByte();
@@ -275,25 +209,24 @@ public partial class AssemblyReferenceRewriter
         return builder.ToArray();
     }
 
-    private byte[] RewriteMethodSignature(byte[] signature)
+    private byte[] RewriteMethodSignature(BlobReader reader)
     {
-        if (signature.Length == 0)
-            return signature;
+        if (reader.Length == 0)
+            return [];
 
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
         RewriteMethodSignatureCore(ref reader, builder);
         return builder.ToArray();
     }
 
-    private void RewriteMethodSignatureCore(ref SignatureReader reader, BlobBuilder builder)
+    private void RewriteMethodSignatureCore(ref BlobReader reader, BlobBuilder builder)
     {
         var header = reader.ReadByte();
         builder.WriteByte(header);
         RewriteMethodSignatureAfterHeader(ref reader, builder, header);
     }
 
-    private void RewriteMethodSignatureAfterHeader(ref SignatureReader reader, BlobBuilder builder, byte header)
+    private void RewriteMethodSignatureAfterHeader(ref BlobReader reader, BlobBuilder builder, byte header)
     {
         // Generic parameter count
         if ((header & 0x10) != 0) // GENERIC
@@ -316,12 +249,11 @@ public partial class AssemblyReferenceRewriter
         }
     }
 
-    private byte[] RewriteFieldSignature(byte[] signature)
+    private byte[] RewriteFieldSignature(BlobReader reader)
     {
-        if (signature.Length == 0)
-            return signature;
+        if (reader.Length == 0)
+            return [];
 
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
 
         var header = reader.ReadByte();
@@ -333,12 +265,11 @@ public partial class AssemblyReferenceRewriter
         return builder.ToArray();
     }
 
-    private byte[] RewriteMethodSpecSignature(byte[] signature)
+    private byte[] RewriteMethodSpecSignature(BlobReader reader)
     {
-        if (signature.Length == 0)
-            return signature;
+        if (reader.Length == 0)
+            return [];
 
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
 
         var header = reader.ReadByte();
@@ -357,12 +288,11 @@ public partial class AssemblyReferenceRewriter
         return builder.ToArray();
     }
 
-    private byte[] RewriteLocalVarsSignature(byte[] signature)
+    private byte[] RewriteLocalVarsSignature(BlobReader reader)
     {
-        if (signature.Length == 0)
-            return signature;
+        if (reader.Length == 0)
+            return [];
 
-        var reader = new SignatureReader(signature);
         var builder = new BlobBuilder();
 
         var header = reader.ReadByte();

@@ -11,13 +11,13 @@ public partial class AssemblyReferenceRewriter
         {
             var memberRef = _reader.GetMemberReference(memberRefHandle);
             var name = _reader.GetString(memberRef.Name);
-            var signature = _reader.GetBlobBytes(memberRef.Signature);
+            var reader = _reader.GetBlobReader(memberRef.Signature);
 
             // Map the parent
             var newParent = MapEntityHandle(memberRef.Parent);
 
             // Rewrite the signature
-            var newSignature = RewriteMethodOrFieldSignature(signature);
+            var newSignature = RewriteMethodOrFieldSignature(reader);
 
             var newHandle = _metadata.AddMemberReference(
                 newParent,
@@ -36,13 +36,13 @@ public partial class AssemblyReferenceRewriter
         {
             var methodSpecHandle = MetadataTokens.MethodSpecificationHandle(row);
             var methodSpec = _reader.GetMethodSpecification(methodSpecHandle);
-            var signature = _reader.GetBlobBytes(methodSpec.Signature);
+            var reader = _reader.GetBlobReader(methodSpec.Signature);
 
             // Map the method
             var newMethod = MapEntityHandle(methodSpec.Method);
 
             // Rewrite the instantiation signature
-            var newSignature = RewriteMethodSpecSignature(signature);
+            var newSignature = RewriteMethodSpecSignature(reader);
 
             var newHandle = _metadata.AddMethodSpecification(
                 newMethod,
@@ -139,8 +139,8 @@ public partial class AssemblyReferenceRewriter
     private void CopyFieldDefinition(FieldDefinitionHandle fieldHandle)
     {
         var field = _reader.GetFieldDefinition(fieldHandle);
-        var signature = _reader.GetBlobBytes(field.Signature);
-        var newSignature = RewriteFieldSignature(signature);
+        var reader = _reader.GetBlobReader(field.Signature);
+        var newSignature = RewriteFieldSignature(reader);
 
         var newHandle = _metadata.AddFieldDefinition(
             field.Attributes,
@@ -207,8 +207,8 @@ public partial class AssemblyReferenceRewriter
     private void CopyMethodDefinition(MethodDefinitionHandle methodHandle)
     {
         var method = _reader.GetMethodDefinition(methodHandle);
-        var signature = _reader.GetBlobBytes(method.Signature);
-        var newSignature = RewriteMethodSignature(signature);
+        var reader = _reader.GetBlobReader(method.Signature);
+        var newSignature = RewriteMethodSignature(reader);
 
         // Get IL body offset if present
         int bodyOffset = -1;
@@ -280,8 +280,8 @@ public partial class AssemblyReferenceRewriter
                 continue;
 
             var sig = _reader.GetStandaloneSignature(sigHandle);
-            var sigBytes = _reader.GetBlobBytes(sig.Signature);
-            var newSigBytes = RewriteLocalVarsSignature(sigBytes);
+            var reader = _reader.GetBlobReader(sig.Signature);
+            var newSigBytes = RewriteLocalVarsSignature(reader);
 
             var newHandle = _metadata.AddStandaloneSignature(_metadata.GetOrAddBlob(newSigBytes));
             _standAloneSigMap[sigHandle] = newHandle;

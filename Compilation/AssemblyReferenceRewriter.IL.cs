@@ -27,8 +27,8 @@ public partial class AssemblyReferenceRewriter
             {
                 // Copy the standalone signature now
                 var sig = _reader.GetStandaloneSignature(body.LocalSignature);
-                var sigBytes = _reader.GetBlobBytes(sig.Signature);
-                var newSigBytes = RewriteLocalVarsSignature(sigBytes);
+                var reader = _reader.GetBlobReader(sig.Signature);
+                var newSigBytes = RewriteLocalVarsSignature(reader);
                 localSig = _metadata.AddStandaloneSignature(_metadata.GetOrAddBlob(newSigBytes));
                 _standAloneSigMap[body.LocalSignature] = localSig;
             }
