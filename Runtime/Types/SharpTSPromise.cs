@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -6,6 +8,11 @@ namespace SharpTS.Runtime.Types;
 /// <remarks>
 /// Wraps a .NET Task&lt;object?&gt; to provide Promise semantics in the interpreter.
 /// Supports automatic Promise flattening - Promise&lt;Promise&lt;T&gt;&gt; becomes Promise&lt;T&gt;.
+///
+/// IMPORTANT: Callers should NOT double-wrap Promises. If you're creating a Promise
+/// from a value that might already be a Promise, use SharpTSPromise.Resolve() which
+/// handles flattening. Direct constructor calls with Task&lt;SharpTSPromise&gt; will
+/// trigger a debug assertion.
 /// </remarks>
 public class SharpTSPromise
 {
@@ -14,9 +21,23 @@ public class SharpTSPromise
     /// <summary>
     /// Creates a Promise wrapping an existing Task.
     /// </summary>
+    /// <remarks>
+    /// The task's result should NOT be a SharpTSPromise - this would create
+    /// double-wrapping which causes infinite loops in async iterators.
+    /// Use SharpTSPromise.Resolve() for values that might already be Promises.
+    /// </remarks>
     public SharpTSPromise(Task<object?> task)
     {
         _task = task ?? throw new ArgumentNullException(nameof(task));
+
+        // Debug assertion to catch double-wrapping bugs early.
+        // If this fires, the caller is wrapping a Promise in another Promise,
+        // which will cause infinite loops when awaited (the inner Promise
+        // is returned instead of the actual value).
+        Debug.Assert(
+            !task.IsCompletedSuccessfully || task.Result is not SharpTSPromise,
+            "Double-wrapped Promise detected! The task's result is already a SharpTSPromise. " +
+            "Use SharpTSPromise.Resolve() instead of the constructor to handle Promise flattening.");
     }
 
     /// <summary>

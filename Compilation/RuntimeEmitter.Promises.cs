@@ -145,8 +145,10 @@ public partial class RuntimeEmitter
         var taskType = _types.TaskOfObject;
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
 
-        // Promise.resolve(value?) - simply wraps value in completed Task
-        // IL equivalent: Task.FromResult<object?>(value)
+        // Promise.resolve(value?) - wraps value in completed Task, flattening if already a Task
+        // IL equivalent:
+        //   if (value is Task<object?> task) return task;
+        //   return Task.FromResult<object?>(value);
         var resolve = typeBuilder.DefineMethod(
             "PromiseResolve",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -156,6 +158,22 @@ public partial class RuntimeEmitter
         runtime.PromiseResolve = resolve;
         {
             var il = resolve.GetILGenerator();
+            var notTaskLabel = il.DefineLabel();
+            var taskLocal = il.DeclareLocal(taskType);
+
+            // Check if value is already a Task<object?>
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, taskType);
+            il.Emit(OpCodes.Stloc, taskLocal);
+            il.Emit(OpCodes.Ldloc, taskLocal);
+            il.Emit(OpCodes.Brfalse, notTaskLabel);
+
+            // It's a Task<object?>, return it directly (flattening)
+            il.Emit(OpCodes.Ldloc, taskLocal);
+            il.Emit(OpCodes.Ret);
+
+            // Not a Task, wrap in Task.FromResult
+            il.MarkLabel(notTaskLabel);
             il.Emit(OpCodes.Ldarg_0);
             // Call Task.FromResult<object?>(value) - keep typeof() for generic method lookup
             var fromResult = typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(_types.Object);

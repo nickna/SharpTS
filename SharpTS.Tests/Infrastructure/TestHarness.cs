@@ -15,6 +15,11 @@ namespace SharpTS.Tests.Infrastructure;
 public static class TestHarness
 {
     /// <summary>
+    /// Default timeout for test execution (30 seconds).
+    /// Async iterator bugs can cause infinite loops - this ensures tests fail fast.
+    /// </summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+    /// <summary>
     /// Lock to prevent concurrent Console.Out/Error manipulation across parallel tests.
     /// Any test that redirects Console.Out or Console.Error should acquire this lock.
     /// </summary>
@@ -22,70 +27,143 @@ public static class TestHarness
 
     /// <summary>
     /// Runs TypeScript source through the interpreter and captures console output.
+    /// Uses default timeout to prevent infinite loops from hanging tests.
     /// </summary>
     /// <param name="source">TypeScript source code</param>
     /// <returns>Captured console output</returns>
     public static string RunInterpreted(string source)
     {
-        return RunInterpreted(source, DecoratorMode.None);
+        return RunInterpreted(source, DecoratorMode.None, DefaultTimeout);
+    }
+
+    /// <summary>
+    /// Runs TypeScript source through the interpreter with a timeout.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="timeout">Maximum execution time before throwing TimeoutException</param>
+    /// <returns>Captured console output</returns>
+    public static string RunInterpreted(string source, TimeSpan timeout)
+    {
+        return RunInterpreted(source, DecoratorMode.None, timeout);
     }
 
     /// <summary>
     /// Runs TypeScript source through the interpreter with decorator support and captures console output.
+    /// Uses default timeout.
+    /// </summary>
+    public static string RunInterpreted(string source, DecoratorMode decoratorMode)
+    {
+        return RunInterpreted(source, decoratorMode, DefaultTimeout);
+    }
+
+    /// <summary>
+    /// Runs TypeScript source through the interpreter with decorator support and timeout.
     /// </summary>
     /// <param name="source">TypeScript source code</param>
     /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <param name="timeout">Maximum execution time before throwing TimeoutException</param>
     /// <returns>Captured console output</returns>
-    public static string RunInterpreted(string source, DecoratorMode decoratorMode)
+    /// <exception cref="TimeoutException">Thrown if execution exceeds the timeout (likely an infinite loop bug)</exception>
+    public static string RunInterpreted(string source, DecoratorMode decoratorMode, TimeSpan timeout)
     {
-        lock (ConsoleLock)
+        // Run interpretation in a task so we can enforce a timeout.
+        // This catches infinite loop bugs (e.g., Promise double-wrapping in async iterators).
+        var task = Task.Run(() =>
         {
-            var sw = new StringWriter();
-            var originalOut = Console.Out;
-            Console.SetOut(sw);
-
-            try
+            lock (ConsoleLock)
             {
-                var lexer = new Lexer(source);
-                var tokens = lexer.ScanTokens();
-                var parser = new Parser(tokens, decoratorMode);
-                var statements = parser.Parse();
+                var sw = new StringWriter();
+                var originalOut = Console.Out;
+                Console.SetOut(sw);
 
-                var checker = new TypeChecker();
-                checker.SetDecoratorMode(decoratorMode);
-                var typeMap = checker.Check(statements);
+                try
+                {
+                    var lexer = new Lexer(source);
+                    var tokens = lexer.ScanTokens();
+                    var parser = new Parser(tokens, decoratorMode);
+                    var statements = parser.Parse();
 
-                var interpreter = new Interpreter();
-                interpreter.SetDecoratorMode(decoratorMode);
-                interpreter.Interpret(statements, typeMap);
+                    var checker = new TypeChecker();
+                    checker.SetDecoratorMode(decoratorMode);
+                    var typeMap = checker.Check(statements);
 
-                // Normalize line endings for cross-platform test consistency
-                return sw.ToString().Replace("\r\n", "\n");
+                    var interpreter = new Interpreter();
+                    interpreter.SetDecoratorMode(decoratorMode);
+                    interpreter.Interpret(statements, typeMap);
+
+                    // Normalize line endings for cross-platform test consistency
+                    return sw.ToString().Replace("\r\n", "\n");
+                }
+                finally
+                {
+                    Console.SetOut(originalOut);
+                }
             }
-            finally
+        });
+
+        try
+        {
+            if (task.Wait(timeout))
             {
-                Console.SetOut(originalOut);
+                return task.Result;
             }
+
+            throw new TimeoutException(
+                $"Interpreter execution exceeded {timeout.TotalSeconds}s timeout. " +
+                "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
+        }
+        catch (AggregateException ex)
+        {
+            // Unwrap AggregateException to preserve original exception type for tests
+            // that use Assert.Throws<SpecificExceptionType>
+            if (ex.InnerExceptions.Count == 1)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException!).Throw();
+            }
+            throw;
         }
     }
 
     /// <summary>
     /// Compiles TypeScript source to a .NET DLL, executes it, and captures output.
+    /// Uses default timeout to prevent infinite loops from hanging tests.
     /// </summary>
     /// <param name="source">TypeScript source code</param>
     /// <returns>Captured console output from the compiled executable</returns>
     public static string RunCompiled(string source)
     {
-        return RunCompiled(source, DecoratorMode.None);
+        return RunCompiled(source, DecoratorMode.None, DefaultTimeout);
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source to a .NET DLL with a timeout, executes it, and captures output.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="timeout">Maximum execution time before throwing TimeoutException</param>
+    /// <returns>Captured console output from the compiled executable</returns>
+    public static string RunCompiled(string source, TimeSpan timeout)
+    {
+        return RunCompiled(source, DecoratorMode.None, timeout);
     }
 
     /// <summary>
     /// Compiles TypeScript source to a .NET DLL with decorator support, executes it, and captures output.
+    /// Uses default timeout.
+    /// </summary>
+    public static string RunCompiled(string source, DecoratorMode decoratorMode)
+    {
+        return RunCompiled(source, decoratorMode, DefaultTimeout);
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source to a .NET DLL with decorator support and timeout, executes it, and captures output.
     /// </summary>
     /// <param name="source">TypeScript source code</param>
     /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <param name="timeout">Maximum execution time before throwing TimeoutException</param>
     /// <returns>Captured console output from the compiled executable</returns>
-    public static string RunCompiled(string source, DecoratorMode decoratorMode)
+    /// <exception cref="TimeoutException">Thrown if execution exceeds the timeout (likely an infinite loop bug)</exception>
+    public static string RunCompiled(string source, DecoratorMode decoratorMode, TimeSpan timeout)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
@@ -145,7 +223,15 @@ public static class TestHarness
             using var process = Process.Start(psi)!;
             var output = process.StandardOutput.ReadToEnd();
             var error = process.StandardError.ReadToEnd();
-            process.WaitForExit();
+
+            // Use timeout to catch infinite loop bugs
+            if (!process.WaitForExit((int)timeout.TotalMilliseconds))
+            {
+                process.Kill();
+                throw new TimeoutException(
+                    $"Compiled program execution exceeded {timeout.TotalSeconds}s timeout. " +
+                    "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
+            }
 
             if (process.ExitCode != 0)
             {

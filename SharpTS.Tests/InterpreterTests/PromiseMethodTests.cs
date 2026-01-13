@@ -334,6 +334,93 @@ public class PromiseMethodTests
         Assert.Equal("null\n", output);
     }
 
+    /// <summary>
+    /// Regression test: Nested Promise.resolve must flatten correctly.
+    /// Previously, this caused double-wrapping: Promise(Task(Promise(Task(value))))
+    /// which led to infinite loops in async iterators.
+    /// </summary>
+    [Fact]
+    public void Resolve_NestedPromiseResolve_Flattens()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let innerPromise = Promise.resolve(42);
+                let outerPromise = Promise.resolve(innerPromise);
+                let result = await outerPromise;
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("42\n", output);
+    }
+
+    /// <summary>
+    /// Regression test: Triple-nested Promise.resolve must flatten correctly.
+    /// </summary>
+    [Fact]
+    public void Resolve_TripleNestedPromise_Flattens()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p1 = Promise.resolve(100);
+                let p2 = Promise.resolve(p1);
+                let p3 = Promise.resolve(p2);
+                let result = await p3;
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n", output);
+    }
+
+    /// <summary>
+    /// Regression test: Promise.resolve with object containing done:true.
+    /// This is the exact pattern that caused infinite loops in async iterators
+    /// when the iterator result object was double-wrapped.
+    /// </summary>
+    [Fact]
+    public void Resolve_IteratorResultObject_NotDoubleWrapped()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let iterResult = { value: 42, done: true };
+                let p = Promise.resolve(iterResult);
+                let result = await p;
+                console.log(result.value);
+                console.log(result.done);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("42\ntrue\n", output);
+    }
+
+    /// <summary>
+    /// Regression test: Async function returning Promise.resolve should not double-wrap.
+    /// </summary>
+    [Fact]
+    public void Resolve_FromAsyncFunction_NotDoubleWrapped()
+    {
+        var source = """
+            async function getValue(): Promise<number> {
+                return await Promise.resolve(99);
+            }
+            async function main(): Promise<void> {
+                let result = await getValue();
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("99\n", output);
+    }
+
     #endregion
 
     #region Promise.reject() Tests

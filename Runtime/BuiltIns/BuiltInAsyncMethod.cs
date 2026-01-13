@@ -8,6 +8,22 @@ namespace SharpTS.Runtime.BuiltIns;
 /// Callable wrapper for native C# async implementations of built-in methods.
 /// Used by Promise methods that must return Promises.
 /// </summary>
+/// <remarks>
+/// PROMISE WRAPPING CONTRACT:
+///
+/// This wrapper automatically wraps the implementation's result in a SharpTSPromise.
+/// Therefore, implementation functions should return RAW VALUES, not Promises.
+///
+/// ✓ CORRECT: Implementation returns Task&lt;object?&gt; containing the raw value
+///   Example: Task.FromResult(42) → Call() returns SharpTSPromise(Task&lt;42&gt;)
+///
+/// ✗ WRONG: Implementation returns Task&lt;SharpTSPromise&gt;
+///   This causes double-wrapping: SharpTSPromise(Task&lt;SharpTSPromise(Task&lt;value&gt;)&gt;)
+///   which leads to infinite loops when awaited in async iterators.
+///
+/// For Promise.reject(), throw SharpTSPromiseRejectedException instead of
+/// returning a rejected Promise - the catch block will create the rejected Promise.
+/// </remarks>
 public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
 {
     private readonly string _name;
