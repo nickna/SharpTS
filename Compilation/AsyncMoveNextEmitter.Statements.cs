@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitStatement(Stmt stmt)
+    public override void EmitStatement(Stmt stmt)
     {
         switch (stmt)
         {

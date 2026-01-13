@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncGeneratorMoveNextEmitter
 {
-    private void EmitStatement(Stmt stmt)
+    public override void EmitStatement(Stmt stmt)
     {
         switch (stmt)
         {
@@ -87,7 +87,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitVarDeclaration(Stmt.Var v)
+    protected override void EmitVarDeclaration(Stmt.Var v)
     {
         string name = v.Name.Lexeme;
 
@@ -130,7 +130,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitReturn(Stmt.Return r)
+    protected override void EmitReturn(Stmt.Return r)
     {
         // Async generator return - store return value in Current and set state to completed
         // The return value will be available in the {value: returnValue, done: true} result
@@ -150,7 +150,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         EmitReturnValueTaskBool(false);
     }
 
-    private void EmitIf(Stmt.If i)
+    protected override void EmitIf(Stmt.If i)
     {
         var elseLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -170,7 +170,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.MarkLabel(endLabel);
     }
 
-    private void EmitWhile(Stmt.While w)
+    protected override void EmitWhile(Stmt.While w)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -193,7 +193,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitForOf(Stmt.ForOf f)
+    protected override void EmitForOf(Stmt.ForOf f)
     {
         if (f.IsAsync)
         {
@@ -343,14 +343,14 @@ public partial class AsyncGeneratorMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitPrint(Stmt.Print p)
+    protected override void EmitPrint(Stmt.Print p)
     {
         EmitExpression(p.Expr);
         EnsureBoxed();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
     }
 
-    private void EmitDoWhile(Stmt.DoWhile dw)
+    protected override void EmitDoWhile(Stmt.DoWhile dw)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -372,7 +372,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitForIn(Stmt.ForIn f)
+    protected override void EmitForIn(Stmt.ForIn f)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -440,7 +440,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitThrow(Stmt.Throw t)
+    protected override void EmitThrow(Stmt.Throw t)
     {
         EmitExpression(t.Value);
         EnsureBoxed();
@@ -448,7 +448,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Throw);
     }
 
-    private void EmitSwitch(Stmt.Switch s)
+    protected override void EmitSwitch(Stmt.Switch s)
     {
         var endLabel = _il.DefineLabel();
         var defaultLabel = _il.DefineLabel();
@@ -500,7 +500,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.MarkLabel(endLabel);
     }
 
-    private void EmitTryCatch(Stmt.TryCatch t)
+    protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         _il.BeginExceptionBlock();
 
@@ -537,7 +537,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.EndExceptionBlock();
     }
 
-    private void EmitBreak(Stmt.Break b)
+    protected override void EmitBreak(Stmt.Break b)
     {
         if (b.Label != null)
         {
@@ -556,7 +556,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitContinue(Stmt.Continue c)
+    protected override void EmitContinue(Stmt.Continue c)
     {
         if (c.Label != null)
         {
@@ -575,7 +575,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitLabeledStatement(Stmt.LabeledStatement ls)
+    protected override void EmitLabeledStatement(Stmt.LabeledStatement ls)
     {
         var breakLabel = _il.DefineLabel();
         _loopLabels.Push((breakLabel, breakLabel, ls.Label.Lexeme));

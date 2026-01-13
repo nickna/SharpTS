@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// Emits the MoveNextAsync method body for an async generator state machine.
 /// Handles state dispatch, yield points, await points, and generator completion.
 /// </summary>
-public partial class AsyncGeneratorMoveNextEmitter : ExpressionEmitterBase
+public partial class AsyncGeneratorMoveNextEmitter : StatementEmitterBase
 {
     private readonly AsyncGeneratorStateMachineBuilder _builder;
     private readonly AsyncGeneratorStateAnalyzer.AsyncGeneratorFunctionAnalysis _analysis;
@@ -45,6 +45,63 @@ public partial class AsyncGeneratorMoveNextEmitter : ExpressionEmitterBase
         _il = builder.MoveNextAsyncMethod.GetILGenerator();
         _types = types;
     }
+
+    #region StatementEmitterBase Abstract Implementations - Loop Labels
+
+    protected override void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)
+        => _loopLabels.Push((breakLabel, continueLabel, labelName));
+
+    protected override void ExitLoop()
+        => _loopLabels.Pop();
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? CurrentLoop
+        => _loopLabels.Count > 0 ? _loopLabels.Peek() : null;
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? FindLabeledLoop(string labelName)
+    {
+        foreach (var loop in _loopLabels)
+        {
+            if (loop.LabelName == labelName)
+                return loop;
+        }
+        return null;
+    }
+
+    #endregion
+
+    #region StatementEmitterBase Virtual Overrides
+
+    protected override void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
+
+    protected override LocalBuilder? DeclareLoopVariable(string name)
+    {
+        var varField = _builder.GetVariableField(name);
+        if (varField != null) return null; // Hoisted field
+        var local = _il.DeclareLocal(typeof(object));
+        _ctx!.Locals.RegisterLocal(name, local);
+        return local;
+    }
+
+    protected override void EmitStoreLoopVariable(LocalBuilder? local, string name, Action emitValue)
+    {
+        var varField = _builder.GetVariableField(name);
+        if (varField != null)
+        {
+            var temp = _il.DeclareLocal(typeof(object));
+            emitValue();
+            _il.Emit(OpCodes.Stloc, temp);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, varField);
+        }
+        else if (local != null)
+        {
+            emitValue();
+            _il.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Emits the complete MoveNextAsync method body.
@@ -154,8 +211,8 @@ public partial class AsyncGeneratorMoveNextEmitter : ExpressionEmitterBase
 
     // Note: EnsureBoxed, SetStackUnknown, SetStackType, EmitNullConstant, EmitDoubleConstant,
     // EmitBoolConstant, EmitStringConstant are inherited from ExpressionEmitterBase
+    // EmitTruthyCheck is now overridden from StatementEmitterBase
 
-    private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();

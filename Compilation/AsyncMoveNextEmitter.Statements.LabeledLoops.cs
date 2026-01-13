@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitLabeledStatement(Stmt.LabeledStatement ls)
+    protected override void EmitLabeledStatement(Stmt.LabeledStatement ls)
     {
         // For a labeled statement, we need to:
         // 1. If the inner statement is a loop, add the label name to the loop's entry

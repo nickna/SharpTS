@@ -28,7 +28,7 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="ILCompiler"/>
 /// <seealso cref="CompilationContext"/>
-public partial class ILEmitter : ExpressionEmitterBase
+public partial class ILEmitter : StatementEmitterBase
 {
     private readonly CompilationContext _ctx;
     private readonly LocalVariableResolver _resolver;
@@ -62,7 +62,44 @@ public partial class ILEmitter : ExpressionEmitterBase
         _resolver = new LocalVariableResolver(ctx.IL, ctx, ctx.Types);
     }
 
-    public void EmitStatement(Stmt stmt)
+    #region StatementEmitterBase Abstract Implementations - Loop Labels
+
+    protected override void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)
+        => _ctx.EnterLoop(breakLabel, continueLabel, labelName);
+
+    protected override void ExitLoop()
+        => _ctx.ExitLoop();
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? CurrentLoop
+        => _ctx.CurrentLoop;
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? FindLabeledLoop(string labelName)
+        => _ctx.FindLabeledLoop(labelName);
+
+    #endregion
+
+    #region StatementEmitterBase Overrides
+
+    protected override bool IsDead(Stmt stmt)
+        => _ctx.DeadCode?.IsDead(stmt) == true;
+
+    protected override void EmitBranchToLabel(Label target)
+    {
+        // Use Leave instead of Br when inside exception blocks
+        if (_ctx.ExceptionBlockDepth > 0)
+            IL.Emit(OpCodes.Leave, target);
+        else
+            IL.Emit(OpCodes.Br, target);
+    }
+
+    protected override LocalBuilder? DeclareLoopVariable(string name)
+    {
+        return _ctx.Locals.DeclareLocal(name, _ctx.Types.Object);
+    }
+
+    #endregion
+
+    public override void EmitStatement(Stmt stmt)
     {
         // Skip dead statements (unreachable code)
         if (_ctx.DeadCode?.IsDead(stmt) == true)
@@ -115,11 +152,11 @@ public partial class ILEmitter : ExpressionEmitterBase
                 break;
 
             case Stmt.Break breakStmt:
-                EmitBreak(breakStmt.Label?.Lexeme);
+                EmitBreak(breakStmt);
                 break;
 
             case Stmt.Continue continueStmt:
-                EmitContinue(continueStmt.Label?.Lexeme);
+                EmitContinue(continueStmt);
                 break;
 
             case Stmt.LabeledStatement labeledStmt:

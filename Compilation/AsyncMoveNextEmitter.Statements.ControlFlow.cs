@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitReturn(Stmt.Return r)
+    protected override void EmitReturn(Stmt.Return r)
     {
         if (r.Value != null)
         {
@@ -31,7 +31,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Leave, _setResultLabel);
     }
 
-    private void EmitIf(Stmt.If i)
+    protected override void EmitIf(Stmt.If i)
     {
         var elseLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -51,7 +51,7 @@ public partial class AsyncMoveNextEmitter
         _il.MarkLabel(endLabel);
     }
 
-    private void EmitBreak(Stmt.Break b)
+    protected override void EmitBreak(Stmt.Break b)
     {
         if (b.Label != null)
         {
@@ -73,7 +73,7 @@ public partial class AsyncMoveNextEmitter
         }
     }
 
-    private void EmitContinue(Stmt.Continue c)
+    protected override void EmitContinue(Stmt.Continue c)
     {
         if (c.Label != null)
         {

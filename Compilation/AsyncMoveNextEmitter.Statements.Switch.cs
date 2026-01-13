@@ -6,14 +6,14 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitPrint(Stmt.Print p)
+    protected override void EmitPrint(Stmt.Print p)
     {
         EmitExpression(p.Expr);
         EnsureBoxed();
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
     }
 
-    private void EmitThrow(Stmt.Throw t)
+    protected override void EmitThrow(Stmt.Throw t)
     {
         EmitExpression(t.Value);
         EnsureBoxed();
@@ -21,7 +21,7 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Throw);
     }
 
-    private void EmitSwitch(Stmt.Switch s)
+    protected override void EmitSwitch(Stmt.Switch s)
     {
         var endLabel = _il.DefineLabel();
         var defaultLabel = _il.DefineLabel();

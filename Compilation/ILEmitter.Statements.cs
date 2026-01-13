@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitVarDeclaration(Stmt.Var v)
+    protected override void EmitVarDeclaration(Stmt.Var v)
     {
         // Check if this is a top-level variable captured by async functions
         // These use static fields instead of locals so async state machines can access them
@@ -84,7 +84,7 @@ public partial class ILEmitter
         return true;
     }
 
-    private void EmitIf(Stmt.If i)
+    protected override void EmitIf(Stmt.If i)
     {
         // Check for dead code elimination optimization
         var branchResult = _ctx.DeadCode?.GetIfResult(i) ?? IfBranchResult.BothReachable;
@@ -144,7 +144,7 @@ public partial class ILEmitter
         IL.MarkLabel(endLabel);
     }
 
-    private void EmitWhile(Stmt.While w)
+    protected override void EmitWhile(Stmt.While w)
     {
         var startLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -182,7 +182,7 @@ public partial class ILEmitter
         _ctx.ExitLoop();
     }
 
-    private void EmitDoWhile(Stmt.DoWhile dw)
+    protected override void EmitDoWhile(Stmt.DoWhile dw)
     {
         var startLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -225,7 +225,7 @@ public partial class ILEmitter
         _ctx.ExitLoop();
     }
 
-    private void EmitForOf(Stmt.ForOf f)
+    protected override void EmitForOf(Stmt.ForOf f)
     {
         _ctx.Locals.EnterScope();
 
@@ -427,7 +427,7 @@ public partial class ILEmitter
         _ctx.ExitLoop();
     }
 
-    private void EmitForIn(Stmt.ForIn f)
+    protected override void EmitForIn(Stmt.ForIn f)
     {
         var startLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -483,7 +483,7 @@ public partial class ILEmitter
         _ctx.ExitLoop();
     }
 
-    private void EmitBlock(Stmt.Block b)
+    protected override void EmitBlock(Stmt.Block b)
     {
         _ctx.Locals.EnterScope();
         foreach (var stmt in b.Statements)
@@ -493,7 +493,7 @@ public partial class ILEmitter
         _ctx.Locals.ExitScope();
     }
 
-    private void EmitReturn(Stmt.Return r)
+    protected override void EmitReturn(Stmt.Return r)
     {
         if (r.Value != null)
         {
@@ -522,39 +522,27 @@ public partial class ILEmitter
         }
     }
 
-    private void EmitBreak(string? labelName = null)
+    protected override void EmitBreak(Stmt.Break b)
     {
-        var loop = labelName != null
-            ? _ctx.FindLabeledLoop(labelName)
-            : _ctx.CurrentLoop;
+        var loop = b.Label != null
+            ? FindLabeledLoop(b.Label.Lexeme)
+            : CurrentLoop;
 
         if (loop != null)
-        {
-            // Use Leave instead of Br when inside exception blocks
-            if (_ctx.ExceptionBlockDepth > 0)
-                IL.Emit(OpCodes.Leave, loop.Value.BreakLabel);
-            else
-                IL.Emit(OpCodes.Br, loop.Value.BreakLabel);
-        }
+            EmitBranchToLabel(loop.Value.BreakLabel);
     }
 
-    private void EmitContinue(string? labelName = null)
+    protected override void EmitContinue(Stmt.Continue c)
     {
-        var loop = labelName != null
-            ? _ctx.FindLabeledLoop(labelName)
-            : _ctx.CurrentLoop;
+        var loop = c.Label != null
+            ? FindLabeledLoop(c.Label.Lexeme)
+            : CurrentLoop;
 
         if (loop != null)
-        {
-            // Use Leave instead of Br when inside exception blocks
-            if (_ctx.ExceptionBlockDepth > 0)
-                IL.Emit(OpCodes.Leave, loop.Value.ContinueLabel);
-            else
-                IL.Emit(OpCodes.Br, loop.Value.ContinueLabel);
-        }
+            EmitBranchToLabel(loop.Value.ContinueLabel);
     }
 
-    private void EmitLabeledStatement(Stmt.LabeledStatement labeledStmt)
+    protected override void EmitLabeledStatement(Stmt.LabeledStatement labeledStmt)
     {
         string labelName = labeledStmt.Label.Lexeme;
         var breakLabel = IL.DefineLabel();
@@ -583,7 +571,7 @@ public partial class ILEmitter
         IL.MarkLabel(breakLabel);
     }
 
-    private void EmitSwitch(Stmt.Switch s)
+    protected override void EmitSwitch(Stmt.Switch s)
     {
         // Check for exhaustive switch optimization
         var switchAnalysis = _ctx.DeadCode?.GetSwitchResult(s);
@@ -630,7 +618,7 @@ public partial class ILEmitter
                     if (breakStmt.Label != null)
                     {
                         // Labeled break - find and jump to the labeled target
-                        EmitBreak(breakStmt.Label.Lexeme);
+                        EmitBreak(breakStmt);
                     }
                     else
                     {
@@ -657,7 +645,7 @@ public partial class ILEmitter
                     if (breakStmt.Label != null)
                     {
                         // Labeled break - find and jump to the labeled target
-                        EmitBreak(breakStmt.Label.Lexeme);
+                        EmitBreak(breakStmt);
                     }
                     else
                     {
@@ -675,7 +663,7 @@ public partial class ILEmitter
         IL.MarkLabel(endLabel);
     }
 
-    private void EmitTryCatch(Stmt.TryCatch t)
+    protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         _ctx.ExceptionBlockDepth++;
 
@@ -722,7 +710,7 @@ public partial class ILEmitter
         _ctx.ExceptionBlockDepth--;
     }
 
-    private void EmitThrow(Stmt.Throw t)
+    protected override void EmitThrow(Stmt.Throw t)
     {
         EmitExpression(t.Value);
         EmitBoxIfNeeded(t.Value);
@@ -730,7 +718,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Throw);
     }
 
-    private void EmitPrint(Stmt.Print p)
+    protected override void EmitPrint(Stmt.Print p)
     {
         EmitExpression(p.Expr);
         EmitBoxIfNeeded(p.Expr);

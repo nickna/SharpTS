@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitWhile(Stmt.While w)
+    protected override void EmitWhile(Stmt.While w)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -30,7 +30,7 @@ public partial class AsyncMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitForOf(Stmt.ForOf f)
+    protected override void EmitForOf(Stmt.ForOf f)
     {
         if (f.IsAsync)
         {
@@ -305,7 +305,7 @@ public partial class AsyncMoveNextEmitter
         _il.MarkLabel(afterLoopLabel);
     }
 
-    private void EmitDoWhile(Stmt.DoWhile dw)
+    protected override void EmitDoWhile(Stmt.DoWhile dw)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -331,7 +331,7 @@ public partial class AsyncMoveNextEmitter
         _loopLabels.Pop();
     }
 
-    private void EmitForIn(Stmt.ForIn f)
+    protected override void EmitForIn(Stmt.ForIn f)
     {
         var startLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();

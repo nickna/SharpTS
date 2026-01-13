@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitVarDeclaration(Stmt.Var v)
+    protected override void EmitVarDeclaration(Stmt.Var v)
     {
         string name = v.Name.Lexeme;
 

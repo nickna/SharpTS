@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// Emits the MoveNext method body for a generator state machine.
 /// Handles state dispatch, yield points, and generator completion.
 /// </summary>
-public partial class GeneratorMoveNextEmitter : ExpressionEmitterBase
+public partial class GeneratorMoveNextEmitter : StatementEmitterBase
 {
     private readonly GeneratorStateMachineBuilder _builder;
     private readonly GeneratorStateAnalyzer.GeneratorFunctionAnalysis _analysis;
@@ -43,6 +43,64 @@ public partial class GeneratorMoveNextEmitter : ExpressionEmitterBase
 
     // Loop label tracking for break/continue
     private readonly Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> _loopLabels = new();
+
+    #region StatementEmitterBase Abstract Implementations - Loop Labels
+
+    protected override void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)
+        => _loopLabels.Push((breakLabel, continueLabel, labelName));
+
+    protected override void ExitLoop()
+        => _loopLabels.Pop();
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? CurrentLoop
+        => _loopLabels.Count > 0 ? _loopLabels.Peek() : null;
+
+    protected override (Label BreakLabel, Label ContinueLabel, string? LabelName)? FindLabeledLoop(string labelName)
+    {
+        foreach (var loop in _loopLabels)
+            if (loop.LabelName == labelName)
+                return loop;
+        return null;
+    }
+
+    #endregion
+
+    #region StatementEmitterBase Overrides
+
+    protected override void EmitTruthyCheck()
+        => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
+
+    protected override LocalBuilder? DeclareLoopVariable(string name)
+    {
+        // Check if variable is hoisted to state machine field
+        var field = _builder.GetVariableField(name);
+        if (field != null)
+            return null; // Hoisted to field, no local needed
+
+        var local = _il.DeclareLocal(typeof(object));
+        _ctx!.Locals.RegisterLocal(name, local);
+        return local;
+    }
+
+    protected override void EmitStoreLoopVariable(LocalBuilder? local, string name, Action emitValue)
+    {
+        var field = _builder.GetVariableField(name);
+        if (field != null)
+        {
+            // Store to hoisted field
+            _il.Emit(OpCodes.Ldarg_0);
+            emitValue();
+            _il.Emit(OpCodes.Stfld, field);
+        }
+        else if (local != null)
+        {
+            // Store to local
+            emitValue();
+            _il.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    #endregion
 
     public GeneratorMoveNextEmitter(GeneratorStateMachineBuilder builder, GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis, TypeProvider types)
         : base(new StateMachineEmitHelpers(builder.MoveNextMethod.GetILGenerator(), types))
@@ -129,8 +187,8 @@ public partial class GeneratorMoveNextEmitter : ExpressionEmitterBase
 
     // Note: EnsureBoxed, SetStackUnknown, SetStackType, EmitNullConstant, EmitDoubleConstant,
     // EmitBoolConstant, EmitStringConstant are inherited from ExpressionEmitterBase
+    // EmitTruthyCheck is now inherited from StatementEmitterBase
 
-    private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
     private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
     private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
     private void EmitBoxDouble() => _helpers.EmitBoxDouble();

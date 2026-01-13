@@ -149,7 +149,7 @@ public partial class ILEmitter
         };
     }
 
-    private void EmitTruthyCheck()
+    protected override void EmitTruthyCheck()
     {
         if (_ctx.Runtime?.IsTruthy != null)
         {

@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
-    private void EmitTryCatch(Stmt.TryCatch t)
+    protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         // Check if this try block contains any await points
         bool hasAwaitsInTry = ContainsAwait(t.TryBlock);
