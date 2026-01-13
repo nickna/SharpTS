@@ -221,6 +221,12 @@ sb.append("Hello from .NET!");
 console.log(sb.toString());
 ```
 
+```bash
+$ sharpts --experimentalDecorators --compile dotnet-example.ts
+$ dotnet dotnet-example.dll
+Hello from .NET!
+```
+
 ### Access TypeScript classes from .NET (C#)
 ```C#
 // Compile your TypeScript with --ref-asm:
