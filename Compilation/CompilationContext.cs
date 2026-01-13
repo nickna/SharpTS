@@ -109,6 +109,9 @@ public class CompilationContext
     // Namespace support: namespace path -> static field
     public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
 
+    // Top-level variables captured by async functions (stored as static fields)
+    public Dictionary<string, FieldBuilder>? TopLevelStaticVars { get; set; }
+
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }
 

@@ -461,29 +461,34 @@ public static class PromiseBuiltIns
 
     /// <summary>
     /// Implementation of Promise.resolve(value?)
-    /// If value is a Promise, returns it as-is. Otherwise wraps in a resolved Promise.
+    /// Returns the value directly - BuiltInAsyncMethod.Call wraps in a Promise.
     /// </summary>
     private static object? ResolveImpl(List<object?> args)
     {
         var value = args.Count > 0 ? args[0] : null;
 
-        // If already a Promise, return as-is (no double wrapping)
+        // If already a Promise, unwrap it so we don't double-wrap
+        // (BuiltInAsyncMethod.Call will wrap the result in a new Promise)
         if (value is SharpTSPromise promise)
         {
-            return promise;
+            // Return the promise's underlying task result to avoid double-wrapping
+            // The caller (BuiltInAsyncMethod.Call) will wrap this in a new Promise
+            return promise.Task.GetAwaiter().GetResult();
         }
 
-        return SharpTSPromise.Resolve(value);
+        // Return the raw value - BuiltInAsyncMethod.Call will wrap it in a Promise
+        return value;
     }
 
     /// <summary>
     /// Implementation of Promise.reject(reason)
-    /// Creates a rejected Promise with the given reason.
+    /// Throws an exception that BuiltInAsyncMethod.Call will convert to a rejected Promise.
     /// </summary>
     private static object? RejectImpl(List<object?> args)
     {
         var reason = args.Count > 0 ? args[0] : null;
-        return SharpTSPromise.Reject(reason);
+        // Throw to let BuiltInAsyncMethod.Call create the rejected Promise
+        throw new SharpTSPromiseRejectedException(reason);
     }
 
     #endregion

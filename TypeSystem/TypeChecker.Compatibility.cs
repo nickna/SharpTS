@@ -637,9 +637,9 @@ public partial class TypeChecker
         return null;
     }
 
-    private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any;
-    private bool IsString(TypeInfo t) => t is TypeInfo.String || t is TypeInfo.StringLiteral || t is TypeInfo.Any;
-    private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any;
+    private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsNumber));
+    private bool IsString(TypeInfo t) => t is TypeInfo.String || t is TypeInfo.StringLiteral || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsString));
+    private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsBigInt));
 
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).

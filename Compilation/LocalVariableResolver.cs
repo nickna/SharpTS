@@ -61,6 +61,13 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(field.FieldType);
         }
 
+        // 4. Top-level static vars (captured by functions from entry point)
+        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Ldsfld, topLevelField);
+            return StackType.Unknown;
+        }
+
         return null; // Caller handles fallback (Math, classes, functions, namespaces)
     }
 
@@ -91,6 +98,13 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, field);
+            return true;
+        }
+
+        // 4. Top-level static vars (captured by functions from entry point)
+        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Stsfld, topLevelField);
             return true;
         }
 

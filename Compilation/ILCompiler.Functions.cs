@@ -130,6 +130,7 @@ public partial class ILCompiler
             InstanceSetters = _instanceSetters,
             ClassSuperclass = _classSuperclass,
             AsyncMethods = null,
+            TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation
             CurrentModulePath = _currentModulePath,
             ClassToModule = _classToModule,
@@ -208,6 +209,7 @@ public partial class ILCompiler
             EnumReverse = _enumReverse,
             EnumKinds = _enumKinds,
             NamespaceFields = _namespaceFields,
+            TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
             ClassGenericParams = _classGenericParams,
             FunctionGenericParams = _functionGenericParams,
@@ -236,7 +238,42 @@ public partial class ILCompiler
             {
                 continue;
             }
-            emitter.EmitStatement(stmt);
+
+            // Special handling for expression statements to wait for top-level async calls
+            if (stmt is Stmt.Expression exprStmt)
+            {
+                emitter.EmitExpression(exprStmt.Expr);
+
+                // Check if the result is a Task<object> and wait for it
+                // This provides "top-level await" behavior for compiled code
+                var notTaskLabel = il.DefineLabel();
+                var doneLabel = il.DefineLabel();
+
+                il.Emit(OpCodes.Dup);  // Keep copy for Task check
+                il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+                il.Emit(OpCodes.Brfalse, notTaskLabel);
+
+                // It's a Task<object> - wait for it
+                il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+                var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
+                il.Emit(OpCodes.Call, getAwaiter);
+                var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
+                il.Emit(OpCodes.Stloc, awaiterLocal);
+                il.Emit(OpCodes.Ldloca, awaiterLocal);
+                var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
+                il.Emit(OpCodes.Call, getResult);
+                il.Emit(OpCodes.Pop);  // Discard the result
+                il.Emit(OpCodes.Br, doneLabel);
+
+                il.MarkLabel(notTaskLabel);
+                il.Emit(OpCodes.Pop);  // Not a Task, just pop the original value
+
+                il.MarkLabel(doneLabel);
+            }
+            else
+            {
+                emitter.EmitStatement(stmt);
+            }
         }
 
         il.Emit(OpCodes.Ret);

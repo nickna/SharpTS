@@ -30,6 +30,14 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
+        // Fallback: Check if it's a top-level variable captured from entry point
+        if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Ldsfld, topLevelField);
+            SetStackUnknown();
+            return;
+        }
+
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackType(StackType.Null);
@@ -42,6 +50,14 @@ public partial class AsyncArrowMoveNextEmitter
         EmitExpression(a.Value);
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
+
+        // Check if it's a top-level variable captured from entry point
+        if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Stsfld, topLevelField);
+            SetStackUnknown();
+            return;
+        }
 
         // Use resolver to store (consumes one copy, leaves one on stack as return value)
         _resolver!.TryStoreVariable(name);

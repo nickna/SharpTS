@@ -11,6 +11,24 @@ public partial class ILEmitter
 {
     private void EmitVarDeclaration(Stmt.Var v)
     {
+        // Check if this is a top-level variable captured by async functions
+        // These use static fields instead of locals so async state machines can access them
+        if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var staticField) == true)
+        {
+            if (v.Initializer != null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+                IL.Emit(OpCodes.Stsfld, staticField);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+                IL.Emit(OpCodes.Stsfld, staticField);
+            }
+            return;
+        }
+
         // Determine if this local can use unboxed double type
         Type localType = CanUseUnboxedLocal(v) ? _ctx.Types.Double : _ctx.Types.Object;
         var local = _ctx.Locals.DeclareLocal(v.Name.Lexeme, localType);

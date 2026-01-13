@@ -163,6 +163,14 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
+        // Fallback: Check if it's a top-level variable captured from entry point
+        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Ldsfld, topLevelField);
+            SetStackUnknown();
+            return;
+        }
+
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
@@ -177,6 +185,14 @@ public partial class AsyncMoveNextEmitter
 
         // Duplicate for return value
         _il.Emit(OpCodes.Dup);
+
+        // Check if it's a top-level variable captured from entry point
+        if (_ctx!.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Stsfld, topLevelField);
+            SetStackUnknown();
+            return;
+        }
 
         // Use resolver to store (consumes one copy, leaves one on stack as return value)
         _resolver!.TryStoreVariable(name);
@@ -453,6 +469,46 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitGet(Expr.Get g)
     {
+        // Special case: Symbol well-known symbols
+        if (g.Object is Expr.Variable symV && symV.Name.Lexeme == "Symbol")
+        {
+            switch (g.Name.Lexeme)
+            {
+                case "iterator":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
+                    SetStackUnknown();
+                    return;
+                case "asyncIterator":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolAsyncIterator);
+                    SetStackUnknown();
+                    return;
+                case "toStringTag":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolToStringTag);
+                    SetStackUnknown();
+                    return;
+                case "hasInstance":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolHasInstance);
+                    SetStackUnknown();
+                    return;
+                case "isConcatSpreadable":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIsConcatSpreadable);
+                    SetStackUnknown();
+                    return;
+                case "toPrimitive":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolToPrimitive);
+                    SetStackUnknown();
+                    return;
+                case "species":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolSpecies);
+                    SetStackUnknown();
+                    return;
+                case "unscopables":
+                    _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolUnscopables);
+                    SetStackUnknown();
+                    return;
+            }
+        }
+
         // Handle static field access: Class.field
         if (g.Object is Expr.Variable classVar &&
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))

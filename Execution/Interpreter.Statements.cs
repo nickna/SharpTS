@@ -539,6 +539,16 @@ public partial class Interpreter
                 throw new Exception("Runtime Error: Iterator must have a next() method.");
             }
 
+            // Bind next() to the iterator object so 'this' works correctly
+            if (nextMethod is SharpTSArrowFunction arrowFn)
+            {
+                nextMethod = arrowFn.Bind(iterator!);
+            }
+            else if (nextMethod is SharpTSFunction fn)
+            {
+                nextMethod = fn.Bind(iterator is SharpTSInstance inst ? inst : null);
+            }
+
             // Call next()
             object? result;
             if (nextMethod is ISharpTSCallable nextCallable)

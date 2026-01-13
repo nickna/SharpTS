@@ -147,6 +147,9 @@ public partial class ILCompiler
     // Shared context for definition phase (module name resolution)
     private CompilationContext? _definitionContext;
 
+    // Top-level variables captured by async functions (need to be static fields)
+    private readonly Dictionary<string, FieldBuilder> _topLevelStaticVars = [];
+
     // Entry point
     private MethodBuilder? _entryPoint;
 
@@ -342,6 +345,9 @@ public partial class ILCompiler
                 DefineNamespaceFields(nsStmt);
             }
         }
+
+        // Phase 4.4: Define static fields for top-level variables captured by async functions
+        DefineTopLevelCapturedVariables(statements);
 
         // Phase 4.5: Initialize typed interop support now that all classes are defined
         _unionGenerator = new UnionTypeGenerator(_typeMapper);
@@ -669,6 +675,80 @@ public partial class ILCompiler
             // Write directly to file
             using FileStream fileStream = new(outputPath, FileMode.Create, FileAccess.Write);
             peBlob.WriteContentTo(fileStream);
+        }
+    }
+
+    /// <summary>
+    /// Defines static fields for top-level variables that are captured by functions.
+    /// These variables cannot be accessed as locals from the entry point because functions
+    /// may run in separate contexts (async state machines, nested calls, etc).
+    /// </summary>
+    private void DefineTopLevelCapturedVariables(List<Stmt> statements)
+    {
+        // Collect all top-level variable names
+        var topLevelVars = new HashSet<string>();
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Var varStmt)
+            {
+                topLevelVars.Add(varStmt.Name.Lexeme);
+            }
+        }
+
+        // Check which top-level variables are captured by regular functions
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Function funcStmt && !funcStmt.IsAsync && !funcStmt.IsGenerator)
+            {
+                var captures = _closureAnalyzer.GetCaptures(funcStmt);
+                foreach (var capturedVar in captures)
+                {
+                    if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
+                    {
+                        var field = _programType.DefineField(
+                            $"$topLevel_{capturedVar}",
+                            _types.Object,
+                            FieldAttributes.Public | FieldAttributes.Static);
+                        _topLevelStaticVars[capturedVar] = field;
+                    }
+                }
+            }
+        }
+
+        // Check which top-level variables are captured by async functions
+        foreach (var funcStmt in _asyncFunctions.Values)
+        {
+            var captures = _closureAnalyzer.GetCaptures(funcStmt);
+            foreach (var capturedVar in captures)
+            {
+                if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
+                {
+                    // Define a static field for this captured variable
+                    // Use Public so async state machines (nested types) can access them
+                    var field = _programType.DefineField(
+                        $"$topLevel_{capturedVar}",
+                        _types.Object,
+                        FieldAttributes.Public | FieldAttributes.Static);
+                    _topLevelStaticVars[capturedVar] = field;
+                }
+            }
+        }
+
+        // Also check async generator functions
+        foreach (var funcStmt in _asyncGeneratorFunctions.Values)
+        {
+            var captures = _closureAnalyzer.GetCaptures(funcStmt);
+            foreach (var capturedVar in captures)
+            {
+                if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
+                {
+                    var field = _programType.DefineField(
+                        $"$topLevel_{capturedVar}",
+                        _types.Object,
+                        FieldAttributes.Public | FieldAttributes.Static);
+                    _topLevelStaticVars[capturedVar] = field;
+                }
+            }
         }
     }
 }

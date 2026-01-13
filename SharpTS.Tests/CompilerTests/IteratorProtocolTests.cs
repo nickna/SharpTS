@@ -233,11 +233,8 @@ public class IteratorProtocolTests
     #endregion
 
     #region Async Iterator Protocol (Symbol.asyncIterator)
-    // Note: These tests are skipped until async iterator protocol is fully implemented.
-    // The infrastructure is in place but there's an issue with Symbol.asyncIterator lookup
-    // in async state machine contexts that requires further investigation.
 
-    [Fact(Skip = "Async iterator protocol not yet fully implemented")]
+    [Fact]
     public void CustomAsyncIterator_BasicObject_IteratesValues()
     {
         var source = """
@@ -275,7 +272,7 @@ public class IteratorProtocolTests
         Assert.Equal("600\n", output);
     }
 
-    [Fact(Skip = "Async iterator protocol not yet fully implemented")]
+    [Fact]
     public void CustomAsyncIterator_EmptyIterator_NoIterations()
     {
         var source = """
@@ -305,7 +302,7 @@ public class IteratorProtocolTests
         Assert.Equal("count: 0\n", output);
     }
 
-    [Fact(Skip = "Async iterator protocol not yet fully implemented")]
+    [Fact]
     public void CustomAsyncIterator_WithBreak_StopsEarly()
     {
         var source = """
@@ -340,7 +337,7 @@ public class IteratorProtocolTests
         Assert.Equal("1\n2\n3\ndone\n", output);
     }
 
-    [Fact(Skip = "Async iterator protocol not yet fully implemented")]
+    [Fact]
     public void CustomAsyncIterator_WithContinue_SkipsValues()
     {
         var source = """
@@ -378,7 +375,7 @@ public class IteratorProtocolTests
 
     #region Fallback to Built-in Iteration
 
-    [Fact(Skip = "Type checker bug: loop variable type inference in for...of")]
+    [Fact]
     public void ArrayWithoutSymbolIterator_StillIterates()
     {
         var source = """
@@ -412,7 +409,7 @@ public class IteratorProtocolTests
 
     #region Interpreter vs Compiler Parity
 
-    [Fact(Skip = "Interpreter does not yet support custom iterators")]
+    [Fact]
     public void CustomIterator_InterpreterCompilerParity()
     {
         var source = """
@@ -447,7 +444,7 @@ public class IteratorProtocolTests
         Assert.Equal(interpretedOutput, compiledOutput);
     }
 
-    [Fact(Skip = "Async iterator protocol not yet fully implemented")]
+    [Fact]
     public void CustomAsyncIterator_InterpreterCompilerParity()
     {
         var source = """

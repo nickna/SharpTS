@@ -95,7 +95,8 @@ public partial class ILEmitter
         switch (methodName)
         {
             case "resolve":
-                // Promise.resolve(value?)
+                // Promise.resolve(value?) - returns Task<object?> directly
+                // The caller (async context) will await if needed
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -106,12 +107,12 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseResolve);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
+                // Sync functions return Task, async functions will await via proper machinery
                 return;
 
             case "reject":
-                // Promise.reject(reason)
+                // Promise.reject(reason) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -122,12 +123,11 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseReject);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
                 return;
 
             case "all":
-                // Promise.all(iterable)
+                // Promise.all(iterable) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -138,12 +138,11 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAll);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
                 return;
 
             case "race":
-                // Promise.race(iterable)
+                // Promise.race(iterable) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -154,12 +153,11 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseRace);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
                 return;
 
             case "allSettled":
-                // Promise.allSettled(iterable)
+                // Promise.allSettled(iterable) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -170,12 +168,11 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAllSettled);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
                 return;
 
             case "any":
-                // Promise.any(iterable)
+                // Promise.any(iterable) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
@@ -186,8 +183,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldnull);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseAny);
-                // Result is Task<object?>, need to await it
-                EmitAwaitTask();
+                // Don't await here - return the Task directly
                 return;
 
             default:
