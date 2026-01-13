@@ -353,4 +353,7 @@ public class EmittedRuntime
     public MethodBuilder AsyncGeneratorNextMethod { get; set; } = null!;
     public MethodBuilder AsyncGeneratorReturnMethod { get; set; } = null!;
     public MethodBuilder AsyncGeneratorThrowMethod { get; set; } = null!;
+
+    // Async Generator await continuation helper
+    public MethodBuilder AsyncGeneratorAwaitContinue { get; set; } = null!;
 }

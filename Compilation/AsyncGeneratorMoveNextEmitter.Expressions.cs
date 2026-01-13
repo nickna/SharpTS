@@ -471,7 +471,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     private void EmitAwaitSuspensionReturn()
     {
-        // Call RuntimeTypes.AsyncGeneratorAwaitContinue(task, generator)
+        // Call emitted AsyncGeneratorAwaitContinue(task, generator)
         // This creates a proper continuation that calls MoveNextAsync after the await completes
 
         // Load the awaited task from field
@@ -482,9 +482,8 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Castclass, _types.IAsyncEnumeratorOfObject);
 
-        // Call AsyncGeneratorAwaitContinue(task, generator)
-        var helperMethod = typeof(RuntimeTypes).GetMethod("AsyncGeneratorAwaitContinue")!;
-        _il.Emit(OpCodes.Call, helperMethod);
+        // Call AsyncGeneratorAwaitContinue(task, generator) - use emitted method for standalone support
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.AsyncGeneratorAwaitContinue);
 
         // Returns ValueTask<bool>, return it
         _il.Emit(OpCodes.Ret);

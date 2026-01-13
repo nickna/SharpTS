@@ -1106,6 +1106,8 @@ public partial class RuntimeEmitter
         EmitDynamicImportMethods(typeBuilder, runtime);
         // Iterator protocol methods
         EmitIteratorMethods(typeBuilder, runtime);
+        // Async generator await continuation helper
+        EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
 
         typeBuilder.CreateType();
     }
