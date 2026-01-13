@@ -7,6 +7,7 @@ namespace SharpTS.Runtime.Types;
 /// At runtime, namespaces are objects with their exported members as properties.
 /// Classes become constructor functions, functions remain functions, and variables are values.
 /// Supports declaration merging via the Merge method.
+/// NOTE: Changes here must be mirrored in RuntimeEmitter.EmitTSNamespaceClass() for compiled assemblies.
 /// </remarks>
 public class SharpTSNamespace
 {

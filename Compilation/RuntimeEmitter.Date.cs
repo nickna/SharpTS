@@ -1,11 +1,11 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
 /// <summary>
 /// Date-related runtime emission methods.
+/// Uses the emitted $TSDate class for standalone support.
 /// </summary>
 public partial class RuntimeEmitter
 {
@@ -51,7 +51,8 @@ public partial class RuntimeEmitter
         runtime.DateNow = method;
 
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("Now", BindingFlags.Public | BindingFlags.Static)!);
+        // Call $TSDate.Now() static method
+        il.Emit(OpCodes.Call, runtime.TSDateNowStatic);
         il.Emit(OpCodes.Ret);
     }
 
@@ -66,7 +67,8 @@ public partial class RuntimeEmitter
         runtime.CreateDateNoArgs = method;
 
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("CreateNoArgs", BindingFlags.Public | BindingFlags.Static)!);
+        // new $TSDate()
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorNoArgs);
         il.Emit(OpCodes.Ret);
     }
 
@@ -81,8 +83,35 @@ public partial class RuntimeEmitter
         runtime.CreateDateFromValue = method;
 
         var il = method.GetILGenerator();
+        var stringLabel = il.DefineLabel();
+        var defaultLabel = il.DefineLabel();
+
+        // Check if value is double
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("CreateFromValue", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, stringLabel);
+
+        // Double case: new $TSDate((double)value)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorMilliseconds);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(stringLabel);
+        // Check if value is string
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, defaultLabel);
+
+        // String case: new $TSDate((string)value)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorString);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(defaultLabel);
+        // Default: new $TSDate()
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorNoArgs);
         il.Emit(OpCodes.Ret);
     }
 
@@ -97,14 +126,22 @@ public partial class RuntimeEmitter
         runtime.CreateDateFromComponents = method;
 
         var il = method.GetILGenerator();
+        // new $TSDate((int)year, (int)month, (int)day, (int)hours, (int)minutes, (int)seconds, (int)ms)
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_S, (byte)6);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("CreateFromComponents", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorComponents);
         il.Emit(OpCodes.Ret);
     }
 
@@ -119,8 +156,43 @@ public partial class RuntimeEmitter
         runtime.DateToString = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
+        // Check if date is $TSDate
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("ToString", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call date.ToString()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldstr, "Invalid Date");
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitDateInstanceMethodCall(TypeBuilder typeBuilder, EmittedRuntime runtime,
+        string helperName, string instanceMethodName, MethodBuilder targetMethod)
+    {
+        var il = targetMethod.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
+        // Check if date is $TSDate
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call date.Method()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods[instanceMethodName]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -133,11 +205,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetTime = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetTime", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetTime", "GetTime", method);
     }
 
     private void EmitDateGetFullYear(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -149,11 +217,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetFullYear = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetFullYear", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetFullYear", "GetFullYear", method);
     }
 
     private void EmitDateGetMonth(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -165,11 +229,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetMonth = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetMonth", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetMonth", "GetMonth", method);
     }
 
     private void EmitDateGetDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -181,11 +241,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetDate = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetDate", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetDate", "GetDate", method);
     }
 
     private void EmitDateGetDay(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -197,11 +253,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetDay = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetDay", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetDay", "GetDay", method);
     }
 
     private void EmitDateGetHours(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -213,11 +265,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetHours = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetHours", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetHours", "GetHours", method);
     }
 
     private void EmitDateGetMinutes(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -229,11 +277,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetMinutes = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetMinutes", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetMinutes", "GetMinutes", method);
     }
 
     private void EmitDateGetSeconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -245,11 +289,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetSeconds = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetSeconds", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetSeconds", "GetSeconds", method);
     }
 
     private void EmitDateGetMilliseconds(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -261,11 +301,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetMilliseconds = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetMilliseconds", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetMilliseconds", "GetMilliseconds", method);
     }
 
     private void EmitDateGetTimezoneOffset(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -277,11 +313,7 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateGetTimezoneOffset = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("GetTimezoneOffset", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateGetTimezoneOffset", "GetTimezoneOffset", method);
     }
 
     private void EmitDateSetTime(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -295,9 +327,20 @@ public partial class RuntimeEmitter
         runtime.DateSetTime = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetTime", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetTime"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -312,9 +355,24 @@ public partial class RuntimeEmitter
         runtime.DateSetFullYear = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetFullYear", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetFullYear with args[0] as the year
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Ldarg_1);  // args array
+        il.Emit(OpCodes.Ldc_I4_0);  // index 0
+        il.Emit(OpCodes.Ldelem_Ref);  // args[0]
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetFullYear"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -329,9 +387,24 @@ public partial class RuntimeEmitter
         runtime.DateSetMonth = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetMonth with args[0]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetMonth", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetMonth"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -346,9 +419,21 @@ public partial class RuntimeEmitter
         runtime.DateSetDate = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetDate with arg1 (direct double parameter)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetDate", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetDate"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -363,9 +448,24 @@ public partial class RuntimeEmitter
         runtime.DateSetHours = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetHours with args[0]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetHours", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetHours"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -380,9 +480,24 @@ public partial class RuntimeEmitter
         runtime.DateSetMinutes = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetMinutes with args[0]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetMinutes", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetMinutes"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -397,9 +512,24 @@ public partial class RuntimeEmitter
         runtime.DateSetSeconds = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetSeconds with args[0]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetSeconds", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetSeconds"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -414,9 +544,21 @@ public partial class RuntimeEmitter
         runtime.DateSetMilliseconds = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        // Call SetMilliseconds with arg1 (direct double parameter)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("SetMilliseconds", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["SetMilliseconds"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
         il.Emit(OpCodes.Ret);
     }
 
@@ -431,9 +573,21 @@ public partial class RuntimeEmitter
         runtime.DateToISOString = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("ToISOString", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["ToISOString"]);
         il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldstr, "Runtime Error: Invalid Date");
+        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Throw);
     }
 
     private void EmitDateToDateString(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -447,8 +601,19 @@ public partial class RuntimeEmitter
         runtime.DateToDateString = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("ToDateString", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["ToDateString"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
     }
 
@@ -463,8 +628,19 @@ public partial class RuntimeEmitter
         runtime.DateToTimeString = method;
 
         var il = method.GetILGenerator();
+        var invalidLabel = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("ToTimeString", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, invalidLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["ToTimeString"]);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidLabel);
+        il.Emit(OpCodes.Ldstr, "Invalid Date");
         il.Emit(OpCodes.Ret);
     }
 
@@ -477,190 +653,6 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.DateValueOf = method;
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(DateRuntimeHelpers).GetMethod("ValueOf", BindingFlags.Public | BindingFlags.Static)!);
-        il.Emit(OpCodes.Ret);
+        EmitDateInstanceMethodCall(typeBuilder, runtime, "DateValueOf", "ValueOf", method);
     }
 }
-
-/// <summary>
-/// Static helper methods for Date operations in compiled code.
-/// These methods are called by the emitted runtime.
-/// </summary>
-public static class DateRuntimeHelpers
-{
-    public static double Now() => SharpTSDate.Now();
-
-    public static object CreateNoArgs() => new SharpTSDate();
-
-    public static object CreateFromValue(object? value)
-    {
-        return value switch
-        {
-            double ms => new SharpTSDate(ms),
-            string str => new SharpTSDate(str),
-            _ => new SharpTSDate()
-        };
-    }
-
-    public static object CreateFromComponents(double year, double month, double day,
-                                               double hours, double minutes, double seconds, double ms)
-    {
-        return new SharpTSDate((int)year, (int)month, (int)day, (int)hours, (int)minutes, (int)seconds, (int)ms);
-    }
-
-    public static string ToString(object? date)
-    {
-        if (date is SharpTSDate d) return d.ToString();
-        return "Invalid Date";
-    }
-
-    public static double GetTime(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetTime();
-        return double.NaN;
-    }
-
-    public static double GetFullYear(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetFullYear();
-        return double.NaN;
-    }
-
-    public static double GetMonth(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetMonth();
-        return double.NaN;
-    }
-
-    public static double GetDate(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetDate();
-        return double.NaN;
-    }
-
-    public static double GetDay(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetDay();
-        return double.NaN;
-    }
-
-    public static double GetHours(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetHours();
-        return double.NaN;
-    }
-
-    public static double GetMinutes(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetMinutes();
-        return double.NaN;
-    }
-
-    public static double GetSeconds(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetSeconds();
-        return double.NaN;
-    }
-
-    public static double GetMilliseconds(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetMilliseconds();
-        return double.NaN;
-    }
-
-    public static double GetTimezoneOffset(object? date)
-    {
-        if (date is SharpTSDate d) return d.GetTimezoneOffset();
-        return double.NaN;
-    }
-
-    public static double SetTime(object? date, double time)
-    {
-        if (date is SharpTSDate d) return d.SetTime(time);
-        return double.NaN;
-    }
-
-    public static double SetFullYear(object? date, object[]? args)
-    {
-        if (date is not SharpTSDate d || args == null || args.Length == 0) return double.NaN;
-        var year = (double)args[0];
-        double? month = args.Length > 1 ? (double?)args[1] : null;
-        double? day = args.Length > 2 ? (double?)args[2] : null;
-        return d.SetFullYear(year, month, day);
-    }
-
-    public static double SetMonth(object? date, object[]? args)
-    {
-        if (date is not SharpTSDate d || args == null || args.Length == 0) return double.NaN;
-        var month = (double)args[0];
-        double? day = args.Length > 1 ? (double?)args[1] : null;
-        return d.SetMonth(month, day);
-    }
-
-    public static double SetDate(object? date, double day)
-    {
-        if (date is SharpTSDate d) return d.SetDate(day);
-        return double.NaN;
-    }
-
-    public static double SetHours(object? date, object[]? args)
-    {
-        if (date is not SharpTSDate d || args == null || args.Length == 0) return double.NaN;
-        var hours = (double)args[0];
-        double? min = args.Length > 1 ? (double?)args[1] : null;
-        double? sec = args.Length > 2 ? (double?)args[2] : null;
-        double? ms = args.Length > 3 ? (double?)args[3] : null;
-        return d.SetHours(hours, min, sec, ms);
-    }
-
-    public static double SetMinutes(object? date, object[]? args)
-    {
-        if (date is not SharpTSDate d || args == null || args.Length == 0) return double.NaN;
-        var min = (double)args[0];
-        double? sec = args.Length > 1 ? (double?)args[1] : null;
-        double? ms = args.Length > 2 ? (double?)args[2] : null;
-        return d.SetMinutes(min, sec, ms);
-    }
-
-    public static double SetSeconds(object? date, object[]? args)
-    {
-        if (date is not SharpTSDate d || args == null || args.Length == 0) return double.NaN;
-        var sec = (double)args[0];
-        double? ms = args.Length > 1 ? (double?)args[1] : null;
-        return d.SetSeconds(sec, ms);
-    }
-
-    public static double SetMilliseconds(object? date, double ms)
-    {
-        if (date is SharpTSDate d) return d.SetMilliseconds(ms);
-        return double.NaN;
-    }
-
-    public static string ToISOString(object? date)
-    {
-        if (date is SharpTSDate d) return d.ToISOString();
-        throw new Exception("Runtime Error: Invalid Date");
-    }
-
-    public static string ToDateString(object? date)
-    {
-        if (date is SharpTSDate d) return d.ToDateString();
-        return "Invalid Date";
-    }
-
-    public static string ToTimeString(object? date)
-    {
-        if (date is SharpTSDate d) return d.ToTimeString();
-        return "Invalid Date";
-    }
-
-    public static double ValueOf(object? date)
-    {
-        if (date is SharpTSDate d) return d.ValueOf();
-        return double.NaN;
-    }
-}
-

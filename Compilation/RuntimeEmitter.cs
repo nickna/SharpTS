@@ -28,6 +28,7 @@ public partial class RuntimeEmitter
         EmitTSFunctionClass(moduleBuilder, runtime);
 
         // Emit TSNamespace class for namespace support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSNamespace
         EmitTSNamespaceClass(moduleBuilder, runtime);
 
         // Emit TSSymbol class for symbol support
@@ -44,6 +45,10 @@ public partial class RuntimeEmitter
 
         // Emit $IteratorWrapper class for custom iterator protocol support
         EmitIteratorWrapperType(moduleBuilder, runtime);
+
+        // Emit $TSDate class for standalone Date support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
+        EmitTSDateClass(moduleBuilder, runtime);
 
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);

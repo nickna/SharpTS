@@ -265,6 +265,19 @@ public class EmittedRuntime
     public MethodBuilder ValidateWeakMapKey { get; set; } = null!;
     public MethodBuilder ValidateWeakSetValue { get; set; } = null!;
 
+    // The emitted TSDate class
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
+    public TypeBuilder TSDateType { get; set; } = null!;
+    public ConstructorBuilder TSDateCtorNoArgs { get; set; } = null!;
+    public ConstructorBuilder TSDateCtorMilliseconds { get; set; } = null!;
+    public ConstructorBuilder TSDateCtorString { get; set; } = null!;
+    public ConstructorBuilder TSDateCtorComponents { get; set; } = null!;
+    public MethodBuilder TSDateNowStatic { get; set; } = null!;
+    /// <summary>
+    /// Dictionary of $TSDate instance methods by name. Used to lookup methods before CreateType().
+    /// </summary>
+    public Dictionary<string, MethodBuilder> TSDateMethods { get; } = new();
+
     // Date support
     public MethodBuilder DateNow { get; set; } = null!;
     public MethodBuilder CreateDateNoArgs { get; set; } = null!;
