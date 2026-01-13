@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -14,13 +15,20 @@ public partial class AsyncArrowMoveNextEmitter
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
     private readonly TypeProvider _types;
     private ILGenerator _il = null!;
+    private StateMachineEmitHelpers _helpers = null!;
     private CompilationContext? _ctx;
     private int _currentState = 0;
     private readonly List<Label> _stateLabels = [];
     private Label _exitLabel;
-    private StackType _stackType = StackType.Unknown;
     private LocalBuilder? _resultLocal;
     private LocalBuilder? _exceptionLocal;
+
+    // Stack type tracking via shared helpers
+    private StackType _stackType
+    {
+        get => _helpers.StackType;
+        set => _helpers.StackType = value;
+    }
 
     // Non-hoisted local variables (live within a single MoveNext invocation)
     private readonly Dictionary<string, LocalBuilder> _locals = [];
@@ -41,6 +49,7 @@ public partial class AsyncArrowMoveNextEmitter
     public void EmitMoveNext(List<Stmt> body, CompilationContext ctx, Type returnType)
     {
         _il = _builder.MoveNextMethod.GetILGenerator();
+        _helpers = new StateMachineEmitHelpers(_il, _types);
         _ctx = ctx;
 
         // Create labels for each await state
@@ -100,4 +109,47 @@ public partial class AsyncArrowMoveNextEmitter
         // Default case - continue with normal execution
         _il.MarkLabel(defaultLabel);
     }
+
+    #region Helper Method Wrappers
+
+    private void EnsureBoxed() => _helpers.EnsureBoxed();
+    private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
+    private void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
+    private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
+    private void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
+    private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
+    private void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);
+    private void EmitNullConstant() => _helpers.EmitNullConstant();
+    private void EmitBoxDouble() => _helpers.EmitBoxDouble();
+    private void EmitBoxBool() => _helpers.EmitBoxBool();
+    private void SetStackUnknown() => _helpers.SetStackUnknown();
+    private void SetStackType(StackType type) => _helpers.SetStackType(type);
+    private void EmitAdd_Double() => _helpers.EmitAdd_Double();
+    private void EmitSub_Double() => _helpers.EmitSub_Double();
+    private void EmitMul_Double() => _helpers.EmitMul_Double();
+    private void EmitDiv_Double() => _helpers.EmitDiv_Double();
+    private void EmitRem_Double() => _helpers.EmitRem_Double();
+    private void EmitNeg_Double() => _helpers.EmitNeg_Double();
+    private void EmitClt_Boolean() => _helpers.EmitClt_Boolean();
+    private void EmitCgt_Boolean() => _helpers.EmitCgt_Boolean();
+    private void EmitCeq_Boolean() => _helpers.EmitCeq_Boolean();
+    private void EmitLessOrEqual_Boolean() => _helpers.EmitLessOrEqual_Boolean();
+    private void EmitGreaterOrEqual_Boolean() => _helpers.EmitGreaterOrEqual_Boolean();
+    private void EmitCallUnknown(MethodInfo method) => _helpers.EmitCallUnknown(method);
+    private void EmitCallvirtUnknown(MethodInfo method) => _helpers.EmitCallvirtUnknown(method);
+    private void EmitCallString(MethodInfo method) => _helpers.EmitCallString(method);
+    private void EmitCallBoolean(MethodInfo method) => _helpers.EmitCallBoolean(method);
+    private void EmitCallDouble(MethodInfo method) => _helpers.EmitCallDouble(method);
+    private void EmitCallAndBoxDouble(MethodInfo method) => _helpers.EmitCallAndBoxDouble(method);
+    private void EmitCallAndBoxBool(MethodInfo method) => _helpers.EmitCallAndBoxBool(method);
+    private void EmitLdlocUnknown(LocalBuilder local) => _helpers.EmitLdlocUnknown(local);
+    private void EmitLdargUnknown(int argIndex) => _helpers.EmitLdargUnknown(argIndex);
+    private void EmitLdfldUnknown(FieldInfo field) => _helpers.EmitLdfldUnknown(field);
+    private void EmitNewobjUnknown(ConstructorInfo ctor) => _helpers.EmitNewobjUnknown(ctor);
+    private void EmitConvertToDouble() => _helpers.EmitConvertToDouble();
+    private void EmitConvR8AndBox() => _helpers.EmitConvR8AndBox();
+    private void EmitObjectEqualsBoxed() => _helpers.EmitObjectEqualsBoxed();
+    private void EmitObjectNotEqualsBoxed() => _helpers.EmitObjectNotEqualsBoxed();
+
+    #endregion
 }

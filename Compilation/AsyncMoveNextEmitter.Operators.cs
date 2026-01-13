@@ -8,28 +8,9 @@ public partial class AsyncMoveNextEmitter
 {
     private void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
-        var rightLabel = _il.DefineLabel();
-        var endLabel = _il.DefineLabel();
-
-        // Emit left side
-        EmitExpression(nc.Left);
-        EnsureBoxed();
-
-        // Check for null/undefined
-        _il.Emit(OpCodes.Dup);
-        _il.Emit(OpCodes.Brfalse, rightLabel);
-
-        // Left is not null - use it
-        _il.Emit(OpCodes.Br, endLabel);
-
-        // Left was null - pop and emit right
-        _il.MarkLabel(rightLabel);
-        _il.Emit(OpCodes.Pop);
-        EmitExpression(nc.Right);
-        EnsureBoxed();
-
-        _il.MarkLabel(endLabel);
-        SetStackUnknown();
+        _helpers.EmitNullishCoalescing(
+            () => EmitExpression(nc.Left),
+            () => EmitExpression(nc.Right));
     }
 
     private void EmitTemplateLiteral(Expr.TemplateLiteral tl)
@@ -240,36 +221,28 @@ public partial class AsyncMoveNextEmitter
         if (opType == TokenType.PLUS_EQUAL)
         {
             // Use runtime Add for string concatenation support
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.Add);
+            _helpers.EmitCallUnknown(_ctx!.Runtime!.Add);
             return;
         }
 
-        // For other operations, convert to double
-        var rightLocal = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-        _il.Emit(OpCodes.Ldloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-
+        // For other operations, use helpers
         switch (opType)
         {
             case TokenType.MINUS_EQUAL:
-                _il.Emit(OpCodes.Sub);
+                _helpers.EmitArithmeticBinary(OpCodes.Sub);
                 break;
             case TokenType.STAR_EQUAL:
-                _il.Emit(OpCodes.Mul);
+                _helpers.EmitArithmeticBinary(OpCodes.Mul);
                 break;
             case TokenType.SLASH_EQUAL:
-                _il.Emit(OpCodes.Div);
+                _helpers.EmitArithmeticBinary(OpCodes.Div);
                 break;
             case TokenType.PERCENT_EQUAL:
-                _il.Emit(OpCodes.Rem);
+                _helpers.EmitArithmeticBinary(OpCodes.Rem);
                 break;
             default:
-                _il.Emit(OpCodes.Add);
+                _helpers.EmitArithmeticBinary(OpCodes.Add);
                 break;
         }
-
-        _il.Emit(OpCodes.Box, typeof(double));
     }
 }

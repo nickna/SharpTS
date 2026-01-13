@@ -14,6 +14,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     private readonly AsyncGeneratorStateAnalyzer.AsyncGeneratorFunctionAnalysis _analysis;
     private readonly ILGenerator _il;
     private readonly TypeProvider _types;
+    private readonly StateMachineEmitHelpers _helpers;
 
     // Labels for state dispatch
     private readonly Dictionary<int, Label> _stateLabels = [];
@@ -22,8 +23,12 @@ public partial class AsyncGeneratorMoveNextEmitter
     // Current suspension point being processed
     private int _currentSuspensionState = 0;
 
-    // Stack type tracking
-    private StackType _stackType = StackType.Unknown;
+    // Stack type tracking via shared helpers
+    private StackType _stackType
+    {
+        get => _helpers.StackType;
+        set => _helpers.StackType = value;
+    }
 
     // Compilation context for access to functions, classes, etc.
     private CompilationContext? _ctx;
@@ -37,6 +42,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _analysis = analysis;
         _il = builder.MoveNextAsyncMethod.GetILGenerator();
         _types = types;
+        _helpers = new StateMachineEmitHelpers(_il, _types);
     }
 
     /// <summary>
@@ -136,11 +142,31 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ret);
     }
 
-    private void SetStackUnknown() => _stackType = StackType.Unknown;
-    private void SetStackNumber() => _stackType = StackType.Number;
-    private void SetStackString() => _stackType = StackType.String;
-    private void SetStackBoolean() => _stackType = StackType.Boolean;
-    private void SetStackObject() => _stackType = StackType.Object;
+    #region Helper Method Wrappers
 
-    private enum StackType { Unknown, Number, String, Boolean, Object, BigInt }
+    private void EnsureBoxed() => _helpers.EnsureBoxed();
+    private void EmitTruthyCheck() => _helpers.EmitTruthyCheck(_ctx!.Runtime!.IsTruthy);
+    private void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
+    private void EmitBoxedDoubleConstant(double value) => _helpers.EmitBoxedDoubleConstant(value);
+    private void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
+    private void EmitBoxedBoolConstant(bool value) => _helpers.EmitBoxedBoolConstant(value);
+    private void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);
+    private void EmitNullConstant() => _helpers.EmitNullConstant();
+    private void EmitBoxDouble() => _helpers.EmitBoxDouble();
+    private void EmitBoxBool() => _helpers.EmitBoxBool();
+    private void SetStackUnknown() => _helpers.SetStackUnknown();
+    private void SetStackType(StackType type) => _helpers.SetStackType(type);
+    private void SetStackNumber() => _helpers.SetStackType(StackType.Double);
+    private void SetStackString() => _helpers.SetStackType(StackType.String);
+    private void SetStackBoolean() => _helpers.SetStackType(StackType.Boolean);
+    private void SetStackObject() => _helpers.SetStackUnknown();
+    private void EmitCallUnknown(MethodInfo method) => _helpers.EmitCallUnknown(method);
+    private void EmitCallvirtUnknown(MethodInfo method) => _helpers.EmitCallvirtUnknown(method);
+    private void EmitLdlocUnknown(LocalBuilder local) => _helpers.EmitLdlocUnknown(local);
+    private void EmitLdargUnknown(int argIndex) => _helpers.EmitLdargUnknown(argIndex);
+    private void EmitLdfldUnknown(FieldInfo field) => _helpers.EmitLdfldUnknown(field);
+    private void EmitNewobjUnknown(ConstructorInfo ctor) => _helpers.EmitNewobjUnknown(ctor);
+    private void EmitConvertToDouble() => _helpers.EmitConvertToDouble();
+
+    #endregion
 }
