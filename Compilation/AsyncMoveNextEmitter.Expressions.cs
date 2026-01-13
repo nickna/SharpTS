@@ -297,31 +297,11 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitCall(Expr.Call c)
     {
-        // Handle console.log specially (parser converts console.log to Expr.Variable("console.log"))
-        if (c.Callee is Expr.Variable consoleVar && consoleVar.Name.Lexeme == "console.log")
+        // Handle console.log specially (handles both Variable and Get patterns)
+        if (_helpers.TryEmitConsoleLog(c,
+            arg => { EmitExpression(arg); EnsureBoxed(); },
+            _ctx!.Runtime!.ConsoleLog))
         {
-            if (c.Arguments.Count > 0)
-            {
-                EmitExpression(c.Arguments[0]);
-                EnsureBoxed();
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
-            }
-            _il.Emit(OpCodes.Ldnull);
-            SetStackUnknown();
-            return;
-        }
-
-        // Also handle the Get pattern in case it's used differently
-        if (c.Callee is Expr.Get g && g.Object is Expr.Variable v && v.Name.Lexeme == "console" && g.Name.Lexeme == "log")
-        {
-            if (c.Arguments.Count > 0)
-            {
-                EmitExpression(c.Arguments[0]);
-                EnsureBoxed();
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConsoleLog);
-            }
-            _il.Emit(OpCodes.Ldnull);
-            SetStackUnknown();
             return;
         }
 

@@ -670,4 +670,83 @@ public class StateMachineEmitHelpers
     }
 
     #endregion
+
+    #region Console Intrinsics
+
+    /// <summary>
+    /// Checks if the call expression is a console.log call (either Variable or Get pattern).
+    /// </summary>
+    public static bool IsConsoleLogCall(SharpTS.Parsing.Expr.Call call)
+    {
+        // Pattern 1: Parser transforms console.log to Variable "console.log"
+        if (call.Callee is SharpTS.Parsing.Expr.Variable v && v.Name.Lexeme == "console.log")
+            return true;
+
+        // Pattern 2: Get expression console.log
+        if (call.Callee is SharpTS.Parsing.Expr.Get g &&
+            g.Object is SharpTS.Parsing.Expr.Variable consoleVar &&
+            consoleVar.Name.Lexeme == "console" &&
+            g.Name.Lexeme == "log")
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Emits a console.log call if the expression matches. Returns true if handled.
+    /// Supports 0, 1, or multiple arguments.
+    /// </summary>
+    /// <param name="call">The call expression to check</param>
+    /// <param name="emitArgumentBoxed">Action to emit a single argument expression AND ensure it's boxed</param>
+    /// <param name="consoleLogMethod">RuntimeTypes.ConsoleLog method for single argument</param>
+    /// <param name="consoleLogMultipleMethod">RuntimeTypes.ConsoleLogMultiple method for multiple arguments (optional)</param>
+    /// <returns>True if this was a console.log call and was handled</returns>
+    public bool TryEmitConsoleLog(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        MethodInfo consoleLogMethod,
+        MethodInfo? consoleLogMultipleMethod = null)
+    {
+        if (!IsConsoleLogCall(call))
+            return false;
+
+        if (call.Arguments.Count == 0)
+        {
+            // No arguments - just print newline
+            _il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "WriteLine"));
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            // Single argument - use ConsoleLog
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, consoleLogMethod);
+        }
+        else if (consoleLogMultipleMethod != null)
+        {
+            // Multiple arguments - use ConsoleLogMultiple
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 0; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, consoleLogMultipleMethod);
+        }
+        else
+        {
+            // Multiple arguments but no ConsoleLogMultiple available - just emit first arg
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, consoleLogMethod);
+        }
+
+        // console.log returns undefined (null)
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+        return true;
+    }
+
+    #endregion
 }

@@ -36,68 +36,12 @@ public partial class ILEmitter
             }
         }
 
-        // Special case: console.log (parser transforms it to Variable "console.log")
-        if (c.Callee is Expr.Variable consoleVar && consoleVar.Name.Lexeme == "console.log")
+        // Special case: console.log (handles both Variable and Get patterns)
+        if (_helpers.TryEmitConsoleLog(c,
+            arg => { EmitExpression(arg); EmitBoxIfNeeded(arg); },
+            _ctx.Runtime!.ConsoleLog,
+            _ctx.Runtime!.ConsoleLogMultiple))
         {
-            if (c.Arguments.Count == 1)
-            {
-                // Single argument - use RuntimeTypes.ConsoleLog
-                EmitExpression(c.Arguments[0]);
-                EmitBoxIfNeeded(c.Arguments[0]);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConsoleLog);
-            }
-            else if (c.Arguments.Count == 0)
-            {
-                // No arguments - just print newline
-                IL.Emit(OpCodes.Call, _ctx.Types.GetMethodNoParams(_ctx.Types.Console, "WriteLine"));
-            }
-            else
-            {
-                // Multiple arguments - use RuntimeTypes.ConsoleLogMultiple
-                IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Ldc_I4, i);
-                    EmitExpression(c.Arguments[i]);
-                    EmitBoxIfNeeded(c.Arguments[i]);
-                    IL.Emit(OpCodes.Stelem_Ref);
-                }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConsoleLogMultiple);
-            }
-            IL.Emit(OpCodes.Ldnull); // console.log returns undefined
-            return;
-        }
-
-        // Alternative: console.log kept as Get expression (fallback)
-        if (c.Callee is Expr.Get get && get.Object is Expr.Variable v && v.Name.Lexeme == "console" && get.Name.Lexeme == "log")
-        {
-            if (c.Arguments.Count == 1)
-            {
-                EmitExpression(c.Arguments[0]);
-                EmitBoxIfNeeded(c.Arguments[0]);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConsoleLog);
-            }
-            else if (c.Arguments.Count == 0)
-            {
-                IL.Emit(OpCodes.Call, _ctx.Types.GetMethodNoParams(_ctx.Types.Console, "WriteLine"));
-            }
-            else
-            {
-                IL.Emit(OpCodes.Ldc_I4, c.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Ldc_I4, i);
-                    EmitExpression(c.Arguments[i]);
-                    EmitBoxIfNeeded(c.Arguments[i]);
-                    IL.Emit(OpCodes.Stelem_Ref);
-                }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConsoleLogMultiple);
-            }
-            IL.Emit(OpCodes.Ldnull);
             return;
         }
 
