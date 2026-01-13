@@ -1,10 +1,54 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
 public partial class AsyncArrowMoveNextEmitter
 {
+    private void EmitVariable(Expr.Variable v)
+    {
+        string name = v.Name.Lexeme;
+
+        // Try resolver first (params, locals, hoisted, captured)
+        var stackType = _resolver!.TryLoadVariable(name);
+        if (stackType != null)
+        {
+            SetStackType(stackType.Value);
+            return;
+        }
+
+        // Fallback: Check if it's a global function
+        if (_ctx?.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod) == true)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ldtoken, funcMethod);
+            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
+            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+            SetStackUnknown();
+            return;
+        }
+
+        // Not found - push null
+        _il.Emit(OpCodes.Ldnull);
+        SetStackType(StackType.Null);
+    }
+
+    private void EmitAssign(Expr.Assign a)
+    {
+        string name = a.Name.Lexeme;
+
+        EmitExpression(a.Value);
+        EnsureBoxed();
+        _il.Emit(OpCodes.Dup);
+
+        // Use resolver to store (consumes one copy, leaves one on stack as return value)
+        _resolver!.TryStoreVariable(name);
+
+        SetStackUnknown();
+    }
+
     private void LoadVariable(string name)
     {
         // Check if it's a parameter of this arrow

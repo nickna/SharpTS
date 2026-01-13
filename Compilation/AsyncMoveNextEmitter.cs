@@ -39,6 +39,9 @@ public partial class AsyncMoveNextEmitter
     // Compilation context for access to functions, classes, etc.
     private CompilationContext? _ctx;
 
+    // Variable resolver for hoisted fields and non-hoisted locals
+    private IVariableResolver? _resolver;
+
     // Return value storage
     private LocalBuilder? _returnValueLocal;
     private bool _hasReturnValue;
@@ -78,6 +81,13 @@ public partial class AsyncMoveNextEmitter
 
         _ctx = ctx;
         _hasReturnValue = returnType != _types.Void;
+
+        // Create variable resolver for hoisted fields and non-hoisted locals
+        _resolver = new StateMachineVariableResolver(
+            _il,
+            _builder.GetVariableField,
+            ctx.Locals,
+            _builder.ThisField);
 
         // Declare exception local for catch block
         _exceptionLocal = _il.DeclareLocal(_types.Exception);

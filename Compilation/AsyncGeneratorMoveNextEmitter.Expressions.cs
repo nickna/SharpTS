@@ -654,26 +654,16 @@ public partial class AsyncGeneratorMoveNextEmitter
     {
         string name = v.Name.Lexeme;
 
-        // Check if hoisted to state machine field
-        var field = _builder.GetVariableField(name);
-        if (field != null)
+        // Try resolver first (hoisted fields and non-hoisted locals)
+        var stackType = _resolver!.TryLoadVariable(name);
+        if (stackType != null)
         {
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, field);
-            SetStackUnknown();
+            SetStackType(stackType.Value);
             return;
         }
 
-        // Check if it's a local variable
-        if (_ctx!.Locals.TryGetLocal(name, out var local))
-        {
-            _il.Emit(OpCodes.Ldloc, local);
-            SetStackUnknown();
-            return;
-        }
-
-        // Check if it's a function
-        if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod))
+        // Fallback: Check if it's a function
+        if (_ctx!.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod))
         {
             // Create TSFunction wrapper
             _il.Emit(OpCodes.Ldnull);
@@ -684,7 +674,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             return;
         }
 
-        // Check if it's a namespace - load the static field
+        // Fallback: Check if it's a namespace - load the static field
         if (_ctx.NamespaceFields?.TryGetValue(name, out var nsField) == true)
         {
             _il.Emit(OpCodes.Ldsfld, nsField);
@@ -707,20 +697,8 @@ public partial class AsyncGeneratorMoveNextEmitter
         // Duplicate for return value
         _il.Emit(OpCodes.Dup);
 
-        // Check if hoisted
-        var field = _builder.GetVariableField(name);
-        if (field != null)
-        {
-            var temp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, temp);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, temp);
-            _il.Emit(OpCodes.Stfld, field);
-        }
-        else if (_ctx!.Locals.TryGetLocal(name, out var local))
-        {
-            _il.Emit(OpCodes.Stloc, local);
-        }
+        // Use resolver to store (consumes one copy, leaves one on stack as return value)
+        _resolver!.TryStoreVariable(name);
 
         SetStackUnknown();
     }

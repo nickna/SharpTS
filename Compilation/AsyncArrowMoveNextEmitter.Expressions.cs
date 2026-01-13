@@ -15,14 +15,11 @@ public partial class AsyncArrowMoveNextEmitter
                 break;
 
             case Expr.Variable v:
-                LoadVariable(v.Name.Lexeme);
+                EmitVariable(v);
                 break;
 
             case Expr.Assign a:
-                EmitExpression(a.Value);
-                EnsureBoxed();
-                _il.Emit(OpCodes.Dup);
-                StoreVariable(a.Name.Lexeme);
+                EmitAssign(a);
                 break;
 
             case Expr.Binary b:

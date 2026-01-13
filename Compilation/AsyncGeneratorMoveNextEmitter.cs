@@ -33,6 +33,9 @@ public partial class AsyncGeneratorMoveNextEmitter
     // Compilation context for access to functions, classes, etc.
     private CompilationContext? _ctx;
 
+    // Variable resolver for hoisted fields and non-hoisted locals
+    private IVariableResolver? _resolver;
+
     // Loop label tracking for break/continue
     private readonly Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> _loopLabels = new();
 
@@ -58,6 +61,13 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
 
         _ctx = ctx;
+
+        // Create variable resolver for hoisted fields and non-hoisted locals
+        _resolver = new StateMachineVariableResolver(
+            _il,
+            _builder.GetVariableField,
+            ctx.Locals,
+            _builder.ThisField);
 
         // Define labels for each suspension resume point
         foreach (var suspensionPoint in _analysis.SuspensionPoints)

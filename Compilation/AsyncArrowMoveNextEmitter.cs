@@ -33,6 +33,9 @@ public partial class AsyncArrowMoveNextEmitter
     // Non-hoisted local variables (live within a single MoveNext invocation)
     private readonly Dictionary<string, LocalBuilder> _locals = [];
 
+    // Variable resolver for hoisted fields, locals, and captured variables
+    private IVariableResolver? _resolver;
+
     public AsyncArrowMoveNextEmitter(
         AsyncArrowStateMachineBuilder builder,
         AsyncStateAnalyzer.AsyncFunctionAnalysis analysis,
@@ -51,6 +54,9 @@ public partial class AsyncArrowMoveNextEmitter
         _il = _builder.MoveNextMethod.GetILGenerator();
         _helpers = new StateMachineEmitHelpers(_il, _types);
         _ctx = ctx;
+
+        // Create variable resolver for hoisted fields, locals, and captured variables
+        _resolver = new AsyncArrowVariableResolver(_il, _builder, _locals);
 
         // Create labels for each await state
         for (int i = 0; i < _analysis.AwaitPointCount; i++)
