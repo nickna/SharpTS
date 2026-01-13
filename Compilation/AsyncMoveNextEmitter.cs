@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -10,7 +11,7 @@ namespace SharpTS.Compilation;
 /// This is the heart of async IL generation, handling state dispatch,
 /// await points, and result/exception completion.
 /// </summary>
-public partial class AsyncMoveNextEmitter : StatementEmitterBase
+public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContext
 {
     private readonly AsyncStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
@@ -22,6 +23,45 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase
     protected override CompilationContext Ctx => _ctx!;
     protected override TypeProvider Types => _types;
     protected override IVariableResolver Resolver => _resolver!;
+
+    #region IEmitterContext Implementation
+
+    /// <summary>
+    /// Provides access to the compilation context for type emitter strategies.
+    /// </summary>
+    public CompilationContext Context => _ctx!;
+
+    /// <summary>
+    /// Boxes the value on the stack if needed.
+    /// In async context, we use the simpler EnsureBoxed approach.
+    /// </summary>
+    public void EmitBoxIfNeeded(Expr expr) => EnsureBoxed();
+
+    /// <summary>
+    /// Emits an expression and ensures the result is an unboxed double on the stack.
+    /// </summary>
+    public void EmitExpressionAsDouble(Expr expr)
+    {
+        if (expr is Expr.Literal lit && lit.Value is double d)
+        {
+            // Literal double - push directly
+            _il.Emit(OpCodes.Ldc_R8, d);
+            _stackType = StackType.Double;
+        }
+        else if (expr is Expr.Literal intLit && intLit.Value is int i)
+        {
+            _il.Emit(OpCodes.Ldc_R8, (double)i);
+            _stackType = StackType.Double;
+        }
+        else
+        {
+            // Other expressions - emit and convert if needed
+            EmitExpression(expr);
+            EnsureDouble();
+        }
+    }
+
+    #endregion
 
     // Labels for state dispatch
     private readonly Dictionary<int, Label> _stateLabels = [];

@@ -12,7 +12,7 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on an async generator receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -82,7 +82,7 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on an async generator receiver.
     /// Async generators don't have special properties (unlike regular generators).
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         // Async generators don't have special properties we need to handle
         return false;

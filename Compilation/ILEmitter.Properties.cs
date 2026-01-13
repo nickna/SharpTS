@@ -11,109 +11,14 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
-        // Special case: Math properties
-        if (g.Object is Expr.Variable v && v.Name.Lexeme == "Math")
+        // Static type property dispatch via registry (Math.PI, Number.MAX_VALUE, Symbol.iterator, etc.)
+        if (g.Object is Expr.Variable staticVar && _ctx.TypeEmitterRegistry != null)
         {
-            switch (g.Name.Lexeme)
+            var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
+            if (staticStrategy != null && staticStrategy.TryEmitStaticPropertyGet(this, g.Name.Lexeme))
             {
-                case "PI":
-                    IL.Emit(OpCodes.Ldc_R8, Math.PI);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "E":
-                    IL.Emit(OpCodes.Ldc_R8, Math.E);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-            }
-        }
-
-        // Special case: Number properties (constants)
-        if (g.Object is Expr.Variable numV && numV.Name.Lexeme == "Number")
-        {
-            switch (g.Name.Lexeme)
-            {
-                case "MAX_VALUE":
-                    IL.Emit(OpCodes.Ldc_R8, double.MaxValue);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "MIN_VALUE":
-                    IL.Emit(OpCodes.Ldc_R8, double.Epsilon); // JS MIN_VALUE = smallest positive
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "NaN":
-                    IL.Emit(OpCodes.Ldc_R8, double.NaN);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "POSITIVE_INFINITY":
-                    IL.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "NEGATIVE_INFINITY":
-                    IL.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "MAX_SAFE_INTEGER":
-                    IL.Emit(OpCodes.Ldc_R8, 9007199254740991.0); // 2^53 - 1
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "MIN_SAFE_INTEGER":
-                    IL.Emit(OpCodes.Ldc_R8, -9007199254740991.0); // -(2^53 - 1)
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-                case "EPSILON":
-                    IL.Emit(OpCodes.Ldc_R8, 2.220446049250313e-16); // 2^-52
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-            }
-        }
-
-        // Special case: Symbol well-known symbols
-        if (g.Object is Expr.Variable symV && symV.Name.Lexeme == "Symbol")
-        {
-            switch (g.Name.Lexeme)
-            {
-                case "iterator":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
-                    SetStackUnknown();
-                    return;
-                case "asyncIterator":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolAsyncIterator);
-                    SetStackUnknown();
-                    return;
-                case "toStringTag":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolToStringTag);
-                    SetStackUnknown();
-                    return;
-                case "hasInstance":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolHasInstance);
-                    SetStackUnknown();
-                    return;
-                case "isConcatSpreadable":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIsConcatSpreadable);
-                    SetStackUnknown();
-                    return;
-                case "toPrimitive":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolToPrimitive);
-                    SetStackUnknown();
-                    return;
-                case "species":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolSpecies);
-                    SetStackUnknown();
-                    return;
-                case "unscopables":
-                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolUnscopables);
-                    SetStackUnknown();
-                    return;
+                SetStackUnknown();
+                return;
             }
         }
 

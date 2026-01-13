@@ -212,4 +212,81 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateWeakSet);
         SetStackUnknown();
     }
+
+    /// <summary>
+    /// Emits code for new Date(...) construction.
+    /// </summary>
+    private void EmitNewDate(List<Expr> arguments)
+    {
+        switch (arguments.Count)
+        {
+            case 0:
+                // new Date() - current date/time
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateNoArgs);
+                break;
+
+            case 1:
+                // new Date(value) - milliseconds or ISO string
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateFromValue);
+                break;
+
+            default:
+                // new Date(year, month, day?, hours?, minutes?, seconds?, ms?)
+                // Emit all 7 arguments, using 0 for missing ones
+                for (int i = 0; i < 7; i++)
+                {
+                    if (i < arguments.Count)
+                    {
+                        EmitExpressionAsDouble(arguments[i]);
+                    }
+                    else
+                    {
+                        // Default values: day=1, others=0
+                        IL.Emit(OpCodes.Ldc_R8, i == 2 ? 1.0 : 0.0);
+                    }
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateDateFromComponents);
+                break;
+        }
+        // All Date constructors return an object, reset stack type
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new RegExp(...) construction.
+    /// </summary>
+    private void EmitNewRegExp(List<Expr> arguments)
+    {
+        switch (arguments.Count)
+        {
+            case 0:
+                // new RegExp() - empty pattern
+                IL.Emit(OpCodes.Ldstr, "");
+                IL.Emit(OpCodes.Ldstr, "");
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
+                break;
+
+            case 1:
+                // new RegExp(pattern) - pattern only
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure pattern is a string
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExp);
+                break;
+
+            default:
+                // new RegExp(pattern, flags) - pattern and flags
+                EmitExpression(arguments[0]);
+                EmitBoxIfNeeded(arguments[0]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure pattern is a string
+                EmitExpression(arguments[1]);
+                EmitBoxIfNeeded(arguments[1]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify); // Ensure flags is a string
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateRegExpWithFlags);
+                break;
+        }
+        SetStackUnknown();
+    }
 }

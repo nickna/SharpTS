@@ -12,7 +12,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on a string receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -128,7 +128,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a property get on a string receiver.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         if (propertyName != "length")
             return false;
@@ -151,7 +151,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
     #region String Method Implementations
 
-    private static void EmitCharAt(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitCharAt(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -169,7 +169,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringCharAt);
     }
 
-    private static void EmitSubstring(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSubstring(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -187,7 +187,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringSubstring);
     }
 
-    private static void EmitIndexOf(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitIndexOf(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -206,7 +206,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
-    private static void EmitReplace(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitReplace(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -228,7 +228,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
     }
 
-    private static void EmitSplit(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSplit(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -246,7 +246,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringSplitRegExp);
     }
 
-    private static void EmitMatch(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitMatch(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -263,7 +263,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringMatchRegExp);
     }
 
-    private static void EmitSearch(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSearch(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -281,7 +281,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
-    private static void EmitIncludes(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitIncludes(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -300,7 +300,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
 
-    private static void EmitStartsWith(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitStartsWith(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -319,7 +319,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
 
-    private static void EmitEndsWith(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitEndsWith(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -338,7 +338,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
 
-    private static void EmitSlice(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSlice(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -357,7 +357,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringSlice);
     }
 
-    private static void EmitRepeat(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitRepeat(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -375,7 +375,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringRepeat);
     }
 
-    private static void EmitPadStart(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitPadStart(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -394,7 +394,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringPadStart);
     }
 
-    private static void EmitPadEnd(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitPadEnd(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -413,7 +413,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringPadEnd);
     }
 
-    private static void EmitCharCodeAt(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitCharCodeAt(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -432,7 +432,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
-    private static void EmitConcat(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitConcat(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -450,7 +450,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringConcat);
     }
 
-    private static void EmitLastIndexOf(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitLastIndexOf(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -469,7 +469,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
-    private static void EmitReplaceAll(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitReplaceAll(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -491,7 +491,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceAll);
     }
 
-    private static void EmitAt(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitAt(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;

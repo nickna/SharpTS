@@ -386,6 +386,15 @@ public partial class ILCompiler
         var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
 
+        // Register static type emitters
+        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
+
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
 
@@ -564,6 +573,15 @@ public partial class ILCompiler
 
         var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
+
+        // Register static type emitters
+        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);

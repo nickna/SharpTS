@@ -288,24 +288,28 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
-        // Handle Promise.xxx() static calls - returns Task<object?> without synchronously awaiting
-        if (c.Callee is Expr.Get promiseGet &&
-            promiseGet.Object is Expr.Variable promiseVar &&
-            promiseVar.Name.Lexeme == "Promise")
+        // Static type dispatch via registry (Math, JSON, Object, Array, Number, Promise, Symbol)
+        if (c.Callee is Expr.Get staticGet &&
+            staticGet.Object is Expr.Variable staticVar &&
+            _ctx?.TypeEmitterRegistry != null)
         {
-            EmitPromiseStaticCall(promiseGet.Name.Lexeme, c.Arguments);
-            return;
+            var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
+            if (staticStrategy != null && staticStrategy.TryEmitStaticCall(this, staticGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
         }
 
         // Handle Class.staticMethod() calls
-        if (c.Callee is Expr.Get staticGet &&
-            staticGet.Object is Expr.Variable classVar &&
+        if (c.Callee is Expr.Get classStaticGet &&
+            classStaticGet.Object is Expr.Variable classVar &&
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             if (_ctx.StaticMethods != null &&
                 _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
-                classMethods.TryGetValue(staticGet.Name.Lexeme, out var staticMethod))
+                classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
             {
                 var paramCount = staticMethod.GetParameters().Length;
 
@@ -349,48 +353,74 @@ public partial class AsyncMoveNextEmitter
                 return;
             }
 
-            // Handle string-only methods
-            if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
-                or "trim" or "replace" or "split" or "startsWith" or "endsWith"
-                or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
-                or "trimStart" or "trimEnd" or "replaceAll" or "at")
-            {
-                EmitStringMethodCall(methodGet.Object, methodName, c.Arguments);
-                return;
-            }
-
-            // Handle array-only methods
-            if (methodName is "pop" or "shift" or "unshift" or "map" or "filter" or "forEach"
-                or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join"
-                or "reverse" or "concat")
-            {
-                EmitArrayMethodCall(methodGet.Object, methodName, c.Arguments);
-                return;
-            }
-
-            // Handle ambiguous methods (slice, concat, includes, indexOf) that exist on both string and array
-            if (methodName is "slice" or "concat" or "includes" or "indexOf")
-            {
-                // Try to get type info for better dispatch
-                var objType = _ctx?.TypeMap?.Get(methodGet.Object);
-                if (objType is TypeSystem.TypeInfo.String)
-                {
-                    EmitStringMethodCall(methodGet.Object, methodName, c.Arguments);
-                    return;
-                }
-                if (objType is TypeSystem.TypeInfo.Array)
-                {
-                    EmitArrayMethodCall(methodGet.Object, methodName, c.Arguments);
-                    return;
-                }
-                // Fallback: runtime dispatch for any/unknown types
-                EmitAmbiguousMethodCall(methodGet.Object, methodName, c.Arguments);
-                return;
-            }
-
             // Try direct dispatch for known class instance methods
             if (TryEmitDirectMethodCall(methodGet.Object, methodName, c.Arguments))
                 return;
+
+            // Type-first dispatch: Use TypeEmitterRegistry if we have type information
+            var objType = _ctx?.TypeMap?.Get(methodGet.Object);
+            if (objType != null && _ctx?.TypeEmitterRegistry != null)
+            {
+                var strategy = _ctx.TypeEmitterRegistry.GetStrategy(objType);
+                if (strategy != null && strategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                    return;
+
+                // Handle union types - try emitters for member types
+                if (objType is TypeSystem.TypeInfo.Union union)
+                {
+                    // Try string emitter if union contains string
+                    bool hasStringMember = union.Types.Any(t => t is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral);
+                    if (hasStringMember)
+                    {
+                        var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
+                        if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                            return;
+                    }
+
+                    // Try array emitter if union contains array
+                    bool hasArrayMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Array);
+                    if (hasArrayMember)
+                    {
+                        var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
+                        if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                            return;
+                    }
+                }
+            }
+
+            // Fallback: Method name-based dispatch for known built-in methods when type info is unavailable
+            // This handles cases where type inference is lost (e.g., loop variables from for-await)
+            if (_ctx?.TypeEmitterRegistry != null)
+            {
+                // String-only methods
+                if (methodName is "charAt" or "substring" or "toUpperCase" or "toLowerCase"
+                    or "trim" or "replace" or "split" or "startsWith" or "endsWith"
+                    or "repeat" or "padStart" or "padEnd" or "charCodeAt" or "lastIndexOf"
+                    or "trimStart" or "trimEnd" or "replaceAll" or "at" or "match" or "search")
+                {
+                    var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
+                    if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                        return;
+                }
+
+                // Array-only methods
+                if (methodName is "pop" or "shift" or "unshift" or "map" or "filter" or "forEach"
+                    or "push" or "find" or "findIndex" or "some" or "every" or "reduce" or "join"
+                    or "reverse")
+                {
+                    var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
+                    if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                        return;
+                }
+            }
+
+            // Handle ambiguous methods (slice, concat, includes, indexOf) that exist on both string and array
+            // Use runtime dispatch when type is unknown
+            if (methodName is "slice" or "concat" or "includes" or "indexOf")
+            {
+                EmitAmbiguousMethodCall(methodGet.Object, methodName, c.Arguments);
+                return;
+            }
         }
 
         // Check if it's a direct function call
@@ -700,4 +730,255 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
+
+    #region Ambiguous Method Runtime Dispatch
+
+    /// <summary>
+    /// Handles methods that exist on both strings and arrays at runtime.
+    /// Used as fallback when type information is not available.
+    /// </summary>
+    private void EmitAmbiguousMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the object
+        EmitExpression(obj);
+        EnsureBoxed();
+
+        var objLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, objLocal);
+
+        // Check if it's a string
+        var isStringLabel = _il.DefineLabel();
+        var isListLabel = _il.DefineLabel();
+        var doneLabel = _il.DefineLabel();
+
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Isinst, typeof(string));
+        _il.Emit(OpCodes.Brtrue, isStringLabel);
+
+        // Assume it's a list if not a string
+        _il.Emit(OpCodes.Br, isListLabel);
+
+        // String path
+        _il.MarkLabel(isStringLabel);
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Castclass, typeof(string));
+
+        switch (methodName)
+        {
+            case "includes":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Castclass, typeof(string));
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldstr, "");
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringIncludes);
+                _il.Emit(OpCodes.Box, typeof(bool));
+                break;
+
+            case "indexOf":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Castclass, typeof(string));
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldstr, "");
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringIndexOf);
+                _il.Emit(OpCodes.Box, typeof(double));
+                break;
+
+            case "slice":
+                _il.Emit(OpCodes.Ldc_I4, arguments.Count);
+                _il.Emit(OpCodes.Ldc_I4, arguments.Count);
+                _il.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringSlice);
+                break;
+
+            case "concat":
+                _il.Emit(OpCodes.Ldc_I4, arguments.Count);
+                _il.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.StringConcat);
+                break;
+        }
+
+        _il.Emit(OpCodes.Br, doneLabel);
+
+        // List path
+        _il.MarkLabel(isListLabel);
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Castclass, typeof(List<object>));
+
+        switch (methodName)
+        {
+            case "includes":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ArrayIncludes);
+                _il.Emit(OpCodes.Box, typeof(bool));
+                break;
+
+            case "indexOf":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ArrayIndexOf);
+                _il.Emit(OpCodes.Box, typeof(double));
+                break;
+
+            case "slice":
+                _il.Emit(OpCodes.Ldc_I4, arguments.Count);
+                _il.Emit(OpCodes.Newarr, typeof(object));
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ArraySlice);
+                break;
+
+            case "concat":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.ArrayConcat);
+                break;
+        }
+
+        _il.MarkLabel(doneLabel);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits a Promise instance method call (.then, .catch, .finally).
+    /// These methods take callbacks and return a new Promise (Task).
+    /// </summary>
+    private void EmitPromiseInstanceMethodCall(Expr promise, string methodName, List<Expr> arguments)
+    {
+        // Emit the promise (should be Task<object?>)
+        EmitExpression(promise);
+        EnsureBoxed();
+
+        // Cast to Task<object?> if needed
+        _il.Emit(OpCodes.Castclass, typeof(Task<object?>));
+
+        switch (methodName)
+        {
+            case "then":
+                // promise.then(onFulfilled?, onRejected?)
+                // PromiseThen(Task<object?> promise, object? onFulfilled, object? onRejected)
+
+                // onFulfilled callback (optional)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+
+                // onRejected callback (optional)
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.PromiseThen);
+                break;
+
+            case "catch":
+                // promise.catch(onRejected)
+                // PromiseCatch(Task<object?> promise, object? onRejected)
+
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.PromiseCatch);
+                break;
+
+            case "finally":
+                // promise.finally(onFinally)
+                // PromiseFinally(Task<object?> promise, object? onFinally)
+
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.PromiseFinally);
+                break;
+
+            default:
+                // Unknown method - just return the promise unchanged
+                break;
+        }
+
+        SetStackUnknown();
+    }
+
+    #endregion
 }

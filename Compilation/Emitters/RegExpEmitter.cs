@@ -12,7 +12,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on a RegExp receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -45,7 +45,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on a RegExp receiver.
     /// Handles: source, flags, global, ignoreCase, multiline, lastIndex.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -93,7 +93,7 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Emits the first argument as a string, or empty string if no arguments.
     /// </summary>
-    private static void EmitStringArgOrEmpty(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitStringArgOrEmpty(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;

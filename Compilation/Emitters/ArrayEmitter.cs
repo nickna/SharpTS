@@ -12,7 +12,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on an array receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -127,7 +127,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on an array receiver.
     /// Currently not implemented - array.length is handled by the runtime.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         // Array length is handled by the runtime GetProperty method
         // TODO: Could optimize by directly accessing List<object>.Count
@@ -139,7 +139,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Emits a single argument or null if no arguments provided.
     /// </summary>
-    private static void EmitSingleArgOrNull(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -158,7 +158,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Emits all arguments as an object array.
     /// </summary>
-    private static void EmitArgsArray(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;

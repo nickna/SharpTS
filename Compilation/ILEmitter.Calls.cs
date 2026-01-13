@@ -45,56 +45,17 @@ public partial class ILEmitter
             return;
         }
 
-        // Special case: Math methods
-        if (c.Callee is Expr.Get mathGet && mathGet.Object is Expr.Variable mathVar && mathVar.Name.Lexeme == "Math")
+        // Static type dispatch via registry (Math, JSON, Object, Array, Number, Promise)
+        if (c.Callee is Expr.Get staticGet &&
+            staticGet.Object is Expr.Variable staticVar &&
+            _ctx.TypeEmitterRegistry != null)
         {
-            EmitMathCall(mathGet.Name.Lexeme, c.Arguments);
-            return;
-        }
-
-        // Special case: Object.keys(), Object.values(), Object.entries()
-        if (c.Callee is Expr.Get objGet &&
-            objGet.Object is Expr.Variable objVar &&
-            objVar.Name.Lexeme == "Object")
-        {
-            EmitObjectStaticCall(objGet.Name.Lexeme, c.Arguments);
-            return;
-        }
-
-        // Special case: Array.isArray()
-        if (c.Callee is Expr.Get arrGet &&
-            arrGet.Object is Expr.Variable arrVar &&
-            arrVar.Name.Lexeme == "Array")
-        {
-            EmitArrayStaticCall(arrGet.Name.Lexeme, c.Arguments);
-            return;
-        }
-
-        // Special case: JSON.parse(), JSON.stringify()
-        if (c.Callee is Expr.Get jsonGet &&
-            jsonGet.Object is Expr.Variable jsonVar &&
-            jsonVar.Name.Lexeme == "JSON")
-        {
-            EmitJSONCall(jsonGet.Name.Lexeme, c.Arguments);
-            return;
-        }
-
-        // Special case: Number.parseInt(), Number.parseFloat(), Number.isNaN(), etc.
-        if (c.Callee is Expr.Get numGet &&
-            numGet.Object is Expr.Variable numVar &&
-            numVar.Name.Lexeme == "Number")
-        {
-            EmitNumberStaticCall(numGet.Name.Lexeme, c.Arguments);
-            return;
-        }
-
-        // Special case: Promise.resolve(), Promise.reject(), Promise.all(), Promise.race()
-        if (c.Callee is Expr.Get promiseGet &&
-            promiseGet.Object is Expr.Variable promiseVar &&
-            promiseVar.Name.Lexeme == "Promise")
-        {
-            EmitPromiseStaticCall(promiseGet.Name.Lexeme, c.Arguments);
-            return;
+            var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
+            if (staticStrategy != null && staticStrategy.TryEmitStaticCall(this, staticGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
         }
 
         // Special case: __objectRest (internal helper for object rest patterns)
@@ -207,14 +168,14 @@ public partial class ILEmitter
         }
 
         // Special case: Static method call on class (e.g., Counter.increment())
-        if (c.Callee is Expr.Get staticGet &&
-            staticGet.Object is Expr.Variable classVar &&
+        if (c.Callee is Expr.Get classStaticGet &&
+            classStaticGet.Object is Expr.Variable classVar &&
             _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             if (_ctx.StaticMethods != null &&
                 _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
-                classMethods.TryGetValue(staticGet.Name.Lexeme, out var staticMethod))
+                classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
             {
                 var paramCount = staticMethod.GetParameters().Length;
 

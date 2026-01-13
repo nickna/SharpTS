@@ -12,7 +12,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on a Date receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -157,7 +157,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on a Date receiver.
     /// Date objects don't have accessible properties in TypeScript.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         // Date doesn't expose properties directly - all access is via methods
         return false;
@@ -168,7 +168,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Emits a single argument as double, or NaN if no arguments.
     /// </summary>
-    private static void EmitSingleDoubleArgOrNaN(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSingleDoubleArgOrNaN(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -186,7 +186,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Emits all arguments as an object array.
     /// </summary>
-    private static void EmitArgsArray(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;

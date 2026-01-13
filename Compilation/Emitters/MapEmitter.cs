@@ -12,7 +12,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on a Map receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -78,7 +78,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on a Map receiver.
     /// Handles the 'size' property.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         if (propertyName != "size")
             return false;
@@ -96,7 +96,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
 
     #region Helper Methods
 
-    private static void EmitSingleArgOrNull(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -112,7 +112,7 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         }
     }
 
-    private static void EmitSecondArgOrNull(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSecondArgOrNull(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;

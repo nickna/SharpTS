@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -28,7 +29,7 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="ILCompiler"/>
 /// <seealso cref="CompilationContext"/>
-public partial class ILEmitter : StatementEmitterBase
+public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 {
     private readonly CompilationContext _ctx;
     private readonly LocalVariableResolver _resolver;

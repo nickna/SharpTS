@@ -12,7 +12,7 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
     /// <summary>
     /// Attempts to emit IL for a method call on a WeakSet receiver.
     /// </summary>
-    public bool TryEmitMethodCall(ILEmitter emitter, Expr receiver, string methodName, List<Expr> arguments)
+    public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -49,7 +49,7 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
     /// Attempts to emit IL for a property get on a WeakSet receiver.
     /// WeakSet doesn't have accessible properties.
     /// </summary>
-    public bool TryEmitPropertyGet(ILEmitter emitter, Expr receiver, string propertyName)
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
     {
         // WeakSet doesn't expose properties
         return false;
@@ -57,7 +57,7 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
 
     #region Helper Methods
 
-    private static void EmitSingleArgOrNull(ILEmitter emitter, List<Expr> arguments)
+    private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
