@@ -414,10 +414,200 @@ public partial class RuntimeEmitter
         runtime.GetValues = method;
 
         var il = method.GetILGenerator();
+        var dictType = _types.DictionaryStringObject;
+        var listType = _types.ListOfObject;
+        var kvpType = _types.KeyValuePairStringObject;
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(), _types.String, _types.Object);
 
-        // Delegate to RuntimeTypes.GetValues which handles both _fields dictionary and __ backing fields
+        var resultLocal = il.DeclareLocal(listType);
+        var dictLocal = il.DeclareLocal(dictType);
+        var typeLocal = il.DeclareLocal(_types.Type);
+        var fieldsLocal = il.DeclareLocal(_types.FieldInfoArray);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var fieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldNameLocal = il.DeclareLocal(_types.String);
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsDictLocal = il.DeclareLocal(dictType);
+        var seenKeysLocal = il.DeclareLocal(_types.HashSetOfString);
+        var enumeratorLocal = il.DeclareLocal(enumeratorType);
+        var currentLocal = il.DeclareLocal(kvpType);
+
+        var reflectionLabel = il.DefineLabel();
+        var returnEmptyLabel = il.DefineLabel();
+        var fieldLoopStartLabel = il.DefineLabel();
+        var fieldLoopEndLabel = il.DefineLabel();
+        var skipFieldLabel = il.DefineLabel();
+        var returnResultLabel = il.DefineLabel();
+        var fieldsLoopStart = il.DefineLabel();
+        var fieldsLoopEnd = il.DefineLabel();
+        var skipDuplicateLabel = il.DefineLabel();
+
+        // if (obj is Dictionary<string, object?> dict)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("GetValues", [typeof(object)])!);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, reflectionLabel);
+
+        // Create result list and add all values from dictionary
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        var dictLoopStart = il.DefineLabel();
+        var dictLoopEnd = il.DefineLabel();
+        il.MarkLabel(dictLoopStart);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, dictLoopEnd);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Br, dictLoopStart);
+
+        il.MarkLabel(dictLoopEnd);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Reflection for class instances
+        il.MarkLabel(reflectionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnEmptyLabel);
+
+        // var result = new List<object?>(); var seenKeys = new HashSet<string>();
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Newobj, _types.HashSetOfString.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, seenKeysLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        // var fields = type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetFields", [_types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // Iterate backing fields
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(fieldLoopStartLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, fieldLoopEndLabel);
+
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, fieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldLocal);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, fieldNameLocal);
+
+        // if (field.Name.StartsWith("__"))
+        il.Emit(OpCodes.Ldloc, fieldNameLocal);
+        il.Emit(OpCodes.Ldstr, "__");
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, skipFieldLabel);
+
+        // seenKeys.Add(field.Name.Substring(2));
+        il.Emit(OpCodes.Ldloc, seenKeysLocal);
+        il.Emit(OpCodes.Ldloc, fieldNameLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.HashSetOfString.GetMethod("Add")!);
+        il.Emit(OpCodes.Pop);
+
+        // values.Add(field.GetValue(obj));
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, fieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("GetValue", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.MarkLabel(skipFieldLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, fieldLoopStartLabel);
+
+        il.MarkLabel(fieldLoopEndLabel);
+
+        // Get _fields dictionary
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsFieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Brfalse, returnResultLabel);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("GetValue", [_types.Object])!);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, fieldsDictLocal);
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Brfalse, returnResultLabel);
+
+        // Iterate _fields and add values for keys not in seenKeys
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        var fieldsDictEnumeratorLocal = il.DeclareLocal(enumeratorType);
+        il.Emit(OpCodes.Stloc, fieldsDictEnumeratorLocal);
+
+        il.MarkLabel(fieldsLoopStart);
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, fieldsLoopEnd);
+
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentLocal);
+
+        // if (!seenKeys.Contains(kvp.Key))
+        il.Emit(OpCodes.Ldloc, seenKeysLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.HashSetOfString.GetMethod("Contains")!);
+        il.Emit(OpCodes.Brtrue, skipDuplicateLabel);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.MarkLabel(skipDuplicateLabel);
+        il.Emit(OpCodes.Br, fieldsLoopStart);
+
+        il.MarkLabel(fieldsLoopEnd);
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+
+        il.MarkLabel(returnResultLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -432,10 +622,230 @@ public partial class RuntimeEmitter
         runtime.GetEntries = method;
 
         var il = method.GetILGenerator();
+        var dictType = _types.DictionaryStringObject;
+        var listType = _types.ListOfObject;
+        var kvpType = _types.KeyValuePairStringObject;
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(), _types.String, _types.Object);
 
-        // Delegate to RuntimeTypes.GetEntries which handles both _fields dictionary and __ backing fields
+        var resultLocal = il.DeclareLocal(listType);
+        var dictLocal = il.DeclareLocal(dictType);
+        var typeLocal = il.DeclareLocal(_types.Type);
+        var fieldsLocal = il.DeclareLocal(_types.FieldInfoArray);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var fieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldNameLocal = il.DeclareLocal(_types.String);
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsDictLocal = il.DeclareLocal(dictType);
+        var seenKeysLocal = il.DeclareLocal(_types.HashSetOfString);
+        var enumeratorLocal = il.DeclareLocal(enumeratorType);
+        var currentLocal = il.DeclareLocal(kvpType);
+        var entryLocal = il.DeclareLocal(listType);
+        var propNameLocal = il.DeclareLocal(_types.String);
+
+        var reflectionLabel = il.DefineLabel();
+        var returnEmptyLabel = il.DefineLabel();
+        var fieldLoopStartLabel = il.DefineLabel();
+        var fieldLoopEndLabel = il.DefineLabel();
+        var skipFieldLabel = il.DefineLabel();
+        var returnResultLabel = il.DefineLabel();
+        var fieldsLoopStart = il.DefineLabel();
+        var fieldsLoopEnd = il.DefineLabel();
+        var skipDuplicateLabel = il.DefineLabel();
+
+        // if (obj is Dictionary<string, object?> dict)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod("GetEntries", [typeof(object)])!);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, reflectionLabel);
+
+        // Create result list and add [key, value] entries
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        var dictLoopStart = il.DefineLabel();
+        var dictLoopEnd = il.DefineLabel();
+        il.MarkLabel(dictLoopStart);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, dictLoopEnd);
+
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentLocal);
+
+        // var entry = new List<object?> { kvp.Key, kvp.Value };
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, entryLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Br, dictLoopStart);
+
+        il.MarkLabel(dictLoopEnd);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Reflection for class instances
+        il.MarkLabel(reflectionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnEmptyLabel);
+
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Newobj, _types.HashSetOfString.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, seenKeysLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("GetType")!);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetFields", [_types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(fieldLoopStartLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, fieldLoopEndLabel);
+
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, fieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldLocal);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, fieldNameLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldNameLocal);
+        il.Emit(OpCodes.Ldstr, "__");
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, skipFieldLabel);
+
+        // propName = field.Name.Substring(2)
+        il.Emit(OpCodes.Ldloc, fieldNameLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, propNameLocal);
+
+        il.Emit(OpCodes.Ldloc, seenKeysLocal);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Callvirt, _types.HashSetOfString.GetMethod("Add")!);
+        il.Emit(OpCodes.Pop);
+
+        // var entry = new List<object?> { propName, field.GetValue(obj) };
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, entryLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloc, fieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("GetValue", [_types.Object])!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.MarkLabel(skipFieldLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, fieldLoopStartLabel);
+
+        il.MarkLabel(fieldLoopEndLabel);
+
+        // Get _fields dictionary
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsFieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Brfalse, returnResultLabel);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("GetValue", [_types.Object])!);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, fieldsDictLocal);
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Brfalse, returnResultLabel);
+
+        var fieldsDictEnumeratorLocal = il.DeclareLocal(enumeratorType);
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Stloc, fieldsDictEnumeratorLocal);
+
+        il.MarkLabel(fieldsLoopStart);
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, fieldsLoopEnd);
+
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentLocal);
+
+        il.Emit(OpCodes.Ldloc, seenKeysLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.HashSetOfString.GetMethod("Contains")!);
+        il.Emit(OpCodes.Brtrue, skipDuplicateLabel);
+
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, entryLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Ldloca, currentLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Callvirt, listType.GetMethod("Add")!);
+
+        il.MarkLabel(skipDuplicateLabel);
+        il.Emit(OpCodes.Br, fieldsLoopStart);
+
+        il.MarkLabel(fieldsLoopEnd);
+        il.Emit(OpCodes.Ldloca, fieldsDictEnumeratorLocal);
+        il.Emit(OpCodes.Call, enumeratorType.GetMethod("Dispose")!);
+
+        il.MarkLabel(returnResultLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Newobj, listType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 

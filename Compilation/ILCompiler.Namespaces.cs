@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -25,7 +24,7 @@ public partial class ILCompiler
         {
             var field = _programType.DefineField(
                 $"$ns_{path.Replace(".", "_")}",
-                typeof(SharpTSNamespace),
+                _runtime.TSNamespaceType,
                 FieldAttributes.Public | FieldAttributes.Static);
             _namespaceFields[path] = field;
         }
@@ -111,9 +110,9 @@ public partial class ILCompiler
                 ? nsPath[(nsPath.LastIndexOf('.') + 1)..]
                 : nsPath;
 
-            // new SharpTSNamespace(simpleName)
+            // new $TSNamespace(simpleName)
             il.Emit(OpCodes.Ldstr, simpleName);
-            il.Emit(OpCodes.Newobj, typeof(SharpTSNamespace).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Newobj, _runtime.TSNamespaceCtor);
             il.Emit(OpCodes.Stsfld, field);
 
             // If nested, add to parent: parent.Set(childName, child)
@@ -126,7 +125,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldsfld, parentField);
                     il.Emit(OpCodes.Ldstr, simpleName);
                     il.Emit(OpCodes.Ldsfld, field);
-                    il.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
+                    il.Emit(OpCodes.Call, _runtime.TSNamespaceSet);
                 }
             }
         }

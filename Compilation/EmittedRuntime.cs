@@ -24,6 +24,16 @@ public class EmittedRuntime
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
     public MethodBuilder TSFunctionBindThis { get; set; } = null!;
 
+    // The emitted TSNamespace class
+    public TypeBuilder TSNamespaceType { get; set; } = null!;
+    public ConstructorBuilder TSNamespaceCtor { get; set; } = null!;
+    public MethodBuilder TSNamespaceGet { get; set; } = null!;
+    public MethodBuilder TSNamespaceSet { get; set; } = null!;
+
+    // The emitted ReferenceEqualityComparer class (for Map/Set key equality)
+    public TypeBuilder ReferenceEqualityComparerType { get; set; } = null!;
+    public FieldBuilder ReferenceEqualityComparerInstance { get; set; } = null!;
+
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;
 
@@ -250,6 +260,10 @@ public class EmittedRuntime
     public MethodBuilder WeakSetAdd { get; set; } = null!;
     public MethodBuilder WeakSetHas { get; set; } = null!;
     public MethodBuilder WeakSetDelete { get; set; } = null!;
+
+    // WeakMap/WeakSet validation helpers
+    public MethodBuilder ValidateWeakMapKey { get; set; } = null!;
+    public MethodBuilder ValidateWeakSetValue { get; set; } = null!;
 
     // Date support
     public MethodBuilder DateNow { get; set; } = null!;

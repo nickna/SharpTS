@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -360,9 +359,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // SharpTSNamespace - call ns.Get(name)
+        // $TSNamespace - call ns.Get(name)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(SharpTSNamespace));
+        il.Emit(OpCodes.Isinst, runtime.TSNamespaceType);
         il.Emit(OpCodes.Brtrue, namespaceLabel);
 
         // Dictionary
@@ -395,9 +394,9 @@ public partial class RuntimeEmitter
         // Namespace handler - call ns.Get(name)
         il.MarkLabel(namespaceLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, typeof(SharpTSNamespace));
+        il.Emit(OpCodes.Castclass, runtime.TSNamespaceType);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(SharpTSNamespace).GetMethod("Get")!);
+        il.Emit(OpCodes.Callvirt, runtime.TSNamespaceGet);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

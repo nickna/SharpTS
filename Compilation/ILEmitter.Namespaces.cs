@@ -1,6 +1,5 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -74,7 +73,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
                     IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
-                    IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
                 }
                 break;
 
@@ -92,7 +91,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);
                     IL.Emit(OpCodes.Ldtoken, classType);
                     IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
-                    IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
                 }
                 break;
 
@@ -130,7 +129,7 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Box, memberLocal.LocalType);
             }
-            IL.Emit(OpCodes.Call, typeof(SharpTSNamespace).GetMethod("Set")!);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
         }
     }
 }

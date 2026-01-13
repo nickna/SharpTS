@@ -155,14 +155,19 @@ public class TypeProvider
     public Type IEnumerator => Resolve("System.Collections.IEnumerator");
     public Type ConditionalWeakTableOpen => Resolve("System.Runtime.CompilerServices.ConditionalWeakTable`2");
     public Type ConcurrentDictionaryOpen => Resolve("System.Collections.Concurrent.ConcurrentDictionary`2");
+    public Type IEqualityComparerOpen => Resolve("System.Collections.Generic.IEqualityComparer`1");
+    public Type RuntimeHelpers => Resolve("System.Runtime.CompilerServices.RuntimeHelpers");
 
     public Type ListOfObject => MakeGenericType(ListOpen, Object);
+    public Type IEqualityComparerOfObject => MakeGenericType(IEqualityComparerOpen, Object);
     public Type DictionaryObjectObject => MakeGenericType(DictionaryOpen, Object, Object);
     public Type DictionaryStringObject => MakeGenericType(DictionaryOpen, String, Object);
     public Type IEnumerableOfObject => MakeGenericType(IEnumerableOpen, Object);
     public Type IEnumeratorOfObject => MakeGenericType(IEnumeratorOpen, Object);
     public Type KeyValuePairStringObject => MakeGenericType(KeyValuePairOpen, String, Object);
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);
+    public Type HashSetOfObject => MakeGenericType(HashSetOpen, Object);
+    public Type ConditionalWeakTableObjectObject => MakeGenericType(ConditionalWeakTableOpen, Object, Object);
 
     #endregion
 
@@ -223,6 +228,7 @@ public class TypeProvider
 
     public Type PropertyInfo => Resolve("System.Reflection.PropertyInfo");
     public Type FieldInfo => Resolve("System.Reflection.FieldInfo");
+    public Type FieldInfoArray => FieldInfo.MakeArrayType();
     public Type ConstructorInfo => Resolve("System.Reflection.ConstructorInfo");
     public Type ParameterInfo => Resolve("System.Reflection.ParameterInfo");
     public Type Assembly => Resolve("System.Reflection.Assembly");
