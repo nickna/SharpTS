@@ -209,11 +209,6 @@ public partial class ILEmitter
 
     private void EmitForOf(Stmt.ForOf f)
     {
-        var startLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
-        var continueLabel = IL.DefineLabel();
-
-        _ctx.EnterLoop(endLabel, continueLabel);
         _ctx.Locals.EnterScope();
 
         // Evaluate iterable
@@ -232,55 +227,146 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
         }
 
-        // For generators, use enumerator-based iteration
+        // For generators, use enumerator-based iteration (with its own labels)
         if (iterableType is TypeInfo.Generator)
         {
-            EmitForOfEnumerator(f, startLabel, endLabel, continueLabel);
+            var genStartLabel = IL.DefineLabel();
+            var genEndLabel = IL.DefineLabel();
+            var genContinueLabel = IL.DefineLabel();
+            _ctx.EnterLoop(genEndLabel, genContinueLabel);
+            EmitForOfEnumerator(f, genStartLabel, genEndLabel, genContinueLabel);
             return;
         }
 
+        // Store the iterable for potential iterator protocol check
         var iterableLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iterableLocal);
 
-        // Create index variable
-        var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Stloc, indexLocal);
+        // Try iterator protocol first: GetIteratorFunction(iterable, Symbol.iterator)
+        var iteratorFnLocal = IL.DeclareLocal(_ctx.Types.Object);
+        var indexBasedLabel = IL.DefineLabel();
+        var afterLoopLabel = IL.DefineLabel();
 
-        // Loop variable
-        var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
-
-        IL.MarkLabel(startLabel);
-
-        // Check if index < length
-        IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
-        IL.Emit(OpCodes.Clt);
-        IL.Emit(OpCodes.Brfalse, endLabel);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorFunction);
+        IL.Emit(OpCodes.Stloc, iteratorFnLocal);
 
-        // Get current element
-        IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetElement);
-        IL.Emit(OpCodes.Stloc, loopVar);
+        // If iterator function is null, fall back to index-based iteration
+        IL.Emit(OpCodes.Ldloc, iteratorFnLocal);
+        IL.Emit(OpCodes.Brfalse, indexBasedLabel);
 
-        // Emit body
-        EmitStatement(f.Body);
+        // ===== Iterator protocol path =====
+        {
+            var iterStartLabel = IL.DefineLabel();
+            var iterEndLabel = IL.DefineLabel();
+            var iterContinueLabel = IL.DefineLabel();
+            _ctx.EnterLoop(iterEndLabel, iterContinueLabel);
 
-        IL.MarkLabel(continueLabel);
+            // Call the iterator function to get the iterator object
+            // Use InvokeMethodValue to properly bind 'this' to the iterable object
+            IL.Emit(OpCodes.Ldloc, iterableLocal);       // receiver (this)
+            IL.Emit(OpCodes.Ldloc, iteratorFnLocal);     // method
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);  // args
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
 
-        // Increment index
-        IL.Emit(OpCodes.Ldloc, indexLocal);
-        IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Add);
-        IL.Emit(OpCodes.Stloc, indexLocal);
+            // Store the iterator object
+            var iteratorObjLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, iteratorObjLocal);
 
-        IL.Emit(OpCodes.Br, startLabel);
+            // Create $IteratorWrapper: new $IteratorWrapper(iteratorObj, typeof($Runtime))
+            IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.IteratorWrapperCtor);
 
-        IL.MarkLabel(endLabel);
+            // Cast to IEnumerator and store
+            var enumLocal = IL.DeclareLocal(_ctx.Types.IEnumerator);
+            IL.Emit(OpCodes.Castclass, _ctx.Types.IEnumerator);
+            IL.Emit(OpCodes.Stloc, enumLocal);
+
+            // Loop variable
+            var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+
+            // Get MoveNext and Current methods
+            var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
+            var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
+
+            IL.MarkLabel(iterStartLabel);
+
+            // Call MoveNext
+            IL.Emit(OpCodes.Ldloc, enumLocal);
+            IL.Emit(OpCodes.Callvirt, moveNext);
+            IL.Emit(OpCodes.Brfalse, iterEndLabel);
+
+            // Get Current
+            IL.Emit(OpCodes.Ldloc, enumLocal);
+            IL.Emit(OpCodes.Callvirt, current);
+            IL.Emit(OpCodes.Stloc, loopVar);
+
+            // Emit body
+            EmitStatement(f.Body);
+
+            IL.MarkLabel(iterContinueLabel);
+            IL.Emit(OpCodes.Br, iterStartLabel);
+
+            IL.MarkLabel(iterEndLabel);
+            _ctx.ExitLoop();
+            IL.Emit(OpCodes.Br, afterLoopLabel); // Skip the index-based path
+        }
+
+        // ===== Index-based fallback (for arrays, strings, etc.) =====
+        IL.MarkLabel(indexBasedLabel);
+        {
+            var startLabel = IL.DefineLabel();
+            var endLabel = IL.DefineLabel();
+            var continueLabel = IL.DefineLabel();
+            _ctx.EnterLoop(endLabel, continueLabel);
+
+            // Create index variable
+            var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Stloc, indexLocal);
+
+            // Loop variable
+            var indexLoopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+
+            IL.MarkLabel(startLabel);
+
+            // Check if index < length
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
+            IL.Emit(OpCodes.Clt);
+            IL.Emit(OpCodes.Brfalse, endLabel);
+
+            // Get current element
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetElement);
+            IL.Emit(OpCodes.Stloc, indexLoopVar);
+
+            // Emit body
+            EmitStatement(f.Body);
+
+            IL.MarkLabel(continueLabel);
+
+            // Increment index
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Add);
+            IL.Emit(OpCodes.Stloc, indexLocal);
+
+            IL.Emit(OpCodes.Br, startLabel);
+
+            IL.MarkLabel(endLabel);
+            _ctx.ExitLoop();
+        }
+
+        // Common exit point for both paths
+        IL.MarkLabel(afterLoopLabel);
         _ctx.Locals.ExitScope();
-        _ctx.ExitLoop();
     }
 
     private void EmitForOfEnumerator(Stmt.ForOf f, Label startLabel, Label endLabel, Label continueLabel)

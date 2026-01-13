@@ -305,6 +305,16 @@ public class EmittedRuntime
     // Iterator protocol support
     public MethodBuilder GetIterator { get; set; } = null!;
 
+    // Iterator wrapper type (implements IEnumerator<object?> for custom iterables)
+    public TypeBuilder IteratorWrapperType { get; set; } = null!;
+    public ConstructorBuilder IteratorWrapperCtor { get; set; } = null!;
+
+    // Iterator protocol helper methods
+    public MethodBuilder GetIteratorFunction { get; set; } = null!;  // Returns iterator function or null
+    public MethodBuilder InvokeIteratorNext { get; set; } = null!;   // Calls next() on iterator
+    public MethodBuilder GetIteratorDone { get; set; } = null!;      // Extracts done from result
+    public MethodBuilder GetIteratorValue { get; set; } = null!;     // Extracts value from result
+
     // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)
     public TypeBuilder GeneratorInterfaceType { get; set; } = null!;
     public MethodBuilder GeneratorReturnMethod { get; set; } = null!;
