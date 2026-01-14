@@ -59,6 +59,10 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Stelem_Ref);
             }
 
+            // Pass Symbol.iterator and runtimeType for iterator protocol support
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
+            _il.Emit(OpCodes.Ldtoken, _ctx!.Runtime!.RuntimeType);
+            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConcatArrays);
         }
         SetStackUnknown();

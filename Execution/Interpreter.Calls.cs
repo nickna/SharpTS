@@ -147,14 +147,8 @@ public partial class Interpreter
             if (argument is Expr.Spread spread)
             {
                 object? spreadValue = Evaluate(spread.Expression);
-                if (spreadValue is SharpTSArray arr)
-                {
-                    argumentsList.AddRange(arr.Elements);
-                }
-                else
-                {
-                    throw new Exception("Runtime Error: Spread expression must be an array.");
-                }
+                // Use GetIterableElements to support custom iterables with Symbol.iterator
+                argumentsList.AddRange(GetIterableElements(spreadValue));
             }
             else
             {

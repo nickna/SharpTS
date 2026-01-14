@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-13 (Added template literal types and intrinsic string types)
+**Last Updated:** 2026-01-13 (Completed compiler iterator protocol - spread, yield*, for...of with Symbol.iterator)
 
 ## Legend
 - ✅ Implemented
@@ -220,7 +220,7 @@ This document tracks TypeScript language features and their implementation statu
 | Generators (`function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; for...of integration |
 | Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of`; full IL compiler support |
 | Well-known Symbols | ✅ | `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables` |
-| Iterator Protocol | ✅ | Custom iterables via `[Symbol.iterator]()` method (interpreter only) |
+| Iterator Protocol | ✅ | Custom iterables via `[Symbol.iterator]()` method (interpreter and compiler) |
 | Async Iterator Protocol | ✅ | Custom async iterables via `[Symbol.asyncIterator]()` method |
 | `for await...of` | ✅ | Async iteration over async iterators and generators |
 | `Symbol.for`/`Symbol.keyFor` | ✅ | Global symbol registry |
@@ -238,6 +238,7 @@ This document tracks TypeScript language features and their implementation statu
 ### IL Compiler Bugs
 
 - `yield await expr` in a single expression causes NullReferenceException in async generators. Workaround: use separate statements (`const val = await expr; yield val;`)
+- Generator variable capture for outer scope variables may not work correctly. Workaround: pass outer variables as parameters to the generator function.
 
 ### Recently Fixed Bugs (2026-01-12)
 - ~~Generic types with array suffix~~ - Fixed: `ParseGenericTypeReference()` now properly finds matching `>` and handles array suffixes (`Partial<T>[]`, `Promise<number>[][]`, etc.)
@@ -565,7 +566,7 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Generator `.throw(error)` - throws into generator
 - ✅ Fixed `SharpTSIteratorResult.ToString()` to show value when done
 - ✅ Compiler support for well-known symbol access (`Symbol.iterator`)
-- ⚠️ Compiler iterator protocol: foundation in place, full implementation pending
+- ✅ Compiler iterator protocol: for...of, spread operators, yield* with custom iterables (Symbol.iterator); direct IL emission, no reflection
 - ✅ `for await...of` syntax (parsing, interpreter, and IL compiler)
 - ✅ Async generators (`async function*`) with `yield`, `yield*`, `.next()`, `.return()`, `.throw()` (interpreter and IL compiler)
 - ✅ Async iterator protocol via `Symbol.asyncIterator` (interpreter and IL compiler)

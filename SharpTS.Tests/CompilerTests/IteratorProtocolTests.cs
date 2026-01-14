@@ -484,4 +484,370 @@ public class IteratorProtocolTests
     }
 
     #endregion
+
+    #region Spread with Custom Iterator
+
+    [Fact]
+    public void SpreadCustomIterator_InArrayLiteral_CollectsAllValues()
+    {
+        var source = """
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
+                            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
+
+            const arr = [1, ...iterable, 100];
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[1]);
+            console.log(arr[2]);
+            console.log(arr[3]);
+            console.log(arr[4]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n1\n10\n20\n30\n100\n", output);
+    }
+
+    [Fact]
+    public void SpreadCustomIterator_InArrayLiteral_InterpreterParity()
+    {
+        var source = """
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
+                            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
+
+            const arr = [1, ...iterable, 100];
+            console.log(arr.join(","));
+            """;
+
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal(interpretedOutput, compiledOutput);
+    }
+
+    [Fact]
+    public void SpreadEmptyIterator_InArrayLiteral_AddsNothing()
+    {
+        var source = """
+            const empty: any = {
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        next() {
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
+
+            const arr = [1, ...empty, 2];
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[1]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n1\n2\n", output);
+    }
+
+    [Fact]
+    public void SpreadCustomIterator_InFunctionCall_ExpandsArguments()
+    {
+        var source = """
+            function sum(...args: number[]): number {
+                let total = 0;
+                for (const x of args) {
+                    total = total + x;
+                }
+                return total;
+            }
+
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
+                            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
+
+            console.log(sum(1, ...iterable, 100));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("161\n", output);
+    }
+
+    [Fact]
+    public void SpreadCustomIterator_InFunctionCall_InterpreterParity()
+    {
+        var source = """
+            function sum(...args: number[]): number {
+                let total = 0;
+                for (const x of args) {
+                    total = total + x;
+                }
+                return total;
+            }
+
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
+                            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
+
+            console.log(sum(1, ...iterable, 100));
+            """;
+
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal(interpretedOutput, compiledOutput);
+    }
+
+    [Fact]
+    public void SpreadGenerator_InArrayLiteral_CollectsAllValues()
+    {
+        var source = """
+            function* nums(): Generator<number> {
+                yield 1;
+                yield 2;
+                yield 3;
+            }
+
+            const gen: any = nums();
+            const arr = [...gen];
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[1]);
+            console.log(arr[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("3\n1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void SpreadGenerator_InArrayLiteral_InterpreterParity()
+    {
+        var source = """
+            function* nums(): Generator<number> {
+                yield 1;
+                yield 2;
+                yield 3;
+            }
+
+            const gen: any = nums();
+            const arr = [...gen];
+            console.log(arr.join(","));
+            """;
+
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal(interpretedOutput, compiledOutput);
+    }
+
+    #endregion
+
+    #region Yield* with Custom Iterator
+
+    [Fact]
+    public void YieldStar_CustomIterator_DelegatesAllValues()
+    {
+        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        var source = """
+            function createIterable() {
+                const iterable: any = {
+                    data: [10, 20, 30],
+                    [Symbol.iterator]() {
+                        const iter: any = {
+                            i: 0,
+                            data: this.data,
+                            next() {
+                                if (this.i < this.data.length) {
+                                    const val = this.data[this.i];
+                                    this.i = this.i + 1;
+                                    return { value: val, done: false };
+                                }
+                                return { value: null, done: true };
+                            }
+                        };
+                        return iter;
+                    }
+                };
+                return iterable;
+            }
+
+            function* gen(iter: any): Generator<number> {
+                yield 1;
+                yield* iter;
+                yield 100;
+            }
+
+            for (const x of gen(createIterable())) {
+                console.log(x);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n10\n20\n30\n100\n", output);
+    }
+
+    [Fact]
+    public void YieldStar_CustomIterator_InterpreterParity()
+    {
+        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        var source = """
+            function createIterable() {
+                const iterable: any = {
+                    data: [10, 20, 30],
+                    [Symbol.iterator]() {
+                        const iter: any = {
+                            i: 0,
+                            data: this.data,
+                            next() {
+                                if (this.i < this.data.length) {
+                                    const val = this.data[this.i];
+                                    this.i = this.i + 1;
+                                    return { value: val, done: false };
+                                }
+                                return { value: null, done: true };
+                            }
+                        };
+                        return iter;
+                    }
+                };
+                return iterable;
+            }
+
+            function* gen(iter: any): Generator<number> {
+                yield 1;
+                yield* iter;
+                yield 100;
+            }
+
+            let result = "";
+            for (const x of gen(createIterable())) {
+                result = result + x + ",";
+            }
+            console.log(result);
+            """;
+
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal(interpretedOutput, compiledOutput);
+    }
+
+    [Fact]
+    public void YieldStar_EmptyIterator_YieldsNothing()
+    {
+        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        var source = """
+            function createEmpty() {
+                const empty: any = {
+                    [Symbol.iterator]() {
+                        const iter: any = {
+                            next() {
+                                return { value: null, done: true };
+                            }
+                        };
+                        return iter;
+                    }
+                };
+                return empty;
+            }
+
+            function* gen(iter: any): Generator<number> {
+                yield 1;
+                yield* iter;
+                yield 2;
+            }
+
+            for (const x of gen(createEmpty())) {
+                console.log(x);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void YieldStar_Generator_DelegatesAllValues()
+    {
+        var source = """
+            function* inner(): Generator<number> {
+                yield 10;
+                yield 20;
+                yield 30;
+            }
+
+            function* outer(): Generator<number> {
+                yield 1;
+                yield* inner();
+                yield 100;
+            }
+
+            for (const x of outer()) {
+                console.log(x);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n10\n20\n30\n100\n", output);
+    }
+
+    #endregion
 }

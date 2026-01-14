@@ -11,6 +11,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the $IteratorWrapper class that adapts custom iterator objects to IEnumerator&lt;object&gt;.
     /// This allows for...of loops to work with any object that has a [Symbol.iterator]() method.
+    /// NOTE: Must be called AFTER EmitIteratorMethods so that runtime.InvokeIteratorNext etc. are defined.
     /// </summary>
     private void EmitIteratorWrapperType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -23,16 +24,16 @@ public partial class RuntimeEmitter
         );
         runtime.IteratorWrapperType = typeBuilder;
 
-        // Define fields
+        // Define fields - simplified, no longer need _runtime field
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
-        var runtimeField = typeBuilder.DefineField("_runtime", _types.Type, FieldAttributes.Private);
 
-        // Constructor: $IteratorWrapper(object iterator, Type runtimeType)
+        // Constructor: $IteratorWrapper(object iterator)
+        // NOTE: runtimeType parameter kept for backward compatibility but not used
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, _types.Type]
+            [_types.Object, _types.Type]  // Keep signature for compatibility
         );
         runtime.IteratorWrapperCtor = ctor;
 
@@ -44,14 +45,11 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, iteratorField);
-        // this._runtime = runtimeType
-        ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Ldarg_2);
-        ctorIl.Emit(OpCodes.Stfld, runtimeField);
         // this._current = null
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldnull);
         ctorIl.Emit(OpCodes.Stfld, currentField);
+        // runtimeType (arg_2) is ignored - no longer needed
         ctorIl.Emit(OpCodes.Ret);
 
         // Property: object Current { get; } - generic version
@@ -86,7 +84,7 @@ public partial class RuntimeEmitter
         ienumeratorCurrentGetterIl.Emit(OpCodes.Ret);
         typeBuilder.DefineMethodOverride(ienumeratorCurrentGetter, _types.IEnumerator.GetProperty("Current")!.GetGetMethod()!);
 
-        // Method: bool MoveNext()
+        // Method: bool MoveNext() - uses DIRECT method calls instead of reflection
         var moveNext = typeBuilder.DefineMethod(
             "MoveNext",
             MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
@@ -97,79 +95,29 @@ public partial class RuntimeEmitter
 
         // Locals for MoveNext
         var resultLocal = moveNextIl.DeclareLocal(_types.Object);
-        var doneLocal = moveNextIl.DeclareLocal(_types.Boolean);
-        var methodInfoLocal = moveNextIl.DeclareLocal(_types.MethodInfo);
 
-        // Call InvokeIteratorNext(_iterator) via reflection on runtime type
-        // var invokeMethod = _runtime.GetMethod("InvokeIteratorNext");
-        moveNextIl.Emit(OpCodes.Ldarg_0);
-        moveNextIl.Emit(OpCodes.Ldfld, runtimeField);
-        moveNextIl.Emit(OpCodes.Ldstr, "InvokeIteratorNext");
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        moveNextIl.Emit(OpCodes.Stloc, methodInfoLocal);
-
-        // var result = invokeMethod.Invoke(null, new object[] { _iterator });
-        moveNextIl.Emit(OpCodes.Ldloc, methodInfoLocal);
-        moveNextIl.Emit(OpCodes.Ldnull); // static method, no instance
-        moveNextIl.Emit(OpCodes.Ldc_I4_1);
-        moveNextIl.Emit(OpCodes.Newarr, _types.Object);
-        moveNextIl.Emit(OpCodes.Dup);
-        moveNextIl.Emit(OpCodes.Ldc_I4_0);
+        // var result = InvokeIteratorNext(_iterator);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
         moveNextIl.Emit(OpCodes.Ldfld, iteratorField);
-        moveNextIl.Emit(OpCodes.Stelem_Ref);
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        moveNextIl.Emit(OpCodes.Call, runtime.InvokeIteratorNext);
         moveNextIl.Emit(OpCodes.Stloc, resultLocal);
 
-        // Call GetIteratorDone(result) via reflection
-        // var doneMethod = _runtime.GetMethod("GetIteratorDone");
-        moveNextIl.Emit(OpCodes.Ldarg_0);
-        moveNextIl.Emit(OpCodes.Ldfld, runtimeField);
-        moveNextIl.Emit(OpCodes.Ldstr, "GetIteratorDone");
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        moveNextIl.Emit(OpCodes.Stloc, methodInfoLocal);
-
-        // var done = (bool)doneMethod.Invoke(null, new object[] { result });
-        moveNextIl.Emit(OpCodes.Ldloc, methodInfoLocal);
-        moveNextIl.Emit(OpCodes.Ldnull);
-        moveNextIl.Emit(OpCodes.Ldc_I4_1);
-        moveNextIl.Emit(OpCodes.Newarr, _types.Object);
-        moveNextIl.Emit(OpCodes.Dup);
-        moveNextIl.Emit(OpCodes.Ldc_I4_0);
+        // var done = GetIteratorDone(result);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
-        moveNextIl.Emit(OpCodes.Stelem_Ref);
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        moveNextIl.Emit(OpCodes.Unbox_Any, _types.Boolean);
-        moveNextIl.Emit(OpCodes.Stloc, doneLocal);
+        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorDone);
 
         // if (done) return false;
         var notDoneLabel = moveNextIl.DefineLabel();
-        moveNextIl.Emit(OpCodes.Ldloc, doneLocal);
         moveNextIl.Emit(OpCodes.Brfalse, notDoneLabel);
         moveNextIl.Emit(OpCodes.Ldc_I4_0);
         moveNextIl.Emit(OpCodes.Ret);
 
         moveNextIl.MarkLabel(notDoneLabel);
 
-        // Call GetIteratorValue(result) via reflection
-        // var valueMethod = _runtime.GetMethod("GetIteratorValue");
+        // _current = GetIteratorValue(result);  -- DIRECT CALL
         moveNextIl.Emit(OpCodes.Ldarg_0);
-        moveNextIl.Emit(OpCodes.Ldfld, runtimeField);
-        moveNextIl.Emit(OpCodes.Ldstr, "GetIteratorValue");
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        moveNextIl.Emit(OpCodes.Stloc, methodInfoLocal);
-
-        // _current = valueMethod.Invoke(null, new object[] { result });
-        moveNextIl.Emit(OpCodes.Ldarg_0);
-        moveNextIl.Emit(OpCodes.Ldloc, methodInfoLocal);
-        moveNextIl.Emit(OpCodes.Ldnull);
-        moveNextIl.Emit(OpCodes.Ldc_I4_1);
-        moveNextIl.Emit(OpCodes.Newarr, _types.Object);
-        moveNextIl.Emit(OpCodes.Dup);
-        moveNextIl.Emit(OpCodes.Ldc_I4_0);
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
-        moveNextIl.Emit(OpCodes.Stelem_Ref);
-        moveNextIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
         moveNextIl.Emit(OpCodes.Stfld, currentField);
 
         // return true;
@@ -202,18 +150,28 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits methods for iterator protocol support.
+    /// Emits basic iterator protocol methods (GetIteratorDone, GetIteratorValue, InvokeIteratorNext, GetIteratorFunction).
+    /// These must be called before EmitIteratorWrapperType because $IteratorWrapper uses them.
     /// </summary>
-    private void EmitIteratorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitIteratorMethodsBasic(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Keep the original stub for backwards compatibility
         EmitGetIterator(typeBuilder, runtime);
 
-        // New iterator protocol helpers
+        // Basic iterator protocol helpers - needed by $IteratorWrapper
         EmitGetIteratorDone(typeBuilder, runtime);
         EmitGetIteratorValue(typeBuilder, runtime);
         EmitInvokeIteratorNext(typeBuilder, runtime);
         EmitGetIteratorFunction(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits IterateToList method which depends on $IteratorWrapper.
+    /// Must be called after EmitIteratorWrapperType.
+    /// </summary>
+    private void EmitIteratorMethodsAdvanced(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        EmitIterateToList(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -362,6 +320,181 @@ public partial class RuntimeEmitter
         il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits IterateToList: converts any iterable (including custom iterables with Symbol.iterator) to List&lt;object&gt;.
+    /// Used by spread operators and yield* to collect values from any iterable source.
+    /// Signature: List&lt;object&gt; IterateToList(object obj, $TSSymbol iteratorSymbol, Type runtimeType)
+    /// </summary>
+    private void EmitIterateToList(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "IterateToList",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object, runtime.TSSymbolType, _types.Type]
+        );
+        runtime.IterateToList = method;
+
+        var il = method.GetILGenerator();
+
+        // Locals
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);     // result list
+        var iterFnLocal = il.DeclareLocal(_types.Object);           // iterator function
+        var iteratorLocal = il.DeclareLocal(_types.Object);         // iterator object
+        var wrapperLocal = il.DeclareLocal(_types.IEnumeratorOfObject); // $IteratorWrapper
+
+        // Labels
+        var tryStringLabel = il.DefineLabel();
+        var tryIteratorLabel = il.DefineLabel();
+        var collectLoopLabel = il.DefineLabel();
+        var collectDoneLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Create result list
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // Check for null input
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, throwLabel);
+
+        // 1. If obj is already List<object>, return it directly (fast path for arrays)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, tryStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ret);
+
+        // 2. If obj is string, iterate characters
+        il.MarkLabel(tryStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, tryIteratorLabel);
+        {
+            // for each char in string, add char.ToString() to result
+            var strLocal = il.DeclareLocal(_types.String);
+            var idxLocal = il.DeclareLocal(_types.Int32);
+            var strLoopStart = il.DefineLabel();
+            var strLoopEnd = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Stloc, strLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, idxLocal);
+
+            il.MarkLabel(strLoopStart);
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+            il.Emit(OpCodes.Bge, strLoopEnd);
+
+            // result.Add(str[idx].ToString())
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
+            var charToString = typeof(char).GetMethod("ToString", Type.EmptyTypes)!;
+            il.Emit(OpCodes.Call, charToString);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, idxLocal);
+            il.Emit(OpCodes.Br, strLoopStart);
+
+            il.MarkLabel(strLoopEnd);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // 3. Check for Symbol.iterator
+        var tryIEnumerableLabel = il.DefineLabel();
+        il.MarkLabel(tryIteratorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);  // Symbol.iterator
+        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, iterFnLocal);
+
+        // If no iterator function found, try IEnumerable fallback
+        il.Emit(OpCodes.Ldloc, iterFnLocal);
+        il.Emit(OpCodes.Brfalse, tryIEnumerableLabel);
+
+        // Call the iterator function: iterator = InvokeMethodValue(obj, iterFn, new object[0])
+        il.Emit(OpCodes.Ldarg_0);          // receiver (this)
+        il.Emit(OpCodes.Ldloc, iterFnLocal);  // function
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);  // empty args
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, iteratorLocal);
+
+        // Create $IteratorWrapper: wrapper = new $IteratorWrapper(iterator, runtimeType)
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Ldarg_2);  // runtimeType
+        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
+        il.Emit(OpCodes.Stloc, wrapperLocal);
+
+        // Collect all values: while (wrapper.MoveNext()) result.Add(wrapper.Current);
+        il.MarkLabel(collectLoopLabel);
+        il.Emit(OpCodes.Ldloc, wrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.IEnumerator.GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, collectDoneLabel);
+
+        // result.Add(wrapper.Current)
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, wrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.IEnumeratorOfObject.GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, collectLoopLabel);
+
+        il.MarkLabel(collectDoneLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // 4. Try IEnumerable fallback (for generators and other .NET enumerables)
+        il.MarkLabel(tryIEnumerableLabel);
+        {
+            var enumLoopLabel = il.DefineLabel();
+            var enumDoneLabel = il.DefineLabel();
+            var enumLocal = il.DeclareLocal(_types.IEnumerator);
+
+            // Check if obj is IEnumerable
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.IEnumerable);
+            il.Emit(OpCodes.Brfalse, throwLabel);
+
+            // Get enumerator: enumerator = ((IEnumerable)obj).GetEnumerator()
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.IEnumerable);
+            il.Emit(OpCodes.Callvirt, _types.IEnumerable.GetMethod("GetEnumerator")!);
+            il.Emit(OpCodes.Stloc, enumLocal);
+
+            // Collect: while (enumerator.MoveNext()) result.Add(enumerator.Current)
+            il.MarkLabel(enumLoopLabel);
+            il.Emit(OpCodes.Ldloc, enumLocal);
+            il.Emit(OpCodes.Callvirt, _types.IEnumerator.GetMethod("MoveNext")!);
+            il.Emit(OpCodes.Brfalse, enumDoneLabel);
+
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, enumLocal);
+            il.Emit(OpCodes.Callvirt, _types.IEnumerator.GetProperty("Current")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Br, enumLoopLabel);
+
+            il.MarkLabel(enumDoneLabel);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Throw error for non-iterable
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "Runtime Error: Value is not iterable. Expected an array, string, or object with [Symbol.iterator].");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
     }
 
     /// <summary>

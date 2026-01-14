@@ -601,6 +601,36 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Gets iterable elements from any iterable value, including custom iterables with Symbol.iterator.
+    /// This method is used by spread operators and yield* to uniformly handle all iterable types.
+    /// </summary>
+    /// <param name="value">The value to iterate.</param>
+    /// <returns>An enumerable of the value's elements.</returns>
+    /// <exception cref="Exception">Thrown if the value is not iterable.</exception>
+    internal IEnumerable<object?> GetIterableElements(object? value)
+    {
+        // First, check for Symbol.iterator protocol on objects/instances
+        IEnumerable<object?>? customIterator = TryGetSymbolIterator(value);
+        if (customIterator != null)
+        {
+            return customIterator;
+        }
+
+        // Fall back to known iterable types
+        return value switch
+        {
+            SharpTSArray array => array.Elements,
+            SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
+            SharpTSSet set => set.Values().Elements,       // yields values
+            SharpTSIterator iter => iter.Elements,
+            SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
+            string s => s.Select(c => (object?)c.ToString()),
+            null => throw new Exception("Runtime Error: Cannot spread null or undefined."),
+            _ => throw new Exception($"Runtime Error: Value of type '{value.GetType().Name}' is not iterable. Expected an array, string, Map, Set, generator, or object with [Symbol.iterator].")
+        };
+    }
+
+    /// <summary>
     /// Iterates over elements with proper break/continue handling.
     /// </summary>
     private ExecutionResult IterateWithBreakContinue(IEnumerable<object?> elements, string variableName, Stmt body)

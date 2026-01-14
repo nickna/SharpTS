@@ -43,8 +43,7 @@ public partial class RuntimeEmitter
         // Emit $IAsyncGenerator interface for async generator return/throw support
         EmitAsyncGeneratorInterface(moduleBuilder, runtime);
 
-        // Emit $IteratorWrapper class for custom iterator protocol support
-        EmitIteratorWrapperType(moduleBuilder, runtime);
+        // NOTE: $IteratorWrapper is emitted later, after iterator methods are defined
 
         // Emit $TSDate class for standalone Date support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
@@ -1004,7 +1003,30 @@ public partial class RuntimeEmitter
         EmitInstanceOf(typeBuilder, runtime);
         EmitAdd(typeBuilder, runtime);
         EmitEquals(typeBuilder, runtime);
-        // Arrays
+        // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed
+        EmitCreateObject(typeBuilder, runtime);
+        EmitGetArrayMethod(typeBuilder, runtime);
+        EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
+        EmitGetFieldsProperty(typeBuilder, runtime);
+        EmitSetFieldsProperty(typeBuilder, runtime);
+        EmitGetProperty(typeBuilder, runtime);
+        EmitSetProperty(typeBuilder, runtime);
+        EmitMergeIntoObject(typeBuilder, runtime);
+        // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
+        EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
+        EmitIsSymbol(typeBuilder, runtime);
+        EmitGetIndex(typeBuilder, runtime);
+        EmitSetIndex(typeBuilder, runtime);
+        EmitInvokeValue(typeBuilder, runtime);
+        EmitInvokeMethodValue(typeBuilder, runtime);
+        // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
+        EmitIteratorMethodsBasic(typeBuilder, runtime);
+        // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
+        // but BEFORE IterateToList (which needs IteratorWrapperCtor)
+        EmitIteratorWrapperType(moduleBuilder, runtime);
+        // Advanced iterator methods (IterateToList) - needs IteratorWrapperCtor
+        EmitIteratorMethodsAdvanced(typeBuilder, runtime);
+        // Arrays - must come AFTER iterator methods since ConcatArrays/ExpandCallArgs use IterateToList
         EmitCreateArray(typeBuilder, runtime);
         EmitGetLength(typeBuilder, runtime);
         EmitGetElement(typeBuilder, runtime);
@@ -1019,22 +1041,6 @@ public partial class RuntimeEmitter
         EmitArrayShift(typeBuilder, runtime);
         EmitArrayUnshift(typeBuilder, runtime);
         EmitArraySlice(typeBuilder, runtime);
-        // Objects
-        EmitCreateObject(typeBuilder, runtime);
-        EmitGetArrayMethod(typeBuilder, runtime);
-        EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
-        EmitGetFieldsProperty(typeBuilder, runtime);
-        EmitSetFieldsProperty(typeBuilder, runtime);
-        EmitGetProperty(typeBuilder, runtime);
-        EmitSetProperty(typeBuilder, runtime);
-        EmitMergeIntoObject(typeBuilder, runtime);
-        // Symbol support helpers - must come before EmitGetIndex/EmitSetIndex which depend on them
-        EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
-        EmitIsSymbol(typeBuilder, runtime);
-        EmitGetIndex(typeBuilder, runtime);
-        EmitSetIndex(typeBuilder, runtime);
-        EmitInvokeValue(typeBuilder, runtime);
-        EmitInvokeMethodValue(typeBuilder, runtime);
         // Array callback methods must come after InvokeValue and IsTruthy
         EmitArrayMap(typeBuilder, runtime);
         EmitArrayFilter(typeBuilder, runtime);
@@ -1104,8 +1110,6 @@ public partial class RuntimeEmitter
         EmitWeakSetMethods(typeBuilder, runtime);
         // Dynamic import methods
         EmitDynamicImportMethods(typeBuilder, runtime);
-        // Iterator protocol methods
-        EmitIteratorMethods(typeBuilder, runtime);
         // Async generator await continuation helper
         EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
 

@@ -341,6 +341,7 @@ public class EmittedRuntime
     public MethodBuilder InvokeIteratorNext { get; set; } = null!;   // Calls next() on iterator
     public MethodBuilder GetIteratorDone { get; set; } = null!;      // Extracts done from result
     public MethodBuilder GetIteratorValue { get; set; } = null!;     // Extracts value from result
+    public MethodBuilder IterateToList { get; set; } = null!;        // Converts any iterable to List<object>
 
     // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)
     public TypeBuilder GeneratorInterfaceType { get; set; } = null!;

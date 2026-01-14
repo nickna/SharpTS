@@ -349,22 +349,12 @@ public class SharpTSGenerator : IEnumerable<object?>
     }
 
     /// <summary>
-    /// Gets elements from an iterable value.
+    /// Gets elements from an iterable value, including custom iterables with Symbol.iterator.
     /// </summary>
-    private static IEnumerable<object?> GetIterableElements(object? value)
+    private IEnumerable<object?> GetIterableElements(object? value)
     {
-        return value switch
-        {
-            SharpTSArray array => array.Elements,
-            SharpTSGenerator gen => gen,
-            SharpTSIterator iter => iter.Elements,
-            SharpTSMap map => map.Entries().Elements,
-            SharpTSSet set => set.Values().Elements,
-            string s => s.Select(c => (object?)c.ToString()),
-            IEnumerable<object?> enumerable => enumerable,
-            null => [],
-            _ => throw new Exception($"Runtime Error: Cannot iterate over non-iterable value.")
-        };
+        // Use the interpreter's GetIterableElements which handles Symbol.iterator protocol
+        return _interpreter.GetIterableElements(value);
     }
 
     /// <summary>

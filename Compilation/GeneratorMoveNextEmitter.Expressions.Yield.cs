@@ -71,16 +71,56 @@ public partial class GeneratorMoveNextEmitter
         var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
 
         var loopEnd = _il.DefineLabel();
+        var hasIteratorLabel = _il.DefineLabel();
+        var gotEnumeratorLabel = _il.DefineLabel();
 
-        // Emit the iterable expression and get its enumerator
+        // Locals
+        var iterableLocal = _il.DeclareLocal(typeof(object));
+        var iterFnLocal = _il.DeclareLocal(typeof(object));
+        var iteratorLocal = _il.DeclareLocal(typeof(object));
+        var enumTemp = _il.DeclareLocal(typeof(System.Collections.IEnumerator));
+
+        // Emit the iterable expression
         EmitExpression(y.Value!);
         EnsureBoxed();
+        _il.Emit(OpCodes.Stloc, iterableLocal);
+
+        // Check for Symbol.iterator: var iterFn = GetIteratorFunction(iterable, Symbol.iterator)
+        _il.Emit(OpCodes.Ldloc, iterableLocal);
+        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+        _il.Emit(OpCodes.Stloc, iterFnLocal);
+
+        // If iterFn != null, use iterator protocol
+        _il.Emit(OpCodes.Ldloc, iterFnLocal);
+        _il.Emit(OpCodes.Brtrue, hasIteratorLabel);
+
+        // No Symbol.iterator - fall back to IEnumerable cast
+        _il.Emit(OpCodes.Ldloc, iterableLocal);
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
         _il.Emit(OpCodes.Callvirt, getEnumerator);
+        _il.Emit(OpCodes.Stloc, enumTemp);
+        _il.Emit(OpCodes.Br, gotEnumeratorLabel);
+
+        // Has Symbol.iterator - use iterator protocol with $IteratorWrapper
+        _il.MarkLabel(hasIteratorLabel);
+        // Call iterator function: iterator = InvokeMethodValue(iterable, iterFn, new object[0])
+        _il.Emit(OpCodes.Ldloc, iterableLocal);     // receiver (this)
+        _il.Emit(OpCodes.Ldloc, iterFnLocal);       // function
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Newarr, typeof(object));   // empty args
+        _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+        _il.Emit(OpCodes.Stloc, iteratorLocal);
+
+        // Create $IteratorWrapper: new $IteratorWrapper(iterator, runtimeType)
+        _il.Emit(OpCodes.Ldloc, iteratorLocal);
+        _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeType);
+        _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+        _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrapperCtor);
+        _il.Emit(OpCodes.Stloc, enumTemp);
 
         // Store enumerator in field
-        var enumTemp = _il.DeclareLocal(typeof(System.Collections.IEnumerator));
-        _il.Emit(OpCodes.Stloc, enumTemp);
+        _il.MarkLabel(gotEnumeratorLabel);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, enumTemp);
         _il.Emit(OpCodes.Stfld, delegatedField);

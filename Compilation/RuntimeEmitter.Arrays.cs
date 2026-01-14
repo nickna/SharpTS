@@ -381,25 +381,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Emits ConcatArrays: concatenates multiple iterables into a single List&lt;object&gt;.
+    /// Supports arrays, strings, and custom iterables with Symbol.iterator.
+    /// Signature: List&lt;object&gt; ConcatArrays(object[] arrays, $TSSymbol iteratorSymbol, Type runtimeType)
+    /// </summary>
     private void EmitConcatArrays(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ConcatArrays",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.ObjectArray]
+            [_types.ObjectArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
         );
         runtime.ConcatArrays = method;
 
         var il = method.GetILGenerator();
         // var result = new List<object>();
-        // foreach (var arr in arrays) if (arr is List<object> list) result.AddRange(list);
+        // foreach (var element in arrays) result.AddRange(IterateToList(element, iteratorSymbol, runtimeType));
         // return result;
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var indexLocal = il.DeclareLocal(_types.Int32);
+        var iteratedLocal = il.DeclareLocal(_types.ListOfObject);  // Result of IterateToList
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
-        var addRangeLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
@@ -413,26 +418,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // Get element
+        // Call IterateToList(arrays[index], iteratorSymbol, runtimeType)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, addRangeLabel);
-        il.Emit(OpCodes.Pop);
-        var skipLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, skipLabel);
+        il.Emit(OpCodes.Ldarg_1);  // iteratorSymbol
+        il.Emit(OpCodes.Ldarg_2);  // runtimeType
+        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Stloc, iteratedLocal);
 
-        il.MarkLabel(addRangeLabel);
+        // result.AddRange(iterated)
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldloc, iteratedLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", _types.IEnumerableOfObject));
 
-        il.MarkLabel(skipLabel);
+        // index++
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -444,20 +444,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Emits ExpandCallArgs: expands function call arguments with spread support.
+    /// Supports arrays, strings, and custom iterables with Symbol.iterator.
+    /// Signature: object[] ExpandCallArgs(object[] args, bool[] isSpread, $TSSymbol iteratorSymbol, Type runtimeType)
+    /// </summary>
     private void EmitExpandCallArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "ExpandCallArgs",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ObjectArray,
-            [_types.ObjectArray, _types.BoolArray]
+            [_types.ObjectArray, _types.BoolArray, runtime.TSSymbolType, _types.Type]  // Added iteratorSymbol and runtimeType
         );
         runtime.ExpandCallArgs = method;
 
         var il = method.GetILGenerator();
-        // Simple implementation: create result list, iterate args, expand spreads
+        // Create result list, iterate args, expand spreads using IterateToList
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var indexLocal = il.DeclareLocal(_types.Int32);
+        var iteratedLocal = il.DeclareLocal(_types.ListOfObject);  // Result of IterateToList
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
@@ -481,24 +487,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_I1);
         il.Emit(OpCodes.Brfalse, notSpreadLabel);
 
-        // Is spread - add range if it's a list
+        // Is spread - use IterateToList to handle any iterable
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Dup);
-        var notListLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notListLabel);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", _types.IEnumerableOfObject));
-        il.Emit(OpCodes.Br, continueLabel);
+        il.Emit(OpCodes.Ldarg_2);  // iteratorSymbol
+        il.Emit(OpCodes.Ldarg_3);  // runtimeType
+        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Stloc, iteratedLocal);
 
-        il.MarkLabel(notListLabel);
-        il.Emit(OpCodes.Pop);
+        // result.AddRange(iterated)
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, iteratedLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", _types.IEnumerableOfObject));
         il.Emit(OpCodes.Br, continueLabel);
 
         // Not spread - add single element
