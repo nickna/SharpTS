@@ -12,7 +12,10 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitJsonStringifyFull(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // First emit the helper method for recursive stringification
+        // First emit the escape helper (needed by stringify)
+        EmitEscapeJsonStringHelper(typeBuilder);
+
+        // Then emit the helper method for recursive stringification
         var stringifyFullHelper = EmitStringifyValueFullHelper(typeBuilder, runtime);
 
         var method = typeBuilder.DefineMethod(
@@ -292,19 +295,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(doubleLabel);
         EmitFormatNumber(il, valueLocal);
 
-        // string
+        // string - escape for JSON
         il.MarkLabel(stringLabel);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldnull);
-        var serializeMethod = typeof(System.Text.Json.JsonSerializer)
-            .GetMethods()
-            .First(m => m.Name == "Serialize" && m.IsGenericMethod &&
-                        m.GetParameters().Length == 2 &&
-                        m.GetParameters()[0].ParameterType.IsGenericParameter &&
-                        m.GetParameters()[1].ParameterType == typeof(System.Text.Json.JsonSerializerOptions))
-            .MakeGenericMethod(typeof(string));
-        il.Emit(OpCodes.Call, serializeMethod);
+        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
         il.Emit(OpCodes.Ret);
 
         // List<object?> - stringify array with full options
@@ -641,7 +636,7 @@ public partial class RuntimeEmitter
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object>.Enumerator));
+        var enumeratorLocal = il.DeclareLocal(_types.DictionaryStringObjectEnumerator);
         var currentLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
         var firstLocal = il.DeclareLocal(_types.Boolean);
         var newlineLocal = il.DeclareLocal(_types.String);
@@ -696,16 +691,16 @@ public partial class RuntimeEmitter
 
         // Get enumerator
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("GetEnumerator")!);
         il.Emit(OpCodes.Stloc, enumeratorLocal);
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetMethod("MoveNext")!);
         il.Emit(OpCodes.Brfalse, loopEnd);
 
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, typeof(Dictionary<string, object>.Enumerator).GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.DictionaryStringObjectEnumerator.GetProperty("Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         // key = current.Key
@@ -769,18 +764,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
-        // sb.Append(JsonSerializer.Serialize(key));
+        // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Ldnull);
-        var serializeKeyMethod = typeof(System.Text.Json.JsonSerializer)
-            .GetMethods()
-            .First(m => m.Name == "Serialize" && m.IsGenericMethod &&
-                        m.GetParameters().Length == 2 &&
-                        m.GetParameters()[0].ParameterType.IsGenericParameter &&
-                        m.GetParameters()[1].ParameterType == typeof(System.Text.Json.JsonSerializerOptions))
-            .MakeGenericMethod(typeof(string));
-        il.Emit(OpCodes.Call, serializeKeyMethod);
+        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
@@ -811,7 +798,7 @@ public partial class RuntimeEmitter
 
         // Dispose enumerator
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Constrained, typeof(Dictionary<string, object>.Enumerator));
+        il.Emit(OpCodes.Constrained, _types.DictionaryStringObjectEnumerator);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
 
         // sb.Append(close);
@@ -974,27 +961,69 @@ public partial class RuntimeEmitter
         // Actually, we can call StringifyValueFull by name via reflection at emit time
         // But that's complex. Let me simplify by making this method call a separate helper
 
-        // For now, let's just emit the key-value pair without recursive stringify
-        // strResult = StringifyValueFull(fieldValue, replacer, allowedKeys, indentStr, depth + 1)
-        // We need to define this method first, then reference it here
+        // Stringify the field value - check type and handle common cases
+        // For strings, use escape helper. For other types, use simplified approach.
+        var fieldIsString = il.DefineLabel();
+        var fieldIsBool = il.DefineLabel();
+        var fieldIsDouble = il.DefineLabel();
+        var fieldDefault = il.DefineLabel();
+        var fieldDone = il.DefineLabel();
 
-        // Simplified: Use JsonSerializer.Serialize for nested values in class instances
-        // This loses custom formatting but avoids forward reference complexity
-
-        // Simple fallback: use System.Text.Json for the field value
+        // if (fieldValue is string)
         il.Emit(OpCodes.Ldloc, fieldValueLocal);
-        il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
-        il.Emit(OpCodes.Ldnull);
-        var serializeMethod = typeof(System.Text.Json.JsonSerializer)
-            .GetMethods()
-            .First(m => m.Name == "Serialize" && !m.IsGenericMethod &&
-                        m.GetParameters().Length == 3 &&
-                        m.GetParameters()[0].ParameterType == typeof(object) &&
-                        m.GetParameters()[1].ParameterType == typeof(Type) &&
-                        m.GetParameters()[2].ParameterType == typeof(System.Text.Json.JsonSerializerOptions));
-        il.Emit(OpCodes.Call, serializeMethod);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, fieldIsString);
+
+        // if (fieldValue is bool)
+        il.Emit(OpCodes.Ldloc, fieldValueLocal);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, fieldIsBool);
+
+        // if (fieldValue is double)
+        il.Emit(OpCodes.Ldloc, fieldValueLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, fieldIsDouble);
+
+        // Default - return object representation
+        il.MarkLabel(fieldDefault);
+        il.Emit(OpCodes.Ldstr, "{}");
         il.Emit(OpCodes.Stloc, strResultLocal);
+        il.Emit(OpCodes.Br, fieldDone);
+
+        // String - escape for JSON
+        il.MarkLabel(fieldIsString);
+        il.Emit(OpCodes.Ldloc, fieldValueLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
+        il.Emit(OpCodes.Stloc, strResultLocal);
+        il.Emit(OpCodes.Br, fieldDone);
+
+        // Bool - "true" or "false"
+        il.MarkLabel(fieldIsBool);
+        var boolTrueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fieldValueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, boolTrueLabel);
+        il.Emit(OpCodes.Ldstr, "false");
+        il.Emit(OpCodes.Stloc, strResultLocal);
+        il.Emit(OpCodes.Br, fieldDone);
+        il.MarkLabel(boolTrueLabel);
+        il.Emit(OpCodes.Ldstr, "true");
+        il.Emit(OpCodes.Stloc, strResultLocal);
+        il.Emit(OpCodes.Br, fieldDone);
+
+        // Double - format as number
+        il.MarkLabel(fieldIsDouble);
+        var tempDouble = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, fieldValueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, tempDouble);
+        il.Emit(OpCodes.Ldloca, tempDouble);
+        il.Emit(OpCodes.Ldstr, "G15");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String]));
+        il.Emit(OpCodes.Stloc, strResultLocal);
+
+        il.MarkLabel(fieldDone);
 
         // if (strResult == null) continue;
         il.Emit(OpCodes.Ldloc, strResultLocal);
@@ -1018,18 +1047,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 
-        // sb.Append(JsonSerializer.Serialize(camelName));
+        // sb.Append(EscapeJsonString(camelName));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, camelNameLocal);
-        il.Emit(OpCodes.Ldnull);
-        var serializeKeyMethod = typeof(System.Text.Json.JsonSerializer)
-            .GetMethods()
-            .First(m => m.Name == "Serialize" && m.IsGenericMethod &&
-                        m.GetParameters().Length == 2 &&
-                        m.GetParameters()[0].ParameterType.IsGenericParameter &&
-                        m.GetParameters()[1].ParameterType == typeof(System.Text.Json.JsonSerializerOptions))
-            .MakeGenericMethod(typeof(string));
-        il.Emit(OpCodes.Call, serializeKeyMethod);
+        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
 

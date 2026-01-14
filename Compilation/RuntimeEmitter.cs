@@ -119,7 +119,7 @@ public partial class RuntimeEmitter
             Type.EmptyTypes
         );
         var cctorIL = cctorBuilder.GetILGenerator();
-        cctorIL.Emit(OpCodes.Newobj, fieldCacheType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(fieldCacheType));
         cctorIL.Emit(OpCodes.Stsfld, fieldCacheField);
         cctorIL.Emit(OpCodes.Ret);
 
@@ -134,7 +134,7 @@ public partial class RuntimeEmitter
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         // this._target = target
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
@@ -580,7 +580,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argTypeLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldnull);  // modifiers
-        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetMethod", [_types.String, typeof(BindingFlags), typeof(Binder), _types.MakeArrayType(_types.Type), _types.MakeArrayType(typeof(ParameterModifier))])!);
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetMethod", [_types.String, _types.BindingFlags, _types.Binder, _types.MakeArrayType(_types.Type), _types.MakeArrayType(_types.ParameterModifier)])!);
         il.Emit(OpCodes.Stloc, implicitOpLocal);
 
         // if (implicitOp == null) continue
@@ -643,14 +643,14 @@ public partial class RuntimeEmitter
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         // _name = name
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
         ctorIL.Emit(OpCodes.Stfld, nameField);
         // _members = new Dictionary<string, object?>()
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         ctorIL.Emit(OpCodes.Stfld, membersField);
         ctorIL.Emit(OpCodes.Ret);
 
@@ -743,7 +743,7 @@ public partial class RuntimeEmitter
         var ctorIL = ctorBuilder.GetILGenerator();
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         // _id = Interlocked.Increment(ref _nextId)
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldsflda, nextIdField);
@@ -921,7 +921,7 @@ public partial class RuntimeEmitter
         );
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, _types.Object.GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
         ctorIL.Emit(OpCodes.Ret);
 
         // Static constructor to initialize Instance
@@ -1081,7 +1081,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStringLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("GetHashCode", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "GetHashCode"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notStringLabel);
@@ -1095,7 +1095,7 @@ public partial class RuntimeEmitter
         var doubleLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, doubleLocal);
         il.Emit(OpCodes.Ldloca, doubleLocal);
-        il.Emit(OpCodes.Call, _types.Double.GetMethod("GetHashCode", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Double, "GetHashCode"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notDoubleLabel);
@@ -1109,7 +1109,7 @@ public partial class RuntimeEmitter
         var boolLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Stloc, boolLocal);
         il.Emit(OpCodes.Ldloca, boolLocal);
-        il.Emit(OpCodes.Call, _types.Boolean.GetMethod("GetHashCode", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Boolean, "GetHashCode"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBoolLabel);
@@ -1123,14 +1123,14 @@ public partial class RuntimeEmitter
         var bigIntLocal = il.DeclareLocal(_types.BigInteger);
         il.Emit(OpCodes.Stloc, bigIntLocal);
         il.Emit(OpCodes.Ldloca, bigIntLocal);
-        il.Emit(OpCodes.Call, _types.BigInteger.GetMethod("GetHashCode", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.BigInteger, "GetHashCode"));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notBigIntLabel);
 
         // default: return RuntimeHelpers.GetHashCode(obj);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.RuntimeHelpers.GetMethod("GetHashCode", [_types.Object])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.RuntimeHelpers, "GetHashCode", [_types.Object]));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1166,11 +1166,11 @@ public partial class RuntimeEmitter
         var cctorIL = cctorBuilder.GetILGenerator();
 
         // Initialize _random = new Random()
-        cctorIL.Emit(OpCodes.Newobj, _types.Random.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Random));
         cctorIL.Emit(OpCodes.Stsfld, randomField);
 
         // Initialize _symbolStorage = new ConditionalWeakTable<object, Dictionary<object, object?>>()
-        cctorIL.Emit(OpCodes.Newobj, symbolStorageType.GetConstructor(Type.EmptyTypes)!);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(symbolStorageType));
         cctorIL.Emit(OpCodes.Stsfld, symbolStorageField);
 
         cctorIL.Emit(OpCodes.Ret);

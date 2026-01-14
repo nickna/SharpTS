@@ -72,8 +72,10 @@ public partial class ILEmitter
         if (!_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
             // No fields to populate, just create TSFunction
+            // Use two-argument GetMethodFromHandle for display class methods
             IL.Emit(OpCodes.Ldtoken, method);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            IL.Emit(OpCodes.Ldtoken, displayClass);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
             IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             return;
@@ -131,9 +133,11 @@ public partial class ILEmitter
         // Create TSFunction: new TSFunction(displayInstance, method)
         // Stack has: displayInstance
 
-        // Load method info
+        // Load method info - use two-argument GetMethodFromHandle for display class methods
+        // This is required because the method's parameter types need the declaring type context to resolve
         IL.Emit(OpCodes.Ldtoken, method);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Ldtoken, displayClass);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor

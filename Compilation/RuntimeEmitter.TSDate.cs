@@ -93,7 +93,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_1); // DateTimeKind.Utc
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stsfld, _tsDateUnixEpochField);
         il.Emit(OpCodes.Ret);
@@ -314,7 +314,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_2); // DateTimeKind.Local
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, baseDateLocal);
 
@@ -714,7 +714,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.DateTime.GetProperty("Millisecond")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_2);  // DateTimeKind.Local
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, newDateLocal);
 
@@ -770,7 +770,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.DateTime.GetProperty("Millisecond")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, newDateLocal);
 
@@ -823,7 +823,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.DateTime.GetProperty("Millisecond")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, newDateLocal);
 
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.DateTime.GetProperty("Millisecond")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newobj, _types.DateTime.GetConstructor([
-            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, typeof(DateTimeKind)
+            _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.Int32, _types.DateTimeKind
         ])!);
         il.Emit(OpCodes.Stloc, newDateLocal);
 

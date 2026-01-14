@@ -56,7 +56,11 @@ public class ILVerifier : IResolver, IDisposable
                 {
                     var typeName = GetTypeName(metadataReader, method.GetDeclaringType());
                     var methodName = metadataReader.GetString(method.Name);
-                    errors.Add($"[IL Error] {typeName}.{methodName}: {result.Message}");
+                    // Include error code and any additional args for debugging
+                    var argsStr = result.Args != null && result.Args.Length > 0
+                        ? $" [{string.Join(", ", result.Args)}]"
+                        : "";
+                    errors.Add($"[IL Error] {typeName}.{methodName}: {result.Code}{argsStr} - {result.Message}");
                 }
             }
             catch (Exception ex)

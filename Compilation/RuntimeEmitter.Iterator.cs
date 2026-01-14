@@ -393,12 +393,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bge, strLoopEnd);
 
             // result.Add(str[idx].ToString())
+            var charLocal = il.DeclareLocal(_types.Char);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, strLocal);
             il.Emit(OpCodes.Ldloc, idxLocal);
-            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
-            var charToString = typeof(char).GetMethod("ToString", Type.EmptyTypes)!;
-            il.Emit(OpCodes.Call, charToString);
+            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [_types.Int32])!);
+            il.Emit(OpCodes.Stloc, charLocal);
+            il.Emit(OpCodes.Ldloca, charLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
             il.Emit(OpCodes.Ldloc, idxLocal);
