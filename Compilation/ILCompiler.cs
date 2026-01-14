@@ -816,5 +816,25 @@ public partial class ILCompiler
                 }
             }
         }
+
+        // Check which top-level variables are captured by generator functions
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Function funcStmt && funcStmt.IsGenerator && !funcStmt.IsAsync)
+            {
+                var analysis = _generatorAnalyzer.Analyze(funcStmt);
+                foreach (var capturedVar in analysis.CapturedVariables)
+                {
+                    if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
+                    {
+                        var field = _programType.DefineField(
+                            $"$topLevel_{capturedVar}",
+                            _types.Object,
+                            FieldAttributes.Public | FieldAttributes.Static);
+                        _topLevelStaticVars[capturedVar] = field;
+                    }
+                }
+            }
+        }
     }
 }

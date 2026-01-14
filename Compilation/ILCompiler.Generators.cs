@@ -59,9 +59,10 @@ public partial class ILCompiler
         {
             var funcStmt = _generatorFunctions[funcName];
             var methodBuilder = _functionBuilders[funcName];
+            var analysis = _generatorAnalyzer.Analyze(funcStmt);
 
             // Emit the stub method body (creates and returns the state machine)
-            EmitGeneratorStubMethod(methodBuilder, smBuilder, funcStmt);
+            EmitGeneratorStubMethod(methodBuilder, smBuilder, funcStmt, analysis);
 
             // Emit the MoveNext method body
             EmitGeneratorMoveNextBody(smBuilder, funcStmt);
@@ -74,7 +75,11 @@ public partial class ILCompiler
     /// <summary>
     /// Emits the stub method that creates and initializes the generator state machine.
     /// </summary>
-    private void EmitGeneratorStubMethod(MethodBuilder methodBuilder, GeneratorStateMachineBuilder smBuilder, Stmt.Function funcStmt)
+    private void EmitGeneratorStubMethod(
+        MethodBuilder methodBuilder,
+        GeneratorStateMachineBuilder smBuilder,
+        Stmt.Function funcStmt,
+        GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis)
     {
         var il = methodBuilder.GetILGenerator();
 
@@ -91,6 +96,21 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
                 il.Emit(OpCodes.Ldarg, i);
                 il.Emit(OpCodes.Stfld, field);
+            }
+        }
+
+        // Copy captured outer scope variables to state machine fields
+        foreach (var capturedVar in analysis.CapturedVariables)
+        {
+            var capturedField = smBuilder.CapturedVariables.GetValueOrDefault(capturedVar);
+            if (capturedField == null) continue;
+
+            // Try to load from top-level static vars (module-level variables)
+            if (_topLevelStaticVars.TryGetValue(capturedVar, out var staticField))
+            {
+                il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
+                il.Emit(OpCodes.Ldsfld, staticField);
+                il.Emit(OpCodes.Stfld, capturedField);
             }
         }
 

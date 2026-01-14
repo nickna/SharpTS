@@ -29,6 +29,7 @@ public class GeneratorStateMachineBuilder
     // Hoisted variables (become struct fields) - delegated to HoistingManager
     public Dictionary<string, FieldBuilder> HoistedParameters => _hoisting.HoistedParameters;
     public Dictionary<string, FieldBuilder> HoistedLocals => _hoisting.HoistedLocals;
+    public Dictionary<string, FieldBuilder> CapturedVariables => _hoisting.CapturedVariables;
 
     // 'this' field for instance generator methods
     public FieldBuilder? ThisField { get; private set; }
@@ -108,6 +109,7 @@ public class GeneratorStateMachineBuilder
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
         _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
         _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
+        _hoisting.DefineHoistedCapturedVariables(analysis.CapturedVariables);
 
         // Define 'this' field for instance methods that use 'this'
         if (isInstanceMethod && analysis.UsesThis)

@@ -27,7 +27,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         HashSet<string> HoistedLocals,
         HashSet<string> HoistedParameters,
         bool UsesThis,
-        bool HasYieldStar
+        bool HasYieldStar,
+        HashSet<string> CapturedVariables  // Variables from outer scopes that need to be captured
     );
 
     // State during analysis
@@ -35,6 +36,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     private readonly HashSet<string> _declaredVariables = [];
     private readonly HashSet<string> _variablesUsedAfterYield = [];
     private readonly HashSet<string> _variablesDeclaredBeforeYield = [];
+    private readonly HashSet<string> _capturedVariables = [];  // Variables from outer scopes
     private int _yieldCounter = 0;
     private bool _seenYield = false;
     private bool _usesThis = false;
@@ -76,7 +78,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
             HoistedLocals: hoistedLocals,
             HoistedParameters: parameters,
             UsesThis: _usesThis,
-            HasYieldStar: _hasYieldStar
+            HasYieldStar: _hasYieldStar,
+            CapturedVariables: [.. _capturedVariables]
         );
     }
 
@@ -86,6 +89,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         _declaredVariables.Clear();
         _variablesUsedAfterYield.Clear();
         _variablesDeclaredBeforeYield.Clear();
+        _capturedVariables.Clear();
         _yieldCounter = 0;
         _seenYield = false;
         _usesThis = false;
@@ -167,8 +171,16 @@ public class GeneratorStateAnalyzer : AstVisitorBase
 
     protected override void VisitVariable(Expr.Variable expr)
     {
-        if (_seenYield && _declaredVariables.Contains(expr.Name.Lexeme))
-            _variablesUsedAfterYield.Add(expr.Name.Lexeme);
+        var name = expr.Name.Lexeme;
+
+        // Detect outer scope capture - variable not declared in this function
+        if (!_declaredVariables.Contains(name))
+        {
+            _capturedVariables.Add(name);
+        }
+
+        if (_seenYield && _declaredVariables.Contains(name))
+            _variablesUsedAfterYield.Add(name);
         // No base call needed - leaf node
     }
 
