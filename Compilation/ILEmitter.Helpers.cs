@@ -150,8 +150,8 @@ public partial class ILEmitter
         if (_stackType == StackType.Boolean && targetType == typeof(bool))
             return;
 
-        // Check if target is a union type (generated types start with "Union_")
-        if (targetType.Name.StartsWith("Union_") && targetType.IsValueType)
+        // Check if target is a union type using marker interface
+        if (UnionTypeHelper.IsUnionType(targetType))
         {
             // Determine source type from stack or expression
             Type? sourceType = _stackType switch

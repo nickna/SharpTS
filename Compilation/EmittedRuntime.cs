@@ -50,13 +50,16 @@ public class EmittedRuntime
     public MethodBuilder ConsoleTimeLog { get; set; } = null!;
     public FieldBuilder ConsoleTimersField { get; set; } = null!;
 
+    // Union type marker interface (for fast union type detection)
+    public Type IUnionTypeInterface { get; set; } = null!;
+    public MethodInfo IUnionTypeValueGetter { get; set; } = null!;
+
     // Type coercion methods
     public MethodBuilder Stringify { get; set; } = null!;
     public MethodBuilder ToNumber { get; set; } = null!;
     public MethodBuilder IsTruthy { get; set; } = null!;
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
-    public MethodBuilder ConvertArgsForUnionTypes { get; set; } = null!;
 
     // Operator methods
     public MethodBuilder Add { get; set; } = null!;

@@ -103,31 +103,7 @@ public class TSFunction
     /// Converts arguments to union types using implicit conversion operators if needed.
     /// </summary>
     private void ConvertUnionArguments(object?[] args, System.Reflection.ParameterInfo[] parameters)
-    {
-        for (int i = 0; i < args.Length && i < parameters.Length; i++)
-        {
-            var paramType = parameters[i].ParameterType;
-            var arg = args[i];
-
-            // Check if parameter is a union type (generated types start with "Union_")
-            if (paramType.IsValueType && paramType.Name.StartsWith("Union_") && arg != null)
-            {
-                var argType = arg.GetType();
-                // Skip if already the correct type
-                if (argType == paramType) continue;
-
-                // Find implicit conversion operator: op_Implicit(argType) -> paramType
-                var implicitOp = paramType.GetMethod("op_Implicit",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
-                    null, [argType], null);
-
-                if (implicitOp != null)
-                {
-                    args[i] = implicitOp.Invoke(null, [arg]);
-                }
-            }
-        }
-    }
+        => UnionTypeHelper.ConvertArgsForUnionTypes(parameters, args);
 
     /// <summary>
     /// Get the number of expected parameters.
