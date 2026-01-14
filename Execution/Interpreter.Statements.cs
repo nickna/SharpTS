@@ -544,9 +544,9 @@ public partial class Interpreter
             {
                 nextMethod = arrowFn.Bind(iterator!);
             }
-            else if (nextMethod is SharpTSFunction fn)
+            else if (nextMethod is SharpTSFunction fn && iterator is SharpTSInstance inst)
             {
-                nextMethod = fn.Bind(iterator is SharpTSInstance inst ? inst : null);
+                nextMethod = fn.Bind(inst);
             }
 
             // Call next()
