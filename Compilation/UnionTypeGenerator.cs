@@ -23,7 +23,9 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public class UnionTypeGenerator
 {
-    private readonly Dictionary<string, Type> _generatedUnions = new();
+    private readonly Dictionary<string, TypeBuilder> _unionTypeBuilders = new();
+    private readonly Dictionary<string, Type> _finalizedUnions = new();
+    private readonly Dictionary<(string unionKey, Type fromType), MethodBuilder> _implicitConversions = new();
     private readonly TypeMapper _typeMapper;
 
     public UnionTypeGenerator(TypeMapper typeMapper)
@@ -32,18 +34,62 @@ public class UnionTypeGenerator
     }
 
     /// <summary>
+    /// Gets the implicit conversion method from a source type to a union type.
+    /// Returns the MethodBuilder if not yet finalized, or the finalized MethodInfo.
+    /// </summary>
+    public MethodInfo? GetImplicitConversion(Type unionType, Type fromType)
+    {
+        string key = unionType.Name.Replace("Union_", "");
+
+        // Check if we have a stored MethodBuilder for this conversion
+        if (_implicitConversions.TryGetValue((key, fromType), out var methodBuilder))
+            return methodBuilder;
+
+        // If finalized, try reflection
+        if (_finalizedUnions.TryGetValue(key, out var finalized))
+        {
+            return finalized.GetMethod("op_Implicit",
+                BindingFlags.Public | BindingFlags.Static,
+                null, [fromType], null);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Gets or creates a discriminated union type for the given TypeScript union.
+    /// Returns a TypeBuilder that will be finalized later.
     /// </summary>
     public Type GetOrCreateUnionType(TSTypeInfo.Union union, ModuleBuilder moduleBuilder)
     {
         string key = GetUnionKey(union);
 
-        if (_generatedUnions.TryGetValue(key, out var existing))
+        // Return finalized type if already created
+        if (_finalizedUnions.TryGetValue(key, out var finalized))
+            return finalized;
+
+        // Return existing TypeBuilder if already defined
+        if (_unionTypeBuilders.TryGetValue(key, out var existing))
             return existing;
 
-        var unionType = GenerateUnionType(union, moduleBuilder, key);
-        _generatedUnions[key] = unionType;
-        return unionType;
+        var typeBuilder = GenerateUnionTypeBuilder(union, moduleBuilder, key);
+        _unionTypeBuilders[key] = typeBuilder;
+        return typeBuilder;
+    }
+
+    /// <summary>
+    /// Finalizes all union types by calling CreateType().
+    /// Must be called before assembly metadata generation.
+    /// </summary>
+    public void FinalizeAllUnionTypes()
+    {
+        foreach (var (key, typeBuilder) in _unionTypeBuilders)
+        {
+            if (!_finalizedUnions.ContainsKey(key))
+            {
+                _finalizedUnions[key] = typeBuilder.CreateType()!;
+            }
+        }
     }
 
     /// <summary>
@@ -82,7 +128,7 @@ public class UnionTypeGenerator
         _ => type.GetType().Name
     };
 
-    private Type GenerateUnionType(TSTypeInfo.Union union, ModuleBuilder moduleBuilder, string key)
+    private TypeBuilder GenerateUnionTypeBuilder(TSTypeInfo.Union union, ModuleBuilder moduleBuilder, string key)
     {
         var types = union.FlattenedTypes;
         string typeName = $"Union_{key}";
@@ -100,7 +146,8 @@ public class UnionTypeGenerator
         typeBuilder.SetCustomAttribute(structLayoutAttr);
 
         // Define _tag field (byte for efficiency, supports up to 256 union members)
-        var tagField = typeBuilder.DefineField("_tag", typeof(byte), FieldAttributes.Private | FieldAttributes.InitOnly);
+        // Note: Cannot use InitOnly because implicit conversion operators need to set fields
+        var tagField = typeBuilder.DefineField("_tag", typeof(byte), FieldAttributes.Private);
 
         // Define value fields for each type
         List<FieldBuilder> valueFields = [];
@@ -114,7 +161,7 @@ public class UnionTypeGenerator
             var field = typeBuilder.DefineField(
                 $"_v{i}",
                 mappedType,
-                FieldAttributes.Private | FieldAttributes.InitOnly
+                FieldAttributes.Private
             );
             valueFields.Add(field);
         }
@@ -136,13 +183,17 @@ public class UnionTypeGenerator
             EmitAsProperty(typeBuilder, tagField, valueFields[i], mappedTypes[i], i, propName);
         }
 
-        // Generate Value property (returns boxed object)
+        // Generate Value property (returns boxed object) - needed for runtime access
         var valueGetter = EmitValueProperty(typeBuilder, tagField, valueFields, mappedTypes);
 
-        // Generate implicit conversion operators
+        // Generate implicit conversion operators - needed for typed parameter passing
         for (int i = 0; i < types.Count; i++)
         {
-            EmitImplicitConversion(typeBuilder, tagField, valueFields, mappedTypes, i);
+            var conversionMethod = EmitImplicitConversion(typeBuilder, tagField, valueFields, mappedTypes, i);
+            if (conversionMethod != null)
+            {
+                _implicitConversions[(key, mappedTypes[i])] = conversionMethod;
+            }
         }
 
         // Generate ToString override
@@ -152,7 +203,7 @@ public class UnionTypeGenerator
         EmitEquals(typeBuilder, tagField, valueFields, mappedTypes, valueGetter);
         EmitGetHashCode(typeBuilder, tagField, valueFields, mappedTypes, valueGetter);
 
-        return typeBuilder.CreateType()!;
+        return typeBuilder;
     }
 
     private string GetTypePropertyName(TSTypeInfo type, int index) => type switch
@@ -327,14 +378,14 @@ public class UnionTypeGenerator
         return getter;
     }
 
-    private void EmitImplicitConversion(TypeBuilder typeBuilder, FieldBuilder tagField,
+    private MethodBuilder? EmitImplicitConversion(TypeBuilder typeBuilder, FieldBuilder tagField,
         List<FieldBuilder> valueFields, List<Type> mappedTypes, int index)
     {
         Type fromType = mappedTypes[index];
 
         // Skip if the type is object or void (can't have implicit conversion from object)
         if (fromType == typeof(object) || fromType == typeof(void))
-            return;
+            return null;
 
         var method = typeBuilder.DefineMethod(
             "op_Implicit",
@@ -366,6 +417,8 @@ public class UnionTypeGenerator
         // Return the local
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     private void EmitDefaultValue(ILGenerator il, Type type)
@@ -422,17 +475,14 @@ public class UnionTypeGenerator
         il.Emit(OpCodes.Ldfld, tagField);
         il.Emit(OpCodes.Switch, labels);
 
-        // default: return "Unknown"
-        il.Emit(OpCodes.Ldstr, "Unknown");
+        // default: return ""
+        il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Br_S, endLabel);
 
-        // case N: return $"{TypeName}: {value}"
+        // case N: return value.ToString() (just the value, no type prefix for TypeScript semantics)
         for (int i = 0; i < valueFields.Count; i++)
         {
             il.MarkLabel(labels[i]);
-
-            string typeName = GetTypePropertyName(types[i], i);
-            il.Emit(OpCodes.Ldstr, $"{typeName}: ");
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, valueFields[i]);
@@ -443,9 +493,6 @@ public class UnionTypeGenerator
 
             var toStringMethod = typeof(object).GetMethod("ToString", Type.EmptyTypes)!;
             il.Emit(OpCodes.Callvirt, toStringMethod);
-
-            var concatMethod = typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!;
-            il.Emit(OpCodes.Call, concatMethod);
 
             il.Emit(OpCodes.Br_S, endLabel);
         }
@@ -517,16 +564,32 @@ public class UnionTypeGenerator
 
         var il = method.GetILGenerator();
 
-        // return HashCode.Combine(_tag, Value);
+        // return _tag ^ (Value?.GetHashCode() ?? 0);
+        // Load tag as int
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, tagField);
         il.Emit(OpCodes.Conv_I4);
 
+        // Get Value and call GetHashCode if not null
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, valueGetter);
+        il.Emit(OpCodes.Dup);
+        var notNullLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue_S, notNullLabel);
 
-        var hashCombineMethod = typeof(HashCode).GetMethod("Combine", [typeof(int), typeof(object)])!;
-        il.Emit(OpCodes.Call, hashCombineMethod);
+        // null case: use 0
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Br_S, endLabel);
+
+        // not null: call GetHashCode
+        il.MarkLabel(notNullLabel);
+        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetHashCode")!);
+
+        il.MarkLabel(endLabel);
+        // XOR tag with value hash
+        il.Emit(OpCodes.Xor);
         il.Emit(OpCodes.Ret);
 
         typeBuilder.DefineMethodOverride(method, typeof(object).GetMethod("GetHashCode")!);

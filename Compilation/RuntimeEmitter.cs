@@ -107,6 +107,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stfld, methodField);
         ctorIL.Emit(OpCodes.Ret);
 
+        // Helper method: private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
+        var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder);
+
         // Invoke method: public object Invoke(object[] args)
         var invokeBuilder = typeBuilder.DefineMethod(
             "Invoke",
@@ -238,6 +241,14 @@ public partial class RuntimeEmitter
 
         // Do invoke
         invokeIL.MarkLabel(doInvoke);
+
+        // Convert args for union types before invoking
+        // ConvertArgsForUnionTypes(this._method, adjustedArgs)
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, methodField);
+        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
+        invokeIL.Emit(OpCodes.Call, convertArgsMethod);
+
         invokeIL.Emit(OpCodes.Ldarg_0);
         invokeIL.Emit(OpCodes.Ldfld, methodField);
         invokeIL.Emit(OpCodes.Ldloc, invokeTargetLocal);
@@ -430,6 +441,144 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Emits a private static helper method on $TSFunction to convert arguments for union type parameters.
+    /// </summary>
+    private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder)
+    {
+        // private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
+        var method = typeBuilder.DefineMethod(
+            "ConvertArgsForUnionTypes",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.MethodInfo, _types.ObjectArray]
+        );
+
+        var il = method.GetILGenerator();
+
+        // var parameters = method.GetParameters();
+        var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Stloc, paramsLocal);
+
+        // for (int i = 0; i < args.Length && i < parameters.Length; i++)
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var paramTypeLocal = il.DeclareLocal(_types.Type);
+        var argLocal = il.DeclareLocal(_types.Object);
+        var argTypeLocal = il.DeclareLocal(_types.Type);
+        var implicitOpLocal = il.DeclareLocal(_types.MethodInfo);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+        var continueLoop = il.DefineLabel();
+
+        // i = 0
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(loopStart);
+        // i < args.Length
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // i < parameters.Length
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // paramType = parameters[i].ParameterType
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, paramTypeLocal);
+
+        // arg = args[i]
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, argLocal);
+
+        // if (!paramType.IsValueType) continue
+        il.Emit(OpCodes.Ldloc, paramTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsValueType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, continueLoop);
+
+        // if (!paramType.Name.StartsWith("Union_")) continue
+        il.Emit(OpCodes.Ldloc, paramTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "Union_");
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, continueLoop);
+
+        // if (arg == null) continue
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Brfalse, continueLoop);
+
+        // argType = arg.GetType()
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, argTypeLocal);
+
+        // if (argType == paramType) continue
+        il.Emit(OpCodes.Ldloc, argTypeLocal);
+        il.Emit(OpCodes.Ldloc, paramTypeLocal);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, continueLoop);
+
+        // implicitOp = paramType.GetMethod("op_Implicit", BindingFlags.Public | BindingFlags.Static, null, new Type[] { argType }, null)
+        il.Emit(OpCodes.Ldloc, paramTypeLocal);
+        il.Emit(OpCodes.Ldstr, "op_Implicit");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static));
+        il.Emit(OpCodes.Ldnull);  // binder
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, argTypeLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldnull);  // modifiers
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetMethod", [_types.String, typeof(BindingFlags), typeof(Binder), _types.MakeArrayType(_types.Type), _types.MakeArrayType(typeof(ParameterModifier))])!);
+        il.Emit(OpCodes.Stloc, implicitOpLocal);
+
+        // if (implicitOp == null) continue
+        il.Emit(OpCodes.Ldloc, implicitOpLocal);
+        il.Emit(OpCodes.Brfalse, continueLoop);
+
+        // args[i] = implicitOp.Invoke(null, new object[] { arg })
+        il.Emit(OpCodes.Ldarg_1);  // args
+        il.Emit(OpCodes.Ldloc, indexLocal);  // i
+        il.Emit(OpCodes.Ldloc, implicitOpLocal);  // implicitOp
+        il.Emit(OpCodes.Ldnull);  // target (null for static)
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("Invoke", [_types.Object, _types.ObjectArray])!);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        il.MarkLabel(continueLoop);
+        // i++
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+        il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     private void EmitTSNamespaceClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -1001,6 +1150,7 @@ public partial class RuntimeEmitter
         EmitIsTruthy(typeBuilder, runtime);
         EmitTypeOf(typeBuilder, runtime);
         EmitInstanceOf(typeBuilder, runtime);
+        EmitConvertArgsForUnionTypes(typeBuilder, runtime);
         EmitAdd(typeBuilder, runtime);
         EmitEquals(typeBuilder, runtime);
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed

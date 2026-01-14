@@ -472,6 +472,9 @@ public partial class ILCompiler
         EmitEntryPoint(statements);
 
         // Phase 9: Finalize all types
+        // Finalize union types first (they don't depend on other types)
+        _unionGenerator?.FinalizeAllUnionTypes();
+
         foreach (var tb in _displayClasses.Values)
         {
             tb.CreateType();
@@ -678,6 +681,9 @@ public partial class ILCompiler
         EmitModulesEntryPoint(modules);
 
         // Phase 11: Finalize all types
+        // Finalize union types first (they don't depend on other types)
+        _unionGenerator?.FinalizeAllUnionTypes();
+
         foreach (var tb in _displayClasses.Values)
         {
             tb.CreateType();

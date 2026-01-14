@@ -47,6 +47,7 @@ public class EmittedRuntime
     public MethodBuilder IsTruthy { get; set; } = null!;
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
+    public MethodBuilder ConvertArgsForUnionTypes { get; set; } = null!;
 
     // Operator methods
     public MethodBuilder Add { get; set; } = null!;

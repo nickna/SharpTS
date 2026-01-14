@@ -145,13 +145,6 @@ public static class ParameterTypeResolver
         return funcType.ParamTypes
             .Select((pt, i) =>
             {
-                // WORKAROUND: Always use object for union types in class methods
-                // until the underlying union type generation issue is fixed
-                if (pt is TSTypeInfo.Union)
-                {
-                    return typeof(object);
-                }
-
                 Type mappedType;
                 try
                 {
@@ -251,13 +244,6 @@ public static class ParameterTypeResolver
         return funcType.ParamTypes
             .Select((pt, i) =>
             {
-                // WORKAROUND: Always use object for union types in constructors
-                // until the underlying union type generation issue is fixed
-                if (pt is TSTypeInfo.Union)
-                {
-                    return typeof(object);
-                }
-
                 Type mappedType;
                 try
                 {

@@ -150,6 +150,54 @@ public partial class ILEmitter
         if (_stackType == StackType.Boolean && targetType == typeof(bool))
             return;
 
+        // Check if target is a union type (generated types start with "Union_")
+        if (targetType.Name.StartsWith("Union_") && targetType.IsValueType)
+        {
+            // Determine source type from stack or expression
+            Type? sourceType = _stackType switch
+            {
+                StackType.Double => typeof(double),
+                StackType.Boolean => typeof(bool),
+                StackType.String => typeof(string),
+                _ => null
+            };
+
+            // If stack type is unknown, try to determine from expression
+            if (sourceType == null && expr is Expr.Literal exprLit)
+            {
+                sourceType = exprLit.Value switch
+                {
+                    double => typeof(double),
+                    string => typeof(string),
+                    bool => typeof(bool),
+                    _ => null
+                };
+            }
+
+            // Try to find an implicit conversion operator
+            if (sourceType != null && _ctx.UnionGenerator != null)
+            {
+                var implicitOp = _ctx.UnionGenerator.GetImplicitConversion(targetType, sourceType);
+
+                if (implicitOp != null)
+                {
+                    IL.Emit(OpCodes.Call, implicitOp);
+                    return;
+                }
+            }
+
+            // Fallback: box the value and create a default union
+            // This won't work correctly but prevents crashes
+            EmitBoxIfNeeded(expr);
+            var valueLocal = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, valueLocal);
+            var unionLocal = IL.DeclareLocal(targetType);
+            IL.Emit(OpCodes.Ldloca, unionLocal);
+            IL.Emit(OpCodes.Initobj, targetType);
+            IL.Emit(OpCodes.Ldloc, unionLocal);
+            return;
+        }
+
         // If target is a value type and we have an object, unbox
         if (targetType.IsValueType && _stackType != StackType.Double && _stackType != StackType.Boolean)
         {

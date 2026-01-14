@@ -44,7 +44,8 @@ public class TSFunction
     {
         try
         {
-            var paramCount = _method.GetParameters().Length;
+            var parameters = _method.GetParameters();
+            var paramCount = parameters.Length;
             object?[] finalArgs;
             object? invokeTarget;
 
@@ -78,17 +79,53 @@ public class TSFunction
                     Array.Copy(finalArgs, adjustedArgs, copyCount);
                 }
                 // Remaining slots are already null (default)
-                
+
+                // 3. Convert arguments for union types
+                ConvertUnionArguments(adjustedArgs, parameters);
+
                 // Use the adjusted array
                 return _invoker.Invoke(invokeTarget, new Span<object?>(adjustedArgs));
             }
 
-            // 3. Perfect Match
+            // 3. Convert arguments for union types (perfect match case)
+            ConvertUnionArguments(finalArgs, parameters);
+
+            // 4. Perfect Match
             return _invoker.Invoke(invokeTarget, new Span<object?>(finalArgs));
         }
         catch (System.Reflection.TargetInvocationException ex)
         {
             throw ex.InnerException ?? ex;
+        }
+    }
+
+    /// <summary>
+    /// Converts arguments to union types using implicit conversion operators if needed.
+    /// </summary>
+    private void ConvertUnionArguments(object?[] args, System.Reflection.ParameterInfo[] parameters)
+    {
+        for (int i = 0; i < args.Length && i < parameters.Length; i++)
+        {
+            var paramType = parameters[i].ParameterType;
+            var arg = args[i];
+
+            // Check if parameter is a union type (generated types start with "Union_")
+            if (paramType.IsValueType && paramType.Name.StartsWith("Union_") && arg != null)
+            {
+                var argType = arg.GetType();
+                // Skip if already the correct type
+                if (argType == paramType) continue;
+
+                // Find implicit conversion operator: op_Implicit(argType) -> paramType
+                var implicitOp = paramType.GetMethod("op_Implicit",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+                    null, [argType], null);
+
+                if (implicitOp != null)
+                {
+                    args[i] = implicitOp.Invoke(null, [arg]);
+                }
+            }
         }
     }
 

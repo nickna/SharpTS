@@ -164,7 +164,8 @@ public partial class ILCompiler
             EnumToModule = _enumToModule,
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprBuilders,
+            UnionGenerator = _unionGenerator
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -256,7 +257,8 @@ public partial class ILCompiler
             ClassExprStaticFields = _classExprStaticFields,
             ClassExprStaticMethods = _classExprStaticMethods,
             ClassExprConstructors = _classExprConstructors,
-            ClassExprSuperclass = _classExprSuperclass
+            ClassExprSuperclass = _classExprSuperclass,
+            UnionGenerator = _unionGenerator
         };
 
         // Initialize namespace static fields before any code that might reference them
