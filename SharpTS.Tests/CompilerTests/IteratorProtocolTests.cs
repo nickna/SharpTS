@@ -1221,10 +1221,8 @@ public class IteratorProtocolTests
     }
 
     [Fact]
-    public void ForOfWithYield_CompilerOnly_WorksCorrectly()
+    public void ForOfWithYield_InterpreterParity()
     {
-        // NOTE: Interpreter has a bug with for...of containing yield
-        // This test verifies compiler behavior only
         var source = """
             function* gen(): Generator<number> {
                 for (const x of [1, 2, 3]) {
@@ -1239,15 +1237,15 @@ public class IteratorProtocolTests
             console.log(result);
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        Assert.Equal("10,20,30,\n", output);
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal("10,20,30,\n", interpretedOutput);
+        Assert.Equal(interpretedOutput, compiledOutput);
     }
 
     [Fact]
-    public void ForOfWithYield_NestedLoops_CompilerOnly_WorksCorrectly()
+    public void ForOfWithYield_NestedLoops_InterpreterParity()
     {
-        // NOTE: Interpreter has a bug with for...of containing yield
-        // This test verifies compiler behavior only
         var source = """
             function* gen(): Generator<number> {
                 for (const x of [1, 2]) {
@@ -1264,8 +1262,10 @@ public class IteratorProtocolTests
             console.log(result);
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        Assert.Equal("10,20,20,40,\n", output);
+        var interpretedOutput = TestHarness.RunInterpreted(source);
+        var compiledOutput = TestHarness.RunCompiled(source);
+        Assert.Equal("10,20,20,40,\n", interpretedOutput);
+        Assert.Equal(interpretedOutput, compiledOutput);
     }
 
     #endregion

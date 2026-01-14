@@ -160,7 +160,7 @@ public class SharpTSGenerator : IEnumerable<object?>
             case Stmt.Block block:
                 if (block.Statements != null)
                 {
-                    var blockEnv = new RuntimeEnvironment(_environment);
+                    var blockEnv = new RuntimeEnvironment(_interpreter.Environment);
                     RuntimeEnvironment prevEnv = _interpreter.Environment;
                     _interpreter.SetEnvironment(blockEnv);
                     try
@@ -251,7 +251,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                 IEnumerable<object?> elements = GetIterableElements(iterable);
                 foreach (var element in elements)
                 {
-                    var loopEnv = new RuntimeEnvironment(_environment);
+                    var loopEnv = new RuntimeEnvironment(_interpreter.Environment);
                     loopEnv.Define(forOf.Variable.Lexeme, element);
 
                     RuntimeEnvironment prevEnv = _interpreter.Environment;
@@ -291,7 +291,7 @@ public class SharpTSGenerator : IEnumerable<object?>
                 {
                     if (tryCatch.CatchBlock != null && tryCatch.CatchParam != null)
                     {
-                        var catchEnv = new RuntimeEnvironment(_environment);
+                        var catchEnv = new RuntimeEnvironment(_interpreter.Environment);
                         catchEnv.Define(tryCatch.CatchParam.Lexeme, tryResult.Value);
                         RuntimeEnvironment prevEnv = _interpreter.Environment;
                         _interpreter.SetEnvironment(catchEnv);
