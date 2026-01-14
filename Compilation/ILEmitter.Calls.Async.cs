@@ -16,19 +16,27 @@ public partial class ILEmitter
     /// </summary>
     private void EmitAsyncFunctionCall(MethodInfo asyncMethod, List<Expr> arguments)
     {
-        var paramCount = asyncMethod.GetParameters().Length;
+        var asyncMethodParams = asyncMethod.GetParameters();
+        var paramCount = asyncMethodParams.Length;
 
-        // Emit provided arguments
-        foreach (var arg in arguments)
+        // Emit provided arguments with proper type conversions
+        for (int i = 0; i < arguments.Count; i++)
         {
-            EmitExpression(arg);
-            EmitBoxIfNeeded(arg);
+            EmitExpression(arguments[i]);
+            if (i < asyncMethodParams.Length)
+            {
+                EmitConversionForParameter(arguments[i], asyncMethodParams[i].ParameterType);
+            }
+            else
+            {
+                EmitBoxIfNeeded(arguments[i]);
+            }
         }
 
-        // Pad with nulls for missing arguments (for default parameters)
+        // Pad missing optional arguments with appropriate default values
         for (int i = arguments.Count; i < paramCount; i++)
         {
-            IL.Emit(OpCodes.Ldnull);
+            EmitDefaultForType(asyncMethodParams[i].ParameterType);
         }
 
         // Call the async method (returns Task<object?> or Task)

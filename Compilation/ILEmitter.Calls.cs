@@ -23,16 +23,31 @@ public partial class ILEmitter
                 // Load this
                 IL.Emit(OpCodes.Ldarg_0);
 
-                // Load arguments
-                foreach (var arg in c.Arguments)
+                // Load arguments with proper type conversions
+                var parentCtorParams = parentCtor.GetParameters();
+                for (int i = 0; i < c.Arguments.Count; i++)
                 {
-                    EmitExpression(arg);
-                    EmitBoxIfNeeded(arg);
+                    EmitExpression(c.Arguments[i]);
+                    if (i < parentCtorParams.Length)
+                    {
+                        EmitConversionForParameter(c.Arguments[i], parentCtorParams[i].ParameterType);
+                    }
+                    else
+                    {
+                        EmitBoxIfNeeded(c.Arguments[i]);
+                    }
+                }
+
+                // Pad missing optional arguments with appropriate default values
+                for (int i = c.Arguments.Count; i < parentCtorParams.Length; i++)
+                {
+                    EmitDefaultForType(parentCtorParams[i].ParameterType);
                 }
 
                 // Call parent constructor
                 IL.Emit(OpCodes.Call, parentCtor);
                 IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
+                SetStackUnknown();
                 return;
             }
 
@@ -64,16 +79,31 @@ public partial class ILEmitter
                     // Load this
                     IL.Emit(OpCodes.Ldarg_0);
 
-                    // Load arguments
-                    foreach (var arg in c.Arguments)
+                    // Load arguments with proper type conversions
+                    var parentExprCtorParams = parentExprCtor.GetParameters();
+                    for (int i = 0; i < c.Arguments.Count; i++)
                     {
-                        EmitExpression(arg);
-                        EmitBoxIfNeeded(arg);
+                        EmitExpression(c.Arguments[i]);
+                        if (i < parentExprCtorParams.Length)
+                        {
+                            EmitConversionForParameter(c.Arguments[i], parentExprCtorParams[i].ParameterType);
+                        }
+                        else
+                        {
+                            EmitBoxIfNeeded(c.Arguments[i]);
+                        }
+                    }
+
+                    // Pad missing optional arguments with appropriate default values
+                    for (int i = c.Arguments.Count; i < parentExprCtorParams.Length; i++)
+                    {
+                        EmitDefaultForType(parentExprCtorParams[i].ParameterType);
                     }
 
                     // Call parent constructor
                     IL.Emit(OpCodes.Call, parentExprCtor);
                     IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
+                    SetStackUnknown();
                     return;
                 }
             }
@@ -220,22 +250,31 @@ public partial class ILEmitter
                 _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
                 classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
             {
-                var paramCount = staticMethod.GetParameters().Length;
+                var staticMethodParams = staticMethod.GetParameters();
+                var paramCount = staticMethodParams.Length;
 
-                // Emit provided arguments
-                foreach (var arg in c.Arguments)
+                // Emit provided arguments with proper type conversions
+                for (int i = 0; i < c.Arguments.Count; i++)
                 {
-                    EmitExpression(arg);
-                    EmitBoxIfNeeded(arg);
+                    EmitExpression(c.Arguments[i]);
+                    if (i < staticMethodParams.Length)
+                    {
+                        EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
+                    }
+                    else
+                    {
+                        EmitBoxIfNeeded(c.Arguments[i]);
+                    }
                 }
 
-                // Pad with nulls for missing arguments (for default parameters)
+                // Pad missing optional arguments with appropriate default values
                 for (int i = c.Arguments.Count; i < paramCount; i++)
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    EmitDefaultForType(staticMethodParams[i].ParameterType);
                 }
 
                 IL.Emit(OpCodes.Call, staticMethod);
+                SetStackUnknown();
                 return;
             }
         }
@@ -249,22 +288,31 @@ public partial class ILEmitter
             _ctx.ClassExprStaticMethods.TryGetValue(classExpr, out var exprStaticMethods) &&
             exprStaticMethods.TryGetValue(classExprStaticGet.Name.Lexeme, out var exprStaticMethod))
         {
-            var paramCount = exprStaticMethod.GetParameters().Length;
+            var exprStaticMethodParams = exprStaticMethod.GetParameters();
+            var paramCount = exprStaticMethodParams.Length;
 
-            // Emit provided arguments
-            foreach (var arg in c.Arguments)
+            // Emit provided arguments with proper type conversions
+            for (int i = 0; i < c.Arguments.Count; i++)
             {
-                EmitExpression(arg);
-                EmitBoxIfNeeded(arg);
+                EmitExpression(c.Arguments[i]);
+                if (i < exprStaticMethodParams.Length)
+                {
+                    EmitConversionForParameter(c.Arguments[i], exprStaticMethodParams[i].ParameterType);
+                }
+                else
+                {
+                    EmitBoxIfNeeded(c.Arguments[i]);
+                }
             }
 
-            // Pad with nulls for missing arguments
+            // Pad missing optional arguments with appropriate default values
             for (int i = c.Arguments.Count; i < paramCount; i++)
             {
-                IL.Emit(OpCodes.Ldnull);
+                EmitDefaultForType(exprStaticMethodParams[i].ParameterType);
             }
 
             IL.Emit(OpCodes.Call, exprStaticMethod);
+            SetStackUnknown();
             return;
         }
 
@@ -423,9 +471,29 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    // No rest param - regular argument emission
-                    foreach (var arg in c.Arguments)
+                    // No rest param - select overload based on argument count
+                    // Check if we need to use an overload (fewer args than params)
+                    if (c.Arguments.Count < paramCount &&
+                        _ctx.FunctionOverloads != null &&
+                        _ctx.FunctionOverloads.TryGetValue(resolvedFuncName, out var overloads))
                     {
+                        // Find the overload matching our argument count
+                        var matchingOverload = overloads.FirstOrDefault(o =>
+                            o.GetParameters().Length == c.Arguments.Count);
+                        if (matchingOverload != null)
+                        {
+                            targetMethod = matchingOverload;
+                            paramCount = c.Arguments.Count; // Update param count for typed emission
+                        }
+                    }
+
+                    // Get target parameter types for proper conversion
+                    var targetParams = targetMethod.GetParameters();
+
+                    // Emit arguments with proper type conversions
+                    for (int i = 0; i < c.Arguments.Count; i++)
+                    {
+                        var arg = c.Arguments[i];
                         if (arg is Expr.Spread spread)
                         {
                             // Spread in non-rest function - just emit the expression
@@ -435,14 +503,24 @@ public partial class ILEmitter
                         else
                         {
                             EmitExpression(arg);
-                            EmitBoxIfNeeded(arg);
+                            // Convert to target parameter type
+                            if (i < targetParams.Length)
+                            {
+                                EmitConversionForParameter(arg, targetParams[i].ParameterType);
+                            }
+                            else
+                            {
+                                EmitBoxIfNeeded(arg);
+                            }
                         }
                     }
 
-                    // Pad with nulls for missing arguments (for default parameters)
+                    // Only pad with nulls if no matching overload was found
+                    // and we still need more arguments
                     for (int i = c.Arguments.Count; i < paramCount; i++)
                     {
-                        IL.Emit(OpCodes.Ldnull);
+                        var paramType = targetParams[i].ParameterType;
+                        EmitDefaultForType(paramType);
                     }
                 }
 
@@ -835,25 +913,36 @@ public partial class ILEmitter
         if (!_ctx.Classes.TryGetValue(className, out var classType))
             return false;
 
-        // Get expected parameter count from method definition
-        int expectedParamCount = methodBuilder.GetParameters().Length;
+        // Get target parameter types for proper conversion
+        var targetParams = methodBuilder.GetParameters();
+        int expectedParamCount = targetParams.Length;
 
         // Emit: ((ClassName)receiver).method(args)
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
         IL.Emit(OpCodes.Castclass, classType);
 
-        // Emit all provided arguments
-        foreach (var arg in arguments)
+        // Emit arguments with proper type conversions
+        for (int i = 0; i < arguments.Count; i++)
         {
+            var arg = arguments[i];
             EmitExpression(arg);
-            EmitBoxIfNeeded(arg);
+            // Convert to target parameter type
+            if (i < targetParams.Length)
+            {
+                EmitConversionForParameter(arg, targetParams[i].ParameterType);
+            }
+            else
+            {
+                EmitBoxIfNeeded(arg);
+            }
         }
 
-        // Pad missing optional arguments with null
+        // Pad missing optional arguments with appropriate default values
         for (int i = arguments.Count; i < expectedParamCount; i++)
         {
-            IL.Emit(OpCodes.Ldnull);
+            var paramType = targetParams[i].ParameterType;
+            EmitDefaultForType(paramType);
         }
 
         // Emit the virtual call

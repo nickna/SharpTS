@@ -111,6 +111,93 @@ public partial class ILEmitter
         }
     }
 
+    /// <summary>
+    /// Emits conversion from the current stack value to the target parameter type.
+    /// Handles boxing for object, unboxing for value types, and pass-through for matching types.
+    /// </summary>
+    public void EmitConversionForParameter(Expr expr, Type targetType)
+    {
+        // If target is object, box value types
+        if (targetType == typeof(object))
+        {
+            EmitBoxIfNeeded(expr);
+            return;
+        }
+
+        // Check if the expression produces a matching type
+        if (expr is Expr.Literal lit)
+        {
+            if (lit.Value is double && targetType == typeof(double))
+            {
+                // Already emitted as double, no conversion needed
+                return;
+            }
+            if (lit.Value is bool && targetType == typeof(bool))
+            {
+                // Already emitted as bool, no conversion needed
+                return;
+            }
+            if (lit.Value is string && targetType == typeof(string))
+            {
+                // Already emitted as string, no conversion needed
+                return;
+            }
+        }
+
+        // If stack has a known type matching target, no conversion needed
+        if (_stackType == StackType.Double && targetType == typeof(double))
+            return;
+        if (_stackType == StackType.Boolean && targetType == typeof(bool))
+            return;
+
+        // If target is a value type and we have an object, unbox
+        if (targetType.IsValueType && _stackType != StackType.Double && _stackType != StackType.Boolean)
+        {
+            IL.Emit(OpCodes.Unbox_Any, targetType);
+        }
+    }
+
+    /// <summary>
+    /// Emits a default value for the given type.
+    /// Used when padding missing arguments (fallback when no overload matches).
+    /// </summary>
+    public void EmitDefaultForType(Type type)
+    {
+        if (type == typeof(double))
+        {
+            IL.Emit(OpCodes.Ldc_R8, 0.0);
+        }
+        else if (type == typeof(int))
+        {
+            IL.Emit(OpCodes.Ldc_I4_0);
+        }
+        else if (type == typeof(bool))
+        {
+            IL.Emit(OpCodes.Ldc_I4_0);
+        }
+        else if (type == typeof(float))
+        {
+            IL.Emit(OpCodes.Ldc_R4, 0.0f);
+        }
+        else if (type == typeof(long))
+        {
+            IL.Emit(OpCodes.Ldc_I8, 0L);
+        }
+        else if (type.IsValueType)
+        {
+            // For other value types, use initobj with a local
+            var local = IL.DeclareLocal(type);
+            IL.Emit(OpCodes.Ldloca, local);
+            IL.Emit(OpCodes.Initobj, type);
+            IL.Emit(OpCodes.Ldloc, local);
+        }
+        else
+        {
+            // Reference types default to null
+            IL.Emit(OpCodes.Ldnull);
+        }
+    }
+
     public void EmitExpressionAsDouble(Expr expr)
     {
         // Emit expression and ensure result is a double on the stack

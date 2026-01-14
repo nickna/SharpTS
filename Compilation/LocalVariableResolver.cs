@@ -41,7 +41,12 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.TryGetParameter(name, out var argIndex))
         {
             _il.Emit(OpCodes.Ldarg, argIndex);
-            return StackType.Unknown; // Parameters are always object
+            // Check if we have type information for this parameter
+            if (_ctx.TryGetParameterType(name, out var paramType) && paramType != null)
+            {
+                return MapTypeToStackType(paramType);
+            }
+            return StackType.Unknown; // Fallback for untyped parameters
         }
 
         // 2. Locals (with type awareness)

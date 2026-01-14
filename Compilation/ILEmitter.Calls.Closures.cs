@@ -100,6 +100,11 @@ public partial class ILEmitter
             else if (_ctx.TryGetParameter(capturedVar, out var argIndex))
             {
                 IL.Emit(OpCodes.Ldarg, argIndex);
+                // If parameter is typed (value type), box it for object field storage
+                if (_ctx.TryGetParameterType(capturedVar, out var paramType) && paramType != null && paramType.IsValueType)
+                {
+                    IL.Emit(OpCodes.Box, paramType);
+                }
             }
             else if (_ctx.CapturedFields != null && _ctx.CapturedFields.TryGetValue(capturedVar, out var capturedField))
             {

@@ -253,7 +253,11 @@ public partial class ILCompiler
         if (!_classConstructors.ContainsKey(qualifiedClassName))
         {
             var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
-            var ctorParamTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray() ?? [];
+            // Use typed parameters from TypeMap
+            var ctorParamTypes = constructor != null
+                ? ParameterTypeResolver.ResolveConstructorParameters(
+                    classStmt.Name.Lexeme, constructor.Parameters, _typeMapper, _typeMap)
+                : [];
 
             var ctorBuilder = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,
@@ -273,8 +277,10 @@ public partial class ILCompiler
         // Pre-define static methods (so they're available during async MoveNext emission)
         foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.IsStatic && m.Name.Lexeme != "constructor"))
         {
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
-            // Async methods return Task<object>, sync methods return object
+            // Use typed parameters from TypeMap
+            var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
+                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+            // Keep return type as object for now (async methods return Task<object>)
             var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
 
             var methodBuilder = typeBuilder.DefineMethod(
@@ -293,7 +299,9 @@ public partial class ILCompiler
             if (method.IsStatic || method.Name.Lexeme == "constructor")
                 continue;
 
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            // Use typed parameters from TypeMap
+            var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
+                classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)
@@ -301,6 +309,7 @@ public partial class ILCompiler
                 methodAttrs |= MethodAttributes.Abstract;
             }
 
+            // Keep return type as object for now (async methods return Task<object>)
             Type returnType = method.IsAsync ? typeof(Task<object>) : typeof(object);
 
             var methodBuilder = typeBuilder.DefineMethod(
@@ -544,7 +553,9 @@ public partial class ILCompiler
         else
         {
             // Define the method (fallback for when DefineClassMethodsOnly wasn't called)
-            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            // Use typed parameters from TypeMap
+            var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
+                typeBuilder.Name, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)
@@ -552,6 +563,7 @@ public partial class ILCompiler
                 methodAttrs |= MethodAttributes.Abstract;
             }
 
+            // Keep return type as object for now
             Type returnType = method.IsAsync ? typeof(Task<object>) : typeof(object);
 
             methodBuilder = typeBuilder.DefineMethod(
@@ -644,16 +656,16 @@ public partial class ILCompiler
                 ctx.GenericTypeParameters[gp.Name] = gp;
         }
 
-        // Define parameters
+        // Define parameters with their types
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1);
+            // Instance methods have 'this' at index 0, so params start at index 1
+            Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
-
-        // Emit default parameter checks (instance method)
-        emitter.EmitDefaultParameters(method.Parameters, true);
 
         // Variables for @lock decorator support
         LocalBuilder? prevReentrancyLocal = null;

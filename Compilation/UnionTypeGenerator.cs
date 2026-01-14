@@ -137,7 +137,7 @@ public class UnionTypeGenerator
         }
 
         // Generate Value property (returns boxed object)
-        EmitValueProperty(typeBuilder, tagField, valueFields, mappedTypes);
+        var valueGetter = EmitValueProperty(typeBuilder, tagField, valueFields, mappedTypes);
 
         // Generate implicit conversion operators
         for (int i = 0; i < types.Count; i++)
@@ -148,9 +148,9 @@ public class UnionTypeGenerator
         // Generate ToString override
         EmitToString(typeBuilder, tagField, valueFields, mappedTypes, types);
 
-        // Generate Equals and GetHashCode
-        EmitEquals(typeBuilder, tagField, valueFields, mappedTypes);
-        EmitGetHashCode(typeBuilder, tagField, valueFields, mappedTypes);
+        // Generate Equals and GetHashCode (pass valueGetter to avoid GetMethod on TypeBuilder)
+        EmitEquals(typeBuilder, tagField, valueFields, mappedTypes, valueGetter);
+        EmitGetHashCode(typeBuilder, tagField, valueFields, mappedTypes, valueGetter);
 
         return typeBuilder.CreateType()!;
     }
@@ -273,7 +273,7 @@ public class UnionTypeGenerator
         property.SetGetMethod(getter);
     }
 
-    private void EmitValueProperty(TypeBuilder typeBuilder, FieldBuilder tagField,
+    private MethodBuilder EmitValueProperty(TypeBuilder typeBuilder, FieldBuilder tagField,
         List<FieldBuilder> valueFields, List<Type> mappedTypes)
     {
         var property = typeBuilder.DefineProperty(
@@ -324,6 +324,7 @@ public class UnionTypeGenerator
         il.Emit(OpCodes.Ret);
 
         property.SetGetMethod(getter);
+        return getter;
     }
 
     private void EmitImplicitConversion(TypeBuilder typeBuilder, FieldBuilder tagField,
@@ -344,32 +345,8 @@ public class UnionTypeGenerator
 
         var il = method.GetILGenerator();
 
-        // Create new instance with tag=index and the value in the correct slot
-        // new Union(tag, default, ..., value, ..., default)
-
-        il.Emit(OpCodes.Ldc_I4, index); // tag
-
-        for (int i = 0; i < mappedTypes.Count; i++)
-        {
-            if (i == index)
-            {
-                il.Emit(OpCodes.Ldarg_0); // The actual value
-            }
-            else
-            {
-                // Default value for other slots
-                EmitDefaultValue(il, mappedTypes[i]);
-            }
-        }
-
-        // Get the private constructor
-        var paramTypes = new Type[mappedTypes.Count + 1];
-        paramTypes[0] = typeof(byte);
-        for (int i = 0; i < mappedTypes.Count; i++)
-            paramTypes[i + 1] = mappedTypes[i];
-
-        // We need to use Newobj with the constructor, but TypeBuilder doesn't have GetConstructor
-        // So we'll emit a local and set fields directly
+        // Create new instance by initializing local and setting fields directly
+        // (TypeBuilder doesn't support GetConstructor before CreateType)
         var local = il.DeclareLocal(typeBuilder);
 
         // Initialize local to default
@@ -481,7 +458,7 @@ public class UnionTypeGenerator
     }
 
     private void EmitEquals(TypeBuilder typeBuilder, FieldBuilder tagField,
-        List<FieldBuilder> valueFields, List<Type> mappedTypes)
+        List<FieldBuilder> valueFields, List<Type> mappedTypes, MethodBuilder valueGetter)
     {
         var method = typeBuilder.DefineMethod(
             "Equals",
@@ -512,9 +489,9 @@ public class UnionTypeGenerator
 
         // Compare Value properties (simplified - uses boxed comparison)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeBuilder.GetMethod("get_Value")!);
+        il.Emit(OpCodes.Call, valueGetter);
         il.Emit(OpCodes.Ldloca_S, otherLocal);
-        il.Emit(OpCodes.Call, typeBuilder.GetMethod("get_Value")!);
+        il.Emit(OpCodes.Call, valueGetter);
         var equalsMethod = typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!;
         il.Emit(OpCodes.Call, equalsMethod);
         il.Emit(OpCodes.Br_S, endLabel);
@@ -529,7 +506,7 @@ public class UnionTypeGenerator
     }
 
     private void EmitGetHashCode(TypeBuilder typeBuilder, FieldBuilder tagField,
-        List<FieldBuilder> valueFields, List<Type> mappedTypes)
+        List<FieldBuilder> valueFields, List<Type> mappedTypes, MethodBuilder valueGetter)
     {
         var method = typeBuilder.DefineMethod(
             "GetHashCode",
@@ -546,7 +523,7 @@ public class UnionTypeGenerator
         il.Emit(OpCodes.Conv_I4);
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeBuilder.GetMethod("get_Value")!);
+        il.Emit(OpCodes.Call, valueGetter);
 
         var hashCombineMethod = typeof(HashCode).GetMethod("Combine", [typeof(int), typeof(object)])!;
         il.Emit(OpCodes.Call, hashCombineMethod);

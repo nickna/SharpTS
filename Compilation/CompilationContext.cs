@@ -73,6 +73,15 @@ public class CompilationContext
     // If a function has a rest param, restParamIndex is its index, regularParamCount is non-rest param count
     public Dictionary<string, (int RestParamIndex, int RegularParamCount)>? FunctionRestParams { get; set; }
 
+    // Function overloads for default parameters: function name -> list of overload methods
+    public Dictionary<string, List<MethodBuilder>>? FunctionOverloads { get; set; }
+
+    // Method overloads for default parameters: class name -> method name -> list of overload methods
+    public Dictionary<string, Dictionary<string, List<MethodBuilder>>>? MethodOverloads { get; set; }
+
+    // Constructor overloads for default parameters: class name -> list of overload constructors
+    public Dictionary<string, List<ConstructorBuilder>>? ConstructorOverloads { get; set; }
+
     // Class constructors by class name -> ConstructorBuilder
     public Dictionary<string, ConstructorBuilder>? ClassConstructors { get; set; }
 
@@ -376,6 +385,7 @@ public class CompilationContext
 
     // Parameter tracking (name -> arg index)
     private readonly Dictionary<string, int> _parameters = [];
+    private readonly Dictionary<string, Type> _parameterTypes = [];
 
     // Loop control labels (with optional label name for labeled statements)
     public Stack<(Label BreakLabel, Label ContinueLabel, string? LabelName)> LoopLabels { get; } = new();
@@ -400,9 +410,13 @@ public class CompilationContext
         Locals = new LocalsManager(il);
     }
 
-    public void DefineParameter(string name, int argIndex)
+    public void DefineParameter(string name, int argIndex, Type? paramType = null)
     {
         _parameters[name] = argIndex;
+        if (paramType != null)
+        {
+            _parameterTypes[name] = paramType;
+        }
     }
 
     public bool TryGetParameter(string name, out int argIndex)
@@ -410,9 +424,21 @@ public class CompilationContext
         return _parameters.TryGetValue(name, out argIndex);
     }
 
+    public bool TryGetParameterType(string name, out Type? paramType)
+    {
+        if (_parameterTypes.TryGetValue(name, out var type))
+        {
+            paramType = type;
+            return true;
+        }
+        paramType = null;
+        return false;
+    }
+
     public void ClearParameters()
     {
         _parameters.Clear();
+        _parameterTypes.Clear();
     }
 
     public void EnterLoop(Label breakLabel, Label continueLabel, string? labelName = null)

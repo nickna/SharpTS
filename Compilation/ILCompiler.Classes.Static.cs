@@ -18,8 +18,10 @@ public partial class ILCompiler
             return;
         }
 
-        var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
-        // Async methods return Task<object>, sync methods return object
+        // Resolve typed parameters from TypeMap
+        var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
+            className, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+        // Keep return type as object (async methods return Task<object>)
         var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
         var methodBuilder = typeBuilder.DefineMethod(
             method.Name.Lexeme,
@@ -189,16 +191,17 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprBuilders
         };
 
-        // Define parameters (starting at index 0, not 1 since no 'this')
+        // Define parameters with types (starting at index 0, not 1 since no 'this')
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i);
+            Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
 
-        // Emit default parameter checks (static method)
-        emitter.EmitDefaultParameters(method.Parameters, false);
+        // No runtime default parameter checks needed - overloads handle this
 
         // Variables for @lock decorator support
         LocalBuilder? prevReentrancyLocal = null;

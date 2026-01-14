@@ -199,8 +199,9 @@ public partial class AsyncMoveNextEmitter
         if (!_ctx.Classes.TryGetValue(className, out var classType))
             return false;
 
-        // Get expected parameter count from method definition
-        int expectedParamCount = methodBuilder.GetParameters().Length;
+        // Get method parameters for typed emission
+        var methodParams = methodBuilder.GetParameters();
+        int expectedParamCount = methodParams.Length;
 
         // IMPORTANT: In async context, await can happen in arguments
         // Emit all arguments first and store to temps before emitting receiver
@@ -219,21 +220,67 @@ public partial class AsyncMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Castclass, classType);
 
-        // Load all arguments back onto stack
-        foreach (var temp in argTemps)
+        // Load all arguments back onto stack with proper type conversions
+        for (int i = 0; i < argTemps.Count; i++)
         {
-            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Ldloc, argTemps[i]);
+            if (i < methodParams.Length)
+            {
+                var targetType = methodParams[i].ParameterType;
+                if (targetType.IsValueType && targetType != typeof(object))
+                {
+                    _il.Emit(OpCodes.Unbox_Any, targetType);
+                }
+            }
         }
 
-        // Pad missing optional arguments with null
+        // Pad missing optional arguments with appropriate default values
         for (int i = arguments.Count; i < expectedParamCount; i++)
         {
-            _il.Emit(OpCodes.Ldnull);
+            EmitDefaultForType(methodParams[i].ParameterType);
         }
 
         // Emit the virtual call
         _il.Emit(OpCodes.Callvirt, methodBuilder);
         SetStackUnknown();
         return true;
+    }
+
+    /// <summary>
+    /// Emits a default value for the given type.
+    /// </summary>
+    private void EmitDefaultForType(Type type)
+    {
+        if (type == typeof(double))
+        {
+            _il.Emit(OpCodes.Ldc_R8, 0.0);
+        }
+        else if (type == typeof(int))
+        {
+            _il.Emit(OpCodes.Ldc_I4_0);
+        }
+        else if (type == typeof(bool))
+        {
+            _il.Emit(OpCodes.Ldc_I4_0);
+        }
+        else if (type == typeof(float))
+        {
+            _il.Emit(OpCodes.Ldc_R4, 0.0f);
+        }
+        else if (type == typeof(long))
+        {
+            _il.Emit(OpCodes.Ldc_I8, 0L);
+        }
+        else if (type.IsValueType)
+        {
+            var local = _il.DeclareLocal(type);
+            _il.Emit(OpCodes.Ldloca, local);
+            _il.Emit(OpCodes.Initobj, type);
+            _il.Emit(OpCodes.Ldloc, local);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
     }
 }

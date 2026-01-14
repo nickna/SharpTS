@@ -99,24 +99,33 @@ public partial class ILEmitter
                 targetCtor = TypeBuilder.GetConstructor(targetType, ctorBuilder);
             }
 
-            // Get expected parameter count from constructor definition
-            int expectedParamCount = ctorBuilder.GetParameters().Length;
+            // Get constructor parameters for typed emission
+            var ctorParams = ctorBuilder.GetParameters();
+            int expectedParamCount = ctorParams.Length;
 
-            // Emit arguments directly onto the stack (all typed as object)
-            foreach (var arg in n.Arguments)
+            // Emit arguments with proper type conversions
+            for (int i = 0; i < n.Arguments.Count; i++)
             {
-                EmitExpression(arg);
-                EmitBoxIfNeeded(arg);
+                EmitExpression(n.Arguments[i]);
+                if (i < ctorParams.Length)
+                {
+                    EmitConversionForParameter(n.Arguments[i], ctorParams[i].ParameterType);
+                }
+                else
+                {
+                    EmitBoxIfNeeded(n.Arguments[i]);
+                }
             }
 
-            // Pad missing optional arguments with null
+            // Pad missing optional arguments with appropriate default values
             for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             {
-                IL.Emit(OpCodes.Ldnull);
+                EmitDefaultForType(ctorParams[i].ParameterType);
             }
 
             // Call the constructor directly using newobj
             IL.Emit(OpCodes.Newobj, targetCtor);
+            SetStackUnknown();  // newobj returns object reference
         }
         else if (_ctx.VarToClassExpr != null &&
                  _ctx.VarToClassExpr.TryGetValue(n.ClassName.Lexeme, out var classExpr) &&
@@ -124,23 +133,32 @@ public partial class ILEmitter
                  _ctx.ClassExprConstructors.TryGetValue(classExpr, out var classExprCtor))
         {
             // Class expression with known constructor - use direct newobj (handles default parameters)
-            int expectedParamCount = classExprCtor.GetParameters().Length;
+            var classExprCtorParams = classExprCtor.GetParameters();
+            int expectedParamCount = classExprCtorParams.Length;
 
-            // Emit arguments directly onto the stack (all typed as object)
-            foreach (var arg in n.Arguments)
+            // Emit arguments with proper type conversions
+            for (int i = 0; i < n.Arguments.Count; i++)
             {
-                EmitExpression(arg);
-                EmitBoxIfNeeded(arg);
+                EmitExpression(n.Arguments[i]);
+                if (i < classExprCtorParams.Length)
+                {
+                    EmitConversionForParameter(n.Arguments[i], classExprCtorParams[i].ParameterType);
+                }
+                else
+                {
+                    EmitBoxIfNeeded(n.Arguments[i]);
+                }
             }
 
-            // Pad missing optional arguments with null
+            // Pad missing optional arguments with appropriate default values
             for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             {
-                IL.Emit(OpCodes.Ldnull);
+                EmitDefaultForType(classExprCtorParams[i].ParameterType);
             }
 
             // Call the constructor directly using newobj
             IL.Emit(OpCodes.Newobj, classExprCtor);
+            SetStackUnknown();  // newobj returns object reference
         }
         else
         {

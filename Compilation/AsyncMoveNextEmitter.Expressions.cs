@@ -7,6 +7,7 @@ namespace SharpTS.Compilation;
 public partial class AsyncMoveNextEmitter
 {
     // EmitExpression dispatch is inherited from ExpressionEmitterBase
+    // EmitDefaultForType is defined in AsyncMoveNextEmitter.ArrowFunctions.cs
 
     protected override void EmitAwait(Expr.Await a)
     {
@@ -311,7 +312,8 @@ public partial class AsyncMoveNextEmitter
                 _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
                 classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
             {
-                var paramCount = staticMethod.GetParameters().Length;
+                var staticMethodParams = staticMethod.GetParameters();
+                var paramCount = staticMethodParams.Length;
 
                 // Emit all arguments and save to temps (await may occur in arguments)
                 List<LocalBuilder> staticArgTemps = [];
@@ -324,16 +326,24 @@ public partial class AsyncMoveNextEmitter
                     staticArgTemps.Add(temp);
                 }
 
-                // Load args from temps
-                foreach (var temp in staticArgTemps)
+                // Load args from temps with proper type conversions
+                for (int i = 0; i < staticArgTemps.Count; i++)
                 {
-                    _il.Emit(OpCodes.Ldloc, temp);
+                    _il.Emit(OpCodes.Ldloc, staticArgTemps[i]);
+                    if (i < staticMethodParams.Length)
+                    {
+                        var targetType = staticMethodParams[i].ParameterType;
+                        if (targetType.IsValueType && targetType != typeof(object))
+                        {
+                            _il.Emit(OpCodes.Unbox_Any, targetType);
+                        }
+                    }
                 }
 
-                // Pad with nulls for missing arguments (for default parameters)
+                // Pad missing optional arguments with appropriate default values
                 for (int i = c.Arguments.Count; i < paramCount; i++)
                 {
-                    _il.Emit(OpCodes.Ldnull);
+                    EmitDefaultForType(staticMethodParams[i].ParameterType);
                 }
 
                 _il.Emit(OpCodes.Call, staticMethod);

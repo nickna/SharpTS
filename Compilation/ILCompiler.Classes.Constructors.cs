@@ -26,7 +26,10 @@ public partial class ILCompiler
         }
         else
         {
-            var paramTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray() ?? [];
+            // Fallback: resolve typed parameters
+            var paramTypes = constructor != null
+                ? ParameterTypeResolver.ResolveConstructorParameters(className, constructor.Parameters, _typeMapper, _typeMap)
+                : [];
             ctorBuilder = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,
                 CallingConventions.Standard,
@@ -187,16 +190,17 @@ public partial class ILCompiler
             ctx.FieldsField = fieldsField;
             ctx.IsInstanceMethod = true;
 
-            // Define parameters
+            // Define parameters with types
+            var ctorParams = ctorBuilder.GetParameters();
             for (int i = 0; i < constructor.Parameters.Count; i++)
             {
-                ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1);
+                Type paramType = i < ctorParams.Length ? ctorParams[i].ParameterType : typeof(object);
+                ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1, paramType);
             }
 
             var emitter = new ILEmitter(ctx);
 
-            // Emit default parameter checks (instance method)
-            emitter.EmitDefaultParameters(constructor.Parameters, true);
+            // No runtime default parameter checks needed - overloads handle this
 
             if (constructor.Body != null)
             {

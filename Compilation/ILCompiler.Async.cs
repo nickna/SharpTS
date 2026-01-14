@@ -614,7 +614,9 @@ public partial class ILCompiler
 
         // Copy parameters to state machine fields
         // For instance methods, parameters start at arg 1 (arg 0 is 'this')
+        // Hoisted parameter fields are typed as 'object', so we need to box value types
         int paramOffset = isInstanceMethod ? 1 : 0;
+        var stubParams = stubMethod.GetParameters();
         for (int i = 0; i < parameters.Count; i++)
         {
             string paramName = parameters[i].Name.Lexeme;
@@ -622,6 +624,11 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Ldloca, smLocal);
                 il.Emit(OpCodes.Ldarg, i + paramOffset);
+                // Box value types since hoisted fields are typed as object
+                if (i < stubParams.Length && stubParams[i].ParameterType.IsValueType)
+                {
+                    il.Emit(OpCodes.Box, stubParams[i].ParameterType);
+                }
                 il.Emit(OpCodes.Stfld, field);
             }
         }

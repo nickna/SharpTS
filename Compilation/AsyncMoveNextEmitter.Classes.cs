@@ -42,8 +42,9 @@ public partial class AsyncMoveNextEmitter
                 targetCtor = TypeBuilder.GetConstructor(targetType, ctorBuilder);
             }
 
-            // Get expected parameter count from constructor definition
-            int expectedParamCount = ctorBuilder.GetParameters().Length;
+            // Get constructor parameters for typed emission
+            var ctorParams = ctorBuilder.GetParameters();
+            int expectedParamCount = ctorParams.Length;
 
             // IMPORTANT: In async, await can happen in arguments
             // Emit all arguments first and store to temps
@@ -57,16 +58,24 @@ public partial class AsyncMoveNextEmitter
                 argTemps.Add(temp);
             }
 
-            // Now load all arguments onto stack
-            foreach (var temp in argTemps)
+            // Now load all arguments onto stack with proper type conversions
+            for (int i = 0; i < argTemps.Count; i++)
             {
-                _il.Emit(OpCodes.Ldloc, temp);
+                _il.Emit(OpCodes.Ldloc, argTemps[i]);
+                if (i < ctorParams.Length)
+                {
+                    var targetParamType = ctorParams[i].ParameterType;
+                    if (targetParamType.IsValueType && targetParamType != typeof(object))
+                    {
+                        _il.Emit(OpCodes.Unbox_Any, targetParamType);
+                    }
+                }
             }
 
-            // Pad missing optional arguments with null
+            // Pad missing optional arguments with appropriate default values
             for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             {
-                _il.Emit(OpCodes.Ldnull);
+                EmitDefaultForType(ctorParams[i].ParameterType);
             }
 
             // Call the constructor directly using newobj

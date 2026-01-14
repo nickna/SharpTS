@@ -35,6 +35,9 @@ public partial class ILCompiler
     private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType classes mapped to .NET types
     private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
     private readonly Dictionary<string, MethodBuilder> _functionBuilders = [];
+    private readonly Dictionary<string, List<MethodBuilder>> _functionOverloads = [];  // Overloads by arity for default params
+    private readonly Dictionary<string, Dictionary<string, List<MethodBuilder>>> _methodOverloads = [];  // className -> methodName -> overloads
+    private readonly Dictionary<string, List<ConstructorBuilder>> _constructorOverloads = [];  // className -> constructor overloads
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _staticFields = [];
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticMethods = [];
     private readonly Dictionary<string, FieldBuilder> _instanceFieldsField = []; // _fields dict field per class
@@ -454,6 +457,7 @@ public partial class ILCompiler
                 // Skip overload signatures (no body)
                 if (funcStmt.Body == null) continue;
                 EmitFunctionBody(funcStmt);
+                EmitFunctionOverloads(funcStmt);
             }
             else if (stmt is Stmt.Namespace nsStmt)
             {
@@ -643,6 +647,7 @@ public partial class ILCompiler
                 else if (stmt is Stmt.Function funcStmt && funcStmt.Body != null)
                 {
                     EmitFunctionBody(funcStmt);
+                    EmitFunctionOverloads(funcStmt);
                 }
                 else if (stmt is Stmt.Export export && export.Declaration != null)
                 {
@@ -653,6 +658,7 @@ public partial class ILCompiler
                     else if (export.Declaration is Stmt.Function funcDecl && funcDecl.Body != null)
                     {
                         EmitFunctionBody(funcDecl);
+                        EmitFunctionOverloads(funcDecl);
                     }
                 }
             }

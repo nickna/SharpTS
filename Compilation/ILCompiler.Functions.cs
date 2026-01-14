@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -44,7 +45,13 @@ public partial class ILCompiler
             _functionToModule[funcStmt.Name.Lexeme] = _currentModulePath;
         }
 
-        var paramTypes = funcStmt.Parameters.Select(_ => typeof(object)).ToArray();
+        // Resolve typed parameters from TypeMap
+        // Note: Return type remains 'object' for now to avoid breaking entry point code
+        // that expects object on the stack for Task checking and logging.
+        var funcType = _typeMap?.GetFunctionType(qualifiedFunctionName);
+        var paramTypes = ParameterTypeResolver.ResolveParameters(
+            funcStmt.Parameters, _typeMapper, funcType);
+
         var methodBuilder = _programType.DefineMethod(
             qualifiedFunctionName,
             MethodAttributes.Public | MethodAttributes.Static,
@@ -79,6 +86,24 @@ public partial class ILCompiler
         }
 
         _functionBuilders[qualifiedFunctionName] = methodBuilder;
+
+        // Generate overloads for functions with default parameters
+        var overloadSignatures = OverloadGenerator.GetOverloadSignatures(
+            funcStmt.Parameters, paramTypes);
+        if (overloadSignatures.Count > 0)
+        {
+            _functionOverloads[qualifiedFunctionName] = [];
+            foreach (var overloadParams in overloadSignatures)
+            {
+                var overload = _programType.DefineMethod(
+                    qualifiedFunctionName,
+                    MethodAttributes.Public | MethodAttributes.Static,
+                    typeof(object),
+                    overloadParams
+                );
+                _functionOverloads[qualifiedFunctionName].Add(overload);
+            }
+        }
 
         // Track rest parameter info
         var restParam = funcStmt.Parameters.FirstOrDefault(p => p.IsRest);
@@ -116,6 +141,7 @@ public partial class ILCompiler
             StaticMethods = _staticMethods,
             ClassConstructors = _classConstructors,
             FunctionRestParams = _functionRestParams,
+            FunctionOverloads = _functionOverloads,
             EnumMembers = _enumMembers,
             EnumReverse = _enumReverse,
             EnumKinds = _enumKinds,
@@ -148,16 +174,15 @@ public partial class ILCompiler
                 ctx.GenericTypeParameters[gp.Name] = gp;
         }
 
-        // Define parameters
+        // Define parameters with their types
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < funcStmt.Parameters.Count; i++)
         {
-            ctx.DefineParameter(funcStmt.Parameters[i].Name.Lexeme, i);
+            Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
+            ctx.DefineParameter(funcStmt.Parameters[i].Name.Lexeme, i, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
-
-        // Emit default parameter checks (static function, not instance method)
-        emitter.EmitDefaultParameters(funcStmt.Parameters, false);
 
         // Top-level functions should always have a body
         if (funcStmt.Body == null)
@@ -177,7 +202,7 @@ public partial class ILCompiler
         }
         else
         {
-            // Default return null
+            // Default return null (return type is object for now)
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ret);
         }
@@ -207,6 +232,7 @@ public partial class ILCompiler
             StaticMethods = _staticMethods,
             ClassConstructors = _classConstructors,
             FunctionRestParams = _functionRestParams,
+            FunctionOverloads = _functionOverloads,
             EnumMembers = _enumMembers,
             EnumReverse = _enumReverse,
             EnumKinds = _enumKinds,
@@ -300,5 +326,59 @@ public partial class ILCompiler
             _ when _classBuilders.TryGetValue(constraint, out var tb) => tb,
             _ => typeof(object)
         };
+    }
+
+    /// <summary>
+    /// Emits forwarding bodies for function overloads.
+    /// Must be called after EmitFunctionBody so the full method is available.
+    /// </summary>
+    private void EmitFunctionOverloads(Stmt.Function funcStmt)
+    {
+        string qualifiedFunctionName = GetDefinitionContext().GetQualifiedFunctionName(funcStmt.Name.Lexeme);
+
+        // Skip if no overloads were generated
+        if (!_functionOverloads.TryGetValue(qualifiedFunctionName, out var overloads) || overloads.Count == 0)
+            return;
+
+        var fullMethod = _functionBuilders[qualifiedFunctionName];
+
+        // For each overload, emit a forwarding body that calls the full method
+        int overloadIndex = 0;
+        for (int arity = funcStmt.Parameters.Count - 1; arity >= GetFirstDefaultIndex(funcStmt.Parameters); arity--)
+        {
+            var overload = overloads[overloadIndex++];
+            var il = overload.GetILGenerator();
+
+            // Create a minimal context just for emitting default value expressions
+            var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+            {
+                Runtime = _runtime,
+                TypeMap = _typeMap
+            };
+            var emitter = new ILEmitter(ctx);
+
+            OverloadGenerator.EmitOverloadBody(
+                il,
+                fullMethod,
+                funcStmt.Parameters,
+                arity,
+                isStatic: true,
+                emitter
+            );
+        }
+    }
+
+    /// <summary>
+    /// Gets the index of the first parameter with a default value.
+    /// Returns -1 if no default parameters exist.
+    /// </summary>
+    private static int GetFirstDefaultIndex(List<Stmt.Parameter> parameters)
+    {
+        for (int i = 0; i < parameters.Count; i++)
+        {
+            if (parameters[i].DefaultValue != null)
+                return i;
+        }
+        return -1;
     }
 }
