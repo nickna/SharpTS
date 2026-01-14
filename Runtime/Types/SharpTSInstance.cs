@@ -14,7 +14,7 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSClass"/>
 /// <seealso cref="SharpTSObject"/>
-public class SharpTSInstance(SharpTSClass klass)
+public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
 {
     private readonly SharpTSClass _klass = klass;
     private readonly Dictionary<string, object?> _fields = [];
@@ -142,15 +142,24 @@ public class SharpTSInstance(SharpTSClass klass)
     /// </summary>
     public IEnumerable<string> GetFieldNames() => _fields.Keys;
 
+    /// <inheritdoc />
+    public IEnumerable<string> PropertyNames => GetFieldNames();
+
     /// <summary>
     /// Get a field value by name for object rest patterns
     /// </summary>
     public object? GetFieldValue(string name) => _fields.TryGetValue(name, out var value) ? value : null;
 
+    /// <inheritdoc />
+    public object? GetProperty(string name) => GetFieldValue(name);
+
     /// <summary>
     /// Set a field value by name for bracket notation assignment
     /// </summary>
     public void SetFieldValue(string name, object? value) => _fields[name] = value;
+
+    /// <inheritdoc />
+    public void SetProperty(string name, object? value) => SetFieldValue(name, value);
 
     /// <summary>
     /// Gets a value by symbol key.

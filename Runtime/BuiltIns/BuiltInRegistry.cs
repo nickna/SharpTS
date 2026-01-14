@@ -15,7 +15,7 @@ public sealed class BuiltInRegistry
     public static BuiltInRegistry Instance { get; } = CreateDefault();
 
     private readonly Dictionary<string, BuiltInNamespace> _namespaces = new();
-    private readonly List<(Type Type, Func<object, string, object?> GetMember)> _instanceTypes = new();
+    private readonly Dictionary<Type, Func<object, string, object?>> _instanceTypes = new();
 
     private BuiltInRegistry() { }
 
@@ -68,16 +68,9 @@ public sealed class BuiltInRegistry
     /// <returns>The member value (property) or BuiltInMethod, or null if not found</returns>
     public object? GetInstanceMember(object instance, string memberName)
     {
-        foreach (var (type, getMember) in _instanceTypes)
+        if (_instanceTypes.TryGetValue(instance.GetType(), out var getMember))
         {
-            if (type.IsInstanceOfType(instance))
-            {
-                var member = getMember(instance, memberName);
-                if (member != null)
-                {
-                    return member;
-                }
-            }
+            return getMember(instance, memberName);
         }
         return null;
     }
@@ -87,14 +80,7 @@ public sealed class BuiltInRegistry
     /// </summary>
     public bool HasInstanceMembers(object instance)
     {
-        foreach (var (type, _) in _instanceTypes)
-        {
-            if (type.IsInstanceOfType(instance))
-            {
-                return true;
-            }
-        }
-        return false;
+        return _instanceTypes.ContainsKey(instance.GetType());
     }
 
     /// <summary>
@@ -112,7 +98,7 @@ public sealed class BuiltInRegistry
     /// <param name="getMember">Function to look up a member by name</param>
     public void RegisterInstanceType(Type type, Func<object, string, object?> getMember)
     {
-        _instanceTypes.Add((type, getMember));
+        _instanceTypes[type] = getMember;
     }
 
     /// <summary>

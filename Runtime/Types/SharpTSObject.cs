@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSInstance"/>
 /// <seealso cref="SharpTSArray"/>
-public class SharpTSObject(Dictionary<string, object?> fields)
+public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
@@ -20,6 +20,9 @@ public class SharpTSObject(Dictionary<string, object?> fields)
     /// Expose fields for Object.keys() and object rest patterns
     /// </summary>
     public IReadOnlyDictionary<string, object?> Fields => _fields;
+
+    /// <inheritdoc />
+    public IEnumerable<string> PropertyNames => _fields.Keys;
 
     public object? Get(string name)
     {
@@ -30,10 +33,16 @@ public class SharpTSObject(Dictionary<string, object?> fields)
         return null; // or throw undefined
     }
 
+    /// <inheritdoc />
+    public object? GetProperty(string name) => Get(name);
+
     public void Set(string name, object? value)
     {
         _fields[name] = value;
     }
+
+    /// <inheritdoc />
+    public void SetProperty(string name, object? value) => Set(name, value);
 
     public bool HasProperty(string name)
     {

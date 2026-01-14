@@ -35,27 +35,21 @@ public partial class Interpreter
 
     /// <summary>
     /// Attempts to get a property value from an object-like runtime value using a string key.
-    /// Handles <see cref="SharpTSInstance"/>, <see cref="SharpTSObject"/>, and <see cref="SharpTSArray"/>.
+    /// Uses <see cref="ISharpTSPropertyAccessor"/> interface for unified dispatch.
     /// </summary>
     /// <param name="obj">The object to get the property from.</param>
     /// <param name="name">The property name as a string.</param>
     /// <param name="value">The retrieved value if successful.</param>
     /// <returns><c>true</c> if the property was found; otherwise <c>false</c>.</returns>
-    private bool TryGetPropertyByName(object? obj, string name, out object? value)
+    private static bool TryGetPropertyByName(object? obj, string name, out object? value)
     {
-        switch (obj)
+        if (obj is ISharpTSPropertyAccessor accessor)
         {
-            case SharpTSInstance instance:
-                instance.SetInterpreter(this);
-                value = instance.GetFieldValue(name);
-                return true;
-            case SharpTSObject simpleObj:
-                value = simpleObj.Get(name);
-                return true;
-            default:
-                value = null;
-                return false;
+            value = accessor.GetProperty(name);
+            return true;
         }
+        value = null;
+        return false;
     }
 
     /// <summary>
@@ -83,6 +77,24 @@ public partial class Interpreter
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Attempts to set a property value on an object-like runtime value using a string key.
+    /// Uses <see cref="ISharpTSPropertyAccessor"/> interface for unified dispatch.
+    /// </summary>
+    /// <param name="obj">The object to set the property on.</param>
+    /// <param name="name">The property name as a string.</param>
+    /// <param name="value">The value to set.</param>
+    /// <returns><c>true</c> if the property was set; otherwise <c>false</c>.</returns>
+    private static bool TrySetPropertyByName(object? obj, string name, object? value)
+    {
+        if (obj is ISharpTSPropertyAccessor accessor)
+        {
+            accessor.SetProperty(name, value);
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
