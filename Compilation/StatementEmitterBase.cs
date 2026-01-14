@@ -567,4 +567,28 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     }
 
     #endregion
+
+    #region Class Expressions
+
+    /// <summary>
+    /// Default implementation for class expressions.
+    /// Loads the pre-defined TypeBuilder as a Type object at runtime.
+    /// </summary>
+    protected override void EmitClassExpression(Expr.ClassExpr ce)
+    {
+        if (Ctx?.ClassExprBuilders != null && Ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
+        {
+            IL.Emit(OpCodes.Ldtoken, typeBuilder);
+            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            SetStackUnknown();
+        }
+        else
+        {
+            // Fallback: push null (should not happen if collection worked)
+            IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
+        }
+    }
+
+    #endregion
 }

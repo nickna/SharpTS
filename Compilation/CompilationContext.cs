@@ -91,6 +91,9 @@ public class CompilationContext
     // Display class constructors (arrow node -> constructor)
     public Dictionary<ArrowFunction, ConstructorBuilder> DisplayClassConstructors { get; set; } = [];
 
+    // Class expression builders (class expr node -> type builder)
+    public Dictionary<Expr.ClassExpr, TypeBuilder>? ClassExprBuilders { get; set; }
+
     // For capturing closures: current display class instance local
     public LocalBuilder? DisplayClassLocal { get; set; }
 

@@ -51,6 +51,7 @@ public partial class TypeChecker
             Expr.DynamicImport di => CheckDynamicImport(di),
             Expr.Yield yieldExpr => CheckYield(yieldExpr),
             Expr.RegexLiteral => new TypeInfo.RegExp(),
+            Expr.ClassExpr classExpr => CheckClassExpression(classExpr),
             _ => new TypeInfo.Any()
         };
 
@@ -567,5 +568,381 @@ public partial class TypeChecker
         if (value is bool b) return new TypeInfo.BooleanLiteral(b);
         if (value is System.Numerics.BigInteger) return new TypeInfo.BigInt();
         return new TypeInfo.Void();
+    }
+
+    // Counter for generating unique anonymous class expression names
+    private int _classExprCounter = 0;
+
+    /// <summary>
+    /// Type checks a class expression and returns the class type.
+    /// Unlike class declarations, the class is not added to the outer environment.
+    /// </summary>
+    private TypeInfo CheckClassExpression(Expr.ClassExpr classExpr)
+    {
+        // Generate name for anonymous classes
+        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
+
+        // Resolve superclass if present
+        TypeInfo.Class? superclass = null;
+        if (classExpr.Superclass != null)
+        {
+            TypeInfo superType = LookupVariable(classExpr.Superclass);
+            if (superType is TypeInfo.Instance si && si.ClassType is TypeInfo.Class sic)
+                superclass = sic;
+            else if (superType is TypeInfo.Class sc)
+                superclass = sc;
+            else
+                throw new TypeCheckException("Superclass must be a class");
+        }
+
+        // Handle generic type parameters
+        List<TypeInfo.TypeParameter>? classTypeParams = null;
+        TypeEnvironment classTypeEnv = new(_environment);
+        if (classExpr.TypeParams != null && classExpr.TypeParams.Count > 0)
+        {
+            classTypeParams = [];
+            foreach (var tp in classExpr.TypeParams)
+            {
+                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                classTypeParams.Add(typeParam);
+                classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+        }
+
+        // Create mutable class early so self-references work
+        var mutableClass = new TypeInfo.MutableClass(className)
+        {
+            Superclass = superclass,
+            IsAbstract = classExpr.IsAbstract
+        };
+
+        // If named, define the name in class body scope for self-reference
+        if (classExpr.Name != null)
+        {
+            classTypeEnv.Define(classExpr.Name.Lexeme, mutableClass);
+        }
+
+        using (new EnvironmentScope(this, classTypeEnv))
+        {
+            // Helper to build a TypeInfo.Function from a method declaration
+            TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
+            {
+                var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+                    method.Parameters,
+                    validateDefaults: true,
+                    contextName: $"method '{method.Name.Lexeme}'"
+                );
+
+                TypeInfo returnType = method.ReturnType != null
+                    ? ToTypeInfo(method.ReturnType)
+                    : new TypeInfo.Void();
+
+                return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+            }
+
+            // Collect method signatures
+            var methodGroups = classExpr.Methods.GroupBy(m => m.Name.Lexeme).ToList();
+            foreach (var group in methodGroups)
+            {
+                string methodName = group.Key;
+                var methods = group.ToList();
+
+                var signatures = methods.Where(m => m.Body == null && !m.IsAbstract).ToList();
+                var implementations = methods.Where(m => m.Body != null).ToList();
+
+                if (signatures.Count > 0)
+                {
+                    if (implementations.Count == 0)
+                        throw new TypeCheckException($" Overloaded method '{methodName}' has no implementation.");
+                    if (implementations.Count > 1)
+                        throw new TypeCheckException($" Overloaded method '{methodName}' has multiple implementations.");
+
+                    var implementation = implementations[0];
+                    var signatureTypes = signatures.Select(BuildMethodFuncType).ToList();
+                    var implType = BuildMethodFuncType(implementation);
+
+                    foreach (var sig in signatureTypes)
+                    {
+                        if (implType.MinArity > sig.MinArity)
+                            throw new TypeCheckException($" Implementation of '{methodName}' requires {implType.MinArity} arguments but overload signature requires only {sig.MinArity}.");
+                    }
+
+                    var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, implType);
+                    if (implementation.IsStatic)
+                        mutableClass.StaticMethods[methodName] = overloadedFunc;
+                    else
+                        mutableClass.Methods[methodName] = overloadedFunc;
+                    mutableClass.MethodAccess[methodName] = implementation.Access;
+                }
+                else if (implementations.Count == 1)
+                {
+                    var method = implementations[0];
+                    var funcType = BuildMethodFuncType(method);
+                    if (method.IsStatic)
+                        mutableClass.StaticMethods[methodName] = funcType;
+                    else
+                        mutableClass.Methods[methodName] = funcType;
+                    mutableClass.MethodAccess[methodName] = method.Access;
+                }
+                else if (implementations.Count > 1)
+                {
+                    throw new TypeCheckException($" Multiple implementations of method '{methodName}' without overload signatures.");
+                }
+            }
+
+            // Collect field types
+            foreach (var field in classExpr.Fields)
+            {
+                string fieldName = field.Name.Lexeme;
+                TypeInfo fieldType = field.TypeAnnotation != null
+                    ? ToTypeInfo(field.TypeAnnotation)
+                    : new TypeInfo.Any();
+
+                if (field.IsStatic)
+                    mutableClass.StaticProperties[fieldName] = fieldType;
+                else
+                    mutableClass.FieldTypes[fieldName] = fieldType;
+
+                mutableClass.FieldAccess[fieldName] = field.Access;
+                if (field.IsReadonly)
+                    mutableClass.ReadonlyFields.Add(fieldName);
+            }
+
+            // Collect accessor types
+            if (classExpr.Accessors != null)
+            {
+                foreach (var accessor in classExpr.Accessors)
+                {
+                    string propName = accessor.Name.Lexeme;
+                    if (accessor.Kind.Type == TokenType.GET)
+                    {
+                        TypeInfo getterRetType = accessor.ReturnType != null
+                            ? ToTypeInfo(accessor.ReturnType)
+                            : new TypeInfo.Any();
+                        mutableClass.Getters[propName] = getterRetType;
+                    }
+                    else
+                    {
+                        TypeInfo paramType = accessor.SetterParam?.Type != null
+                            ? ToTypeInfo(accessor.SetterParam.Type)
+                            : new TypeInfo.Any();
+                        mutableClass.Setters[propName] = paramType;
+                    }
+                }
+
+                // Validate getter/setter type compatibility
+                foreach (var propName in mutableClass.Getters.Keys.Intersect(mutableClass.Setters.Keys))
+                {
+                    if (!IsCompatible(mutableClass.Getters[propName], mutableClass.Setters[propName]))
+                        throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.");
+                }
+            }
+        }
+
+        // Freeze the mutable class
+        // For body checking, always use the frozen MutableClass (which is a TypeInfo.Class)
+        // This matches CheckClassDeclaration: generic classes store GenericClass externally but use
+        // the frozen MutableClass for body checking since it has the same methods/fields structure.
+        TypeInfo.Class classTypeForBody;
+        if (classTypeParams != null && classTypeParams.Count > 0)
+        {
+            var genericClassType = new TypeInfo.GenericClass(
+                className,
+                classTypeParams,
+                superclass,
+                mutableClass.Methods.ToFrozenDictionary(),
+                mutableClass.StaticMethods.ToFrozenDictionary(),
+                mutableClass.StaticProperties.ToFrozenDictionary(),
+                mutableClass.MethodAccess.ToFrozenDictionary(),
+                mutableClass.FieldAccess.ToFrozenDictionary(),
+                mutableClass.ReadonlyFields.ToFrozenSet(),
+                mutableClass.Getters.ToFrozenDictionary(),
+                mutableClass.Setters.ToFrozenDictionary(),
+                mutableClass.FieldTypes.ToFrozenDictionary(),
+                classExpr.IsAbstract,
+                mutableClass.AbstractMethods.Count > 0 ? mutableClass.AbstractMethods.ToFrozenSet() : null,
+                mutableClass.AbstractGetters.Count > 0 ? mutableClass.AbstractGetters.ToFrozenSet() : null,
+                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null
+            );
+            // Store for later lookups - don't add to outer environment
+            // For body check, freeze the mutable class (methods/fields have TypeParameter types)
+            classTypeForBody = mutableClass.Freeze();
+            _typeMap.SetClassType(className, classTypeForBody);
+            // Class expression returns the GenericClass type
+            _ = genericClassType; // Keep for potential future use (return type could be GenericClass)
+        }
+        else
+        {
+            TypeInfo.Class classType = mutableClass.Freeze();
+            _typeMap.SetClassType(className, classType);
+            classTypeForBody = classType;
+        }
+
+        // Validate interface implementations (skip for generic - validated at instantiation)
+        if (classExpr.Interfaces != null && classTypeParams == null)
+        {
+            foreach (var interfaceToken in classExpr.Interfaces)
+            {
+                TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
+                if (itfTypeInfo is not TypeInfo.Interface interfaceType)
+                    throw new TypeCheckException($" '{interfaceToken.Lexeme}' is not an interface.");
+                ValidateInterfaceImplementation(classTypeForBody, interfaceType, className);
+            }
+        }
+
+        // Check method bodies
+        TypeEnvironment classEnv = new(_environment);
+        if (classTypeParams != null)
+        {
+            foreach (var tp in classTypeParams)
+                classEnv.DefineTypeParameter(tp.Name, tp);
+        }
+        classEnv.Define("this", new TypeInfo.Instance(classTypeForBody));
+        if (superclass != null)
+            classEnv.Define("super", superclass);
+
+        TypeEnvironment prevEnv = _environment;
+        TypeInfo.Class? prevClass = _currentClass;
+        _environment = classEnv;
+        _currentClass = classTypeForBody is TypeInfo.Class c ? c : mutableClass.Freeze();
+
+        try
+        {
+            foreach (var method in classExpr.Methods.Where(m => m.Body != null))
+            {
+                TypeEnvironment methodEnv;
+                if (method.IsStatic)
+                    methodEnv = new TypeEnvironment(prevEnv);
+                else
+                    methodEnv = new TypeEnvironment(_environment);
+
+                var declaredMethodType = method.IsStatic
+                    ? classTypeForBody.StaticMethods[method.Name.Lexeme]
+                    : classTypeForBody.Methods[method.Name.Lexeme];
+
+                TypeInfo.Function methodType = declaredMethodType switch
+                {
+                    TypeInfo.OverloadedFunction of => of.Implementation,
+                    TypeInfo.Function f => f,
+                    _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
+                };
+
+                for (int i = 0; i < method.Parameters.Count; i++)
+                    methodEnv.Define(method.Parameters[i].Name.Lexeme, methodType.ParamTypes[i]);
+
+                TypeEnvironment previousEnvFunc = _environment;
+                TypeInfo? previousReturnFunc = _currentFunctionReturnType;
+                bool previousInStatic = _inStaticMethod;
+                bool previousInAsyncFunc = _inAsyncFunction;
+                bool previousInGeneratorFunc = _inGeneratorFunction;
+                int previousLoopDepthFunc = _loopDepth;
+                int previousSwitchDepthFunc = _switchDepth;
+                var previousActiveLabelsFunc = new Dictionary<string, bool>(_activeLabels);
+
+                _environment = methodEnv;
+                _currentFunctionReturnType = methodType.ReturnType;
+                _inStaticMethod = method.IsStatic;
+                _inAsyncFunction = method.IsAsync;
+                _inGeneratorFunction = method.IsGenerator;
+                _loopDepth = 0;
+                _switchDepth = 0;
+                _activeLabels.Clear();
+
+                try
+                {
+                    if (method.Body != null)
+                    {
+                        foreach (var bodyStmt in method.Body)
+                            CheckStmt(bodyStmt);
+                    }
+                }
+                finally
+                {
+                    _environment = previousEnvFunc;
+                    _currentFunctionReturnType = previousReturnFunc;
+                    _inStaticMethod = previousInStatic;
+                    _inAsyncFunction = previousInAsyncFunc;
+                    _inGeneratorFunction = previousInGeneratorFunc;
+                    _loopDepth = previousLoopDepthFunc;
+                    _switchDepth = previousSwitchDepthFunc;
+                    _activeLabels.Clear();
+                    foreach (var kvp in previousActiveLabelsFunc)
+                        _activeLabels[kvp.Key] = kvp.Value;
+                }
+            }
+
+            // Check accessor bodies
+            if (classExpr.Accessors != null)
+            {
+                foreach (var accessor in classExpr.Accessors)
+                {
+                    TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+                    TypeInfo accessorReturnType;
+
+                    if (accessor.Kind.Type == TokenType.GET)
+                    {
+                        accessorReturnType = classTypeForBody.Getters[accessor.Name.Lexeme];
+                    }
+                    else
+                    {
+                        accessorReturnType = new TypeInfo.Void();
+                        if (accessor.SetterParam != null)
+                        {
+                            TypeInfo setterParamType = classTypeForBody.Setters[accessor.Name.Lexeme];
+                            accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
+                        }
+                    }
+
+                    TypeEnvironment previousEnvAcc = _environment;
+                    TypeInfo? previousReturnAcc = _currentFunctionReturnType;
+                    int previousLoopDepthAcc = _loopDepth;
+                    int previousSwitchDepthAcc = _switchDepth;
+                    var previousActiveLabelsAcc = new Dictionary<string, bool>(_activeLabels);
+
+                    _environment = accessorEnv;
+                    _currentFunctionReturnType = accessorReturnType;
+                    _loopDepth = 0;
+                    _switchDepth = 0;
+                    _activeLabels.Clear();
+
+                    try
+                    {
+                        foreach (var bodyStmt in accessor.Body)
+                            CheckStmt(bodyStmt);
+                    }
+                    finally
+                    {
+                        _environment = previousEnvAcc;
+                        _currentFunctionReturnType = previousReturnAcc;
+                        _loopDepth = previousLoopDepthAcc;
+                        _switchDepth = previousSwitchDepthAcc;
+                        _activeLabels.Clear();
+                        foreach (var kvp in previousActiveLabelsAcc)
+                            _activeLabels[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+
+            // Check field initializers
+            foreach (var field in classExpr.Fields.Where(f => f.Initializer != null))
+            {
+                TypeInfo initType = CheckExpr(field.Initializer!);
+                TypeInfo fieldDeclaredType = field.IsStatic
+                    ? classTypeForBody.StaticProperties[field.Name.Lexeme]
+                    : classTypeForBody.FieldTypes[field.Name.Lexeme];
+
+                if (!IsCompatible(fieldDeclaredType, initType))
+                    throw new TypeCheckException($" Cannot assign type '{initType}' to field '{field.Name.Lexeme}' of type '{fieldDeclaredType}'.");
+            }
+        }
+        finally
+        {
+            _environment = prevEnv;
+            _currentClass = prevClass;
+        }
+
+        // Return the class type (not an instance)
+        return classTypeForBody;
     }
 }

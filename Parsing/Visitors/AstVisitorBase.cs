@@ -58,6 +58,7 @@ public abstract class AstVisitorBase
             case Expr.DynamicImport e: VisitDynamicImport(e); break;
             case Expr.Yield e: VisitYield(e); break;
             case Expr.RegexLiteral e: VisitRegexLiteral(e); break;
+            case Expr.ClassExpr e: VisitClassExpr(e); break;
         }
     }
 
@@ -299,6 +300,23 @@ public abstract class AstVisitorBase
     protected virtual void VisitRegexLiteral(Expr.RegexLiteral expr)
     {
         // Leaf node - no children to visit
+    }
+
+    protected virtual void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        // Visit field initializers
+        foreach (var f in expr.Fields)
+            if (f.Initializer != null)
+                Visit(f.Initializer);
+
+        // Visit methods
+        foreach (var m in expr.Methods)
+            VisitFunction(m);
+
+        // Visit accessors
+        if (expr.Accessors != null)
+            foreach (var a in expr.Accessors)
+                VisitAccessor(a);
     }
 
     #endregion

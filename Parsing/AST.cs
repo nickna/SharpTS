@@ -85,6 +85,22 @@ public abstract record Expr
     public record RegexLiteral(string Pattern, string Flags) : Expr;
     // Non-null assertion: expr! (asserts value is not null/undefined at compile time)
     public record NonNullAssertion(Expr Expression) : Expr;
+    /// <summary>
+    /// Class expression: class [Name] [extends Base] [implements Interfaces] { members }
+    /// Name is optional (anonymous class) but visible inside class body for self-reference when present.
+    /// </summary>
+    public record ClassExpr(
+        Token? Name,
+        List<TypeParam>? TypeParams,
+        Token? Superclass,
+        List<string>? SuperclassTypeArgs,
+        List<Stmt.Function> Methods,
+        List<Stmt.Field> Fields,
+        List<Stmt.Accessor>? Accessors = null,
+        List<Token>? Interfaces = null,
+        List<List<string>>? InterfaceTypeArgs = null,
+        bool IsAbstract = false
+    ) : Expr;
 }
 
 /// <summary>

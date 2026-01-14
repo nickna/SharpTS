@@ -311,4 +311,86 @@ public partial class ILCompiler
             return Type.GetType(clrTypeName, throwOnError: false);
         }
     }
+
+    /// <summary>
+    /// Defines types for all collected class expressions.
+    /// Class expressions are collected during arrow function collection phase.
+    /// </summary>
+    private void DefineClassExpressionTypes()
+    {
+        foreach (var classExpr in _classExprsToDefine)
+        {
+            DefineClassExpression(classExpr);
+        }
+    }
+
+    /// <summary>
+    /// Defines a single class expression type.
+    /// Creates a TypeBuilder with constructor and basic structure.
+    /// </summary>
+    private void DefineClassExpression(Expr.ClassExpr classExpr)
+    {
+        string className = _classExprNames[classExpr];
+
+        // Resolve superclass if present
+        Type? baseType = null;
+        if (classExpr.Superclass != null)
+        {
+            string superclassName = classExpr.Superclass.Lexeme;
+            if (_classBuilders.TryGetValue(superclassName, out var superTypeBuilder))
+                baseType = superTypeBuilder;
+            else if (_classExprBuilders.TryGetValue(classExpr, out var superExprBuilder))
+                baseType = superExprBuilder;
+        }
+
+        TypeAttributes typeAttrs = TypeAttributes.Public | TypeAttributes.Class;
+
+        var typeBuilder = _moduleBuilder.DefineType(
+            className,
+            typeAttrs,
+            baseType ?? typeof(object)
+        );
+
+        // Define a _fields dictionary for dynamic properties
+        var fieldsField = typeBuilder.DefineField(
+            "_fields",
+            typeof(Dictionary<string, object>),
+            FieldAttributes.Private
+        );
+
+        // Define a parameterless constructor
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            Type.EmptyTypes
+        );
+
+        var ctorIl = ctor.GetILGenerator();
+
+        // Call base constructor
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, (baseType ?? typeof(object)).GetConstructor(Type.EmptyTypes)!);
+
+        // Initialize _fields dictionary
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor(Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Stfld, fieldsField);
+
+        // Initialize instance fields with their initializers if present
+        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic))
+        {
+            // For simplicity, store null for now - full initializer emission would require emitter context
+            ctorIl.Emit(OpCodes.Ldarg_0);
+            ctorIl.Emit(OpCodes.Ldfld, fieldsField);
+            ctorIl.Emit(OpCodes.Ldstr, field.Name.Lexeme);
+            ctorIl.Emit(OpCodes.Ldnull);
+            ctorIl.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        }
+
+        ctorIl.Emit(OpCodes.Ret);
+
+        // Store the type builder for later use
+        _classExprBuilders[classExpr] = typeBuilder;
+        _instanceFieldsField[className] = fieldsField;
+    }
 }

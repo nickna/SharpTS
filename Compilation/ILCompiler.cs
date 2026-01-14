@@ -57,6 +57,12 @@ public partial class ILCompiler
     private int _arrowMethodCounter = 0;
     private int _displayClassCounter = 0;
 
+    // Class expression support
+    private readonly Dictionary<Expr.ClassExpr, TypeBuilder> _classExprBuilders = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, string> _classExprNames = new(ReferenceEqualityComparer.Instance);
+    private readonly List<Expr.ClassExpr> _classExprsToDefine = [];
+    private int _classExprCounter = 0;
+
     // Enum support
     private readonly Dictionary<string, Dictionary<string, object>> _enumMembers = [];
     private readonly Dictionary<string, Dictionary<double, string>> _enumReverse = [];
@@ -398,6 +404,9 @@ public partial class ILCompiler
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
 
+        // Phase 5.5: Define class expression types (collected during arrow collection)
+        DefineClassExpressionTypes();
+
         // Phase 6: Emit arrow function method bodies
         EmitArrowFunctionBodies();
 
@@ -442,6 +451,10 @@ public partial class ILCompiler
             tb.CreateType();
         }
         foreach (var tb in _classBuilders.Values)
+        {
+            tb.CreateType();
+        }
+        foreach (var tb in _classExprBuilders.Values)
         {
             tb.CreateType();
         }

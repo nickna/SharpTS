@@ -236,4 +236,167 @@ public partial class Parser
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
     }
+
+    // ============== CLASS EXPRESSION ==============
+
+    /// <summary>
+    /// Parses a class expression: class [Name] [extends Base] [implements Interfaces] { members }
+    /// Unlike class declarations, the name is optional (anonymous class).
+    /// </summary>
+    private Expr ClassExpression()
+    {
+        // Optional class name (visible inside class body for self-reference)
+        Token? name = null;
+        if (Check(TokenType.IDENTIFIER))
+        {
+            name = Advance();
+        }
+
+        List<TypeParam>? typeParams = ParseTypeParameters();
+
+        Token? superclass = null;
+        List<string>? superclassTypeArgs = null;
+        if (Match(TokenType.EXTENDS))
+        {
+            superclass = Consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superclassTypeArgs = TryParseTypeArguments();
+        }
+
+        // Parse implements clause
+        List<Token>? interfaces = null;
+        List<List<string>>? interfaceTypeArgs = null;
+        if (Match(TokenType.IMPLEMENTS))
+        {
+            interfaces = [];
+            interfaceTypeArgs = [];
+            do
+            {
+                interfaces.Add(Consume(TokenType.IDENTIFIER, "Expect interface name."));
+                interfaceTypeArgs.Add(TryParseTypeArguments() ?? []);
+            } while (Match(TokenType.COMMA));
+        }
+
+        Consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+
+        List<Stmt.Function> methods = [];
+        List<Stmt.Field> fields = [];
+        List<Stmt.Accessor> accessors = [];
+        while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+        {
+            // Parse modifiers (no decorators on class expression members per TypeScript spec)
+            AccessModifier access = AccessModifier.Public;
+            bool isStatic = false;
+            bool isReadonly = false;
+            bool isMemberAsync = false;
+
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ASYNC))
+            {
+                var modifier = Previous().Type;
+                switch (modifier)
+                {
+                    case TokenType.PUBLIC: access = AccessModifier.Public; break;
+                    case TokenType.PRIVATE: access = AccessModifier.Private; break;
+                    case TokenType.PROTECTED: access = AccessModifier.Protected; break;
+                    case TokenType.STATIC: isStatic = true; break;
+                    case TokenType.READONLY: isReadonly = true; break;
+                    case TokenType.ASYNC: isMemberAsync = true; break;
+                }
+            }
+
+            // Check for getter/setter
+            if (Check(TokenType.GET) || Check(TokenType.SET))
+            {
+                Token kind = Advance(); // consume 'get' or 'set'
+                Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'get'/'set'.");
+                Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
+
+                Stmt.Parameter? setterParam = null;
+                if (kind.Type == TokenType.SET)
+                {
+                    Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name in setter.");
+                    string? paramType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        paramType = ParseTypeAnnotation();
+                    }
+                    setterParam = new Stmt.Parameter(paramName, paramType, null);
+                }
+
+                Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
+
+                string? returnType = null;
+                if (Match(TokenType.COLON))
+                {
+                    returnType = ParseTypeAnnotation();
+                }
+
+                Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
+                List<Stmt> body = Block();
+
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access));
+            }
+            else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
+            {
+                // Field declaration
+                Token fieldName = Consume(TokenType.IDENTIFIER, "Expect field name.");
+                bool isOptional = Match(TokenType.QUESTION);
+                Consume(TokenType.COLON, "Expect ':' after field name.");
+                string typeAnnotation = ParseTypeAnnotation();
+                Expr? initializer = null;
+                if (Match(TokenType.EQUAL))
+                {
+                    initializer = Expression();
+                }
+                Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional));
+            }
+            else
+            {
+                string kind = "method";
+                if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
+                var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
+                func = func with { IsStatic = isStatic, Access = access };
+                methods.Add(func);
+
+                // Synthesize fields from constructor parameter properties
+                if (kind == "constructor")
+                {
+                    foreach (var param in func.Parameters)
+                    {
+                        if (param.IsParameterProperty)
+                        {
+                            if (fields.Any(f => f.Name.Lexeme == param.Name.Lexeme))
+                            {
+                                throw new Exception($"Parse Error: Parameter property '{param.Name.Lexeme}' conflicts with existing field declaration.");
+                            }
+                            fields.Add(new Stmt.Field(
+                                param.Name,
+                                param.Type,
+                                null,
+                                false,
+                                param.Access ?? AccessModifier.Public,
+                                param.IsReadonly,
+                                false
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+
+        return new Expr.ClassExpr(
+            name,
+            typeParams,
+            superclass,
+            superclassTypeArgs,
+            methods,
+            fields,
+            accessors.Count > 0 ? accessors : null,
+            interfaces,
+            interfaceTypeArgs,
+            IsAbstract: false  // Class expressions cannot be abstract
+        );
+    }
 }

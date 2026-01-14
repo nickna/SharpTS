@@ -206,7 +206,7 @@ This document tracks TypeScript language features and their implementation statu
 | Single-quoted strings | ✅ | |
 | Object method shorthand | ✅ | `{ fn() {} }` |
 | Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
-| Class expressions | ❌ | `const C = class { }` |
+| Class expressions | ⚠️ | `const C = class { }` - interpreter full support; IL compiler partial (basic types only, no constructors with args) |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
 
 ---

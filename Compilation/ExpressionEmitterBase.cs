@@ -162,6 +162,9 @@ public abstract class ExpressionEmitterBase
             case Expr.Yield y:
                 EmitYield(y);
                 break;
+            case Expr.ClassExpr ce:
+                EmitClassExpression(ce);
+                break;
             default:
                 EmitUnknownExpression(expr);
                 break;
@@ -193,6 +196,7 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitArrowFunction(Expr.ArrowFunction af);
     protected abstract void EmitDynamicImport(Expr.DynamicImport di);
     protected abstract void EmitUnknownExpression(Expr expr);
+    protected abstract void EmitClassExpression(Expr.ClassExpr ce);
     #endregion
 
     #region Virtual Methods - Pass-through expressions

@@ -449,7 +449,8 @@ public partial class ILCompiler
                 FunctionToModule = _functionToModule,
                 EnumToModule = _enumToModule,
                 DotNetNamespace = _currentDotNetNamespace,
-                TypeEmitterRegistry = _typeEmitterRegistry
+                TypeEmitterRegistry = _typeEmitterRegistry,
+                ClassExprBuilders = _classExprBuilders
             };
 
             // Emit MoveNext body
@@ -529,7 +530,8 @@ public partial class ILCompiler
             ClassToModule = parentCtx.ClassToModule,
             FunctionToModule = parentCtx.FunctionToModule,
             EnumToModule = parentCtx.EnumToModule,
-            TypeEmitterRegistry = parentCtx.TypeEmitterRegistry
+            TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
+            ClassExprBuilders = parentCtx.ClassExprBuilders
         };
 
         // Create arrow-specific emitter
@@ -773,7 +775,8 @@ public partial class ILCompiler
             StaticSyncLockFields = _staticSyncLockFields,
             StaticAsyncLockFields = _staticAsyncLockFields,
             StaticLockReentrancyFields = _staticLockReentrancyFields,
-            TypeEmitterRegistry = _typeEmitterRegistry
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            ClassExprBuilders = _classExprBuilders
         };
 
         // Emit MoveNext body

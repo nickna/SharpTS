@@ -492,6 +492,12 @@ public partial class Parser
             return new Expr.DynamicImport(keyword, pathExpr);
         }
 
+        // Class expression: class [Name] { ... }
+        if (Match(TokenType.CLASS))
+        {
+            return ClassExpression();
+        }
+
         if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
 
         // Symbol and BigInt are special callable constructors

@@ -315,7 +315,39 @@ public partial class ILCompiler
             case Expr.Spread sp:
                 CollectArrowsFromExpr(sp.Expression);
                 break;
+            case Expr.ClassExpr ce:
+                // Collect the class expression for later definition
+                CollectClassExpression(ce);
+                // Also collect arrows inside class expression methods
+                foreach (var method in ce.Methods)
+                    if (method.Body != null)
+                        foreach (var s in method.Body)
+                            CollectArrowsFromStmt(s);
+                // Collect arrows in field initializers
+                foreach (var field in ce.Fields)
+                    if (field.Initializer != null)
+                        CollectArrowsFromExpr(field.Initializer);
+                // Collect arrows in accessor bodies
+                if (ce.Accessors != null)
+                    foreach (var accessor in ce.Accessors)
+                        foreach (var s in accessor.Body)
+                            CollectArrowsFromStmt(s);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Collects a class expression for later type definition.
+    /// </summary>
+    private void CollectClassExpression(Expr.ClassExpr classExpr)
+    {
+        if (_classExprNames.ContainsKey(classExpr))
+            return; // Already collected
+
+        // Generate unique name
+        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
+        _classExprNames[classExpr] = className;
+        _classExprsToDefine.Add(classExpr);
     }
 
     private void EmitArrowFunctionBodies()
@@ -377,7 +409,8 @@ public partial class ILCompiler
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
             DotNetNamespace = _currentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            ClassExprBuilders = _classExprBuilders
         };
 
         if (displayClass != null)

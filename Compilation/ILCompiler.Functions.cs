@@ -137,7 +137,8 @@ public partial class ILCompiler
             FunctionToModule = _functionToModule,
             EnumToModule = _enumToModule,
             DotNetNamespace = _currentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            ClassExprBuilders = _classExprBuilders
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -201,6 +202,7 @@ public partial class ILCompiler
             DisplayClasses = _displayClasses,
             DisplayClassFields = _displayClassFields,
             DisplayClassConstructors = _displayClassConstructors,
+            ClassExprBuilders = _classExprBuilders,
             StaticFields = _staticFields,
             StaticMethods = _staticMethods,
             ClassConstructors = _classConstructors,

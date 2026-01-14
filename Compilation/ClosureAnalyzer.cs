@@ -122,6 +122,18 @@ public class ClosureAnalyzer : AstVisitorBase
         }
     }
 
+    protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        // Class expressions don't declare the class name in the outer scope
+        // (unlike class declarations), but we still need to analyze methods
+        foreach (var method in expr.Methods)
+        {
+            // Skip overload signatures (no body)
+            if (method.Body != null)
+                AnalyzeFunctionBody(method, method.Parameters, method.Body);
+        }
+    }
+
     protected override void VisitBlock(Stmt.Block stmt)
     {
         EnterScope();

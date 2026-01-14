@@ -255,4 +255,23 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
+
+    protected override void EmitClassExpression(Expr.ClassExpr ce)
+    {
+        // Class expressions evaluate to the Type object at runtime.
+        // The type has been pre-defined during collection phase.
+        if (_ctx.ClassExprBuilders != null && _ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
+        {
+            // Load the Type object using ldtoken + GetTypeFromHandle
+            IL.Emit(OpCodes.Ldtoken, typeBuilder);
+            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            SetStackUnknown();
+        }
+        else
+        {
+            // Fallback: push null (should not happen if collection worked)
+            IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
+        }
+    }
 }

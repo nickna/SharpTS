@@ -246,6 +246,20 @@ public class DeadCodeAnalyzer
         {
             AnalyzeBlock(arrow.BlockBody);
         }
+        // Analyze class expressions for dead code within methods
+        else if (expr is Expr.ClassExpr classExpr)
+        {
+            foreach (var method in classExpr.Methods)
+            {
+                if (method.Body != null)
+                    AnalyzeBlock(method.Body);
+            }
+            if (classExpr.Accessors != null)
+            {
+                foreach (var accessor in classExpr.Accessors)
+                    AnalyzeBlock(accessor.Body);
+            }
+        }
         // Could add ternary analysis here if needed
     }
 

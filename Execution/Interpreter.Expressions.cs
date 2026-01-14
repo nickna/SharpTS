@@ -57,6 +57,7 @@ public partial class Interpreter
             Expr.DynamicImport di => EvaluateDynamicImport(di),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
+            Expr.ClassExpr classExpr => EvaluateClassExpression(classExpr),
             _ => throw new Exception("Unknown expression type.")
         };
     }
@@ -116,6 +117,7 @@ public partial class Interpreter
             case Expr.DynamicImport di: return EvaluateDynamicImport(di);
             case Expr.Yield yieldExpr: return EvaluateYield(yieldExpr);
             case Expr.RegexLiteral regex: return new SharpTSRegExp(regex.Pattern, regex.Flags);
+            case Expr.ClassExpr classExpr: return EvaluateClassExpression(classExpr);
             default: throw new Exception("Unknown expression type.");
         }
     }
@@ -558,5 +560,138 @@ public partial class Interpreter
 
         // Return the module namespace
         return _loadedModules[absolutePath].ExportsAsObject();
+    }
+
+    // Counter for generating unique anonymous class expression names
+    private int _classExprCounter = 0;
+
+    /// <summary>
+    /// Evaluates a class expression and returns the SharpTSClass object.
+    /// Unlike class declarations, the class is not added to the environment.
+    /// </summary>
+    private object? EvaluateClassExpression(Expr.ClassExpr classExpr)
+    {
+        // Generate name for anonymous classes
+        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
+
+        // Resolve superclass if present
+        object? superclass = null;
+        if (classExpr.Superclass != null)
+        {
+            superclass = _environment.Get(classExpr.Superclass);
+            if (superclass is not SharpTSClass)
+            {
+                throw new Exception("Superclass must be a class.");
+            }
+        }
+
+        // Create environment for class body
+        RuntimeEnvironment classEnv = _environment;
+
+        // If named, define the name in class body scope for self-reference
+        if (classExpr.Name != null)
+        {
+            classEnv = new RuntimeEnvironment(_environment);
+            classEnv.Define(classExpr.Name.Lexeme, null); // Placeholder for self-reference
+        }
+
+        if (classExpr.Superclass != null)
+        {
+            classEnv = new RuntimeEnvironment(classEnv);
+            classEnv.Define("super", superclass);
+        }
+
+        var savedEnv = _environment;
+        _environment = classEnv;
+
+        try
+        {
+            Dictionary<string, SharpTSFunction> methods = [];
+            Dictionary<string, SharpTSFunction> staticMethods = [];
+            Dictionary<string, object?> staticProperties = [];
+            List<Stmt.Field> instanceFields = [];
+
+            // Process fields
+            foreach (Stmt.Field field in classExpr.Fields)
+            {
+                if (field.IsStatic)
+                {
+                    object? fieldValue = field.Initializer != null
+                        ? Evaluate(field.Initializer)
+                        : null;
+                    staticProperties[field.Name.Lexeme] = fieldValue;
+                }
+                else
+                {
+                    instanceFields.Add(field);
+                }
+            }
+
+            // Process methods (skip overload signatures with no body)
+            foreach (Stmt.Function method in classExpr.Methods.Where(m => m.Body != null))
+            {
+                SharpTSFunction func = new(method, _environment);
+                if (method.IsStatic)
+                {
+                    staticMethods[method.Name.Lexeme] = func;
+                }
+                else
+                {
+                    methods[method.Name.Lexeme] = func;
+                }
+            }
+
+            // Create accessor functions
+            Dictionary<string, SharpTSFunction> getters = [];
+            Dictionary<string, SharpTSFunction> setters = [];
+
+            if (classExpr.Accessors != null)
+            {
+                foreach (var accessor in classExpr.Accessors)
+                {
+                    var funcStmt = new Stmt.Function(
+                        accessor.Name,
+                        null,
+                        null,
+                        accessor.SetterParam != null ? [accessor.SetterParam] : [],
+                        accessor.Body,
+                        accessor.ReturnType);
+
+                    SharpTSFunction func = new(funcStmt, _environment);
+
+                    if (accessor.Kind.Type == TokenType.GET)
+                    {
+                        getters[accessor.Name.Lexeme] = func;
+                    }
+                    else
+                    {
+                        setters[accessor.Name.Lexeme] = func;
+                    }
+                }
+            }
+
+            SharpTSClass klass = new(
+                className,
+                (SharpTSClass?)superclass,
+                methods,
+                staticMethods,
+                staticProperties,
+                getters,
+                setters,
+                classExpr.IsAbstract,
+                instanceFields);
+
+            // Update self-reference if named
+            if (classExpr.Name != null)
+            {
+                classEnv.Assign(classExpr.Name, klass);
+            }
+
+            return klass;
+        }
+        finally
+        {
+            _environment = savedEnv;
+        }
     }
 }
