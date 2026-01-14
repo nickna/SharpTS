@@ -806,5 +806,119 @@ public class AsyncGeneratorCompilerTests
         Assert.Equal("6\n10\n", output);
     }
 
+    [Fact]
+    public void AsyncGenerator_MultipleYieldAwait_InSequence()
+    {
+        // Regression test for yield await bug - multiple yield await expressions
+        var source = """
+            async function getValue(n: number): Promise<number> {
+                return n * 10;
+            }
+
+            async function* gen() {
+                yield await getValue(1);
+                yield await getValue(2);
+                yield await getValue(3);
+            }
+
+            async function main() {
+                for await (const val of gen()) {
+                    console.log(val);
+                }
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n20\n30\n", output);
+    }
+
+    [Fact]
+    public void AsyncGenerator_MixedYieldAndYieldAwait()
+    {
+        // Regression test for yield await bug - mixed yield and yield await
+        var source = """
+            async function getValue(n: number): Promise<number> {
+                return n * 10;
+            }
+
+            async function* gen() {
+                yield 1;
+                yield await getValue(2);
+                yield 3;
+                yield await getValue(4);
+                yield 5;
+            }
+
+            async function main() {
+                for await (const val of gen()) {
+                    console.log(val);
+                }
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n20\n3\n40\n5\n", output);
+    }
+
+    [Fact]
+    public void AsyncGenerator_YieldAwaitThenStandaloneAwait()
+    {
+        // Regression test for yield await bug - yield await followed by standalone await
+        var source = """
+            async function getValue(n: number): Promise<number> {
+                return n * 10;
+            }
+
+            async function* gen() {
+                yield await getValue(1);
+                const x = await getValue(2);
+                yield x;
+                yield await getValue(3);
+            }
+
+            async function main() {
+                for await (const val of gen()) {
+                    console.log(val);
+                }
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n20\n30\n", output);
+    }
+
+    [Fact]
+    public void AsyncGenerator_YieldAwaitWithComputation()
+    {
+        // Regression test for yield await bug - computation on awaited value before yield
+        var source = """
+            async function getValue(n: number): Promise<number> {
+                return n;
+            }
+
+            async function* gen() {
+                yield await getValue(5) + 1;
+                yield await getValue(10) * 2;
+            }
+
+            async function main() {
+                for await (const val of gen()) {
+                    console.log(val);
+                }
+            }
+
+            main();
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("6\n20\n", output);
+    }
+
     #endregion
 }

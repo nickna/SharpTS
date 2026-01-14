@@ -207,7 +207,7 @@ This document tracks TypeScript language features and their implementation statu
 | Single-quoted strings | ✅ | |
 | Object method shorthand | ✅ | `{ fn() {} }` |
 | Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
-| Class expressions | ⚠️ | `const C = class { }` - interpreter full support; IL compiler partial (basic types only, no constructors with args) |
+| Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
 
 ---
@@ -237,8 +237,12 @@ This document tracks TypeScript language features and their implementation statu
 
 ### IL Compiler Bugs
 
-- `yield await expr` in a single expression causes NullReferenceException in async generators. Workaround: use separate statements (`const val = await expr; yield val;`)
-- Generator variable capture for outer scope variables may not work correctly. Workaround: pass outer variables as parameters to the generator function.
+- Nested function declarations (functions defined inside other functions) are not supported. Workaround: define functions at module level.
+
+### Recently Fixed Bugs (2026-01-13)
+- ~~`yield await expr` NullReferenceException~~ - Fixed: State analyzer now assigns yield state before visiting nested await, matching emitter execution order
+- ~~Generator variable capture for module-level variables~~ - Fixed: Generators correctly capture and use module-level variables including with `yield*`
+- ~~Class expression constructors with default parameters~~ - Fixed: IL compiler now uses direct `newobj` with constructor builder instead of `Activator.CreateInstance`
 
 ### Recently Fixed Bugs (2026-01-12)
 - ~~Generic types with array suffix~~ - Fixed: `ParseGenericTypeReference()` now properly finds matching `>` and handles array suffixes (`Partial<T>[]`, `Promise<number>[][]`, etc.)

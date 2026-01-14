@@ -706,37 +706,34 @@ public class IteratorProtocolTests
     [Fact]
     public void YieldStar_CustomIterator_DelegatesAllValues()
     {
-        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        // Tests yield* with captured custom iterable (Symbol.iterator protocol)
         var source = """
-            function createIterable() {
-                const iterable: any = {
-                    data: [10, 20, 30],
-                    [Symbol.iterator]() {
-                        const iter: any = {
-                            i: 0,
-                            data: this.data,
-                            next() {
-                                if (this.i < this.data.length) {
-                                    const val = this.data[this.i];
-                                    this.i = this.i + 1;
-                                    return { value: val, done: false };
-                                }
-                                return { value: null, done: true };
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
                             }
-                        };
-                        return iter;
-                    }
-                };
-                return iterable;
-            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
 
-            function* gen(iter: any): Generator<number> {
+            function* gen(): Generator<number> {
                 yield 1;
-                yield* iter;
+                yield* iterable;
                 yield 100;
             }
 
-            for (const x of gen(createIterable())) {
+            for (const x of gen()) {
                 console.log(x);
             }
             """;
@@ -748,38 +745,35 @@ public class IteratorProtocolTests
     [Fact]
     public void YieldStar_CustomIterator_InterpreterParity()
     {
-        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        // Tests yield* with captured custom iterable - interpreter vs compiled parity
         var source = """
-            function createIterable() {
-                const iterable: any = {
-                    data: [10, 20, 30],
-                    [Symbol.iterator]() {
-                        const iter: any = {
-                            i: 0,
-                            data: this.data,
-                            next() {
-                                if (this.i < this.data.length) {
-                                    const val = this.data[this.i];
-                                    this.i = this.i + 1;
-                                    return { value: val, done: false };
-                                }
-                                return { value: null, done: true };
+            const iterable: any = {
+                data: [10, 20, 30],
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        i: 0,
+                        data: this.data,
+                        next() {
+                            if (this.i < this.data.length) {
+                                const val = this.data[this.i];
+                                this.i = this.i + 1;
+                                return { value: val, done: false };
                             }
-                        };
-                        return iter;
-                    }
-                };
-                return iterable;
-            }
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
 
-            function* gen(iter: any): Generator<number> {
+            function* gen(): Generator<number> {
                 yield 1;
-                yield* iter;
+                yield* iterable;
                 yield 100;
             }
 
             let result = "";
-            for (const x of gen(createIterable())) {
+            for (const x of gen()) {
                 result = result + x + ",";
             }
             console.log(result);
@@ -793,29 +787,26 @@ public class IteratorProtocolTests
     [Fact]
     public void YieldStar_EmptyIterator_YieldsNothing()
     {
-        // NOTE: Uses parameter instead of captured variable due to generator variable capture bug
+        // Tests yield* with captured empty custom iterator
         var source = """
-            function createEmpty() {
-                const empty: any = {
-                    [Symbol.iterator]() {
-                        const iter: any = {
-                            next() {
-                                return { value: null, done: true };
-                            }
-                        };
-                        return iter;
-                    }
-                };
-                return empty;
-            }
+            const empty: any = {
+                [Symbol.iterator]() {
+                    const iter: any = {
+                        next() {
+                            return { value: null, done: true };
+                        }
+                    };
+                    return iter;
+                }
+            };
 
-            function* gen(iter: any): Generator<number> {
+            function* gen(): Generator<number> {
                 yield 1;
-                yield* iter;
+                yield* empty;
                 yield 2;
             }
 
-            for (const x of gen(createEmpty())) {
+            for (const x of gen()) {
                 console.log(x);
             }
             """;

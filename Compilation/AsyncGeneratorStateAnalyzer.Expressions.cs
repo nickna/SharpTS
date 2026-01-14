@@ -8,14 +8,20 @@ public partial class AsyncGeneratorStateAnalyzer
 
     protected override void VisitYield(Expr.Yield expr)
     {
+        // IMPORTANT: Record yield state FIRST, before visiting its value.
+        // This ensures state numbers match the emitter's execution order.
+        // The emitter processes yield before any nested await in the value,
+        // so the analyzer must assign states in the same order.
+        var yieldStateNumber = _stateCounter++;
+
         // Visit yield value BEFORE marking _seenSuspension, so variables in the yield
         // expression are not incorrectly marked as "used after suspension"
         base.VisitYield(expr);
 
-        // Record this yield point as a suspension point
+        // Record this yield point as a suspension point (using pre-allocated state)
         var liveVars = new HashSet<string>(_declaredVariables);
         _suspensionPoints.Add(new SuspensionPoint(
-            _stateCounter++,
+            yieldStateNumber,
             SuspensionType.Yield,
             expr.Value,
             liveVars,

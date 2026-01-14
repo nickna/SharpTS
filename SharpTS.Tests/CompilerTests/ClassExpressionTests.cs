@@ -191,4 +191,37 @@ public class ClassExpressionTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("42\n", output);
     }
+
+    [Fact]
+    public void ClassExpression_ConstructorWithDefaultParameters()
+    {
+        // Regression test: class expression constructors with default parameters
+        // Previously failed with MissingMethodException because Activator.CreateInstance
+        // was used instead of direct newobj with argument padding.
+        var source = """
+            const Config = class {
+                host: string;
+                port: number;
+                constructor(host: string = "localhost", port: number = 8080) {
+                    this.host = host;
+                    this.port = port;
+                }
+            };
+
+            const c1 = new Config();
+            console.log(c1.host);
+            console.log(c1.port);
+
+            const c2 = new Config("example.com");
+            console.log(c2.host);
+            console.log(c2.port);
+
+            const c3 = new Config("api.example.com", 3000);
+            console.log(c3.host);
+            console.log(c3.port);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("localhost\n8080\nexample.com\n8080\napi.example.com\n3000\n", output);
+    }
 }

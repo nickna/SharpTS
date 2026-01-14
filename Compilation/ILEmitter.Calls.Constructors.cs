@@ -118,6 +118,30 @@ public partial class ILEmitter
             // Call the constructor directly using newobj
             IL.Emit(OpCodes.Newobj, targetCtor);
         }
+        else if (_ctx.VarToClassExpr != null &&
+                 _ctx.VarToClassExpr.TryGetValue(n.ClassName.Lexeme, out var classExpr) &&
+                 _ctx.ClassExprConstructors != null &&
+                 _ctx.ClassExprConstructors.TryGetValue(classExpr, out var classExprCtor))
+        {
+            // Class expression with known constructor - use direct newobj (handles default parameters)
+            int expectedParamCount = classExprCtor.GetParameters().Length;
+
+            // Emit arguments directly onto the stack (all typed as object)
+            foreach (var arg in n.Arguments)
+            {
+                EmitExpression(arg);
+                EmitBoxIfNeeded(arg);
+            }
+
+            // Pad missing optional arguments with null
+            for (int i = n.Arguments.Count; i < expectedParamCount; i++)
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+
+            // Call the constructor directly using newobj
+            IL.Emit(OpCodes.Newobj, classExprCtor);
+        }
         else
         {
             // Fallback: try to instantiate via local variable (imported class as Type)
