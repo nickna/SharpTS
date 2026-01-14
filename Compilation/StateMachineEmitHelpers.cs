@@ -11,6 +11,7 @@ public class StateMachineEmitHelpers
 {
     private readonly ILGenerator _il;
     private readonly TypeProvider _types;
+    private readonly ValidatedILBuilder? _builder;
     private StackType _stackType = StackType.Unknown;
 
     /// <summary>
@@ -32,11 +33,51 @@ public class StateMachineEmitHelpers
     /// </summary>
     public TypeProvider Types => _types;
 
+    /// <summary>
+    /// The validated IL builder, if available. Use this for label and branch operations
+    /// to get compile-time validation of IL correctness.
+    /// </summary>
+    public ValidatedILBuilder? Builder => _builder;
+
     public StateMachineEmitHelpers(ILGenerator il, TypeProvider types)
     {
         _il = il;
         _types = types;
+        _builder = null;
     }
+
+    public StateMachineEmitHelpers(ILGenerator il, TypeProvider types, ValidatedILBuilder builder)
+    {
+        _il = il;
+        _types = types;
+        _builder = builder;
+    }
+
+    #region Label Operations
+
+    /// <summary>
+    /// Defines a new label. Uses validated builder if available.
+    /// </summary>
+    /// <param name="debugName">Optional debug name for error messages.</param>
+    public Label DefineLabel(string? debugName = null)
+    {
+        return _builder != null
+            ? _builder.DefineLabel(debugName)
+            : _il.DefineLabel();
+    }
+
+    /// <summary>
+    /// Marks a label at the current position. Uses validated builder if available.
+    /// </summary>
+    public void MarkLabel(Label label)
+    {
+        if (_builder != null)
+            _builder.MarkLabel(label);
+        else
+            _il.MarkLabel(label);
+    }
+
+    #endregion
 
     #region Boxing and Type Conversion
 
@@ -438,7 +479,7 @@ public class StateMachineEmitHelpers
     /// <param name="isTruthyMethod">Runtime.IsTruthy method</param>
     public void EmitLogical(bool isAnd, Action emitLeft, Action emitRight, MethodInfo isTruthyMethod)
     {
-        var endLabel = _il.DefineLabel();
+        var endLabel = DefineLabel("logical_end");
 
         emitLeft();
         EnsureBoxed();
@@ -462,7 +503,7 @@ public class StateMachineEmitHelpers
             EnsureBoxed();
         }
 
-        _il.MarkLabel(endLabel);
+        MarkLabel(endLabel);
         SetStackUnknown();
     }
 
@@ -471,8 +512,8 @@ public class StateMachineEmitHelpers
     /// </summary>
     public void EmitTernary(Action emitCondition, Action emitThen, Action emitElse, MethodInfo isTruthyMethod)
     {
-        var elseLabel = _il.DefineLabel();
-        var endLabel = _il.DefineLabel();
+        var elseLabel = DefineLabel("ternary_else");
+        var endLabel = DefineLabel("ternary_end");
 
         emitCondition();
         EnsureBoxed();
@@ -483,11 +524,11 @@ public class StateMachineEmitHelpers
         EnsureBoxed();
         _il.Emit(OpCodes.Br, endLabel);
 
-        _il.MarkLabel(elseLabel);
+        MarkLabel(elseLabel);
         emitElse();
         EnsureBoxed();
 
-        _il.MarkLabel(endLabel);
+        MarkLabel(endLabel);
         SetStackUnknown();
     }
 
@@ -496,8 +537,8 @@ public class StateMachineEmitHelpers
     /// </summary>
     public void EmitNullishCoalescing(Action emitLeft, Action emitRight)
     {
-        var rightLabel = _il.DefineLabel();
-        var endLabel = _il.DefineLabel();
+        var rightLabel = DefineLabel("nullish_right");
+        var endLabel = DefineLabel("nullish_end");
 
         emitLeft();
         EnsureBoxed();
@@ -505,12 +546,12 @@ public class StateMachineEmitHelpers
         _il.Emit(OpCodes.Brfalse, rightLabel);
         _il.Emit(OpCodes.Br, endLabel);
 
-        _il.MarkLabel(rightLabel);
+        MarkLabel(rightLabel);
         _il.Emit(OpCodes.Pop);
         emitRight();
         EnsureBoxed();
 
-        _il.MarkLabel(endLabel);
+        MarkLabel(endLabel);
         SetStackUnknown();
     }
 

@@ -47,6 +47,12 @@ public class CompilationContext
     public LocalsManager Locals { get; }
 
     /// <summary>
+    /// Validated IL builder that wraps the ILGenerator with compile-time checks.
+    /// Use this for new code to catch label, stack, and exception block errors early.
+    /// </summary>
+    public ValidatedILBuilder ILBuilder { get; private set; }
+
+    /// <summary>
     /// Type provider for resolving .NET types (runtime or reference assembly mode).
     /// Use this instead of typeof() for type resolution to support --ref-asm compilation.
     /// </summary>
@@ -416,6 +422,16 @@ public class CompilationContext
         Classes = classes;
         Types = types ?? TypeProvider.Runtime;
         Locals = new LocalsManager(il);
+        ILBuilder = new ValidatedILBuilder(il, Types);
+    }
+
+    /// <summary>
+    /// Updates the validated IL builder for a new ILGenerator (when switching methods).
+    /// Call this when the IL property changes to a new method's generator.
+    /// </summary>
+    public void UpdateILBuilder(ILGenerator newIL)
+    {
+        ILBuilder = new ValidatedILBuilder(newIL, Types);
     }
 
     public void DefineParameter(string name, int argIndex, Type? paramType = null)

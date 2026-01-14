@@ -15,7 +15,8 @@ public partial class ILEmitter
         if (_ctx.ReturnValueLocal != null)
         {
             // Mark the return label and emit the actual return
-            IL.MarkLabel(_ctx.ReturnLabel);
+            // Use builder's MarkLabel since ReturnLabel was defined with builder
+            _ctx.ILBuilder.MarkLabel(_ctx.ReturnLabel);
             IL.Emit(OpCodes.Ldloc, _ctx.ReturnValueLocal);
             IL.Emit(OpCodes.Ret);
         }
@@ -33,6 +34,7 @@ public partial class ILEmitter
     public void EmitDefaultParameters(List<Stmt.Parameter> parameters, bool isInstanceMethod)
     {
         int argOffset = isInstanceMethod ? 1 : 0;
+        var builder = _ctx.ILBuilder;
 
         for (int i = 0; i < parameters.Count; i++)
         {
@@ -42,18 +44,18 @@ public partial class ILEmitter
             int argIndex = i + argOffset;
 
             // if (arg == null) { arg = <default>; }
-            var skipDefault = IL.DefineLabel();
+            var skipDefault = builder.DefineLabel($"skip_default_{i}");
 
             // Load argument and check if null
             IL.Emit(OpCodes.Ldarg, argIndex);
-            IL.Emit(OpCodes.Brtrue, skipDefault);
+            builder.Emit_Brtrue(skipDefault);
 
             // Argument is null, emit default value and store
             EmitExpression(param.DefaultValue);
             EmitBoxIfNeeded(param.DefaultValue);
             IL.Emit(OpCodes.Starg, argIndex);
 
-            IL.MarkLabel(skipDefault);
+            builder.MarkLabel(skipDefault);
         }
     }
 
@@ -296,35 +298,36 @@ public partial class ILEmitter
         // - null => false
         // - boxed false => false
         // - everything else => true
-        var checkBoolLabel = IL.DefineLabel();
-        var falseLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var checkBoolLabel = builder.DefineLabel("truthy_checkbool");
+        var falseLabel = builder.DefineLabel("truthy_false");
+        var endLabel = builder.DefineLabel("truthy_end");
 
         // Check for null
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Brfalse, falseLabel);
+        builder.Emit_Brfalse(falseLabel);
 
         // Check if it's a boolean
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Isinst, _ctx.Types.Boolean);
-        IL.Emit(OpCodes.Brfalse, checkBoolLabel);
+        builder.Emit_Brfalse(checkBoolLabel);
 
         // It's a boxed bool - unbox and use the value
         IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
-        IL.Emit(OpCodes.Br, endLabel);
+        builder.Emit_Br(endLabel);
 
-        IL.MarkLabel(checkBoolLabel);
+        builder.MarkLabel(checkBoolLabel);
         // Not null and not bool - always truthy
         IL.Emit(OpCodes.Pop);
         IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Br, endLabel);
+        builder.Emit_Br(endLabel);
 
-        IL.MarkLabel(falseLabel);
+        builder.MarkLabel(falseLabel);
         // Null - false
         IL.Emit(OpCodes.Pop);
         IL.Emit(OpCodes.Ldc_I4_0);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
     }
 
     private static bool IsComparisonOp(TokenType op) =>

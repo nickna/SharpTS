@@ -162,21 +162,22 @@ public partial class ILEmitter
 
         if (g.Optional)
         {
-            var nullLabel = IL.DefineLabel();
-            var endLabel = IL.DefineLabel();
+            var builder = _ctx.ILBuilder;
+            var nullLabel = builder.DefineLabel("optional_null");
+            var endLabel = builder.DefineLabel("optional_end");
 
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Brfalse, nullLabel);
+            builder.Emit_Brfalse(nullLabel);
 
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
-            IL.Emit(OpCodes.Br, endLabel);
+            builder.Emit_Br(endLabel);
 
-            IL.MarkLabel(nullLabel);
+            builder.MarkLabel(nullLabel);
             IL.Emit(OpCodes.Pop);
             IL.Emit(OpCodes.Ldnull);
 
-            IL.MarkLabel(endLabel);
+            builder.MarkLabel(endLabel);
         }
         else
         {

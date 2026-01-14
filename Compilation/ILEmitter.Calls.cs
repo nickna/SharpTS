@@ -731,19 +731,20 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, objLocal);
 
         // Check if it's a string
-        var isStringLabel = IL.DefineLabel();
-        var isListLabel = IL.DefineLabel();
-        var doneLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var isStringLabel = builder.DefineLabel("ambiguous_string");
+        var isListLabel = builder.DefineLabel("ambiguous_list");
+        var doneLabel = builder.DefineLabel("ambiguous_done");
 
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Isinst, _ctx.Types.String);
-        IL.Emit(OpCodes.Brtrue, isStringLabel);
+        builder.Emit_Brtrue(isStringLabel);
 
         // Assume it's a list if not a string
-        IL.Emit(OpCodes.Br, isListLabel);
+        builder.Emit_Br(isListLabel);
 
         // String path
-        IL.MarkLabel(isStringLabel);
+        builder.MarkLabel(isStringLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Castclass, _ctx.Types.String);
 
@@ -811,10 +812,10 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringConcat);
                 break;
         }
-        IL.Emit(OpCodes.Br, doneLabel);
+        builder.Emit_Br(doneLabel);
 
         // List path
-        IL.MarkLabel(isListLabel);
+        builder.MarkLabel(isListLabel);
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
 
@@ -877,7 +878,7 @@ public partial class ILEmitter
                 break;
         }
 
-        IL.MarkLabel(doneLabel);
+        builder.MarkLabel(doneLabel);
     }
 
     /// <summary>

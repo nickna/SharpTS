@@ -106,8 +106,9 @@ public partial class ILEmitter
         }
 
         // BothReachable: emit both branches with condition check
-        var elseLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var elseLabel = builder.DefineLabel("if_else");
+        var endLabel = builder.DefineLabel("if_end");
 
         EmitExpression(i.Condition);
         // Handle condition based on what's actually on the stack
@@ -130,28 +131,29 @@ public partial class ILEmitter
             EnsureBoxed();
             EmitTruthyCheck();
         }
-        IL.Emit(OpCodes.Brfalse, elseLabel);
+        builder.Emit_Brfalse(elseLabel);
 
         EmitStatement(i.ThenBranch);
-        IL.Emit(OpCodes.Br, endLabel);
+        builder.Emit_Br(endLabel);
 
-        IL.MarkLabel(elseLabel);
+        builder.MarkLabel(elseLabel);
         if (i.ElseBranch != null)
         {
             EmitStatement(i.ElseBranch);
         }
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
     }
 
     protected override void EmitWhile(Stmt.While w)
     {
-        var startLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var startLabel = builder.DefineLabel("while_start");
+        var endLabel = builder.DefineLabel("while_end");
 
         _ctx.EnterLoop(endLabel, startLabel);
 
-        IL.MarkLabel(startLabel);
+        builder.MarkLabel(startLabel);
         EmitExpression(w.Condition);
         // Handle condition based on what's actually on the stack
         if (_stackType == StackType.Boolean)
@@ -173,29 +175,30 @@ public partial class ILEmitter
             EnsureBoxed();
             EmitTruthyCheck();
         }
-        IL.Emit(OpCodes.Brfalse, endLabel);
+        builder.Emit_Brfalse(endLabel);
 
         EmitStatement(w.Body);
-        IL.Emit(OpCodes.Br, startLabel);
+        builder.Emit_Br(startLabel);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         _ctx.ExitLoop();
     }
 
     protected override void EmitDoWhile(Stmt.DoWhile dw)
     {
-        var startLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
-        var continueLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var startLabel = builder.DefineLabel("dowhile_start");
+        var endLabel = builder.DefineLabel("dowhile_end");
+        var continueLabel = builder.DefineLabel("dowhile_continue");
 
         _ctx.EnterLoop(endLabel, continueLabel);
 
         // Body executes at least once
-        IL.MarkLabel(startLabel);
+        builder.MarkLabel(startLabel);
         EmitStatement(dw.Body);
 
         // Continue target is after the body, before condition check
-        IL.MarkLabel(continueLabel);
+        builder.MarkLabel(continueLabel);
 
         // Evaluate condition
         EmitExpression(dw.Condition);
@@ -219,15 +222,16 @@ public partial class ILEmitter
             EnsureBoxed();
             EmitTruthyCheck();
         }
-        IL.Emit(OpCodes.Brtrue, startLabel);
+        builder.Emit_Brtrue(startLabel);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         _ctx.ExitLoop();
     }
 
     protected override void EmitForOf(Stmt.ForOf f)
     {
         _ctx.Locals.EnterScope();
+        var builder = _ctx.ILBuilder;
 
         // Evaluate iterable
         TypeInfo? iterableType = _ctx.TypeMap?.Get(f.Iterable);
@@ -248,9 +252,9 @@ public partial class ILEmitter
         // For generators, use enumerator-based iteration (with its own labels)
         if (iterableType is TypeInfo.Generator)
         {
-            var genStartLabel = IL.DefineLabel();
-            var genEndLabel = IL.DefineLabel();
-            var genContinueLabel = IL.DefineLabel();
+            var genStartLabel = builder.DefineLabel("forof_gen_start");
+            var genEndLabel = builder.DefineLabel("forof_gen_end");
+            var genContinueLabel = builder.DefineLabel("forof_gen_continue");
             _ctx.EnterLoop(genEndLabel, genContinueLabel);
             EmitForOfEnumerator(f, genStartLabel, genEndLabel, genContinueLabel);
             return;
@@ -262,8 +266,8 @@ public partial class ILEmitter
 
         // Try iterator protocol first: GetIteratorFunction(iterable, Symbol.iterator)
         var iteratorFnLocal = IL.DeclareLocal(_ctx.Types.Object);
-        var indexBasedLabel = IL.DefineLabel();
-        var afterLoopLabel = IL.DefineLabel();
+        var indexBasedLabel = builder.DefineLabel("forof_index_based");
+        var afterLoopLabel = builder.DefineLabel("forof_after");
 
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
@@ -272,13 +276,13 @@ public partial class ILEmitter
 
         // If iterator function is null, fall back to index-based iteration
         IL.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        IL.Emit(OpCodes.Brfalse, indexBasedLabel);
+        builder.Emit_Brfalse(indexBasedLabel);
 
         // ===== Iterator protocol path =====
         {
-            var iterStartLabel = IL.DefineLabel();
-            var iterEndLabel = IL.DefineLabel();
-            var iterContinueLabel = IL.DefineLabel();
+            var iterStartLabel = builder.DefineLabel("forof_iter_start");
+            var iterEndLabel = builder.DefineLabel("forof_iter_end");
+            var iterContinueLabel = builder.DefineLabel("forof_iter_continue");
             _ctx.EnterLoop(iterEndLabel, iterContinueLabel);
 
             // Call the iterator function to get the iterator object
@@ -311,12 +315,12 @@ public partial class ILEmitter
             var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
             var current = _ctx.Types.IEnumerator.GetProperty("Current")!.GetGetMethod()!;
 
-            IL.MarkLabel(iterStartLabel);
+            builder.MarkLabel(iterStartLabel);
 
             // Call MoveNext
             IL.Emit(OpCodes.Ldloc, enumLocal);
             IL.Emit(OpCodes.Callvirt, moveNext);
-            IL.Emit(OpCodes.Brfalse, iterEndLabel);
+            builder.Emit_Brfalse(iterEndLabel);
 
             // Get Current
             IL.Emit(OpCodes.Ldloc, enumLocal);
@@ -326,20 +330,20 @@ public partial class ILEmitter
             // Emit body
             EmitStatement(f.Body);
 
-            IL.MarkLabel(iterContinueLabel);
-            IL.Emit(OpCodes.Br, iterStartLabel);
+            builder.MarkLabel(iterContinueLabel);
+            builder.Emit_Br(iterStartLabel);
 
-            IL.MarkLabel(iterEndLabel);
+            builder.MarkLabel(iterEndLabel);
             _ctx.ExitLoop();
-            IL.Emit(OpCodes.Br, afterLoopLabel); // Skip the index-based path
+            builder.Emit_Br(afterLoopLabel); // Skip the index-based path
         }
 
         // ===== Index-based fallback (for arrays, strings, etc.) =====
-        IL.MarkLabel(indexBasedLabel);
+        builder.MarkLabel(indexBasedLabel);
         {
-            var startLabel = IL.DefineLabel();
-            var endLabel = IL.DefineLabel();
-            var continueLabel = IL.DefineLabel();
+            var startLabel = builder.DefineLabel("forof_idx_start");
+            var endLabel = builder.DefineLabel("forof_idx_end");
+            var continueLabel = builder.DefineLabel("forof_idx_continue");
             _ctx.EnterLoop(endLabel, continueLabel);
 
             // Create index variable
@@ -350,14 +354,14 @@ public partial class ILEmitter
             // Loop variable
             var indexLoopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
-            IL.MarkLabel(startLabel);
+            builder.MarkLabel(startLabel);
 
             // Check if index < length
             IL.Emit(OpCodes.Ldloc, indexLocal);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
             IL.Emit(OpCodes.Clt);
-            IL.Emit(OpCodes.Brfalse, endLabel);
+            builder.Emit_Brfalse(endLabel);
 
             // Get current element
             IL.Emit(OpCodes.Ldloc, iterableLocal);
@@ -368,7 +372,7 @@ public partial class ILEmitter
             // Emit body
             EmitStatement(f.Body);
 
-            IL.MarkLabel(continueLabel);
+            builder.MarkLabel(continueLabel);
 
             // Increment index
             IL.Emit(OpCodes.Ldloc, indexLocal);
@@ -376,19 +380,21 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Add);
             IL.Emit(OpCodes.Stloc, indexLocal);
 
-            IL.Emit(OpCodes.Br, startLabel);
+            builder.Emit_Br(startLabel);
 
-            IL.MarkLabel(endLabel);
+            builder.MarkLabel(endLabel);
             _ctx.ExitLoop();
         }
 
         // Common exit point for both paths
-        IL.MarkLabel(afterLoopLabel);
+        builder.MarkLabel(afterLoopLabel);
         _ctx.Locals.ExitScope();
     }
 
     private void EmitForOfEnumerator(Stmt.ForOf f, Label startLabel, Label endLabel, Label continueLabel)
     {
+        var builder = _ctx.ILBuilder;
+
         // Use IEnumerable.GetEnumerator()/MoveNext()/Current pattern for generators
         var getEnumerator = _ctx.Types.GetMethod(_ctx.Types.IEnumerable, "GetEnumerator");
         var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
@@ -404,12 +410,12 @@ public partial class ILEmitter
         // Loop variable
         var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
-        IL.MarkLabel(startLabel);
+        builder.MarkLabel(startLabel);
 
         // Call MoveNext
         IL.Emit(OpCodes.Ldloc, enumLocal);
         IL.Emit(OpCodes.Callvirt, moveNext);
-        IL.Emit(OpCodes.Brfalse, endLabel);
+        builder.Emit_Brfalse(endLabel);
 
         // Get Current
         IL.Emit(OpCodes.Ldloc, enumLocal);
@@ -419,19 +425,20 @@ public partial class ILEmitter
         // Emit body
         EmitStatement(f.Body);
 
-        IL.MarkLabel(continueLabel);
-        IL.Emit(OpCodes.Br, startLabel);
+        builder.MarkLabel(continueLabel);
+        builder.Emit_Br(startLabel);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         _ctx.Locals.ExitScope();
         _ctx.ExitLoop();
     }
 
     protected override void EmitForIn(Stmt.ForIn f)
     {
-        var startLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
-        var continueLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var startLabel = builder.DefineLabel("forin_start");
+        var endLabel = builder.DefineLabel("forin_end");
+        var continueLabel = builder.DefineLabel("forin_continue");
 
         _ctx.EnterLoop(endLabel, continueLabel);
         _ctx.Locals.EnterScope();
@@ -450,14 +457,14 @@ public partial class ILEmitter
         // Loop variable (holds current key)
         var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
 
-        IL.MarkLabel(startLabel);
+        builder.MarkLabel(startLabel);
 
         // Check if index < keys.Count
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Ldloc, keysLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetLength);
         IL.Emit(OpCodes.Clt);
-        IL.Emit(OpCodes.Brfalse, endLabel);
+        builder.Emit_Brfalse(endLabel);
 
         // Get current key: keys[index]
         IL.Emit(OpCodes.Ldloc, keysLocal);
@@ -468,7 +475,7 @@ public partial class ILEmitter
         // Emit body
         EmitStatement(f.Body);
 
-        IL.MarkLabel(continueLabel);
+        builder.MarkLabel(continueLabel);
 
         // Increment index
         IL.Emit(OpCodes.Ldloc, indexLocal);
@@ -476,9 +483,9 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Stloc, indexLocal);
 
-        IL.Emit(OpCodes.Br, startLabel);
+        builder.Emit_Br(startLabel);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         _ctx.Locals.ExitScope();
         _ctx.ExitLoop();
     }
@@ -508,13 +515,15 @@ public partial class ILEmitter
         if (_ctx.ExceptionBlockDepth > 0)
         {
             // Inside exception block: store value and leave
+            // Use builder for Leave validation (ensures we're inside exception block)
+            var builder = _ctx.ILBuilder;
             if (_ctx.ReturnValueLocal == null)
             {
                 _ctx.ReturnValueLocal = IL.DeclareLocal(_ctx.Types.Object);
-                _ctx.ReturnLabel = IL.DefineLabel();
+                _ctx.ReturnLabel = builder.DefineLabel("deferred_return");
             }
             IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
-            IL.Emit(OpCodes.Leave, _ctx.ReturnLabel);
+            builder.Emit_Leave(_ctx.ReturnLabel);
         }
         else
         {
@@ -545,15 +554,16 @@ public partial class ILEmitter
     protected override void EmitLabeledStatement(Stmt.LabeledStatement labeledStmt)
     {
         string labelName = labeledStmt.Label.Lexeme;
-        var breakLabel = IL.DefineLabel();
-        var continueLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var breakLabel = builder.DefineLabel($"labeled_{labelName}_break");
+        var continueLabel = builder.DefineLabel($"labeled_{labelName}_continue");
 
         // For labeled statements, we need to handle both loops and non-loop statements.
         // For loops, the inner loop will use its own labels for unlabeled break/continue,
         // but labeled break/continue should use the labels registered here.
 
         // Mark continue label at the start (for labeled continue, restart from here)
-        IL.MarkLabel(continueLabel);
+        builder.MarkLabel(continueLabel);
 
         _ctx.EnterLoop(breakLabel, continueLabel, labelName);
         try
@@ -568,7 +578,7 @@ public partial class ILEmitter
         }
 
         // Mark the break label (after the statement, for labeled break)
-        IL.MarkLabel(breakLabel);
+        builder.MarkLabel(breakLabel);
     }
 
     protected override void EmitSwitch(Stmt.Switch s)
@@ -577,9 +587,10 @@ public partial class ILEmitter
         var switchAnalysis = _ctx.DeadCode?.GetSwitchResult(s);
         bool skipDefault = switchAnalysis?.DefaultIsUnreachable == true;
 
-        var endLabel = IL.DefineLabel();
-        var defaultLabel = IL.DefineLabel();
-        var caseLabels = s.Cases.Select(_ => IL.DefineLabel()).ToList();
+        var builder = _ctx.ILBuilder;
+        var endLabel = builder.DefineLabel("switch_end");
+        var defaultLabel = builder.DefineLabel("switch_default");
+        var caseLabels = s.Cases.Select((_, i) => builder.DefineLabel($"switch_case_{i}")).ToList();
 
         // Evaluate subject once
         EmitExpression(s.Subject);
@@ -594,23 +605,23 @@ public partial class ILEmitter
             EmitExpression(s.Cases[i].Value);
             EmitBoxIfNeeded(s.Cases[i].Value);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.Equals);
-            IL.Emit(OpCodes.Brtrue, caseLabels[i]);
+            builder.Emit_Brtrue(caseLabels[i]);
         }
 
         // Jump to default or end (skip default if unreachable)
         if (skipDefault || s.DefaultBody == null)
         {
-            IL.Emit(OpCodes.Br, endLabel);
+            builder.Emit_Br(endLabel);
         }
         else
         {
-            IL.Emit(OpCodes.Br, defaultLabel);
+            builder.Emit_Br(defaultLabel);
         }
 
         // Emit case bodies
         for (int i = 0; i < s.Cases.Count; i++)
         {
-            IL.MarkLabel(caseLabels[i]);
+            builder.MarkLabel(caseLabels[i]);
             foreach (var stmt in s.Cases[i].Body)
             {
                 if (stmt is Stmt.Break breakStmt)
@@ -623,7 +634,7 @@ public partial class ILEmitter
                     else
                     {
                         // Unlabeled break - exits switch only
-                        IL.Emit(OpCodes.Br, endLabel);
+                        builder.Emit_Br(endLabel);
                     }
                 }
                 else
@@ -637,7 +648,7 @@ public partial class ILEmitter
         // Default case (skip if unreachable)
         if (s.DefaultBody != null && !skipDefault)
         {
-            IL.MarkLabel(defaultLabel);
+            builder.MarkLabel(defaultLabel);
             foreach (var stmt in s.DefaultBody)
             {
                 if (stmt is Stmt.Break breakStmt)
@@ -650,7 +661,7 @@ public partial class ILEmitter
                     else
                     {
                         // Unlabeled break - exits switch only
-                        IL.Emit(OpCodes.Br, endLabel);
+                        builder.Emit_Br(endLabel);
                     }
                 }
                 else
@@ -660,14 +671,17 @@ public partial class ILEmitter
             }
         }
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
     }
 
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
-        _ctx.ExceptionBlockDepth++;
+        // Use ValidatedILBuilder for exception block operations - it tracks depth automatically
+        // and validates proper Begin/End pairing
+        var builder = _ctx.ILBuilder;
 
-        IL.BeginExceptionBlock();
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
 
         foreach (var stmt in t.TryBlock)
         {
@@ -676,7 +690,7 @@ public partial class ILEmitter
 
         if (t.CatchBlock != null)
         {
-            IL.BeginCatchBlock(_ctx.Types.Exception);
+            builder.BeginCatchBlock(_ctx.Types.Exception);
 
             if (t.CatchParam != null)
             {
@@ -698,15 +712,14 @@ public partial class ILEmitter
 
         if (t.FinallyBlock != null)
         {
-            IL.BeginFinallyBlock();
+            builder.BeginFinallyBlock();
             foreach (var stmt in t.FinallyBlock)
             {
                 EmitStatement(stmt);
             }
         }
 
-        IL.EndExceptionBlock();
-
+        builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
     }
 
