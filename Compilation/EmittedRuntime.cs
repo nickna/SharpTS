@@ -40,6 +40,15 @@ public class EmittedRuntime
     // Console methods
     public MethodBuilder ConsoleLog { get; set; } = null!;
     public MethodBuilder ConsoleLogMultiple { get; set; } = null!;
+    public MethodBuilder ConsoleError { get; set; } = null!;
+    public MethodBuilder ConsoleErrorMultiple { get; set; } = null!;
+    public MethodBuilder ConsoleWarn { get; set; } = null!;
+    public MethodBuilder ConsoleWarnMultiple { get; set; } = null!;
+    public MethodBuilder ConsoleClear { get; set; } = null!;
+    public MethodBuilder ConsoleTime { get; set; } = null!;
+    public MethodBuilder ConsoleTimeEnd { get; set; } = null!;
+    public MethodBuilder ConsoleTimeLog { get; set; } = null!;
+    public FieldBuilder ConsoleTimersField { get; set; } = null!;
 
     // Type coercion methods
     public MethodBuilder Stringify { get; set; } = null!;
@@ -364,4 +373,51 @@ public class EmittedRuntime
 
     // Async Generator await continuation helper
     public MethodBuilder AsyncGeneratorAwaitContinue { get; set; } = null!;
+
+    // Path module methods
+    public MethodBuilder PathFormat { get; set; } = null!;
+
+    // Fs module methods
+    public MethodBuilder FsExistsSync { get; set; } = null!;
+    public MethodBuilder FsReadFileSync { get; set; } = null!;
+    public MethodBuilder FsWriteFileSync { get; set; } = null!;
+    public MethodBuilder FsAppendFileSync { get; set; } = null!;
+    public MethodBuilder FsUnlinkSync { get; set; } = null!;
+    public MethodBuilder FsMkdirSync { get; set; } = null!;
+    public MethodBuilder FsRmdirSync { get; set; } = null!;
+    public MethodBuilder FsReaddirSync { get; set; } = null!;
+    public MethodBuilder FsStatSync { get; set; } = null!;
+    public MethodBuilder FsRenameSync { get; set; } = null!;
+    public MethodBuilder FsCopyFileSync { get; set; } = null!;
+    public MethodBuilder FsAccessSync { get; set; } = null!;
+
+    // Built-in module methods (module name -> method name -> MethodBuilder)
+    // Used for creating TSFunction wrappers when importing named exports
+    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _builtInModuleMethods = new();
+
+    /// <summary>
+    /// Registers a built-in module method.
+    /// </summary>
+    public void RegisterBuiltInModuleMethod(string moduleName, string methodName, MethodBuilder method)
+    {
+        if (!_builtInModuleMethods.TryGetValue(moduleName, out var methods))
+        {
+            methods = new Dictionary<string, MethodBuilder>();
+            _builtInModuleMethods[moduleName] = methods;
+        }
+        methods[methodName] = method;
+    }
+
+    /// <summary>
+    /// Gets a built-in module method for creating a TSFunction wrapper.
+    /// </summary>
+    public MethodBuilder? GetBuiltInModuleMethod(string moduleName, string methodName)
+    {
+        if (_builtInModuleMethods.TryGetValue(moduleName, out var methods) &&
+            methods.TryGetValue(methodName, out var method))
+        {
+            return method;
+        }
+        return null;
+    }
 }

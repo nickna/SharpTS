@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation.Emitters;
+using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
@@ -206,6 +207,13 @@ public class CompilationContext
 
     // Type emitter registry for type-first method dispatch
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
+
+    // Built-in module emitter registry for fs, path, os, etc.
+    public BuiltInModuleEmitterRegistry? BuiltInModuleEmitterRegistry { get; set; }
+
+    // Built-in module namespace variables (variable name -> module name)
+    // Tracks which local variables are built-in module namespaces for direct dispatch
+    public Dictionary<string, string>? BuiltInModuleNamespaces { get; set; }
 
     // Dynamic property dictionary field (class name -> FieldBuilder for _extras)
     // Used for runtime-added properties that weren't declared in TypeScript

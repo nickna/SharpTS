@@ -67,6 +67,12 @@ public class ParsedModule
     /// </summary>
     public bool IsTypeChecked { get; set; }
 
+    /// <summary>
+    /// Whether this is a built-in module (fs, path, os, etc.).
+    /// Built-in modules are not loaded from files.
+    /// </summary>
+    public bool IsBuiltIn { get; set; }
+
     public ParsedModule(string path, List<Stmt> statements)
     {
         Path = path;

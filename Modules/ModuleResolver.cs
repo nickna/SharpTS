@@ -1,4 +1,6 @@
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns.Modules;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Modules;
 
@@ -50,6 +52,12 @@ public class ModuleResolver
         }
         else
         {
+            // Check for built-in modules first (fs, path, os, etc.)
+            if (BuiltInModuleRegistry.IsBuiltIn(specifier))
+            {
+                return BuiltInModuleRegistry.GetBuiltInPath(specifier);
+            }
+
             // Bare specifier (e.g., 'lodash')
             // Look in node_modules directories
             string? resolvedPath = TryResolveNodeModule(specifier, currentDir);
@@ -134,6 +142,28 @@ public class ModuleResolver
     /// <exception cref="Exception">If a circular dependency is detected</exception>
     public ParsedModule LoadModule(string absolutePath, DecoratorMode decoratorMode = DecoratorMode.None)
     {
+        // Skip built-in modules - they don't need to be loaded from files
+        if (absolutePath.StartsWith(BuiltInModuleRegistry.BuiltInPrefix))
+        {
+            // Return a placeholder module for built-in modules
+            var moduleName = BuiltInModuleRegistry.GetModuleName(absolutePath) ?? "builtin";
+            if (!_moduleCache.TryGetValue(absolutePath, out var builtinModule))
+            {
+                builtinModule = new ParsedModule(absolutePath, []) { IsBuiltIn = true, IsTypeChecked = true };
+                // Populate the exported types from the built-in module type definitions
+                var moduleTypes = BuiltInModuleTypes.GetModuleTypes(moduleName);
+                if (moduleTypes != null)
+                {
+                    foreach (var (name, type) in moduleTypes)
+                    {
+                        builtinModule.ExportedTypes[name] = type;
+                    }
+                }
+                _moduleCache[absolutePath] = builtinModule;
+            }
+            return builtinModule;
+        }
+
         absolutePath = Path.GetFullPath(absolutePath);
 
         // Return cached module if already loaded
@@ -232,7 +262,11 @@ public class ModuleResolver
     /// </summary>
     public ParsedModule? GetCachedModule(string absolutePath)
     {
-        absolutePath = Path.GetFullPath(absolutePath);
+        // Don't normalize built-in module paths
+        if (!absolutePath.StartsWith(BuiltInModuleRegistry.BuiltInPrefix))
+        {
+            absolutePath = Path.GetFullPath(absolutePath);
+        }
         return _moduleCache.GetValueOrDefault(absolutePath);
     }
 

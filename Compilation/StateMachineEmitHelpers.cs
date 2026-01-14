@@ -748,5 +748,184 @@ public class StateMachineEmitHelpers
         return true;
     }
 
+    /// <summary>
+    /// Gets the console method name from a console.X call expression.
+    /// Returns null if not a console method call.
+    /// </summary>
+    public static string? GetConsoleMethodName(SharpTS.Parsing.Expr.Call call)
+    {
+        // Pattern 1: Parser transforms console.X to Variable "console.X"
+        if (call.Callee is SharpTS.Parsing.Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
+            return v.Name.Lexeme["console.".Length..];
+
+        // Pattern 2: Get expression console.X
+        if (call.Callee is SharpTS.Parsing.Expr.Get g &&
+            g.Object is SharpTS.Parsing.Expr.Variable consoleVar &&
+            consoleVar.Name.Lexeme == "console")
+            return g.Name.Lexeme;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Emits a console method call (log, error, warn, info, debug, clear, time, timeEnd, timeLog).
+    /// Returns true if handled.
+    /// </summary>
+    public bool TryEmitConsoleMethod(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        var methodName = GetConsoleMethodName(call);
+        if (methodName == null)
+            return false;
+
+        switch (methodName)
+        {
+            case "log":
+            case "info":
+            case "debug":
+                // info and debug are aliases for log - emit inline since TryEmitConsoleLog only checks for "log"
+                EmitConsoleLogInline(call, emitArgumentBoxed, runtime.ConsoleLog, runtime.ConsoleLogMultiple);
+                return true;
+
+            case "error":
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, runtime.ConsoleError, runtime.ConsoleErrorMultiple);
+                return true;
+
+            case "warn":
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, runtime.ConsoleWarn, runtime.ConsoleWarnMultiple);
+                return true;
+
+            case "clear":
+                _il.Emit(OpCodes.Call, runtime.ConsoleClear);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "time":
+                if (call.Arguments.Count >= 1)
+                {
+                    emitArgumentBoxed(call.Arguments[0]);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, runtime.ConsoleTime);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "timeEnd":
+                if (call.Arguments.Count >= 1)
+                {
+                    emitArgumentBoxed(call.Arguments[0]);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, runtime.ConsoleTimeEnd);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "timeLog":
+                if (call.Arguments.Count >= 1)
+                {
+                    emitArgumentBoxed(call.Arguments[0]);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, runtime.ConsoleTimeLog);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Helper to emit console output methods (error, warn) with single/multiple argument support.
+    /// </summary>
+    private void EmitConsoleOutputMethod(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        MethodInfo singleArgMethod,
+        MethodInfo multipleArgMethod)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            // No arguments - just print newline to stderr
+            _il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
+            _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TextWriter, "WriteLine"));
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, singleArgMethod);
+        }
+        else
+        {
+            // Multiple arguments
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 0; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, multipleArgMethod);
+        }
+
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Helper to emit console.log/info/debug calls directly.
+    /// </summary>
+    private void EmitConsoleLogInline(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        MethodInfo singleArgMethod,
+        MethodInfo multipleArgMethod)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            // No arguments - just print newline
+            _il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "WriteLine"));
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, singleArgMethod);
+        }
+        else
+        {
+            // Multiple arguments
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 0; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, multipleArgMethod);
+        }
+
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
     #endregion
 }

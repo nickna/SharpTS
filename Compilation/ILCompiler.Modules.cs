@@ -363,6 +363,8 @@ public partial class ILCompiler
             EnumToModule = _enumToModule,
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprBuilders
         };
     }

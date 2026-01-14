@@ -116,6 +116,7 @@ public class TypeProvider
     public Type Environment => Resolve("System.Environment");
     public Type Activator => Resolve("System.Activator");
     public Type Random => Resolve("System.Random");
+    public Type Stopwatch => Resolve("System.Diagnostics.Stopwatch");
     public Type Interlocked => Resolve("System.Threading.Interlocked");
 
     #endregion
@@ -270,6 +271,19 @@ public class TypeProvider
     public Type TextWriter => Resolve("System.IO.TextWriter");
     public Type IDictionary => Resolve("System.Collections.IDictionary");
     public Type IDisposable => Resolve("System.IDisposable");
+
+    #endregion
+
+    #region IO Types (for built-in modules)
+
+    public Type Path => Resolve("System.IO.Path");
+    public Type Directory => Resolve("System.IO.Directory");
+    public Type File => Resolve("System.IO.File");
+    public Type FileInfo => Resolve("System.IO.FileInfo");
+    public Type DirectoryInfo => Resolve("System.IO.DirectoryInfo");
+    public Type FileNotFoundException => Resolve("System.IO.FileNotFoundException");
+    public Type DirectoryNotFoundException => Resolve("System.IO.DirectoryNotFoundException");
+    public Type IOException => Resolve("System.IO.IOException");
 
     #endregion
 
@@ -428,6 +442,17 @@ public class TypeProvider
     public ConstructorInfo GetDefaultConstructor(Type type)
     {
         return GetConstructor(type, Type.EmptyTypes);
+    }
+
+    /// <summary>
+    /// Gets a field from a type by name.
+    /// </summary>
+    public FieldInfo GetField(Type type, string name)
+    {
+        var field = type.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance);
+        if (field == null)
+            throw new InvalidOperationException($"Could not find field {type.FullName}.{name}");
+        return field;
     }
 
     #endregion

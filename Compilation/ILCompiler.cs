@@ -4,6 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using SharpTS.Compilation.Emitters;
+using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
@@ -34,6 +35,8 @@ public partial class ILCompiler
     private readonly Dictionary<string, TypeBuilder> _classBuilders = [];
     private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType classes mapped to .NET types
     private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
+    private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = new();  // Built-in module emitters
+    private readonly Dictionary<string, string> _builtInModuleNamespaces = [];  // Variable name -> module name for direct dispatch
     private readonly Dictionary<string, MethodBuilder> _functionBuilders = [];
     private readonly Dictionary<string, List<MethodBuilder>> _functionOverloads = [];  // Overloads by arity for default params
     private readonly Dictionary<string, Dictionary<string, List<MethodBuilder>>> _methodOverloads = [];  // className -> methodName -> overloads
@@ -439,6 +442,11 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
 
+        // Register built-in module emitters
+        _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
+
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
 
@@ -643,6 +651,11 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
+
+        // Register built-in module emitters
+        _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);

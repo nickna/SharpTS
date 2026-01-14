@@ -743,6 +743,8 @@ public partial class ILCompiler
             ExtrasFields = _extrasFields,
             UnionGenerator = _unionGenerator,
             TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprBuilders,
             ClassExprBackingFields = _classExprBackingFields,
             ClassExprProperties = _classExprProperties,

@@ -1262,6 +1262,11 @@ public partial class RuntimeEmitter
         EmitDynamicImportMethods(typeBuilder, runtime);
         // Async generator await continuation helper
         EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
+        // Built-in module methods (path, fs, os)
+        EmitPathModuleMethods(typeBuilder, runtime);
+        EmitFsModuleMethods(typeBuilder, runtime);
+        // Console extensions (error, warn, clear, time, timeEnd, timeLog)
+        EmitConsoleExtensions(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

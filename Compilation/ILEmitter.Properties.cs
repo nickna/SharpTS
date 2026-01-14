@@ -22,6 +22,19 @@ public partial class ILEmitter
             }
         }
 
+        // Built-in module property access (path.sep, path.delimiter, os.EOL, etc.)
+        if (g.Object is Expr.Variable builtInVar &&
+            _ctx.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(builtInVar.Name.Lexeme, out var builtInModuleName) &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(builtInModuleName) is { } builtInEmitter)
+        {
+            if (builtInEmitter.TryEmitPropertyGet(this, g.Name.Lexeme))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
         // Enum forward mapping: Direction.Up -> 0 or Status.Success -> "SUCCESS"
         if (g.Object is Expr.Variable enumVar &&
             _ctx.EnumMembers?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var members) == true &&

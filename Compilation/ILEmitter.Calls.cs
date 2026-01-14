@@ -109,11 +109,10 @@ public partial class ILEmitter
             }
         }
 
-        // Special case: console.log (handles both Variable and Get patterns)
-        if (_helpers.TryEmitConsoleLog(c,
+        // Special case: console methods (log, error, warn, info, debug, clear, time, timeEnd, timeLog)
+        if (_helpers.TryEmitConsoleMethod(c,
             arg => { EmitExpression(arg); EmitBoxIfNeeded(arg); },
-            _ctx.Runtime!.ConsoleLog,
-            _ctx.Runtime!.ConsoleLogMultiple))
+            _ctx.Runtime!))
         {
             return;
         }
@@ -125,6 +124,20 @@ public partial class ILEmitter
         {
             var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
             if (staticStrategy != null && staticStrategy.TryEmitStaticCall(this, staticGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Built-in module method calls (path.join, fs.readFileSync, etc.)
+        if (c.Callee is Expr.Get builtInGet &&
+            builtInGet.Object is Expr.Variable builtInVar &&
+            _ctx.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(builtInVar.Name.Lexeme, out var builtInModuleName) &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(builtInModuleName) is { } builtInEmitter)
+        {
+            if (builtInEmitter.TryEmitMethodCall(this, builtInGet.Name.Lexeme, c.Arguments))
             {
                 SetStackUnknown();
                 return;

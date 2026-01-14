@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns.Modules;
 
 namespace SharpTS.Compilation;
 
@@ -18,6 +19,20 @@ public partial class ILEmitter
         // Skip type-only imports entirely - they have no runtime code
         if (import.IsTypeOnly)
             return;
+
+        // Check for built-in module imports (fs, path, os, etc.)
+        string? builtInModuleName = BuiltInModuleRegistry.GetModuleName(import.ModulePath);
+        if (builtInModuleName == null && _ctx.ModuleResolver != null && _ctx.CurrentModulePath != null)
+        {
+            string resolvedPath = _ctx.ModuleResolver.ResolveModulePath(import.ModulePath, _ctx.CurrentModulePath);
+            builtInModuleName = BuiltInModuleRegistry.GetModuleName(resolvedPath);
+        }
+
+        if (builtInModuleName != null)
+        {
+            EmitBuiltInModuleImport(import, builtInModuleName);
+            return;
+        }
 
         if (_ctx.CurrentModulePath == null || _ctx.ModuleResolver == null ||
             _ctx.ModuleExportFields == null || _ctx.ModuleTypes == null)
@@ -389,6 +404,114 @@ public partial class ILEmitter
 
         // Wrap in SharpTSObject
         EmitCallUnknown(_ctx.Runtime!.CreateObject);
+    }
+
+    /// <summary>
+    /// Emits code for importing a built-in module (fs, path, os, etc.).
+    /// Creates local variables bound to module methods/properties.
+    /// </summary>
+    private void EmitBuiltInModuleImport(Stmt.Import import, string moduleName)
+    {
+        var emitter = _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(moduleName);
+        if (emitter == null)
+        {
+            // Module emitter not registered - skip
+            return;
+        }
+
+        // Namespace import: import * as mod from 'module'
+        if (import.NamespaceImport != null)
+        {
+            string localName = import.NamespaceImport.Lexeme;
+            var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+
+            // Track this variable as a built-in module namespace for direct method dispatch
+            _ctx.BuiltInModuleNamespaces ??= new Dictionary<string, string>();
+            _ctx.BuiltInModuleNamespaces[localName] = moduleName;
+
+            // Create a dictionary to hold all module exports
+            var dictType = _ctx.Types.DictionaryStringObject;
+            var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+            var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
+
+            IL.Emit(OpCodes.Newobj, dictCtor);
+
+            // Add each exported member to the dictionary
+            foreach (var memberName in emitter.GetExportedMembers())
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldstr, memberName);
+
+                // Try to emit the property value, or create a function wrapper
+                if (!emitter.TryEmitPropertyGet(this, memberName))
+                {
+                    // For methods, we need to create a TSFunction wrapper
+                    // This will be handled by EmitBuiltInModuleMethodWrapper
+                    EmitBuiltInModuleMethodWrapper(moduleName, memberName);
+                }
+
+                EnsureBoxed();
+                IL.Emit(OpCodes.Call, addMethod);
+            }
+
+            // Wrap dictionary in SharpTSObject
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+
+        // Named imports: import { readFileSync, writeFileSync } from 'fs'
+        if (import.NamedImports != null)
+        {
+            foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
+            {
+                string importedName = spec.Imported.Lexeme;
+                string localName = spec.LocalName?.Lexeme ?? importedName;
+
+                var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+
+                // Try property first, then method
+                if (!emitter.TryEmitPropertyGet(this, importedName))
+                {
+                    EmitBuiltInModuleMethodWrapper(moduleName, importedName);
+                }
+
+                EnsureBoxed();
+                IL.Emit(OpCodes.Stloc, local);
+            }
+        }
+
+        // Default import: not typically used for Node.js built-in modules
+        // but we support it for completeness
+        if (import.DefaultImport != null)
+        {
+            // Built-in modules don't have default exports - this is a no-op
+        }
+    }
+
+    /// <summary>
+    /// Emits a TSFunction wrapper for a built-in module method.
+    /// This allows the method to be passed around as a first-class function.
+    /// </summary>
+    private void EmitBuiltInModuleMethodWrapper(string moduleName, string methodName)
+    {
+        // Create a TSFunction that wraps the built-in method
+        // The runtime helper will be generated to handle the dispatch
+        var helperMethod = _ctx.Runtime?.GetBuiltInModuleMethod(moduleName, methodName);
+        if (helperMethod != null)
+        {
+            IL.Emit(OpCodes.Ldnull); // target (null for static methods)
+            IL.Emit(OpCodes.Ldtoken, helperMethod);
+            var runtimeMethodHandle = _ctx.Types.Resolve("System.RuntimeMethodHandle");
+            var methodBase = _ctx.Types.Resolve("System.Reflection.MethodBase");
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(methodBase, "GetMethodFromHandle", runtimeMethodHandle));
+            IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+        }
+        else
+        {
+            // Fallback: emit null for unknown methods
+            IL.Emit(OpCodes.Ldnull);
+        }
     }
 
     #endregion

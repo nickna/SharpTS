@@ -164,6 +164,8 @@ public partial class ILCompiler
             EnumToModule = _enumToModule,
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprBuilders,
             UnionGenerator = _unionGenerator
         };
@@ -315,6 +317,8 @@ public partial class ILCompiler
             AsyncMethods = null,
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
             // Class expression support
             VarToClassExpr = _varToClassExpr,
             ClassExprStaticFields = _classExprStaticFields,
@@ -427,6 +431,8 @@ public partial class ILCompiler
             AsyncMethods = null,
             DotNetNamespace = _currentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
             VarToClassExpr = _varToClassExpr,
             ClassExprStaticFields = _classExprStaticFields,
             ClassExprStaticMethods = _classExprStaticMethods,
