@@ -86,7 +86,39 @@ public partial class TypeChecker
             throw new TypeCheckException($" Dynamic import path must be a string, got '{pathType}'.");
         }
 
-        // Dynamic import returns Promise<any> since module type is unknown at compile time
+        // For string literal paths, try to resolve the module and return Promise<Module>
+        if (pathType is TypeInfo.StringLiteral literal)
+        {
+            // Track this path for module discovery (even if resolution fails)
+            _dynamicImportPaths.Add(literal.Value);
+
+            // Try to resolve the module and get its exports
+            if (_moduleResolver != null && _currentModule != null)
+            {
+                try
+                {
+                    string resolvedPath = _moduleResolver.ResolveModulePath(literal.Value, _currentModule.Path);
+                    var targetModule = _moduleResolver.GetCachedModule(resolvedPath);
+
+                    if (targetModule != null && targetModule.IsTypeChecked)
+                    {
+                        // Build module namespace type from exports
+                        var moduleType = new TypeInfo.Module(
+                            resolvedPath,
+                            targetModule.ExportedTypes.ToFrozenDictionary(),
+                            targetModule.DefaultExportType
+                        );
+                        return new TypeInfo.Promise(moduleType);
+                    }
+                }
+                catch
+                {
+                    // Module resolution failed - fall through to Promise<any>
+                }
+            }
+        }
+
+        // Variable paths or unresolved modules: Promise<any>
         return new TypeInfo.Promise(new TypeInfo.Any());
     }
 

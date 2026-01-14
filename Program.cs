@@ -435,15 +435,33 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
 static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references)
 {
-    // Load all dependencies via ModuleResolver
+    // Phase 1: Load all static dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
     var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
     var allModules = resolver.GetModulesInOrder(entryModule);
 
-    // Type checking across all modules
+    // Phase 2: Initial type checking to discover dynamic import paths
     var checker = new TypeChecker();
     checker.SetDecoratorMode(decoratorMode);
     var typeMap = checker.CheckModules(allModules, resolver);
+
+    // Phase 3: Load modules discovered through dynamic import string literals
+    // These modules aren't in the static dependency graph but need to be compiled
+    // for runtime dynamic imports to work
+    var dynamicPaths = checker.DynamicImportPaths;
+    if (dynamicPaths.Count > 0)
+    {
+        var newModules = resolver.LoadDynamicImportModules(dynamicPaths, absolutePath, decoratorMode);
+        if (newModules.Count > 0)
+        {
+            // Re-get the module list to include newly discovered modules
+            allModules = resolver.GetModulesInOrder(entryModule);
+
+            // Re-run type checking with the expanded module list
+            // (CheckModules is incremental - only checks newly added modules)
+            typeMap = checker.CheckModules(allModules, resolver);
+        }
+    }
 
     // Dead Code Analysis
     DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);

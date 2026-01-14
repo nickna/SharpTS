@@ -329,6 +329,12 @@ public class EmittedRuntime
     public MethodBuilder DynamicImportModule { get; set; } = null!;
     public MethodBuilder WrapTaskAsPromise { get; set; } = null!;
 
+    // Module registry for dynamic imports
+    // Stores mapping from module path -> factory function that returns module namespace
+    public FieldBuilder ModuleRegistry { get; set; } = null!;
+    public MethodBuilder RegisterModule { get; set; } = null!;
+    public MethodBuilder InitializeModuleRegistry { get; set; } = null!;
+
     // Iterator protocol support
     public MethodBuilder GetIterator { get; set; } = null!;
 

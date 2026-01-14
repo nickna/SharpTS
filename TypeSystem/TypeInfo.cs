@@ -404,6 +404,23 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a module namespace type returned by dynamic import.
+    /// Contains the exported members and optional default export.
+    /// Used for typeof import('./path') type inference.
+    /// </summary>
+    /// <param name="ModulePath">The resolved absolute path of the module</param>
+    /// <param name="Exports">Named exports from the module</param>
+    /// <param name="DefaultExport">Default export type, if present</param>
+    public record Module(
+        string ModulePath,
+        FrozenDictionary<string, TypeInfo> Exports,
+        TypeInfo? DefaultExport = null
+    ) : TypeInfo
+    {
+        public override string ToString() => $"typeof import('{System.IO.Path.GetFileName(ModulePath)}')";
+    }
+
+    /// <summary>
     /// Represents a Generator type (Generator&lt;T&gt;).
     /// Generator functions return Generator objects that yield values of type T.
     /// </summary>

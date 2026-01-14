@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-13 (Completed compiler iterator protocol - spread, yield*, for...of with Symbol.iterator)
+**Last Updated:** 2026-01-13 (Added dynamic imports with module registry for compiled mode)
 
 ## Legend
 - ✅ Implemented
@@ -112,7 +112,7 @@ This document tracks TypeScript language features and their implementation statu
 | Re-exports | ✅ | `export { x } from './file'`, `export * from './file'` |
 | TypeScript namespaces | ✅ | `namespace X { }` with declaration merging, dotted syntax, functions, variables, enums, nested namespaces, classes with `new Namespace.Class()` instantiation |
 | Namespace import alias | ✅ | `import X = Namespace.Member`, `export import X = Namespace.Member` |
-| Dynamic imports | ❌ | `await import('./file')` |
+| Dynamic imports | ✅ | `await import('./file')` with module registry for compiled mode, `typeof import()` typing for literal paths |
 
 ---
 

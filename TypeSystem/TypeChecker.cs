@@ -198,6 +198,16 @@ public partial class TypeChecker
     private ParsedModule? _currentModule = null;
     private ModuleResolver? _moduleResolver = null;
 
+    // Track dynamic import paths discovered during type checking
+    // Used for module discovery - ensures dynamically imported modules are compiled
+    private readonly HashSet<string> _dynamicImportPaths = [];
+
+    /// <summary>
+    /// Gets the set of module paths discovered in dynamic import expressions with string literal paths.
+    /// These paths are relative to the importing module and should be resolved before use.
+    /// </summary>
+    public IReadOnlySet<string> DynamicImportPaths => _dynamicImportPaths;
+
     /// <summary>
     /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.
     /// </summary>

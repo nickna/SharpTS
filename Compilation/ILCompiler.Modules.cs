@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -10,6 +11,9 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    // Track $GetNamespace methods for module registration
+    private readonly Dictionary<string, MethodBuilder> _moduleGetNamespaceMethods = [];
+
     /// <summary>
     /// Defines a module type with export fields.
     /// </summary>
@@ -119,6 +123,50 @@ public partial class ILCompiler
         }
 
         _moduleExportFields[module.Path] = exportFields;
+
+        // Create $GetNamespace method that returns all exports as SharpTSObject
+        EmitModuleGetNamespace(module, moduleType, exportFields);
+    }
+
+    /// <summary>
+    /// Emits the $GetNamespace method that returns all module exports as a SharpTSObject.
+    /// Used for dynamic import - returns the module namespace object.
+    /// </summary>
+    private void EmitModuleGetNamespace(
+        ParsedModule module,
+        TypeBuilder moduleType,
+        Dictionary<string, FieldBuilder> exportFields)
+    {
+        var method = moduleType.DefineMethod(
+            "$GetNamespace",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            Type.EmptyTypes
+        );
+        _moduleGetNamespaceMethods[module.Path] = method;
+
+        var il = method.GetILGenerator();
+
+        // var dict = new Dictionary<string, object?>();
+        var dictType = typeof(Dictionary<string, object?>);
+        var dictLocal = il.DeclareLocal(dictType);
+        il.Emit(OpCodes.Newobj, dictType.GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // Add each export to the dictionary
+        foreach (var (exportName, field) in exportFields)
+        {
+            // dict[exportName] = exportField;
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, exportName == "$default" ? "default" : exportName);
+            il.Emit(OpCodes.Ldsfld, field);
+            il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
+        }
+
+        // return new SharpTSObject(dict);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Newobj, typeof(SharpTSObject).GetConstructor([dictType])!);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -136,11 +184,19 @@ public partial class ILCompiler
 
     /// <summary>
     /// Emits the initialization method for a module.
+    /// Includes an initialization guard to ensure module is only initialized once.
     /// </summary>
     private void EmitModuleInit(ParsedModule module)
     {
         var moduleType = _moduleTypes[module.Path];
         var exportFields = _moduleExportFields[module.Path];
+
+        // Create _initialized field for caching guard
+        var initializedField = moduleType.DefineField(
+            "_initialized",
+            typeof(bool),
+            FieldAttributes.Private | FieldAttributes.Static
+        );
 
         // Create $Initialize method
         var initMethod = moduleType.DefineMethod(
@@ -152,6 +208,16 @@ public partial class ILCompiler
         _moduleInitMethods[module.Path] = initMethod;
 
         var il = initMethod.GetILGenerator();
+
+        // Guard: if (_initialized) return;
+        var skipLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, initializedField);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+
+        // _initialized = true;
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stsfld, initializedField);
+
         var ctx = CreateCompilationContext(il);
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _moduleExportFields;
@@ -172,11 +238,13 @@ public partial class ILCompiler
             emitter.EmitStatement(stmt);
         }
 
+        il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits the entry point that initializes all modules in dependency order.
+    /// Also initializes the module registry and registers all modules for dynamic import support.
     /// </summary>
     private void EmitModulesEntryPoint(List<ParsedModule> modules)
     {
@@ -190,6 +258,30 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
 
+        // Initialize module registry
+        il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
+
+        // Register each module in the registry for dynamic import support
+        foreach (var module in modules)
+        {
+            if (_moduleGetNamespaceMethods.TryGetValue(module.Path, out var getNamespaceMethod))
+            {
+                // Register under relative path (e.g., "./utils.ts")
+                string relativePath = GetRelativeModulePath(module, modules[^1]);
+                EmitRegisterModule(il, relativePath, getNamespaceMethod);
+
+                // Also register under absolute path for direct matches
+                EmitRegisterModule(il, module.Path, getNamespaceMethod);
+
+                // Register under module name without extension (e.g., "utils")
+                string moduleName = module.ModuleName;
+                if (!string.IsNullOrEmpty(moduleName))
+                {
+                    EmitRegisterModule(il, moduleName, getNamespaceMethod);
+                }
+            }
+        }
+
         // Call each module's $Initialize method in dependency order
         foreach (var module in modules)
         {
@@ -198,6 +290,41 @@ public partial class ILCompiler
         }
 
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits code to register a module with the registry.
+    /// </summary>
+    private void EmitRegisterModule(ILGenerator il, string path, MethodBuilder getNamespaceMethod)
+    {
+        // TSRuntime.RegisterModule(path, () => $Module_xxx.$GetNamespace())
+        il.Emit(OpCodes.Ldstr, path);
+        il.Emit(OpCodes.Ldnull); // target for static method delegate
+        il.Emit(OpCodes.Ldftn, getNamespaceMethod);
+        il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructor([typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, _runtime.RegisterModule);
+    }
+
+    /// <summary>
+    /// Gets the relative path from entry module to target module.
+    /// </summary>
+    private static string GetRelativeModulePath(ParsedModule targetModule, ParsedModule entryModule)
+    {
+        // Get directory of entry module
+        string entryDir = Path.GetDirectoryName(entryModule.Path) ?? "";
+        string targetPath = targetModule.Path;
+
+        // Try to make it relative
+        if (targetPath.StartsWith(entryDir, StringComparison.OrdinalIgnoreCase))
+        {
+            string relative = targetPath[entryDir.Length..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // Normalize to forward slashes and add ./ prefix
+            relative = "./" + relative.Replace(Path.DirectorySeparatorChar, '/');
+            return relative;
+        }
+
+        // Fall back to filename
+        return "./" + Path.GetFileName(targetPath);
     }
 
     /// <summary>

@@ -243,4 +243,47 @@ public class ModuleResolver
     {
         _moduleCache.Clear();
     }
+
+    /// <summary>
+    /// Loads modules discovered through dynamic import expressions.
+    /// These modules may not be in the static dependency graph but should be
+    /// compiled to support runtime dynamic imports.
+    /// </summary>
+    /// <param name="paths">Relative module paths from dynamic import string literals</param>
+    /// <param name="basePath">Base path for resolving relative paths (typically entry module path)</param>
+    /// <param name="decoratorMode">Decorator mode to use for parsing</param>
+    /// <returns>List of newly loaded modules (not previously cached)</returns>
+    public List<ParsedModule> LoadDynamicImportModules(
+        IEnumerable<string> paths,
+        string basePath,
+        DecoratorMode decoratorMode = DecoratorMode.None)
+    {
+        List<ParsedModule> newModules = [];
+
+        foreach (var path in paths)
+        {
+            try
+            {
+                string resolvedPath = ResolveModulePath(path, basePath);
+
+                // Skip if already loaded
+                if (_moduleCache.ContainsKey(resolvedPath))
+                {
+                    continue;
+                }
+
+                // Load the module (this will also load its dependencies)
+                var module = LoadModule(resolvedPath, decoratorMode);
+                newModules.Add(module);
+            }
+            catch
+            {
+                // Dynamic imports may reference modules that don't exist yet
+                // or are optional - don't fail the compilation
+                // The runtime will handle missing modules with rejected promises
+            }
+        }
+
+        return newModules;
+    }
 }
