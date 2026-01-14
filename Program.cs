@@ -71,10 +71,8 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
 {
     if (remainingArgs.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output] [-t dll|exe] [-r <assembly.dll>]...");
-        Console.WriteLine("       [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
-        Console.WriteLine("       [--msbuild-errors] [--quiet]");
-        Console.WriteLine("       [--pack] [--push <source>] [--api-key <key>] [--package-id <id>] [--version <ver>]");
+        Console.WriteLine("Error: Missing input file");
+        PrintCompileUsage();
         Environment.Exit(64);
     }
 
@@ -105,15 +103,29 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         {
             explicitOutput = remainingArgs[++i];
         }
-        else if ((remainingArgs[i] == "-t" || remainingArgs[i] == "--target") && i + 1 < remainingArgs.Length)
+        else if (remainingArgs[i] == "-t" || remainingArgs[i] == "--target")
         {
-            var targetArg = remainingArgs[++i].ToLowerInvariant();
-            target = targetArg switch
+            if (i + 1 >= remainingArgs.Length)
             {
-                "dll" => OutputTarget.Dll,
-                "exe" => OutputTarget.Exe,
-                _ => throw new ArgumentException($"Invalid target '{targetArg}'. Use 'dll' or 'exe'.")
-            };
+                Console.WriteLine($"Error: {remainingArgs[i]} requires a value (dll or exe)");
+                PrintCompileUsage();
+                Environment.Exit(64);
+            }
+            var targetArg = remainingArgs[++i].ToLowerInvariant();
+            if (targetArg == "dll")
+            {
+                target = OutputTarget.Dll;
+            }
+            else if (targetArg == "exe")
+            {
+                target = OutputTarget.Exe;
+            }
+            else
+            {
+                Console.WriteLine($"Error: Invalid target '{targetArg}'. Use 'dll' or 'exe'.");
+                PrintCompileUsage();
+                Environment.Exit(64);
+            }
         }
         else if (remainingArgs[i] == "--preserveConstEnums")
         {
@@ -227,6 +239,14 @@ else if (remainingArgs[0] == "lsp-bridge")
 }
 else if (remainingArgs.Length == 1)
 {
+    // Check if it looks like an unknown flag
+    if (remainingArgs[0].StartsWith('-'))
+    {
+        Console.WriteLine($"Error: Unknown option '{remainingArgs[0]}'");
+        Console.WriteLine();
+        Console.WriteLine("Use 'sharpts --help' for usage information.");
+        Environment.Exit(64);
+    }
     RunFile(remainingArgs[0], options.DecoratorMode, options.EmitDecoratorMetadata);
 }
 else
@@ -763,7 +783,8 @@ static void PrintHelp()
     Console.WriteLine();
     Console.WriteLine("Compile Options:");
     Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
-    Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll)");
+    Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
+    Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
     Console.WriteLine("  -r, --reference <asm.dll>     Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
@@ -783,7 +804,30 @@ static void PrintHelp()
     Console.WriteLine("  sharpts                           Start REPL");
     Console.WriteLine("  sharpts script.ts                 Run TypeScript file");
     Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
+    Console.WriteLine("  sharpts --compile app.ts -t exe   Compile to executable");
     Console.WriteLine("  sharpts --compile app.ts --pack   Compile and create NuGet package");
+}
+
+static void PrintCompileUsage()
+{
+    Console.WriteLine();
+    Console.WriteLine("Usage: sharpts --compile <file.ts> [options]");
+    Console.WriteLine();
+    Console.WriteLine("Options:");
+    Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
+    Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
+    Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
+    Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
+    Console.WriteLine("  --ref-asm              Emit reference-assembly-compatible output");
+    Console.WriteLine("  --sdk-path <path>      Path to .NET SDK reference assemblies");
+    Console.WriteLine("  --verify               Verify emitted IL");
+    Console.WriteLine("  --msbuild-errors       Output errors in MSBuild format");
+    Console.WriteLine("  --quiet                Suppress success messages");
+    Console.WriteLine("  --pack                 Generate NuGet package");
+    Console.WriteLine("  --push <source>        Push to NuGet feed (implies --pack)");
+    Console.WriteLine("  --api-key <key>        NuGet API key for push");
+    Console.WriteLine("  --package-id <id>      Override package ID");
+    Console.WriteLine("  --version <ver>        Override package version");
 }
 
 record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);
