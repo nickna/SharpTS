@@ -8,6 +8,10 @@ public partial class AsyncGeneratorStateAnalyzer
 
     protected override void VisitYield(Expr.Yield expr)
     {
+        // Visit yield value BEFORE marking _seenSuspension, so variables in the yield
+        // expression are not incorrectly marked as "used after suspension"
+        base.VisitYield(expr);
+
         // Record this yield point as a suspension point
         var liveVars = new HashSet<string>(_declaredVariables);
         _suspensionPoints.Add(new SuspensionPoint(
@@ -26,12 +30,14 @@ public partial class AsyncGeneratorStateAnalyzer
 
         // Track suspension in try block
         RecordSuspensionInTryBlock();
-
-        base.VisitYield(expr);
     }
 
     protected override void VisitAwait(Expr.Await expr)
     {
+        // Visit await expression BEFORE marking _seenSuspension, so variables in the await
+        // expression are not incorrectly marked as "used after suspension"
+        base.VisitAwait(expr);
+
         // Record this await point as a suspension point
         var liveVars = new HashSet<string>(_declaredVariables);
         _suspensionPoints.Add(new SuspensionPoint(
@@ -47,8 +53,6 @@ public partial class AsyncGeneratorStateAnalyzer
 
         // Track suspension in try block
         RecordSuspensionInTryBlock();
-
-        base.VisitAwait(expr);
     }
 
     protected override void VisitVariable(Expr.Variable expr)

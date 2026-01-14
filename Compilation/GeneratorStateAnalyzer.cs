@@ -171,6 +171,10 @@ public class GeneratorStateAnalyzer : AstVisitorBase
 
     protected override void VisitYield(Expr.Yield expr)
     {
+        // Visit yield value BEFORE marking _seenYield, so variables in the yield
+        // expression are not incorrectly marked as "used after yield"
+        base.VisitYield(expr);
+
         var liveVars = new HashSet<string>(_declaredVariables);
         _yieldPoints.Add(new YieldPoint(_yieldCounter++, expr, liveVars));
         _seenYield = true;
@@ -183,8 +187,6 @@ public class GeneratorStateAnalyzer : AstVisitorBase
             if (!_forOfLoopsWithYield.Contains(forOf))
                 _forOfLoopsWithYield.Add(forOf);
         }
-
-        base.VisitYield(expr);
     }
 
     protected override void VisitVariable(Expr.Variable expr)

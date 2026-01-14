@@ -8,6 +8,10 @@ public partial class AsyncStateAnalyzer
 
     protected override void VisitAwait(Expr.Await expr)
     {
+        // Visit await expression BEFORE marking _seenAwait, so variables in the await
+        // expression are not incorrectly marked as "used after await"
+        base.VisitAwait(expr);
+
         // Record this await point with try block context
         var liveVars = new HashSet<string>(_declaredVariables);
         _awaitPoints.Add(new AwaitPoint(
@@ -36,9 +40,6 @@ public partial class AsyncStateAnalyzer
             };
             _tryBlockAwaitFlags[tryId] = flags;
         }
-
-        // Continue traversal into the awaited expression
-        base.VisitAwait(expr);
     }
 
     protected override void VisitVariable(Expr.Variable expr)
