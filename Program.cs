@@ -33,6 +33,7 @@
 // See also: Lexer.cs, Parser.cs, TypeChecker.cs, Interpreter.cs, ILCompiler.cs
 // =============================================================================
 
+using System.Reflection;
 using SharpTS.Compilation;
 using SharpTS.Declaration;
 using SharpTS.Execution;
@@ -42,6 +43,21 @@ using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+
+// Handle --help and --version before other processing
+if (args.Length > 0)
+{
+    if (args[0] is "--help" or "-h")
+    {
+        PrintHelp();
+        return;
+    }
+    if (args[0] is "--version" or "-v")
+    {
+        Console.WriteLine($"sharpts {GetVersion()}");
+        return;
+    }
+}
 
 // Parse global options that apply to all modes
 var options = ParseGlobalOptions(args);
@@ -302,7 +318,7 @@ static void RunPrompt(DecoratorMode decoratorMode)
 {
     Interpreter interpreter = new();
     interpreter.SetDecoratorMode(decoratorMode);
-    Console.WriteLine("SharpTS REPL (v0.1)");
+    Console.WriteLine($"SharpTS REPL (v{GetVersion()})");
     if (decoratorMode != DecoratorMode.None)
     {
         Console.WriteLine($"Decorator mode: {decoratorMode}");
@@ -685,6 +701,61 @@ static void GenerateDeclarations(string typeOrAssembly, string? outputPath)
         Console.WriteLine($"Error: {ex.Message}");
         Environment.Exit(1);
     }
+}
+
+static string GetVersion()
+{
+    var assembly = typeof(Program).Assembly;
+    var infoVersion = assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    if (infoVersion != null)
+    {
+        // Strip build metadata (everything after +) if present
+        var plusIndex = infoVersion.IndexOf('+');
+        return plusIndex >= 0 ? infoVersion[..plusIndex] : infoVersion;
+    }
+    return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+}
+
+static void PrintHelp()
+{
+    Console.WriteLine($"SharpTS {GetVersion()} - TypeScript interpreter and compiler for .NET");
+    Console.WriteLine();
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  sharpts [options] [script.ts]");
+    Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
+    Console.WriteLine("  sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
+    Console.WriteLine("  sharpts lsp-bridge [--project <csproj>] [-r <assembly.dll>]");
+    Console.WriteLine();
+    Console.WriteLine("Options:");
+    Console.WriteLine("  -h, --help                    Show this help message");
+    Console.WriteLine("  -v, --version                 Show version information");
+    Console.WriteLine("  --experimentalDecorators      Enable Legacy (Stage 2) decorators");
+    Console.WriteLine("  --decorators                  Enable TC39 Stage 3 decorators");
+    Console.WriteLine("  --emitDecoratorMetadata       Emit design-time type metadata");
+    Console.WriteLine();
+    Console.WriteLine("Compile Options:");
+    Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
+    Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll)");
+    Console.WriteLine("  -r, --reference <asm.dll>     Add assembly reference (repeatable)");
+    Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
+    Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
+    Console.WriteLine("  --sdk-path <path>             Path to .NET SDK reference assemblies");
+    Console.WriteLine("  --verify                      Verify emitted IL");
+    Console.WriteLine("  --msbuild-errors              Output errors in MSBuild format");
+    Console.WriteLine("  --quiet                       Suppress success messages");
+    Console.WriteLine();
+    Console.WriteLine("Packaging Options:");
+    Console.WriteLine("  --pack                        Generate NuGet package");
+    Console.WriteLine("  --push <source>               Push to NuGet feed (implies --pack)");
+    Console.WriteLine("  --api-key <key>               NuGet API key for push");
+    Console.WriteLine("  --package-id <id>             Override package ID");
+    Console.WriteLine("  --version <ver>               Override package version");
+    Console.WriteLine();
+    Console.WriteLine("Examples:");
+    Console.WriteLine("  sharpts                           Start REPL");
+    Console.WriteLine("  sharpts script.ts                 Run TypeScript file");
+    Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
+    Console.WriteLine("  sharpts --compile app.ts --pack   Compile and create NuGet package");
 }
 
 record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);
