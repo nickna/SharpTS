@@ -119,6 +119,7 @@ public sealed class BuiltInRegistry
         RegisterDateNamespace(registry);
         RegisterReflectNamespace(registry);
         RegisterSymbolNamespace(registry);
+        RegisterProcessNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
@@ -135,6 +136,7 @@ public sealed class BuiltInRegistry
         RegisterIteratorType(registry);
         RegisterGeneratorType(registry);
         RegisterAsyncGeneratorType(registry);
+        RegisterProcessType(registry);
 
         return registry;
     }
@@ -335,6 +337,23 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSAsyncGenerator), (instance, name) =>
             AsyncGeneratorBuiltIns.GetMember((SharpTSAsyncGenerator)instance, name));
+    }
+
+    private static void RegisterProcessNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "process",
+            IsSingleton: true,
+            SingletonFactory: () => SharpTSProcess.Instance,
+            GetMethod: name => ProcessBuiltIns.GetMember(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterProcessType(BuiltInRegistry registry)
+    {
+        // Process members accessed via property access (process.env, process.cwd)
+        registry.RegisterInstanceType(typeof(SharpTSProcess), (_, name) =>
+            ProcessBuiltIns.GetMember(name));
     }
 
     private static string Stringify(object? obj)

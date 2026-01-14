@@ -1,6 +1,7 @@
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.BuiltIns.Modules;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
@@ -306,7 +307,28 @@ public partial class Interpreter
         catch (Exception ex)
         {
             // Treat host exceptions as guest throws
-            object? errorValue = ex is ThrowException tex ? tex.Value : ex.Message;
+            object? errorValue;
+            if (ex is ThrowException tex)
+            {
+                errorValue = tex.Value;
+            }
+            else if (ex is NodeError nodeError)
+            {
+                // Convert NodeError to a JavaScript-compatible error object
+                errorValue = new SharpTSObject(new Dictionary<string, object?>
+                {
+                    ["name"] = "Error",
+                    ["message"] = nodeError.Message,
+                    ["code"] = nodeError.Code,
+                    ["syscall"] = nodeError.Syscall,
+                    ["path"] = nodeError.Path,
+                    ["errno"] = nodeError.Errno.HasValue ? (double)nodeError.Errno.Value : null
+                });
+            }
+            else
+            {
+                errorValue = ex.Message;
+            }
             pendingResult = ExecutionResult.Throw(errorValue);
             exceptionHandled = HandleCatchBlock(tryCatch, errorValue, out pendingResult);
         }

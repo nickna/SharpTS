@@ -441,6 +441,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
 
         // Register built-in module emitters
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
@@ -651,6 +652,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
 
         // Register built-in module emitters
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());

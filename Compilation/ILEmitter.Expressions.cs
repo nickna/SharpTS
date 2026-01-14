@@ -59,10 +59,16 @@ public partial class ILEmitter
             return;
         }
 
-        // Fallback: pseudo-variables (Math, classes, functions, namespaces)
+        // Fallback: pseudo-variables (Math, process, classes, functions, namespaces)
         if (name == "Math")
         {
             EmitNullConstant(); // Math is handled specially in property access
+            return;
+        }
+
+        if (name == "process")
+        {
+            EmitNullConstant(); // process is handled specially in property access
             return;
         }
 

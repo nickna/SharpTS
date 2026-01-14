@@ -218,6 +218,7 @@ public partial class TypeChecker
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
         _environment.Define("Reflect", new TypeInfo.Any());
+        _environment.Define("process", new TypeInfo.Any());
 
         foreach (Stmt statement in statements)
         {
@@ -240,6 +241,7 @@ public partial class TypeChecker
         // Pre-define built-ins in the global environment
         _environment.Define("console", new TypeInfo.Any());
         _environment.Define("Reflect", new TypeInfo.Any());
+        _environment.Define("process", new TypeInfo.Any());
 
         // First pass: collect all exports from each module
         foreach (var module in modules)

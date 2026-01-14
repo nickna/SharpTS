@@ -118,6 +118,7 @@ public class TypeProvider
     public Type Random => Resolve("System.Random");
     public Type Stopwatch => Resolve("System.Diagnostics.Stopwatch");
     public Type Interlocked => Resolve("System.Threading.Interlocked");
+    public Type Version => Resolve("System.Version");
 
     #endregion
 
@@ -270,6 +271,8 @@ public class TypeProvider
     public Type TextReader => Resolve("System.IO.TextReader");
     public Type TextWriter => Resolve("System.IO.TextWriter");
     public Type IDictionary => Resolve("System.Collections.IDictionary");
+    public Type IDictionaryEnumerator => Resolve("System.Collections.IDictionaryEnumerator");
+    public Type DictionaryEntry => Resolve("System.Collections.DictionaryEntry");
     public Type IDisposable => Resolve("System.IDisposable");
 
     #endregion

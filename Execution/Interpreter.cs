@@ -2,6 +2,8 @@ using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.BuiltIns.Modules;
+using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
@@ -158,6 +160,22 @@ public partial class Interpreter
         // Create module instance to track exports
         var moduleInstance = new ModuleInstance();
         _loadedModules[module.Path] = moduleInstance;
+
+        // Handle built-in modules specially - populate exports from interpreter implementations
+        if (module.IsBuiltIn)
+        {
+            var moduleName = BuiltInModuleRegistry.GetModuleName(module.Path);
+            if (moduleName != null && BuiltInModuleValues.HasInterpreterSupport(moduleName))
+            {
+                var exports = BuiltInModuleValues.GetModuleExports(moduleName);
+                foreach (var (name, value) in exports)
+                {
+                    moduleInstance.SetExport(name, value);
+                }
+            }
+            moduleInstance.IsExecuted = true;
+            return;
+        }
 
         // Create module-scoped environment
         var moduleEnv = new RuntimeEnvironment(_environment);

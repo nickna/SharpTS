@@ -90,8 +90,66 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "get_Item", _types.Object));
         il.Emit(OpCodes.Ret);
 
-        // Fallback: wrap standard .NET exceptions as Dictionary
+        // Check for __nodeError marker in Data (Node.js-style fs errors)
         il.MarkLabel(fallbackLabel);
+        var standardFallbackLabel = il.DefineLabel();
+
+        // if (ex.Data.Contains("__nodeError"))
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "__nodeError");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "Contains", _types.Object));
+        il.Emit(OpCodes.Brfalse, standardFallbackLabel);
+
+        // It's a Node.js error with metadata - create Dictionary with all properties
+        // Create the dictionary
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+
+        // name: "Error"
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Ldstr, "Error");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // message: exception message
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "message");
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // code: ex.Data["__code"]
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "code");
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "__code");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "get_Item", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // syscall: ex.Data["__syscall"]
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "syscall");
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "__syscall");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "get_Item", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // path: ex.Data["__path"]
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "path");
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "__path");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "get_Item", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+
+        // Return the dictionary
+        il.Emit(OpCodes.Ret);
+
+        // Standard fallback: wrap standard .NET exceptions as Dictionary
+        il.MarkLabel(standardFallbackLabel);
         // return new Dictionary<string, object> { ["message"] = ex.Message, ["name"] = ex.GetType().Name }
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Dup);

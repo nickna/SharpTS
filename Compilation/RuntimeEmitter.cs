@@ -1262,9 +1262,13 @@ public partial class RuntimeEmitter
         EmitDynamicImportMethods(typeBuilder, runtime);
         // Async generator await continuation helper
         EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
+        // NodeError conversion helpers (must be before fs methods which use them)
+        EmitNodeErrorHelpers(typeBuilder, runtime);
         // Built-in module methods (path, fs, os)
         EmitPathModuleMethods(typeBuilder, runtime);
         EmitFsModuleMethods(typeBuilder, runtime);
+        // Process global methods (env, argv)
+        EmitProcessMethods(typeBuilder, runtime);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
 

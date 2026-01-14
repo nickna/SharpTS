@@ -391,6 +391,14 @@ public class EmittedRuntime
     public MethodBuilder FsCopyFileSync { get; set; } = null!;
     public MethodBuilder FsAccessSync { get; set; } = null!;
 
+    // NodeError conversion helpers
+    public MethodBuilder ConvertToNodeError { get; set; } = null!;
+    public MethodBuilder ThrowNodeError { get; set; } = null!;
+
+    // Process module methods
+    public MethodBuilder ProcessGetEnv { get; set; } = null!;
+    public MethodBuilder ProcessGetArgv { get; set; } = null!;
+
     // Built-in module methods (module name -> method name -> MethodBuilder)
     // Used for creating TSFunction wrappers when importing named exports
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _builtInModuleMethods = new();
