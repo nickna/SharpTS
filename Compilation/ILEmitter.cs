@@ -57,7 +57,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     }
 
     public ILEmitter(CompilationContext ctx)
-        : base(new StateMachineEmitHelpers(ctx.IL, ctx.Types))
+        : base(new StateMachineEmitHelpers(ctx.IL, ctx.Types, ctx.ILBuilder))
     {
         _ctx = ctx;
         _resolver = new LocalVariableResolver(ctx.IL, ctx, ctx.Types);
@@ -86,11 +86,12 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
     protected override void EmitBranchToLabel(Label target)
     {
-        // Use Leave instead of Br when inside exception blocks
+        // Use builder for branch validation - it enforces Leave vs Br rules
+        var builder = _ctx.ILBuilder;
         if (_ctx.ExceptionBlockDepth > 0)
-            IL.Emit(OpCodes.Leave, target);
+            builder.Emit_Leave(target);
         else
-            IL.Emit(OpCodes.Br, target);
+            builder.Emit_Br(target);
     }
 
     protected override LocalBuilder? DeclareLoopVariable(string name)

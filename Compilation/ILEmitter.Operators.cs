@@ -156,7 +156,8 @@ public partial class ILEmitter
 
     protected override void EmitLogical(Expr.Logical l)
     {
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var endLabel = builder.DefineLabel("logical_end");
 
         EmitExpression(l.Left);
         EmitBoxIfNeeded(l.Left);
@@ -166,19 +167,19 @@ public partial class ILEmitter
         if (l.Operator.Type == TokenType.AND_AND)
         {
             // Short-circuit: if left is falsy, return left
-            IL.Emit(OpCodes.Brfalse, endLabel);
+            builder.Emit_Brfalse(endLabel);
         }
         else // OR
         {
             // Short-circuit: if left is truthy, return left
-            IL.Emit(OpCodes.Brtrue, endLabel);
+            builder.Emit_Brtrue(endLabel);
         }
 
         IL.Emit(OpCodes.Pop); // Pop the duplicate left value
         EmitExpression(l.Right);
         EmitBoxIfNeeded(l.Right);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         SetStackUnknown(); // Logical operators return boxed object
     }
 

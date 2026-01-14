@@ -163,8 +163,9 @@ public partial class ILEmitter
 
     protected override void EmitTernary(Expr.Ternary t)
     {
-        var elseLabel = IL.DefineLabel();
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var elseLabel = builder.DefineLabel("ternary_else");
+        var endLabel = builder.DefineLabel("ternary_end");
 
         EmitExpression(t.Condition);
         // Handle condition based on what's actually on the stack
@@ -187,35 +188,36 @@ public partial class ILEmitter
             EnsureBoxed(); // Ensure it's boxed first
             EmitTruthyCheck();
         }
-        IL.Emit(OpCodes.Brfalse, elseLabel);
+        builder.Emit_Brfalse(elseLabel);
 
         EmitExpression(t.ThenBranch);
         EmitBoxIfNeeded(t.ThenBranch);
-        IL.Emit(OpCodes.Br, endLabel);
+        builder.Emit_Br(endLabel);
 
-        IL.MarkLabel(elseLabel);
+        builder.MarkLabel(elseLabel);
         EmitExpression(t.ElseBranch);
         EmitBoxIfNeeded(t.ElseBranch);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         // Both branches box, so result is Unknown (boxed object)
         SetStackUnknown();
     }
 
     protected override void EmitNullishCoalescing(Expr.NullishCoalescing nc)
     {
-        var endLabel = IL.DefineLabel();
+        var builder = _ctx.ILBuilder;
+        var endLabel = builder.DefineLabel("nullish_end");
 
         EmitExpression(nc.Left);
         EmitBoxIfNeeded(nc.Left);
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Brtrue, endLabel);
+        builder.Emit_Brtrue(endLabel);
 
         IL.Emit(OpCodes.Pop);
         EmitExpression(nc.Right);
         EmitBoxIfNeeded(nc.Right);
 
-        IL.MarkLabel(endLabel);
+        builder.MarkLabel(endLabel);
         // Both branches box, so result is Unknown (boxed object)
         SetStackUnknown();
     }

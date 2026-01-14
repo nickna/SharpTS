@@ -683,8 +683,9 @@ public partial class ILCompiler
             lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken
 
             // Set up deferred return handling for the lock's exception block
+            // Use the builder to define the label so it's tracked for validation
             ctx.ReturnValueLocal = il.DeclareLocal(typeof(object));
-            ctx.ReturnLabel = il.DefineLabel();
+            ctx.ReturnLabel = ctx.ILBuilder.DefineLabel("lock_deferred_return");
             ctx.ExceptionBlockDepth++;
 
             // int __prevReentrancy = _lockReentrancy.Value;
@@ -719,8 +720,8 @@ public partial class ILCompiler
 
             il.MarkLabel(skipEnterLabel);
 
-            // Begin try block
-            il.BeginExceptionBlock();
+            // Begin try block - use builder to keep exception depth in sync
+            ctx.ILBuilder.BeginExceptionBlock();
         }
 
         // Abstract methods have no body to emit
@@ -740,10 +741,10 @@ public partial class ILCompiler
             // ReturnValueLocal is guaranteed non-null here (set up earlier in hasLock block)
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Stloc, ctx.ReturnValueLocal!);
-            il.Emit(OpCodes.Leave, ctx.ReturnLabel);
+            ctx.ILBuilder.Emit_Leave(ctx.ReturnLabel);
 
-            // Begin finally block
-            il.BeginFinallyBlock();
+            // Begin finally block - use builder for exception block tracking
+            ctx.ILBuilder.BeginFinallyBlock();
 
             // _lockReentrancy.Value = __prevReentrancy;
             il.Emit(OpCodes.Ldarg_0);                               // this
@@ -763,13 +764,13 @@ public partial class ILCompiler
 
             il.MarkLabel(skipExitLabel);
 
-            // End try/finally block
-            il.EndExceptionBlock();
+            // End try/finally block - use builder for exception block tracking
+            ctx.ILBuilder.EndExceptionBlock();
 
             ctx.ExceptionBlockDepth--;
 
-            // Mark return label and emit actual return
-            il.MarkLabel(ctx.ReturnLabel);
+            // Mark return label and emit actual return - use builder since label was defined with builder
+            ctx.ILBuilder.MarkLabel(ctx.ReturnLabel);
             il.Emit(OpCodes.Ldloc, ctx.ReturnValueLocal!);  // Non-null in hasLock path
             il.Emit(OpCodes.Ret);
         }
