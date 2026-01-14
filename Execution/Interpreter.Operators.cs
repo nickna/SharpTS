@@ -42,19 +42,13 @@ public partial class Interpreter
         object? obj = Evaluate(compound.Object);
         object? addValue = Evaluate(compound.Value);
 
-        if (obj is SharpTSInstance instance)
+        if (TryGetProperty(obj, compound.Name, out object? currentValue))
         {
-            object? currentValue = instance.Get(compound.Name);
             object? newValue = ApplyCompoundOperator(compound.Operator.Type, currentValue, addValue);
-            instance.Set(compound.Name, newValue);
-            return newValue;
-        }
-        if (obj is SharpTSObject simpleObj)
-        {
-            object? currentValue = simpleObj.Get(compound.Name.Lexeme);
-            object? newValue = ApplyCompoundOperator(compound.Operator.Type, currentValue, addValue);
-            simpleObj.Set(compound.Name.Lexeme, newValue);
-            return newValue;
+            if (TrySetProperty(obj, compound.Name, newValue))
+            {
+                return newValue;
+            }
         }
 
         throw new Exception("Only instances and objects have fields.");
@@ -99,46 +93,7 @@ public partial class Interpreter
     private object? EvaluatePrefixIncrement(Expr.PrefixIncrement prefix)
     {
         double delta = prefix.Operator.Type == TokenType.PLUS_PLUS ? 1 : -1;
-
-        if (prefix.Operand is Expr.Variable variable)
-        {
-            double current = (double)_environment.Get(variable.Name)!;
-            double newValue = current + delta;
-            _environment.Assign(variable.Name, newValue);
-            return newValue; // Prefix returns NEW value
-        }
-        if (prefix.Operand is Expr.Get get)
-        {
-            object? obj = Evaluate(get.Object);
-            if (obj is SharpTSInstance instance)
-            {
-                double current = (double)instance.Get(get.Name)!;
-                double newValue = current + delta;
-                instance.Set(get.Name, newValue);
-                return newValue;
-            }
-            if (obj is SharpTSObject simpleObj)
-            {
-                double current = (double)simpleObj.Get(get.Name.Lexeme)!;
-                double newValue = current + delta;
-                simpleObj.Set(get.Name.Lexeme, newValue);
-                return newValue;
-            }
-        }
-        if (prefix.Operand is Expr.GetIndex getIndex)
-        {
-            object? obj = Evaluate(getIndex.Object);
-            object? index = Evaluate(getIndex.Index);
-            if (obj is SharpTSArray array && index is double idx)
-            {
-                double current = (double)array.Get((int)idx)!;
-                double newValue = current + delta;
-                array.Set((int)idx, newValue);
-                return newValue;
-            }
-        }
-
-        throw new Exception("Invalid increment operand.");
+        return EvaluateIncrement(prefix.Operand, delta, returnOld: false);
     }
 
     /// <summary>
@@ -154,46 +109,7 @@ public partial class Interpreter
     private object? EvaluatePostfixIncrement(Expr.PostfixIncrement postfix)
     {
         double delta = postfix.Operator.Type == TokenType.PLUS_PLUS ? 1 : -1;
-
-        if (postfix.Operand is Expr.Variable variable)
-        {
-            double current = (double)_environment.Get(variable.Name)!;
-            double newValue = current + delta;
-            _environment.Assign(variable.Name, newValue);
-            return current; // Postfix returns OLD value
-        }
-        if (postfix.Operand is Expr.Get get)
-        {
-            object? obj = Evaluate(get.Object);
-            if (obj is SharpTSInstance instance)
-            {
-                double current = (double)instance.Get(get.Name)!;
-                double newValue = current + delta;
-                instance.Set(get.Name, newValue);
-                return current;
-            }
-            if (obj is SharpTSObject simpleObj)
-            {
-                double current = (double)simpleObj.Get(get.Name.Lexeme)!;
-                double newValue = current + delta;
-                simpleObj.Set(get.Name.Lexeme, newValue);
-                return current;
-            }
-        }
-        if (postfix.Operand is Expr.GetIndex getIndex)
-        {
-            object? obj = Evaluate(getIndex.Object);
-            object? index = Evaluate(getIndex.Index);
-            if (obj is SharpTSArray array && index is double idx)
-            {
-                double current = (double)array.Get((int)idx)!;
-                double newValue = current + delta;
-                array.Set((int)idx, newValue);
-                return current;
-            }
-        }
-
-        throw new Exception("Invalid increment operand.");
+        return EvaluateIncrement(postfix.Operand, delta, returnOld: true);
     }
 
     /// <summary>

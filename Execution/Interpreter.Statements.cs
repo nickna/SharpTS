@@ -169,20 +169,14 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html#block-scoping">TypeScript Block Scoping</seealso>
     public ExecutionResult ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
     {
-        RuntimeEnvironment previous = _environment;
-        try
+        using (PushScope(environment))
         {
-            _environment = environment;
             foreach (Stmt statement in statements)
             {
                 var result = Execute(statement);
                 if (result.IsAbrupt) return result;
             }
             return ExecutionResult.Success();
-        }
-        finally
-        {
-            _environment = previous;
         }
     }
 
@@ -347,31 +341,28 @@ public partial class Interpreter
                 catchEnv.Define(tryCatch.CatchParam.Lexeme, errorValue);
             }
 
-            RuntimeEnvironment previous = _environment;
-            _environment = catchEnv;
-            try
+            using (PushScope(catchEnv))
             {
-                foreach (var catchStmt in tryCatch.CatchBlock)
+                try
                 {
-                    var catchResult = Execute(catchStmt);
-                    if (catchResult.IsAbrupt)
+                    foreach (var catchStmt in tryCatch.CatchBlock)
                     {
-                        result = catchResult;
-                        return true;
+                        var catchResult = Execute(catchStmt);
+                        if (catchResult.IsAbrupt)
+                        {
+                            result = catchResult;
+                            return true;
+                        }
                     }
+                    result = ExecutionResult.Success();
+                    return true;
                 }
-                result = ExecutionResult.Success();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
-                result = ExecutionResult.Throw(catchError);
-                return true;
-            }
-            finally
-            {
-                _environment = previous;
+                catch (Exception ex)
+                {
+                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    result = ExecutionResult.Throw(catchError);
+                    return true;
+                }
             }
         }
         return false;
@@ -640,19 +631,12 @@ public partial class Interpreter
             RuntimeEnvironment loopEnv = new(_environment);
             loopEnv.Define(variableName, element);
 
-            RuntimeEnvironment previous = _environment;
-            _environment = loopEnv;
-
-            try
+            using (PushScope(loopEnv))
             {
                 var result = Execute(body);
                 if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
                 if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
                 if (result.IsAbrupt) return result;
-            }
-            finally
-            {
-                _environment = previous;
             }
         }
         return ExecutionResult.Success();
