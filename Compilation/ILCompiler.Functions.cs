@@ -224,7 +224,13 @@ public partial class ILCompiler
             ClassSuperclass = _classSuperclass,
             AsyncMethods = null,
             DotNetNamespace = _currentDotNetNamespace,
-            TypeEmitterRegistry = _typeEmitterRegistry
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            // Class expression support
+            VarToClassExpr = _varToClassExpr,
+            ClassExprStaticFields = _classExprStaticFields,
+            ClassExprStaticMethods = _classExprStaticMethods,
+            ClassExprConstructors = _classExprConstructors,
+            ClassExprSuperclass = _classExprSuperclass
         };
 
         // Initialize namespace static fields before any code that might reference them

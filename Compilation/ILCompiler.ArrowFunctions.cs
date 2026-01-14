@@ -127,7 +127,14 @@ public partial class ILCompiler
                 break;
             case Stmt.Var v:
                 if (v.Initializer != null)
+                {
+                    // If initializing with a class expression, track variable name → class expr mapping
+                    if (v.Initializer is Expr.ClassExpr classExpr)
+                    {
+                        _varToClassExpr[v.Name.Lexeme] = classExpr;
+                    }
                     CollectArrowsFromExpr(v.Initializer);
+                }
                 break;
             case Stmt.Function f:
                 // Skip overload signatures (no body)

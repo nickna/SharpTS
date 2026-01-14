@@ -125,12 +125,33 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitClassExpr(Expr.ClassExpr expr)
     {
         // Class expressions don't declare the class name in the outer scope
-        // (unlike class declarations), but we still need to analyze methods
+        // (unlike class declarations), but we still need to analyze all bodies
+
+        // Analyze field initializers for captured variables
+        foreach (var field in expr.Fields)
+        {
+            if (field.Initializer != null)
+                Visit(field.Initializer);
+        }
+
+        // Analyze methods
         foreach (var method in expr.Methods)
         {
             // Skip overload signatures (no body)
             if (method.Body != null)
                 AnalyzeFunctionBody(method, method.Parameters, method.Body);
+        }
+
+        // Analyze accessors
+        if (expr.Accessors != null)
+        {
+            foreach (var accessor in expr.Accessors)
+            {
+                var parameters = accessor.SetterParam != null
+                    ? [accessor.SetterParam]
+                    : new List<Stmt.Parameter>();
+                AnalyzeFunctionBody(accessor, parameters, accessor.Body);
+            }
         }
     }
 

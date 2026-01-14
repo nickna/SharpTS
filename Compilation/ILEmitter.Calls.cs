@@ -15,6 +15,7 @@ public partial class ILEmitter
         // Special case: super() or super.constructor() call in derived class
         if (c.Callee is Expr.Super superExpr && (superExpr.Method == null || superExpr.Method.Lexeme == "constructor"))
         {
+            // Try class declaration constructors first
             if (_ctx.CurrentSuperclassName != null &&
                 _ctx.ClassConstructors != null &&
                 _ctx.ClassConstructors.TryGetValue(_ctx.CurrentSuperclassName, out var parentCtor))
@@ -33,6 +34,48 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, parentCtor);
                 IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
                 return;
+            }
+
+            // Try class expression constructors (for class expression inheritance)
+            if (_ctx.CurrentClassExpr != null &&
+                _ctx.ClassExprSuperclass?.TryGetValue(_ctx.CurrentClassExpr, out var superclassName) == true &&
+                superclassName != null)
+            {
+                // Find parent constructor by superclass name (using variable name mapping)
+                ConstructorBuilder? parentExprCtor = null;
+
+                // Check class expression constructors using VarToClassExpr mapping
+                if (_ctx.VarToClassExpr != null &&
+                    _ctx.VarToClassExpr.TryGetValue(superclassName, out var parentClassExpr) &&
+                    _ctx.ClassExprConstructors != null &&
+                    _ctx.ClassExprConstructors.TryGetValue(parentClassExpr, out var exprCtor))
+                {
+                    parentExprCtor = exprCtor;
+                }
+
+                // If not found in class expressions, try class declarations
+                if (parentExprCtor == null && _ctx.ClassConstructors?.TryGetValue(superclassName, out var declCtor) == true)
+                {
+                    parentExprCtor = declCtor;
+                }
+
+                if (parentExprCtor != null)
+                {
+                    // Load this
+                    IL.Emit(OpCodes.Ldarg_0);
+
+                    // Load arguments
+                    foreach (var arg in c.Arguments)
+                    {
+                        EmitExpression(arg);
+                        EmitBoxIfNeeded(arg);
+                    }
+
+                    // Call parent constructor
+                    IL.Emit(OpCodes.Call, parentExprCtor);
+                    IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
+                    return;
+                }
             }
         }
 
@@ -195,6 +238,34 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, staticMethod);
                 return;
             }
+        }
+
+        // Special case: Static method call on class expression (const Factory = class { static create() { } }; Factory.create())
+        if (c.Callee is Expr.Get classExprStaticGet &&
+            classExprStaticGet.Object is Expr.Variable classExprVar &&
+            _ctx.VarToClassExpr != null &&
+            _ctx.VarToClassExpr.TryGetValue(classExprVar.Name.Lexeme, out var classExpr) &&
+            _ctx.ClassExprStaticMethods != null &&
+            _ctx.ClassExprStaticMethods.TryGetValue(classExpr, out var exprStaticMethods) &&
+            exprStaticMethods.TryGetValue(classExprStaticGet.Name.Lexeme, out var exprStaticMethod))
+        {
+            var paramCount = exprStaticMethod.GetParameters().Length;
+
+            // Emit provided arguments
+            foreach (var arg in c.Arguments)
+            {
+                EmitExpression(arg);
+                EmitBoxIfNeeded(arg);
+            }
+
+            // Pad with nulls for missing arguments
+            for (int i = c.Arguments.Count; i < paramCount; i++)
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+
+            IL.Emit(OpCodes.Call, exprStaticMethod);
+            return;
         }
 
         // Special case: Array/String methods

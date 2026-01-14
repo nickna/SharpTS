@@ -5,12 +5,10 @@ namespace SharpTS.Tests.CompilerTests;
 
 /// <summary>
 /// Tests for class expressions (const C = class { ... }) - IL compilation.
-/// Note: IL compilation for class expressions is partially implemented.
-/// These tests are skipped until full IL compilation support is added.
 /// </summary>
 public class ClassExpressionTests
 {
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void AnonymousClassExpression_Basic()
     {
         var source = """
@@ -25,7 +23,7 @@ public class ClassExpressionTests
         Assert.Equal("42\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void AnonymousClassExpression_WithMethod()
     {
         var source = """
@@ -46,7 +44,7 @@ public class ClassExpressionTests
         Assert.Equal("2\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void AnonymousClassExpression_WithConstructor()
     {
         var source = """
@@ -67,7 +65,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void NamedClassExpression_Basic()
     {
         var source = """
@@ -85,7 +83,7 @@ public class ClassExpressionTests
         Assert.Equal("99\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_WithInheritance()
     {
         var source = """
@@ -105,7 +103,7 @@ public class ClassExpressionTests
         Assert.Equal("10\n20\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_SuperCall()
     {
         var source = """
@@ -129,7 +127,7 @@ public class ClassExpressionTests
         Assert.Equal("Rex barks\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_MultipleClassesInArray()
     {
         // Note: new <expression>() syntax isn't supported yet.
@@ -148,7 +146,7 @@ public class ClassExpressionTests
         Assert.Equal("1\n2\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_AssignedToVariable()
     {
         // Class expressions can be assigned to variables and instantiated
@@ -164,7 +162,7 @@ public class ClassExpressionTests
         Assert.Equal("123\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_StaticField()
     {
         var source = """
@@ -178,7 +176,7 @@ public class ClassExpressionTests
         Assert.Equal("0\n", output);
     }
 
-    [Fact(Skip = "IL compilation for class expressions is not fully implemented yet")]
+    [Fact]
     public void ClassExpression_StaticMethod()
     {
         var source = """

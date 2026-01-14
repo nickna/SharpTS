@@ -59,6 +59,19 @@ public partial class ILEmitter
             // If we get here for a method reference (not call), we'll use the generic path
         }
 
+        // Handle static member access via class expression variable
+        if (g.Object is Expr.Variable classExprVar &&
+            _ctx.VarToClassExpr != null &&
+            _ctx.VarToClassExpr.TryGetValue(classExprVar.Name.Lexeme, out var classExpr) &&
+            _ctx.ClassExprStaticFields != null &&
+            _ctx.ClassExprStaticFields.TryGetValue(classExpr, out var exprStaticFields) &&
+            exprStaticFields.TryGetValue(g.Name.Lexeme, out var exprStaticField))
+        {
+            IL.Emit(OpCodes.Ldsfld, exprStaticField);
+            SetStackUnknown();
+            return;
+        }
+
         // Handle static property access on external .NET types (@DotNetType)
         if (g.Object is Expr.Variable extVar && _ctx.TypeMapper.ExternalTypes.TryGetValue(extVar.Name.Lexeme, out var externalType))
         {

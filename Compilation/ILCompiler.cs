@@ -60,8 +60,24 @@ public partial class ILCompiler
     // Class expression support
     private readonly Dictionary<Expr.ClassExpr, TypeBuilder> _classExprBuilders = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ClassExpr, string> _classExprNames = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, Expr.ClassExpr> _varToClassExpr = [];
     private readonly List<Expr.ClassExpr> _classExprsToDefine = [];
     private int _classExprCounter = 0;
+
+    // Class expression extended tracking
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> _classExprBackingFields = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, PropertyBuilder>> _classExprProperties = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, Type>> _classExprPropertyTypes = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, HashSet<string>> _classExprDeclaredProperties = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, HashSet<string>> _classExprReadonlyProperties = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> _classExprStaticFields = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprStaticMethods = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprInstanceMethods = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprGetters = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprSetters = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, ConstructorBuilder> _classExprConstructors = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]> _classExprGenericParams = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ClassExpr, string?> _classExprSuperclass = new(ReferenceEqualityComparer.Instance);
 
     // Enum support
     private readonly Dictionary<string, Dictionary<string, object>> _enumMembers = [];
@@ -407,6 +423,9 @@ public partial class ILCompiler
         // Phase 5.5: Define class expression types (collected during arrow collection)
         DefineClassExpressionTypes();
 
+        // Phase 5.6: Define class expression method signatures
+        DefineClassExpressionMethods();
+
         // Phase 6: Emit arrow function method bodies
         EmitArrowFunctionBodies();
 
@@ -441,6 +460,9 @@ public partial class ILCompiler
                 EmitNamespaceMemberBodies(nsStmt);
             }
         }
+
+        // Phase 7.5: Emit class expression bodies (methods, constructors, accessors)
+        EmitClassExpressionBodies();
 
         // Phase 8: Emit entry point (top-level statements)
         EmitEntryPoint(statements);
@@ -599,6 +621,12 @@ public partial class ILCompiler
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);
 
+        // Phase 6.5: Define class expression types (collected during arrow collection)
+        DefineClassExpressionTypes();
+
+        // Phase 6.6: Define class expression method signatures
+        DefineClassExpressionMethods();
+
         // Phase 7: Emit arrow function bodies
         EmitArrowFunctionBodies();
 
@@ -631,6 +659,9 @@ public partial class ILCompiler
         }
         _currentModulePath = null;
 
+        // Phase 8.5: Emit class expression bodies (methods, constructors, accessors)
+        EmitClassExpressionBodies();
+
         // Phase 9: Emit module initialization methods
         foreach (var module in modules)
         {
@@ -646,6 +677,10 @@ public partial class ILCompiler
             tb.CreateType();
         }
         foreach (var tb in _classBuilders.Values)
+        {
+            tb.CreateType();
+        }
+        foreach (var tb in _classExprBuilders.Values)
         {
             tb.CreateType();
         }
