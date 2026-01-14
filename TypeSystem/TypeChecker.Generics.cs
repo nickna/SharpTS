@@ -123,6 +123,21 @@ public partial class TypeChecker
                 throw new TypeCheckException($" Omit<T, K> requires exactly 2 type arguments, got {typeArgs.Count}.");
             result = ExpandOmit(typeArgs[0], typeArgs[1]);
         }
+        else if (baseName is "Uppercase" or "Lowercase" or "Capitalize" or "Uncapitalize")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" {baseName}<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+
+            var operation = baseName switch
+            {
+                "Uppercase" => StringManipulation.Uppercase,
+                "Lowercase" => StringManipulation.Lowercase,
+                "Capitalize" => StringManipulation.Capitalize,
+                "Uncapitalize" => StringManipulation.Uncapitalize,
+                _ => throw new InvalidOperationException()
+            };
+            result = EvaluateIntrinsicStringType(typeArgs[0], operation);
+        }
         else
         {
             // Check for generic type alias first
@@ -1549,6 +1564,12 @@ public partial class TypeChecker
             return false;
         }
 
+        // Template literal pattern with infer
+        if (extendsType is TypeInfo.TemplateLiteralType templatePattern)
+        {
+            return MatchTemplateLiteralWithInfer(checkType, templatePattern, inferredTypes);
+        }
+
         // Function type matching with infer for return/param types
         if (extendsType is TypeInfo.Function extendsFunc)
         {
@@ -1672,5 +1693,195 @@ public partial class TypeChecker
             (TypeInfo.GenericInterface gi1, TypeInfo.GenericInterface gi2) => gi1.Name == gi2.Name,
             _ => false
         };
+    }
+
+    // ============== INTRINSIC STRING TYPE EVALUATION ==============
+
+    /// <summary>
+    /// Evaluates an intrinsic string manipulation type (Uppercase, Lowercase, Capitalize, Uncapitalize).
+    /// </summary>
+    private TypeInfo EvaluateIntrinsicStringType(TypeInfo input, StringManipulation operation)
+    {
+        return input switch
+        {
+            TypeInfo.StringLiteral sl => new TypeInfo.StringLiteral(ApplyStringManipulation(sl.Value, operation)),
+            TypeInfo.Union u => new TypeInfo.Union(
+                u.FlattenedTypes.Select(t => EvaluateIntrinsicStringType(t, operation)).ToList()),
+            TypeInfo.TemplateLiteralType tl => new TypeInfo.TemplateLiteralType(
+                tl.Strings.Select(s => ApplyStringManipulation(s, operation)).ToList(),
+                tl.InterpolatedTypes.Select(t => EvaluateIntrinsicStringType(t, operation)).ToList()),
+            TypeInfo.TypeParameter => new TypeInfo.IntrinsicStringType(operation, input),
+            TypeInfo.IntrinsicStringType ist => new TypeInfo.IntrinsicStringType(operation,
+                EvaluateIntrinsicStringType(ist.Inner, ist.Operation)),  // Compose intrinsics
+            _ => new TypeInfo.String()  // Fallback for string, any, etc.
+        };
+    }
+
+    /// <summary>
+    /// Applies a string manipulation operation to a string value.
+    /// </summary>
+    private static string ApplyStringManipulation(string value, StringManipulation op) => op switch
+    {
+        StringManipulation.Uppercase => value.ToUpperInvariant(),
+        StringManipulation.Lowercase => value.ToLowerInvariant(),
+        StringManipulation.Capitalize => value.Length > 0
+            ? char.ToUpperInvariant(value[0]) + value[1..] : value,
+        StringManipulation.Uncapitalize => value.Length > 0
+            ? char.ToLowerInvariant(value[0]) + value[1..] : value,
+        _ => value
+    };
+
+    // ============== TEMPLATE LITERAL INFER MATCHING ==============
+
+    /// <summary>
+    /// Matches a type against a template literal pattern, extracting inferred types.
+    /// </summary>
+    private bool MatchTemplateLiteralWithInfer(
+        TypeInfo checkType,
+        TypeInfo.TemplateLiteralType pattern,
+        Dictionary<string, TypeInfo> inferredTypes)
+    {
+        // String literal: try to match and extract parts
+        if (checkType is TypeInfo.StringLiteral sl)
+        {
+            return MatchStringLiteralToTemplatePattern(sl.Value, pattern, inferredTypes);
+        }
+
+        // Union: distribute over members and combine inferred types
+        if (checkType is TypeInfo.Union union)
+        {
+            var allInferred = new Dictionary<string, List<TypeInfo>>();
+            foreach (var member in union.FlattenedTypes)
+            {
+                var memberInferred = new Dictionary<string, TypeInfo>();
+                if (!MatchTemplateLiteralWithInfer(member, pattern, memberInferred))
+                    return false;
+                foreach (var (name, type) in memberInferred)
+                {
+                    if (!allInferred.ContainsKey(name))
+                        allInferred[name] = [];
+                    allInferred[name].Add(type);
+                }
+            }
+            // Build union of inferred types
+            foreach (var (name, types) in allInferred)
+            {
+                var distinct = types.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+                inferredTypes[name] = distinct.Count == 1 ? distinct[0] : new TypeInfo.Union(distinct);
+            }
+            return true;
+        }
+
+        // Template literal to template literal: structural match with recursive infer
+        if (checkType is TypeInfo.TemplateLiteralType checkTL)
+        {
+            if (checkTL.Strings.Count != pattern.Strings.Count)
+                return false;
+
+            // Static strings must match
+            for (int i = 0; i < pattern.Strings.Count; i++)
+            {
+                if (pattern.Strings[i] != checkTL.Strings[i])
+                    return false;
+            }
+
+            // Recursively match interpolated types
+            for (int i = 0; i < pattern.InterpolatedTypes.Count; i++)
+            {
+                if (!CheckExtendsRecursive(checkTL.InterpolatedTypes[i], pattern.InterpolatedTypes[i], inferredTypes))
+                    return false;
+            }
+            return true;
+        }
+
+        // string type matches if all interpolated parts accept string
+        if (checkType is TypeInfo.String)
+        {
+            // Bind all infer positions to string
+            foreach (var typePart in pattern.InterpolatedTypes)
+            {
+                if (typePart is TypeInfo.InferredTypeParameter infer)
+                {
+                    if (!inferredTypes.TryGetValue(infer.Name, out _))
+                        inferredTypes[infer.Name] = new TypeInfo.String();
+                }
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Matches a string value against a template literal pattern, extracting captured parts.
+    /// </summary>
+    private bool MatchStringLiteralToTemplatePattern(
+        string value,
+        TypeInfo.TemplateLiteralType pattern,
+        Dictionary<string, TypeInfo> inferredTypes)
+    {
+        int pos = 0;
+
+        for (int i = 0; i < pattern.InterpolatedTypes.Count; i++)
+        {
+            string literalBefore = pattern.Strings[i];
+
+            // Verify literal prefix matches
+            if (!value[pos..].StartsWith(literalBefore))
+                return false;
+            pos += literalBefore.Length;
+
+            // Find where this type part ends
+            string literalAfter = pattern.Strings[i + 1];
+            int endPos;
+
+            if (i == pattern.InterpolatedTypes.Count - 1 && string.IsNullOrEmpty(literalAfter))
+            {
+                // Last interpolation with empty suffix - capture rest of string
+                endPos = value.Length;
+            }
+            else if (string.IsNullOrEmpty(literalAfter))
+            {
+                // Empty separator - use minimal match (single char for first infer)
+                endPos = pos + 1;
+                if (endPos > value.Length) endPos = value.Length;
+            }
+            else
+            {
+                // Find next literal part
+                endPos = value.IndexOf(literalAfter, pos);
+                if (endPos < 0) return false;
+            }
+
+            string captured = value[pos..endPos];
+
+            // Handle the interpolated type
+            var typePart = pattern.InterpolatedTypes[i];
+            if (typePart is TypeInfo.InferredTypeParameter infer)
+            {
+                // Infer binding
+                if (inferredTypes.TryGetValue(infer.Name, out var existing))
+                {
+                    // Check consistency
+                    if (existing is TypeInfo.StringLiteral existingSl && existingSl.Value != captured)
+                        return false;
+                }
+                else
+                {
+                    inferredTypes[infer.Name] = new TypeInfo.StringLiteral(captured);
+                }
+            }
+            else
+            {
+                // Non-infer type - check if captured matches
+                if (!CheckExtendsRecursive(new TypeInfo.StringLiteral(captured), typePart, inferredTypes))
+                    return false;
+            }
+
+            pos = endPos;
+        }
+
+        // Verify final suffix
+        return value[pos..] == pattern.Strings[^1];
     }
 }

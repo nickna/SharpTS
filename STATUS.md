@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-12 (Fixed generic types with array suffix)
+**Last Updated:** 2026-01-13 (Added template literal types and intrinsic string types)
 
 ## Legend
 - ✅ Implemented
@@ -227,8 +227,8 @@ This document tracks TypeScript language features and their implementation statu
 | `bigint` type | ✅ | Arbitrary precision integers with full operation support |
 | Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
 | Conditional types | ✅ | `T extends U ? X : Y`, `infer` keyword, distribution over unions |
-| Template literal types | ❌ | `` `${string}ID` `` |
-| Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>` |
+| Template literal types | ✅ | `` `prefix${string}` ``, union expansion, pattern matching, `infer` support |
+| Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>`, `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>` |
 
 ---
 
@@ -607,3 +607,13 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Preserves optional property modifiers in Pick/Omit
 - ✅ Record supports string literal union keys and string index signatures
 - ✅ Full interpreter and IL compiler support with 74 test cases
+
+### Phase 34 Features (Template Literal Types)
+- ✅ Template literal type syntax: `` type Greeting = `Hello ${string}` ``
+- ✅ Union expansion: `` `${"a" | "b"}X` `` expands to `"aX" | "bX"`
+- ✅ Pattern matching: string literals can be checked against template patterns
+- ✅ `infer` support: `` T extends `prefix${infer U}` ? U : never ``
+- ✅ Intrinsic string types: `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>`
+- ✅ Intrinsics work with string literals, unions, and template literals
+- ✅ Cartesian product expansion limit (10,000 combinations max)
+- ✅ Full interpreter and IL compiler support

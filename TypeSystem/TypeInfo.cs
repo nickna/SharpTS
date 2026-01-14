@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Text;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -35,6 +36,11 @@ public enum MappedTypeModifiers
     AddOptional = 4,       // +? or just ?
     RemoveOptional = 8     // -?
 }
+
+/// <summary>
+/// String manipulation operations for intrinsic string types.
+/// </summary>
+public enum StringManipulation { Uppercase, Lowercase, Capitalize, Uncapitalize }
 
 /// <summary>
 /// Base record for compile-time type representations.
@@ -428,6 +434,37 @@ public abstract record TypeInfo
     public record BooleanLiteral(bool Value) : TypeInfo
     {
         public override string ToString() => Value ? "true" : "false";
+    }
+
+    /// <summary>
+    /// Represents a template literal type pattern: `prefix${Type}suffix`
+    /// </summary>
+    /// <param name="Strings">Static string parts (n+1 elements for n interpolations)</param>
+    /// <param name="InterpolatedTypes">Type slots between static parts (n elements)</param>
+    public record TemplateLiteralType(List<string> Strings, List<TypeInfo> InterpolatedTypes) : TypeInfo
+    {
+        public override string ToString()
+        {
+            var sb = new StringBuilder("`");
+            for (int i = 0; i < InterpolatedTypes.Count; i++)
+            {
+                sb.Append(Strings[i]);
+                sb.Append("${");
+                sb.Append(InterpolatedTypes[i]);
+                sb.Append('}');
+            }
+            sb.Append(Strings[^1]);
+            sb.Append('`');
+            return sb.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Represents an unevaluated intrinsic string type (e.g., Uppercase&lt;T&gt; where T is unresolved)
+    /// </summary>
+    public record IntrinsicStringType(StringManipulation Operation, TypeInfo Inner) : TypeInfo
+    {
+        public override string ToString() => $"{Operation}<{Inner}>";
     }
 
     public record Union(List<TypeInfo> Types) : TypeInfo

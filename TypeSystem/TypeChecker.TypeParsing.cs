@@ -128,6 +128,12 @@ public partial class TypeChecker
             return new TypeInfo.Array(elementType);
         }
 
+        // Handle template literal types: `prefix${Type}suffix`
+        if (typeName.StartsWith('`') && typeName.EndsWith('`'))
+        {
+            return ParseTemplateLiteralTypeInfo(typeName);
+        }
+
         // Handle string literal types: "value"
         if (typeName.StartsWith("\"") && typeName.EndsWith("\""))
         {
@@ -934,5 +940,146 @@ public partial class TypeChecker
             }
         }
         return -1;
+    }
+
+    // ============== TEMPLATE LITERAL TYPE PARSING ==============
+
+    /// <summary>
+    /// Parses a template literal type string into TypeInfo.
+    /// May return Union of StringLiterals if fully expandable, or TemplateLiteralType if contains 'string'.
+    /// </summary>
+    private TypeInfo ParseTemplateLiteralTypeInfo(string typeStr)
+    {
+        // Remove backticks
+        string inner = typeStr[1..^1];
+
+        List<string> strings = [];
+        List<TypeInfo> interpolatedTypes = [];
+
+        int pos = 0;
+        var currentString = new System.Text.StringBuilder();
+
+        while (pos < inner.Length)
+        {
+            if (pos < inner.Length - 1 && inner[pos] == '$' && inner[pos + 1] == '{')
+            {
+                // Found interpolation start
+                strings.Add(currentString.ToString());
+                currentString.Clear();
+                pos += 2; // skip ${
+
+                // Find matching } with brace depth tracking
+                int braceDepth = 1;
+                int start = pos;
+                while (pos < inner.Length && braceDepth > 0)
+                {
+                    if (inner[pos] == '{') braceDepth++;
+                    else if (inner[pos] == '}') braceDepth--;
+                    if (braceDepth > 0) pos++;
+                }
+
+                string typeContent = inner[start..pos];
+                interpolatedTypes.Add(ToTypeInfo(typeContent));
+                pos++; // skip }
+            }
+            else
+            {
+                currentString.Append(inner[pos]);
+                pos++;
+            }
+        }
+        strings.Add(currentString.ToString());
+
+        return NormalizeTemplateLiteralType(strings, interpolatedTypes);
+    }
+
+    /// <summary>
+    /// Normalizes a template literal type, expanding to union of string literals when possible.
+    /// </summary>
+    private TypeInfo NormalizeTemplateLiteralType(List<string> strings, List<TypeInfo> types)
+    {
+        // No interpolations → simple string literal
+        if (types.Count == 0)
+            return new TypeInfo.StringLiteral(strings[0]);
+
+        // All concrete → expand to union of string literals
+        if (types.All(IsConcreteStringType))
+            return ExpandTemplateLiteral(strings, types);
+
+        // Contains string primitive → keep as pattern type
+        return new TypeInfo.TemplateLiteralType(strings, types);
+    }
+
+    /// <summary>
+    /// Checks if a type can be expanded to concrete string literals.
+    /// </summary>
+    private static bool IsConcreteStringType(TypeInfo type) => type switch
+    {
+        TypeInfo.StringLiteral => true,
+        TypeInfo.NumberLiteral => true,  // Numbers can be stringified
+        TypeInfo.BooleanLiteral => true,  // Booleans can be stringified
+        TypeInfo.Union u => u.FlattenedTypes.All(IsConcreteStringType),
+        _ => false
+    };
+
+    /// <summary>
+    /// Expands a template literal with all concrete parts to a union of string literals.
+    /// Uses Cartesian product for unions.
+    /// </summary>
+    private TypeInfo ExpandTemplateLiteral(List<string> strings, List<TypeInfo> types)
+    {
+        // Convert each type to list of string values
+        List<List<string>> valueOptions = types.Select(GetStringLiteralValues).ToList();
+
+        // Generate all combinations (Cartesian product)
+        List<string> combinations = GenerateTemplateCombinations(strings, valueOptions);
+
+        // Limit check (TypeScript caps at ~10000)
+        if (combinations.Count > 10000)
+            throw new TypeCheckException(" Template literal type produces too many combinations (limit: 10000).");
+
+        // Convert to string literal types
+        var literalTypes = combinations.Select(s => (TypeInfo)new TypeInfo.StringLiteral(s)).ToList();
+
+        // Return single literal or union
+        return literalTypes.Count == 1
+            ? literalTypes[0]
+            : new TypeInfo.Union(literalTypes);
+    }
+
+    /// <summary>
+    /// Extracts string values from a concrete type (literal or union of literals).
+    /// </summary>
+    private static List<string> GetStringLiteralValues(TypeInfo type) => type switch
+    {
+        TypeInfo.StringLiteral sl => [sl.Value],
+        TypeInfo.NumberLiteral nl => [nl.Value.ToString()],
+        TypeInfo.BooleanLiteral bl => [bl.Value ? "true" : "false"],
+        TypeInfo.Union u => u.FlattenedTypes.SelectMany(GetStringLiteralValues).ToList(),
+        _ => throw new InvalidOperationException($"Expected concrete string type, got {type}")
+    };
+
+    /// <summary>
+    /// Generates all combinations of template literal parts using Cartesian product.
+    /// </summary>
+    private static List<string> GenerateTemplateCombinations(List<string> strings, List<List<string>> valueOptions)
+    {
+        // Start with the first static string
+        List<string> results = [strings[0]];
+
+        for (int i = 0; i < valueOptions.Count; i++)
+        {
+            var newResults = new List<string>();
+            foreach (var current in results)
+            {
+                foreach (var value in valueOptions[i])
+                {
+                    newResults.Add(current + value + strings[i + 1]);
+                }
+            }
+            results = newResults;
+        }
+
+        return results;
     }
 }

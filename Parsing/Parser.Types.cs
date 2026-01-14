@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace SharpTS.Parsing;
 
 public partial class Parser
@@ -180,6 +182,15 @@ public partial class Parser
                 typeName = "(" + ParseUnionType() + ")";
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after grouped type.");
             }
+        }
+        // Handle template literal types: `literal` or `prefix${Type}suffix`
+        else if (Match(TokenType.TEMPLATE_FULL))
+        {
+            typeName = "`" + (string)Previous().Literal! + "`";
+        }
+        else if (Match(TokenType.TEMPLATE_HEAD))
+        {
+            typeName = ParseTemplateLiteralType();
         }
         // Handle string literal types: "success" | "error"
         else if (Match(TokenType.STRING))
@@ -629,5 +640,38 @@ public partial class Parser
             _current = saved;
             return null;
         }
+    }
+
+    // ============== TEMPLATE LITERAL TYPE PARSING ==============
+
+    /// <summary>
+    /// Parses a template literal type after consuming TEMPLATE_HEAD.
+    /// Returns the string representation: `prefix${Type}middle${Type}suffix`
+    /// </summary>
+    private string ParseTemplateLiteralType()
+    {
+        var sb = new StringBuilder("`");
+        sb.Append((string)Previous().Literal!); // head string
+
+        // Parse first interpolated type
+        sb.Append("${");
+        sb.Append(ParseUnionType()); // Allow unions inside interpolation
+        sb.Append('}');
+
+        // Parse middle parts
+        while (Match(TokenType.TEMPLATE_MIDDLE))
+        {
+            sb.Append((string)Previous().Literal!);
+            sb.Append("${");
+            sb.Append(ParseUnionType());
+            sb.Append('}');
+        }
+
+        // Expect tail
+        Consume(TokenType.TEMPLATE_TAIL, "Expect end of template literal type.");
+        sb.Append((string)Previous().Literal!);
+        sb.Append('`');
+
+        return sb.ToString();
     }
 }
