@@ -209,7 +209,70 @@ public partial class ILCompiler
         }
     }
 
+    /// <summary>
+    /// Finds a user-defined main() function with the expected signature.
+    /// Returns the function and whether it's async, or null if no valid main exists.
+    /// </summary>
+    /// <remarks>
+    /// Expected signature: function main(args: string[]): void
+    /// Or async: async function main(args: string[]): Promise&lt;void&gt;
+    /// </remarks>
+    private (Stmt.Function Func, bool IsAsync)? FindMainFunction(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Function func && func.Name.Lexeme == "main" && func.Body != null)
+            {
+                // Validate signature: exactly one parameter (args: string[])
+                if (func.Parameters.Count != 1)
+                    continue;
+
+                var param = func.Parameters[0];
+                // Parameter should be named 'args' with type 'string[]'
+                if (param.Type != "string[]")
+                    continue;
+
+                // Return type should be void (or null for implicit) for sync,
+                // or Promise<void> for async
+                if (func.IsAsync)
+                {
+                    if (func.ReturnType != null && func.ReturnType != "Promise<void>")
+                        continue;
+                }
+                else
+                {
+                    if (func.ReturnType != null && func.ReturnType != "void")
+                        continue;
+                }
+
+                return (func, func.IsAsync);
+            }
+        }
+        return null;
+    }
+
     private void EmitEntryPoint(List<Stmt> statements)
+    {
+        // For EXE target, check if user defined a main() function
+        if (_outputTarget == OutputTarget.Exe)
+        {
+            var mainFunc = FindMainFunction(statements);
+            if (mainFunc != null)
+            {
+                EmitExeEntryPointWithUserMain(statements, mainFunc.Value.Func, mainFunc.Value.IsAsync);
+                return;
+            }
+        }
+
+        // Default behavior: synthetic Main with top-level statements
+        EmitDefaultEntryPoint(statements);
+    }
+
+    /// <summary>
+    /// Emits the default entry point where top-level statements run as the program.
+    /// Used for DLL target or EXE without user-defined main().
+    /// </summary>
+    private void EmitDefaultEntryPoint(List<Stmt> statements)
     {
         var mainMethod = _programType.DefineMethod(
             "Main",
@@ -313,6 +376,143 @@ public partial class ILCompiler
         }
 
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits an entry point that calls the user's main(args) function.
+    /// Used for EXE target when a valid main() function is defined.
+    /// </summary>
+    private void EmitExeEntryPointWithUserMain(List<Stmt> statements, Stmt.Function mainFunc, bool isAsync)
+    {
+        // PE entry point must return void (or int for exit code)
+        // For async main, we create a void Main that awaits the async main
+        var mainMethod = _programType.DefineMethod(
+            "Main",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [typeof(string[])]  // Accept string[] args from .NET runtime
+        );
+
+        _entryPoint = mainMethod;
+
+        var il = mainMethod.GetILGenerator();
+        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        {
+            ClosureAnalyzer = _closureAnalyzer,
+            ArrowMethods = _arrowMethods,
+            DisplayClasses = _displayClasses,
+            DisplayClassFields = _displayClassFields,
+            DisplayClassConstructors = _displayClassConstructors,
+            ClassExprBuilders = _classExprBuilders,
+            StaticFields = _staticFields,
+            StaticMethods = _staticMethods,
+            ClassConstructors = _classConstructors,
+            FunctionRestParams = _functionRestParams,
+            FunctionOverloads = _functionOverloads,
+            EnumMembers = _enumMembers,
+            EnumReverse = _enumReverse,
+            EnumKinds = _enumKinds,
+            NamespaceFields = _namespaceFields,
+            TopLevelStaticVars = _topLevelStaticVars,
+            Runtime = _runtime,
+            ClassGenericParams = _classGenericParams,
+            FunctionGenericParams = _functionGenericParams,
+            IsGenericFunction = _isGenericFunction,
+            TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
+            InstanceMethods = _instanceMethods,
+            InstanceGetters = _instanceGetters,
+            InstanceSetters = _instanceSetters,
+            ClassSuperclass = _classSuperclass,
+            AsyncMethods = null,
+            DotNetNamespace = _currentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            VarToClassExpr = _varToClassExpr,
+            ClassExprStaticFields = _classExprStaticFields,
+            ClassExprStaticMethods = _classExprStaticMethods,
+            ClassExprConstructors = _classExprConstructors,
+            ClassExprSuperclass = _classExprSuperclass,
+            UnionGenerator = _unionGenerator
+        };
+
+        // Initialize namespace static fields before any code
+        InitializeNamespaceFields(il);
+
+        var emitter = new ILEmitter(ctx);
+
+        // Execute top-level statements (module initialization), excluding the main function
+        foreach (var stmt in statements)
+        {
+            // Skip declarations (handled in earlier phases), including main()
+            if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.Enum)
+            {
+                continue;
+            }
+
+            // Run top-level code (imports, variable initialization, etc.)
+            if (stmt is Stmt.Expression exprStmt)
+            {
+                emitter.EmitExpression(exprStmt.Expr);
+
+                // Check for async calls and wait for them
+                var notTaskLabel = il.DefineLabel();
+                var doneLabel = il.DefineLabel();
+
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+                il.Emit(OpCodes.Brfalse, notTaskLabel);
+
+                il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+                var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
+                il.Emit(OpCodes.Call, getAwaiter);
+                var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
+                il.Emit(OpCodes.Stloc, awaiterLocal);
+                il.Emit(OpCodes.Ldloca, awaiterLocal);
+                var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
+                il.Emit(OpCodes.Call, getResult);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Br, doneLabel);
+
+                il.MarkLabel(notTaskLabel);
+                il.Emit(OpCodes.Pop);
+
+                il.MarkLabel(doneLabel);
+            }
+            else
+            {
+                emitter.EmitStatement(stmt);
+            }
+        }
+
+        // Now call the user's main(args) function
+        // Load the args parameter (arg 0) - string[] is a reference type, no boxing needed
+        il.Emit(OpCodes.Ldarg_0);  // Load string[] args (reference types implicitly convert to object)
+
+        // Call the user's main function
+        var userMainMethod = _functionBuilders[mainFunc.Name.Lexeme];
+        il.Emit(OpCodes.Call, userMainMethod);
+
+        if (isAsync)
+        {
+            // Async main returns Task<object> - we need to await it synchronously
+            // Call GetAwaiter().GetResult() to block until completion
+            il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+            var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
+            il.Emit(OpCodes.Call, getAwaiter);
+            var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
+            il.Emit(OpCodes.Stloc, awaiterLocal);
+            il.Emit(OpCodes.Ldloca, awaiterLocal);
+            var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
+            il.Emit(OpCodes.Call, getResult);
+            il.Emit(OpCodes.Pop);  // Discard the result
+            il.Emit(OpCodes.Ret);
+        }
+        else
+        {
+            // Sync main returns object, but we expect void behavior - just pop and return
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>

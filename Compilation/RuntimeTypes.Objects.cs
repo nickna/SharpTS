@@ -207,6 +207,12 @@ public static partial class RuntimeTypes
                 return list[idx];
             }
 
+            // Native .NET arrays (e.g., string[] from command line args)
+            if (obj is Array arr && idx >= 0 && idx < arr.Length)
+            {
+                return arr.GetValue(idx);
+            }
+
             if (obj is string s && idx >= 0 && idx < s.Length)
             {
                 return s[idx].ToString();

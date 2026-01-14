@@ -192,6 +192,9 @@ public partial class ILCompiler
     private readonly IReadOnlyList<string>? _referenceAssemblies;
     private AssemblyReferenceLoader? _referenceLoader;
 
+    // Output target type (DLL or EXE)
+    private readonly OutputTarget _outputTarget;
+
     /// <summary>
     /// Creates a new IL compiler with default settings (runtime assembly mode).
     /// </summary>
@@ -235,6 +238,21 @@ public partial class ILCompiler
     /// <param name="metadata">Optional assembly metadata for version and attributes.</param>
     /// <param name="references">Optional list of external assembly paths for @DotNetType support.</param>
     public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, AssemblyMetadata? metadata, IReadOnlyList<string>? references)
+        : this(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new IL compiler with all options including output target type.
+    /// </summary>
+    /// <param name="assemblyName">Name for the output assembly.</param>
+    /// <param name="preserveConstEnums">Whether to preserve const enums in output.</param>
+    /// <param name="useReferenceAssemblies">If true, post-processes output for compile-time referenceability.</param>
+    /// <param name="sdkPath">Optional explicit path to SDK reference assemblies.</param>
+    /// <param name="metadata">Optional assembly metadata for version and attributes.</param>
+    /// <param name="references">Optional list of external assembly paths for @DotNetType support.</param>
+    /// <param name="target">Output target type: DLL (class library) or EXE (executable).</param>
+    public ILCompiler(string assemblyName, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, AssemblyMetadata? metadata, IReadOnlyList<string>? references, OutputTarget target)
     {
         _assemblyName = assemblyName;
         _preserveConstEnums = preserveConstEnums;
@@ -242,6 +260,7 @@ public partial class ILCompiler
         _sdkPath = sdkPath;
         _metadata = metadata;
         _referenceAssemblies = references;
+        _outputTarget = target;
 
         // Initialize reference loader if external assemblies are provided
         if (references != null && references.Count > 0)
@@ -710,17 +729,23 @@ public partial class ILCompiler
             out BlobBuilder ilStream,
             out BlobBuilder fieldData);
 
-        // Create an executable with entry point
-        PEHeaderBuilder peHeader = PEHeaderBuilder.CreateExecutableHeader();
+        // Choose PE header based on output target
+        // DLLs can still have entry points (runnable with `dotnet <dll>`)
+        PEHeaderBuilder peHeader = _outputTarget == OutputTarget.Exe
+            ? PEHeaderBuilder.CreateExecutableHeader()
+            : PEHeaderBuilder.CreateLibraryHeader();
+
+        // Set entry point if available (both DLL and EXE can have entry points)
+        var entryPointHandle = _entryPoint != null
+            ? MetadataTokens.MethodDefinitionHandle(_entryPoint.MetadataToken)
+            : default;
 
         ManagedPEBuilder peBuilder = new(
             header: peHeader,
             metadataRootBuilder: new MetadataRootBuilder(metadataBuilder),
             ilStream: ilStream,
             mappedFieldData: fieldData,
-            entryPoint: _entryPoint != null
-                ? MetadataTokens.MethodDefinitionHandle(_entryPoint.MetadataToken)
-                : default);
+            entryPoint: entryPointHandle);
 
         BlobBuilder peBlob = new();
         peBuilder.Serialize(peBlob);

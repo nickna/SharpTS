@@ -71,7 +71,7 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
 {
     if (remainingArgs.Length < 2)
     {
-        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output.dll] [-r <assembly.dll>]...");
+        Console.WriteLine("Usage: sharpts --compile <file.ts> [-o output] [-t dll|exe] [-r <assembly.dll>]...");
         Console.WriteLine("       [--preserveConstEnums] [--ref-asm] [--sdk-path <path>] [--verify]");
         Console.WriteLine("       [--msbuild-errors] [--quiet]");
         Console.WriteLine("       [--pack] [--push <source>] [--api-key <key>] [--package-id <id>] [--version <ver>]");
@@ -79,7 +79,8 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     }
 
     string inputFile = remainingArgs[1];
-    string outputFile = Path.ChangeExtension(inputFile, ".dll");
+    OutputTarget target = OutputTarget.Dll;
+    string? explicitOutput = null;
     bool preserveConstEnums = false;
     bool useReferenceAssemblies = false;
     bool verifyIL = false;
@@ -102,7 +103,17 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
     {
         if (remainingArgs[i] == "-o" && i + 1 < remainingArgs.Length)
         {
-            outputFile = remainingArgs[++i];
+            explicitOutput = remainingArgs[++i];
+        }
+        else if ((remainingArgs[i] == "-t" || remainingArgs[i] == "--target") && i + 1 < remainingArgs.Length)
+        {
+            var targetArg = remainingArgs[++i].ToLowerInvariant();
+            target = targetArg switch
+            {
+                "dll" => OutputTarget.Dll,
+                "exe" => OutputTarget.Exe,
+                _ => throw new ArgumentException($"Invalid target '{targetArg}'. Use 'dll' or 'exe'.")
+            };
         }
         else if (remainingArgs[i] == "--preserveConstEnums")
         {
@@ -155,9 +166,12 @@ else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
         }
     }
 
+    // Determine output file: use explicit output if provided, otherwise derive from input + target
+    string outputFile = explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
+
     var packOptions = new PackOptions(pack, pushSource, apiKey, packageIdOverride, versionOverride);
     var outputOptions = new OutputOptions(msbuildErrors, quietMode);
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions, references);
+    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions, references, target);
 }
 else if (remainingArgs[0] == "--gen-decl")
 {
@@ -360,7 +374,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target)
 {
     try
     {
@@ -422,11 +436,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target);
         }
 
         // Package if requested
@@ -450,7 +464,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target)
 {
     // Phase 1: Load all static dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -487,7 +501,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     // Compilation
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
     compiler.Save(outputPath);
@@ -506,7 +520,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target)
 {
     // Static Analysis Phase
     TypeChecker checker = new();
@@ -519,7 +533,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
     // Compilation Phase
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references);
+    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
     compiler.SetDecoratorMode(decoratorMode);
     compiler.Compile(statements, typeMap, deadCodeInfo);
     compiler.Save(outputPath);

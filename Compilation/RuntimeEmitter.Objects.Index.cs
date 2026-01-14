@@ -17,6 +17,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var listLabel = il.DefineLabel();
+        var arrayLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var dictStringKeyLabel = il.DefineLabel();
@@ -38,6 +39,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
+
+        // Native .NET Array (e.g., string[] from command line args)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ArrayType);
+        il.Emit(OpCodes.Brtrue, arrayLabel);
 
         // String
         il.Emit(OpCodes.Ldarg_0);
@@ -94,6 +100,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Ret);
+
+        // Native .NET Array handler (e.g., string[] from command line args)
+        il.MarkLabel(arrayLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ArrayType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ArrayType, "GetValue", _types.Int32));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(stringLabel);
