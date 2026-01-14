@@ -311,12 +311,14 @@ public abstract record TypeInfo
     public record Tuple(
         List<TypeInfo> ElementTypes,
         int RequiredCount,
-        TypeInfo? RestElementType = null
+        TypeInfo? RestElementType = null,
+        List<string?>? ElementNames = null
     ) : TypeInfo
     {
         public int MinLength => RequiredCount;
         public int? MaxLength => RestElementType != null ? null : ElementTypes.Count;
         public bool HasRest => RestElementType != null;
+        public bool HasNames => ElementNames != null && ElementNames.Any(n => n != null);
 
         public override string ToString()
         {
@@ -324,7 +326,15 @@ public abstract record TypeInfo
             for (int i = 0; i < ElementTypes.Count; i++)
             {
                 bool isOptional = i >= RequiredCount;
-                parts.Add(isOptional ? $"{ElementTypes[i]}?" : ElementTypes[i].ToString());
+                string elemStr = ElementTypes[i].ToString();
+
+                // Include name if present
+                if (ElementNames != null && i < ElementNames.Count && ElementNames[i] != null)
+                {
+                    elemStr = $"{ElementNames[i]}: {elemStr}";
+                }
+
+                parts.Add(isOptional ? $"{elemStr}?" : elemStr);
             }
             if (RestElementType != null)
                 parts.Add($"...{RestElementType}[]");

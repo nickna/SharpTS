@@ -407,9 +407,18 @@ public partial class Parser
             }
             else if (Match(TokenType.AS))
             {
-                // Type assertion: expr as Type
-                string targetType = ParseTypeAnnotation();
-                expr = new Expr.TypeAssertion(expr, targetType);
+                // Check for 'as const' - constant assertion for deep readonly inference
+                if (Check(TokenType.CONST))
+                {
+                    Advance(); // consume 'const'
+                    expr = new Expr.TypeAssertion(expr, "const");
+                }
+                else
+                {
+                    // Type assertion: expr as Type
+                    string targetType = ParseTypeAnnotation();
+                    expr = new Expr.TypeAssertion(expr, targetType);
+                }
             }
             else if (Match(TokenType.BANG))
             {
@@ -482,10 +491,21 @@ public partial class Parser
             return new Expr.Super(keyword, method);
         }
 
-        // Dynamic import: import(pathExpr)
+        // Dynamic import: import(pathExpr) or import.meta
         if (Match(TokenType.IMPORT))
         {
             Token keyword = Previous();
+
+            // Check for import.meta
+            if (Match(TokenType.DOT))
+            {
+                Token meta = Consume(TokenType.IDENTIFIER, "Expect 'meta' after 'import.'.");
+                if (meta.Lexeme != "meta")
+                    throw new Exception($"Parse Error: Unexpected import.{meta.Lexeme}. Only 'import.meta' is supported.");
+                return new Expr.ImportMeta(keyword);
+            }
+
+            // Dynamic import: import(pathExpr)
             Consume(TokenType.LEFT_PAREN, "Expect '(' after 'import' for dynamic import.");
             Expr pathExpr = Expression();
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after import path.");

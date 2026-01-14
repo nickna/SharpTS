@@ -11,9 +11,14 @@ public partial class ILEmitter
     /// <summary>
     /// Emits code for an import statement.
     /// Imports bind local variables to module export fields.
+    /// Type-only imports are skipped (erased at compile time).
     /// </summary>
     private void EmitImport(Stmt.Import import)
     {
+        // Skip type-only imports entirely - they have no runtime code
+        if (import.IsTypeOnly)
+            return;
+
         if (_ctx.CurrentModulePath == null || _ctx.ModuleResolver == null ||
             _ctx.ModuleExportFields == null || _ctx.ModuleTypes == null)
         {
@@ -43,9 +48,10 @@ public partial class ILEmitter
         }
 
         // Named imports: bind local variables to named export fields
+        // Skip individual type-only specifiers
         if (import.NamedImports != null)
         {
-            foreach (var spec in import.NamedImports)
+            foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
             {
                 string importedName = spec.Imported.Lexeme;
                 string localName = spec.LocalName?.Lexeme ?? importedName;
@@ -359,6 +365,30 @@ public partial class ILEmitter
 
         // Wrap Task<object?> in SharpTSPromise
         EmitCallUnknown(_ctx.Runtime!.WrapTaskAsPromise);
+    }
+
+    /// <summary>
+    /// Emits an import.meta expression.
+    /// Returns an object with 'url' property containing the current module path.
+    /// </summary>
+    protected override void EmitImportMeta(Expr.ImportMeta im)
+    {
+        // Get current module path and convert to file:// URL
+        string url = _ctx.CurrentModulePath ?? "";
+        if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
+        {
+            url = "file:///" + url.Replace("\\", "/");
+        }
+
+        // Create Dictionary<string, object> and add "url" property
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Ldstr, "url");
+        IL.Emit(OpCodes.Ldstr, url);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+
+        // Wrap in SharpTSObject
+        EmitCallUnknown(_ctx.Runtime!.CreateObject);
     }
 
     #endregion

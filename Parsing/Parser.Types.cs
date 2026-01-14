@@ -288,11 +288,30 @@ public partial class Parser
                 break; // Rest must be last
             }
 
-            string elementType = ParseUnionType(); // Support union elements like [string | number, boolean]
+            string elementType;
 
-            // Check for optional marker
-            if (Match(TokenType.QUESTION))
-                elementType += "?";
+            // Check for named tuple element: name: type or name?: type
+            // Pattern: identifier followed by colon, OR identifier followed by ? then colon
+            bool isNamedElement = Check(TokenType.IDENTIFIER) &&
+                (PeekNext().Type == TokenType.COLON ||
+                 (PeekNext().Type == TokenType.QUESTION && _current + 2 < _tokens.Count && _tokens[_current + 2].Type == TokenType.COLON));
+
+            if (isNamedElement)
+            {
+                Token name = Advance(); // consume identifier
+                bool isOptional = Match(TokenType.QUESTION); // consume ? if present (for name?: type)
+                Consume(TokenType.COLON, ""); // consume colon
+                string innerType = ParseUnionType();
+                elementType = isOptional ? $"{name.Lexeme}?: {innerType}" : $"{name.Lexeme}: {innerType}";
+            }
+            else
+            {
+                elementType = ParseUnionType(); // Support union elements like [string | number, boolean]
+
+                // Check for optional marker on unnamed element
+                if (Match(TokenType.QUESTION))
+                    elementType += "?";
+            }
 
             elements.Add(elementType);
 

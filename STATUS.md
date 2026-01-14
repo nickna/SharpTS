@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-13 (Added dynamic imports with module registry for compiled mode)
+**Last Updated:** 2026-01-14 (Added `import.meta.url`, named tuple elements, `import type`, `as const`)
 
 ## Legend
 - ✅ Implemented
@@ -27,10 +27,11 @@ This document tracks TypeScript language features and their implementation statu
 | Intersection Types (`A & B`) | ✅ | For combining types with full TypeScript semantics |
 | Literal Types (`"success" \| "error"`) | ✅ | String, number, and boolean literals |
 | Type Aliases (`type Name = ...`) | ✅ | Including function types |
-| Tuple Types (`[string, number]`) | ✅ | Fixed-length typed arrays with optional and rest elements |
+| Tuple Types (`[string, number]`) | ✅ | Fixed-length typed arrays with optional, rest, and named elements |
 | `unknown` type | ✅ | Safer alternative to `any` |
 | `never` type | ✅ | For exhaustive checking |
 | Type Assertions (`as`, `<Type>`) | ✅ | Both `as` and angle-bracket syntax |
+| `as const` assertions | ✅ | Deep readonly inference for literals |
 | Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing in if-statements |
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
@@ -113,6 +114,8 @@ This document tracks TypeScript language features and their implementation statu
 | TypeScript namespaces | ✅ | `namespace X { }` with declaration merging, dotted syntax, functions, variables, enums, nested namespaces, classes with `new Namespace.Class()` instantiation |
 | Namespace import alias | ✅ | `import X = Namespace.Member`, `export import X = Namespace.Member` |
 | Dynamic imports | ✅ | `await import('./file')` with module registry for compiled mode, `typeof import()` typing for literal paths |
+| `import type` | ✅ | Statement-level (`import type { T }`) and inline (`import { type T }`) type-only imports |
+| `import.meta` | ✅ | `import.meta.url` for module metadata |
 
 ---
 
@@ -624,3 +627,13 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Intrinsics work with string literals, unions, and template literals
 - ✅ Cartesian product expansion limit (10,000 combinations max)
 - ✅ Full interpreter and IL compiler support
+
+### Phase 35 Features (Low-Effort TypeScript Features)
+- ✅ `import.meta.url` - module metadata access returning current module path as `file://` URL
+- ✅ Named tuple elements (`[x: number, y: string]`) - documentation-only element names in tuple types
+- ✅ Optional named tuple elements (`[x: number, y?: number]`) - named elements with optional marker
+- ✅ `import type` statement-level (`import type { MyType } from './mod'`) - type-only imports
+- ✅ `import type` inline specifier (`import { type MyType, value } from './mod'`) - mixed type/value imports
+- ✅ `as const` assertions with deep readonly inference for arrays, objects, and literals
+- ✅ Type-only imports skipped at runtime (interpreter and compiler)
+- ✅ Full interpreter and IL compiler support with 31 test cases

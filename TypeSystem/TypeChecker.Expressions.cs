@@ -49,6 +49,7 @@ public partial class TypeChecker
             Expr.NonNullAssertion nna => CheckNonNullAssertion(nna),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
             Expr.DynamicImport di => CheckDynamicImport(di),
+            Expr.ImportMeta im => CheckImportMeta(im),
             Expr.Yield yieldExpr => CheckYield(yieldExpr),
             Expr.RegexLiteral => new TypeInfo.RegExp(),
             Expr.ClassExpr classExpr => CheckClassExpression(classExpr),
@@ -70,6 +71,17 @@ public partial class TypeChecker
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
         return ResolveAwaitedType(exprType);
+    }
+
+    private TypeInfo CheckImportMeta(Expr.ImportMeta im)
+    {
+        // import.meta is an object with 'url' property
+        return new TypeInfo.Record(
+            new Dictionary<string, TypeInfo>
+            {
+                ["url"] = new TypeInfo.String()
+            }.ToFrozenDictionary()
+        );
     }
 
     private TypeInfo CheckDynamicImport(Expr.DynamicImport di)
@@ -179,6 +191,13 @@ public partial class TypeChecker
     private TypeInfo CheckTypeAssertion(Expr.TypeAssertion ta)
     {
         TypeInfo sourceType = CheckExpr(ta.Expression);
+
+        // Handle 'as const' - deep readonly inference with literal types
+        if (ta.TargetType == "const")
+        {
+            return InferConstType(ta.Expression, sourceType);
+        }
+
         TypeInfo targetType = ToTypeInfo(ta.TargetType);
 
         // Allow any <-> anything (escape hatch)
@@ -190,6 +209,81 @@ public partial class TypeChecker
             return targetType;
 
         throw new TypeCheckException($" Cannot assert type '{sourceType}' to '{targetType}'.");
+    }
+
+    /// <summary>
+    /// Infers the const type for an expression, recursively converting:
+    /// - Array literals to tuples with literal element types
+    /// - Object literals to records with literal property types
+    /// - Primitive literals to their literal types (string literal, number literal, etc.)
+    /// </summary>
+    private TypeInfo InferConstType(Expr expr, TypeInfo sourceType)
+    {
+        return expr switch
+        {
+            Expr.ArrayLiteral arr => InferConstArrayType(arr),
+            Expr.ObjectLiteral obj => InferConstObjectType(obj),
+            Expr.Literal lit => InferConstLiteralType(lit.Value),
+            _ => sourceType // Variables and other expressions keep their inferred type
+        };
+    }
+
+    /// <summary>
+    /// Converts an array literal to a tuple type with literal element types.
+    /// </summary>
+    private TypeInfo InferConstArrayType(Expr.ArrayLiteral arr)
+    {
+        var elementTypes = arr.Elements
+            .Select(e => InferConstType(e, CheckExpr(e)))
+            .ToList();
+        return new TypeInfo.Tuple(elementTypes, elementTypes.Count, null, null);
+    }
+
+    /// <summary>
+    /// Converts an object literal to a record type with literal property types.
+    /// </summary>
+    private TypeInfo InferConstObjectType(Expr.ObjectLiteral obj)
+    {
+        var fields = new Dictionary<string, TypeInfo>();
+        foreach (var prop in obj.Properties)
+        {
+            if (prop.IsSpread)
+            {
+                // For spread properties, merge the spread type
+                var spreadType = InferConstType(prop.Value, CheckExpr(prop.Value));
+                if (spreadType is TypeInfo.Record rec)
+                {
+                    foreach (var (k, v) in rec.Fields)
+                        fields[k] = v;
+                }
+            }
+            else if (prop.Key is Expr.IdentifierKey ik)
+            {
+                fields[ik.Name.Lexeme] = InferConstType(prop.Value, CheckExpr(prop.Value));
+            }
+            else if (prop.Key is Expr.LiteralKey lk && lk.Literal.Literal is string strKey)
+            {
+                fields[strKey] = InferConstType(prop.Value, CheckExpr(prop.Value));
+            }
+            // Computed keys are handled dynamically - use the source type
+        }
+        return new TypeInfo.Record(fields.ToFrozenDictionary());
+    }
+
+    /// <summary>
+    /// Converts a literal value to its corresponding literal type.
+    /// </summary>
+    private static TypeInfo InferConstLiteralType(object? value)
+    {
+        return value switch
+        {
+            string s => new TypeInfo.StringLiteral(s),
+            double d => new TypeInfo.NumberLiteral(d),
+            int i => new TypeInfo.NumberLiteral(i),
+            bool b => new TypeInfo.BooleanLiteral(b),
+            null => new TypeInfo.Null(),
+            _ => new TypeInfo.Any()
+        };
     }
 
     private TypeInfo CheckTemplateLiteral(Expr.TemplateLiteral template)

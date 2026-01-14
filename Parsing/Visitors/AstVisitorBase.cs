@@ -56,6 +56,7 @@ public abstract class AstVisitorBase
             case Expr.NonNullAssertion e: VisitNonNullAssertion(e); break;
             case Expr.Await e: VisitAwait(e); break;
             case Expr.DynamicImport e: VisitDynamicImport(e); break;
+            case Expr.ImportMeta e: VisitImportMeta(e); break;
             case Expr.Yield e: VisitYield(e); break;
             case Expr.RegexLiteral e: VisitRegexLiteral(e); break;
             case Expr.ClassExpr e: VisitClassExpr(e); break;
@@ -289,6 +290,11 @@ public abstract class AstVisitorBase
     protected virtual void VisitDynamicImport(Expr.DynamicImport expr)
     {
         Visit(expr.PathExpression);
+    }
+
+    protected virtual void VisitImportMeta(Expr.ImportMeta expr)
+    {
+        // Leaf node - no children to visit
     }
 
     protected virtual void VisitYield(Expr.Yield expr)

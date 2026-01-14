@@ -79,6 +79,8 @@ public abstract record Expr
     public record Await(Token Keyword, Expr Expression) : Expr;
     // Dynamic import: import(pathExpr) - returns Promise of module namespace
     public record DynamicImport(Token Keyword, Expr PathExpression) : Expr;
+    // import.meta expression - provides module metadata (url, etc.)
+    public record ImportMeta(Token Keyword) : Expr;
     // Yield expression: yield expr or yield* expr (only valid inside generator functions)
     public record Yield(Token Keyword, Expr? Value, bool IsDelegating) : Expr;
     // Regex literal: /pattern/flags
@@ -202,20 +204,23 @@ public abstract record Stmt
     /// <param name="DefaultImport">Default import identifier</param>
     /// <param name="NamespaceImport">Namespace import: * as Module</param>
     /// <param name="ModulePath">Module path: './file' or 'lodash'</param>
+    /// <param name="IsTypeOnly">True for 'import type ...' - type-only imports are erased at runtime</param>
     public record Import(
         Token Keyword,
         List<ImportSpecifier>? NamedImports,
         Token? DefaultImport,
         Token? NamespaceImport,
-        string ModulePath
+        string ModulePath,
+        bool IsTypeOnly = false
     ) : Stmt;
 
     /// <summary>
-    /// Individual import specifier: { x } or { x as y }
+    /// Individual import specifier: { x } or { x as y } or { type x }
     /// </summary>
     /// <param name="Imported">Original name in source module</param>
     /// <param name="LocalName">Renamed locally (null = same as imported)</param>
-    public record ImportSpecifier(Token Imported, Token? LocalName);
+    /// <param name="IsTypeOnly">True for '{ type x }' - inline type-only specifier</param>
+    public record ImportSpecifier(Token Imported, Token? LocalName, bool IsTypeOnly = false);
 
     /// <summary>
     /// Export declaration with various forms.

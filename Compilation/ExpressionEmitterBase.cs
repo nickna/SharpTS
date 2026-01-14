@@ -144,6 +144,9 @@ public abstract class ExpressionEmitterBase
             case Expr.DynamicImport di:
                 EmitDynamicImport(di);
                 break;
+            case Expr.ImportMeta im:
+                EmitImportMeta(im);
+                break;
             case Expr.Grouping g:
                 EmitGrouping(g);
                 break;
@@ -195,6 +198,7 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitPostfixIncrement(Expr.PostfixIncrement poi);
     protected abstract void EmitArrowFunction(Expr.ArrowFunction af);
     protected abstract void EmitDynamicImport(Expr.DynamicImport di);
+    protected abstract void EmitImportMeta(Expr.ImportMeta im);
     protected abstract void EmitUnknownExpression(Expr expr);
     protected abstract void EmitClassExpression(Expr.ClassExpr ce);
     #endregion

@@ -474,10 +474,11 @@ public partial class TypeChecker
     {
         string inner = tupleStr[1..^1].Trim(); // Remove [ and ]
         if (string.IsNullOrEmpty(inner))
-            return new TypeInfo.Tuple([], 0, null);
+            return new TypeInfo.Tuple([], 0, null, null);
 
         var elements = SplitTupleElements(inner.AsSpan());
         List<TypeInfo> elementTypes = [];
+        List<string?> elementNames = [];
         int requiredCount = 0;
         bool seenOptional = false;
         TypeInfo? restType = null;
@@ -485,6 +486,7 @@ public partial class TypeChecker
         for (int i = 0; i < elements.Count; i++)
         {
             string elem = elements[i].Trim();
+            string? name = null;
 
             // Rest element: ...type[]
             if (elem.StartsWith("..."))
@@ -498,11 +500,39 @@ public partial class TypeChecker
                 break;
             }
 
-            // Optional element: type?
-            bool isOptional = elem.EndsWith("?");
+            // Check for named element: name: type or name?: type
+            int colonIdx = elem.IndexOf(':');
+            bool isOptional = false;
+            if (colonIdx > 0)
+            {
+                string potentialName = elem[..colonIdx].Trim();
+                // Handle optional named element: name?: type
+                if (potentialName.EndsWith('?'))
+                {
+                    potentialName = potentialName[..^1];
+                    isOptional = true;
+                }
+                // Validate it's an identifier (not a built-in type name)
+                if (IsValidTupleElementName(potentialName))
+                {
+                    name = potentialName;
+                    elem = elem[(colonIdx + 1)..].Trim();
+                }
+                else
+                {
+                    isOptional = false; // Reset if name wasn't valid
+                }
+            }
+
+            // Optional element: type? (for unnamed elements or if not already set)
+            if (!isOptional && elem.EndsWith("?"))
+            {
+                isOptional = true;
+                elem = elem[..^1];
+            }
+
             if (isOptional)
             {
-                elem = elem[..^1];
                 seenOptional = true;
             }
             else if (seenOptional)
@@ -511,10 +541,31 @@ public partial class TypeChecker
             }
 
             elementTypes.Add(ToTypeInfo(elem));
+            elementNames.Add(name);
             if (!isOptional) requiredCount++;
         }
 
-        return new TypeInfo.Tuple(elementTypes, requiredCount, restType);
+        // Only include names if any were specified
+        var namesParam = elementNames.Any(n => n != null) ? elementNames : null;
+        return new TypeInfo.Tuple(elementTypes, requiredCount, restType, namesParam);
+    }
+
+    /// <summary>
+    /// Checks if a string is a valid tuple element name (identifier that's not a type keyword).
+    /// </summary>
+    private static bool IsValidTupleElementName(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+
+        // Must start with letter or underscore
+        if (!char.IsLetter(s[0]) && s[0] != '_') return false;
+
+        // Rest must be alphanumeric or underscore
+        if (!s.All(c => char.IsLetterOrDigit(c) || c == '_')) return false;
+
+        // Must not be a type keyword
+        return s is not ("string" or "number" or "boolean" or "void" or "null" or "undefined"
+                      or "unknown" or "never" or "any" or "symbol" or "bigint" or "object");
     }
 
     private List<string> SplitTupleElements(ReadOnlySpan<char> inner)

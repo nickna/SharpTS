@@ -12,17 +12,22 @@ public partial class Parser
     /// - import Default from './module';            (default import)
     /// - import * as Module from './module';        (namespace import)
     /// - import Default, { x, y } from './module';  (combined)
+    /// - import type { x } from './module';         (type-only import)
+    /// - import { type x, y } from './module';      (inline type specifiers)
     /// </summary>
     private Stmt ImportDeclaration()
     {
         Token keyword = Previous();
+
+        // Check for 'import type' (statement-level type-only import)
+        bool isTypeOnlyImport = Match(TokenType.TYPE);
 
         // import './module' (side-effect import)
         if (Check(TokenType.STRING))
         {
             string path = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
             Consume(TokenType.SEMICOLON, "Expect ';' after import.");
-            return new Stmt.Import(keyword, null, null, null, path);
+            return new Stmt.Import(keyword, null, null, null, path, isTypeOnlyImport);
         }
 
         Token? defaultImport = null;
@@ -71,11 +76,12 @@ public partial class Parser
         string modulePath = (string)Consume(TokenType.STRING, "Expect module path string.").Literal!;
         Consume(TokenType.SEMICOLON, "Expect ';' after import declaration.");
 
-        return new Stmt.Import(keyword, namedImports, defaultImport, namespaceImport, modulePath);
+        return new Stmt.Import(keyword, namedImports, defaultImport, namespaceImport, modulePath, isTypeOnlyImport);
     }
 
     /// <summary>
     /// Parses the list of import specifiers inside { }.
+    /// Supports inline type specifiers: { type Foo, bar }
     /// </summary>
     private List<Stmt.ImportSpecifier> ParseImportSpecifiers()
     {
@@ -86,6 +92,9 @@ public partial class Parser
         {
             do
             {
+                // Check for inline type specifier: { type Foo }
+                bool isTypeOnly = Match(TokenType.TYPE);
+
                 Token imported = Consume(TokenType.IDENTIFIER, "Expect import name.");
                 Token? localName = null;
 
@@ -94,7 +103,7 @@ public partial class Parser
                     localName = Consume(TokenType.IDENTIFIER, "Expect local name after 'as'.");
                 }
 
-                specifiers.Add(new Stmt.ImportSpecifier(imported, localName));
+                specifiers.Add(new Stmt.ImportSpecifier(imported, localName, isTypeOnly));
             } while (Match(TokenType.COMMA));
         }
 

@@ -218,6 +218,10 @@ public partial class Interpreter
         {
             if (stmt is Stmt.Import import)
             {
+                // Skip type-only imports entirely - they have no runtime binding
+                if (import.IsTypeOnly)
+                    continue;
+
                 string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
                 var importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
 
@@ -239,9 +243,10 @@ public partial class Interpreter
                 }
 
                 // Named imports: import { x, y as z } from './file'
+                // Skip individual type-only specifiers
                 if (import.NamedImports != null)
                 {
-                    foreach (var spec in import.NamedImports)
+                    foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
                     {
                         string importedName = spec.Imported.Lexeme;
                         string localName = spec.LocalName?.Lexeme ?? importedName;

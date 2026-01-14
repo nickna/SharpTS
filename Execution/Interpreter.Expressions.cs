@@ -55,6 +55,7 @@ public partial class Interpreter
             Expr.NonNullAssertion nna => Evaluate(nna.Expression), // Non-null assertions are pass-through at runtime
             Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(), // Sync wrapper for await
             Expr.DynamicImport di => EvaluateDynamicImport(di),
+            Expr.ImportMeta im => EvaluateImportMeta(im),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             Expr.ClassExpr classExpr => EvaluateClassExpression(classExpr),
@@ -115,6 +116,7 @@ public partial class Interpreter
             case Expr.NonNullAssertion nna: return await EvaluateAsync(nna.Expression);
             case Expr.Await awaitExpr: return await EvaluateAwaitAsync(awaitExpr);
             case Expr.DynamicImport di: return EvaluateDynamicImport(di);
+            case Expr.ImportMeta im: return EvaluateImportMeta(im);
             case Expr.Yield yieldExpr: return EvaluateYield(yieldExpr);
             case Expr.RegexLiteral regex: return new SharpTSRegExp(regex.Pattern, regex.Flags);
             case Expr.ClassExpr classExpr: return EvaluateClassExpression(classExpr);
@@ -518,6 +520,26 @@ public partial class Interpreter
     private object? EvaluateDynamicImport(Expr.DynamicImport di)
     {
         return new SharpTSPromise(DynamicImportAsync(di));
+    }
+
+    /// <summary>
+    /// Evaluates an import.meta expression, returning an object with module metadata.
+    /// </summary>
+    private object? EvaluateImportMeta(Expr.ImportMeta im)
+    {
+        // Get current module path
+        string url = _currentModule?.Path ?? "";
+
+        // Convert to file:// URL format if it's a file path
+        if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
+        {
+            url = "file:///" + url.Replace("\\", "/");
+        }
+
+        return new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["url"] = url
+        });
     }
 
     /// <summary>

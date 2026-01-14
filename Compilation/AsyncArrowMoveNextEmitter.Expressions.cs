@@ -131,6 +131,27 @@ public partial class AsyncArrowMoveNextEmitter
         SetStackUnknown();
     }
 
+    protected override void EmitImportMeta(Expr.ImportMeta im)
+    {
+        // Get current module path and convert to file:// URL
+        string url = _ctx?.CurrentModulePath ?? "";
+        if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
+        {
+            url = "file:///" + url.Replace("\\", "/");
+        }
+
+        // Create Dictionary<string, object> and add "url" property
+        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Ldstr, "url");
+        _il.Emit(OpCodes.Ldstr, url);
+        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+
+        // Wrap in SharpTSObject
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
+        SetStackUnknown();
+    }
+
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;
