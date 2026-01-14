@@ -1300,6 +1300,9 @@ public partial class RuntimeEmitter
         // Built-in module methods (path, fs, os)
         EmitPathModuleMethods(typeBuilder, runtime);
         EmitFsModuleMethods(typeBuilder, runtime);
+        // Emit wrapper methods for named imports
+        EmitFsModuleMethodWrappers(typeBuilder, runtime);
+        EmitPathModulePropertyWrappers(typeBuilder, runtime);
         // Process global methods (env, argv)
         EmitProcessMethods(typeBuilder, runtime);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
