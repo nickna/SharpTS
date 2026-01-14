@@ -801,6 +801,7 @@ public partial class TypeChecker
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();
             _typeMap.SetClassType(className, classTypeForBody);
+            _typeMap.SetClassExprType(classExpr, classTypeForBody);
             // Class expression returns the GenericClass type
             _ = genericClassType; // Keep for potential future use (return type could be GenericClass)
         }
@@ -808,6 +809,7 @@ public partial class TypeChecker
         {
             TypeInfo.Class classType = mutableClass.Freeze();
             _typeMap.SetClassType(className, classType);
+            _typeMap.SetClassExprType(classExpr, classType);
             classTypeForBody = classType;
         }
 

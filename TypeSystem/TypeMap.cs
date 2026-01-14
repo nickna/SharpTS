@@ -16,6 +16,7 @@ public class TypeMap
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<string, TypeInfo.Class> _classTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Function> _functionTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<Expr.ClassExpr, TypeInfo.Class> _classExprTypes = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -31,6 +32,16 @@ public class TypeMap
     /// Gets the class type by name, or null if not found.
     /// </summary>
     public TypeInfo.Class? GetClassType(string className) => _classTypes.GetValueOrDefault(className);
+
+    /// <summary>
+    /// Registers a class expression type by expression reference for IL compiler lookup.
+    /// </summary>
+    public void SetClassExprType(Expr.ClassExpr expr, TypeInfo.Class classType) => _classExprTypes[expr] = classType;
+
+    /// <summary>
+    /// Gets the class expression type by expression reference, or null if not found.
+    /// </summary>
+    public TypeInfo.Class? GetClassExprType(Expr.ClassExpr expr) => _classExprTypes.GetValueOrDefault(expr);
 
     /// <summary>
     /// Registers a top-level function type by name.

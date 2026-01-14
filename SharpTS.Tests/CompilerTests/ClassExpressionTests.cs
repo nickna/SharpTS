@@ -224,4 +224,140 @@ public class ClassExpressionTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("localhost\n8080\nexample.com\n8080\napi.example.com\n3000\n", output);
     }
+
+    [Fact]
+    public void ClassExpression_TypedConstructorParameters()
+    {
+        // Test that constructor parameters are typed correctly (not all object)
+        var source = """
+            const Point = class {
+                x: number;
+                y: number;
+                constructor(x: number, y: number) {
+                    this.x = x;
+                    this.y = y;
+                }
+                sum(): number {
+                    return this.x + this.y;
+                }
+            };
+            let p = new Point(10.5, 20.5);
+            console.log(p.sum());
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("31\n", output);
+    }
+
+    [Fact]
+    public void ClassExpression_TypedMethodParameters()
+    {
+        // Test that method parameters are typed correctly
+        var source = """
+            const Calculator = class {
+                add(a: number, b: number): number {
+                    return a + b;
+                }
+                multiply(a: number, b: number): number {
+                    return a * b;
+                }
+            };
+            let calc = new Calculator();
+            console.log(calc.add(5, 3));
+            console.log(calc.multiply(4, 7));
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("8\n28\n", output);
+    }
+
+    [Fact]
+    public void ClassExpression_MixedTypeParameters()
+    {
+        // Test that mixed type parameters work correctly
+        var source = """
+            const Person = class {
+                name: string;
+                age: number;
+                constructor(name: string, age: number) {
+                    this.name = name;
+                    this.age = age;
+                }
+                describe(): string {
+                    return this.name + " is " + this.age;
+                }
+            };
+            let p = new Person("Alice", 30);
+            console.log(p.describe());
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Alice is 30\n", output);
+    }
+
+    [Fact]
+    public void ClassExpression_StaticMethodTypedParameters()
+    {
+        // Test that static method parameters are typed correctly
+        var source = """
+            const MathUtils = class {
+                static square(n: number): number {
+                    return n * n;
+                }
+                static double(n: number): number {
+                    return n * 2;
+                }
+            };
+            console.log(MathUtils.square(5));
+            console.log(MathUtils.double(7));
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("25\n14\n", output);
+    }
+
+    [Fact]
+    public void ClassExpression_InheritanceTypedConstructors()
+    {
+        // Test that inheritance with typed constructors works correctly
+        var source = """
+            const Animal = class {
+                name: string;
+                constructor(name: string) {
+                    this.name = name;
+                }
+            };
+            const Dog = class extends Animal {
+                breed: string;
+                constructor(name: string, breed: string) {
+                    super(name);
+                    this.breed = breed;
+                }
+                describe(): string {
+                    return this.name + " the " + this.breed;
+                }
+            };
+            let d = new Dog("Rex", "German Shepherd");
+            console.log(d.describe());
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Rex the German Shepherd\n", output);
+    }
+
+    [Fact]
+    public void ClassExpression_MethodReturnTypes()
+    {
+        // Test that method return types are correct
+        var source = """
+            const Formatter = class {
+                formatNumber(n: number): string {
+                    return "Value: " + n;
+                }
+                parseNumber(s: string): number {
+                    return 42;
+                }
+            };
+            let f = new Formatter();
+            console.log(f.formatNumber(100));
+            console.log(f.parseNumber("ignored") + 8);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Value: 100\n50\n", output);
+    }
 }

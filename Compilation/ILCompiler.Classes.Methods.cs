@@ -100,6 +100,120 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Gets typed constructor parameter types for a class expression from the TypeMap.
+    /// Falls back to object[] if type info is not available.
+    /// </summary>
+    private Type[] GetTypedClassExprConstructorParameters(Expr.ClassExpr classExpr, int paramCount)
+    {
+        var classType = _typeMap.GetClassExprType(classExpr);
+        if (classType == null)
+            return Enumerable.Repeat(typeof(object), paramCount).ToArray();
+
+        if (classType.Methods.TryGetValue("constructor", out var ctorType))
+        {
+            if (ctorType is TSTypeInfo.Function func)
+            {
+                return func.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+            if (ctorType is TSTypeInfo.OverloadedFunction of)
+            {
+                return of.Implementation.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+        }
+
+        return Enumerable.Repeat(typeof(object), paramCount).ToArray();
+    }
+
+    /// <summary>
+    /// Gets typed parameter types for a class expression method from the TypeMap.
+    /// Falls back to object[] if type info is not available.
+    /// </summary>
+    private Type[] GetTypedClassExprMethodParameters(Expr.ClassExpr classExpr, string methodName, int paramCount)
+    {
+        var classType = _typeMap.GetClassExprType(classExpr);
+        if (classType == null)
+            return Enumerable.Repeat(typeof(object), paramCount).ToArray();
+
+        // Check instance methods
+        if (classType.Methods.TryGetValue(methodName, out var methodType))
+        {
+            if (methodType is TSTypeInfo.Function func)
+            {
+                return func.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+            if (methodType is TSTypeInfo.OverloadedFunction of)
+            {
+                return of.Implementation.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+        }
+
+        // Check static methods
+        if (classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
+        {
+            if (staticMethodType is TSTypeInfo.Function func)
+            {
+                return func.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+            if (staticMethodType is TSTypeInfo.OverloadedFunction of)
+            {
+                return of.Implementation.ParamTypes.Select(pt => _typeMapper.MapTypeInfoStrict(pt)).ToArray();
+            }
+        }
+
+        return Enumerable.Repeat(typeof(object), paramCount).ToArray();
+    }
+
+    /// <summary>
+    /// Gets the typed return type for a class expression method from the TypeMap.
+    /// Falls back to object (or Task&lt;object&gt; for async) if type info is not available.
+    /// </summary>
+    private Type GetTypedClassExprMethodReturnType(Expr.ClassExpr classExpr, string methodName, bool isAsync)
+    {
+        var classType = _typeMap.GetClassExprType(classExpr);
+        if (classType == null)
+            return isAsync ? typeof(Task<object>) : typeof(object);
+
+        TSTypeInfo.Function? funcType = null;
+
+        // Check instance methods
+        if (classType.Methods.TryGetValue(methodName, out var methodType))
+        {
+            funcType = methodType switch
+            {
+                TSTypeInfo.Function f => f,
+                TSTypeInfo.OverloadedFunction of => of.Implementation,
+                _ => null
+            };
+        }
+        // Check static methods
+        else if (classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
+        {
+            funcType = staticMethodType switch
+            {
+                TSTypeInfo.Function f => f,
+                TSTypeInfo.OverloadedFunction of => of.Implementation,
+                _ => null
+            };
+        }
+
+        if (funcType is null)
+            return isAsync ? typeof(Task<object>) : typeof(object);
+
+        Type returnType = _typeMapper.MapTypeInfoStrict(funcType.ReturnType);
+
+        // For async methods, wrap in Task<T>
+        if (isAsync)
+        {
+            // If return type is void, use Task (non-generic)
+            if (returnType == typeof(void))
+                return typeof(Task);
+            return typeof(Task<>).MakeGenericType(returnType);
+        }
+
+        return returnType;
+    }
+
+    /// <summary>
     /// Defines all class methods (without emitting bodies) so they're available for
     /// direct dispatch in async state machines.
     /// </summary>
