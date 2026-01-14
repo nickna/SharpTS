@@ -318,11 +318,12 @@ static void RunPrompt(DecoratorMode decoratorMode)
 {
     Interpreter interpreter = new();
     interpreter.SetDecoratorMode(decoratorMode);
-    Console.WriteLine($"SharpTS REPL (v{GetVersion()})");
+    PrintBanner();
     if (decoratorMode != DecoratorMode.None)
     {
         Console.WriteLine($"Decorator mode: {decoratorMode}");
     }
+    Console.WriteLine("Type expressions to evaluate. Press Ctrl+C to exit.");
     for (; ; )
     {
         Console.Write("> ");
@@ -716,10 +717,23 @@ static string GetVersion()
     return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 }
 
+static void PrintBanner()
+{
+    Console.WriteLine("""
+      ____  _                      _____ ____
+     / ___|| |__   __ _ _ __ _ __ |_   _/ ___|
+     \___ \| '_ \ / _` | '__| '_ \  | | \___ \
+      ___) | | | | (_| | |  | |_) | | |  ___) |
+     |____/|_| |_|\__,_|_|  | .__/  |_| |____/
+                            |_|
+    """);
+    Console.WriteLine($"    v{GetVersion()} - TypeScript interpreter and compiler for .NET");
+    Console.WriteLine();
+}
+
 static void PrintHelp()
 {
-    Console.WriteLine($"SharpTS {GetVersion()} - TypeScript interpreter and compiler for .NET");
-    Console.WriteLine();
+    PrintBanner();
     Console.WriteLine("Usage:");
     Console.WriteLine("  sharpts [options] [script.ts]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
