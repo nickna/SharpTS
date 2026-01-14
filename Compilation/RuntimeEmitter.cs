@@ -24,6 +24,9 @@ public partial class RuntimeEmitter
     {
         var runtime = new EmittedRuntime();
 
+        // Emit IUnionType marker interface first (union types need to implement this)
+        EmitIUnionTypeInterface(moduleBuilder, runtime);
+
         // Emit TSFunction class first (other methods depend on it)
         EmitTSFunctionClass(moduleBuilder, runtime);
 
@@ -53,6 +56,41 @@ public partial class RuntimeEmitter
         EmitRuntimeClass(moduleBuilder, runtime);
 
         return runtime;
+    }
+
+    /// <summary>
+    /// Emits the $IUnionType marker interface for fast union type detection.
+    /// All generated union types implement this interface.
+    /// </summary>
+    private void EmitIUnionTypeInterface(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        // Define interface: public interface $IUnionType
+        var typeBuilder = moduleBuilder.DefineType(
+            "$IUnionType",
+            TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract,
+            null
+        );
+
+        // Define Value property getter: object? Value { get; }
+        var valueGetter = typeBuilder.DefineMethod(
+            "get_Value",
+            MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual |
+            MethodAttributes.SpecialName | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            Type.EmptyTypes
+        );
+
+        var valueProp = typeBuilder.DefineProperty(
+            "Value",
+            PropertyAttributes.None,
+            _types.Object,
+            null
+        );
+        valueProp.SetGetMethod(valueGetter);
+
+        // Create and store the interface type
+        runtime.IUnionTypeInterface = typeBuilder.CreateType()!;
+        runtime.IUnionTypeValueGetter = runtime.IUnionTypeInterface.GetProperty("Value")!.GetGetMethod()!;
     }
 
     private void EmitTSFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -108,7 +146,7 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ret);
 
         // Helper method: private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
-        var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder);
+        var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder, runtime);
 
         // Invoke method: public object Invoke(object[] args)
         var invokeBuilder = typeBuilder.DefineMethod(
@@ -446,7 +484,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits a private static helper method on $TSFunction to convert arguments for union type parameters.
     /// </summary>
-    private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitTSFunctionConvertArgsHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
         var method = typeBuilder.DefineMethod(
@@ -507,16 +545,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, argLocal);
 
-        // if (!paramType.IsValueType) continue
+        // if (!typeof($IUnionType).IsAssignableFrom(paramType)) continue
+        // Load the $IUnionType interface type
+        il.Emit(OpCodes.Ldtoken, runtime.IUnionTypeInterface);
+        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
         il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("IsValueType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, continueLoop);
-
-        // if (!paramType.Name.StartsWith("Union_")) continue
-        il.Emit(OpCodes.Ldloc, paramTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.Type.GetProperty("Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldstr, "Union_");
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("IsAssignableFrom", [_types.Type])!);
         il.Emit(OpCodes.Brfalse, continueLoop);
 
         // if (arg == null) continue
@@ -1150,7 +1184,6 @@ public partial class RuntimeEmitter
         EmitIsTruthy(typeBuilder, runtime);
         EmitTypeOf(typeBuilder, runtime);
         EmitInstanceOf(typeBuilder, runtime);
-        EmitConvertArgsForUnionTypes(typeBuilder, runtime);
         EmitAdd(typeBuilder, runtime);
         EmitEquals(typeBuilder, runtime);
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed

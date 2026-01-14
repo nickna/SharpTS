@@ -45,9 +45,8 @@ public class LocalVariableResolver : IVariableResolver
             if (_ctx.TryGetParameterType(name, out var paramType) && paramType != null)
             {
                 var stackType = MapTypeToStackType(paramType);
-                // Box non-primitive value types (like union structs) immediately
-                // so that StackType.Unknown correctly means "boxed object"
-                if (stackType == StackType.Unknown && paramType.IsValueType)
+                // Box union types immediately so that StackType.Unknown correctly means "boxed object"
+                if (stackType == StackType.Unknown && UnionTypeHelper.IsUnionType(paramType))
                 {
                     _il.Emit(OpCodes.Box, paramType);
                 }

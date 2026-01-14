@@ -28,6 +28,12 @@ public class UnionTypeGenerator
     private readonly Dictionary<(string unionKey, Type fromType), MethodBuilder> _implicitConversions = new();
     private readonly TypeMapper _typeMapper;
 
+    /// <summary>
+    /// The union type marker interface to implement. When compiling to standalone DLLs,
+    /// this is set to the emitted $IUnionType interface. Otherwise, defaults to IUnionType.
+    /// </summary>
+    public Type UnionTypeInterface { get; set; } = typeof(IUnionType);
+
     public UnionTypeGenerator(TypeMapper typeMapper)
     {
         _typeMapper = typeMapper;
@@ -133,11 +139,12 @@ public class UnionTypeGenerator
         var types = union.FlattenedTypes;
         string typeName = $"Union_{key}";
 
-        // Define the union as a struct
+        // Define the union as a struct implementing the union type marker interface
         var typeBuilder = moduleBuilder.DefineType(
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(ValueType)
+            typeof(ValueType),
+            [UnionTypeInterface]
         );
 
         // Add StructLayout attribute for auto layout
@@ -334,12 +341,21 @@ public class UnionTypeGenerator
             null
         );
 
+        // Must be Virtual to implement interface method
         var getter = typeBuilder.DefineMethod(
             "get_Value",
-            MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.SpecialName |
+            MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Final,
             typeof(object),
             Type.EmptyTypes
         );
+
+        // Map this method to the interface's get_Value
+        var interfaceGetter = UnionTypeInterface.GetProperty("Value")?.GetGetMethod();
+        if (interfaceGetter != null)
+        {
+            typeBuilder.DefineMethodOverride(getter, interfaceGetter);
+        }
 
         var il = getter.GetILGenerator();
         var labels = new Label[valueFields.Count];

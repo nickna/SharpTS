@@ -398,6 +398,7 @@ public partial class ILCompiler
 
         // Phase 4.5: Initialize typed interop support now that all classes are defined
         _unionGenerator = new UnionTypeGenerator(_typeMapper);
+        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface; // Use emitted interface for standalone DLLs
         _typeMapper.SetClassBuilders(_classBuilders);
         _typeMapper.SetUnionGenerator(_unionGenerator);
 
@@ -608,6 +609,7 @@ public partial class ILCompiler
 
         // Phase 5.5: Initialize typed interop support now that all classes are defined
         _unionGenerator = new UnionTypeGenerator(_typeMapper);
+        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface; // Use emitted interface for standalone DLLs
         _typeMapper.SetClassBuilders(_classBuilders);
         _typeMapper.SetUnionGenerator(_unionGenerator);
 
