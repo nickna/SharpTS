@@ -25,6 +25,35 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits a try-catch block that converts exceptions to Node.js-style errors.
+    /// The emitTryBody action receives the afterTry label for the Leave instruction.
+    /// </summary>
+    private void EmitWithFsErrorHandling(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder pathLocal,
+        string syscall,
+        Action<Label> emitTryBody)
+    {
+        var caughtExLocal = il.DeclareLocal(_types.Exception);
+        var afterTry = il.DefineLabel();
+
+        il.BeginExceptionBlock();
+        emitTryBody(afterTry);
+
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Stloc, caughtExLocal);
+        il.Emit(OpCodes.Ldloc, caughtExLocal);
+        il.Emit(OpCodes.Ldstr, syscall);
+        il.Emit(OpCodes.Ldloc, pathLocal);
+        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
+        il.Emit(OpCodes.Rethrow);
+
+        il.EndExceptionBlock();
+        il.MarkLabel(afterTry);
+    }
+
+    /// <summary>
     /// Emits: public static bool FsExistsSync(object path)
     /// Returns true if file or directory exists.
     /// </summary>
@@ -80,7 +109,6 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -88,82 +116,69 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        {
+            // Check if encoding is provided (not null)
+            var readBytesLabel = il.DefineLabel();
+            var afterReadLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, readBytesLabel);
 
-        // Check if encoding is provided (not null)
-        var readBytesLabel = il.DefineLabel();
-        var afterReadLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, readBytesLabel);
+            // Read as text: File.ReadAllText(path)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "ReadAllText", _types.String));
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Br, afterReadLabel);
 
-        // Read as text: File.ReadAllText(path)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "ReadAllText", _types.String));
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Br, afterReadLabel);
+            // Read as bytes: File.ReadAllBytes(path) - wrap in List<object>
+            il.MarkLabel(readBytesLabel);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "ReadAllBytes", _types.String));
 
-        // Read as bytes: File.ReadAllBytes(path) - wrap in List<object>
-        il.MarkLabel(readBytesLabel);
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "ReadAllBytes", _types.String));
+            // Convert byte[] to List<object> for JS array compatibility
+            var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+            il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // Convert byte[] to List<object> for JS array compatibility
-        var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        il.Emit(OpCodes.Stloc, bytesLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
+            var listLocal = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Stloc, listLocal);
 
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
+            // Loop: for each byte, add to list
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+            var indexLocal = il.DeclareLocal(_types.Int32);
 
-        // Loop: for each byte, add to list
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var indexLocal = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, indexLocal);
 
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
+            il.MarkLabel(loopStart);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldloc, bytesLocal);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Bge, loopEnd);
 
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, bytesLocal);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_U1);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, loopStart);
 
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Stloc, resultLocal);
 
-        il.MarkLabel(loopEnd);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        il.MarkLabel(afterReadLabel);
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "open");         // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            il.MarkLabel(afterReadLabel);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -182,7 +197,6 @@ public partial class RuntimeEmitter
         runtime.FsWriteFileSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -196,27 +210,14 @@ public partial class RuntimeEmitter
         var dataLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, dataLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
-
-        // File.WriteAllText(path, data)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "WriteAllText", _types.String, _types.String));
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "open");         // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        {
+            // File.WriteAllText(path, data)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "WriteAllText", _types.String, _types.String));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -234,7 +235,6 @@ public partial class RuntimeEmitter
         runtime.FsAppendFileSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -248,27 +248,14 @@ public partial class RuntimeEmitter
         var dataLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, dataLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
-
-        // File.AppendAllText(path, data)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "AppendAllText", _types.String, _types.String));
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "open");         // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        {
+            // File.AppendAllText(path, data)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "AppendAllText", _types.String, _types.String));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -286,7 +273,6 @@ public partial class RuntimeEmitter
         runtime.FsUnlinkSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -294,39 +280,26 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "unlink", afterTry =>
+        {
+            // Check if file exists first (File.Delete is a no-op if file doesn't exist)
+            var existsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, existsLabel);
 
-        // Check if file exists first (File.Delete is a no-op if file doesn't exist)
-        var existsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
-        il.Emit(OpCodes.Brtrue, existsLabel);
+            // File doesn't exist - throw FileNotFoundException
+            il.Emit(OpCodes.Ldstr, "no such file or directory");
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
+            il.Emit(OpCodes.Throw);
 
-        // File doesn't exist - throw FileNotFoundException
-        il.Emit(OpCodes.Ldstr, "no such file or directory");
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        // File exists - delete it
-        il.MarkLabel(existsLabel);
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Delete", _types.String));
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "unlink");       // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            // File exists - delete it
+            il.MarkLabel(existsLabel);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Delete", _types.String));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -344,7 +317,6 @@ public partial class RuntimeEmitter
         runtime.FsMkdirSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -352,27 +324,14 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
-
-        // Directory.CreateDirectory(path)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "CreateDirectory", _types.String));
-        il.Emit(OpCodes.Pop); // CreateDirectory returns DirectoryInfo
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "mkdir");        // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "mkdir", afterTry =>
+        {
+            // Directory.CreateDirectory(path)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "CreateDirectory", _types.String));
+            il.Emit(OpCodes.Pop); // CreateDirectory returns DirectoryInfo
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -390,7 +349,6 @@ public partial class RuntimeEmitter
         runtime.FsRmdirSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -398,46 +356,33 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "rmdir", afterTry =>
+        {
+            // Check if options.recursive is set
+            var nonRecursive = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, nonRecursive);
 
-        // Check if options.recursive is set
-        var nonRecursive = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, nonRecursive);
+            // Get "recursive" property if options is provided
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "recursive");
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Brfalse, nonRecursive);
 
-        // Get "recursive" property if options is provided
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "recursive");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Brfalse, nonRecursive);
+            // Directory.Delete(path, true)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Delete", _types.String, _types.Boolean));
+            il.Emit(OpCodes.Leave, afterTry);
 
-        // Directory.Delete(path, true)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Delete", _types.String, _types.Boolean));
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Directory.Delete(path, false)
-        il.MarkLabel(nonRecursive);
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Delete", _types.String, _types.Boolean));
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "rmdir");        // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            // Directory.Delete(path, false)
+            il.MarkLabel(nonRecursive);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Delete", _types.String, _types.Boolean));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -456,7 +401,6 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -464,66 +408,53 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "readdir", afterTry =>
+        {
+            // Get entries: Directory.GetFileSystemEntries(path)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "GetFileSystemEntries", _types.String));
+            var entriesLocal = il.DeclareLocal(_types.StringArray);
+            il.Emit(OpCodes.Stloc, entriesLocal);
 
-        // Get entries: Directory.GetFileSystemEntries(path)
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "GetFileSystemEntries", _types.String));
-        var entriesLocal = il.DeclareLocal(_types.StringArray);
-        il.Emit(OpCodes.Stloc, entriesLocal);
+            // Create result list
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
+            var listLocal = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Stloc, listLocal);
 
-        // Create result list
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
+            // Loop through entries and add just the filename (not full path)
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+            var indexLocal = il.DeclareLocal(_types.Int32);
 
-        // Loop through entries and add just the filename (not full path)
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var indexLocal = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, indexLocal);
 
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
+            il.MarkLabel(loopStart);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldloc, entriesLocal);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Bge, loopEnd);
 
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, entriesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, entriesLocal);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            // Get just the filename using Path.GetFileName
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetFileName", _types.String));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, entriesLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        // Get just the filename using Path.GetFileName
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetFileName", _types.String));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, loopStart);
 
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "readdir");      // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -544,7 +475,6 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Object);
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -552,115 +482,102 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "stat", afterTry =>
+        {
+            // Create dictionary for stats
+            var dictType = _types.DictionaryStringObject;
+            var dictCtor = _types.GetDefaultConstructor(dictType);
+            var addMethod = _types.GetMethod(dictType, "Add", _types.String, _types.Object);
 
-        // Create dictionary for stats
-        var dictType = _types.DictionaryStringObject;
-        var dictCtor = _types.GetDefaultConstructor(dictType);
-        var addMethod = _types.GetMethod(dictType, "Add", _types.String, _types.Object);
+            il.Emit(OpCodes.Newobj, dictCtor);
+            var dictLocal = il.DeclareLocal(dictType);
+            il.Emit(OpCodes.Stloc, dictLocal);
 
-        il.Emit(OpCodes.Newobj, dictCtor);
-        var dictLocal = il.DeclareLocal(dictType);
-        il.Emit(OpCodes.Stloc, dictLocal);
+            // Define all labels within try block scope
+            var isDirLabel = il.DefineLabel();
+            var isFileLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
 
-        // Define all labels within try block scope
-        var isDirLabel = il.DefineLabel();
-        var isFileLabel = il.DefineLabel();
-        var doneLabel = il.DefineLabel();
+            // Check if directory exists first
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, isDirLabel);
 
-        // Check if directory exists first
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
-        il.Emit(OpCodes.Brtrue, isDirLabel);
+            // Check if file exists
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, isFileLabel);
 
-        // Check if file exists
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
-        il.Emit(OpCodes.Brtrue, isFileLabel);
+            // Neither exists - throw FileNotFoundException
+            il.Emit(OpCodes.Ldstr, "no such file or directory");
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
+            il.Emit(OpCodes.Throw);
 
-        // Neither exists - throw FileNotFoundException
-        il.Emit(OpCodes.Ldstr, "no such file or directory");
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
-        il.Emit(OpCodes.Throw);
+            // It's a directory
+            il.MarkLabel(isDirLabel);
 
-        // It's a directory
-        il.MarkLabel(isDirLabel);
+            // isDirectory: true
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isDirectory");
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // isDirectory: true
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "isDirectory");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, addMethod);
+            // isFile: false
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isFile");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // isFile: false
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "isFile");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, addMethod);
+            // size: 0 for directories
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "size");
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // size: 0 for directories
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "size");
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, addMethod);
+            il.Emit(OpCodes.Br, doneLabel);
 
-        il.Emit(OpCodes.Br, doneLabel);
+            // It's a file
+            il.MarkLabel(isFileLabel);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileInfo, _types.String));
+            var fileInfoLocal = il.DeclareLocal(_types.FileInfo);
+            il.Emit(OpCodes.Stloc, fileInfoLocal);
 
-        // It's a file
-        il.MarkLabel(isFileLabel);
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileInfo, _types.String));
-        var fileInfoLocal = il.DeclareLocal(_types.FileInfo);
-        il.Emit(OpCodes.Stloc, fileInfoLocal);
+            // isDirectory: false
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isDirectory");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // isDirectory: false
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "isDirectory");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, addMethod);
+            // isFile: true
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isFile");
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // isFile: true
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "isFile");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, addMethod);
+            // size: fileInfo.Length
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "size");
+            il.Emit(OpCodes.Ldloc, fileInfoLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.FileInfo, "Length").GetMethod!);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, addMethod);
 
-        // size: fileInfo.Length
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldstr, "size");
-        il.Emit(OpCodes.Ldloc, fileInfoLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.FileInfo, "Length").GetMethod!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, addMethod);
+            il.MarkLabel(doneLabel);
 
-        il.MarkLabel(doneLabel);
-
-        // Wrap in SharpTSObject and store result
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.CreateObject);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "stat");         // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            // Wrap in SharpTSObject and store result
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, runtime.CreateObject);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -679,7 +596,6 @@ public partial class RuntimeEmitter
         runtime.FsRenameSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert paths to strings
         il.Emit(OpCodes.Ldarg_0);
@@ -692,40 +608,27 @@ public partial class RuntimeEmitter
         var newPathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, newPathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, oldPathLocal, "rename", afterTry =>
+        {
+            // Check if it's a directory
+            var isFileLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, oldPathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
+            il.Emit(OpCodes.Brfalse, isFileLabel);
 
-        // Check if it's a directory
-        var isFileLabel = il.DefineLabel();
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, oldPathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
-        il.Emit(OpCodes.Brfalse, isFileLabel);
+            // Directory.Move
+            il.Emit(OpCodes.Ldloc, oldPathLocal);
+            il.Emit(OpCodes.Ldloc, newPathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Move", _types.String, _types.String));
+            il.Emit(OpCodes.Leave, afterTry);
 
-        // Directory.Move
-        il.Emit(OpCodes.Ldloc, oldPathLocal);
-        il.Emit(OpCodes.Ldloc, newPathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Move", _types.String, _types.String));
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // File.Move
-        il.MarkLabel(isFileLabel);
-        il.Emit(OpCodes.Ldloc, oldPathLocal);
-        il.Emit(OpCodes.Ldloc, newPathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Move", _types.String, _types.String));
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "rename");       // syscall
-        il.Emit(OpCodes.Ldloc, oldPathLocal);   // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            // File.Move
+            il.MarkLabel(isFileLabel);
+            il.Emit(OpCodes.Ldloc, oldPathLocal);
+            il.Emit(OpCodes.Ldloc, newPathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Move", _types.String, _types.String));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -743,7 +646,6 @@ public partial class RuntimeEmitter
         runtime.FsCopyFileSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert paths to strings
         il.Emit(OpCodes.Ldarg_0);
@@ -756,28 +658,15 @@ public partial class RuntimeEmitter
         var destLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, destLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
-
-        // File.Copy(src, dest, overwrite: true)
-        il.Emit(OpCodes.Ldloc, srcLocal);
-        il.Emit(OpCodes.Ldloc, destLocal);
-        il.Emit(OpCodes.Ldc_I4_1); // overwrite = true
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Copy", _types.String, _types.String, _types.Boolean));
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "copyfile");     // syscall
-        il.Emit(OpCodes.Ldloc, srcLocal);       // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+        EmitWithFsErrorHandling(il, runtime, srcLocal, "copyfile", afterTry =>
+        {
+            // File.Copy(src, dest, overwrite: true)
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, destLocal);
+            il.Emit(OpCodes.Ldc_I4_1); // overwrite = true
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Copy", _types.String, _types.String, _types.Boolean));
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 
@@ -796,7 +685,6 @@ public partial class RuntimeEmitter
         runtime.FsAccessSync = method;
 
         var il = method.GetILGenerator();
-        var caughtExLocal = il.DeclareLocal(_types.Exception);
 
         // Convert path to string
         il.Emit(OpCodes.Ldarg_0);
@@ -804,40 +692,27 @@ public partial class RuntimeEmitter
         var pathLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, pathLocal);
 
-        // Begin try block
-        il.BeginExceptionBlock();
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "access", afterTry =>
+        {
+            // Check if exists (File.Exists || Directory.Exists)
+            var existsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, existsLabel);
 
-        // Check if exists (File.Exists || Directory.Exists)
-        var existsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
-        il.Emit(OpCodes.Brtrue, existsLabel);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, existsLabel);
 
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
-        il.Emit(OpCodes.Brtrue, existsLabel);
+            // Throw FileNotFoundException
+            il.Emit(OpCodes.Ldstr, "no such file or directory");
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
+            il.Emit(OpCodes.Throw);
 
-        // Throw FileNotFoundException
-        il.Emit(OpCodes.Ldstr, "no such file or directory");
-        il.Emit(OpCodes.Ldloc, pathLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
-        il.Emit(OpCodes.Throw);
-
-        il.MarkLabel(existsLabel);
-        var afterTry = il.DefineLabel();
-        il.Emit(OpCodes.Leave, afterTry);
-
-        // Catch block - convert exception to NodeError and rethrow
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Stloc, caughtExLocal);
-        il.Emit(OpCodes.Ldloc, caughtExLocal);  // exception
-        il.Emit(OpCodes.Ldstr, "access");       // syscall
-        il.Emit(OpCodes.Ldloc, pathLocal);      // path
-        il.Emit(OpCodes.Call, runtime.ThrowNodeError);
-        il.Emit(OpCodes.Rethrow);
-
-        il.EndExceptionBlock();
-        il.MarkLabel(afterTry);
+            il.MarkLabel(existsLabel);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
         il.Emit(OpCodes.Ret);
     }
 }
