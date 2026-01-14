@@ -60,15 +60,21 @@ public partial class Interpreter
         {
             return _environment.GetAt(distance, name.Lexeme);
         }
-        
-        // Check for built-in singleton namespaces (e.g., Math)
+
+        // Check user-defined variables first (allows shadowing built-ins)
+        if (_environment.IsDefined(name.Lexeme))
+        {
+            return _environment.Get(name);
+        }
+
+        // Check for built-in singleton namespaces (e.g., Math, process)
         var singleton = BuiltInRegistry.Instance.GetSingleton(name.Lexeme);
         if (singleton != null)
         {
             return singleton;
         }
 
-        // Fallback to global/dynamic lookup if not resolved (or global)
+        // Fallback to global/dynamic lookup (will throw if not found)
         return _environment.Get(name);
     }
 

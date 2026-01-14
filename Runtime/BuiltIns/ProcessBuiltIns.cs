@@ -121,9 +121,9 @@ public static class ProcessBuiltIns
     private static object? Exit(Interpreter i, object? r, List<object?> args)
     {
         int exitCode = 0;
-        if (args.Count > 0 && args[0] != null)
+        if (args.Count > 0 && args[0] is double d)
         {
-            exitCode = (int)(double)args[0];
+            exitCode = (int)d;
         }
         Environment.Exit(exitCode);
         return null; // Never reached

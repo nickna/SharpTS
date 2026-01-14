@@ -91,9 +91,10 @@ public class ImportTypeTests
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
         Assert.Single(import.NamedImports!);
-        Assert.True(import.NamedImports[0].IsTypeOnly);
-        Assert.Equal("Foo", import.NamedImports[0].Imported.Lexeme);
-        Assert.Equal("Bar", import.NamedImports[0].LocalName?.Lexeme);
+        var namedImport = import.NamedImports![0];
+        Assert.True(namedImport.IsTypeOnly);
+        Assert.Equal("Foo", namedImport.Imported.Lexeme);
+        Assert.Equal("Bar", namedImport.LocalName?.Lexeme);
     }
 
     [Fact]

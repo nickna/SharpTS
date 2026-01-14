@@ -36,6 +36,16 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
         throw new Exception($"Undefined variable '{name.Lexeme}'.");
     }
 
+    /// <summary>
+    /// Checks if a variable is defined in this scope or any enclosing scope.
+    /// </summary>
+    public bool IsDefined(string name)
+    {
+        if (_values.ContainsKey(name))
+            return true;
+        return Enclosing?.IsDefined(name) ?? false;
+    }
+
     public void Assign(Token name, object? value)
     {
         if (_values.ContainsKey(name.Lexeme))
