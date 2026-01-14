@@ -148,7 +148,7 @@ public abstract record Stmt
     public record Switch(Expr Subject, List<SwitchCase> Cases, List<Stmt>? DefaultBody) : Stmt;
     public record TryCatch(List<Stmt> TryBlock, Token? CatchParam, List<Stmt>? CatchBlock, List<Stmt>? FinallyBlock) : Stmt;
     public record Throw(Token Keyword, Expr Value) : Stmt;
-    public record TypeAlias(Token Name, string TypeDefinition) : Stmt;
+    public record TypeAlias(Token Name, string TypeDefinition, List<TypeParam>? TypeParameters = null) : Stmt;
     public record EnumMember(Token Name, Expr? Value);
     public record Enum(Token Name, List<EnumMember> Members, bool IsConst = false) : Stmt;
 

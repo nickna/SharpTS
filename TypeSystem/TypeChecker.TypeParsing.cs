@@ -39,6 +39,21 @@ public partial class TypeChecker
             return new TypeInfo.KeyOf(innerType);
         }
 
+        // Handle infer keyword for conditional types: "infer U"
+        if (typeName.StartsWith("infer "))
+        {
+            string paramName = typeName[6..].Trim();
+            return new TypeInfo.InferredTypeParameter(paramName);
+        }
+
+        // Handle conditional types: "T extends U ? X : Y"
+        // Must check BEFORE union types since conditional has lowest precedence
+        var conditionalMatch = TryParseConditionalType(typeName);
+        if (conditionalMatch != null)
+        {
+            return conditionalMatch;
+        }
+
         // Handle generic type syntax: Box<number>, Map<string, number>
         if (typeName.Contains('<') && typeName.Contains('>'))
         {
@@ -840,6 +855,82 @@ public partial class TypeChecker
                      (i + 4 >= str.Length || !char.IsLetterOrDigit(str[i + 4])))
             {
                 return i + 1; // Return index after the space, at 'as'
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Tries to parse a conditional type string. Returns null if not a conditional type.
+    /// Format: "CheckType extends ExtendsType ? TrueType : FalseType"
+    /// </summary>
+    private TypeInfo? TryParseConditionalType(string typeName)
+    {
+        // Find " extends " at the top level (not inside brackets)
+        int extendsIndex = FindTopLevelKeyword(typeName, " extends ");
+        if (extendsIndex < 0) return null;
+
+        string checkTypeStr = typeName[..extendsIndex].Trim();
+        string remainder = typeName[(extendsIndex + 9)..]; // Skip " extends "
+
+        // Find the '?' at the top level
+        int questionIndex = FindTopLevelChar(remainder, '?');
+        if (questionIndex < 0) return null;
+
+        string extendsTypeStr = remainder[..questionIndex].Trim();
+        string afterQuestion = remainder[(questionIndex + 1)..].Trim();
+
+        // Find the ':' at the top level
+        int colonIndex = FindTopLevelChar(afterQuestion, ':');
+        if (colonIndex < 0) return null;
+
+        string trueTypeStr = afterQuestion[..colonIndex].Trim();
+        string falseTypeStr = afterQuestion[(colonIndex + 1)..].Trim();
+
+        // Parse all four type components
+        TypeInfo checkType = ToTypeInfo(checkTypeStr);
+        TypeInfo extendsType = ToTypeInfo(extendsTypeStr);
+        TypeInfo trueType = ToTypeInfo(trueTypeStr);
+        TypeInfo falseType = ToTypeInfo(falseTypeStr);
+
+        return new TypeInfo.ConditionalType(checkType, extendsType, trueType, falseType);
+    }
+
+    /// <summary>
+    /// Finds a keyword at the top level (not inside brackets/parens/braces/angle brackets).
+    /// Returns the index of the first character of the keyword, or -1 if not found.
+    /// </summary>
+    private static int FindTopLevelKeyword(string str, string keyword)
+    {
+        int depth = 0;
+        for (int i = 0; i <= str.Length - keyword.Length; i++)
+        {
+            char c = str[i];
+            if (c == '<' || c == '(' || c == '[' || c == '{') depth++;
+            else if (c == '>' || c == ')' || c == ']' || c == '}') depth--;
+            else if (depth == 0 && str.Substring(i, keyword.Length) == keyword)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Finds a character at the top level (not inside brackets/parens/braces/angle brackets).
+    /// Returns the index of the character, or -1 if not found.
+    /// </summary>
+    private static int FindTopLevelChar(string str, char target)
+    {
+        int depth = 0;
+        for (int i = 0; i < str.Length; i++)
+        {
+            char c = str[i];
+            if (c == '<' || c == '(' || c == '[' || c == '{') depth++;
+            else if (c == '>' || c == ')' || c == ']' || c == '}') depth--;
+            else if (depth == 0 && c == target)
+            {
+                return i;
             }
         }
         return -1;

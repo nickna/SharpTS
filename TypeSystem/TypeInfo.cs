@@ -618,6 +618,35 @@ public abstract record TypeInfo
     {
         public override string ToString() => $"{ObjectType}[{IndexType}]";
     }
+
+    /// <summary>
+    /// Represents a conditional type: T extends U ? X : Y
+    /// Conditional types are evaluated lazily, distributing over union types.
+    /// </summary>
+    /// <param name="CheckType">The type being checked (T in T extends U ? X : Y)</param>
+    /// <param name="ExtendsType">The constraint type (U)</param>
+    /// <param name="TrueType">The type if T extends U (X)</param>
+    /// <param name="FalseType">The type if T does not extend U (Y)</param>
+    public record ConditionalType(
+        TypeInfo CheckType,
+        TypeInfo ExtendsType,
+        TypeInfo TrueType,
+        TypeInfo FalseType
+    ) : TypeInfo
+    {
+        public override string ToString() =>
+            $"{CheckType} extends {ExtendsType} ? {TrueType} : {FalseType}";
+    }
+
+    /// <summary>
+    /// Represents an inferred type parameter in a conditional type's extends clause.
+    /// Used for pattern matching: T extends Array&lt;infer U&gt; ? U : T
+    /// </summary>
+    /// <param name="Name">The name of the inferred type parameter (e.g., "U")</param>
+    public record InferredTypeParameter(string Name) : TypeInfo
+    {
+        public override string ToString() => $"infer {Name}";
+    }
 }
 
 public class TypeInfoEqualityComparer : IEqualityComparer<TypeInfo>

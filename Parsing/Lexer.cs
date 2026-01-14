@@ -56,6 +56,7 @@ public class Lexer(string source)
         { "implements", TokenType.IMPLEMENTS },
         { "import", TokenType.IMPORT },
         { "in", TokenType.IN },
+        { "infer", TokenType.INFER },
         { "instanceof", TokenType.INSTANCEOF },
         { "interface", TokenType.INTERFACE },
         { "keyof", TokenType.KEYOF },

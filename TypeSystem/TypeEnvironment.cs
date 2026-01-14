@@ -19,6 +19,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
 {
     private readonly Dictionary<string, TypeInfo> _types = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _typeAliases = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Definition, List<string> TypeParams)> _genericTypeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly TypeEnvironment? _enclosing = enclosing;
@@ -97,6 +98,24 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
         if (_typeAliases.TryGetValue(name, out var definition))
             return definition;
         return _enclosing?.GetTypeAlias(name);
+    }
+
+    /// <summary>
+    /// Defines a generic type alias with type parameters.
+    /// </summary>
+    public void DefineGenericTypeAlias(string name, string definition, List<string> typeParams)
+    {
+        _genericTypeAliases[name] = (definition, typeParams);
+    }
+
+    /// <summary>
+    /// Gets a generic type alias definition by name.
+    /// </summary>
+    public (string Definition, List<string> TypeParams)? GetGenericTypeAlias(string name)
+    {
+        if (_genericTypeAliases.TryGetValue(name, out var alias))
+            return alias;
+        return _enclosing?.GetGenericTypeAlias(name);
     }
 
     /// <summary>

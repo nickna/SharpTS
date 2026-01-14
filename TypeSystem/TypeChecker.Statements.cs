@@ -75,7 +75,17 @@ public partial class TypeChecker
                 break;
 
             case Stmt.TypeAlias typeAlias:
-                _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+                if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
+                {
+                    // Generic type alias: type Foo<T, U> = ...
+                    var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
+                }
+                else
+                {
+                    // Simple type alias: type Foo = ...
+                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+                }
                 break;
 
             case Stmt.Enum enumStmt:

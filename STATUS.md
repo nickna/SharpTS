@@ -226,7 +226,7 @@ This document tracks TypeScript language features and their implementation statu
 | Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
 | `bigint` type | ✅ | Arbitrary precision integers with full operation support |
 | Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
-| Conditional types | ❌ | `T extends U ? X : Y` |
+| Conditional types | ✅ | `T extends U ? X : Y`, `infer` keyword, distribution over unions |
 | Template literal types | ❌ | `` `${string}ID` `` |
 | Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>` |
 

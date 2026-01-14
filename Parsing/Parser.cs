@@ -177,7 +177,12 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         Check(TokenType.NULL) ||
         Check(TokenType.LEFT_PAREN) ||
         Check(TokenType.LEFT_BRACE) ||  // for inline object types: { x: number }
-        Check(TokenType.LEFT_BRACKET);  // for tuple types: [string, number]
+        Check(TokenType.LEFT_BRACKET) ||  // for tuple types: [string, number]
+        Check(TokenType.INFER) ||  // for conditional type infer patterns
+        Check(TokenType.STRING) ||  // for string literal types: "hello" | "world"
+        Check(TokenType.NUMBER) ||  // for number literal types: 1 | 2 | 3
+        Check(TokenType.TRUE) ||  // for boolean literal type true
+        Check(TokenType.FALSE);  // for boolean literal type false
 
     // ============== GENERIC TYPE CLOSING BRACKET HANDLING ==============
     //

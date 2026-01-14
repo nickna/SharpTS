@@ -125,16 +125,40 @@ public partial class TypeChecker
         }
         else
         {
-            // Look up the generic definition
-            TypeInfo? genericDef = _environment.Get(baseName);
-
-            result = genericDef switch
+            // Check for generic type alias first
+            var genericAlias = _environment.GetGenericTypeAlias(baseName);
+            if (genericAlias != null)
             {
-                TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
-                TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
-                TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
-                _ => new TypeInfo.Any() // Unknown generic type - fallback to any
-            };
+                var (definition, typeParamNames) = genericAlias.Value;
+                if (typeArgs.Count != typeParamNames.Count)
+                {
+                    throw new TypeCheckException($" Type alias '{baseName}' requires {typeParamNames.Count} type argument(s), got {typeArgs.Count}.");
+                }
+
+                // Substitute type parameters in the definition string
+                string expanded = definition;
+                for (int i = 0; i < typeParamNames.Count; i++)
+                {
+                    // Replace type parameter with actual type argument string
+                    expanded = SubstituteTypeParamInString(expanded, typeParamNames[i], typeArgStrings[i]);
+                }
+
+                // Parse the expanded definition
+                result = ToTypeInfo(expanded);
+            }
+            else
+            {
+                // Look up the generic definition
+                TypeInfo? genericDef = _environment.Get(baseName);
+
+                result = genericDef switch
+                {
+                    TypeInfo.GenericClass gc => new TypeInfo.Instance(InstantiateGenericClass(gc, typeArgs)),
+                    TypeInfo.GenericInterface gi => InstantiateGenericInterface(gi, typeArgs),
+                    TypeInfo.GenericFunction gf => InstantiateGenericFunction(gf, typeArgs),
+                    _ => new TypeInfo.Any() // Unknown generic type - fallback to any
+                };
+            }
         }
 
         // Handle array suffix(es) after the generic type
@@ -174,6 +198,39 @@ public partial class TypeChecker
         }
 
         return args;
+    }
+
+    /// <summary>
+    /// Substitutes a type parameter name with an actual type string in a type definition.
+    /// Handles word boundaries to avoid partial replacements (e.g., "T" shouldn't match "Type").
+    /// </summary>
+    private static string SubstituteTypeParamInString(string definition, string paramName, string replacement)
+    {
+        // Use word boundary matching to avoid partial replacements
+        var result = new System.Text.StringBuilder();
+        int i = 0;
+        while (i < definition.Length)
+        {
+            // Check if we're at the start of paramName
+            if (i + paramName.Length <= definition.Length &&
+                definition.Substring(i, paramName.Length) == paramName)
+            {
+                // Check word boundaries
+                bool startBoundary = i == 0 || !char.IsLetterOrDigit(definition[i - 1]);
+                bool endBoundary = i + paramName.Length >= definition.Length ||
+                                   !char.IsLetterOrDigit(definition[i + paramName.Length]);
+
+                if (startBoundary && endBoundary)
+                {
+                    result.Append(replacement);
+                    i += paramName.Length;
+                    continue;
+                }
+            }
+            result.Append(definition[i]);
+            i++;
+        }
+        return result.ToString();
     }
 
     /// <summary>
@@ -305,6 +362,12 @@ public partial class TypeChecker
                 new TypeInfo.IndexedAccess(
                     Substitute(ia.ObjectType, substitutions),
                     Substitute(ia.IndexType, substitutions)),
+            // Conditional types: evaluate with current substitutions
+            TypeInfo.ConditionalType cond =>
+                EvaluateConditionalType(cond, substitutions),
+            // Inferred type parameters: substitute if bound, else keep as-is
+            TypeInfo.InferredTypeParameter infer =>
+                substitutions.TryGetValue(infer.Name, out var inferSub) ? inferSub : type,
             // Primitives, Any, Void, Never, Unknown, Null pass through unchanged
             _ => type
         };
@@ -1217,5 +1280,397 @@ public partial class TypeChecker
         }
 
         return keys;
+    }
+
+    // ==================== CONDITIONAL TYPE EVALUATION ====================
+
+    /// <summary>
+    /// Maximum recursion depth for conditional type evaluation.
+    /// Prevents infinite loops in recursive type definitions.
+    /// </summary>
+    private const int MaxConditionalTypeDepth = 50;
+
+    /// <summary>
+    /// Tracks current recursion depth during conditional type evaluation.
+    /// Thread-local to handle concurrent type checking safely.
+    /// </summary>
+    [ThreadStatic]
+    private static int _conditionalTypeDepth;
+
+    /// <summary>
+    /// Evaluates a conditional type, handling distribution over unions and infer patterns.
+    /// </summary>
+    /// <param name="conditional">The conditional type to evaluate</param>
+    /// <param name="substitutions">Current type parameter substitutions</param>
+    /// <returns>The resolved type after conditional evaluation</returns>
+    public TypeInfo EvaluateConditionalType(
+        TypeInfo.ConditionalType conditional,
+        Dictionary<string, TypeInfo>? substitutions = null)
+    {
+        substitutions ??= [];
+
+        // Check recursion depth
+        if (_conditionalTypeDepth >= MaxConditionalTypeDepth)
+        {
+            throw new TypeCheckException(
+                $"Conditional type recursion depth exceeded {MaxConditionalTypeDepth}. " +
+                "This may indicate an infinitely recursive type definition.");
+        }
+
+        _conditionalTypeDepth++;
+        try
+        {
+            // Apply current substitutions to the check type
+            TypeInfo checkType = SubstituteWithoutConditionalEval(conditional.CheckType, substitutions);
+
+            // If check type is still a naked type parameter (not substituted), defer evaluation
+            if (checkType is TypeInfo.TypeParameter)
+            {
+                // Return unevaluated conditional with substitutions applied
+                return new TypeInfo.ConditionalType(
+                    checkType,
+                    SubstituteWithoutConditionalEval(conditional.ExtendsType, substitutions),
+                    SubstituteWithoutConditionalEval(conditional.TrueType, substitutions),
+                    SubstituteWithoutConditionalEval(conditional.FalseType, substitutions)
+                );
+            }
+
+            // Distribution: if check type is a union (either from substitution or directly), distribute
+            // This handles both: T extends U ? X : Y where T substitutes to union,
+            // and directly expanded types like: string | number extends U ? X : Y
+            if (checkType is TypeInfo.Union union)
+            {
+                return DistributeConditionalOverUnion(conditional, union, substitutions);
+            }
+
+            // Apply substitutions to the extends type
+            TypeInfo extendsType = SubstituteWithoutConditionalEval(conditional.ExtendsType, substitutions);
+
+            // Perform the extends check with infer pattern matching
+            var (matches, inferredTypes) = CheckExtendsWithInfer(checkType, extendsType);
+
+            // Merge inferred types into substitutions
+            var newSubstitutions = new Dictionary<string, TypeInfo>(substitutions);
+            foreach (var (name, type) in inferredTypes)
+            {
+                newSubstitutions[name] = type;
+            }
+
+            // Evaluate true or false branch based on extends check result
+            TypeInfo resultType = matches
+                ? Substitute(conditional.TrueType, newSubstitutions)
+                : Substitute(conditional.FalseType, substitutions);
+
+            return resultType;
+        }
+        finally
+        {
+            _conditionalTypeDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Substitutes type parameters without triggering conditional type evaluation (to avoid infinite recursion).
+    /// </summary>
+    private TypeInfo SubstituteWithoutConditionalEval(TypeInfo type, Dictionary<string, TypeInfo> substitutions)
+    {
+        return type switch
+        {
+            TypeInfo.TypeParameter tp =>
+                substitutions.TryGetValue(tp.Name, out var sub) ? sub : type,
+            TypeInfo.Array arr =>
+                new TypeInfo.Array(SubstituteWithoutConditionalEval(arr.ElementType, substitutions)),
+            TypeInfo.Promise promise =>
+                new TypeInfo.Promise(SubstituteWithoutConditionalEval(promise.ValueType, substitutions)),
+            TypeInfo.Function func =>
+                new TypeInfo.Function(
+                    func.ParamTypes.Select(p => SubstituteWithoutConditionalEval(p, substitutions)).ToList(),
+                    SubstituteWithoutConditionalEval(func.ReturnType, substitutions),
+                    func.RequiredParams,
+                    func.HasRestParam),
+            TypeInfo.Tuple tuple =>
+                new TypeInfo.Tuple(
+                    tuple.ElementTypes.Select(e => SubstituteWithoutConditionalEval(e, substitutions)).ToList(),
+                    tuple.RequiredCount,
+                    tuple.RestElementType != null ? SubstituteWithoutConditionalEval(tuple.RestElementType, substitutions) : null),
+            TypeInfo.Union union =>
+                new TypeInfo.Union(union.Types.Select(t => SubstituteWithoutConditionalEval(t, substitutions)).ToList()),
+            TypeInfo.Record rec =>
+                new TypeInfo.Record(
+                    rec.Fields.ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => SubstituteWithoutConditionalEval(kvp.Value, substitutions)).ToFrozenDictionary()),
+            TypeInfo.InstantiatedGeneric ig =>
+                new TypeInfo.InstantiatedGeneric(
+                    ig.GenericDefinition,
+                    ig.TypeArguments.Select(a => SubstituteWithoutConditionalEval(a, substitutions)).ToList()),
+            TypeInfo.KeyOf keyOf =>
+                new TypeInfo.KeyOf(SubstituteWithoutConditionalEval(keyOf.SourceType, substitutions)),
+            TypeInfo.IndexedAccess ia =>
+                new TypeInfo.IndexedAccess(
+                    SubstituteWithoutConditionalEval(ia.ObjectType, substitutions),
+                    SubstituteWithoutConditionalEval(ia.IndexType, substitutions)),
+            TypeInfo.ConditionalType cond =>
+                new TypeInfo.ConditionalType(
+                    SubstituteWithoutConditionalEval(cond.CheckType, substitutions),
+                    SubstituteWithoutConditionalEval(cond.ExtendsType, substitutions),
+                    SubstituteWithoutConditionalEval(cond.TrueType, substitutions),
+                    SubstituteWithoutConditionalEval(cond.FalseType, substitutions)),
+            TypeInfo.InferredTypeParameter infer =>
+                substitutions.TryGetValue(infer.Name, out var inferSub) ? inferSub : type,
+            _ => type
+        };
+    }
+
+    /// <summary>
+    /// Distributes a conditional type over a union type.
+    /// (A | B) extends U ? X : Y becomes (A extends U ? X : Y) | (B extends U ? X : Y)
+    /// </summary>
+    private TypeInfo DistributeConditionalOverUnion(
+        TypeInfo.ConditionalType conditional,
+        TypeInfo.Union union,
+        Dictionary<string, TypeInfo> substitutions)
+    {
+        List<TypeInfo> resultTypes = [];
+
+        foreach (var memberType in union.FlattenedTypes)
+        {
+            // Create substitutions with the union member replacing the original type parameter
+            var memberSubs = new Dictionary<string, TypeInfo>(substitutions);
+            if (conditional.CheckType is TypeInfo.TypeParameter tp)
+            {
+                memberSubs[tp.Name] = memberType;
+            }
+
+            // Create a new conditional with this union member as the check type
+            var distributed = new TypeInfo.ConditionalType(
+                memberType,
+                conditional.ExtendsType,
+                conditional.TrueType,
+                conditional.FalseType
+            );
+
+            // Evaluate the distributed conditional
+            var result = EvaluateConditionalType(distributed, memberSubs);
+
+            // Skip 'never' results (they disappear from unions)
+            if (result is not TypeInfo.Never)
+            {
+                resultTypes.Add(result);
+            }
+        }
+
+        // Build result union
+        if (resultTypes.Count == 0)
+            return new TypeInfo.Never();
+        if (resultTypes.Count == 1)
+            return resultTypes[0];
+
+        // Deduplicate and flatten
+        var flattenedTypes = resultTypes
+            .SelectMany(t => t is TypeInfo.Union u ? u.FlattenedTypes : [t])
+            .Distinct(TypeInfoEqualityComparer.Instance)
+            .ToList();
+
+        if (flattenedTypes.Count == 1)
+            return flattenedTypes[0];
+
+        return new TypeInfo.Union(flattenedTypes);
+    }
+
+    /// <summary>
+    /// Checks if a type extends another type, with support for infer pattern matching.
+    /// Returns (matches, inferredTypes) where inferredTypes contains bindings for infer parameters.
+    /// </summary>
+    private (bool Matches, Dictionary<string, TypeInfo> InferredTypes) CheckExtendsWithInfer(
+        TypeInfo checkType,
+        TypeInfo extendsType)
+    {
+        var inferredTypes = new Dictionary<string, TypeInfo>();
+        bool matches = CheckExtendsRecursive(checkType, extendsType, inferredTypes);
+        return (matches, inferredTypes);
+    }
+
+    /// <summary>
+    /// Recursively checks the extends relationship, extracting infer bindings.
+    /// </summary>
+    private bool CheckExtendsRecursive(
+        TypeInfo checkType,
+        TypeInfo extendsType,
+        Dictionary<string, TypeInfo> inferredTypes)
+    {
+        // Handle infer pattern: T extends infer U - bind U to the check type
+        if (extendsType is TypeInfo.InferredTypeParameter inferParam)
+        {
+            if (inferredTypes.TryGetValue(inferParam.Name, out var existing))
+            {
+                // Already inferred - check consistency
+                return IsCompatible(existing, checkType) || IsCompatible(checkType, existing);
+            }
+            inferredTypes[inferParam.Name] = checkType;
+            return true;
+        }
+
+        // Array<infer U> matching
+        if (extendsType is TypeInfo.Array extendsArr)
+        {
+            if (checkType is TypeInfo.Array checkArr)
+            {
+                return CheckExtendsRecursive(checkArr.ElementType, extendsArr.ElementType, inferredTypes);
+            }
+            if (checkType is TypeInfo.Tuple checkTuple)
+            {
+                // Tuple extends Array if all elements extend the array element type
+                if (extendsArr.ElementType is TypeInfo.InferredTypeParameter tupleInfer)
+                {
+                    // Infer the union of all tuple element types
+                    TypeInfo unionOfElements = checkTuple.ElementTypes.Count switch
+                    {
+                        0 => new TypeInfo.Never(),
+                        1 => checkTuple.ElementTypes[0],
+                        _ => new TypeInfo.Union(checkTuple.ElementTypes)
+                    };
+                    inferredTypes[tupleInfer.Name] = unionOfElements;
+                    return true;
+                }
+                return checkTuple.ElementTypes.All(e =>
+                    CheckExtendsRecursive(e, extendsArr.ElementType, inferredTypes));
+            }
+            return false;
+        }
+
+        // Promise<infer T> matching
+        if (extendsType is TypeInfo.Promise extendsPromise)
+        {
+            if (checkType is TypeInfo.Promise checkPromise)
+            {
+                return CheckExtendsRecursive(checkPromise.ValueType, extendsPromise.ValueType, inferredTypes);
+            }
+            return false;
+        }
+
+        // Function type matching with infer for return/param types
+        if (extendsType is TypeInfo.Function extendsFunc)
+        {
+            if (checkType is TypeInfo.Function checkFunc)
+            {
+                // Function assignability is contravariant in parameters, covariant in return
+                // For infer in parameters, we infer from the check function's params
+                // For infer in return, we infer from the check function's return
+
+                // Match parameters (check function should have at least as many params)
+                for (int i = 0; i < extendsFunc.ParamTypes.Count; i++)
+                {
+                    TypeInfo extendsParam = extendsFunc.ParamTypes[i];
+                    TypeInfo checkParam = i < checkFunc.ParamTypes.Count
+                        ? checkFunc.ParamTypes[i]
+                        : new TypeInfo.Any();
+
+                    if (!CheckExtendsRecursive(checkParam, extendsParam, inferredTypes))
+                        return false;
+                }
+
+                // Match return type (covariant)
+                return CheckExtendsRecursive(checkFunc.ReturnType, extendsFunc.ReturnType, inferredTypes);
+            }
+            return false;
+        }
+
+        // Tuple matching
+        if (extendsType is TypeInfo.Tuple extendsTuple)
+        {
+            if (checkType is TypeInfo.Tuple checkTuple)
+            {
+                // Check tuple has at least as many elements
+                if (checkTuple.ElementTypes.Count < extendsTuple.RequiredCount)
+                    return false;
+
+                // Match element types
+                for (int i = 0; i < extendsTuple.ElementTypes.Count && i < checkTuple.ElementTypes.Count; i++)
+                {
+                    if (!CheckExtendsRecursive(checkTuple.ElementTypes[i], extendsTuple.ElementTypes[i], inferredTypes))
+                        return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        // InstantiatedGeneric matching (e.g., Box<infer T>)
+        if (extendsType is TypeInfo.InstantiatedGeneric extendsGeneric)
+        {
+            if (checkType is TypeInfo.InstantiatedGeneric checkGeneric)
+            {
+                // Must be same generic base
+                if (!IsSameGenericDefinition(checkGeneric.GenericDefinition, extendsGeneric.GenericDefinition))
+                    return false;
+
+                // Match type arguments
+                if (checkGeneric.TypeArguments.Count != extendsGeneric.TypeArguments.Count)
+                    return false;
+
+                for (int i = 0; i < extendsGeneric.TypeArguments.Count; i++)
+                {
+                    if (!CheckExtendsRecursive(checkGeneric.TypeArguments[i], extendsGeneric.TypeArguments[i], inferredTypes))
+                        return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        // Record/object type matching
+        if (extendsType is TypeInfo.Record extendsRec)
+        {
+            var checkProps = ExtractPropertiesWithTypes(checkType);
+            foreach (var (key, extendsFieldType) in extendsRec.Fields)
+            {
+                if (!checkProps.TryGetValue(key, out var checkFieldType))
+                    return false;
+                if (!CheckExtendsRecursive(checkFieldType, extendsFieldType, inferredTypes))
+                    return false;
+            }
+            return true;
+        }
+
+        // Interface matching
+        if (extendsType is TypeInfo.Interface extendsItf)
+        {
+            var checkProps = ExtractPropertiesWithTypes(checkType);
+            foreach (var (key, extendsFieldType) in extendsItf.Members)
+            {
+                if (extendsItf.OptionalMembers.Contains(key))
+                    continue; // Optional members don't need to exist
+
+                if (!checkProps.TryGetValue(key, out var checkFieldType))
+                    return false;
+                if (!CheckExtendsRecursive(checkFieldType, extendsFieldType, inferredTypes))
+                    return false;
+            }
+            return true;
+        }
+
+        // Union on extends side: check type must extend ALL members (intersection semantics)
+        if (extendsType is TypeInfo.Union extendsUnion)
+        {
+            // For conditional types, extends union is satisfied if check extends any member
+            return extendsUnion.FlattenedTypes.Any(t => CheckExtendsRecursive(checkType, t, inferredTypes));
+        }
+
+        // Fall back to standard compatibility check (no infer patterns)
+        return IsCompatible(extendsType, checkType);
+    }
+
+    /// <summary>
+    /// Checks if two generic definitions refer to the same generic type.
+    /// </summary>
+    private static bool IsSameGenericDefinition(TypeInfo def1, TypeInfo def2)
+    {
+        return (def1, def2) switch
+        {
+            (TypeInfo.GenericClass gc1, TypeInfo.GenericClass gc2) => gc1.Name == gc2.Name,
+            (TypeInfo.GenericInterface gi1, TypeInfo.GenericInterface gi2) => gi1.Name == gi2.Name,
+            _ => false
+        };
     }
 }

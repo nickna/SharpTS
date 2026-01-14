@@ -4,7 +4,48 @@ public partial class Parser
 {
     private string ParseTypeAnnotation()
     {
-        return ParseUnionType();
+        return ParseConditionalType();
+    }
+
+    /// <summary>
+    /// Parses conditional types: T extends U ? X : Y
+    /// Conditional types have the lowest precedence among type operators.
+    /// </summary>
+    private string ParseConditionalType()
+    {
+        string checkType = ParseUnionType();
+
+        // Check for "extends" keyword indicating a conditional type
+        if (!Check(TokenType.EXTENDS))
+            return checkType;
+
+        // This might be a constraint in generics - we need to look ahead
+        // for the ternary operator to confirm this is a conditional type
+        int saved = _current;
+        Advance(); // consume 'extends'
+
+        // Parse the extends type (which may contain 'infer' keywords)
+        string extendsType = ParseUnionType();
+
+        // Must have '?' for this to be a conditional type
+        if (!Check(TokenType.QUESTION))
+        {
+            // Not a conditional type - backtrack
+            _current = saved;
+            return checkType;
+        }
+
+        Advance(); // consume '?'
+
+        // Parse true branch (recursive - can contain nested conditionals)
+        string trueType = ParseConditionalType();
+
+        Consume(TokenType.COLON, "Expect ':' in conditional type.");
+
+        // Parse false branch (recursive - can contain nested conditionals)
+        string falseType = ParseConditionalType();
+
+        return $"{checkType} extends {extendsType} ? {trueType} : {falseType}";
     }
 
     private string ParseUnionType()
@@ -39,6 +80,13 @@ public partial class Parser
     private string ParsePrimaryType()
     {
         string typeName;
+
+        // Handle infer keyword for conditional types: infer U
+        if (Match(TokenType.INFER))
+        {
+            Token paramName = Consume(TokenType.IDENTIFIER, "Expect type parameter name after 'infer'.");
+            return $"infer {paramName.Lexeme}";
+        }
 
         // Handle keyof prefix operator: keyof T
         if (Match(TokenType.KEYOF))

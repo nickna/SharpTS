@@ -96,6 +96,10 @@ public class TypeMapper
         TypeInfo.GenericFunction => _types.Object,
         TypeInfo.GenericInterface => _types.Object,
         TypeInfo.InstantiatedGeneric => _types.Object,
+        // Conditional types should be fully evaluated during type checking
+        // If they reach IL emission, fall back to object
+        TypeInfo.ConditionalType => _types.Object,
+        TypeInfo.InferredTypeParameter => _types.Object,
         _ => _types.Object
     };
 
@@ -171,6 +175,9 @@ public class TypeMapper
         TypeInfo.GenericFunction => _types.Delegate,
         TypeInfo.GenericInterface => _types.Object,
         TypeInfo.InstantiatedGeneric ig => MapInstantiatedGenericStrict(ig),
+        // Conditional types should be evaluated during type checking
+        TypeInfo.ConditionalType => _types.Object,
+        TypeInfo.InferredTypeParameter => _types.Object,
         _ => _types.Object
     };
 

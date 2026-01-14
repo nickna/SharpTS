@@ -76,6 +76,10 @@ public partial class Parser
     private Stmt TypeAliasDeclaration()
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect type alias name.");
+
+        // Parse optional generic type parameters: type Foo<T, U extends Base> = ...
+        List<TypeParam>? typeParams = ParseTypeParameters();
+
         Consume(TokenType.EQUAL, "Expect '=' after type alias name.");
 
         // ParseTypeAnnotation handles all cases including:
@@ -83,11 +87,12 @@ public partial class Parser
         // - Grouped types: (A & B) | C
         // - Union types: A | B
         // - Intersection types: A & B
+        // - Conditional types: T extends U ? X : Y
         // The disambiguation is done in ParsePrimaryType
         string typeDef = ParseTypeAnnotation();
 
         Consume(TokenType.SEMICOLON, "Expect ';' after type alias.");
-        return new Stmt.TypeAlias(name, typeDef);
+        return new Stmt.TypeAlias(name, typeDef, typeParams);
     }
 
     private string ParseFunctionTypeDefinition()

@@ -144,6 +144,25 @@ public partial class TypeChecker
             return IsCompatible(expected, expandedActual);
         }
 
+        // Conditional type compatibility - evaluate then compare
+        if (expected is TypeInfo.ConditionalType expectedCond)
+        {
+            TypeInfo expandedExpected = EvaluateConditionalType(expectedCond);
+            return IsCompatible(expandedExpected, actual);
+        }
+        if (actual is TypeInfo.ConditionalType actualCond)
+        {
+            TypeInfo expandedActual = EvaluateConditionalType(actualCond);
+            return IsCompatible(expected, expandedActual);
+        }
+
+        // InferredTypeParameter should not appear in compatibility checks
+        // (they should be resolved during conditional type evaluation)
+        if (expected is TypeInfo.InferredTypeParameter || actual is TypeInfo.InferredTypeParameter)
+        {
+            return false; // Unresolved infer parameters are not compatible with anything
+        }
+
         // Enum compatibility: primitive values are assignable to their enum type
         // (e.g., Direction.Up which is typed as 'number' can be assigned to Direction)
         if (expected is TypeInfo.Enum expectedEnum)
