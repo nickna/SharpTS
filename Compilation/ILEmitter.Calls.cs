@@ -552,6 +552,9 @@ public partial class ILEmitter
         // Emit the callee (should produce a TSFunction on the stack)
         EmitExpression(c.Callee);
 
+        // Cast to TSFunction - needed for IL verification when the callee is stored in an object-typed local
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSFunctionType);
+
         // Check if any argument is a spread
         bool hasSpreads = c.Arguments.Any(a => a is Expr.Spread);
 

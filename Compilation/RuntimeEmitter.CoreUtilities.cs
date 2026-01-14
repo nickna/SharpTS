@@ -223,17 +223,19 @@ public partial class RuntimeEmitter
         runtime.ToNumber = method;
 
         var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Double);
+
         // Use Convert.ToDouble with try-catch fallback to NaN
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
-        var endLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, endLabel);
+        il.Emit(OpCodes.Stloc, resultLocal);
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Stloc, resultLocal);
         il.EndExceptionBlock();
-        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
 

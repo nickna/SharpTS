@@ -279,7 +279,7 @@ public partial class ILCompiler
         var mainMethod = _programType.DefineMethod(
             "Main",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
+            _types.Void,
             Type.EmptyTypes
         );
 
@@ -393,8 +393,8 @@ public partial class ILCompiler
         var mainMethod = _programType.DefineMethod(
             "Main",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(void),
-            [typeof(string[])]  // Accept string[] args from .NET runtime
+            _types.Void,
+            [_types.StringArray]  // Accept string[] args from .NET runtime
         );
 
         _entryPoint = mainMethod;

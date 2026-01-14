@@ -564,4 +564,166 @@ public static class TestHarness
             }
         }
     }
+
+    /// <summary>
+    /// Verifies the IL in a compiled assembly.
+    /// </summary>
+    /// <param name="dllPath">Path to the compiled DLL</param>
+    /// <returns>List of verification error messages (empty if valid)</returns>
+    public static List<string> VerifyIL(string dllPath)
+    {
+        var sdkPath = SdkResolver.FindReferenceAssembliesPath();
+        if (sdkPath == null)
+            throw new InvalidOperationException("Could not find .NET SDK reference assemblies for IL verification");
+
+        using var verifier = new ILVerifier(sdkPath);
+        using var stream = File.OpenRead(dllPath);
+        return verifier.Verify(stream);
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source and verifies the generated IL without running.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="decoratorMode">Decorator mode</param>
+    /// <returns>List of verification errors</returns>
+    public static List<string> CompileAndVerifyOnly(string source, DecoratorMode decoratorMode = DecoratorMode.None)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var lexer = new Lexer(source);
+            var tokens = lexer.ScanTokens();
+            var parser = new Parser(tokens, decoratorMode);
+            var statements = parser.Parse();
+
+            var checker = new TypeChecker();
+            checker.SetDecoratorMode(decoratorMode);
+            var typeMap = checker.Check(statements);
+
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+            // Use reference assemblies for IL verification compatibility
+            var sdkPath = SdkResolver.FindReferenceAssembliesPath();
+            var compiler = new ILCompiler("test", preserveConstEnums: false, useReferenceAssemblies: true, sdkPath: sdkPath);
+            compiler.SetDecoratorMode(decoratorMode);
+            compiler.Compile(statements, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Verify IL - filter out expected "Failed to load assembly 'SharpTS'" errors
+            var allErrors = VerifyIL(dllPath);
+            return allErrors.Where(e => !e.Contains("Failed to load assembly")).ToList();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compiles TypeScript source and verifies the generated IL.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="decoratorMode">Decorator mode</param>
+    /// <returns>Tuple of (verification errors, console output)</returns>
+    public static (List<string> errors, string output) CompileVerifyAndRun(string source, DecoratorMode decoratorMode = DecoratorMode.None)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var lexer = new Lexer(source);
+            var tokens = lexer.ScanTokens();
+            var parser = new Parser(tokens, decoratorMode);
+            var statements = parser.Parse();
+
+            var checker = new TypeChecker();
+            checker.SetDecoratorMode(decoratorMode);
+            var typeMap = checker.Check(statements);
+
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(statements);
+
+            // Use reference assemblies for IL verification compatibility
+            var sdkPath = SdkResolver.FindReferenceAssembliesPath();
+            var compiler = new ILCompiler("test", preserveConstEnums: false, useReferenceAssemblies: true, sdkPath: sdkPath);
+            compiler.SetDecoratorMode(decoratorMode);
+            compiler.Compile(statements, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Verify IL - filter out expected "Failed to load assembly 'SharpTS'" errors
+            var allErrors = VerifyIL(dllPath);
+            var errors = allErrors.Where(e => !e.Contains("Failed to load assembly")).ToList();
+
+            // Copy SharpTS.dll for runtime dependency
+            var sharpTsDll = typeof(RuntimeTypes).Assembly.Location;
+            if (!string.IsNullOrEmpty(sharpTsDll) && File.Exists(sharpTsDll))
+            {
+                File.Copy(sharpTsDll, Path.Combine(tempDir, "SharpTS.dll"), overwrite: true);
+            }
+
+            // Write runtimeconfig.json
+            var configPath = Path.Combine(tempDir, "test.runtimeconfig.json");
+            File.WriteAllText(configPath, """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // Execute and capture output
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception($"Compiled program exited with code {process.ExitCode}. Stderr: {error}");
+            }
+
+            return (errors, output.Replace("\r\n", "\n"));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+        }
+    }
 }

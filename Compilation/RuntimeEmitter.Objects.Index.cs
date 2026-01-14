@@ -112,11 +112,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(stringLabel);
+        var charLocal = il.DeclareLocal(_types.Char);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Stloc, charLocal);
+        il.Emit(OpCodes.Ldloca, charLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
         il.Emit(OpCodes.Ret);
 

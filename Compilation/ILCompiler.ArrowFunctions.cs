@@ -27,13 +27,13 @@ public partial class ILCompiler
             if (arrow.IsObjectMethod)
             {
                 paramTypes = new Type[arrow.Parameters.Count + 1];
-                paramTypes[0] = typeof(object);  // __this
+                paramTypes[0] = _types.Object;  // __this
                 for (int i = 0; i < arrow.Parameters.Count; i++)
-                    paramTypes[i + 1] = typeof(object);
+                    paramTypes[i + 1] = _types.Object;
             }
             else
             {
-                paramTypes = arrow.Parameters.Select(_ => typeof(object)).ToArray();
+                paramTypes = arrow.Parameters.Select(_ => _types.Object).ToArray();
             }
 
             if (captures.Count == 0)
@@ -42,7 +42,7 @@ public partial class ILCompiler
                 var methodBuilder = _programType.DefineMethod(
                     $"<>Arrow_{_arrowMethodCounter++}",
                     MethodAttributes.Private | MethodAttributes.Static,
-                    typeof(object),
+                    _types.Object,
                     paramTypes
                 );
 
@@ -67,14 +67,14 @@ public partial class ILCompiler
                 var displayClass = _moduleBuilder.DefineType(
                     $"<>c__DisplayClass{_displayClassCounter++}",
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-                    typeof(object)
+                    _types.Object
                 );
 
                 // Add fields for captured variables
                 Dictionary<string, FieldBuilder> fieldMap = [];
                 foreach (var capturedVar in captures)
                 {
-                    var field = displayClass.DefineField(capturedVar, typeof(object), FieldAttributes.Public);
+                    var field = displayClass.DefineField(capturedVar, _types.Object, FieldAttributes.Public);
                     fieldMap[capturedVar] = field;
                 }
                 _displayClassFields[arrow] = fieldMap;
@@ -87,7 +87,7 @@ public partial class ILCompiler
                 );
                 var ctorIL = ctorBuilder.GetILGenerator();
                 ctorIL.Emit(OpCodes.Ldarg_0);
-                ctorIL.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+                ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
                 ctorIL.Emit(OpCodes.Ret);
                 _displayClassConstructors[arrow] = ctorBuilder;
 
@@ -95,7 +95,7 @@ public partial class ILCompiler
                 var invokeMethod = displayClass.DefineMethod(
                     "Invoke",
                     MethodAttributes.Public,
-                    typeof(object),
+                    _types.Object,
                     paramTypes
                 );
 

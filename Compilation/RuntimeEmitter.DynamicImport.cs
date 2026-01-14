@@ -154,6 +154,7 @@ public partial class RuntimeEmitter
         // Locals
         var factoryLocal = il.DeclareLocal(funcType);
         var tcsLocal = il.DeclareLocal(tcsType);
+        var exceptionLocal = il.DeclareLocal(_types.Exception);
 
         // Labels
         var notFoundLabel = il.DefineLabel();
@@ -194,9 +195,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
 
         // tcs.SetException(ex);
-        il.Emit(OpCodes.Stloc_0); // Store exception temporarily
+        il.Emit(OpCodes.Stloc, exceptionLocal);
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Ldloc_0); // Load exception
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "SetException", _types.Exception));
 
         // return tcs.Task;

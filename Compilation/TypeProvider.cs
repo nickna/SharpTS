@@ -167,6 +167,7 @@ public class TypeProvider
     public Type IEnumerableOfObject => MakeGenericType(IEnumerableOpen, Object);
     public Type IEnumeratorOfObject => MakeGenericType(IEnumeratorOpen, Object);
     public Type KeyValuePairStringObject => MakeGenericType(KeyValuePairOpen, String, Object);
+    public Type DictionaryStringObjectEnumerator => DictionaryStringObject.GetMethod("GetEnumerator")!.ReturnType;
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);
     public Type HashSetOfObject => MakeGenericType(HashSetOpen, Object);
     public Type ConditionalWeakTableObjectObject => MakeGenericType(ConditionalWeakTableOpen, Object, Object);
@@ -181,6 +182,9 @@ public class TypeProvider
     public Type ValueTaskOpen => Resolve("System.Threading.Tasks.ValueTask`1");
     public Type TaskCompletionSourceOpen => Resolve("System.Threading.Tasks.TaskCompletionSource`1");
     public Type CancellationToken => Resolve("System.Threading.CancellationToken");
+    public Type TaskContinuationOptions => Resolve("System.Threading.Tasks.TaskContinuationOptions");
+    public Type Monitor => Resolve("System.Threading.Monitor");
+    public Type IntPtr => Resolve("System.IntPtr");
 
     public Type TaskOfObject => MakeGenericType(TaskOpen, Object);
     public Type TaskCompletionSourceOfObject => MakeGenericType(TaskCompletionSourceOpen, Object);
@@ -235,6 +239,14 @@ public class TypeProvider
     public Type ParameterInfo => Resolve("System.Reflection.ParameterInfo");
     public Type Assembly => Resolve("System.Reflection.Assembly");
     public Type BindingFlags => Resolve("System.Reflection.BindingFlags");
+    public Type Binder => Resolve("System.Reflection.Binder");
+    public Type ParameterModifier => Resolve("System.Reflection.ParameterModifier");
+
+    #endregion
+
+    #region Date/Time Types
+
+    public Type DateTimeKind => Resolve("System.DateTimeKind");
 
     #endregion
 
@@ -290,6 +302,13 @@ public class TypeProvider
 
     #endregion
 
+    #region JSON Serialization
+
+    public Type JsonSerializer => Resolve("System.Text.Json.JsonSerializer");
+    public Type JsonSerializerOptions => Resolve("System.Text.Json.JsonSerializerOptions");
+
+    #endregion
+
     #region Func and Action Delegates
 
     public Type ActionOpen1 => Resolve("System.Action`1");
@@ -297,6 +316,9 @@ public class TypeProvider
     public Type FuncOpen1 => Resolve("System.Func`1");
     public Type FuncOpen2 => Resolve("System.Func`2");
     public Type FuncOpen3 => Resolve("System.Func`3");
+
+    // Specialized Action types for async continuations
+    public Type ActionTaskOfObjectAndObject => MakeGenericType(ActionOpen2, TaskOfObject, Object);
 
     #endregion
 
@@ -324,7 +346,8 @@ public class TypeProvider
                 ?? typeof(System.Numerics.BigInteger).Assembly.GetType(fullName)
                 ?? typeof(System.Console).Assembly.GetType(fullName)
                 ?? typeof(System.Text.StringBuilder).Assembly.GetType(fullName)
-                ?? typeof(System.Convert).Assembly.GetType(fullName);
+                ?? typeof(System.Convert).Assembly.GetType(fullName)
+                ?? typeof(System.Text.Json.JsonSerializer).Assembly.GetType(fullName);
         }
 
         if (type == null)
@@ -422,6 +445,29 @@ public class TypeProvider
         if (getter == null)
             throw new InvalidOperationException($"Property {type.FullName}.{name} does not have a getter");
         return getter;
+    }
+
+    /// <summary>
+    /// Gets a static method from a type by name (no parameters).
+    /// </summary>
+    public MethodInfo GetMethodStatic(Type type, string name)
+    {
+        var method = type.GetMethod(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        if (method == null)
+            throw new InvalidOperationException($"Could not find static method {type.FullName}.{name}");
+        return method;
+    }
+
+    /// <summary>
+    /// Gets a generic instance method from a type by name.
+    /// </summary>
+    public MethodInfo GetGenericMethod(Type type, string name)
+    {
+        var method = type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == name && m.IsGenericMethod);
+        if (method == null)
+            throw new InvalidOperationException($"Could not find generic method {type.FullName}.{name}");
+        return method;
     }
 
     /// <summary>

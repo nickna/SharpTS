@@ -16,27 +16,27 @@ public partial class RuntimeEmitter
         var typeBuilder = moduleBuilder.DefineType(
             "$AnyState",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(object)
+            _types.Object
         );
 
         // Fields
-        var pendingCountField = typeBuilder.DefineField("PendingCount", typeof(int), FieldAttributes.Public);
-        var rejectionReasonsField = typeBuilder.DefineField("RejectionReasons", typeof(List<object?>), FieldAttributes.Public);
-        var tcsField = typeBuilder.DefineField("Tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Public);
-        var lockField = typeBuilder.DefineField("Lock", typeof(object), FieldAttributes.Public);
+        var pendingCountField = typeBuilder.DefineField("PendingCount", _types.Int32, FieldAttributes.Public);
+        var rejectionReasonsField = typeBuilder.DefineField("RejectionReasons", _types.ListOfObject, FieldAttributes.Public);
+        var tcsField = typeBuilder.DefineField("Tcs", _types.TaskCompletionSourceOfObject, FieldAttributes.Public);
+        var lockField = typeBuilder.DefineField("Lock", _types.Object, FieldAttributes.Public);
 
         // Constructor: Initialize all fields
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [typeof(int)]  // pendingCount parameter
+            [_types.Int32]  // pendingCount parameter
         );
 
         var ctorIL = ctor.GetILGenerator();
 
         // Call base constructor
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
 
         // this.PendingCount = pendingCount
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -45,17 +45,17 @@ public partial class RuntimeEmitter
 
         // this.RejectionReasons = new List<object?>()
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         ctorIL.Emit(OpCodes.Stfld, rejectionReasonsField);
 
         // this.Tcs = new TaskCompletionSource<object?>()
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Newobj, typeof(TaskCompletionSource<object?>).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.TaskCompletionSourceOfObject));
         ctorIL.Emit(OpCodes.Stfld, tcsField);
 
         // this.Lock = new object()
         ctorIL.Emit(OpCodes.Ldarg_0);
-        ctorIL.Emit(OpCodes.Newobj, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
         ctorIL.Emit(OpCodes.Stfld, lockField);
 
         ctorIL.Emit(OpCodes.Ret);
@@ -102,15 +102,15 @@ public partial class RuntimeEmitter
 
         // if (task.IsCompletedSuccessfully) goto successLabel
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Task).GetProperty("IsCompletedSuccessfully")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompletedSuccessfully").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, failedLabel);
 
         // Success path: state.Tcs.TrySetResult(task.Result)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetProperty("Result")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object]));
         il.Emit(OpCodes.Pop);  // discard bool result
         il.Emit(OpCodes.Br, endLabel);
 
@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         // Monitor.Enter(state.Lock)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.LockField);
-        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Enter", [_types.Object]));
 
         // try block
         il.BeginExceptionBlock();
@@ -133,7 +133,7 @@ public partial class RuntimeEmitter
         var hasExceptionLabel = il.DefineLabel();
         var afterExceptionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, typeof(Task).GetProperty("Exception")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "Exception").GetGetMethod()!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, hasExceptionLabel);
         il.Emit(OpCodes.Pop);
@@ -141,10 +141,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterExceptionLabel);
 
         il.MarkLabel(hasExceptionLabel);
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("Message")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
 
         il.MarkLabel(afterExceptionLabel);
-        il.Emit(OpCodes.Callvirt, typeof(List<object?>).GetMethod("Add")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
 
         // state.PendingCount--
         il.Emit(OpCodes.Ldarg_1);
@@ -164,8 +164,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Ldstr, "AggregateError: All promises were rejected");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetException", [typeof(Exception)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String]));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception]));
         il.Emit(OpCodes.Pop);  // discard bool result
 
         il.MarkLabel(notAllFailedLabel);
@@ -175,7 +175,7 @@ public partial class RuntimeEmitter
         il.BeginFinallyBlock();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.LockField);
-        il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Exit", [_types.Object]));
         il.EndExceptionBlock();
 
         il.MarkLabel(endLabel);
@@ -187,20 +187,20 @@ public partial class RuntimeEmitter
     /// </summary>
     private PromiseAnyStateMachine DefinePromiseAnyStateMachine(ModuleBuilder moduleBuilder, AnyStateClass anyState)
     {
-        var builderType = typeof(AsyncTaskMethodBuilder<object>);
-        var awaiterType = typeof(TaskAwaiter<object?>);
+        var builderType = _types.AsyncTaskMethodBuilderOfObject;
+        var awaiterType = _types.TaskAwaiterOfObject;
 
         var typeBuilder = moduleBuilder.DefineType(
             "$PromiseAny_StateMachine",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
-            typeof(ValueType),
-            [typeof(IAsyncStateMachine)]
+            _types.ValueType,
+            [_types.IAsyncStateMachine]
         );
 
         // Fields
-        var stateField = typeBuilder.DefineField("<>1__state", typeof(int), FieldAttributes.Public);
+        var stateField = typeBuilder.DefineField("<>1__state", _types.Int32, FieldAttributes.Public);
         var builderField = typeBuilder.DefineField("<>t__builder", builderType, FieldAttributes.Public);
-        var iterableField = typeBuilder.DefineField("iterable", typeof(object), FieldAttributes.Public);
+        var iterableField = typeBuilder.DefineField("iterable", _types.Object, FieldAttributes.Public);
         var stateObjField = typeBuilder.DefineField("anyState", anyState.Type, FieldAttributes.Public);
         var awaiterField = typeBuilder.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
 
@@ -208,19 +208,19 @@ public partial class RuntimeEmitter
         var moveNext = typeBuilder.DefineMethod(
             "MoveNext",
             MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
-            Type.EmptyTypes
+            _types.Void,
+            []
         );
-        typeBuilder.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        typeBuilder.DefineMethodOverride(moveNext, _types.GetMethodNoParams(_types.IAsyncStateMachine, "MoveNext"));
 
         // SetStateMachine
         var setStateMachine = typeBuilder.DefineMethod(
             "SetStateMachine",
             MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
-            typeof(void),
-            [typeof(IAsyncStateMachine)]
+            _types.Void,
+            [_types.IAsyncStateMachine]
         );
-        typeBuilder.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        typeBuilder.DefineMethodOverride(setStateMachine, _types.GetMethod(_types.IAsyncStateMachine, "SetStateMachine", [_types.IAsyncStateMachine]));
         var setIL = setStateMachine.GetILGenerator();
         setIL.Emit(OpCodes.Ret);
 
@@ -261,7 +261,7 @@ public partial class RuntimeEmitter
 
         // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create()
         il.Emit(OpCodes.Ldloca, smLocal);
-        var createMethod = sm.BuilderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
+        var createMethod = _types.GetMethodStatic(sm.BuilderType, "Create");
         il.Emit(OpCodes.Call, createMethod);
         il.Emit(OpCodes.Stfld, sm.BuilderField);
 
@@ -269,15 +269,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloca, smLocal);
-        var startMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "Start" && m.IsGenericMethod)
+        var startMethod = _types.GetGenericMethod(sm.BuilderType, "Start")
             .MakeGenericMethod(sm.Type);
         il.Emit(OpCodes.Call, startMethod);
 
         // return sm.<>t__builder.Task
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
-        var taskGetter = sm.BuilderType.GetProperty("Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
+        var taskGetter = _types.GetPropertyGetter(sm.BuilderType, "Task");
         il.Emit(OpCodes.Call, taskGetter);
         il.Emit(OpCodes.Ret);
     }
@@ -289,11 +288,11 @@ public partial class RuntimeEmitter
     private void EmitPromiseAnyMoveNext(PromiseAnyStateMachine sm, AnyStateClass anyState, MethodBuilder handleAnyCompletion)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
-        var listType = typeof(List<object?>);
+        var listType = _types.ListOfObject;
 
         // Local variables
-        var exceptionLocal = il.DeclareLocal(typeof(Exception));
-        var resultLocal = il.DeclareLocal(typeof(object));
+        var exceptionLocal = il.DeclareLocal(_types.Exception);
+        var resultLocal = il.DeclareLocal(_types.Object);
 
         // Labels
         var state0Label = il.DefineLabel();
@@ -318,9 +317,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, listLocal);
 
         // Get count
-        var countLocal = il.DeclareLocal(typeof(int));
+        var countLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, countLocal);
 
         // Check for empty list - throw AggregateException
@@ -330,7 +329,7 @@ public partial class RuntimeEmitter
 
         // Empty list - throw exception
         il.Emit(OpCodes.Ldstr, "AggregateError: All promises were rejected");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String]));
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notEmptyLabel);
@@ -347,9 +346,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, sm.StateObjField);
 
         // Loop through elements and set up ContinueWith
-        var indexLocal = il.DeclareLocal(typeof(int));
-        var elementLocal = il.DeclareLocal(typeof(object));
-        var taskLocal = il.DeclareLocal(typeof(Task<object?>));
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var elementLocal = il.DeclareLocal(_types.Object);
+        var taskLocal = il.DeclareLocal(_types.TaskOfObject);
 
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -366,7 +365,7 @@ public partial class RuntimeEmitter
         // element = list[index]
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, listType.GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, elementLocal);
 
         // Check if element is Task<object?>
@@ -374,7 +373,7 @@ public partial class RuntimeEmitter
         var afterTaskSetupLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, typeof(Task<object?>));
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, isTaskLabel);
         il.Emit(OpCodes.Pop);
@@ -384,7 +383,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object]));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, afterTaskSetupLabel);
 
@@ -407,16 +406,16 @@ public partial class RuntimeEmitter
         // For now, let's use a different approach:
         // Register completion inline using GetAwaiter().OnCompleted()
 
-        // Get awaiter
-        il.Emit(OpCodes.Ldloca, taskLocal);
-        il.Emit(OpCodes.Call, typeof(Task<object?>).GetMethod("GetAwaiter")!);
-        var taskAwaiterLocal = il.DeclareLocal(typeof(TaskAwaiter<object?>));
+        // Get awaiter (Task is reference type, use Ldloc not Ldloca)
+        il.Emit(OpCodes.Ldloc, taskLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter"));
+        var taskAwaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
         il.Emit(OpCodes.Stloc, taskAwaiterLocal);
 
         // Check if already completed
         var notCompletedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloca, taskAwaiterLocal);
-        il.Emit(OpCodes.Call, typeof(TaskAwaiter<object?>).GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.TaskAwaiterOfObject, "IsCompleted"));
         il.Emit(OpCodes.Brfalse, notCompletedLabel);
 
         // Already completed - call HandleAnyCompletion directly
@@ -436,24 +435,19 @@ public partial class RuntimeEmitter
         // For static method: ldnull, ldftn method, newobj Action::.ctor(object, IntPtr)
         il.Emit(OpCodes.Ldnull);  // null target for static method
         il.Emit(OpCodes.Ldftn, handleAnyCompletion);  // handleAnyCompletion is actually the shim
-        var actionType = typeof(Action<Task<object?>, object?>);
-        var actionCtor = actionType.GetConstructor([typeof(object), typeof(IntPtr)])!;
+        var actionType = _types.ActionTaskOfObjectAndObject;
+        var actionCtor = actionType.GetConstructor([_types.Object, _types.IntPtr])!;
         il.Emit(OpCodes.Newobj, actionCtor);
 
-        // Load boxed state
+        // Load state (already a reference type, no boxing needed)
         il.Emit(OpCodes.Ldloc, stateLocal);
-        il.Emit(OpCodes.Box, anyState.Type);
 
         // Load TaskContinuationOptions.ExecuteSynchronously
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
 
         // Call ContinueWith(Action<Task<TResult>, object?>, object?, TaskContinuationOptions)
-        var continueWithMethod = typeof(Task<object?>).GetMethods()
-            .First(m => m.Name == "ContinueWith" &&
-                       m.GetParameters().Length == 3 &&
-                       m.GetParameters()[0].ParameterType == typeof(Action<Task<object?>, object?>) &&
-                       m.GetParameters()[1].ParameterType == typeof(object) &&
-                       m.GetParameters()[2].ParameterType == typeof(TaskContinuationOptions));
+        var continueWithMethod = _types.GetMethod(_types.TaskOfObject, "ContinueWith",
+            [_types.ActionTaskOfObjectAndObject, _types.Object, _types.TaskContinuationOptions]);
         il.Emit(OpCodes.Callvirt, continueWithMethod);
         il.Emit(OpCodes.Pop);  // Discard the continuation task returned by ContinueWith
 
@@ -473,8 +467,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.StateObjField);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
-        il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetProperty("Task")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.TaskCompletionSourceOfObject, "Task"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter"));
 
         var awaiterLocal = il.DeclareLocal(sm.AwaiterType);
         il.Emit(OpCodes.Stloc, awaiterLocal);
@@ -485,7 +479,7 @@ public partial class RuntimeEmitter
         // Check IsCompleted
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(sm.AwaiterType, "IsCompleted"));
         il.Emit(OpCodes.Brtrue, continueLabel);
 
         // Not completed - suspend
@@ -498,8 +492,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
         il.Emit(OpCodes.Ldarg_0);
-        var awaitMethod = sm.BuilderType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod)
+        var awaitMethod = _types.GetGenericMethod(sm.BuilderType, "AwaitUnsafeOnCompleted")
             .MakeGenericMethod(sm.AwaiterType, sm.Type);
         il.Emit(OpCodes.Call, awaitMethod);
 
@@ -517,7 +510,7 @@ public partial class RuntimeEmitter
         // GetResult
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.AwaiterField);
-        il.Emit(OpCodes.Call, sm.AwaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(sm.AwaiterType, "GetResult"));
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Set state to -2 and SetResult
@@ -528,11 +521,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetResult")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult", [_types.Object]));
         il.Emit(OpCodes.Leave, returnLabel);
 
         // ========== Exception handler ==========
-        il.BeginCatchBlock(typeof(Exception));
+        il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Stloc, exceptionLocal);
 
         il.Emit(OpCodes.Ldarg_0);
@@ -542,7 +535,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
-        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException", [_types.Exception]));
         il.Emit(OpCodes.Leave, returnLabel);
 
         il.EndExceptionBlock();

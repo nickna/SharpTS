@@ -137,6 +137,27 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Starg, argIndex);
             SetStackUnknown();
         }
+        else if (_ctx.CapturedFields?.TryGetValue(a.Name.Lexeme, out var field) == true)
+        {
+            // Captured field in display class (closure)
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
+            // Store to field: need temp since value is on top of stack
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            IL.Emit(OpCodes.Ldarg_0);  // Load display class instance
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, field);
+            SetStackUnknown();
+        }
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(a.Name.Lexeme, out var topLevelField) == true)
+        {
+            // Top-level static variable
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stsfld, topLevelField);
+            SetStackUnknown();
+        }
         else
         {
             // Unknown target - box for safety

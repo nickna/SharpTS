@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
             var il = reject.GetILGenerator();
             // Create Exception from reason
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Object, "ToString"));
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
             var exceptionCtor = _types.GetConstructor(_types.Exception, [_types.String]);
             il.Emit(OpCodes.Newobj, exceptionCtor);
             // Call Task.FromException<object?>(exception) - keep typeof() for arity-based generic lookup
