@@ -28,7 +28,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         HashSet<string> HoistedParameters,
         bool UsesThis,
         bool HasYieldStar,
-        HashSet<string> CapturedVariables  // Variables from outer scopes that need to be captured
+        HashSet<string> CapturedVariables,  // Variables from outer scopes that need to be captured
+        List<Stmt.ForOf> ForOfLoopsWithYield  // for...of loops containing yields that need enumerator hoisting
     );
 
     // State during analysis
@@ -37,6 +38,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     private readonly HashSet<string> _variablesUsedAfterYield = [];
     private readonly HashSet<string> _variablesDeclaredBeforeYield = [];
     private readonly HashSet<string> _capturedVariables = [];  // Variables from outer scopes
+    private readonly List<Stmt.ForOf> _forOfLoopsWithYield = [];  // for...of loops containing yields
+    private readonly Stack<Stmt.ForOf> _forOfStack = new();  // Track nested for...of loops
     private int _yieldCounter = 0;
     private bool _seenYield = false;
     private bool _usesThis = false;
@@ -79,7 +82,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
             HoistedParameters: parameters,
             UsesThis: _usesThis,
             HasYieldStar: _hasYieldStar,
-            CapturedVariables: [.. _capturedVariables]
+            CapturedVariables: [.. _capturedVariables],
+            ForOfLoopsWithYield: [.. _forOfLoopsWithYield]
         );
     }
 
@@ -90,6 +94,8 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         _variablesUsedAfterYield.Clear();
         _variablesDeclaredBeforeYield.Clear();
         _capturedVariables.Clear();
+        _forOfLoopsWithYield.Clear();
+        _forOfStack.Clear();
         _yieldCounter = 0;
         _seenYield = false;
         _usesThis = false;
@@ -111,7 +117,11 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         _declaredVariables.Add(stmt.Variable.Lexeme);
         if (!_seenYield)
             _variablesDeclaredBeforeYield.Add(stmt.Variable.Lexeme);
+
+        // Track for...of loops to detect yields inside them
+        _forOfStack.Push(stmt);
         base.VisitForOf(stmt);
+        _forOfStack.Pop();
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
@@ -166,6 +176,14 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         _seenYield = true;
         if (expr.IsDelegating)
             _hasYieldStar = true;
+
+        // Record all for...of loops we're currently inside - they need enumerator hoisting
+        foreach (var forOf in _forOfStack)
+        {
+            if (!_forOfLoopsWithYield.Contains(forOf))
+                _forOfLoopsWithYield.Add(forOf);
+        }
+
         base.VisitYield(expr);
     }
 

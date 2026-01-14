@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -30,6 +31,12 @@ public class HoistingManager
     /// the state machine.
     /// </summary>
     public Dictionary<string, FieldBuilder> CapturedVariables { get; } = [];
+
+    /// <summary>
+    /// Enumerators for for...of loops that contain yield statements.
+    /// These must be hoisted because the enumerator state persists across yield boundaries.
+    /// </summary>
+    public Dictionary<Stmt.ForOf, FieldBuilder> HoistedEnumerators { get; } = [];
 
     public HoistingManager(TypeBuilder typeBuilder, Type objectType)
     {
@@ -106,4 +113,28 @@ public class HoistingManager
     /// Checks if a variable is captured from an outer scope.
     /// </summary>
     public bool IsCaptured(string name) => CapturedVariables.ContainsKey(name);
+
+    /// <summary>
+    /// Defines fields for hoisted enumerators from for...of loops containing yields.
+    /// </summary>
+    public void DefineHoistedEnumerators(IEnumerable<Stmt.ForOf> forOfLoops, Type enumeratorType)
+    {
+        int index = 0;
+        foreach (var loop in forOfLoops)
+        {
+            // Use <>7__enum prefix following C# compiler convention for wrap fields
+            var field = _typeBuilder.DefineField(
+                $"<>7__enum{index++}",
+                enumeratorType,
+                FieldAttributes.Private
+            );
+            HoistedEnumerators[loop] = field;
+        }
+    }
+
+    /// <summary>
+    /// Gets the hoisted enumerator field for a for...of loop, or null if not hoisted.
+    /// </summary>
+    public FieldBuilder? GetEnumeratorField(Stmt.ForOf loop) =>
+        HoistedEnumerators.TryGetValue(loop, out var field) ? field : null;
 }

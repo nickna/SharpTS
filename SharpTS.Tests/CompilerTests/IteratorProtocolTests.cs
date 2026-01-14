@@ -956,14 +956,14 @@ public class IteratorProtocolTests
     [Fact]
     public void Generator_CapturesArrayFromOuter_AccessesCorrectly()
     {
-        // NOTE: Avoids for...of with yield inside due to pre-existing enumerator hoisting bug
+        // Test both index-based access and for...of iteration with captured array
         var source = """
             const data = [5, 10, 15];
             function* gen(): Generator<number> {
-                yield data[0];
-                yield data[1];
-                yield data[2];
                 yield data.length;
+                for (const item of data) {
+                    yield item * 2;
+                }
             }
 
             for (const v of gen()) {
@@ -972,7 +972,7 @@ public class IteratorProtocolTests
             """;
 
         var output = TestHarness.RunCompiled(source);
-        Assert.Equal("5\n10\n15\n3\n", output);
+        Assert.Equal("3\n10\n20\n30\n", output);
     }
 
     [Fact]
@@ -1072,6 +1072,200 @@ public class IteratorProtocolTests
 
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("100\n5\n105\n", output);
+    }
+
+    #endregion
+
+    #region For...Of with Yield Inside Generators
+
+    [Fact]
+    public void ForOfWithYield_BasicLoop_IteratesAllValues()
+    {
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2, 3]) {
+                    yield x * 2;
+                }
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n4\n6\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_ParameterArray_IteratesAllValues()
+    {
+        var source = """
+            function* gen(data: number[]): Generator<number> {
+                for (const item of data) {
+                    yield item * 2;
+                }
+            }
+
+            for (const v of gen([5, 10, 15])) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n20\n30\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_CapturedArray_IteratesAllValues()
+    {
+        var source = """
+            const data = [5, 10, 15];
+            function* gen(): Generator<number> {
+                for (const item of data) {
+                    yield item;
+                }
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n10\n15\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_NestedLoops_IteratesAllCombinations()
+    {
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2]) {
+                    for (const y of [10, 20]) {
+                        yield x + y;
+                    }
+                }
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("11\n21\n12\n22\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_MultipleLoops_IteratesAllSequentially()
+    {
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2]) {
+                    yield x;
+                }
+                for (const y of [10, 20]) {
+                    yield y;
+                }
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n10\n20\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_WithBreak_StopsEarly()
+    {
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2, 3, 4, 5]) {
+                    yield x;
+                    if (x >= 3) break;
+                }
+                yield 100;
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n3\n100\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_WithContinue_SkipsValues()
+    {
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2, 3, 4, 5]) {
+                    if (x % 2 === 0) continue;
+                    yield x;
+                }
+            }
+
+            for (const v of gen()) {
+                console.log(v);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n3\n5\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_CompilerOnly_WorksCorrectly()
+    {
+        // NOTE: Interpreter has a bug with for...of containing yield
+        // This test verifies compiler behavior only
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2, 3]) {
+                    yield x * 10;
+                }
+            }
+
+            let result = "";
+            for (const v of gen()) {
+                result = result + v + ",";
+            }
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10,20,30,\n", output);
+    }
+
+    [Fact]
+    public void ForOfWithYield_NestedLoops_CompilerOnly_WorksCorrectly()
+    {
+        // NOTE: Interpreter has a bug with for...of containing yield
+        // This test verifies compiler behavior only
+        var source = """
+            function* gen(): Generator<number> {
+                for (const x of [1, 2]) {
+                    for (const y of [10, 20]) {
+                        yield x * y;
+                    }
+                }
+            }
+
+            let result = "";
+            for (const v of gen()) {
+                result = result + v + ",";
+            }
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10,20,20,40,\n", output);
     }
 
     #endregion

@@ -110,6 +110,7 @@ public class GeneratorStateMachineBuilder
         _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
         _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
         _hoisting.DefineHoistedCapturedVariables(analysis.CapturedVariables);
+        _hoisting.DefineHoistedEnumerators(analysis.ForOfLoopsWithYield, _types.IEnumerator);
 
         // Define 'this' field for instance methods that use 'this'
         if (isInstanceMethod && analysis.UsesThis)
@@ -339,6 +340,11 @@ public class GeneratorStateMachineBuilder
     /// Checks if a variable is hoisted to the state machine.
     /// </summary>
     public bool IsHoisted(string name) => _hoisting.IsHoisted(name);
+
+    /// <summary>
+    /// Gets the hoisted enumerator field for a for...of loop, or null if not hoisted.
+    /// </summary>
+    public FieldBuilder? GetEnumeratorField(Parsing.Stmt.ForOf loop) => _hoisting.GetEnumeratorField(loop);
 
     /// <summary>
     /// Finalizes the type after MoveNext body has been emitted.

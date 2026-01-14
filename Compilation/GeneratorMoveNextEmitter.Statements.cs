@@ -104,10 +104,81 @@ public partial class GeneratorMoveNextEmitter
 
     #endregion
 
+    #region For...Of Loop Override (Hoisted Enumerator Support)
+
+    /// <summary>
+    /// Emits a for...of loop with hoisted enumerator support.
+    /// When the loop contains yield statements, the enumerator is stored in a state machine field
+    /// so it persists across yield boundaries.
+    /// </summary>
+    protected override void EmitForOf(Stmt.ForOf f)
+    {
+        // Check if this loop needs a hoisted enumerator
+        var enumeratorField = _builder.GetEnumeratorField(f);
+
+        if (enumeratorField == null)
+        {
+            // No yield inside this loop - use base implementation with local enumerator
+            base.EmitForOf(f);
+            return;
+        }
+
+        // Loop contains yield - use hoisted enumerator field
+        var startLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+        var continueLabel = _il.DefineLabel();
+
+        // Emit iterable and get enumerator
+        EmitExpression(f.Iterable);
+        EnsureBoxed();
+
+        _il.Emit(OpCodes.Castclass, _types.IEnumerable);
+        _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerable, "GetEnumerator"));
+
+        // Store enumerator to hoisted field (need temp local for the stack swap)
+        var tempLocal = _il.DeclareLocal(_types.IEnumerator);
+        _il.Emit(OpCodes.Stloc, tempLocal);
+        _il.Emit(OpCodes.Ldarg_0);  // this
+        _il.Emit(OpCodes.Ldloc, tempLocal);
+        _il.Emit(OpCodes.Stfld, enumeratorField);
+
+        EnterLoop(endLabel, continueLabel);
+
+        // Declare loop variable (may be hoisted or local)
+        var loopVarLocal = DeclareLoopVariable(f.Variable.Lexeme);
+
+        _il.MarkLabel(startLabel);
+
+        // Check MoveNext - load enumerator from hoisted field
+        _il.Emit(OpCodes.Ldarg_0);  // this
+        _il.Emit(OpCodes.Ldfld, enumeratorField);
+        _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
+        _il.Emit(OpCodes.Brfalse, endLabel);
+
+        // Set loop variable from Current
+        EmitStoreLoopVariable(loopVarLocal, f.Variable.Lexeme, () =>
+        {
+            _il.Emit(OpCodes.Ldarg_0);  // this
+            _il.Emit(OpCodes.Ldfld, enumeratorField);
+            _il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+        });
+
+        // Emit body
+        EmitStatement(f.Body);
+
+        _il.MarkLabel(continueLabel);
+        _il.Emit(OpCodes.Br, startLabel);
+
+        _il.MarkLabel(endLabel);
+        ExitLoop();
+    }
+
+    #endregion
+
     // Note: The following methods are inherited from StatementEmitterBase:
     // - EmitStatement (dispatch)
     // - EmitIf, EmitWhile, EmitDoWhile (control flow)
-    // - EmitForOf, EmitForIn (loops with DeclareLoopVariable/EmitStoreLoopVariable overrides)
+    // - EmitForIn (loops with DeclareLoopVariable/EmitStoreLoopVariable overrides)
     // - EmitBlock, EmitBreak, EmitContinue, EmitLabeledStatement
     // - EmitSwitch, EmitThrow, EmitPrint
 }
