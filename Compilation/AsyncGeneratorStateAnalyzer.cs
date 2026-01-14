@@ -80,6 +80,9 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
     private readonly HashSet<string> _variablesUsedAfterSuspension = [];
     private readonly HashSet<string> _variablesDeclaredBeforeSuspension = [];
     private readonly List<TryBlockInfo> _tryBlocks = [];
+    private readonly List<Stmt.ForOf> _forOfLoopsWithSuspension = [];  // for...of loops containing yields/awaits
+    private readonly Stack<Stmt.ForOf> _forOfStack = new();  // Track nested for...of loops
+    private readonly Dictionary<Stmt.ForOf, HashSet<string>> _variablesUsedInLoopBody = new();  // Variables used in each for...of body
     private int _stateCounter = 0;
     private bool _seenSuspension = false;
     private bool _usesThis = false;
@@ -180,6 +183,9 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
         _variablesUsedAfterSuspension.Clear();
         _variablesDeclaredBeforeSuspension.Clear();
         _tryBlocks.Clear();
+        _forOfLoopsWithSuspension.Clear();
+        _forOfStack.Clear();
+        _variablesUsedInLoopBody.Clear();
         _stateCounter = 0;
         _seenSuspension = false;
         _usesThis = false;

@@ -30,6 +30,13 @@ public partial class AsyncGeneratorStateAnalyzer
 
         // Track suspension in try block
         RecordSuspensionInTryBlock();
+
+        // Record all for...of loops we're currently inside - they need special handling
+        foreach (var forOf in _forOfStack)
+        {
+            if (!_forOfLoopsWithSuspension.Contains(forOf))
+                _forOfLoopsWithSuspension.Add(forOf);
+        }
     }
 
     protected override void VisitAwait(Expr.Await expr)
@@ -53,12 +60,28 @@ public partial class AsyncGeneratorStateAnalyzer
 
         // Track suspension in try block
         RecordSuspensionInTryBlock();
+
+        // Record all for...of loops we're currently inside - they need special handling
+        foreach (var forOf in _forOfStack)
+        {
+            if (!_forOfLoopsWithSuspension.Contains(forOf))
+                _forOfLoopsWithSuspension.Add(forOf);
+        }
     }
 
     protected override void VisitVariable(Expr.Variable expr)
     {
-        if (_seenSuspension && _declaredVariables.Contains(expr.Name.Lexeme))
-            _variablesUsedAfterSuspension.Add(expr.Name.Lexeme);
+        var name = expr.Name.Lexeme;
+
+        // Track variables used in for...of loop bodies (for hoisting when loop contains suspension)
+        foreach (var loop in _forOfStack)
+        {
+            if (_variablesUsedInLoopBody.TryGetValue(loop, out var vars))
+                vars.Add(name);
+        }
+
+        if (_seenSuspension && _declaredVariables.Contains(name))
+            _variablesUsedAfterSuspension.Add(name);
         // No base call needed - leaf node
     }
 

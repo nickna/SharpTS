@@ -19,7 +19,23 @@ public partial class AsyncGeneratorStateAnalyzer
         _declaredVariables.Add(stmt.Variable.Lexeme);
         if (!_seenSuspension)
             _variablesDeclaredBeforeSuspension.Add(stmt.Variable.Lexeme);
+
+        // Track for...of loops to detect suspensions inside them
+        _forOfStack.Push(stmt);
+        _variablesUsedInLoopBody[stmt] = [];
         base.VisitForOf(stmt);
+        _forOfStack.Pop();
+
+        // If this loop contains a suspension, all variables used in its body need hoisting
+        // because the loop body will re-execute after suspension resumes
+        if (_forOfLoopsWithSuspension.Contains(stmt))
+        {
+            foreach (var varName in _variablesUsedInLoopBody[stmt])
+            {
+                if (_declaredVariables.Contains(varName))
+                    _variablesUsedAfterSuspension.Add(varName);
+            }
+        }
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)

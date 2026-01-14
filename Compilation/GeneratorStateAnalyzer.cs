@@ -40,6 +40,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     private readonly HashSet<string> _capturedVariables = [];  // Variables from outer scopes
     private readonly List<Stmt.ForOf> _forOfLoopsWithYield = [];  // for...of loops containing yields
     private readonly Stack<Stmt.ForOf> _forOfStack = new();  // Track nested for...of loops
+    private readonly Dictionary<Stmt.ForOf, HashSet<string>> _variablesUsedInLoopBody = new();  // Variables used in each for...of body
     private int _yieldCounter = 0;
     private bool _seenYield = false;
     private bool _usesThis = false;
@@ -96,6 +97,7 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         _capturedVariables.Clear();
         _forOfLoopsWithYield.Clear();
         _forOfStack.Clear();
+        _variablesUsedInLoopBody.Clear();
         _yieldCounter = 0;
         _seenYield = false;
         _usesThis = false;
@@ -120,8 +122,20 @@ public class GeneratorStateAnalyzer : AstVisitorBase
 
         // Track for...of loops to detect yields inside them
         _forOfStack.Push(stmt);
+        _variablesUsedInLoopBody[stmt] = [];
         base.VisitForOf(stmt);
         _forOfStack.Pop();
+
+        // If this loop contains a yield, all variables used in its body need hoisting
+        // because the loop body will re-execute after yield resumes
+        if (_forOfLoopsWithYield.Contains(stmt))
+        {
+            foreach (var varName in _variablesUsedInLoopBody[stmt])
+            {
+                if (_declaredVariables.Contains(varName))
+                    _variablesUsedAfterYield.Add(varName);
+            }
+        }
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
@@ -197,6 +211,13 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         if (!_declaredVariables.Contains(name))
         {
             _capturedVariables.Add(name);
+        }
+
+        // Track variables used in for...of loop bodies (for hoisting when loop contains yield)
+        foreach (var loop in _forOfStack)
+        {
+            if (_variablesUsedInLoopBody.TryGetValue(loop, out var vars))
+                vars.Add(name);
         }
 
         if (_seenYield && _declaredVariables.Contains(name))
