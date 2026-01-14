@@ -66,6 +66,12 @@ public partial class Interpreter
             member = export.Declaration;
         }
 
+        // ImportAlias has its own IsExported flag
+        if (member is Stmt.ImportAlias importAliasStmt && importAliasStmt.IsExported)
+        {
+            isExported = true;
+        }
+
         // Execute the member
         var result = Execute(member);
         if (result.IsAbrupt) return result;
@@ -84,6 +90,7 @@ public partial class Interpreter
                 Stmt.Namespace n => n.Name.Lexeme,
                 Stmt.Interface => null,  // Type-only, no runtime value
                 Stmt.TypeAlias => null,  // Type-only, no runtime value
+                Stmt.ImportAlias ia => ia.AliasName.Lexeme,
                 _ => null
             };
 
@@ -105,9 +112,73 @@ public partial class Interpreter
                     object? value = _environment.Get(token);
                     nsObj.Set(memberName, value);
                 }
+                else if (member is Stmt.ImportAlias ia)
+                {
+                    // For import aliases, get from current environment (it was bound by ExecuteImportAlias)
+                    // Use try/catch since RuntimeEnvironment throws if undefined
+                    try
+                    {
+                        object? value = _environment.Get(ia.AliasName);
+                        nsObj.Set(memberName, value);
+                    }
+                    catch
+                    {
+                        // Type-only alias - no runtime value to export
+                    }
+                }
             }
         }
-        
+
+        return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Executes an import alias declaration: import X = Namespace.Member
+    /// Resolves the namespace path at runtime and binds the alias name.
+    /// </summary>
+    private ExecutionResult ExecuteImportAlias(Stmt.ImportAlias importAlias)
+    {
+        var path = importAlias.QualifiedPath;
+        string aliasName = importAlias.AliasName.Lexeme;
+
+        // Resolve the namespace path at runtime
+        // Get the root namespace
+        SharpTSNamespace? currentNs = _environment.GetNamespace(path[0].Lexeme);
+        if (currentNs == null)
+        {
+            throw new Exception($"Runtime Error: Namespace '{path[0].Lexeme}' is not defined.");
+        }
+
+        // Walk to the final namespace
+        for (int i = 1; i < path.Count - 1; i++)
+        {
+            object? member = currentNs.Get(path[i].Lexeme);
+            if (member is SharpTSNamespace nested)
+            {
+                currentNs = nested;
+            }
+            else if (member == null)
+            {
+                throw new Exception($"Runtime Error: '{path[i].Lexeme}' does not exist in namespace '{currentNs.Name}'.");
+            }
+            else
+            {
+                throw new Exception($"Runtime Error: '{path[i].Lexeme}' is not a namespace.");
+            }
+        }
+
+        // Get the final member value
+        string finalMemberName = path[^1].Lexeme;
+        object? value = currentNs.Get(finalMemberName);
+
+        // If value exists, bind it to the alias name
+        // (Type-only aliases like interfaces don't have runtime values)
+        if (value != null)
+        {
+            _environment.Define(aliasName, value);
+        }
+        // Note: Type-only aliases are handled entirely at compile-time
+
         return ExecutionResult.Success();
     }
 }

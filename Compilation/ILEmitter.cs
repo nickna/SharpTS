@@ -192,6 +192,10 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitNamespace(ns);
                 break;
 
+            case Stmt.ImportAlias importAlias:
+                EmitImportAlias(importAlias);
+                break;
+
             case Stmt.Import import:
                 EmitImport(import);
                 break;

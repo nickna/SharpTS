@@ -103,6 +103,39 @@ public partial class Parser
     }
 
     /// <summary>
+    /// Parses import alias declaration: import X = A.B.C.member;
+    /// </summary>
+    /// <param name="isExported">True if prefixed with 'export'</param>
+    private Stmt ImportAliasDeclaration(bool isExported)
+    {
+        Token keyword = Previous(); // 'import' token
+
+        // Parse alias name
+        Token aliasName = Consume(TokenType.IDENTIFIER, "Expect alias name after 'import'.");
+
+        // Consume '='
+        Consume(TokenType.EQUAL, "Expect '=' after alias name in import alias.");
+
+        // Parse qualified path: A.B.C.member
+        List<Token> path = [Consume(TokenType.IDENTIFIER, "Expect namespace path after '='.")];
+
+        while (Match(TokenType.DOT))
+        {
+            path.Add(Consume(TokenType.IDENTIFIER, "Expect identifier after '.' in namespace path."));
+        }
+
+        // Path must have at least 2 parts (Namespace.member)
+        if (path.Count < 2)
+        {
+            throw new Exception($"Parse Error at line {keyword.Line}: Import alias path must have at least two parts (e.g., Namespace.Member).");
+        }
+
+        Consume(TokenType.SEMICOLON, "Expect ';' after import alias.");
+
+        return new Stmt.ImportAlias(keyword, aliasName, path, isExported);
+    }
+
+    /// <summary>
     /// Parses export declarations:
     /// - export const x = 5;                        (declaration export)
     /// - export function foo() {}                   (function export)
@@ -168,6 +201,16 @@ public partial class Parser
 
             // Represent as export with null named exports and a fromPath (meaning all)
             return new Stmt.Export(keyword, null, null, null, fromPath, IsDefaultExport: false);
+        }
+
+        // export import X = Namespace.Member (re-export alias)
+        if (Match(TokenType.IMPORT))
+        {
+            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            {
+                return ImportAliasDeclaration(isExported: true);
+            }
+            throw new Exception($"Parse Error at line {Peek().Line}: Expected import alias after 'export import' (e.g., 'export import X = Namespace.Member').");
         }
 
         // export function/class/const/let/interface/type/enum

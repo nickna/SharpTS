@@ -54,6 +54,16 @@ public partial class Parser
     {
         bool isExported = Match(TokenType.EXPORT);
 
+        // Handle import alias inside namespace: [export] import X = Namespace.Member
+        if (Match(TokenType.IMPORT))
+        {
+            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            {
+                return ImportAliasDeclaration(isExported);
+            }
+            throw new Exception($"Parse Error at line {Previous().Line}: ES6 imports not allowed inside namespaces. Use 'import X = Namespace.Member' syntax.");
+        }
+
         // Parse decorators for class declarations
         List<Decorator>? decorators = ParseDecorators();
 

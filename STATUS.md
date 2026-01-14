@@ -111,6 +111,7 @@ This document tracks TypeScript language features and their implementation statu
 | Namespace imports | ✅ | `import * as X from './file'` |
 | Re-exports | ✅ | `export { x } from './file'`, `export * from './file'` |
 | TypeScript namespaces | ✅ | `namespace X { }` with declaration merging, dotted syntax, functions, variables, enums, nested namespaces, classes with `new Namespace.Class()` instantiation |
+| Namespace import alias | ✅ | `import X = Namespace.Member`, `export import X = Namespace.Member` |
 | Dynamic imports | ❌ | `await import('./file')` |
 
 ---
@@ -549,8 +550,9 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Namespace member access (`Foo.bar()`, `Foo.value`)
 - ✅ Runtime object hierarchy (namespaces are objects at runtime)
 - ✅ Classes in namespaces with `new Namespace.Class()` instantiation (including generics and inheritance)
-- ❌ `import X = Namespace.Member` alias syntax (intentionally skipped)
-- ✅ Full interpreter and IL compiler support with 12 test cases
+- ✅ `import X = Namespace.Member` alias syntax for local namespace member aliases
+- ✅ `export import X = Namespace.Member` syntax for re-exporting aliased members
+- ✅ Full interpreter and IL compiler support with 27 test cases
 
 ### Phase 30 Features (Well-Known Symbols & Iterator Protocol)
 - ✅ Well-known symbols: `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables`

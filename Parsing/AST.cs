@@ -178,6 +178,21 @@ public abstract record Stmt
     /// <param name="IsExported">Whether this namespace is exported from a module</param>
     public record Namespace(Token Name, List<Stmt> Members, bool IsExported = false) : Stmt;
 
+    /// <summary>
+    /// Import alias declaration: import X = Namespace.Member
+    /// Creates a local alias for a namespace member (value or type).
+    /// </summary>
+    /// <param name="Keyword">The 'import' token for error reporting</param>
+    /// <param name="AliasName">The local alias name (X)</param>
+    /// <param name="QualifiedPath">The namespace path tokens [Namespace, Member]</param>
+    /// <param name="IsExported">True if prefixed with 'export'</param>
+    public record ImportAlias(
+        Token Keyword,
+        Token AliasName,
+        List<Token> QualifiedPath,
+        bool IsExported = false
+    ) : Stmt;
+
     // Module statements
     /// <summary>
     /// Import declaration: import { x, y } from './file', import Default from './file', etc.

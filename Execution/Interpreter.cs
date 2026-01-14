@@ -593,6 +593,8 @@ public partial class Interpreter
                 return ExecutionResult.Success();
             case Stmt.Namespace ns:
                 return ExecuteNamespace(ns);
+            case Stmt.ImportAlias importAlias:
+                return ExecuteImportAlias(importAlias);
             case Stmt.Return returnStmt:
                 object? returnValue = null;
                 if (returnStmt.Value != null) returnValue = Evaluate(returnStmt.Value);

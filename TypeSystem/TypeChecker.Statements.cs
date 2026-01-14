@@ -96,6 +96,10 @@ public partial class TypeChecker
                 CheckNamespace(ns);
                 break;
 
+            case Stmt.ImportAlias importAlias:
+                CheckImportAlias(importAlias);
+                break;
+
             case Stmt.Class classStmt:
                 CheckClassDeclaration(classStmt);
                 break;

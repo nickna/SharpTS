@@ -9,6 +9,12 @@ public partial class Parser
         if (Check(TokenType.IMPORT) && PeekNext().Type != TokenType.LEFT_PAREN)
         {
             Advance(); // consume IMPORT
+            // Detect import alias: import X = Namespace.Member
+            // Pattern: IDENTIFIER EQUAL (after consuming IMPORT)
+            if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
+            {
+                return ImportAliasDeclaration(isExported: false);
+            }
             return ImportDeclaration();
         }
         if (Match(TokenType.EXPORT)) return ExportDeclaration();

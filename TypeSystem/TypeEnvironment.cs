@@ -22,6 +22,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
     private readonly Dictionary<string, (string Definition, List<string> TypeParams)> _genericTypeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (TypeInfo Type, bool IsValue)> _importAliases = new(StringComparer.Ordinal);
     private readonly TypeEnvironment? _enclosing = enclosing;
 
     public void Define(string name, TypeInfo type)
@@ -157,5 +158,39 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
         if (_namespaces.TryGetValue(name, out var ns))
             return ns;
         return _enclosing?.GetNamespace(name);
+    }
+
+    /// <summary>
+    /// Defines an import alias in the current scope.
+    /// Import aliases create local names for namespace members (import X = Namespace.Member).
+    /// </summary>
+    /// <param name="name">The alias name</param>
+    /// <param name="type">The resolved type of the aliased member</param>
+    /// <param name="isValue">True if this is a value alias (function, class, variable, enum)</param>
+    public void DefineImportAlias(string name, TypeInfo type, bool isValue)
+    {
+        _importAliases[name] = (type, isValue);
+        // Also define as a regular type so it can be looked up via Get()
+        _types[name] = type;
+    }
+
+    /// <summary>
+    /// Gets an import alias by name, searching up the scope chain.
+    /// Returns the resolved type and whether it's a value alias.
+    /// </summary>
+    public (TypeInfo Type, bool IsValue)? GetImportAlias(string name)
+    {
+        if (_importAliases.TryGetValue(name, out var alias))
+            return alias;
+        return _enclosing?.GetImportAlias(name);
+    }
+
+    /// <summary>
+    /// Checks if a name is an import alias in the current or enclosing scopes.
+    /// </summary>
+    public bool IsImportAlias(string name)
+    {
+        if (_importAliases.ContainsKey(name)) return true;
+        return _enclosing?.IsImportAlias(name) ?? false;
     }
 }

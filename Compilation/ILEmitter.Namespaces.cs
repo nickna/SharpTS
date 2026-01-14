@@ -53,6 +53,7 @@ public partial class ILEmitter
             Stmt.Var v => v.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
             Stmt.Namespace n => n.Name.Lexeme,
+            Stmt.ImportAlias ia => ia.AliasName.Lexeme,
             _ => null
         };
 
@@ -110,7 +111,44 @@ public partial class ILEmitter
             case Stmt.TypeAlias:
                 // Type-only, no runtime effect
                 break;
+
+            case Stmt.ImportAlias importAlias:
+                // Emit the import alias and store in namespace if exported
+                EmitImportAlias(importAlias);
+                StoreLocalInNamespaceField(nsField, memberName!);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Emits IL for an import alias declaration: import X = Namespace.Member
+    /// Creates a local variable that references the namespace member.
+    /// </summary>
+    private void EmitImportAlias(Stmt.ImportAlias importAlias)
+    {
+        var path = importAlias.QualifiedPath;
+        string aliasName = importAlias.AliasName.Lexeme;
+
+        // Build namespace path (all but last element)
+        string nsPath = string.Join(".", path.Take(path.Count - 1).Select(t => t.Lexeme));
+        string memberName = path[^1].Lexeme;
+
+        // Get namespace field
+        if (_ctx.NamespaceFields == null || !_ctx.NamespaceFields.TryGetValue(nsPath, out var nsField))
+        {
+            // Namespace not found - could be type-only alias or compile-time alias
+            // Just define an empty local that won't be used
+            return;
+        }
+
+        // Create local for the alias
+        var aliasLocal = _ctx.Locals.DeclareLocal(aliasName, _ctx.Types.Object);
+
+        // Emit: aliasLocal = nsField.Get(memberName)
+        IL.Emit(OpCodes.Ldsfld, nsField);
+        IL.Emit(OpCodes.Ldstr, memberName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+        IL.Emit(OpCodes.Stloc, aliasLocal);
     }
 
     /// <summary>
