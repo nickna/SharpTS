@@ -645,6 +645,30 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Core while loop execution logic for synchronous execution.
+    /// Uses HandleLoopResult for consistent break/continue handling.
+    /// </summary>
+    /// <param name="evaluateCondition">Function to evaluate the loop condition.</param>
+    /// <param name="executeBody">Function to execute the loop body.</param>
+    /// <param name="label">Optional label for labeled break/continue support.</param>
+    /// <returns>The execution result (Success or propagated abrupt completion).</returns>
+    private ExecutionResult ExecuteWhileCore(
+        Func<bool> evaluateCondition,
+        Func<ExecutionResult> executeBody,
+        string? label = null)
+    {
+        while (evaluateCondition())
+        {
+            var result = executeBody();
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, label);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
+        }
+        return ExecutionResult.Success();
+    }
+
+    /// <summary>
     /// Core loop result handling logic, shared between sync and async loop execution.
     /// Processes ExecutionResult to determine break, continue, or propagation behavior.
     /// </summary>

@@ -53,7 +53,7 @@ public partial class Interpreter
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.NonNullAssertion nna => Evaluate(nna.Expression), // Non-null assertions are pass-through at runtime
-            Expr.Await awaitExpr => EvaluateAwaitAsync(awaitExpr).GetAwaiter().GetResult(),
+            Expr.Await => throw new Exception("Runtime Error: 'await' can only be used inside async functions."),
             Expr.DynamicImport di => EvaluateDynamicImport(di),
             Expr.ImportMeta im => EvaluateImportMeta(im),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),

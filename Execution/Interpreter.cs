@@ -516,21 +516,17 @@ public partial class Interpreter
                 }
                 return ExecutionResult.Success();
             case Stmt.While whileStmt:
-                while (IsTruthy(Evaluate(whileStmt.Condition)))
-                {
-                    var result = Execute(whileStmt.Body);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-                    if (result.IsAbrupt) return result;
-                }
-                return ExecutionResult.Success();
+                return ExecuteWhileCore(
+                    () => IsTruthy(Evaluate(whileStmt.Condition)),
+                    () => Execute(whileStmt.Body));
             case Stmt.DoWhile doWhileStmt:
                 do
                 {
                     var result = Execute(doWhileStmt.Body);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-                    if (result.IsAbrupt) return result;
+                    var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+                    if (shouldBreak) return ExecutionResult.Success();
+                    if (shouldContinue) continue;
+                    if (abruptResult.HasValue) return abruptResult.Value;
                 } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:

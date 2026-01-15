@@ -393,14 +393,15 @@ public class SharpTSAsyncGenerator
     }
 
     /// <summary>
-    /// Evaluates an expression asynchronously, handling await expressions.
+    /// Evaluates an expression asynchronously, handling await and yield expressions.
     /// </summary>
     private async Task<object?> EvaluateAsync(Expr expr)
     {
         // Check for await expression
         if (expr is Expr.Await awaitExpr)
         {
-            var value = _interpreter.Evaluate(awaitExpr.Expression);
+            // Recursively evaluate the inner expression (may contain await)
+            var value = await EvaluateAsync(awaitExpr.Expression);
             // Handle SharpTSPromise (wraps Task<object?>)
             if (value is SharpTSPromise promise)
             {
@@ -411,6 +412,17 @@ public class SharpTSAsyncGenerator
                 return await task;
             }
             return value;
+        }
+
+        // Check for yield expression - evaluate its value asynchronously
+        if (expr is Expr.Yield yieldExpr)
+        {
+            object? value = null;
+            if (yieldExpr.Value != null)
+            {
+                value = await EvaluateAsync(yieldExpr.Value);
+            }
+            throw new YieldException(value, yieldExpr.IsDelegating);
         }
 
         // For other expressions, evaluate synchronously but check for yield

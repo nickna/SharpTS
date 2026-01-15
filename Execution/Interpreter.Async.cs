@@ -68,18 +68,20 @@ public partial class Interpreter
                 while (IsTruthy(await EvaluateAsync(whileStmt.Condition)))
                 {
                     var result = await ExecuteAsync(whileStmt.Body);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-                    if (result.IsAbrupt) return result;
+                    var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+                    if (shouldBreak) return ExecutionResult.Success();
+                    if (shouldContinue) continue;
+                    if (abruptResult.HasValue) return abruptResult.Value;
                 }
                 return ExecutionResult.Success();
             case Stmt.DoWhile doWhileStmt:
                 do
                 {
                     var result = await ExecuteAsync(doWhileStmt.Body);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-                    if (result.IsAbrupt) return result;
+                    var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+                    if (shouldBreak) return ExecutionResult.Success();
+                    if (shouldContinue) continue;
+                    if (abruptResult.HasValue) return abruptResult.Value;
                 } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:
@@ -517,23 +519,23 @@ public partial class Interpreter
     private async Task<object?> EvaluateLogicalAsync(Expr.Logical logical)
     {
         var left = await EvaluateAsync(logical.Left);
-        return EvaluateLogicalCore(logical.Operator.Type, left,
-            () => EvaluateAsync(logical.Right).GetAwaiter().GetResult());
+        if (logical.Operator.Type == TokenType.OR_OR)
+            return IsTruthy(left) ? left : await EvaluateAsync(logical.Right);
+        return !IsTruthy(left) ? left : await EvaluateAsync(logical.Right);
     }
 
     private async Task<object?> EvaluateNullishCoalescingAsync(Expr.NullishCoalescing nc)
     {
         var left = await EvaluateAsync(nc.Left);
-        return EvaluateNullishCoalescingCore(left,
-            () => EvaluateAsync(nc.Right).GetAwaiter().GetResult());
+        return left ?? await EvaluateAsync(nc.Right);
     }
 
     private async Task<object?> EvaluateTernaryAsync(Expr.Ternary ternary)
     {
         var condition = await EvaluateAsync(ternary.Condition);
-        return EvaluateTernaryCore(condition,
-            () => EvaluateAsync(ternary.ThenBranch).GetAwaiter().GetResult(),
-            () => EvaluateAsync(ternary.ElseBranch).GetAwaiter().GetResult());
+        return IsTruthy(condition)
+            ? await EvaluateAsync(ternary.ThenBranch)
+            : await EvaluateAsync(ternary.ElseBranch);
     }
 
     private async Task<object?> EvaluateUnaryAsync(Expr.Unary unary)
