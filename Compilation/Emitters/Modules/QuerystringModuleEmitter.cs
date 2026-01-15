@@ -164,6 +164,7 @@ public sealed class QuerystringModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        emitter.EmitExpression(expr);
         emitter.EmitBoxIfNeeded(expr);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString"));
     }

@@ -43,6 +43,7 @@ public sealed class UrlModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: UrlParse(object? url)
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -61,6 +62,7 @@ public sealed class UrlModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -80,6 +82,7 @@ public sealed class UrlModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: UrlResolve(object? from, object? to)
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -89,6 +92,7 @@ public sealed class UrlModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 1)
         {
+            emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else

@@ -50,6 +50,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: AssertOk(object? value, object? message)
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -59,6 +60,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 1)
         {
+            emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else
@@ -67,6 +69,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertOk);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -78,6 +81,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: AssertStrictEqual(object? actual, object? expected, object? message)
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertStrictEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -88,6 +92,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertNotStrictEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -98,6 +103,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertDeepStrictEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -108,6 +114,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertNotDeepStrictEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -119,6 +126,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: AssertThrows(object? fn, object? message)
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -128,6 +136,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 1)
         {
+            emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else
@@ -136,6 +145,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertThrows);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -146,6 +156,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -155,6 +166,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 1)
         {
+            emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else
@@ -163,6 +175,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertDoesNotThrow);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -174,6 +187,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper: AssertFail(object? message)
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -182,6 +196,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
         }
 
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertFail);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -192,6 +207,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -202,6 +218,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         EmitThreeArgs(emitter, arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.AssertNotEqual);
+        il.Emit(OpCodes.Ldnull); // Push null for expression statement Pop
         return true;
     }
 
@@ -211,6 +228,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 0)
         {
+            emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
         }
         else
@@ -220,6 +238,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 1)
         {
+            emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else
@@ -229,6 +248,7 @@ public sealed class AssertModuleEmitter : IBuiltInModuleEmitter
 
         if (arguments.Count > 2)
         {
+            emitter.EmitExpression(arguments[2]);
             emitter.EmitBoxIfNeeded(arguments[2]);
         }
         else
