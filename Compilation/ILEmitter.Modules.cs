@@ -480,11 +480,43 @@ public partial class ILEmitter
             }
         }
 
-        // Default import: not typically used for Node.js built-in modules
-        // but we support it for completeness
+        // Default import: treat same as namespace import for built-in modules
+        // Node.js allows: import fs from 'fs' which works like import * as fs from 'fs'
         if (import.DefaultImport != null)
         {
-            // Built-in modules don't have default exports - this is a no-op
+            string localName = import.DefaultImport.Lexeme;
+            var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+
+            // Track this variable as a built-in module namespace for direct method dispatch
+            _ctx.BuiltInModuleNamespaces ??= new Dictionary<string, string>();
+            _ctx.BuiltInModuleNamespaces[localName] = moduleName;
+
+            // Create a dictionary to hold all module exports
+            var dictType = _ctx.Types.DictionaryStringObject;
+            var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+            var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
+
+            IL.Emit(OpCodes.Newobj, dictCtor);
+
+            // Add each exported member to the dictionary
+            foreach (var memberName in emitter.GetExportedMembers())
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldstr, memberName);
+
+                // Try to emit the property value, or create a function wrapper
+                if (!emitter.TryEmitPropertyGet(this, memberName))
+                {
+                    EmitBuiltInModuleMethodWrapper(moduleName, memberName);
+                }
+
+                EnsureBoxed();
+                IL.Emit(OpCodes.Call, addMethod);
+            }
+
+            // Wrap dictionary in SharpTSObject
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+            IL.Emit(OpCodes.Stloc, local);
         }
     }
 

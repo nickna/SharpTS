@@ -249,6 +249,7 @@ public partial class ILCompiler
         Phase1_EmitRuntimeTypes();
         Phase2_AnalyzeClosures(statements);
         Phase3_CreateProgramType();
+        PreScanBuiltInModuleImports(statements);
         Phase4_DefineDeclarations(statements);
         Phase5_CollectArrowFunctions(statements);
         Phase6_EmitArrowAndStateMachineBodies(statements);
@@ -294,6 +295,41 @@ public partial class ILCompiler
             "$Program",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
         );
+    }
+
+    /// <summary>
+    /// Pre-scans statements for built-in module imports and registers them
+    /// in _builtInModuleNamespaces. This must happen before function bodies
+    /// are emitted so that calls like os.platform() can be properly dispatched.
+    /// </summary>
+    private void PreScanBuiltInModuleImports(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Import import && !import.IsTypeOnly)
+            {
+                // Check if the import path is a built-in module
+                string? builtInModuleName = Runtime.BuiltIns.Modules.BuiltInModuleRegistry.IsBuiltIn(import.ModulePath)
+                    ? import.ModulePath  // Use the module path directly as the module name
+                    : Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(import.ModulePath);  // Try sentinel path
+                if (builtInModuleName != null)
+                {
+                    // Default import: import os from 'os' -> os maps to "os"
+                    if (import.DefaultImport != null)
+                    {
+                        _builtInModuleNamespaces[import.DefaultImport.Lexeme] = builtInModuleName;
+                    }
+
+                    // Namespace import: import * as os from 'os' -> os maps to "os"
+                    if (import.NamespaceImport != null)
+                    {
+                        _builtInModuleNamespaces[import.NamespaceImport.Lexeme] = builtInModuleName;
+                    }
+
+                    // Named imports don't need special handling here - they bind to specific functions
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -488,6 +524,7 @@ public partial class ILCompiler
         Phase1_EmitRuntimeTypes();
         Phase2_AnalyzeClosures(allStatements);
         Phase3_CreateProgramType();
+        PreScanBuiltInModuleImports(allStatements);
         ModulePhase4_DefineModuleTypes(modules);
         ModulePhase5_DefineDeclarations(modules);
         InitializeTypedInterop();
