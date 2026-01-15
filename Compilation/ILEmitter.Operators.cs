@@ -294,8 +294,7 @@ public partial class ILEmitter
         }
 
         // Numeric compound assignment
-        bool isBitwise = ca.Operator.Type is TokenType.AMPERSAND_EQUAL or TokenType.PIPE_EQUAL
-            or TokenType.CARET_EQUAL or TokenType.LESS_LESS_EQUAL or TokenType.GREATER_GREATER_EQUAL;
+        bool isBitwise = CompoundOperatorHelper.IsBitwise(ca.Operator.Type);
 
         // Get current value
         EmitVariable(new Expr.Variable(ca.Name));
@@ -314,38 +313,11 @@ public partial class ILEmitter
             EmitExpressionAsDouble(ca.Value);
         }
 
-        switch (ca.Operator.Type)
+        // Emit the operator using centralized helper
+        var opcode = CompoundOperatorHelper.GetOpcode(ca.Operator.Type);
+        if (opcode.HasValue)
         {
-            case TokenType.PLUS_EQUAL:
-                IL.Emit(OpCodes.Add);
-                break;
-            case TokenType.MINUS_EQUAL:
-                IL.Emit(OpCodes.Sub);
-                break;
-            case TokenType.STAR_EQUAL:
-                IL.Emit(OpCodes.Mul);
-                break;
-            case TokenType.SLASH_EQUAL:
-                IL.Emit(OpCodes.Div);
-                break;
-            case TokenType.PERCENT_EQUAL:
-                IL.Emit(OpCodes.Rem);
-                break;
-            case TokenType.AMPERSAND_EQUAL:
-                IL.Emit(OpCodes.And);
-                break;
-            case TokenType.PIPE_EQUAL:
-                IL.Emit(OpCodes.Or);
-                break;
-            case TokenType.CARET_EQUAL:
-                IL.Emit(OpCodes.Xor);
-                break;
-            case TokenType.LESS_LESS_EQUAL:
-                IL.Emit(OpCodes.Shl);
-                break;
-            case TokenType.GREATER_GREATER_EQUAL:
-                IL.Emit(OpCodes.Shr);
-                break;
+            IL.Emit(opcode.Value);
         }
 
         if (isBitwise)

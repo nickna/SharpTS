@@ -126,7 +126,13 @@ public partial class Interpreter
     private object EvaluatePlus(object? left, object? right)
     {
         if (left is double l && right is double r) return l + r;
-        if (left is string ls || right is string rs) return Stringify(left) + Stringify(right);
+        if (left is string || right is string)
+        {
+            // Avoid calling Stringify on values that are already strings
+            return string.Concat(
+                left as string ?? Stringify(left),
+                right as string ?? Stringify(right));
+        }
         throw new Exception("Operands must be two numbers or two strings.");
     }
 

@@ -61,10 +61,10 @@ public partial class Interpreter
             return _environment.GetAt(distance, name.Lexeme);
         }
 
-        // Check user-defined variables first (allows shadowing built-ins)
-        if (_environment.IsDefined(name.Lexeme))
+        // Single-pass scope chain traversal (more efficient than IsDefined + Get)
+        if (_environment.TryGet(name.Lexeme, out object? value))
         {
-            return _environment.Get(name);
+            return value;
         }
 
         // Check for built-in singleton namespaces (e.g., Math, process)
@@ -74,8 +74,7 @@ public partial class Interpreter
             return singleton;
         }
 
-        // Fallback to global/dynamic lookup (will throw if not found)
-        return _environment.Get(name);
+        throw new Exception($"Undefined variable '{name.Lexeme}'.");
     }
 
     /// <summary>

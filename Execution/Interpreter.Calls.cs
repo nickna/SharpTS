@@ -1,3 +1,4 @@
+using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -240,50 +241,22 @@ public partial class Interpreter
         System.Numerics.BigInteger? leftBi, System.Numerics.BigInteger? rightBi)
     {
         // Equality operators allow mixed types (bigint with anything)
-        if (op == TokenType.EQUAL_EQUAL || op == TokenType.EQUAL_EQUAL_EQUAL)
+        if (BigIntOperatorHelper.IsEqualityOperator(op))
         {
-            if (!leftBi.HasValue || !rightBi.HasValue) return false;
-            return leftBi.Value == rightBi.Value;
-        }
-        if (op == TokenType.BANG_EQUAL || op == TokenType.BANG_EQUAL_EQUAL)
-        {
-            if (!leftBi.HasValue || !rightBi.HasValue) return true;
-            return leftBi.Value != rightBi.Value;
+            if (!leftBi.HasValue || !rightBi.HasValue)
+            {
+                // Mixed types: equality is false, inequality is true
+                return op is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL;
+            }
+            return BigIntOperatorHelper.EvaluateBinary(op, leftBi.Value, rightBi.Value);
         }
 
         // All other operators require both to be bigint
         if (!leftBi.HasValue || !rightBi.HasValue)
             throw new Exception("Runtime Error: Cannot mix bigint and other types in operations.");
 
-        var l = leftBi.Value;
-        var r = rightBi.Value;
-
-        return op switch
-        {
-            // Arithmetic
-            TokenType.PLUS => new SharpTSBigInt(l + r),
-            TokenType.MINUS => new SharpTSBigInt(l - r),
-            TokenType.STAR => new SharpTSBigInt(l * r),
-            TokenType.SLASH => new SharpTSBigInt(System.Numerics.BigInteger.Divide(l, r)),
-            TokenType.PERCENT => new SharpTSBigInt(System.Numerics.BigInteger.Remainder(l, r)),
-            TokenType.STAR_STAR => SharpTSBigInt.Pow(new SharpTSBigInt(l), new SharpTSBigInt(r)),
-
-            // Comparison
-            TokenType.GREATER => l > r,
-            TokenType.GREATER_EQUAL => l >= r,
-            TokenType.LESS => l < r,
-            TokenType.LESS_EQUAL => l <= r,
-
-            // Bitwise
-            TokenType.AMPERSAND => new SharpTSBigInt(l & r),
-            TokenType.PIPE => new SharpTSBigInt(l | r),
-            TokenType.CARET => new SharpTSBigInt(l ^ r),
-            TokenType.LESS_LESS => new SharpTSBigInt(l << (int)r),
-            TokenType.GREATER_GREATER => new SharpTSBigInt(l >> (int)r),
-            TokenType.GREATER_GREATER_GREATER => throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint."),
-
-            _ => throw new Exception($"Runtime Error: Operator {op} not supported for bigint.")
-        };
+        // Use centralized helper for all BigInt operations
+        return BigIntOperatorHelper.EvaluateBinary(op, leftBi.Value, rightBi.Value);
     }
 
     /// <summary>

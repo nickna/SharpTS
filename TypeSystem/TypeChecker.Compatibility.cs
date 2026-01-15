@@ -108,33 +108,39 @@ public partial class TypeChecker
         // Union-to-union: each type in actual must be compatible with at least one type in expected
         if (expected is TypeInfo.Union expectedUnion && actual is TypeInfo.Union actualUnion)
         {
-            return actualUnion.FlattenedTypes.All(actualType =>
-                expectedUnion.FlattenedTypes.Any(expectedType => IsCompatible(expectedType, actualType)));
+            var expectedTypes = expectedUnion.FlattenedTypes;
+            var actualTypes = actualUnion.FlattenedTypes;
+            return actualTypes.All(actualType =>
+                expectedTypes.Any(expectedType => IsCompatible(expectedType, actualType)));
         }
 
         // Union as expected: actual must match at least one member
         if (expected is TypeInfo.Union expUnion)
         {
-            return expUnion.FlattenedTypes.Any(t => IsCompatible(t, actual));
+            var expTypes = expUnion.FlattenedTypes;
+            return expTypes.Any(t => IsCompatible(t, actual));
         }
 
         // Union as actual: all members must be compatible with expected
         if (actual is TypeInfo.Union actUnion)
         {
-            return actUnion.FlattenedTypes.All(t => IsCompatible(expected, t));
+            var actTypes = actUnion.FlattenedTypes;
+            return actTypes.All(t => IsCompatible(expected, t));
         }
 
         // Intersection as expected: actual must satisfy ALL member types
         if (expected is TypeInfo.Intersection expIntersection)
         {
-            return expIntersection.FlattenedTypes.All(t => IsCompatible(t, actual));
+            var expTypes = expIntersection.FlattenedTypes;
+            return expTypes.All(t => IsCompatible(t, actual));
         }
 
         // Intersection as actual: satisfies expected if any member does
         // (because intersection value has all the properties of all its constituents)
         if (actual is TypeInfo.Intersection actIntersection)
         {
-            return actIntersection.FlattenedTypes.Any(t => IsCompatible(expected, t));
+            var actTypes = actIntersection.FlattenedTypes;
+            return actTypes.Any(t => IsCompatible(expected, t));
         }
 
         // KeyOf type compatibility - must evaluate to compare
@@ -525,8 +531,9 @@ public partial class TypeChecker
 
             if (currentType is TypeInfo.Union union)
             {
-                var narrowed = union.FlattenedTypes.Where(t => TypeMatchesTypeof(t, typeStr)).ToList();
-                var excluded = union.FlattenedTypes.Where(t => !TypeMatchesTypeof(t, typeStr)).ToList();
+                var flattenedTypes = union.FlattenedTypes;
+                var narrowed = flattenedTypes.Where(t => TypeMatchesTypeof(t, typeStr)).ToList();
+                var excluded = flattenedTypes.Where(t => !TypeMatchesTypeof(t, typeStr)).ToList();
 
                 TypeInfo? narrowedType = narrowed.Count == 0 ? null :
                     narrowed.Count == 1 ? narrowed[0] : new TypeInfo.Union(narrowed);
@@ -704,9 +711,22 @@ public partial class TypeChecker
         return null;
     }
 
-    private bool IsNumber(TypeInfo t) => t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER || t is TypeInfo.NumberLiteral || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsNumber));
-    private bool IsString(TypeInfo t) => t is TypeInfo.String || t is TypeInfo.StringLiteral || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsString));
-    private bool IsBigInt(TypeInfo t) => t is TypeInfo.BigInt || t is TypeInfo.Any || (t is TypeInfo.Union u && u.FlattenedTypes.All(IsBigInt));
+    private bool IsNumber(TypeInfo t) =>
+        t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER ||
+        t is TypeInfo.NumberLiteral ||
+        t is TypeInfo.Any ||
+        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsNumber));
+
+    private bool IsString(TypeInfo t) =>
+        t is TypeInfo.String ||
+        t is TypeInfo.StringLiteral ||
+        t is TypeInfo.Any ||
+        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsString));
+
+    private bool IsBigInt(TypeInfo t) =>
+        t is TypeInfo.BigInt ||
+        t is TypeInfo.Any ||
+        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsBigInt));
 
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).

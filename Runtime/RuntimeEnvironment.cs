@@ -47,6 +47,26 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
     }
 
     /// <summary>
+    /// Attempts to get a variable value in a single scope chain traversal.
+    /// More efficient than IsDefined + Get when both are needed.
+    /// </summary>
+    public bool TryGet(string name, out object? value)
+    {
+        if (_values.TryGetValue(name, out value))
+        {
+            return true;
+        }
+
+        if (Enclosing != null)
+        {
+            return Enclosing.TryGet(name, out value);
+        }
+
+        value = null;
+        return false;
+    }
+
+    /// <summary>
     /// Checks if a variable is defined in this scope only (not in enclosing scopes).
     /// Used for function hoisting to avoid re-defining already hoisted functions.
     /// </summary>
