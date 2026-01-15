@@ -1313,6 +1313,14 @@ public partial class RuntimeEmitter
         EmitUrlMethods(typeBuilder, runtime);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
+        // Crypto module methods
+        EmitCryptoMethods(typeBuilder, runtime);
+        // Util module methods
+        EmitUtilMethods(typeBuilder, runtime);
+        // Readline module methods
+        EmitReadlineMethods(typeBuilder, runtime);
+        // Child process module methods
+        EmitChildProcessMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

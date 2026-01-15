@@ -452,6 +452,18 @@ public class TypeProvider
     }
 
     /// <summary>
+    /// Gets the setter method for a property from a type by name.
+    /// </summary>
+    public MethodInfo GetPropertySetter(Type type, string name)
+    {
+        var property = GetProperty(type, name);
+        var setter = property.GetSetMethod();
+        if (setter == null)
+            throw new InvalidOperationException($"Property {type.FullName}.{name} does not have a setter");
+        return setter;
+    }
+
+    /// <summary>
     /// Gets a static method from a type by name (no parameters).
     /// </summary>
     public MethodInfo GetMethodStatic(Type type, string name)

@@ -14,7 +14,12 @@ public static class BuiltInModuleRegistry
         "os",
         "querystring",
         "assert",
-        "url"
+        "url",
+        "process",
+        "crypto",
+        "util",
+        "readline",
+        "child_process"
     ];
 
     /// <summary>

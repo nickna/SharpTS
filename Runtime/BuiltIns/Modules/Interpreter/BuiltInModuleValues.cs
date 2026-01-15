@@ -26,6 +26,11 @@ public static class BuiltInModuleValues
             "querystring" => QuerystringModuleInterpreter.GetExports(),
             "assert" => AssertModuleInterpreter.GetExports(),
             "url" => UrlModuleInterpreter.GetExports(),
+            "process" => ProcessModuleInterpreter.GetExports(),
+            "crypto" => CryptoModuleInterpreter.GetExports(),
+            "util" => UtilModuleInterpreter.GetExports(),
+            "readline" => ReadlineModuleInterpreter.GetExports(),
+            "child_process" => ChildProcessModuleInterpreter.GetExports(),
             _ => throw new Exception($"Unknown built-in module: {moduleName}")
         };
     }
@@ -35,6 +40,7 @@ public static class BuiltInModuleValues
     /// </summary>
     public static bool HasInterpreterSupport(string moduleName)
     {
-        return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url";
+        return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url"
+            or "process" or "crypto" or "util" or "readline" or "child_process";
     }
 }

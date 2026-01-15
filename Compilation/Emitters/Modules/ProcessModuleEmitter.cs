@@ -1,0 +1,248 @@
+using System.Reflection.Emit;
+using System.Runtime.InteropServices;
+using SharpTS.Parsing;
+
+namespace SharpTS.Compilation.Emitters.Modules;
+
+/// <summary>
+/// Emits IL code for the Node.js 'process' module.
+/// Delegates to ProcessStaticEmitter for most operations.
+/// </summary>
+public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
+{
+    public string ModuleName => "process";
+
+    private static readonly string[] _exportedMembers =
+    [
+        "platform", "arch", "pid", "version", "env", "argv", "exitCode",
+        "stdin", "stdout", "stderr",
+        "cwd", "chdir", "exit", "hrtime", "uptime", "memoryUsage"
+    ];
+
+    public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
+
+    public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        return methodName switch
+        {
+            "cwd" => EmitCwd(emitter),
+            "chdir" => EmitChdir(emitter, arguments),
+            "exit" => EmitExit(emitter, arguments),
+            "hrtime" => EmitHrtime(emitter, arguments),
+            "uptime" => EmitUptime(emitter),
+            "memoryUsage" => EmitMemoryUsage(emitter),
+            _ => false
+        };
+    }
+
+    public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        return propertyName switch
+        {
+            "platform" => EmitPlatform(emitter),
+            "arch" => EmitArch(emitter),
+            "pid" => EmitPid(emitter),
+            "version" => EmitVersion(emitter),
+            "env" => EmitEnv(emitter),
+            "argv" => EmitArgv(emitter),
+            "exitCode" => EmitExitCode(emitter),
+            "stdin" => EmitStdin(emitter),
+            "stdout" => EmitStdout(emitter),
+            "stderr" => EmitStderr(emitter),
+            _ => false
+        };
+    }
+
+    #region Method Emitters
+
+    private static bool EmitCwd(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Directory, "GetCurrentDirectory"));
+        return true;
+    }
+
+    private static bool EmitChdir(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+            il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Directory, "SetCurrentDirectory", ctx.Types.String));
+        }
+        il.Emit(OpCodes.Ldnull);
+        return true;
+    }
+
+    private static bool EmitExit(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpressionAsDouble(arguments[0]);
+            il.Emit(OpCodes.Conv_I4);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Environment, "Exit", ctx.Types.Int32));
+        il.Emit(OpCodes.Ldnull);
+        return true;
+    }
+
+    private static bool EmitHrtime(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessHrtime);
+        return true;
+    }
+
+    private static bool EmitUptime(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUptime);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitMemoryUsage(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
+        return true;
+    }
+
+    #endregion
+
+    #region Property Emitters
+
+    private static bool EmitPlatform(IEmitterContext emitter)
+    {
+        var il = emitter.Context.IL;
+        string platform;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            platform = "win32";
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            platform = "linux";
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            platform = "darwin";
+        else
+            platform = "unknown";
+        il.Emit(OpCodes.Ldstr, platform);
+        return true;
+    }
+
+    private static bool EmitArch(IEmitterContext emitter)
+    {
+        var il = emitter.Context.IL;
+        string arch = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "x64",
+            Architecture.X86 => "ia32",
+            Architecture.Arm64 => "arm64",
+            Architecture.Arm => "arm",
+            _ => "unknown"
+        };
+        il.Emit(OpCodes.Ldstr, arch);
+        return true;
+    }
+
+    private static bool EmitPid(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ProcessId"));
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitVersion(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Ldstr, "v");
+        il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "Version"));
+        var versionLocal = il.DeclareLocal(ctx.Types.Version);
+        il.Emit(OpCodes.Stloc, versionLocal);
+        il.Emit(OpCodes.Ldloca, versionLocal);
+        il.Emit(OpCodes.Constrained, ctx.Types.Version);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.String, "Concat", ctx.Types.String, ctx.Types.String));
+        return true;
+    }
+
+    private static bool EmitEnv(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetEnv);
+        return true;
+    }
+
+    private static bool EmitArgv(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetArgv);
+        return true;
+    }
+
+    private static bool EmitExitCode(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ExitCode"));
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitStdin(IEmitterContext emitter)
+    {
+        var il = emitter.Context.IL;
+        il.Emit(OpCodes.Ldstr, "__$stdin$__");
+        return true;
+    }
+
+    private static bool EmitStdout(IEmitterContext emitter)
+    {
+        var il = emitter.Context.IL;
+        il.Emit(OpCodes.Ldstr, "__$stdout$__");
+        return true;
+    }
+
+    private static bool EmitStderr(IEmitterContext emitter)
+    {
+        var il = emitter.Context.IL;
+        il.Emit(OpCodes.Ldstr, "__$stderr$__");
+        return true;
+    }
+
+    #endregion
+}

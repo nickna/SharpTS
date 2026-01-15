@@ -413,6 +413,22 @@ public class EmittedRuntime
     public MethodBuilder StderrWrite { get; set; } = null!;
     public MethodBuilder StderrIsTTY { get; set; } = null!;
 
+    // Crypto module methods
+    public MethodBuilder CryptoCreateHash { get; set; } = null!;
+    public MethodBuilder CryptoRandomBytes { get; set; } = null!;
+
+    // Util module methods
+    public MethodBuilder UtilFormat { get; set; } = null!;
+    public MethodBuilder UtilInspect { get; set; } = null!;
+
+    // Readline module methods
+    public MethodBuilder ReadlineQuestionSync { get; set; } = null!;
+    public MethodBuilder ReadlineCreateInterface { get; set; } = null!;
+
+    // Child process module methods
+    public MethodBuilder ChildProcessExecSync { get; set; } = null!;
+    public MethodBuilder ChildProcessSpawnSync { get; set; } = null!;
+
     // Querystring module methods
     public MethodBuilder QuerystringParse { get; set; } = null!;
     public MethodBuilder QuerystringStringify { get; set; } = null!;

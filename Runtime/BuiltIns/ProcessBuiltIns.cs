@@ -20,6 +20,7 @@ public static class ProcessBuiltIns
 {
     // Cache static methods to avoid allocation on every access
     private static readonly BuiltInMethod _cwd = new("cwd", 0, Cwd);
+    private static readonly BuiltInMethod _chdir = new("chdir", 1, Chdir);
     private static readonly BuiltInMethod _exit = new("exit", 0, 1, Exit);
     private static readonly BuiltInMethod _hrtime = new("hrtime", 0, 1, Hrtime);
     private static readonly BuiltInMethod _uptime = new("uptime", 0, Uptime);
@@ -50,6 +51,7 @@ public static class ProcessBuiltIns
             "version" => "v" + Environment.Version.ToString(),
             "env" => GetEnv(),
             "argv" => GetArgv(),
+            "exitCode" => (double)Environment.ExitCode,
 
             // Stream objects
             "stdin" => SharpTSStdin.Instance,
@@ -58,6 +60,7 @@ public static class ProcessBuiltIns
 
             // Methods
             "cwd" => _cwd,
+            "chdir" => _chdir,
             "exit" => _exit,
             "hrtime" => _hrtime,
             "uptime" => _uptime,
@@ -137,6 +140,15 @@ public static class ProcessBuiltIns
         return Directory.GetCurrentDirectory();
     }
 
+    private static object? Chdir(Interpreter i, object? r, List<object?> args)
+    {
+        if (args.Count > 0 && args[0] is string dir)
+        {
+            Directory.SetCurrentDirectory(dir);
+        }
+        return null;
+    }
+
     private static object? Exit(Interpreter i, object? r, List<object?> args)
     {
         int exitCode = 0;
@@ -199,5 +211,24 @@ public static class ProcessBuiltIns
             ["external"] = 0.0,
             ["arrayBuffers"] = 0.0
         });
+    }
+
+    /// <summary>
+    /// Sets a member of the process object by name.
+    /// Currently only supports setting exitCode.
+    /// </summary>
+    public static bool SetMember(string name, object? value)
+    {
+        return name switch
+        {
+            "exitCode" when value is double d => SetExitCode((int)d),
+            _ => false
+        };
+    }
+
+    private static bool SetExitCode(int code)
+    {
+        Environment.ExitCode = code;
+        return true;
     }
 }

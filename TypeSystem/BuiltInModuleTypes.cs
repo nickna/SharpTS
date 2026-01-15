@@ -361,6 +361,144 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
+    /// Gets the exported types for the process module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetProcessModuleTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var voidType = new TypeInfo.Void();
+        var anyType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Properties
+            ["platform"] = stringType,
+            ["arch"] = stringType,
+            ["pid"] = numberType,
+            ["version"] = stringType,
+            ["env"] = new TypeInfo.Record(new Dictionary<string, TypeInfo>().ToFrozenDictionary()), // Record<string, string>
+            ["argv"] = new TypeInfo.Array(stringType),
+            ["exitCode"] = numberType,
+            ["stdin"] = anyType,
+            ["stdout"] = anyType,
+            ["stderr"] = anyType,
+
+            // Methods
+            ["cwd"] = new TypeInfo.Function([], stringType),
+            ["chdir"] = new TypeInfo.Function([stringType], voidType),
+            ["exit"] = new TypeInfo.Function([numberType], voidType, RequiredParams: 0),
+            ["hrtime"] = new TypeInfo.Function(
+                [new TypeInfo.Array(numberType)],
+                new TypeInfo.Array(numberType),
+                RequiredParams: 0
+            ),
+            ["uptime"] = new TypeInfo.Function([], numberType),
+            ["memoryUsage"] = new TypeInfo.Function([],
+                new TypeInfo.Record(new Dictionary<string, TypeInfo>
+                {
+                    ["rss"] = numberType,
+                    ["heapTotal"] = numberType,
+                    ["heapUsed"] = numberType,
+                    ["external"] = numberType,
+                    ["arrayBuffers"] = numberType
+                }.ToFrozenDictionary())
+            )
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the crypto module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetCryptoModuleTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Methods
+            ["createHash"] = new TypeInfo.Function([stringType], anyType), // Returns Hash object
+            ["randomBytes"] = new TypeInfo.Function([numberType], new TypeInfo.Array(numberType)),
+            ["randomUUID"] = new TypeInfo.Function([], stringType),
+            ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1)
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the util module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetUtilModuleTypes()
+    {
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Methods
+            ["format"] = new TypeInfo.Function([anyType], stringType, HasRestParam: true),
+            ["inspect"] = new TypeInfo.Function([anyType, anyType], stringType, RequiredParams: 1),
+
+            // util.types namespace
+            ["types"] = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+            {
+                ["isArray"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
+                ["isDate"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
+                ["isFunction"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
+                ["isNull"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
+                ["isUndefined"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN))
+            }.ToFrozenDictionary())
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the readline module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetReadlineModuleTypes()
+    {
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+        var voidType = new TypeInfo.Void();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Methods
+            ["questionSync"] = new TypeInfo.Function([stringType], stringType),
+            ["createInterface"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0)
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the child_process module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetChildProcessModuleTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        var spawnResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["stdout"] = stringType,
+            ["stderr"] = stringType,
+            ["status"] = numberType,
+            ["signal"] = new TypeInfo.Union([stringType, new TypeInfo.Null()])
+        }.ToFrozenDictionary());
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Methods
+            ["execSync"] = new TypeInfo.Function([stringType, anyType], stringType, RequiredParams: 1),
+            ["spawnSync"] = new TypeInfo.Function(
+                [stringType, new TypeInfo.Array(stringType), anyType],
+                spawnResultType,
+                RequiredParams: 1
+            )
+        };
+    }
+
+    /// <summary>
     /// Gets the exported types for a built-in module by name.
     /// </summary>
     /// <param name="moduleName">The module name (e.g., "path", "fs", "os").</param>
@@ -375,6 +513,11 @@ public static class BuiltInModuleTypes
             "querystring" => GetQuerystringModuleTypes(),
             "assert" => GetAssertModuleTypes(),
             "url" => GetUrlModuleTypes(),
+            "process" => GetProcessModuleTypes(),
+            "crypto" => GetCryptoModuleTypes(),
+            "util" => GetUtilModuleTypes(),
+            "readline" => GetReadlineModuleTypes(),
+            "child_process" => GetChildProcessModuleTypes(),
             _ => null
         };
     }

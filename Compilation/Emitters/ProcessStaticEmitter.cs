@@ -26,6 +26,18 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Directory, "GetCurrentDirectory"));
                 return true;
 
+            case "chdir":
+                // Directory.SetCurrentDirectory(path)
+                if (arguments.Count > 0)
+                {
+                    emitter.EmitExpression(arguments[0]);
+                    // Convert to string if needed
+                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+                    il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Directory, "SetCurrentDirectory", ctx.Types.String));
+                }
+                il.Emit(OpCodes.Ldnull);
+                return true;
+
             case "exit":
                 // Environment.Exit(code)
                 if (arguments.Count > 0)
@@ -106,6 +118,13 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "argv":
                 // Call runtime helper to create argv array
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetArgv);
+                return true;
+
+            case "exitCode":
+                // Environment.ExitCode
+                il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ExitCode"));
+                il.Emit(OpCodes.Conv_R8); // Convert to double for JS number
+                il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
             // Stream objects - return marker strings that can be detected in method calls

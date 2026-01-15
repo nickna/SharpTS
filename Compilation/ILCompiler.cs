@@ -460,6 +460,11 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new QuerystringModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new AssertModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new UrlModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new ProcessModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new CryptoModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new UtilModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new ReadlineModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
     }
 
     #endregion

@@ -194,6 +194,19 @@ public partial class ILEmitter
 
     protected override void EmitSet(Expr.Set s)
     {
+        // Handle process.exitCode assignment
+        if (s.Object is Expr.Variable processVar && processVar.Name.Lexeme == "process" && s.Name.Lexeme == "exitCode")
+        {
+            EmitExpression(s.Value);
+            EmitUnboxToDouble();
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Dup); // Keep value for expression result
+            IL.Emit(OpCodes.Call, _ctx.Types.GetPropertySetter(_ctx.Types.Environment, "ExitCode"));
+            IL.Emit(OpCodes.Conv_R8); // Convert back to double for JS number
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            return;
+        }
+
         // Handle static property assignment via class name
         if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
