@@ -2,13 +2,11 @@
 // A TypeScript CLI tool for SharpTS that analyzes source code files
 //
 // Usage:
-//   dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts
+//   dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]
 //
-// This tool scans the current directory recursively and displays statistics
-// about source code files including lines of code and function counts.
-//
-// Note: Once SharpTS supports script arguments, this tool will accept
-// a directory path and --help flag as CLI arguments.
+// This tool scans the specified directory (or current directory) recursively
+// and displays statistics about source code files including lines of code
+// and function counts.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -72,9 +70,11 @@ function showHelp(): void {
     console.log('lines of code and function counts.');
     console.log('');
     console.log('Usage:');
-    console.log('  dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts');
+    console.log('  dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]');
     console.log('');
-    console.log('The tool scans the current working directory recursively.');
+    console.log('Arguments:');
+    console.log('  directory    Directory to scan (defaults to current directory)');
+    console.log('  --help, -h   Show this help message');
     console.log('');
     console.log('Supported file extensions:');
     console.log('  .ts, .tsx, .js, .jsx, .css, .html, .json');
@@ -306,32 +306,32 @@ function calculateSummary(stats: any[]): any {
 
 // ========== Main Entry Point ==========
 
-function main(): void {
-    const args = parseArgs(process.argv);
+function main(args: string[]): number {
+    const cliArgs = parseArgs(args);
 
-    if (args.showHelp) {
+    if (cliArgs.showHelp) {
         showHelp();
-        return;
+        return 0;
     }
 
     // Resolve the target directory
     let targetDir: string;
-    if (path.isAbsolute(args.directory)) {
-        targetDir = args.directory;
+    if (path.isAbsolute(cliArgs.directory)) {
+        targetDir = cliArgs.directory;
     } else {
-        targetDir = path.join(process.cwd(), args.directory);
+        targetDir = path.join(process.cwd(), cliArgs.directory);
     }
 
     // Verify directory exists
     if (!fs.existsSync(targetDir)) {
         console.log('Error: Directory not found: ' + targetDir);
-        process.exit(1);
+        return 1;
     }
 
     const stat = fs.statSync(targetDir);
     if (!stat.isDirectory) {
         console.log('Error: Path is not a directory: ' + targetDir);
-        process.exit(1);
+        return 1;
     }
 
     console.log('Source Code Analyzer v' + VERSION);
@@ -344,13 +344,15 @@ function main(): void {
 
     if (stats.length === 0) {
         console.log('No supported source files found.');
-        return;
+        return 0;
     }
 
     // Calculate summary and display
     const summary = calculateSummary(stats);
     printTable(stats, summary);
+
+    return 0;
 }
 
-// Run main
-main();
+// Run main with command line arguments
+process.exit(main(process.argv));
