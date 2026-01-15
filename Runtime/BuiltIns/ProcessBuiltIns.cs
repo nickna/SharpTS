@@ -119,6 +119,7 @@ public static class ProcessBuiltIns
 
     /// <summary>
     /// Returns the process.argv array containing command line arguments.
+    /// Mimics Node.js argv format: [runtime_path, script_path, ...args]
     /// </summary>
     public static SharpTSArray GetArgv()
     {
@@ -127,6 +128,15 @@ public static class ProcessBuiltIns
 
         var elements = new List<object?>();
         var args = Environment.GetCommandLineArgs();
+
+        // Node.js format: [node_path, script_path, ...args]
+        // .NET format: [exe_path, ...args]
+        // We prepend the executable path to maintain compatibility with slice(2)
+        // argv[0] = executable path (acts as "runtime")
+        // argv[1] = executable path (acts as "script" path, from GetCommandLineArgs)
+        // argv[2+] = actual arguments
+        elements.Add(Environment.ProcessPath ?? args[0]);
+
         foreach (var arg in args)
         {
             elements.Add(arg);

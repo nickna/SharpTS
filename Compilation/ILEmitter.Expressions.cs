@@ -242,7 +242,7 @@ public partial class ILEmitter
 
         // If left is undefined, use right
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
         builder.Emit_Brtrue(useRightLabel);
 
         // Left is neither null nor undefined - use it

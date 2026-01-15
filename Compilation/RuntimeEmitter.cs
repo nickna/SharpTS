@@ -24,6 +24,9 @@ public partial class RuntimeEmitter
     {
         var runtime = new EmittedRuntime();
 
+        // Emit $Undefined singleton class first (other methods need this type)
+        EmitUndefinedClass(moduleBuilder, runtime);
+
         // Emit IUnionType marker interface first (union types need to implement this)
         EmitIUnionTypeInterface(moduleBuilder, runtime);
 
@@ -56,6 +59,64 @@ public partial class RuntimeEmitter
         EmitRuntimeClass(moduleBuilder, runtime);
 
         return runtime;
+    }
+
+    /// <summary>
+    /// Emits the $Undefined singleton class.
+    /// This is used instead of referencing SharpTS.Runtime.Types.SharpTSUndefined
+    /// so that compiled assemblies are standalone.
+    /// </summary>
+    private void EmitUndefinedClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        // Define class: public sealed class $Undefined
+        var typeBuilder = moduleBuilder.DefineType(
+            "$Undefined",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object
+        );
+        runtime.UndefinedType = typeBuilder;
+
+        // Static field: public static readonly $Undefined Instance = new $Undefined();
+        var instanceField = typeBuilder.DefineField(
+            "Instance",
+            typeBuilder,
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
+        );
+        runtime.UndefinedInstance = instanceField;
+
+        // Private constructor to ensure singleton
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Private,
+            CallingConventions.Standard,
+            Type.EmptyTypes
+        );
+        var ctorIL = ctor.GetILGenerator();
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIL.Emit(OpCodes.Ret);
+
+        // Static constructor to initialize Instance
+        var cctor = typeBuilder.DefineTypeInitializer();
+        var cctorIL = cctor.GetILGenerator();
+        cctorIL.Emit(OpCodes.Newobj, ctor);
+        cctorIL.Emit(OpCodes.Stsfld, instanceField);
+        cctorIL.Emit(OpCodes.Ret);
+
+        // Override ToString() to return "undefined"
+        var toStringMethod = typeBuilder.DefineMethod(
+            "ToString",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.String,
+            Type.EmptyTypes
+        );
+        var toStringIL = toStringMethod.GetILGenerator();
+        toStringIL.Emit(OpCodes.Ldstr, "undefined");
+        toStringIL.Emit(OpCodes.Ret);
+
+        // Create the type immediately so other emitters can reference it
+        var createdType = typeBuilder.CreateType()!;
+        runtime.UndefinedType = createdType;
+        runtime.UndefinedInstance = createdType.GetField("Instance")!;
     }
 
     /// <summary>

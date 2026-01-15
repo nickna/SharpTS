@@ -521,22 +521,58 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     // Compilation
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
-    compiler.SetDecoratorMode(decoratorMode);
-    compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
-    compiler.Save(outputPath);
 
-    GenerateRuntimeConfig(outputPath);
-    CopySharpTsDll(outputPath);
-    if (!outputOptions.QuietMode)
+    if (target == OutputTarget.Exe)
     {
-        Console.WriteLine($"Compiled to {outputPath}");
+        // For EXE output, first compile to a temp DLL, then bundle into single-file EXE
+        var tempDllPath = Path.Combine(Path.GetTempPath(), $"{assemblyName}_{Guid.NewGuid():N}.dll");
+        try
+        {
+            // Compile to DLL format (will be bundled into EXE)
+            ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
+            compiler.SetDecoratorMode(decoratorMode);
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(tempDllPath);
+
+            // Run IL verification on the DLL if requested
+            if (verifyIL)
+            {
+                VerifyCompiledAssembly(tempDllPath, sdkPath);
+            }
+
+            // Bundle into single-file EXE
+            AppHostGenerator.CreateSingleFileExecutableDirect(tempDllPath, outputPath, assemblyName);
+
+            if (!outputOptions.QuietMode)
+            {
+                Console.WriteLine($"Compiled to {outputPath}");
+            }
+        }
+        finally
+        {
+            // Clean up temp DLL
+            try { File.Delete(tempDllPath); } catch { }
+        }
     }
-
-    // Run IL verification if requested
-    if (verifyIL)
+    else
     {
-        VerifyCompiledAssembly(outputPath, sdkPath);
+        // Standard DLL output
+        ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
+        compiler.SetDecoratorMode(decoratorMode);
+        compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+        compiler.Save(outputPath);
+
+        GenerateRuntimeConfig(outputPath);
+        if (!outputOptions.QuietMode)
+        {
+            Console.WriteLine($"Compiled to {outputPath}");
+        }
+
+        // Run IL verification if requested
+        if (verifyIL)
+        {
+            VerifyCompiledAssembly(outputPath, sdkPath);
+        }
     }
 }
 
@@ -553,22 +589,58 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
     // Compilation Phase
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
-    compiler.SetDecoratorMode(decoratorMode);
-    compiler.Compile(statements, typeMap, deadCodeInfo);
-    compiler.Save(outputPath);
 
-    GenerateRuntimeConfig(outputPath);
-    CopySharpTsDll(outputPath);
-    if (!outputOptions.QuietMode)
+    if (target == OutputTarget.Exe)
     {
-        Console.WriteLine($"Compiled to {outputPath}");
+        // For EXE output, first compile to a temp DLL, then bundle into single-file EXE
+        var tempDllPath = Path.Combine(Path.GetTempPath(), $"{assemblyName}_{Guid.NewGuid():N}.dll");
+        try
+        {
+            // Compile to DLL format (will be bundled into EXE)
+            ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, OutputTarget.Dll);
+            compiler.SetDecoratorMode(decoratorMode);
+            compiler.Compile(statements, typeMap, deadCodeInfo);
+            compiler.Save(tempDllPath);
+
+            // Run IL verification on the DLL if requested
+            if (verifyIL)
+            {
+                VerifyCompiledAssembly(tempDllPath, sdkPath);
+            }
+
+            // Bundle into single-file EXE
+            AppHostGenerator.CreateSingleFileExecutableDirect(tempDllPath, outputPath, assemblyName);
+
+            if (!outputOptions.QuietMode)
+            {
+                Console.WriteLine($"Compiled to {outputPath}");
+            }
+        }
+        finally
+        {
+            // Clean up temp DLL
+            try { File.Delete(tempDllPath); } catch { }
+        }
     }
-
-    // Run IL verification if requested
-    if (verifyIL)
+    else
     {
-        VerifyCompiledAssembly(outputPath, sdkPath);
+        // Standard DLL output
+        ILCompiler compiler = new(assemblyName, preserveConstEnums, useReferenceAssemblies, sdkPath, metadata, references, target);
+        compiler.SetDecoratorMode(decoratorMode);
+        compiler.Compile(statements, typeMap, deadCodeInfo);
+        compiler.Save(outputPath);
+
+        GenerateRuntimeConfig(outputPath);
+        if (!outputOptions.QuietMode)
+        {
+            Console.WriteLine($"Compiled to {outputPath}");
+        }
+
+        // Run IL verification if requested
+        if (verifyIL)
+        {
+            VerifyCompiledAssembly(outputPath, sdkPath);
+        }
     }
 }
 
@@ -587,17 +659,6 @@ static void GenerateRuntimeConfig(string outputPath)
         }
         """;
     File.WriteAllText(runtimeConfigPath, runtimeConfig);
-}
-
-static void CopySharpTsDll(string outputPath)
-{
-    string outputDir = Path.GetDirectoryName(outputPath) ?? ".";
-    string sharpTsSource = typeof(SharpTS.Compilation.RuntimeTypes).Assembly.Location;
-    string sharpTsDest = Path.Combine(outputDir, "SharpTS.dll");
-    if (!string.IsNullOrEmpty(sharpTsSource) && File.Exists(sharpTsSource) && sharpTsSource != sharpTsDest)
-    {
-        File.Copy(sharpTsSource, sharpTsDest, overwrite: true);
-    }
 }
 
 static void VerifyCompiledAssembly(string outputPath, string? sdkPath)

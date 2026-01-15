@@ -17,6 +17,10 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    // The emitted $Undefined singleton class
+    public Type UndefinedType { get; set; } = null!;
+    public FieldInfo UndefinedInstance { get; set; } = null!;
+
     // The emitted TSFunction class
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;

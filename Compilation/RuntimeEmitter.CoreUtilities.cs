@@ -30,7 +30,7 @@ public partial class RuntimeEmitter
 
         // if (value is SharpTSUndefined) return "undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // if (value is bool b) return b ? "true" : "false"
@@ -271,7 +271,7 @@ public partial class RuntimeEmitter
 
         // undefined => false
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, falseLabel);
 
         // bool => return value
@@ -319,7 +319,7 @@ public partial class RuntimeEmitter
 
         // undefined => "undefined"
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // Check for union types using $IUnionType marker interface
@@ -537,7 +537,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse_S, checkRightNullish); // left is null
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un); // true if left is SharpTSUndefined
         il.Emit(OpCodes.Stloc, leftNullish);
@@ -563,7 +563,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(rightNotNull);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un); // true if right is SharpTSUndefined
         il.Emit(OpCodes.Stloc, rightNullish);

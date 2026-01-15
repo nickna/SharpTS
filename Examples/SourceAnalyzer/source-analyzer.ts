@@ -2,7 +2,7 @@
 // A TypeScript CLI tool for SharpTS that analyzes source code files
 //
 // Usage:
-//   dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]
+//   sharpts Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]
 //
 // This tool scans the specified directory (or current directory) recursively
 // and displays statistics about source code files including lines of code
@@ -70,7 +70,7 @@ function showHelp(): void {
     console.log('lines of code and function counts.');
     console.log('');
     console.log('Usage:');
-    console.log('  dotnet run -- Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]');
+    console.log('  ' + path.basename(process.argv[0]) + ' Examples/SourceAnalyzer/source-analyzer.ts [directory] [--help]');
     console.log('');
     console.log('Arguments:');
     console.log('  directory    Directory to scan (defaults to current directory)');

@@ -105,7 +105,10 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static object ProcessGetArgv()
-    /// Creates a SharpTSArray containing command line arguments.
+    /// Creates a List containing command line arguments in Node.js format.
+    /// Node.js argv: [runtime_path, script_path, ...args]
+    /// We prepend the executable path to maintain compatibility with code
+    /// that does process.argv.slice(2) to get actual arguments.
     /// </summary>
     private void EmitProcessGetArgv(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -119,12 +122,65 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Get command line args: Environment.GetCommandLineArgs()
+        // Get command line args first (we need args[0] as fallback)
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Environment, "GetCommandLineArgs"));
+        var argsLocal = il.DeclareLocal(_types.StringArray);
+        il.Emit(OpCodes.Stloc, argsLocal);
 
-        // Create array from string[]
-        il.Emit(OpCodes.Call, runtime.CreateArray);
+        // Create new List<object?>
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, listLocal);
 
+        // Add Environment.ProcessPath ?? args[0] as argv[0] (executable path)
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessPath"));
+        il.Emit(OpCodes.Dup);
+        var notNullLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, notNullLabel);
+        // ProcessPath was null, use args[0] instead
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.MarkLabel(notNullLabel);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        // Loop through args and add to list
+        // int i = 0
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        // while (i < args.Length)
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // list.Add(args[i])
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        // i++
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(loopEnd);
+
+        // Return the list
+        il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ret);
     }
 

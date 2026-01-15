@@ -1,5 +1,5 @@
 // File Organizer - Sort files into folders by extension
-// Usage: dotnet run -- examples/file-organizer.ts <directory> [--dry-run]
+// Usage: sharpts examples/file-organizer.ts <directory> [--dry-run]
 //
 // Demonstrates: fs (readdirSync, statSync, mkdirSync, renameSync, existsSync)
 //               path (join, extname, basename)
@@ -81,7 +81,7 @@ function main(): void {
     if (args.length === 0) {
         console.log('File Organizer - Sort files into folders by extension');
         console.log('');
-        console.log('Usage: dotnet run -- examples/file-organizer.ts <directory> [--dry-run]');
+        console.log('Usage: ' + path.basename(process.argv[0]) + ' examples/file-organizer.ts <directory> [--dry-run]');
         console.log('');
         console.log('Options:');
         console.log('  --dry-run    Show what would be done without moving files');

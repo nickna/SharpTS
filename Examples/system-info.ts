@@ -1,5 +1,5 @@
 // System Info - Display comprehensive system information
-// Usage: dotnet run -- examples/system-info.ts
+// Usage: sharpts examples/system-info.ts
 //
 // Demonstrates: os (platform, arch, hostname, cpus, totalmem, freemem, homedir, tmpdir, userInfo, EOL)
 //               process (pid, version, cwd, env, argv, uptime, memoryUsage)

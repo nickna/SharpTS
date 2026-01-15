@@ -1,5 +1,5 @@
 // File Hasher - Generate checksums for files
-// Usage: dotnet run -- examples/file-hasher.ts <filepath>
+// Usage: sharpts examples/file-hasher.ts <filepath>
 //
 // Demonstrates: crypto (createHash, digest), fs (readFileSync, existsSync, statSync), path (basename, resolve)
 
@@ -26,7 +26,7 @@ function main(): void {
     if (args.length === 0) {
         console.log('File Hasher - Generate checksums for files');
         console.log('');
-        console.log('Usage: dotnet run -- examples/file-hasher.ts <filepath>');
+        console.log('Usage: ' + path.basename(process.argv[0]) + ' examples/file-hasher.ts <filepath>');
         console.log('');
         console.log('Supported algorithms: MD5, SHA1, SHA256, SHA384, SHA512');
         return;

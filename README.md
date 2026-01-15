@@ -7,6 +7,7 @@ A TypeScript interpreter and ahead-of-time compiler written in C#.
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 
 ## Overview
+
 <img width="2816" height="1536" alt="Gemini_Generated_Image_go1ahqgo1ahqgo1a" src="https://github.com/user-attachments/assets/565d98dc-8268-4cd6-8b34-7cc24a0f7a4a" />
 
 SharpTS is an implementation of a TypeScript interpreter and compiler. It implements the complete pipeline from source code to execution:
@@ -17,6 +18,7 @@ SharpTS is an implementation of a TypeScript interpreter and compiler. It implem
 4. **Execution** - Either interpretation or compilation to .NET IL
 
 SharpTS supports two execution modes:
+
 - **Interpretation** - Tree-walking execution for rapid development
 - **AOT Compilation** - Compile TypeScript to native .NET assemblies
 
@@ -69,11 +71,13 @@ SharpTS supports two execution modes:
 ### Installation
 
 **Install CLI tool from NuGet (recommended):**
+
 ```bash
 dotnet tool install -g SharpTS
 ```
 
-**Or use the MSBuild SDK in your project:**
+**Or use the MSBuild SDK in a .NET project:**
+
 ```xml
 <Project Sdk="SharpTS.Sdk/1.0.0">
   <PropertyGroup>
@@ -83,37 +87,36 @@ dotnet tool install -g SharpTS
 </Project>
 ```
 
-**Or build from source:**
-```bash
-git clone https://github.com/nickna/SharpTS.git
-cd SharpTS
-dotnet build
-```
-
 ### Usage
 
 **REPL Mode:**
+
 ```bash
 sharpts
 ```
 
 **Run a TypeScript file (interpreted):**
+
 ```bash
 sharpts script.ts
 ```
 
 **Compile to .NET assembly:**
+
 ```bash
 sharpts --compile script.ts
 dotnet script.dll
 ```
 
-**Compile with custom output:**
+**Compile to self-contained executable:**
+
 ```bash
-sharpts --compile script.ts -o myapp.dll
+sharpts --compile script.ts -t exe
+script.exe
 ```
 
 **Additional compiler options:**
+
 ```bash
 sharpts --compile script.ts --ref-asm       # Reference assembly for C# interop
 sharpts --compile script.ts --verify        # Verify emitted IL
@@ -121,14 +124,17 @@ sharpts --compile script.ts --preserveConstEnums  # Keep const enums
 ```
 
 **Generate NuGet package:**
+
 ```bash
 sharpts --compile Library.ts --pack         # Creates Library.1.0.0.nupkg
 sharpts --compile Library.ts --pack --version 2.0.0-beta  # Custom version
 sharpts --compile Library.ts --pack --push https://api.nuget.org/v3/index.json --api-key $KEY
 ```
+
 Package metadata is read from `package.json` in the source directory.
 
 **Decorator support:**
+
 ```bash
 sharpts --experimentalDecorators script.ts  # Legacy (Stage 2) decorators
 sharpts --decorators script.ts              # TC39 Stage 3 decorators
@@ -228,6 +234,7 @@ Hello from .NET!
 ```
 
 ### Access TypeScript classes from .NET (C#)
+
 ```C#
 // Compile your TypeScript with --ref-asm:
 
@@ -235,7 +242,9 @@ var person = new Person("Alice", 30.0);  // Direct instantiation
 Console.WriteLine(person.name);          // Direct property access
 string greeting = person.greet();        // Typed return values
 ```
-[Example code](Examples/Interop/README.md)
+
+[More code examples](Examples/README.md)
+
 ## Documentation
 
 - [**Using .NET Types**](docs/dotnet-types.md) - Use .NET BCL and libraries from TypeScript
@@ -248,15 +257,10 @@ string greeting = person.greet();        // Typed return values
 
 SharpTS is under active development. See [STATUS.md](STATUS.md) for current feature support and roadmap.
 
-**Looking for help with:**
-- Additional TypeScript features
-- IL compiler feature parity
-- Performance optimizations
-- Test coverage
-
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
+
 - Code style guidelines
 - How to add new language features
 - Submitting pull requests

@@ -13,6 +13,7 @@ public class StateMachineEmitHelpers
     private readonly ILGenerator _il;
     private readonly TypeProvider _types;
     private readonly ValidatedILBuilder? _builder;
+    private readonly EmittedRuntime? _runtime;
     private StackType _stackType = StackType.Unknown;
 
     /// <summary>
@@ -40,18 +41,20 @@ public class StateMachineEmitHelpers
     /// </summary>
     public ValidatedILBuilder? Builder => _builder;
 
-    public StateMachineEmitHelpers(ILGenerator il, TypeProvider types)
+    public StateMachineEmitHelpers(ILGenerator il, TypeProvider types, EmittedRuntime? runtime = null)
     {
         _il = il;
         _types = types;
         _builder = null;
+        _runtime = runtime;
     }
 
-    public StateMachineEmitHelpers(ILGenerator il, TypeProvider types, ValidatedILBuilder builder)
+    public StateMachineEmitHelpers(ILGenerator il, TypeProvider types, ValidatedILBuilder builder, EmittedRuntime? runtime = null)
     {
         _il = il;
         _types = types;
         _builder = builder;
+        _runtime = runtime;
     }
 
     #region Label Operations
@@ -204,8 +207,16 @@ public class StateMachineEmitHelpers
 
     public void EmitUndefinedConstant()
     {
-        // Load SharpTSUndefined.Instance static field
-        _il.Emit(OpCodes.Ldsfld, typeof(Runtime.Types.SharpTSUndefined).GetField("Instance")!);
+        // Load $Undefined.Instance static field from the emitted runtime
+        if (_runtime != null)
+        {
+            _il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+        }
+        else
+        {
+            // Fallback to SharpTS.Runtime type (for interpreter mode or tests)
+            _il.Emit(OpCodes.Ldsfld, typeof(Runtime.Types.SharpTSUndefined).GetField("Instance")!);
+        }
         _stackType = StackType.Unknown;  // Treat as boxed object
     }
 

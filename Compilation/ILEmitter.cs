@@ -73,7 +73,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     }
 
     public ILEmitter(CompilationContext ctx)
-        : base(new StateMachineEmitHelpers(ctx.IL, ctx.Types, ctx.ILBuilder))
+        : base(new StateMachineEmitHelpers(ctx.IL, ctx.Types, ctx.ILBuilder, ctx.Runtime))
     {
         _ctx = ctx;
         _resolver = new LocalVariableResolver(ctx.IL, ctx, ctx.Types);

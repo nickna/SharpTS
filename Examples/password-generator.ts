@@ -1,5 +1,5 @@
 // Password Generator - Generate secure random passwords
-// Usage: dotnet run -- examples/password-generator.ts [length]
+// Usage: sharpts examples/password-generator.ts [length]
 //
 // Demonstrates: crypto (randomBytes, randomInt), readline (questionSync)
 

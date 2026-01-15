@@ -1,5 +1,5 @@
 // URL Toolkit - Parse and manipulate URLs
-// Usage: dotnet run examples/url-toolkit.ts [url]
+// Usage: sharpts examples/url-toolkit.ts [url]
 //
 // Demonstrates: url (parse, resolve), querystring (parse, stringify, escape, unescape)
 
