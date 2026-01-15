@@ -4,9 +4,9 @@
 // Demonstrates: fs (readdirSync, statSync, mkdirSync, renameSync, existsSync)
 //               path (join, extname, basename)
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as process from 'process';
+import fs from 'fs';
+import path from 'path';
+import process from 'process';
 
 // Map extensions to folder names
 const EXTENSION_FOLDERS: { [key: string]: string } = {

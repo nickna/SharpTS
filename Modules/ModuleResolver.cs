@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns.Modules;
 using SharpTS.TypeSystem;
@@ -158,6 +159,11 @@ public class ModuleResolver
                     {
                         builtinModule.ExportedTypes[name] = type;
                     }
+
+                    // Set default export to a record of all exports, enabling: import fs from 'fs'
+                    builtinModule.DefaultExportType = new TypeInfo.Record(
+                        builtinModule.ExportedTypes.ToFrozenDictionary()
+                    );
                 }
                 _moduleCache[absolutePath] = builtinModule;
             }

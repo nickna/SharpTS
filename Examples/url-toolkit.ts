@@ -4,9 +4,9 @@
 // Demonstrates: url (parse, resolve), querystring (parse, stringify, escape, unescape)
 
 import { parse, resolve } from 'url';
-import * as querystring from 'querystring';
-import * as process from 'process';
-import * as readline from 'readline';
+import querystring from 'querystring';
+import process from 'process';
+import readline from 'readline';
 
 function printUrlComponents(urlString: string): void {
     const url = parse(urlString);

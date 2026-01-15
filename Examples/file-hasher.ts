@@ -4,9 +4,9 @@
 // Demonstrates: crypto (createHash, digest), fs (readFileSync, existsSync, statSync), path (basename, resolve)
 
 import { createHash } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as process from 'process';
+import fs from 'fs';
+import path from 'path';
+import process from 'process';
 
 function formatBytes(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';

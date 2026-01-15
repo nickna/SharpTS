@@ -250,6 +250,8 @@ public partial class Interpreter
                 {
                     moduleInstance.SetExport(name, value);
                 }
+                // Set default export to all exports, enabling: import fs from 'fs'
+                moduleInstance.DefaultExport = moduleInstance.ExportsAsObject();
             }
             moduleInstance.IsExecuted = true;
             return;

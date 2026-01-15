@@ -4,8 +4,8 @@
 // Demonstrates: os (platform, arch, hostname, cpus, totalmem, freemem, homedir, tmpdir, userInfo, EOL)
 //               process (pid, version, cwd, env, argv, uptime, memoryUsage)
 
-import * as os from 'os';
-import * as process from 'process';
+import os from 'os';
+import process from 'process';
 
 function formatBytes(bytes: number): string {
     const gb = bytes / (1024 * 1024 * 1024);
