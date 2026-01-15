@@ -322,6 +322,21 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Core logical operation logic, shared between sync and async evaluation.
+    /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
+    /// </summary>
+    /// <param name="op">The operator type (OR_OR or AND_AND).</param>
+    /// <param name="left">The already-evaluated left operand.</param>
+    /// <param name="evaluateRight">A function to evaluate the right operand (only called if needed).</param>
+    /// <returns>The value that determined the result.</returns>
+    private object? EvaluateLogicalCore(TokenType op, object? left, Func<object?> evaluateRight)
+    {
+        if (op == TokenType.OR_OR)
+            return IsTruthy(left) ? left : evaluateRight();
+        return !IsTruthy(left) ? left : evaluateRight();
+    }
+
+    /// <summary>
     /// Evaluates a logical operator expression (AND/OR) with short-circuit evaluation.
     /// </summary>
     /// <param name="logical">The logical expression AST node.</param>
@@ -332,22 +347,18 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_AND">MDN Logical AND</seealso>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Logical_OR">MDN Logical OR</seealso>
-    private object? EvaluateLogical(Expr.Logical logical)
-    {
-        object? left = Evaluate(logical.Left);
+    private object? EvaluateLogical(Expr.Logical logical) =>
+        EvaluateLogicalCore(logical.Operator.Type, Evaluate(logical.Left), () => Evaluate(logical.Right));
 
-        // Short-circuit evaluation
-        if (logical.Operator.Type == TokenType.OR_OR)
-        {
-            if (IsTruthy(left)) return left;
-        }
-        else // AND_AND
-        {
-            if (!IsTruthy(left)) return left;
-        }
-
-        return Evaluate(logical.Right);
-    }
+    /// <summary>
+    /// Core nullish coalescing logic, shared between sync and async evaluation.
+    /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
+    /// </summary>
+    /// <param name="left">The already-evaluated left operand.</param>
+    /// <param name="evaluateRight">A function to evaluate the right operand (only called if left is null).</param>
+    /// <returns>The left value if not null; otherwise the right value.</returns>
+    private object? EvaluateNullishCoalescingCore(object? left, Func<object?> evaluateRight) =>
+        left ?? evaluateRight();
 
     /// <summary>
     /// Evaluates the nullish coalescing operator (<c>??</c>).
@@ -359,16 +370,19 @@ public partial class Interpreter
     /// not for other falsy values like <c>0</c>, <c>""</c>, or <c>false</c>.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#nullish-coalescing">TypeScript Nullish Coalescing</seealso>
-    private object? EvaluateNullishCoalescing(Expr.NullishCoalescing nc)
-    {
-        object? left = Evaluate(nc.Left);
-        // Only return right if left is null (not for other falsy values)
-        if (left == null)
-        {
-            return Evaluate(nc.Right);
-        }
-        return left;
-    }
+    private object? EvaluateNullishCoalescing(Expr.NullishCoalescing nc) =>
+        EvaluateNullishCoalescingCore(Evaluate(nc.Left), () => Evaluate(nc.Right));
+
+    /// <summary>
+    /// Core ternary operation logic, shared between sync and async evaluation.
+    /// Uses lazy evaluation via Func delegates to ensure only one branch is evaluated.
+    /// </summary>
+    /// <param name="condition">The already-evaluated condition.</param>
+    /// <param name="evalThen">A function to evaluate the then branch (only called if condition is truthy).</param>
+    /// <param name="evalElse">A function to evaluate the else branch (only called if condition is falsy).</param>
+    /// <returns>The result of evaluating the appropriate branch.</returns>
+    private object? EvaluateTernaryCore(object? condition, Func<object?> evalThen, Func<object?> evalElse) =>
+        IsTruthy(condition) ? evalThen() : evalElse();
 
     /// <summary>
     /// Evaluates a ternary conditional expression (<c>?:</c>).
@@ -379,13 +393,8 @@ public partial class Interpreter
     /// Only evaluates one branch based on the truthiness of the condition.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Conditional_operator">MDN Conditional Operator</seealso>
-    private object? EvaluateTernary(Expr.Ternary ternary)
-    {
-        object? condition = Evaluate(ternary.Condition);
-        return IsTruthy(condition)
-            ? Evaluate(ternary.ThenBranch)
-            : Evaluate(ternary.ElseBranch);
-    }
+    private object? EvaluateTernary(Expr.Ternary ternary) =>
+        EvaluateTernaryCore(Evaluate(ternary.Condition), () => Evaluate(ternary.ThenBranch), () => Evaluate(ternary.ElseBranch));
 
     /// <summary>
     /// Applies a compound assignment operator to two values.

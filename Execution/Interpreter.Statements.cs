@@ -307,28 +307,7 @@ public partial class Interpreter
         catch (Exception ex)
         {
             // Treat host exceptions as guest throws
-            object? errorValue;
-            if (ex is ThrowException tex)
-            {
-                errorValue = tex.Value;
-            }
-            else if (ex is NodeError nodeError)
-            {
-                // Convert NodeError to a JavaScript-compatible error object
-                errorValue = new SharpTSObject(new Dictionary<string, object?>
-                {
-                    ["name"] = "Error",
-                    ["message"] = nodeError.Message,
-                    ["code"] = nodeError.Code,
-                    ["syscall"] = nodeError.Syscall,
-                    ["path"] = nodeError.Path,
-                    ["errno"] = nodeError.Errno.HasValue ? (double)nodeError.Errno.Value : null
-                });
-            }
-            else
-            {
-                errorValue = ex.Message;
-            }
+            object? errorValue = TranslateException(ex);
             pendingResult = ExecutionResult.Throw(errorValue);
             exceptionHandled = HandleCatchBlock(tryCatch, errorValue, out pendingResult);
         }
@@ -656,11 +635,64 @@ public partial class Interpreter
             using (PushScope(loopEnv))
             {
                 var result = Execute(body);
-                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-                if (result.IsAbrupt) return result;
+                var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+                if (shouldBreak) return ExecutionResult.Success();
+                if (shouldContinue) continue;
+                if (abruptResult.HasValue) return abruptResult.Value;
             }
         }
         return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Core loop result handling logic, shared between sync and async loop execution.
+    /// Processes ExecutionResult to determine break, continue, or propagation behavior.
+    /// </summary>
+    /// <param name="result">The execution result from the loop body.</param>
+    /// <param name="label">The label of the current loop (null for unlabeled loops).</param>
+    /// <returns>A tuple indicating: (shouldBreak, shouldContinue, abruptResultToPropagate).</returns>
+    private (bool shouldBreak, bool shouldContinue, ExecutionResult? abruptResult)
+        HandleLoopResult(ExecutionResult result, string? label)
+    {
+        if (result.Type == ExecutionResult.ResultType.Break &&
+            (result.TargetLabel == null || result.TargetLabel == label))
+            return (true, false, null);
+        if (result.Type == ExecutionResult.ResultType.Continue &&
+            (result.TargetLabel == null || result.TargetLabel == label))
+            return (false, true, null);
+        if (result.IsAbrupt)
+            return (false, false, result);
+        return (false, false, null);
+    }
+
+    /// <summary>
+    /// Translates a host exception to a guest error value.
+    /// Shared between sync and async try/catch handling.
+    /// </summary>
+    /// <param name="ex">The host exception to translate.</param>
+    /// <returns>The guest error value (ThrowException value, NodeError object, or message string).</returns>
+    private object? TranslateException(Exception ex)
+    {
+        if (ex is ThrowException tex)
+            return tex.Value;
+
+        if (ex is SharpTSPromiseRejectedException rex)
+            return rex.Reason;
+
+        if (ex is AggregateException agg && agg.InnerException is SharpTSPromiseRejectedException innerRex)
+            return innerRex.Reason;
+
+        if (ex is NodeError nodeError)
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["name"] = "Error",
+                ["message"] = nodeError.Message,
+                ["code"] = nodeError.Code,
+                ["syscall"] = nodeError.Syscall,
+                ["path"] = nodeError.Path,
+                ["errno"] = nodeError.Errno.HasValue ? (double)nodeError.Errno.Value : null
+            });
+
+        return ex.Message;
     }
 }

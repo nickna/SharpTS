@@ -189,9 +189,10 @@ public partial class Interpreter
             object? value = forOf.IsAsync && item is Task<object?> t ? await t : item;
 
             var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
-            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-            if (result.IsAbrupt) return result;
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
         }
         
         return ExecutionResult.Success();
@@ -287,9 +288,10 @@ public partial class Interpreter
             if (done) break;
 
             var result = await ExecuteLoopBodyAsync(forOf.Variable.Lexeme, value, forOf.Body);
-            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-            if (result.IsAbrupt) return result;
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
         }
         
         return ExecutionResult.Success();
@@ -362,11 +364,12 @@ public partial class Interpreter
         foreach (var key in keys)
         {
             var result = await ExecuteLoopBodyAsync(forIn.Variable.Lexeme, key, forIn.Body);
-            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
-            if (result.IsAbrupt) return result;
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
         }
-        
+
         return ExecutionResult.Success();
     }
 
@@ -439,14 +442,7 @@ public partial class Interpreter
         }
         catch (Exception ex)
         {
-            object? errorValue = ex switch
-            {
-                ThrowException tex => tex.Value,
-                SharpTSPromiseRejectedException rex => rex.Reason,
-                AggregateException agg when agg.InnerException is SharpTSPromiseRejectedException rex => rex.Reason,
-                _ => ex.Message
-            };
-            
+            object? errorValue = TranslateException(ex);
             var catchOutcome = await HandleCatchBlockAsync(tryCatch, errorValue);
             exceptionHandled = catchOutcome.Handled;
             pendingResult = exceptionHandled ? catchOutcome.Result : ExecutionResult.Throw(errorValue);
@@ -499,14 +495,7 @@ public partial class Interpreter
             }
             catch (Exception ex)
             {
-                object? errorValue = ex switch
-                {
-                    ThrowException tex => tex.Value,
-                    SharpTSPromiseRejectedException rex => rex.Reason,
-                    AggregateException agg when agg.InnerException is SharpTSPromiseRejectedException rex => rex.Reason,
-                    _ => ex.Message
-                };
-                return (true, ExecutionResult.Throw(errorValue));
+                return (true, ExecutionResult.Throw(TranslateException(ex)));
             }
             finally
             {
@@ -527,32 +516,24 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateLogicalAsync(Expr.Logical logical)
     {
-        object? left = await EvaluateAsync(logical.Left);
-        if (logical.Operator.Type == TokenType.OR_OR)
-        {
-            if (IsTruthy(left)) return left;
-        }
-        else // AND_AND
-        {
-            if (!IsTruthy(left)) return left;
-        }
-        return await EvaluateAsync(logical.Right);
+        var left = await EvaluateAsync(logical.Left);
+        return EvaluateLogicalCore(logical.Operator.Type, left,
+            () => EvaluateAsync(logical.Right).GetAwaiter().GetResult());
     }
 
     private async Task<object?> EvaluateNullishCoalescingAsync(Expr.NullishCoalescing nc)
     {
-        object? left = await EvaluateAsync(nc.Left);
-        if (left != null) return left;
-        return await EvaluateAsync(nc.Right);
+        var left = await EvaluateAsync(nc.Left);
+        return EvaluateNullishCoalescingCore(left,
+            () => EvaluateAsync(nc.Right).GetAwaiter().GetResult());
     }
 
     private async Task<object?> EvaluateTernaryAsync(Expr.Ternary ternary)
     {
-        if (IsTruthy(await EvaluateAsync(ternary.Condition)))
-        {
-            return await EvaluateAsync(ternary.ThenBranch);
-        }
-        return await EvaluateAsync(ternary.ElseBranch);
+        var condition = await EvaluateAsync(ternary.Condition);
+        return EvaluateTernaryCore(condition,
+            () => EvaluateAsync(ternary.ThenBranch).GetAwaiter().GetResult(),
+            () => EvaluateAsync(ternary.ElseBranch).GetAwaiter().GetResult());
     }
 
     private async Task<object?> EvaluateUnaryAsync(Expr.Unary unary)
