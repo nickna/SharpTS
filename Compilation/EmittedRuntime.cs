@@ -401,6 +401,30 @@ public class EmittedRuntime
     // Process module methods
     public MethodBuilder ProcessGetEnv { get; set; } = null!;
     public MethodBuilder ProcessGetArgv { get; set; } = null!;
+    public MethodBuilder ProcessHrtime { get; set; } = null!;
+    public MethodBuilder ProcessUptime { get; set; } = null!;
+    public MethodBuilder ProcessMemoryUsage { get; set; } = null!;
+
+    // Querystring module methods
+    public MethodBuilder QuerystringParse { get; set; } = null!;
+    public MethodBuilder QuerystringStringify { get; set; } = null!;
+
+    // Assert module methods
+    public MethodBuilder AssertOk { get; set; } = null!;
+    public MethodBuilder AssertStrictEqual { get; set; } = null!;
+    public MethodBuilder AssertNotStrictEqual { get; set; } = null!;
+    public MethodBuilder AssertDeepStrictEqual { get; set; } = null!;
+    public MethodBuilder AssertNotDeepStrictEqual { get; set; } = null!;
+    public MethodBuilder AssertThrows { get; set; } = null!;
+    public MethodBuilder AssertDoesNotThrow { get; set; } = null!;
+    public MethodBuilder AssertFail { get; set; } = null!;
+    public MethodBuilder AssertEqual { get; set; } = null!;
+    public MethodBuilder AssertNotEqual { get; set; } = null!;
+
+    // URL module methods
+    public MethodBuilder UrlParse { get; set; } = null!;
+    public MethodBuilder UrlFormat { get; set; } = null!;
+    public MethodBuilder UrlResolve { get; set; } = null!;
 
     // Built-in module methods (module name -> method name -> MethodBuilder)
     // Used for creating TSFunction wrappers when importing named exports

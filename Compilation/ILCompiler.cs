@@ -448,6 +448,9 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new QuerystringModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new AssertModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new UrlModuleEmitter());
 
         // Phase 5: Collect all arrow functions and generate methods/display classes
         CollectAndDefineArrowFunctions(statements);
@@ -660,6 +663,9 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new QuerystringModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new AssertModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new UrlModuleEmitter());
 
         // Phase 6: Collect all arrow functions
         CollectAndDefineArrowFunctions(allStatements);

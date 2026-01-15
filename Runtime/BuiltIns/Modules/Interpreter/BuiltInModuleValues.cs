@@ -23,6 +23,9 @@ public static class BuiltInModuleValues
             "fs" => FsModuleInterpreter.GetExports(),
             "path" => PathModuleInterpreter.GetExports(),
             "os" => OsModuleInterpreter.GetExports(),
+            "querystring" => QuerystringModuleInterpreter.GetExports(),
+            "assert" => AssertModuleInterpreter.GetExports(),
+            "url" => UrlModuleInterpreter.GetExports(),
             _ => throw new Exception($"Unknown built-in module: {moduleName}")
         };
     }
@@ -32,6 +35,6 @@ public static class BuiltInModuleValues
     /// </summary>
     public static bool HasInterpreterSupport(string moduleName)
     {
-        return moduleName is "fs" or "path" or "os";
+        return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url";
     }
 }

@@ -136,4 +136,171 @@ public class ProcessGlobalTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
+
+    // ============ PROCESS ENHANCEMENT TESTS ============
+
+    [Fact]
+    public void Process_Hrtime_ReturnsArray()
+    {
+        var source = """
+            const hr = process.hrtime();
+            console.log(Array.isArray(hr));
+            console.log(hr.length === 2);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_Hrtime_ReturnsPositiveSeconds()
+    {
+        var source = """
+            const hr = process.hrtime();
+            console.log(hr[0] >= 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Process_Hrtime_ReturnsValidNanoseconds()
+    {
+        var source = """
+            const hr = process.hrtime();
+            // Nanoseconds should be 0-999999999
+            console.log(hr[1] >= 0);
+            console.log(hr[1] < 1000000000);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_Hrtime_WithPrevious_ReturnsDiff()
+    {
+        var source = """
+            const start = process.hrtime();
+            // Small busy loop
+            let sum = 0;
+            for (let i = 0; i < 10000; i++) {
+                sum += i;
+            }
+            const diff = process.hrtime(start);
+            console.log(Array.isArray(diff));
+            console.log(diff.length === 2);
+            // diff[0] should be >= 0 (seconds elapsed)
+            console.log(diff[0] >= 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_Uptime_ReturnsPositiveNumber()
+    {
+        var source = """
+            const up = process.uptime();
+            console.log(typeof up === 'number');
+            console.log(up >= 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_Uptime_IsSmallForNewProcess()
+    {
+        var source = """
+            const up = process.uptime();
+            // For a new process, uptime should be small (less than 60 seconds typically)
+            console.log(up < 120);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_ReturnsObject()
+    {
+        var source = """
+            const mem = process.memoryUsage();
+            console.log(typeof mem === 'object');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_HasRss()
+    {
+        var source = """
+            const mem = process.memoryUsage();
+            console.log(typeof mem.rss === 'number');
+            console.log(mem.rss > 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_HasHeapTotal()
+    {
+        var source = """
+            const mem = process.memoryUsage();
+            console.log(typeof mem.heapTotal === 'number');
+            console.log(mem.heapTotal > 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_HasHeapUsed()
+    {
+        var source = """
+            const mem = process.memoryUsage();
+            console.log(typeof mem.heapUsed === 'number');
+            console.log(mem.heapUsed > 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_HeapUsedLessThanTotal()
+    {
+        var source = """
+            const mem = process.memoryUsage();
+            console.log(mem.heapUsed <= mem.heapTotal);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Process_AllEnhancements_WorkTogether()
+    {
+        var source = """
+            const hr = process.hrtime();
+            const up = process.uptime();
+            const mem = process.memoryUsage();
+            console.log(hr.length === 2);
+            console.log(up >= 0);
+            console.log(mem.rss > 0);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
 }
