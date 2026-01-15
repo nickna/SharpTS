@@ -283,12 +283,17 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
         if (tsType is TSTypeInfo.Any or TSTypeInfo.Unknown)
             return ConversionCost.ObjectFallback;
 
-        // TypeScript null -> reference types (could be null)
+        // TypeScript null -> reference types or Nullable<T>
         if (tsType is TSTypeInfo.Null)
         {
             if (!targetType.IsValueType)
                 return ConversionCost.Exact;
-            // Null to value type is incompatible (unless nullable, which we don't handle yet)
+
+            // Handle Nullable<T> - null IS compatible
+            if (PrimitiveTypeMappings.IsNullableValueType(targetType))
+                return ConversionCost.Exact;
+
+            // Non-nullable value type - truly incompatible
             return ConversionCost.Incompatible;
         }
 

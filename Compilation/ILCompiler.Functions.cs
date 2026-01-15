@@ -555,14 +555,12 @@ public partial class ILCompiler
     /// </summary>
     private Type ResolveConstraintType(string constraint)
     {
-        return constraint switch
-        {
-            "number" => typeof(double),
-            "string" => typeof(string),
-            "boolean" => typeof(bool),
-            _ when _classes.Builders.TryGetValue(constraint, out var tb) => tb,
-            _ => typeof(object)
-        };
+        // Check class builders first
+        if (_classes.Builders.TryGetValue(constraint, out var tb))
+            return tb;
+
+        // Delegate primitive resolution to centralized mappings
+        return PrimitiveTypeMappings.StringToClrType.GetValueOrDefault(constraint, typeof(object));
     }
 
     /// <summary>

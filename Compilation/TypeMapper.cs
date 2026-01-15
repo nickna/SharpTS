@@ -111,13 +111,10 @@ public class TypeMapper
         return _types.MakeGenericType(_types.TaskOpen, innerType);
     }
 
-    private Type MapPrimitive(TypeInfo.Primitive p) => p.Type switch
-    {
-        TokenType.TYPE_NUMBER => _types.Double,
-        TokenType.TYPE_STRING => _types.String,
-        TokenType.TYPE_BOOLEAN => _types.Boolean,
-        _ => _types.Object
-    };
+    private Type MapPrimitive(TypeInfo.Primitive p) =>
+        PrimitiveTypeMappings.TokenToClrType.TryGetValue(p.Type, out var clrType)
+            ? clrType
+            : _types.Object;
 
     /// <summary>
     /// Gets the .NET type for a TypeScript class, resolving to the actual TypeBuilder if available.
@@ -256,20 +253,23 @@ public class TypeMapper
         return _types.Object;
     }
 
-    public static Type GetClrType(string typeAnnotation) => typeAnnotation switch
+    public static Type GetClrType(string typeAnnotation)
     {
-        "number" => typeof(double),
-        "string" => typeof(string),
-        "boolean" => typeof(bool),
-        "bigint" => typeof(System.Numerics.BigInteger),
-        "void" => typeof(void),
-        "any" => typeof(object),
-        "unknown" => typeof(object),
-        "never" => typeof(void),
-        _ when typeAnnotation.EndsWith("[]") => typeof(object), // Array type
-        _ when typeAnnotation.StartsWith("Promise<") => GetPromiseClrType(typeAnnotation),
-        _ => typeof(object) // Class or interface type
-    };
+        // Delegate primitive type resolution to centralized mappings
+        if (PrimitiveTypeMappings.StringToClrType.TryGetValue(typeAnnotation, out var clrType))
+            return clrType;
+
+        // Handle array types
+        if (typeAnnotation.EndsWith("[]"))
+            return typeof(object);
+
+        // Handle Promise types
+        if (typeAnnotation.StartsWith("Promise<"))
+            return GetPromiseClrType(typeAnnotation);
+
+        // Class or interface type - fallback to object
+        return typeof(object);
+    }
 
     private static Type GetPromiseClrType(string typeAnnotation)
     {

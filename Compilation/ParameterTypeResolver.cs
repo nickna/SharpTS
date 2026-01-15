@@ -306,23 +306,8 @@ public static class ParameterTypeResolver
 
     /// <summary>
     /// Parses a type annotation string into TypeInfo.
-    /// Simple implementation for common cases.
+    /// Delegates to centralized PrimitiveTypeMappings for consistency.
     /// </summary>
-    private static TSTypeInfo ParseTypeAnnotation(string typeAnnotation)
-    {
-        return typeAnnotation.Trim() switch
-        {
-            "number" => new TSTypeInfo.Primitive(TokenType.TYPE_NUMBER),
-            "string" => new TSTypeInfo.String(),
-            "boolean" => new TSTypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-            "void" => new TSTypeInfo.Void(),
-            "any" => new TSTypeInfo.Any(),
-            "unknown" => new TSTypeInfo.Unknown(),
-            "never" => new TSTypeInfo.Never(),
-            "null" => new TSTypeInfo.Null(),
-            "bigint" => new TSTypeInfo.BigInt(),
-            "symbol" => new TSTypeInfo.Symbol(),
-            _ => new TSTypeInfo.Any() // Complex types fallback to any/object
-        };
-    }
+    private static TSTypeInfo ParseTypeAnnotation(string typeAnnotation) =>
+        PrimitiveTypeMappings.ParseAnnotation(typeAnnotation);
 }
