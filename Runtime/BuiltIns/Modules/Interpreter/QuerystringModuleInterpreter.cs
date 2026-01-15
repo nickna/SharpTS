@@ -39,8 +39,8 @@ public static class QuerystringModuleInterpreter
             return new SharpTSObject(new Dictionary<string, object?>());
 
         var str = args[0]?.ToString() ?? "";
-        var sep = args.Count > 1 && args[1] != null ? args[1].ToString()! : "&";
-        var eq = args.Count > 2 && args[2] != null ? args[2].ToString()! : "=";
+        var sep = args.Count > 1 && args[1] is { } sep1 ? sep1.ToString() ?? "&" : "&";
+        var eq = args.Count > 2 && args[2] is { } eq2 ? eq2.ToString() ?? "=" : "=";
 
         var result = new Dictionary<string, object?>();
 
@@ -94,8 +94,8 @@ public static class QuerystringModuleInterpreter
         if (args.Count == 0 || args[0] == null)
             return "";
 
-        var sep = args.Count > 1 && args[1] != null ? args[1].ToString()! : "&";
-        var eq = args.Count > 2 && args[2] != null ? args[2].ToString()! : "=";
+        var sep = args.Count > 1 && args[1] is { } sep1 ? sep1.ToString() ?? "&" : "&";
+        var eq = args.Count > 2 && args[2] is { } eq2 ? eq2.ToString() ?? "=" : "=";
 
         var pairs = new List<string>();
         var obj = args[0];

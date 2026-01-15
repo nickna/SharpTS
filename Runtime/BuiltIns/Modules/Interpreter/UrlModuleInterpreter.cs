@@ -33,10 +33,10 @@ public static class UrlModuleInterpreter
     /// </summary>
     private static object? Parse(Interp interpreter, object? receiver, List<object?> args)
     {
-        if (args.Count == 0 || args[0] == null)
+        if (args.Count == 0 || args[0] is not { } arg0)
             return new SharpTSObject(new Dictionary<string, object?>());
 
-        var urlString = args[0].ToString()!;
+        var urlString = arg0.ToString() ?? "";
 
         try
         {
@@ -100,16 +100,16 @@ public static class UrlModuleInterpreter
     /// </summary>
     private static object? Format(Interp interpreter, object? receiver, List<object?> args)
     {
-        if (args.Count == 0 || args[0] == null)
+        if (args.Count == 0 || args[0] is not { } arg0)
             return "";
 
-        if (args[0] is SharpTSURL url)
+        if (arg0 is SharpTSURL url)
             return url.Href;
 
-        if (args[0] is string s)
+        if (arg0 is string s)
             return s;
 
-        if (args[0] is SharpTSObject obj)
+        if (arg0 is SharpTSObject obj)
         {
             // Build URL from object parts
             var protocol = obj.Fields.GetValueOrDefault("protocol")?.ToString() ?? "";
@@ -128,7 +128,7 @@ public static class UrlModuleInterpreter
             return $"{protocol}{slashStr}{host}{pathname}{search}{hash}";
         }
 
-        return args[0].ToString() ?? "";
+        return arg0.ToString() ?? "";
     }
 
     /// <summary>
@@ -168,9 +168,9 @@ public class UrlConstructor
 
         var urlString = args[0]?.ToString() ?? "";
 
-        if (args.Count > 1 && args[1] != null)
+        if (args.Count > 1 && args[1] is { } arg1)
         {
-            var baseUrl = args[1].ToString()!;
+            var baseUrl = arg1.ToString() ?? "";
             return new SharpTSURL(urlString, baseUrl);
         }
 
@@ -187,14 +187,14 @@ public class UrlSearchParamsConstructor
 {
     public SharpTSURLSearchParams Construct(List<object?> args)
     {
-        if (args.Count == 0 || args[0] == null)
+        if (args.Count == 0 || args[0] is not { } arg0)
             return new SharpTSURLSearchParams();
 
-        if (args[0] is string s)
+        if (arg0 is string s)
             return new SharpTSURLSearchParams(s.TrimStart('?'));
 
         // Handle object/dictionary initialization
-        if (args[0] is SharpTSObject obj)
+        if (arg0 is SharpTSObject obj)
         {
             var searchParams = new SharpTSURLSearchParams();
             foreach (var kvp in obj.Fields)
@@ -204,7 +204,7 @@ public class UrlSearchParamsConstructor
             return searchParams;
         }
 
-        if (args[0] is Dictionary<string, object?> dict)
+        if (arg0 is Dictionary<string, object?> dict)
         {
             var searchParams = new SharpTSURLSearchParams();
             foreach (var kvp in dict)
@@ -214,7 +214,7 @@ public class UrlSearchParamsConstructor
             return searchParams;
         }
 
-        return new SharpTSURLSearchParams(args[0].ToString() ?? "");
+        return new SharpTSURLSearchParams(arg0.ToString() ?? "");
     }
 
     public override string ToString() => "function URLSearchParams() { [native code] }";
