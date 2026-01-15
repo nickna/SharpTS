@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
-    /// Emits process global helper methods (GetEnv, GetArgv, Hrtime, Uptime, MemoryUsage).
+    /// Emits process global helper methods (GetEnv, GetArgv, Hrtime, Uptime, MemoryUsage, stdin/stdout/stderr).
     /// </summary>
     private void EmitProcessMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -15,6 +15,9 @@ public partial class RuntimeEmitter
         EmitProcessHrtime(typeBuilder, runtime);
         EmitProcessUptime(typeBuilder, runtime);
         EmitProcessMemoryUsage(typeBuilder, runtime);
+        EmitStdinMethods(typeBuilder, runtime);
+        EmitStdoutMethods(typeBuilder, runtime);
+        EmitStderrMethods(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -391,5 +394,127 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.CreateObject);
 
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits stdin methods (Read, IsTTY).
+    /// </summary>
+    private void EmitStdinMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // StdinRead: public static object StdinRead()
+        var readMethod = typeBuilder.DefineMethod(
+            "StdinRead",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.StdinRead = readMethod;
+
+        var readIl = readMethod.GetILGenerator();
+        // Call Console.ReadLine() - returns string or null
+        readIl.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "ReadLine"));
+        readIl.Emit(OpCodes.Ret);
+
+        // StdinIsTTY: public static object StdinIsTTY()
+        var isTtyMethod = typeBuilder.DefineMethod(
+            "StdinIsTTY",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.StdinIsTTY = isTtyMethod;
+
+        var isTtyIl = isTtyMethod.GetILGenerator();
+        // Return !Console.IsInputRedirected
+        isTtyIl.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "IsInputRedirected"));
+        isTtyIl.Emit(OpCodes.Ldc_I4_0);
+        isTtyIl.Emit(OpCodes.Ceq); // Negate: true becomes false, false becomes true
+        isTtyIl.Emit(OpCodes.Box, _types.Boolean);
+        isTtyIl.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits stdout methods (Write, IsTTY).
+    /// </summary>
+    private void EmitStdoutMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // StdoutWrite: public static object StdoutWrite(object data)
+        var writeMethod = typeBuilder.DefineMethod(
+            "StdoutWrite",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.StdoutWrite = writeMethod;
+
+        var writeIl = writeMethod.GetILGenerator();
+        // Convert to string if needed and write
+        writeIl.Emit(OpCodes.Ldarg_0);
+        writeIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        writeIl.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "Write", _types.String));
+        // Return true
+        writeIl.Emit(OpCodes.Ldc_I4_1);
+        writeIl.Emit(OpCodes.Box, _types.Boolean);
+        writeIl.Emit(OpCodes.Ret);
+
+        // StdoutIsTTY: public static object StdoutIsTTY()
+        var isTtyMethod = typeBuilder.DefineMethod(
+            "StdoutIsTTY",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.StdoutIsTTY = isTtyMethod;
+
+        var isTtyIl = isTtyMethod.GetILGenerator();
+        // Return !Console.IsOutputRedirected
+        isTtyIl.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "IsOutputRedirected"));
+        isTtyIl.Emit(OpCodes.Ldc_I4_0);
+        isTtyIl.Emit(OpCodes.Ceq); // Negate
+        isTtyIl.Emit(OpCodes.Box, _types.Boolean);
+        isTtyIl.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits stderr methods (Write, IsTTY).
+    /// </summary>
+    private void EmitStderrMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // StderrWrite: public static object StderrWrite(object data)
+        var writeMethod = typeBuilder.DefineMethod(
+            "StderrWrite",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.StderrWrite = writeMethod;
+
+        var writeIl = writeMethod.GetILGenerator();
+        // Get Console.Error (TextWriter) and write to it
+        writeIl.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "Error"));
+        writeIl.Emit(OpCodes.Ldarg_0);
+        writeIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        writeIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "Write", _types.String));
+        // Return true
+        writeIl.Emit(OpCodes.Ldc_I4_1);
+        writeIl.Emit(OpCodes.Box, _types.Boolean);
+        writeIl.Emit(OpCodes.Ret);
+
+        // StderrIsTTY: public static object StderrIsTTY()
+        var isTtyMethod = typeBuilder.DefineMethod(
+            "StderrIsTTY",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.StderrIsTTY = isTtyMethod;
+
+        var isTtyIl = isTtyMethod.GetILGenerator();
+        // Return !Console.IsErrorRedirected
+        isTtyIl.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "IsErrorRedirected"));
+        isTtyIl.Emit(OpCodes.Ldc_I4_0);
+        isTtyIl.Emit(OpCodes.Ceq); // Negate
+        isTtyIl.Emit(OpCodes.Box, _types.Boolean);
+        isTtyIl.Emit(OpCodes.Ret);
     }
 }

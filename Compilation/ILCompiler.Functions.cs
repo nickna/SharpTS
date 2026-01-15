@@ -213,13 +213,16 @@ public partial class ILCompiler
 
     /// <summary>
     /// Finds a user-defined main() function with the expected signature.
-    /// Returns the function and whether it's async, or null if no valid main exists.
+    /// Returns the function, whether it's async, and whether it returns an exit code, or null if no valid main exists.
     /// </summary>
     /// <remarks>
-    /// Expected signature: function main(args: string[]): void
-    /// Or async: async function main(args: string[]): Promise&lt;void&gt;
+    /// Expected signatures:
+    /// - function main(args: string[]): void
+    /// - function main(args: string[]): number
+    /// - async function main(args: string[]): Promise&lt;void&gt;
+    /// - async function main(args: string[]): Promise&lt;number&gt;
     /// </remarks>
-    private (Stmt.Function Func, bool IsAsync)? FindMainFunction(List<Stmt> statements)
+    private (Stmt.Function Func, bool IsAsync, bool ReturnsExitCode)? FindMainFunction(List<Stmt> statements)
     {
         foreach (var stmt in statements)
         {
@@ -234,20 +237,25 @@ public partial class ILCompiler
                 if (param.Type != "string[]")
                     continue;
 
-                // Return type should be void (or null for implicit) for sync,
-                // or Promise<void> for async
+                // Determine return type:
+                // Sync: void, null (implicit void), or number (exit code)
+                // Async: Promise<void>, null (implicit Promise<void>), or Promise<number> (exit code)
                 if (func.IsAsync)
                 {
-                    if (func.ReturnType != null && func.ReturnType != "Promise<void>")
-                        continue;
+                    if (func.ReturnType == null || func.ReturnType == "Promise<void>")
+                        return (func, true, false);
+                    if (func.ReturnType == "Promise<number>")
+                        return (func, true, true);
+                    continue; // Invalid async return type
                 }
                 else
                 {
-                    if (func.ReturnType != null && func.ReturnType != "void")
-                        continue;
+                    if (func.ReturnType == null || func.ReturnType == "void")
+                        return (func, false, false);
+                    if (func.ReturnType == "number")
+                        return (func, false, true);
+                    continue; // Invalid sync return type
                 }
-
-                return (func, func.IsAsync);
             }
         }
         return null;
@@ -261,7 +269,7 @@ public partial class ILCompiler
             var mainFunc = FindMainFunction(statements);
             if (mainFunc != null)
             {
-                EmitExeEntryPointWithUserMain(statements, mainFunc.Value.Func, mainFunc.Value.IsAsync);
+                EmitExeEntryPointWithUserMain(statements, mainFunc.Value.Func, mainFunc.Value.IsAsync, mainFunc.Value.ReturnsExitCode);
                 return;
             }
         }
@@ -386,7 +394,7 @@ public partial class ILCompiler
     /// Emits an entry point that calls the user's main(args) function.
     /// Used for EXE target when a valid main() function is defined.
     /// </summary>
-    private void EmitExeEntryPointWithUserMain(List<Stmt> statements, Stmt.Function mainFunc, bool isAsync)
+    private void EmitExeEntryPointWithUserMain(List<Stmt> statements, Stmt.Function mainFunc, bool isAsync, bool returnsExitCode)
     {
         // PE entry point must return void (or int for exit code)
         // For async main, we create a void Main that awaits the async main
@@ -510,13 +518,34 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloca, awaiterLocal);
             var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
             il.Emit(OpCodes.Call, getResult);
-            il.Emit(OpCodes.Pop);  // Discard the result
+
+            if (returnsExitCode)
+            {
+                // Unbox double, convert to int, call Environment.Exit
+                il.Emit(OpCodes.Unbox_Any, _types.Double);
+                il.Emit(OpCodes.Conv_I4);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
+            }
+            else
+            {
+                il.Emit(OpCodes.Pop);  // Discard the result
+            }
             il.Emit(OpCodes.Ret);
         }
         else
         {
-            // Sync main returns object, but we expect void behavior - just pop and return
-            il.Emit(OpCodes.Pop);
+            if (returnsExitCode)
+            {
+                // Unbox double, convert to int, call Environment.Exit
+                il.Emit(OpCodes.Unbox_Any, _types.Double);
+                il.Emit(OpCodes.Conv_I4);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
+            }
+            else
+            {
+                // Sync main returns object, but we expect void behavior - just pop
+                il.Emit(OpCodes.Pop);
+            }
             il.Emit(OpCodes.Ret);
         }
     }

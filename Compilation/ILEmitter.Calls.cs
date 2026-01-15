@@ -140,6 +140,12 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: process.stdin.read(), process.stdout.write(), process.stderr.write()
+        if (TryEmitProcessStreamCall(c))
+        {
+            return;
+        }
+
         // Built-in module method calls (path.join, fs.readFileSync, etc.)
         if (c.Callee is Expr.Get builtInGet &&
             builtInGet.Object is Expr.Variable builtInVar &&
@@ -1333,6 +1339,67 @@ public partial class ILEmitter
                 SetStackUnknown();
             }
             // Reference types are already objects, no conversion needed
+        }
+    }
+
+    /// <summary>
+    /// Tries to emit IL for process.stdin.read(), process.stdout.write(), process.stderr.write() calls.
+    /// Returns true if the call was handled.
+    /// </summary>
+    private bool TryEmitProcessStreamCall(Expr.Call c)
+    {
+        // Pattern: process.stdin.read(), process.stdout.write("data"), process.stderr.write("data")
+        // c.Callee is Expr.Get { Object: Expr.Get { Object: Expr.Variable("process"), Name: "stdin/stdout/stderr" }, Name: "read/write" }
+
+        if (c.Callee is not Expr.Get methodGet)
+            return false;
+
+        if (methodGet.Object is not Expr.Get streamGet)
+            return false;
+
+        if (streamGet.Object is not Expr.Variable processVar || processVar.Name.Lexeme != "process")
+            return false;
+
+        string streamName = streamGet.Name.Lexeme;
+        string methodName = methodGet.Name.Lexeme;
+
+        switch (streamName)
+        {
+            case "stdin" when methodName == "read":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StdinRead);
+                SetStackUnknown();
+                return true;
+
+            case "stdout" when methodName == "write":
+                if (c.Arguments.Count > 0)
+                {
+                    EmitExpression(c.Arguments[0]);
+                    EmitBoxIfNeeded(c.Arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StdoutWrite);
+                SetStackUnknown();
+                return true;
+
+            case "stderr" when methodName == "write":
+                if (c.Arguments.Count > 0)
+                {
+                    EmitExpression(c.Arguments[0]);
+                    EmitBoxIfNeeded(c.Arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StderrWrite);
+                SetStackUnknown();
+                return true;
+
+            default:
+                return false;
         }
     }
 }

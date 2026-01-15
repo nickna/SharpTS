@@ -121,6 +121,9 @@ public partial class Interpreter
                     }
                 }
             }
+
+            // After executing all statements, check for a main() function and call it
+            TryCallMainWithExitCode(statements);
         }
         catch (Exception error)
         {
@@ -145,10 +148,79 @@ public partial class Interpreter
             {
                 ExecuteModule(module);
             }
+
+            // After executing all modules, check for main() in the entry module (last one)
+            if (modules.Count > 0)
+            {
+                TryCallMainWithExitCode(modules[^1].Statements);
+            }
         }
         catch (Exception error)
         {
             Console.WriteLine($"Runtime Error: {error.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Checks for a main(args: string[]) function in the statements and calls it if found.
+    /// If main() returns a number, calls Environment.Exit with that number as the exit code.
+    /// </summary>
+    private void TryCallMainWithExitCode(List<Stmt> statements)
+    {
+        // Look for a function named "main" with the expected signature
+        Stmt.Function? mainFunc = null;
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Function func && func.Name.Lexeme == "main" && func.Body != null)
+            {
+                // Check signature: exactly one parameter (args: string[])
+                if (func.Parameters.Count == 1 && func.Parameters[0].Type == "string[]")
+                {
+                    // Accept return types: void, null (implicit), number, Promise<void>, Promise<number>
+                    var rt = func.ReturnType;
+                    if (rt == null || rt == "void" || rt == "number" ||
+                        rt == "Promise<void>" || rt == "Promise<number>")
+                    {
+                        mainFunc = func;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (mainFunc == null)
+            return;
+
+        // Get the main function from the environment
+        if (!_environment.IsDefined(mainFunc.Name.Lexeme))
+            return;
+
+        var mainValue = _environment.Get(mainFunc.Name);
+        if (mainValue is not SharpTSFunction mainFn)
+            return;
+
+        // Call main with process.argv
+        var argv = ProcessBuiltIns.GetArgv();
+        object? result;
+        try
+        {
+            result = mainFn.Call(this, [argv]);
+        }
+        catch (Runtime.Exceptions.ReturnException ret)
+        {
+            result = ret.Value;
+        }
+
+        // If result is a Promise, await it
+        if (result is SharpTSPromise promise)
+        {
+            result = promise.Task.GetAwaiter().GetResult();
+        }
+
+        // If result is a number, use it as exit code
+        if (result is double exitCode)
+        {
+            System.Environment.Exit((int)exitCode);
         }
     }
 

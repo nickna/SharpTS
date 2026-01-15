@@ -51,6 +51,11 @@ public static class ProcessBuiltIns
             "env" => GetEnv(),
             "argv" => GetArgv(),
 
+            // Stream objects
+            "stdin" => SharpTSStdin.Instance,
+            "stdout" => SharpTSStdout.Instance,
+            "stderr" => SharpTSStderr.Instance,
+
             // Methods
             "cwd" => _cwd,
             "exit" => _exit,

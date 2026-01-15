@@ -22,6 +22,12 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: process.stdin.isTTY, process.stdout.isTTY, process.stderr.isTTY
+        if (TryEmitProcessStreamProperty(g))
+        {
+            return;
+        }
+
         // Built-in module property access (path.sep, path.delimiter, os.EOL, etc.)
         if (g.Object is Expr.Variable builtInVar &&
             _ctx.BuiltInModuleNamespaces != null &&
@@ -828,5 +834,49 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Box, property.PropertyType);
         }
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Tries to emit IL for process.stdin.isTTY, process.stdout.isTTY, process.stderr.isTTY property access.
+    /// Returns true if the property was handled.
+    /// </summary>
+    private bool TryEmitProcessStreamProperty(Expr.Get g)
+    {
+        // Pattern: process.stdin.isTTY, process.stdout.isTTY, process.stderr.isTTY
+        // g.Object is Expr.Get { Object: Expr.Variable("process"), Name: "stdin/stdout/stderr" }
+        // g.Name.Lexeme is "isTTY"
+
+        if (g.Object is not Expr.Get streamGet)
+            return false;
+
+        if (streamGet.Object is not Expr.Variable processVar || processVar.Name.Lexeme != "process")
+            return false;
+
+        string streamName = streamGet.Name.Lexeme;
+        string propertyName = g.Name.Lexeme;
+
+        if (propertyName != "isTTY")
+            return false;
+
+        switch (streamName)
+        {
+            case "stdin":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StdinIsTTY);
+                SetStackUnknown();
+                return true;
+
+            case "stdout":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StdoutIsTTY);
+                SetStackUnknown();
+                return true;
+
+            case "stderr":
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StderrIsTTY);
+                SetStackUnknown();
+                return true;
+
+            default:
+                return false;
+        }
     }
 }

@@ -405,6 +405,14 @@ public class EmittedRuntime
     public MethodBuilder ProcessUptime { get; set; } = null!;
     public MethodBuilder ProcessMemoryUsage { get; set; } = null!;
 
+    // Process stdin/stdout/stderr stream methods
+    public MethodBuilder StdinRead { get; set; } = null!;
+    public MethodBuilder StdinIsTTY { get; set; } = null!;
+    public MethodBuilder StdoutWrite { get; set; } = null!;
+    public MethodBuilder StdoutIsTTY { get; set; } = null!;
+    public MethodBuilder StderrWrite { get; set; } = null!;
+    public MethodBuilder StderrIsTTY { get; set; } = null!;
+
     // Querystring module methods
     public MethodBuilder QuerystringParse { get; set; } = null!;
     public MethodBuilder QuerystringStringify { get; set; } = null!;

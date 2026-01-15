@@ -108,6 +108,19 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetArgv);
                 return true;
 
+            // Stream objects - return marker strings that can be detected in method calls
+            case "stdin":
+                il.Emit(OpCodes.Ldstr, "__$stdin$__");
+                return true;
+
+            case "stdout":
+                il.Emit(OpCodes.Ldstr, "__$stdout$__");
+                return true;
+
+            case "stderr":
+                il.Emit(OpCodes.Ldstr, "__$stderr$__");
+                return true;
+
             default:
                 return false;
         }

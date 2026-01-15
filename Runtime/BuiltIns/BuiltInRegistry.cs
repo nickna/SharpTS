@@ -137,6 +137,9 @@ public sealed class BuiltInRegistry
         RegisterGeneratorType(registry);
         RegisterAsyncGeneratorType(registry);
         RegisterProcessType(registry);
+        RegisterStdinType(registry);
+        RegisterStdoutType(registry);
+        RegisterStderrType(registry);
 
         return registry;
     }
@@ -354,6 +357,27 @@ public sealed class BuiltInRegistry
         // Process members accessed via property access (process.env, process.cwd)
         registry.RegisterInstanceType(typeof(SharpTSProcess), (_, name) =>
             ProcessBuiltIns.GetMember(name));
+    }
+
+    private static void RegisterStdinType(BuiltInRegistry registry)
+    {
+        // Stdin members accessed via property access (process.stdin.read)
+        registry.RegisterInstanceType(typeof(SharpTSStdin), (instance, name) =>
+            StdinBuiltIns.GetMember((SharpTSStdin)instance, name));
+    }
+
+    private static void RegisterStdoutType(BuiltInRegistry registry)
+    {
+        // Stdout members accessed via property access (process.stdout.write)
+        registry.RegisterInstanceType(typeof(SharpTSStdout), (instance, name) =>
+            StdoutBuiltIns.GetMember((SharpTSStdout)instance, name));
+    }
+
+    private static void RegisterStderrType(BuiltInRegistry registry)
+    {
+        // Stderr members accessed via property access (process.stderr.write)
+        registry.RegisterInstanceType(typeof(SharpTSStderr), (instance, name) =>
+            StderrBuiltIns.GetMember((SharpTSStderr)instance, name));
     }
 
     private static string Stringify(object? obj)
