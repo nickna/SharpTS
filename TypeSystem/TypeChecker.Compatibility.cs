@@ -15,7 +15,27 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    /// <summary>
+    /// Checks type compatibility with memoization.
+    /// Uses structural equality of TypeInfo records for cache key matching.
+    /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
+    {
+        _compatibilityCache ??= new();
+        var key = (expected, actual);
+
+        if (_compatibilityCache.TryGetValue(key, out var cached))
+            return cached;
+
+        var result = IsCompatibleCore(expected, actual);
+        _compatibilityCache[key] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// Core type compatibility logic without caching.
+    /// </summary>
+    private bool IsCompatibleCore(TypeInfo expected, TypeInfo actual)
     {
         if (expected is TypeInfo.Any || actual is TypeInfo.Any) return true;
 

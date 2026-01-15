@@ -50,6 +50,9 @@ public partial class TypeChecker
     // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
     private TypeInfo? _currentFunctionThisType = null;
 
+    // Memoization cache for IsCompatible checks - cleared per Check() call
+    private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;
+
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.
     /// Automatically restores the previous environment on disposal, even if an exception is thrown.
@@ -215,6 +218,9 @@ public partial class TypeChecker
     /// <returns>A TypeMap containing the resolved type for each expression.</returns>
     public TypeMap Check(List<Stmt> statements)
     {
+        // Clear compatibility cache for fresh check
+        _compatibilityCache = null;
+
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
         _environment.Define("Reflect", new TypeInfo.Any());
@@ -368,6 +374,9 @@ public partial class TypeChecker
     /// <returns>A TypeMap containing resolved types for all expressions across all modules</returns>
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
+        // Clear compatibility cache for fresh check
+        _compatibilityCache = null;
+
         _moduleResolver = resolver;
 
         // Pre-define built-ins in the global environment
