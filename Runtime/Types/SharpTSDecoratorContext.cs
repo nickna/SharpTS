@@ -76,28 +76,28 @@ public class SharpTSDecoratorContext
         var obj = new SharpTSObject(new Dictionary<string, object?>());
 
         // kind: "class" | "method" | "getter" | "setter" | "field" | "accessor"
-        obj.Set("kind", Kind.ToString().ToLowerInvariant());
+        obj.SetProperty("kind", Kind.ToString().ToLowerInvariant());
 
         // name: string
-        obj.Set("name", Name);
+        obj.SetProperty("name", Name);
 
         // static: boolean
-        obj.Set("static", Static);
+        obj.SetProperty("static", Static);
 
         // private: boolean
-        obj.Set("private", Private);
+        obj.SetProperty("private", Private);
 
         // access: { get(): T, set(v: T): void } | undefined
         if (Access != null)
         {
-            obj.Set("access", Access);
+            obj.SetProperty("access", Access);
         }
 
         // metadata: object
-        obj.Set("metadata", Metadata);
+        obj.SetProperty("metadata", Metadata);
 
         // addInitializer: (fn: () => void) => void
-        obj.Set("addInitializer", new AddInitializerMethod(this));
+        obj.SetProperty("addInitializer", new AddInitializerMethod(this));
 
         return obj;
     }

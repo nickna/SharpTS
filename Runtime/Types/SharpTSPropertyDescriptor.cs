@@ -51,22 +51,22 @@ public class SharpTSPropertyDescriptor
 
         if (Value != null)
         {
-            obj.Set("value", Value);
-            obj.Set("writable", Writable);
+            obj.SetProperty("value", Value);
+            obj.SetProperty("writable", Writable);
         }
 
         if (Get != null)
         {
-            obj.Set("get", Get);
+            obj.SetProperty("get", Get);
         }
 
         if (Set != null)
         {
-            obj.Set("set", Set);
+            obj.SetProperty("set", Set);
         }
 
-        obj.Set("enumerable", Enumerable);
-        obj.Set("configurable", Configurable);
+        obj.SetProperty("enumerable", Enumerable);
+        obj.SetProperty("configurable", Configurable);
 
         return obj;
     }
@@ -78,37 +78,37 @@ public class SharpTSPropertyDescriptor
     {
         var descriptor = new SharpTSPropertyDescriptor();
 
-        var value = obj.Get("value");
+        var value = obj.GetProperty("value");
         if (value != null)
         {
             descriptor.Value = value;
         }
 
-        var getter = obj.Get("get");
+        var getter = obj.GetProperty("get");
         if (getter is ISharpTSCallable getterFn)
         {
             descriptor.Get = getterFn;
         }
 
-        var setter = obj.Get("set");
+        var setter = obj.GetProperty("set");
         if (setter is ISharpTSCallable setterFn)
         {
             descriptor.Set = setterFn;
         }
 
-        var writable = obj.Get("writable");
+        var writable = obj.GetProperty("writable");
         if (writable is bool w)
         {
             descriptor.Writable = w;
         }
 
-        var enumerable = obj.Get("enumerable");
+        var enumerable = obj.GetProperty("enumerable");
         if (enumerable is bool e)
         {
             descriptor.Enumerable = e;
         }
 
-        var configurable = obj.Get("configurable");
+        var configurable = obj.GetProperty("configurable");
         if (configurable is bool c)
         {
             descriptor.Configurable = c;

@@ -25,7 +25,7 @@ public partial class Interpreter
                 value = instance.Get(name);
                 return true;
             case SharpTSObject simpleObj:
-                value = simpleObj.Get(name.Lexeme);
+                value = simpleObj.GetProperty(name.Lexeme);
                 return true;
             default:
                 value = null;
@@ -72,7 +72,7 @@ public partial class Interpreter
                 instance.Set(name, value);
                 return true;
             case SharpTSObject simpleObj:
-                simpleObj.Set(name.Lexeme, value);
+                simpleObj.SetProperty(name.Lexeme, value);
                 return true;
             default:
                 return false;

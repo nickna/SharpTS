@@ -277,9 +277,9 @@ public partial class Interpreter
 
             if (nextResult is SharpTSObject resultObj)
             {
-                var doneVal = resultObj.Get("done");
+                var doneVal = resultObj.GetProperty("done");
                 done = IsTruthy(doneVal);
-                value = resultObj.Get("value");
+                value = resultObj.GetProperty("value");
             }
             else if (nextResult is SharpTSIteratorResult iterResult)
             {
@@ -306,7 +306,7 @@ public partial class Interpreter
     {
         if (target is SharpTSObject obj)
         {
-            var method = obj.Get(methodName);
+            var method = obj.GetProperty(methodName);
             if (method != null)
             {
                 if (method is SharpTSArrowFunction arrowFunc)
@@ -764,7 +764,7 @@ public partial class Interpreter
                 {
                     foreach (var key in inst.GetFieldNames())
                     {
-                        stringFields[key] = inst.GetFieldValue(key);
+                        stringFields[key] = inst.GetRawField(key);
                     }
                 }
                 else
@@ -894,11 +894,11 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            return sharpObj.Get(strKey);
+            return sharpObj.GetProperty(strKey);
         }
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            return numObj.Get(numKey.ToString());
+            return numObj.GetProperty(numKey.ToString());
         }
         if (obj is SharpTSInstance instance && index is string instanceKey)
         {
@@ -916,17 +916,17 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            sharpObj.Set(strKey, value);
+            sharpObj.SetProperty(strKey, value);
             return value;
         }
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            numObj.Set(numKey.ToString(), value);
+            numObj.SetProperty(numKey.ToString(), value);
             return value;
         }
         if (obj is SharpTSInstance instance && index is string instanceKey)
         {
-            instance.SetFieldValue(instanceKey, value);
+            instance.SetRawField(instanceKey, value);
             return value;
         }
         throw new Exception("Index assignment not supported on this type.");

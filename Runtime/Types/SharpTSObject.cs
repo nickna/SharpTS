@@ -24,25 +24,21 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <inheritdoc />
     public IEnumerable<string> PropertyNames => _fields.Keys;
 
-    public object? Get(string name)
+    /// <inheritdoc />
+    public object? GetProperty(string name)
     {
         if (_fields.TryGetValue(name, out object? value))
         {
             return value;
         }
-        return null; // or throw undefined
+        return null;
     }
 
     /// <inheritdoc />
-    public object? GetProperty(string name) => Get(name);
-
-    public void Set(string name, object? value)
+    public void SetProperty(string name, object? value)
     {
         _fields[name] = value;
     }
-
-    /// <inheritdoc />
-    public void SetProperty(string name, object? value) => Set(name, value);
 
     public bool HasProperty(string name)
     {

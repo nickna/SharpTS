@@ -76,12 +76,12 @@ public class SharpTSClass(
             if (field.Initializer != null)
             {
                 object? value = interpreter.Evaluate(field.Initializer);
-                instance.SetFieldValue(field.Name.Lexeme, value);
+                instance.SetRawField(field.Name.Lexeme, value);
             }
             else
             {
                 // Fields without initializers are set to null/undefined
-                instance.SetFieldValue(field.Name.Lexeme, null);
+                instance.SetRawField(field.Name.Lexeme, null);
             }
         }
     }

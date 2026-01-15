@@ -138,7 +138,7 @@ public static class ReflectBuiltIns
                 else if (arguments.Count >= 2 && arguments[1] is SharpTSObject context)
                 {
                     // Stage 3 context object has 'name' property
-                    var name = context.Get("name");
+                    var name = context.GetProperty("name");
                     if (name is string contextName)
                     {
                         propertyKey = contextName;

@@ -513,11 +513,11 @@ public partial class Interpreter
             object? nextMethod = null;
             if (iterator is SharpTSObject iterObj)
             {
-                nextMethod = iterObj.Get("next");
+                nextMethod = iterObj.GetProperty("next");
             }
             else if (iterator is SharpTSInstance iterInst)
             {
-                nextMethod = iterInst.GetFieldValue("next");
+                nextMethod = iterInst.GetRawField("next");
                 if (nextMethod == null)
                 {
                     // Try getting a method from the class
@@ -562,9 +562,9 @@ public partial class Interpreter
 
             if (result is SharpTSObject resultObj)
             {
-                var doneVal = resultObj.Get("done");
+                var doneVal = resultObj.GetProperty("done");
                 done = IsTruthy(doneVal);
-                value = resultObj.Get("value");
+                value = resultObj.GetProperty("value");
             }
             else if (result is SharpTSInstance resultInst)
             {
@@ -578,8 +578,8 @@ public partial class Interpreter
                 catch
                 {
                     // Fall back to field access
-                    done = IsTruthy(resultInst.GetFieldValue("done"));
-                    value = resultInst.GetFieldValue("value");
+                    done = IsTruthy(resultInst.GetRawField("done"));
+                    value = resultInst.GetRawField("value");
                 }
             }
 

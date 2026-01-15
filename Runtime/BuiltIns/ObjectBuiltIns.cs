@@ -34,7 +34,7 @@ public static class ObjectBuiltIns
                 }
                 if (args[0] is SharpTSInstance inst)
                 {
-                    var values = inst.GetFieldNames().Select(n => inst.GetFieldValue(n)).ToList();
+                    var values = inst.GetFieldNames().Select(n => inst.GetRawField(n)).ToList();
                     return new SharpTSArray(values);
                 }
                 throw new Exception("Object.values() requires an object argument");
@@ -50,7 +50,7 @@ public static class ObjectBuiltIns
                 if (args[0] is SharpTSInstance inst)
                 {
                     var entries = inst.GetFieldNames().Select(n =>
-                        (object?)new SharpTSArray([(object?)n, inst.GetFieldValue(n)])).ToList();
+                        (object?)new SharpTSArray([(object?)n, inst.GetRawField(n)])).ToList();
                     return new SharpTSArray(entries);
                 }
                 throw new Exception("Object.entries() requires an object argument");
@@ -81,7 +81,7 @@ public static class ObjectBuiltIns
             foreach (var key in inst.GetFieldNames())
             {
                 if (!excludeSet.Contains(key))
-                    result[key] = inst.GetFieldValue(key);
+                    result[key] = inst.GetRawField(key);
             }
         }
 

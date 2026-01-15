@@ -341,7 +341,7 @@ public static class JSONBuiltIns
             sb.Append(':');
             if (pretty) sb.Append(' ');
 
-            var fieldValue = inst.GetFieldValue(name);
+            var fieldValue = inst.GetRawField(name);
             if (StringifyValue(interp, fieldValue, name, replacer, allowedKeys, indentStr, depth + 1, sb))
             {
                 first = false;

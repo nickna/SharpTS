@@ -269,7 +269,7 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject simpleObj)
         {
-            var value = simpleObj.Get(get.Name.Lexeme);
+            var value = simpleObj.GetProperty(get.Name.Lexeme);
             // Bind 'this' for object method shorthand functions
             if (value is SharpTSArrowFunction arrowFunc && arrowFunc.IsObjectMethod)
             {
@@ -344,7 +344,7 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject simpleObj)
         {
-            simpleObj.Set(set.Name.Lexeme, value);
+            simpleObj.SetProperty(set.Name.Lexeme, value);
             return value;
         }
 

@@ -308,7 +308,7 @@ public partial class Interpreter
                 {
                     foreach (var key in inst.GetFieldNames())
                     {
-                        stringFields[key] = inst.GetFieldValue(key);
+                        stringFields[key] = inst.GetRawField(key);
                     }
                 }
                 else
@@ -417,13 +417,13 @@ public partial class Interpreter
         // Object with string key
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            return sharpObj.Get(strKey);
+            return sharpObj.GetProperty(strKey);
         }
 
         // Object with number key (convert to string)
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            return numObj.Get(numKey.ToString());
+            return numObj.GetProperty(numKey.ToString());
         }
 
         // Object with symbol key
@@ -472,14 +472,14 @@ public partial class Interpreter
         // Object with string key
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            sharpObj.Set(strKey, value);
+            sharpObj.SetProperty(strKey, value);
             return value;
         }
 
         // Object with number key (convert to string)
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            numObj.Set(numKey.ToString(), value);
+            numObj.SetProperty(numKey.ToString(), value);
             return value;
         }
 
@@ -493,7 +493,7 @@ public partial class Interpreter
         // Class instance with string key
         if (obj is SharpTSInstance instance && index is string instanceKey)
         {
-            instance.SetFieldValue(instanceKey, value);
+            instance.SetRawField(instanceKey, value);
             return value;
         }
 

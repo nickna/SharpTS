@@ -4,12 +4,19 @@ SharpTS provides implementations of common Node.js built-in modules. This guide 
 
 ## Import Syntax
 
-```typescript
-// Default import
-import fs from 'fs';
+All three import styles are supported:
 
-// Named imports
+```typescript
+// Default import (recommended for most modules)
+import fs from 'fs';
+import os from 'os';
+
+// Named imports (for specific functions)
 import { readFileSync, writeFileSync } from 'fs';
+import { createHash, randomUUID } from 'crypto';
+
+// Namespace import
+import * as path from 'path';
 
 // Mixed imports
 import path, { join, resolve } from 'path';

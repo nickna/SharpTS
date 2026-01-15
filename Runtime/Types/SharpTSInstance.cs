@@ -146,20 +146,22 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     public IEnumerable<string> PropertyNames => GetFieldNames();
 
     /// <summary>
-    /// Get a field value by name for object rest patterns
+    /// Gets a field value directly without invoking getters or binding methods.
+    /// Used for Object.keys(), JSON serialization, and object rest patterns.
     /// </summary>
-    public object? GetFieldValue(string name) => _fields.TryGetValue(name, out var value) ? value : null;
+    public object? GetRawField(string name) => _fields.TryGetValue(name, out var value) ? value : null;
 
     /// <inheritdoc />
-    public object? GetProperty(string name) => GetFieldValue(name);
+    public object? GetProperty(string name) => GetRawField(name);
 
     /// <summary>
-    /// Set a field value by name for bracket notation assignment
+    /// Sets a field value directly without invoking setters.
+    /// Used for bracket notation assignment and constructor initialization.
     /// </summary>
-    public void SetFieldValue(string name, object? value) => _fields[name] = value;
+    public void SetRawField(string name, object? value) => _fields[name] = value;
 
     /// <inheritdoc />
-    public void SetProperty(string name, object? value) => SetFieldValue(name, value);
+    public void SetProperty(string name, object? value) => SetRawField(name, value);
 
     /// <summary>
     /// Gets a value by symbol key.
