@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using SharpTS.Parsing;
@@ -39,6 +40,18 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Environment, "Exit", ctx.Types.Int32));
                 // Exit never returns, but we need to push something for the stack
                 il.Emit(OpCodes.Ldnull);
+                return true;
+
+            case "hrtime":
+                EmitHrtime(emitter, arguments);
+                return true;
+
+            case "uptime":
+                EmitUptime(emitter);
+                return true;
+
+            case "memoryUsage":
+                EmitMemoryUsage(emitter);
                 return true;
 
             default:
@@ -129,5 +142,54 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         };
 
         il.Emit(OpCodes.Ldstr, arch);
+    }
+
+    /// <summary>
+    /// Emits IL for process.hrtime(prev?).
+    /// Returns a [seconds, nanoseconds] array.
+    /// </summary>
+    private static void EmitHrtime(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper that handles hrtime logic
+        // The helper takes an optional previous time array
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessHrtime);
+    }
+
+    /// <summary>
+    /// Emits IL for process.uptime().
+    /// Returns the number of seconds the process has been running.
+    /// </summary>
+    private static void EmitUptime(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUptime);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+    }
+
+    /// <summary>
+    /// Emits IL for process.memoryUsage().
+    /// Returns an object with memory usage information.
+    /// </summary>
+    private static void EmitMemoryUsage(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
     }
 }

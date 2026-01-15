@@ -473,4 +473,313 @@ public class InterpreterModuleTests
         var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
         Assert.Equal("mixed test\n", output);
     }
+
+    // ============ QUERYSTRING MODULE TESTS ============
+
+    [Fact]
+    public void Querystring_Parse_ParsesSimpleString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { parse } from 'querystring';
+                const result = parse('foo=bar&baz=qux');
+                console.log(result.foo);
+                console.log(result.baz);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("bar\nqux\n", output);
+    }
+
+    [Fact]
+    public void Querystring_Parse_HandlesUrlEncoding()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { parse } from 'querystring';
+                const result = parse('name=John%20Doe');
+                console.log(result.name);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("John Doe\n", output);
+    }
+
+    [Fact]
+    public void Querystring_Stringify_CreatesQueryString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { stringify } from 'querystring';
+                const str = stringify({ foo: 'bar', baz: 'qux' });
+                console.log(str.includes('foo=bar'));
+                console.log(str.includes('baz=qux'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Querystring_Escape_EncodesString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { escape } from 'querystring';
+                console.log(escape('hello world'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Contains("hello%20world", output);
+    }
+
+    [Fact]
+    public void Querystring_Unescape_DecodesString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { unescape } from 'querystring';
+                console.log(unescape('hello%20world'));
+                console.log(unescape('hello+world'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("hello world\nhello world\n", output);
+    }
+
+    // ============ ASSERT MODULE TESTS ============
+
+    [Fact]
+    public void Assert_Ok_PassesForTruthyValues()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { ok } from 'assert';
+                ok(true);
+                ok(1);
+                ok('hello');
+                console.log('all passed');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("all passed\n", output);
+    }
+
+    [Fact]
+    public void Assert_Ok_ThrowsForFalsy()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { ok } from 'assert';
+                try {
+                    ok(false);
+                    console.log('should not reach');
+                } catch (e) {
+                    console.log('caught');
+                }
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("caught\n", output);
+    }
+
+    [Fact]
+    public void Assert_StrictEqual_PassesForEqualValues()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { strictEqual } from 'assert';
+                strictEqual(1, 1);
+                strictEqual('hello', 'hello');
+                console.log('all passed');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("all passed\n", output);
+    }
+
+    [Fact]
+    public void Assert_StrictEqual_ThrowsForUnequalValues()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { strictEqual } from 'assert';
+                try {
+                    strictEqual(1, 2);
+                    console.log('should not reach');
+                } catch (e) {
+                    console.log('caught');
+                }
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("caught\n", output);
+    }
+
+    [Fact]
+    public void Assert_DeepStrictEqual_PassesForEqualObjects()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { deepStrictEqual } from 'assert';
+                deepStrictEqual({ a: 1, b: 2 }, { a: 1, b: 2 });
+                console.log('objects passed');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("objects passed\n", output);
+    }
+
+    [Fact]
+    public void Assert_Fail_AlwaysThrows()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { fail } from 'assert';
+                try {
+                    fail('custom message');
+                    console.log('should not reach');
+                } catch (e) {
+                    console.log('caught');
+                }
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("caught\n", output);
+    }
+
+    // ============ URL MODULE TESTS ============
+
+    [Fact]
+    public void Url_Parse_ParsesFullUrl()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { parse } from 'url';
+                const parsed = parse('https://example.com:8080/path?query=value#hash');
+                console.log(parsed.protocol);
+                console.log(parsed.hostname);
+                console.log(parsed.port);
+                console.log(parsed.pathname);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Contains("https:", output);
+        Assert.Contains("example.com", output);
+        Assert.Contains("8080", output);
+        Assert.Contains("/path", output);
+    }
+
+    [Fact]
+    public void Url_Format_CreatesUrlString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { format } from 'url';
+                const formatted = format({
+                    protocol: 'https:',
+                    hostname: 'example.com',
+                    pathname: '/path',
+                    search: '?key=value'
+                });
+                console.log(formatted);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Contains("https://example.com/path?key=value", output);
+    }
+
+    [Fact]
+    public void Url_Resolve_ResolvesRelativeUrl()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { resolve } from 'url';
+                const resolved = resolve('https://example.com/base/', '../other/path');
+                console.log(resolved);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Contains("example.com/other/path", output);
+    }
+
+    // ============ PROCESS ENHANCEMENT TESTS ============
+
+    [Fact]
+    public void Process_Hrtime_ReturnsArray()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const hr = process.hrtime();
+                console.log(Array.isArray(hr));
+                console.log(hr.length === 2);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_Uptime_ReturnsPositiveNumber()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const up = process.uptime();
+                console.log(typeof up === 'number');
+                console.log(up >= 0);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Process_MemoryUsage_ReturnsObject()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const mem = process.memoryUsage();
+                console.log(typeof mem === 'object');
+                console.log(mem.rss > 0);
+                console.log(mem.heapTotal > 0);
+                console.log(mem.heapUsed > 0);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
 }

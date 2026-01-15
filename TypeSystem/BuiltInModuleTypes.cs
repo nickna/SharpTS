@@ -207,6 +207,160 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
+    /// Gets the exported types for the querystring module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetQuerystringModuleTypes()
+    {
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // parse(str, sep?, eq?, options?) -> object
+            ["parse"] = new TypeInfo.Function(
+                [stringType, stringType, stringType, anyType],
+                anyType,
+                RequiredParams: 1
+            ),
+            // stringify(obj, sep?, eq?, options?) -> string
+            ["stringify"] = new TypeInfo.Function(
+                [anyType, stringType, stringType, anyType],
+                stringType,
+                RequiredParams: 1
+            ),
+            // escape(str) -> string
+            ["escape"] = new TypeInfo.Function([stringType], stringType),
+            // unescape(str) -> string
+            ["unescape"] = new TypeInfo.Function([stringType], stringType),
+            // decode is alias for parse
+            ["decode"] = new TypeInfo.Function(
+                [stringType, stringType, stringType, anyType],
+                anyType,
+                RequiredParams: 1
+            ),
+            // encode is alias for stringify
+            ["encode"] = new TypeInfo.Function(
+                [anyType, stringType, stringType, anyType],
+                stringType,
+                RequiredParams: 1
+            )
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the assert module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetAssertModuleTypes()
+    {
+        var anyType = new TypeInfo.Any();
+        var stringType = new TypeInfo.String();
+        var voidType = new TypeInfo.Void();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // ok(value, message?) -> void
+            ["ok"] = new TypeInfo.Function(
+                [anyType, stringType],
+                voidType,
+                RequiredParams: 1
+            ),
+            // strictEqual(actual, expected, message?) -> void
+            ["strictEqual"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+            // notStrictEqual(actual, expected, message?) -> void
+            ["notStrictEqual"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+            // deepStrictEqual(actual, expected, message?) -> void
+            ["deepStrictEqual"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+            // notDeepStrictEqual(actual, expected, message?) -> void
+            ["notDeepStrictEqual"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+            // throws(fn, message?) -> void
+            ["throws"] = new TypeInfo.Function(
+                [anyType, stringType],
+                voidType,
+                RequiredParams: 1
+            ),
+            // doesNotThrow(fn, message?) -> void
+            ["doesNotThrow"] = new TypeInfo.Function(
+                [anyType, stringType],
+                voidType,
+                RequiredParams: 1
+            ),
+            // fail(message?) -> void
+            ["fail"] = new TypeInfo.Function(
+                [stringType],
+                voidType,
+                RequiredParams: 0
+            ),
+            // equal(actual, expected, message?) -> void (loose equality)
+            ["equal"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+            // notEqual(actual, expected, message?) -> void (loose equality)
+            ["notEqual"] = new TypeInfo.Function(
+                [anyType, anyType, stringType],
+                voidType,
+                RequiredParams: 2
+            )
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the url module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetUrlModuleTypes()
+    {
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        // URL class type (simplified - represents the URL constructor/class)
+        var urlClassType = new TypeInfo.Any(); // Full class typing would require more infrastructure
+
+        // URLSearchParams class type
+        var urlSearchParamsType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // URL class constructor
+            ["URL"] = urlClassType,
+            // URLSearchParams class constructor
+            ["URLSearchParams"] = urlSearchParamsType,
+            // parse function (legacy)
+            ["parse"] = new TypeInfo.Function(
+                [stringType, stringType, anyType],
+                anyType,
+                RequiredParams: 1
+            ),
+            // format function (legacy)
+            ["format"] = new TypeInfo.Function(
+                [anyType],
+                stringType
+            ),
+            // resolve function (legacy)
+            ["resolve"] = new TypeInfo.Function(
+                [stringType, stringType],
+                stringType
+            )
+        };
+    }
+
+    /// <summary>
     /// Gets the exported types for a built-in module by name.
     /// </summary>
     /// <param name="moduleName">The module name (e.g., "path", "fs", "os").</param>
@@ -218,6 +372,9 @@ public static class BuiltInModuleTypes
             "path" => GetPathModuleTypes(),
             "os" => GetOsModuleTypes(),
             "fs" => GetFsModuleTypes(),
+            "querystring" => GetQuerystringModuleTypes(),
+            "assert" => GetAssertModuleTypes(),
+            "url" => GetUrlModuleTypes(),
             _ => null
         };
     }

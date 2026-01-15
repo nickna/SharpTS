@@ -11,7 +11,10 @@ public static class BuiltInModuleRegistry
     [
         "fs",
         "path",
-        "os"
+        "os",
+        "querystring",
+        "assert",
+        "url"
     ];
 
     /// <summary>

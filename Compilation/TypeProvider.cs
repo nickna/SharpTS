@@ -119,6 +119,8 @@ public class TypeProvider
     public Type Stopwatch => Resolve("System.Diagnostics.Stopwatch");
     public Type Interlocked => Resolve("System.Threading.Interlocked");
     public Type Version => Resolve("System.Version");
+    public Type GC => Resolve("System.GC");
+    public Type Process => Resolve("System.Diagnostics.Process");
 
     #endregion
 
@@ -347,7 +349,9 @@ public class TypeProvider
                 ?? typeof(System.Console).Assembly.GetType(fullName)
                 ?? typeof(System.Text.StringBuilder).Assembly.GetType(fullName)
                 ?? typeof(System.Convert).Assembly.GetType(fullName)
-                ?? typeof(System.Text.Json.JsonSerializer).Assembly.GetType(fullName);
+                ?? typeof(System.Text.Json.JsonSerializer).Assembly.GetType(fullName)
+                ?? typeof(System.Diagnostics.Process).Assembly.GetType(fullName)
+                ?? typeof(System.Diagnostics.Stopwatch).Assembly.GetType(fullName);
         }
 
         if (type == null)

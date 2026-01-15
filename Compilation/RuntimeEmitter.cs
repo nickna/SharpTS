@@ -1305,6 +1305,12 @@ public partial class RuntimeEmitter
         EmitPathModulePropertyWrappers(typeBuilder, runtime);
         // Process global methods (env, argv)
         EmitProcessMethods(typeBuilder, runtime);
+        // Querystring module methods
+        EmitQuerystringMethods(typeBuilder, runtime);
+        // Assert module methods
+        EmitAssertMethods(typeBuilder, runtime);
+        // URL module methods
+        EmitUrlMethods(typeBuilder, runtime);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
 

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SharpTS.Execution;
 using SharpTS.Runtime.Types;
@@ -20,10 +21,20 @@ public static class ProcessBuiltIns
     // Cache static methods to avoid allocation on every access
     private static readonly BuiltInMethod _cwd = new("cwd", 0, Cwd);
     private static readonly BuiltInMethod _exit = new("exit", 0, 1, Exit);
+    private static readonly BuiltInMethod _hrtime = new("hrtime", 0, 1, Hrtime);
+    private static readonly BuiltInMethod _uptime = new("uptime", 0, Uptime);
+    private static readonly BuiltInMethod _memoryUsage = new("memoryUsage", 0, MemoryUsage);
 
     // Lazily create env and argv objects
     private static SharpTSObject? _envObject;
     private static SharpTSArray? _argvArray;
+
+    // Process start time for uptime calculation
+    private static readonly DateTime _processStartTime = Process.GetCurrentProcess().StartTime.ToUniversalTime();
+
+    // Stopwatch frequency for hrtime calculations
+    private static readonly long _startTimestamp = Stopwatch.GetTimestamp();
+    private static readonly double _tickFrequency = Stopwatch.Frequency;
 
     /// <summary>
     /// Gets a member of the process object by name.
@@ -43,6 +54,9 @@ public static class ProcessBuiltIns
             // Methods
             "cwd" => _cwd,
             "exit" => _exit,
+            "hrtime" => _hrtime,
+            "uptime" => _uptime,
+            "memoryUsage" => _memoryUsage,
 
             _ => null
         };
@@ -127,5 +141,58 @@ public static class ProcessBuiltIns
         }
         Environment.Exit(exitCode);
         return null; // Never reached
+    }
+
+    /// <summary>
+    /// Returns the current high-resolution real time in a [seconds, nanoseconds] tuple.
+    /// If a previous hrtime result is passed, returns the difference.
+    /// </summary>
+    private static object? Hrtime(Interpreter i, object? r, List<object?> args)
+    {
+        long currentTicks = Stopwatch.GetTimestamp() - _startTimestamp;
+        double totalNanoseconds = currentTicks * 1_000_000_000.0 / _tickFrequency;
+
+        // If a previous time is provided, calculate the difference
+        if (args.Count > 0 && args[0] is SharpTSArray prev && prev.Elements.Count >= 2)
+        {
+            var prevSeconds = Convert.ToDouble(prev.Elements[0]);
+            var prevNanos = Convert.ToDouble(prev.Elements[1]);
+            double prevTotalNanos = prevSeconds * 1_000_000_000.0 + prevNanos;
+            totalNanoseconds -= prevTotalNanos;
+        }
+
+        double seconds = Math.Floor(totalNanoseconds / 1_000_000_000.0);
+        double nanos = totalNanoseconds % 1_000_000_000.0;
+
+        // Ensure non-negative values
+        if (seconds < 0) seconds = 0;
+        if (nanos < 0) nanos = 0;
+
+        return new SharpTSArray([seconds, nanos]);
+    }
+
+    /// <summary>
+    /// Returns the number of seconds the process has been running.
+    /// </summary>
+    private static object? Uptime(Interpreter i, object? r, List<object?> args)
+    {
+        return (DateTime.UtcNow - _processStartTime).TotalSeconds;
+    }
+
+    /// <summary>
+    /// Returns an object describing the memory usage of the process.
+    /// </summary>
+    private static object? MemoryUsage(Interpreter i, object? r, List<object?> args)
+    {
+        var process = Process.GetCurrentProcess();
+
+        return new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["rss"] = (double)process.WorkingSet64,
+            ["heapTotal"] = (double)GC.GetTotalMemory(false),
+            ["heapUsed"] = (double)GC.GetTotalMemory(false),
+            ["external"] = 0.0,
+            ["arrayBuffers"] = 0.0
+        });
     }
 }
