@@ -184,7 +184,9 @@ public class TypeProvider
     public Type ValueTaskOpen => Resolve("System.Threading.Tasks.ValueTask`1");
     public Type TaskCompletionSourceOpen => Resolve("System.Threading.Tasks.TaskCompletionSource`1");
     public Type CancellationToken => Resolve("System.Threading.CancellationToken");
+    public Type CancellationTokenSource => Resolve("System.Threading.CancellationTokenSource");
     public Type TaskContinuationOptions => Resolve("System.Threading.Tasks.TaskContinuationOptions");
+    public Type TaskScheduler => Resolve("System.Threading.Tasks.TaskScheduler");
     public Type Monitor => Resolve("System.Threading.Monitor");
     public Type IntPtr => Resolve("System.IntPtr");
 

@@ -121,8 +121,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             TokenType.PRIVATE or TokenType.PROTECTED or TokenType.PUBLIC or TokenType.READONLY or
             TokenType.RETURN or TokenType.SET or TokenType.STATIC or TokenType.SUPER or
             TokenType.SWITCH or TokenType.THIS or TokenType.THROW or TokenType.TRUE or
-            TokenType.TRY or TokenType.TYPE or TokenType.TYPEOF or TokenType.UNKNOWN or
-            TokenType.VAR or TokenType.WHILE => true,
+            TokenType.TRY or TokenType.TYPE or TokenType.TYPEOF or TokenType.UNDEFINED or
+            TokenType.UNKNOWN or TokenType.VAR or TokenType.WHILE => true,
             _ => false
         };
     }
@@ -175,6 +175,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         Check(TokenType.UNKNOWN) ||
         Check(TokenType.NEVER) ||
         Check(TokenType.NULL) ||
+        Check(TokenType.UNDEFINED) ||
         Check(TokenType.LEFT_PAREN) ||
         Check(TokenType.LEFT_BRACE) ||  // for inline object types: { x: number }
         Check(TokenType.LEFT_BRACKET) ||  // for tuple types: [string, number]

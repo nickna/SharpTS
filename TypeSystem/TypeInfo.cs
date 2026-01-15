@@ -368,6 +368,11 @@ public abstract record TypeInfo
         public override string ToString() => "null";
     }
 
+    public record Undefined() : TypeInfo
+    {
+        public override string ToString() => "undefined";
+    }
+
     public record Unknown() : TypeInfo
     {
         public override string ToString() => "unknown";
@@ -502,6 +507,8 @@ public abstract record TypeInfo
             .ToList();
 
         public bool ContainsNull => FlattenedTypes.Any(t => t is Null);
+
+        public bool ContainsUndefined => FlattenedTypes.Any(t => t is Undefined);
 
         public override string ToString() => string.Join(" | ", FlattenedTypes);
     }

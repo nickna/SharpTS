@@ -161,15 +161,16 @@ public class OperatorTests
     }
 
     [Fact]
-    public void OptionalChaining_WithNull_ReturnsNull()
+    public void OptionalChaining_WithNull_ReturnsUndefined()
     {
+        // In JavaScript, optional chaining on null or undefined returns undefined
         var source = """
             let obj: { name: string } | null = null;
             console.log(obj?.name);
             """;
 
         var output = TestHarness.RunInterpreted(source);
-        Assert.Equal("null\n", output);
+        Assert.Equal("undefined\n", output);
     }
 
     [Fact]

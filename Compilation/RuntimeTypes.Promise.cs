@@ -360,6 +360,7 @@ public static partial class RuntimeTypes
         public readonly List<object?> RejectionReasons = [];
         public readonly TaskCompletionSource<object?> Tcs = new();
         public readonly object Lock = new();
+        public readonly CancellationTokenSource Cts = new();
     }
 
     /// <summary>
@@ -386,17 +387,20 @@ public static partial class RuntimeTypes
         {
             if (element is Task<object?> task)
             {
-                _ = ProcessPromiseForAnyInternal(task, state);
+                _ = ProcessPromiseForAnyInternal(task, state, state.Cts.Token);
             }
             else if (element is Task nonGenericTask)
             {
-                var wrappedTask = nonGenericTask.ContinueWith(_ => (object?)null);
-                _ = ProcessPromiseForAnyInternal(wrappedTask, state);
+                var wrappedTask = nonGenericTask.ContinueWith(_ => (object?)null, state.Cts.Token);
+                _ = ProcessPromiseForAnyInternal(wrappedTask, state, state.Cts.Token);
             }
             else
             {
                 // Non-task values are treated as immediately resolved - first one wins
-                state.Tcs.TrySetResult(element);
+                if (state.Tcs.TrySetResult(element))
+                {
+                    state.Cts.Cancel();  // Cancel remaining processing tasks
+                }
             }
         }
 
@@ -405,26 +409,49 @@ public static partial class RuntimeTypes
 
     /// <summary>
     /// Helper for PromiseAny - processes a single promise.
+    /// Accepts a CancellationToken to allow early termination when another promise fulfills first.
     /// </summary>
-    private static async Task ProcessPromiseForAnyInternal(Task<object?> task, AnyStateInternal state)
+    private static async Task ProcessPromiseForAnyInternal(Task<object?> task, AnyStateInternal state, CancellationToken ct)
     {
         try
         {
+            // Check if already cancelled (another promise fulfilled first)
+            if (ct.IsCancellationRequested)
+                return;
+
             var result = await task;
-            // First fulfillment wins
-            state.Tcs.TrySetResult(result);
+
+            // Check again after await - another promise may have fulfilled while we waited
+            if (ct.IsCancellationRequested)
+                return;
+
+            // First fulfillment wins - cancel remaining tasks if we're first
+            if (state.Tcs.TrySetResult(result))
+            {
+                state.Cts.Cancel();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Task was cancelled - this is expected when another promise fulfilled first
+            // Don't count as rejection, just exit silently
         }
         catch (Exception ex)
         {
+            // If cancelled, don't process the rejection
+            if (ct.IsCancellationRequested)
+                return;
+
             lock (state.Lock)
             {
                 state.RejectionReasons.Add(ex.Message);
                 state.PendingCount--;
 
-                // If all promises rejected, reject with AggregateError
+                // If all promises rejected, reject with AggregateError and cancel
                 if (state.PendingCount == 0)
                 {
                     state.Tcs.TrySetException(new Exception("AggregateError: All promises were rejected"));
+                    state.Cts.Cancel();
                 }
             }
         }

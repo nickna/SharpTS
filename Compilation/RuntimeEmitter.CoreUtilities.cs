@@ -18,6 +18,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
+        var undefinedLabel = il.DefineLabel();
         var boolLabel = il.DefineLabel();
         var doubleLabel = il.DefineLabel();
         var listLabel = il.DefineLabel();
@@ -26,6 +27,11 @@ public partial class RuntimeEmitter
         // if (value == null) return "null"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // if (value is SharpTSUndefined) return "undefined"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // if (value is bool b) return b ? "true" : "false"
         il.Emit(OpCodes.Ldarg_0);
@@ -62,6 +68,11 @@ public partial class RuntimeEmitter
         // null case
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldstr, "null");
+        il.Emit(OpCodes.Br, endLabel);
+
+        // undefined case
+        il.MarkLabel(undefinedLabel);
+        il.Emit(OpCodes.Ldstr, "undefined");
         il.Emit(OpCodes.Br, endLabel);
 
         // bool case
@@ -258,6 +269,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
+        // undefined => false
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Brtrue, falseLabel);
+
         // bool => return value
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
@@ -289,6 +305,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
+        var undefinedLabel = il.DefineLabel();
         var boolLabel = il.DefineLabel();
         var numberLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
@@ -299,6 +316,11 @@ public partial class RuntimeEmitter
         // null => "object" (JS typeof null === "object")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // undefined => "undefined"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Brtrue, undefinedLabel);
 
         // Check for union types using $IUnionType marker interface
         // If value implements $IUnionType, unwrap via Value property and recurse
@@ -364,6 +386,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(undefinedLabel);
+        il.Emit(OpCodes.Ldstr, "undefined");
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(boolLabel);
@@ -495,10 +521,81 @@ public partial class RuntimeEmitter
         runtime.Equals = method;
 
         var il = method.GetILGenerator();
-        // Use object.Equals(left, right)
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+        var checkRightNullish = il.DefineLabel();
+        var notBothNullish = il.DefineLabel();
+        var objectEqualsLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        // Local to track if left is nullish
+        var leftNullish = il.DeclareLocal(_types.Boolean);
+        var rightNullish = il.DeclareLocal(_types.Boolean);
+
+        // Check if left is nullish (null or undefined)
+        // leftNullish = (left == null || left is SharpTSUndefined)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse_S, checkRightNullish); // left is null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un); // true if left is SharpTSUndefined
+        il.Emit(OpCodes.Stloc, leftNullish);
+        il.Emit(OpCodes.Br_S, notBothNullish);
+
+        il.MarkLabel(checkRightNullish);
+        // Left is null - mark as nullish
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, leftNullish);
+
+        il.MarkLabel(notBothNullish);
+
+        // Check if right is nullish (null or undefined)
+        // rightNullish = (right == null || right is SharpTSUndefined)
+        var rightNotNull = il.DefineLabel();
+        var afterRightCheck = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brtrue_S, rightNotNull);
+        // Right is null - mark as nullish
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, rightNullish);
+        il.Emit(OpCodes.Br_S, afterRightCheck);
+
+        il.MarkLabel(rightNotNull);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un); // true if right is SharpTSUndefined
+        il.Emit(OpCodes.Stloc, rightNullish);
+
+        il.MarkLabel(afterRightCheck);
+
+        // If both are nullish, return true (null == undefined)
+        il.Emit(OpCodes.Ldloc, leftNullish);
+        il.Emit(OpCodes.Ldloc, rightNullish);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // If only one is nullish, return false
+        il.Emit(OpCodes.Ldloc, leftNullish);
+        il.Emit(OpCodes.Ldloc, rightNullish);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Brtrue, falseLabel);
+
+        // Neither is nullish - use object.Equals
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+
+        il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 }

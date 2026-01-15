@@ -92,6 +92,9 @@ public partial class Interpreter
         _typeMap = typeMap;
         try
         {
+            // Hoist function declarations first
+            HoistFunctionDeclarations(statements);
+
             foreach (Stmt statement in statements)
             {
                 // For expression statements, we may get a Promise that needs to be awaited
@@ -274,6 +277,10 @@ public partial class Interpreter
 
         try
         {
+            // First pass: hoist function declarations
+            HoistFunctionDeclarations(module.Statements);
+
+            // Second pass: execute all statements
             foreach (var stmt in module.Statements)
             {
                 // For expression statements, we may get a Promise that needs to be awaited
@@ -448,6 +455,54 @@ public partial class Interpreter
         decl is Stmt.Interface or Stmt.TypeAlias;
 
     /// <summary>
+    /// Hoists function declarations by defining them before other statements execute.
+    /// This enables functions to call each other regardless of declaration order.
+    /// </summary>
+    private void HoistFunctionDeclarations(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            Stmt.Function? funcStmt = null;
+
+            // Handle top-level functions
+            if (stmt is Stmt.Function f && f.Body != null)
+            {
+                funcStmt = f;
+            }
+            // Handle exported functions
+            else if (stmt is Stmt.Export export && export.Declaration is Stmt.Function ef && ef.Body != null)
+            {
+                funcStmt = ef;
+            }
+
+            if (funcStmt != null)
+            {
+                // Skip if already defined
+                if (_environment.IsDefinedLocally(funcStmt.Name.Lexeme))
+                    continue;
+
+                // Create the appropriate function type and define it
+                if (funcStmt.IsGenerator && funcStmt.IsAsync)
+                {
+                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSAsyncGeneratorFunction(funcStmt, _environment));
+                }
+                else if (funcStmt.IsGenerator)
+                {
+                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSGeneratorFunction(funcStmt, _environment));
+                }
+                else if (funcStmt.IsAsync)
+                {
+                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSAsyncFunction(funcStmt, _environment));
+                }
+                else
+                {
+                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSFunction(funcStmt, _environment));
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Gets the name of a declaration.
     /// </summary>
     private string GetDeclaredName(Stmt decl)
@@ -578,6 +633,8 @@ public partial class Interpreter
             case Stmt.Function functionStmt:
                 // Skip overload signatures (no body) - they're type-checking only
                 if (functionStmt.Body == null) return ExecutionResult.Success();
+                // Skip if already hoisted
+                if (_environment.IsDefinedLocally(functionStmt.Name.Lexeme)) return ExecutionResult.Success();
                 if (functionStmt.IsGenerator && functionStmt.IsAsync)
                 {
                     // Async generator: async function* foo() { yield await ... }

@@ -38,6 +38,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
                 SetStackUnknown();
                 break;
+            case Runtime.Types.SharpTSUndefined:
+                EmitUndefinedConstant();
+                break;
             case null:
                 EmitNullConstant();
                 break;
@@ -228,12 +231,24 @@ public partial class ILEmitter
     {
         var builder = _ctx.ILBuilder;
         var endLabel = builder.DefineLabel("nullish_end");
+        var useRightLabel = builder.DefineLabel("nullish_use_right");
 
         EmitExpression(nc.Left);
         EmitBoxIfNeeded(nc.Left);
         IL.Emit(OpCodes.Dup);
-        builder.Emit_Brtrue(endLabel);
 
+        // If left is null, use right
+        builder.Emit_Brfalse(useRightLabel);
+
+        // If left is undefined, use right
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Isinst, typeof(Runtime.Types.SharpTSUndefined));
+        builder.Emit_Brtrue(useRightLabel);
+
+        // Left is neither null nor undefined - use it
+        builder.Emit_Br(endLabel);
+
+        builder.MarkLabel(useRightLabel);
         IL.Emit(OpCodes.Pop);
         EmitExpression(nc.Right);
         EmitBoxIfNeeded(nc.Right);

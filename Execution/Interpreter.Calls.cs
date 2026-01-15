@@ -355,10 +355,10 @@ public partial class Interpreter
     /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
     /// </summary>
     /// <param name="left">The already-evaluated left operand.</param>
-    /// <param name="evaluateRight">A function to evaluate the right operand (only called if left is null).</param>
-    /// <returns>The left value if not null; otherwise the right value.</returns>
+    /// <param name="evaluateRight">A function to evaluate the right operand (only called if left is nullish).</param>
+    /// <returns>The left value if not nullish; otherwise the right value.</returns>
     private object? EvaluateNullishCoalescingCore(object? left, Func<object?> evaluateRight) =>
-        left ?? evaluateRight();
+        (left == null || left is Runtime.Types.SharpTSUndefined) ? evaluateRight() : left;
 
     /// <summary>
     /// Evaluates the nullish coalescing operator (<c>??</c>).

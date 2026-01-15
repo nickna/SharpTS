@@ -157,6 +157,7 @@ public partial class TypeChecker
         if (typeName == "bigint") return new TypeInfo.BigInt();
         if (typeName == "void") return new TypeInfo.Void();
         if (typeName == "null") return new TypeInfo.Null();
+        if (typeName == "undefined") return new TypeInfo.Undefined();
         if (typeName == "unknown") return new TypeInfo.Unknown();
         if (typeName == "never") return new TypeInfo.Never();
 

@@ -60,6 +60,14 @@ public partial class TypeChecker
             return false;
         }
 
+        // Undefined compatibility
+        if (actual is TypeInfo.Undefined)
+        {
+            if (expected is TypeInfo.Union u && u.ContainsUndefined) return true;
+            if (expected is TypeInfo.Undefined) return true;
+            return false;
+        }
+
         // Literal type compatibility - literal to literal (must have same value)
         if (expected is TypeInfo.StringLiteral sl1 && actual is TypeInfo.StringLiteral sl2)
             return sl1.Value == sl2.Value;

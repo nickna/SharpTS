@@ -107,6 +107,7 @@ public partial class ILEmitter
     private void EmitConvertToDouble() => _helpers.EmitConvertToDouble();
     private void EmitConvR8AndBox() => _helpers.EmitConvR8AndBox();
     private void EmitObjectEqualsBoxed() => _helpers.EmitObjectEqualsBoxed();
+    private void EmitObjectEqualsBoxed_NoBox() => _helpers.EmitObjectEqualsBoxed_NoBox();
     private void EmitObjectNotEqualsBoxed() => _helpers.EmitObjectNotEqualsBoxed();
 
     #endregion

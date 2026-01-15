@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -9,6 +10,7 @@ public static partial class RuntimeTypes
     public static string Stringify(object? value) => value switch
     {
         null => "null",
+        SharpTSUndefined => "undefined",
         bool b => b ? "true" : "false",
         double d => FormatNumber(d),
         System.Numerics.BigInteger bi => $"{bi}n",
@@ -45,6 +47,7 @@ public static partial class RuntimeTypes
         bool b => b ? 1.0 : 0.0,
         string s when double.TryParse(s, out var d) => d,
         null => 0.0,
+        SharpTSUndefined => double.NaN,  // undefined coerces to NaN, not 0
         _ => double.NaN
     };
 
@@ -52,6 +55,7 @@ public static partial class RuntimeTypes
     public static bool IsTruthy(object? value) => value switch
     {
         null => false,
+        SharpTSUndefined => false,
         bool b => b,
         double d => d != 0.0 && !double.IsNaN(d),
         string s => s.Length > 0,
@@ -62,6 +66,7 @@ public static partial class RuntimeTypes
     public static string TypeOf(object? value)
     {
         if (value == null) return "object"; // typeof null === "object" in JS
+        if (value is SharpTSUndefined) return "undefined";
 
         // Check for union types using marker interface
         if (value is IUnionType union)

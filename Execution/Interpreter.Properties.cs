@@ -218,10 +218,10 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnObject(Expr.Get get, object? obj)
     {
-        // Handle optional chaining - return null if object is null
-        if (get.Optional && obj == null)
+        // Handle optional chaining - return undefined if object is null or undefined
+        if (get.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
         {
-            return null;
+            return Runtime.Types.SharpTSUndefined.Instance;
         }
 
         // Handle static member access on class

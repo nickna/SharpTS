@@ -282,6 +282,7 @@ public partial class TypeChecker
             int i => new TypeInfo.NumberLiteral(i),
             bool b => new TypeInfo.BooleanLiteral(b),
             null => new TypeInfo.Null(),
+            Runtime.Types.SharpTSUndefined => new TypeInfo.Undefined(),
             _ => new TypeInfo.Any()
         };
     }
@@ -688,6 +689,7 @@ public partial class TypeChecker
     private TypeInfo GetLiteralType(object? value)
     {
         if (value is null) return new TypeInfo.Null();
+        if (value is Runtime.Types.SharpTSUndefined) return new TypeInfo.Undefined();
         if (value is int i) return new TypeInfo.NumberLiteral((double)i);
         if (value is double d) return new TypeInfo.NumberLiteral(d);
         if (value is string s) return new TypeInfo.StringLiteral(s);

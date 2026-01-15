@@ -114,6 +114,7 @@ internal class AnyStateClass
     public required FieldBuilder RejectionReasonsField { get; init; } // List<object?>
     public required FieldBuilder TcsField { get; init; }              // TaskCompletionSource<object?>
     public required FieldBuilder LockField { get; init; }             // object
+    public required FieldBuilder CtsField { get; init; }              // CancellationTokenSource
     public required ConstructorBuilder Constructor { get; init; }
     public MethodBuilder? HandleCompletionMethod { get; set; }        // HandleAnyCompletion method
     public MethodBuilder? HandleCompletionShim { get; set; }          // Shim for ContinueWith

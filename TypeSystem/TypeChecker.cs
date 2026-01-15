@@ -220,12 +220,144 @@ public partial class TypeChecker
         _environment.Define("Reflect", new TypeInfo.Any());
         _environment.Define("process", new TypeInfo.Any());
 
+        // Pre-register type declarations (interfaces, classes, enums, type aliases)
+        // This ensures types are available when parsing function signatures during hoisting
+        PreRegisterTypeDeclarations(statements);
+
+        // Hoist function declarations (now type references will resolve correctly)
+        HoistFunctionDeclarations(statements);
+
         foreach (Stmt statement in statements)
         {
             CheckStmt(statement);
         }
 
         return _typeMap;
+    }
+
+    /// <summary>
+    /// Pre-registers type declarations (interfaces, enums, type aliases) before function hoisting.
+    /// This ensures type names are available when parsing function signatures.
+    /// Full validation happens later during CheckStmt.
+    /// Note: Classes are NOT pre-registered to avoid breaking inheritance checking with MutableClass.
+    /// </summary>
+    private void PreRegisterTypeDeclarations(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            switch (stmt)
+            {
+                case Stmt.Interface itf:
+                    PreRegisterInterface(itf);
+                    break;
+                case Stmt.TypeAlias alias:
+                    PreRegisterTypeAlias(alias);
+                    break;
+                case Stmt.Enum enumStmt:
+                    PreRegisterEnum(enumStmt);
+                    break;
+                // Note: Classes are not pre-registered here because doing so creates MutableClass
+                // objects that break inheritance checking. Classes are properly registered during
+                // CheckClassDeclaration which handles inheritance correctly.
+                case Stmt.Export export when export.Declaration != null:
+                    // Handle exported type declarations
+                    PreRegisterTypeDeclarations([export.Declaration]);
+                    break;
+                case Stmt.Namespace ns:
+                    // Pre-register namespace contents
+                    PreRegisterTypeDeclarations(ns.Members);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pre-registers a type alias before function hoisting.
+    /// Type aliases are just stored as string definitions, so pre-registration is the same as full registration.
+    /// </summary>
+    private void PreRegisterTypeAlias(Stmt.TypeAlias typeAlias)
+    {
+        // Skip if already registered
+        if (_environment.GetTypeAlias(typeAlias.Name.Lexeme) != null)
+            return;
+
+        if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
+        {
+            var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+            _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
+        }
+        else
+        {
+            _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+        }
+    }
+
+    /// <summary>
+    /// Pre-registers an enum before function hoisting.
+    /// Creates a basic enum type with placeholder values. Full validation happens in CheckEnumDeclaration.
+    /// </summary>
+    private void PreRegisterEnum(Stmt.Enum enumStmt)
+    {
+        // Skip if already registered
+        if (_environment.IsDefinedLocally(enumStmt.Name.Lexeme))
+            return;
+
+        // Create a basic enum with member names (values will be computed during full check)
+        Dictionary<string, object> members = [];
+        double value = 0;
+
+        foreach (var member in enumStmt.Members)
+        {
+            // During pre-registration, just assign sequential numeric values as placeholders
+            // The full check will compute actual values
+            members[member.Name.Lexeme] = value++;
+        }
+
+        _environment.Define(enumStmt.Name.Lexeme, new TypeInfo.Enum(
+            enumStmt.Name.Lexeme,
+            members.ToFrozenDictionary(),
+            EnumKind.Numeric,
+            enumStmt.IsConst
+        ));
+    }
+
+    /// <summary>
+    /// Pre-registers a class before function hoisting.
+    /// Creates a basic class type structure so the class name is available for type references.
+    /// Full validation happens in CheckClassDeclaration.
+    /// </summary>
+    private void PreRegisterClass(Stmt.Class classStmt)
+    {
+        // Skip if already registered
+        if (_environment.IsDefinedLocally(classStmt.Name.Lexeme))
+            return;
+
+        // Create a mutable class placeholder for forward references
+        // MutableClass supports forward references and will be replaced during full check
+        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme);
+
+        // Try to resolve superclass if present (may fail if superclass not yet defined)
+        if (classStmt.Superclass != null)
+        {
+            try
+            {
+                var superType = _environment.Get(classStmt.Superclass.Lexeme);
+                if (superType is TypeInfo.Class c)
+                {
+                    mutableClass.Superclass = c;
+                }
+                else if (superType is TypeInfo.MutableClass mc && mc.Frozen != null)
+                {
+                    mutableClass.Superclass = mc.Frozen;
+                }
+            }
+            catch
+            {
+                // Ignore superclass resolution errors during pre-registration
+            }
+        }
+
+        _environment.Define(classStmt.Name.Lexeme, mutableClass);
     }
 
     /// <summary>
@@ -267,6 +399,13 @@ public partial class TypeChecker
             // Type-check module body
             using (new EnvironmentScope(this, moduleEnv))
             {
+                // First pass: pre-register type declarations
+                PreRegisterTypeDeclarations(module.Statements);
+
+                // Second pass: hoist function declarations (now types are available)
+                HoistFunctionDeclarations(module.Statements);
+
+                // Third pass: check all statements
                 foreach (var stmt in module.Statements)
                 {
                     CheckStmt(stmt);
@@ -292,9 +431,15 @@ public partial class TypeChecker
             // First, bind imports so we can reference imported types in our declarations
             BindModuleImports(module, moduleEnv);
 
+            // Pre-register type declarations first
+            PreRegisterTypeDeclarations(module.Statements);
+
+            // Hoist function declarations (now types are available)
+            HoistFunctionDeclarations(module.Statements);
+
             // Then, process all declarations to populate the environment
             foreach (var stmt in module.Statements)
-        {
+            {
             // Skip imports - already bound above
             if (stmt is Stmt.Import)
             {

@@ -106,28 +106,28 @@ public partial class TypeChecker
         TypeInfo leftType = CheckExpr(nc.Left);
         TypeInfo rightType = CheckExpr(nc.Right);
 
-        // Remove null from left type since ?? handles the null case
-        TypeInfo nonNullLeft = leftType;
-        if (leftType is TypeInfo.Union u && u.ContainsNull)
+        // Remove null and undefined from left type since ?? handles both cases
+        TypeInfo nonNullishLeft = leftType;
+        if (leftType is TypeInfo.Union u && (u.ContainsNull || u.ContainsUndefined))
         {
-            var nonNullTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
-            nonNullLeft = nonNullTypes.Count == 0 ? rightType :
-                nonNullTypes.Count == 1 ? nonNullTypes[0] :
-                new TypeInfo.Union(nonNullTypes);
+            var nonNullishTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined).ToList();
+            nonNullishLeft = nonNullishTypes.Count == 0 ? rightType :
+                nonNullishTypes.Count == 1 ? nonNullishTypes[0] :
+                new TypeInfo.Union(nonNullishTypes);
         }
-        else if (leftType is TypeInfo.Null)
+        else if (leftType is TypeInfo.Null or TypeInfo.Undefined)
         {
-            return rightType;  // null ?? right = right
-        }
-
-        // If left (non-null) and right are compatible, return non-null left
-        if (IsCompatible(nonNullLeft, rightType) || IsCompatible(rightType, nonNullLeft))
-        {
-            return nonNullLeft;
+            return rightType;  // null/undefined ?? right = right
         }
 
-        // Otherwise return union of non-null left and right
-        return new TypeInfo.Union([nonNullLeft, rightType]);
+        // If left (non-nullish) and right are compatible, return non-nullish left
+        if (IsCompatible(nonNullishLeft, rightType) || IsCompatible(rightType, nonNullishLeft))
+        {
+            return nonNullishLeft;
+        }
+
+        // Otherwise return union of non-nullish left and right
+        return new TypeInfo.Union([nonNullishLeft, rightType]);
     }
 
     private TypeInfo CheckTernary(Expr.Ternary ternary)
@@ -219,17 +219,17 @@ public partial class TypeChecker
     {
         TypeInfo exprType = CheckExpr(nna.Expression);
 
-        // Remove null (and undefined if we had it) from the type
-        if (exprType is TypeInfo.Union u && u.ContainsNull)
+        // Remove null and undefined from the type
+        if (exprType is TypeInfo.Union u && (u.ContainsNull || u.ContainsUndefined))
         {
-            var nonNullTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
-            return nonNullTypes.Count == 0 ? new TypeInfo.Never() :
-                nonNullTypes.Count == 1 ? nonNullTypes[0] :
-                new TypeInfo.Union(nonNullTypes);
+            var nonNullishTypes = u.FlattenedTypes.Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined).ToList();
+            return nonNullishTypes.Count == 0 ? new TypeInfo.Never() :
+                nonNullishTypes.Count == 1 ? nonNullishTypes[0] :
+                new TypeInfo.Union(nonNullishTypes);
         }
 
-        // If the type is just null, return never (asserting null is not null is a type error in practice)
-        if (exprType is TypeInfo.Null)
+        // If the type is just null or undefined, return never (asserting nullish is not nullish is a type error)
+        if (exprType is TypeInfo.Null or TypeInfo.Undefined)
         {
             return new TypeInfo.Never();
         }

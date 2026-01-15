@@ -407,10 +407,24 @@ public partial class TypeChecker
         {
             if (inferred.TryGetValue(tp.Name, out var inferredType))
             {
-                // Validate constraint
-                if (tp.Constraint != null && !IsCompatible(tp.Constraint, inferredType))
+                // Validate constraint if present
+                if (tp.Constraint != null && tp.Constraint is not TypeInfo.Any)
                 {
-                    throw new TypeCheckException($" Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                    // For Record constraints, check that actual type has all required fields
+                    if (tp.Constraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
+                    {
+                        foreach (var (fieldName, _) in constraintRecord.Fields)
+                        {
+                            if (!actualRecord.Fields.ContainsKey(fieldName))
+                            {
+                                throw new TypeCheckException($" Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}' - missing required property '{fieldName}'.");
+                            }
+                        }
+                    }
+                    else if (!IsCompatible(tp.Constraint, inferredType))
+                    {
+                        throw new TypeCheckException($" Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                    }
                 }
                 result.Add(inferredType);
             }

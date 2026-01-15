@@ -24,6 +24,7 @@ public partial class RuntimeEmitter
         var rejectionReasonsField = typeBuilder.DefineField("RejectionReasons", _types.ListOfObject, FieldAttributes.Public);
         var tcsField = typeBuilder.DefineField("Tcs", _types.TaskCompletionSourceOfObject, FieldAttributes.Public);
         var lockField = typeBuilder.DefineField("Lock", _types.Object, FieldAttributes.Public);
+        var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
 
         // Constructor: Initialize all fields
         var ctor = typeBuilder.DefineConstructor(
@@ -58,6 +59,11 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
         ctorIL.Emit(OpCodes.Stfld, lockField);
 
+        // this.Cts = new CancellationTokenSource()
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.CancellationTokenSource));
+        ctorIL.Emit(OpCodes.Stfld, ctsField);
+
         ctorIL.Emit(OpCodes.Ret);
 
         return new AnyStateClass
@@ -67,6 +73,7 @@ public partial class RuntimeEmitter
             RejectionReasonsField = rejectionReasonsField,
             TcsField = tcsField,
             LockField = lockField,
+            CtsField = ctsField,
             Constructor = ctor
         };
     }
@@ -105,13 +112,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompletedSuccessfully").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, failedLabel);
 
-        // Success path: state.Tcs.TrySetResult(task.Result)
+        // Success path: if (state.Tcs.TrySetResult(task.Result)) state.Cts.Cancel();
+        // This cancels remaining pending continuations to prevent orphaned tasks.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetResult", [_types.Object]));
-        il.Emit(OpCodes.Pop);  // discard bool result
+
+        // If TrySetResult returned true (we were first), cancel remaining continuations
+        var skipCancelLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, skipCancelLabel);
+
+        // state.Cts.Cancel() - cancel pending continuations to allow clean process exit
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldfld, anyState.CtsField);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.CancellationTokenSource, "Cancel"));
+
+        il.MarkLabel(skipCancelLabel);
         il.Emit(OpCodes.Br, endLabel);
 
         // Failed path: lock and handle rejection
@@ -167,6 +185,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String]));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception]));
         il.Emit(OpCodes.Pop);  // discard bool result
+
+        // Cancel the token source for cleanup (all continuations have run, but ensures proper disposal)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldfld, anyState.CtsField);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.CancellationTokenSource, "Cancel"));
 
         il.MarkLabel(notAllFailedLabel);
         il.Emit(OpCodes.Leave, endLabel);
@@ -425,9 +448,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterTaskSetupLabel);
 
         il.MarkLabel(notCompletedLabel);
-        // Not completed - use ContinueWith with the shim delegate
+        // Not completed - use ContinueWith with cancellation token support
+        // This ensures continuations can be cancelled when the first promise fulfills,
+        // preventing orphaned tasks from keeping the process alive.
 
-        // task.ContinueWith(Action<Task<object?>, object?>, object? state, TaskContinuationOptions)
+        // task.ContinueWith(action, state, cancellationToken, options, scheduler)
         // Load task
         il.Emit(OpCodes.Ldloc, taskLocal);
 
@@ -442,14 +467,22 @@ public partial class RuntimeEmitter
         // Load state (already a reference type, no boxing needed)
         il.Emit(OpCodes.Ldloc, stateLocal);
 
+        // Load state.Cts.Token for cancellation support
+        il.Emit(OpCodes.Ldloc, stateLocal);
+        il.Emit(OpCodes.Ldfld, anyState.CtsField);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.CancellationTokenSource, "Token"));
+
         // Load TaskContinuationOptions.ExecuteSynchronously
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
 
-        // Call ContinueWith(Action<Task<TResult>, object?>, object?, TaskContinuationOptions)
+        // Load TaskScheduler.Default
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.TaskScheduler, "Default"));
+
+        // Call ContinueWith(Action<Task<TResult>, object?>, object?, CancellationToken, TaskContinuationOptions, TaskScheduler)
         var continueWithMethod = _types.GetMethod(_types.TaskOfObject, "ContinueWith",
-            [_types.ActionTaskOfObjectAndObject, _types.Object, _types.TaskContinuationOptions]);
+            [_types.ActionTaskOfObjectAndObject, _types.Object, _types.CancellationToken, _types.TaskContinuationOptions, _types.TaskScheduler]);
         il.Emit(OpCodes.Callvirt, continueWithMethod);
-        il.Emit(OpCodes.Pop);  // Discard the continuation task returned by ContinueWith
+        il.Emit(OpCodes.Pop);  // Continuation task is tracked via cancellation token, safe to discard
 
         il.MarkLabel(afterTaskSetupLabel);
 

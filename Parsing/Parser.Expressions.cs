@@ -462,6 +462,7 @@ public partial class Parser
         if (Match(TokenType.FALSE)) return new Expr.Literal(false);
         if (Match(TokenType.TRUE)) return new Expr.Literal(true);
         if (Match(TokenType.NULL)) return new Expr.Literal(null);
+        if (Match(TokenType.UNDEFINED)) return new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance);
         if (Match(TokenType.NUMBER, TokenType.STRING, TokenType.BIGINT_LITERAL)) return new Expr.Literal(Previous().Literal);
         if (Match(TokenType.REGEX))
         {

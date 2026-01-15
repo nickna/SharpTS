@@ -70,6 +70,15 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
         return _enclosing?.IsDefined(name) ?? false;
     }
 
+    /// <summary>
+    /// Checks if a name is defined in the current scope only (not in enclosing scopes).
+    /// Used for function hoisting to avoid re-defining already hoisted functions.
+    /// </summary>
+    public bool IsDefinedLocally(string name)
+    {
+        return _types.ContainsKey(name);
+    }
+
     public void Assign(Token name, TypeInfo type)
     {
         if (_types.ContainsKey(name.Lexeme))

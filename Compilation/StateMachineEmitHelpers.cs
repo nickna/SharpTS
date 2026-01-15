@@ -202,6 +202,13 @@ public class StateMachineEmitHelpers
         _stackType = StackType.Null;
     }
 
+    public void EmitUndefinedConstant()
+    {
+        // Load SharpTSUndefined.Instance static field
+        _il.Emit(OpCodes.Ldsfld, typeof(Runtime.Types.SharpTSUndefined).GetField("Instance")!);
+        _stackType = StackType.Unknown;  // Treat as boxed object
+    }
+
     #endregion
 
     #region Arithmetic Helpers
@@ -447,6 +454,15 @@ public class StateMachineEmitHelpers
         _il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", [_types.Object, _types.Object]));
         _il.Emit(OpCodes.Box, _types.Boolean);
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emit Object.Equals call without boxing. Used for strict equality (===).
+    /// </summary>
+    public void EmitObjectEqualsBoxed_NoBox()
+    {
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", [_types.Object, _types.Object]));
+        _stackType = StackType.Boolean;
     }
 
     public void EmitObjectNotEqualsBoxed()

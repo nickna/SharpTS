@@ -84,6 +84,7 @@ public class Lexer(string source)
         { "finally", TokenType.FINALLY },
         { "type", TokenType.TYPE },
         { "typeof", TokenType.TYPEOF },
+        { "undefined", TokenType.UNDEFINED },
         { "unknown", TokenType.UNKNOWN },
         { "while", TokenType.WHILE },
         { "yield", TokenType.YIELD },

@@ -46,6 +46,15 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
         return Enclosing?.IsDefined(name) ?? false;
     }
 
+    /// <summary>
+    /// Checks if a variable is defined in this scope only (not in enclosing scopes).
+    /// Used for function hoisting to avoid re-defining already hoisted functions.
+    /// </summary>
+    public bool IsDefinedLocally(string name)
+    {
+        return _values.ContainsKey(name);
+    }
+
     public void Assign(Token name, object? value)
     {
         if (_values.ContainsKey(name.Lexeme))

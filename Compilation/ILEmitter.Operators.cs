@@ -37,14 +37,32 @@ public partial class ILEmitter
             EmitBoxIfNeeded(b.Left);
             EmitExpression(b.Right);
             EmitBoxIfNeeded(b.Right);
-            if (b.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL)
+
+            // Loose equality (== and !=) uses runtime.Equals which treats null==undefined
+            // Strict equality (=== and !==) uses Object.Equals which keeps them distinct
+            bool isLooseEquality = b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL;
+            bool isNegated = b.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL;
+
+            if (isLooseEquality)
             {
-                EmitObjectNotEqualsBoxed();
+                // Use our runtime Equals which treats null == undefined
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.Equals);
             }
             else
             {
-                EmitObjectEqualsBoxed();
+                // Use Object.Equals for strict equality (null !== undefined)
+                EmitObjectEqualsBoxed_NoBox();
             }
+
+            if (isNegated)
+            {
+                // Negate the result
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ceq);
+            }
+
+            IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+            SetStackUnknown();
             return;
         }
 

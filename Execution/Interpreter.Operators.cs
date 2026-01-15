@@ -179,6 +179,7 @@ public partial class Interpreter
     private string GetTypeofString(object? value) => value switch
     {
         null => "object",  // JavaScript quirk: typeof null === "object"
+        SharpTSUndefined => "undefined",
         bool => "boolean",
         double => "number",
         string => "string",
@@ -201,6 +202,7 @@ public partial class Interpreter
     private bool IsTruthy(object? obj)
     {
         if (obj == null) return false;
+        if (obj is SharpTSUndefined) return false;
         if (obj is bool b) return b;
         if (obj is double d) return d != 0 && !double.IsNaN(d);
         if (obj is string s) return s.Length > 0;
@@ -220,9 +222,12 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Equality">MDN Equality</seealso>
     private bool IsEqual(object? a, object? b)
     {
-        if (a == null && b == null) return true;
-        if (a == null) return false;
-        return a.Equals(b);
+        // null == null, undefined == undefined, null == undefined (loose equality)
+        bool aIsNullish = a == null || a is SharpTSUndefined;
+        bool bIsNullish = b == null || b is SharpTSUndefined;
+        if (aIsNullish && bIsNullish) return true;
+        if (aIsNullish || bIsNullish) return false;
+        return a!.Equals(b);
     }
 
     /// <summary>
@@ -238,10 +243,10 @@ public partial class Interpreter
     private bool IsStrictEqual(object? a, object? b)
     {
         // In TypeScript/JS, === checks both value and type
-        // Since we're already strongly typed, this is essentially the same as ==
-        // But we check that types match exactly
+        // null === null and undefined === undefined, but NOT null === undefined
         if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
+        if (a is SharpTSUndefined && b is SharpTSUndefined) return true;
+        if (a == null || b == null || a is SharpTSUndefined || b is SharpTSUndefined) return false;
         if (a.GetType() != b.GetType()) return false;
         return a.Equals(b);
     }
@@ -291,6 +296,7 @@ public partial class Interpreter
     internal string Stringify(object? obj)
     {
         if (obj == null) return "null";
+        if (obj is SharpTSUndefined) return "undefined";
         if (obj is bool b) return b ? "true" : "false";
         if (obj is double d)
         {

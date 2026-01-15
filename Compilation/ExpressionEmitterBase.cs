@@ -50,6 +50,7 @@ public abstract class ExpressionEmitterBase
 
     #region Constant Emission Delegations
     protected void EmitNullConstant() => _helpers.EmitNullConstant();
+    protected void EmitUndefinedConstant() => _helpers.EmitUndefinedConstant();
     protected void EmitDoubleConstant(double value) => _helpers.EmitDoubleConstant(value);
     protected void EmitBoolConstant(bool value) => _helpers.EmitBoolConstant(value);
     protected void EmitStringConstant(string value) => _helpers.EmitStringConstant(value);

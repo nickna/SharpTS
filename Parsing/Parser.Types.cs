@@ -215,7 +215,7 @@ public partial class Parser
                  Check(TokenType.TYPE_BOOLEAN) || Check(TokenType.TYPE_SYMBOL) ||
                  Check(TokenType.TYPE_BIGINT) ||
                  Check(TokenType.IDENTIFIER) ||
-                 Check(TokenType.NULL) || Check(TokenType.UNKNOWN) || Check(TokenType.NEVER))
+                 Check(TokenType.NULL) || Check(TokenType.UNDEFINED) || Check(TokenType.UNKNOWN) || Check(TokenType.NEVER))
         {
             typeName = Advance().Lexeme;
         }
