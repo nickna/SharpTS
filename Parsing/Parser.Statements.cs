@@ -151,23 +151,9 @@ public partial class Parser
 
         Stmt body = Statement();
 
-        if (increment != null)
-        {
-            body = new Stmt.Block([
-                body,
-                new Stmt.Expression(increment)
-            ]);
-        }
-
-        condition ??= new Expr.Literal(true);
-        body = new Stmt.While(condition, body);
-
-        if (initializer != null)
-        {
-            body = new Stmt.Block([initializer, body]);
-        }
-
-        return body;
+        // Return native For statement instead of desugaring to while
+        // This ensures continue statements properly execute the increment
+        return new Stmt.For(initializer, condition, increment, body);
     }
 
     private Stmt WhileStatement()

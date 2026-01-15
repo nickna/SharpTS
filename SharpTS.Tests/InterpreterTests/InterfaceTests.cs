@@ -236,4 +236,70 @@ public class InterfaceTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("prod\ndev\ntrue\n", output);
     }
+
+    // Interface-to-Interface Compatibility
+    [Fact]
+    public void Interface_ToInterface_SameStructure_Compatible()
+    {
+        var source = """
+            interface Point {
+                x: number;
+                y: number;
+            }
+            function makePoint(): Point {
+                return { x: 1, y: 2 };
+            }
+            let points: Point[] = [];
+            points.push(makePoint());
+            console.log(points[0].x);
+            console.log(points[0].y);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void Interface_ToInterface_ReturnedFromFunction_Compatible()
+    {
+        var source = """
+            interface FileStats {
+                name: string;
+                size: number;
+            }
+            function getStats(): FileStats {
+                return { name: "test.txt", size: 100 };
+            }
+            function process(stats: FileStats): void {
+                console.log(stats.name);
+            }
+            process(getStats());
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("test.txt\n", output);
+    }
+
+    [Fact]
+    public void Interface_ToInterface_WithArrayPush_Compatible()
+    {
+        var source = """
+            interface Item {
+                id: number;
+                value: string;
+            }
+            function createItem(id: number, value: string): Item {
+                return { id: id, value: value };
+            }
+            let items: Item[] = [];
+            items.push(createItem(1, "first"));
+            items.push(createItem(2, "second"));
+            console.log(items.length);
+            console.log(items[0].value);
+            console.log(items[1].value);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\nfirst\nsecond\n", output);
+    }
 }

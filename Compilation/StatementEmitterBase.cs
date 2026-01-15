@@ -158,8 +158,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitDoWhile(dw);
                 break;
 
-            case Stmt.ForOf f:
-                EmitForOf(f);
+            case Stmt.For f:
+                EmitFor(f);
+                break;
+
+            case Stmt.ForOf forOf:
+                EmitForOf(forOf);
                 break;
 
             case Stmt.ForIn fi:
@@ -279,6 +283,48 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.MarkLabel(continueLabel);
         EmitConditionCheck(dw.Condition);
         IL.Emit(OpCodes.Brtrue, startLabel);
+
+        IL.MarkLabel(endLabel);
+        ExitLoop();
+    }
+
+    /// <summary>
+    /// Emits a for loop with proper continue handling.
+    /// Continue jumps to the increment, not past it.
+    /// </summary>
+    protected virtual void EmitFor(Stmt.For f)
+    {
+        // Emit initializer (once, outside the loop)
+        if (f.Initializer != null)
+            EmitStatement(f.Initializer);
+
+        var startLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        var continueLabel = IL.DefineLabel();  // Points to increment
+
+        EnterLoop(endLabel, continueLabel);
+
+        IL.MarkLabel(startLabel);
+
+        // Check condition (if present)
+        if (f.Condition != null)
+        {
+            EmitConditionCheck(f.Condition);
+            IL.Emit(OpCodes.Brfalse, endLabel);
+        }
+
+        // Emit body
+        EmitStatement(f.Body);
+
+        // Continue target: increment goes here
+        IL.MarkLabel(continueLabel);
+        if (f.Increment != null)
+        {
+            EmitExpression(f.Increment);
+            IL.Emit(OpCodes.Pop);  // Discard increment result
+        }
+
+        IL.Emit(OpCodes.Br, startLabel);
 
         IL.MarkLabel(endLabel);
         ExitLoop();

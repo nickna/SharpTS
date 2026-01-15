@@ -55,6 +55,12 @@ public class DeadCodeAnalyzer
                 AnalyzeWhile(whileStmt);
                 break;
 
+            case Stmt.For forStmt:
+                if (forStmt.Initializer != null)
+                    AnalyzeStmt(forStmt.Initializer);
+                AnalyzeStmt(forStmt.Body);
+                break;
+
             case Stmt.ForOf forOf:
                 AnalyzeStmt(forOf.Body);
                 break;

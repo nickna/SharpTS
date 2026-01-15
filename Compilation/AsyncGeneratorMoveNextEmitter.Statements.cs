@@ -54,6 +54,10 @@ public partial class AsyncGeneratorMoveNextEmitter
                 EmitDoWhile(dw);
                 break;
 
+            case Stmt.For f:
+                EmitFor(f);
+                break;
+
             case Stmt.ForIn fi:
                 EmitForIn(fi);
                 break;

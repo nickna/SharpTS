@@ -151,6 +151,7 @@ public abstract record Stmt
     public record Sequence(List<Stmt> Statements) : Stmt;  // Like Block but without creating a new scope
     public record Return(Token Keyword, Expr? Value) : Stmt;
     public record While(Expr Condition, Stmt Body) : Stmt;
+    public record For(Stmt? Initializer, Expr? Condition, Expr? Increment, Stmt Body) : Stmt;
     public record DoWhile(Stmt Body, Expr Condition) : Stmt;
     public record ForOf(Token Variable, string? TypeAnnotation, Expr Iterable, Stmt Body, bool IsAsync = false) : Stmt;
     public record ForIn(Token Variable, string? TypeAnnotation, Expr Object, Stmt Body) : Stmt;

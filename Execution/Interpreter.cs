@@ -461,6 +461,28 @@ public partial class Interpreter
                     if (result.IsAbrupt) return result;
                 } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
+            case Stmt.For forStmt:
+                // Execute initializer once
+                if (forStmt.Initializer != null)
+                    Execute(forStmt.Initializer);
+                // Loop with proper continue handling - increment always runs
+                while (forStmt.Condition == null || IsTruthy(Evaluate(forStmt.Condition)))
+                {
+                    var result = Execute(forStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    // On continue, execute increment then continue the loop
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                    {
+                        if (forStmt.Increment != null)
+                            Evaluate(forStmt.Increment);
+                        continue;
+                    }
+                    if (result.IsAbrupt) return result;
+                    // Normal completion: execute increment
+                    if (forStmt.Increment != null)
+                        Evaluate(forStmt.Increment);
+                }
+                return ExecutionResult.Success();
             case Stmt.ForOf forOf:
                 return ExecuteForOf(forOf);
             case Stmt.ForIn forIn:

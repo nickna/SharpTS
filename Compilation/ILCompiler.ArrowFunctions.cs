@@ -165,9 +165,18 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(w.Condition);
                 CollectArrowsFromStmt(w.Body);
                 break;
-            case Stmt.ForOf f:
-                CollectArrowsFromExpr(f.Iterable);
+            case Stmt.For f:
+                if (f.Initializer != null)
+                    CollectArrowsFromStmt(f.Initializer);
+                if (f.Condition != null)
+                    CollectArrowsFromExpr(f.Condition);
+                if (f.Increment != null)
+                    CollectArrowsFromExpr(f.Increment);
                 CollectArrowsFromStmt(f.Body);
+                break;
+            case Stmt.ForOf forOf:
+                CollectArrowsFromExpr(forOf.Iterable);
+                CollectArrowsFromStmt(forOf.Body);
                 break;
             case Stmt.Block b:
                 foreach (var s in b.Statements)

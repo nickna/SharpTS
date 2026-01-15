@@ -369,6 +369,17 @@ public partial class AsyncMoveNextEmitter
                        (i.ElseBranch != null && ContainsAwaitInStmt(i.ElseBranch));
             case Stmt.While w:
                 return ContainsAwaitInExpr(w.Condition) || ContainsAwaitInStmt(w.Body);
+            case Stmt.DoWhile dw:
+                return ContainsAwaitInStmt(dw.Body) || ContainsAwaitInExpr(dw.Condition);
+            case Stmt.For f:
+                return (f.Initializer != null && ContainsAwaitInStmt(f.Initializer)) ||
+                       (f.Condition != null && ContainsAwaitInExpr(f.Condition)) ||
+                       (f.Increment != null && ContainsAwaitInExpr(f.Increment)) ||
+                       ContainsAwaitInStmt(f.Body);
+            case Stmt.ForOf fo:
+                return ContainsAwaitInExpr(fo.Iterable) || ContainsAwaitInStmt(fo.Body);
+            case Stmt.ForIn fi:
+                return ContainsAwaitInExpr(fi.Object) || ContainsAwaitInStmt(fi.Body);
             case Stmt.Block b:
                 return ContainsAwait(b.Statements);
             case Stmt.Sequence seq:

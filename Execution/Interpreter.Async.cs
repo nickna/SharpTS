@@ -82,6 +82,28 @@ public partial class Interpreter
                     if (result.IsAbrupt) return result;
                 } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
+            case Stmt.For forStmt:
+                // Execute initializer once
+                if (forStmt.Initializer != null)
+                    await ExecuteAsync(forStmt.Initializer);
+                // Loop with proper continue handling - increment always runs
+                while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
+                {
+                    var result = await ExecuteAsync(forStmt.Body);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                    // On continue, execute increment then continue the loop
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                    {
+                        if (forStmt.Increment != null)
+                            await EvaluateAsync(forStmt.Increment);
+                        continue;
+                    }
+                    if (result.IsAbrupt) return result;
+                    // Normal completion: execute increment
+                    if (forStmt.Increment != null)
+                        await EvaluateAsync(forStmt.Increment);
+                }
+                return ExecutionResult.Success();
             case Stmt.ForOf forOf:
                 return await ExecuteForOfAsync(forOf);
             case Stmt.ForIn forIn:

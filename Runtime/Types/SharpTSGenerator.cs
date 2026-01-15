@@ -236,6 +236,75 @@ public class SharpTSGenerator : IEnumerable<object?>
                 }
                 return ExecutionResult.Success();
 
+            case Stmt.For forStmt:
+                // Execute initializer once
+                if (forStmt.Initializer != null)
+                {
+                    var initResult = ExecuteStatement(forStmt.Initializer);
+                    if (initResult.IsAbrupt) return initResult;
+                }
+
+                // Loop
+                while (true)
+                {
+                    // Check condition
+                    if (forStmt.Condition != null)
+                    {
+                        object? forCond;
+                        try
+                        {
+                            forCond = _interpreter.Evaluate(forStmt.Condition);
+                        }
+                        catch (YieldException yield)
+                        {
+                            HandleYield(yield);
+                            forCond = false;
+                        }
+
+                        if (!IsTruthy(forCond)) break;
+                    }
+
+                    // Execute body
+                    var result = ExecuteStatement(forStmt.Body);
+
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null)
+                        break;
+
+                    // On continue OR normal completion, execute increment
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                    {
+                        // Execute increment before continuing
+                        if (forStmt.Increment != null)
+                        {
+                            try
+                            {
+                                _interpreter.Evaluate(forStmt.Increment);
+                            }
+                            catch (YieldException yield)
+                            {
+                                HandleYield(yield);
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (result.IsAbrupt) return result;
+
+                    // Normal completion: execute increment
+                    if (forStmt.Increment != null)
+                    {
+                        try
+                        {
+                            _interpreter.Evaluate(forStmt.Increment);
+                        }
+                        catch (YieldException yield)
+                        {
+                            HandleYield(yield);
+                        }
+                    }
+                }
+                return ExecutionResult.Success();
+
             case Stmt.ForOf forOf:
                 object? iterable;
                 try

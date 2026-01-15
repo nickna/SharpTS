@@ -332,4 +332,86 @@ public class ControlFlowTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("1\n2\n4\n5\n", output);
     }
+
+    // For Loops
+    [Fact]
+    public void For_Basic_IteratesCorrectly()
+    {
+        var source = """
+            for (let i: number = 0; i < 5; i = i + 1) {
+                console.log(i);
+            }
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("0\n1\n2\n3\n4\n", output);
+    }
+
+    [Fact]
+    public void For_WithBreak_ExitsLoop()
+    {
+        var source = """
+            for (let i: number = 0; i < 10; i = i + 1) {
+                if (i == 3) {
+                    break;
+                }
+                console.log(i);
+            }
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("0\n1\n2\n", output);
+    }
+
+    [Fact]
+    public void For_WithContinue_ExecutesIncrement()
+    {
+        var source = """
+            let sum: number = 0;
+            for (let i: number = 0; i < 5; i = i + 1) {
+                if (i == 2) {
+                    continue;
+                }
+                sum = sum + i;
+            }
+            console.log(sum);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("8\n", output);  // 0+1+3+4 = 8
+    }
+
+    [Fact]
+    public void For_WithContinue_DoesNotInfiniteLoop()
+    {
+        var source = """
+            let count: number = 0;
+            for (let i: number = 0; i < 3; i = i + 1) {
+                count = count + 1;
+                continue;
+            }
+            console.log(count);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void For_ContinueAtStart_StillIncrements()
+    {
+        var source = """
+            let printed: number = 0;
+            for (let i: number = 0; i < 5; i = i + 1) {
+                if (i < 3) {
+                    continue;
+                }
+                printed = printed + 1;
+            }
+            console.log(printed);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n", output);  // Only i=3 and i=4 reach the increment of printed
+    }
 }

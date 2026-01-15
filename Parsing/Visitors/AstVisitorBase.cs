@@ -86,6 +86,7 @@ public abstract class AstVisitorBase
             case Stmt.DoWhile s: VisitDoWhile(s); break;
             case Stmt.ForOf s: VisitForOf(s); break;
             case Stmt.ForIn s: VisitForIn(s); break;
+            case Stmt.For s: VisitFor(s); break;
             case Stmt.If s: VisitIf(s); break;
             case Stmt.Print s: VisitPrint(s); break;
             case Stmt.Break s: VisitBreak(s); break;
@@ -426,6 +427,17 @@ public abstract class AstVisitorBase
     protected virtual void VisitForIn(Stmt.ForIn stmt)
     {
         Visit(stmt.Object);
+        Visit(stmt.Body);
+    }
+
+    protected virtual void VisitFor(Stmt.For stmt)
+    {
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+        if (stmt.Condition != null)
+            Visit(stmt.Condition);
+        if (stmt.Increment != null)
+            Visit(stmt.Increment);
         Visit(stmt.Body);
     }
 

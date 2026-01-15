@@ -329,6 +329,25 @@ public partial class TypeChecker
 
         if (expected is TypeInfo.Interface itf)
         {
+            // If actual is also an interface, compare member-to-member structurally
+            if (actual is TypeInfo.Interface actualItf)
+            {
+                // Check that actual has all required members with compatible types
+                foreach (var member in itf.Members)
+                {
+                    if (!actualItf.Members.TryGetValue(member.Key, out var actualMemberType))
+                    {
+                        // Member missing - check if optional
+                        if (!(itf.OptionalMembers?.Contains(member.Key) ?? false))
+                            return false;
+                    }
+                    else if (!IsCompatible(member.Value, actualMemberType))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
             return CheckStructuralCompatibility(itf.Members, actual, itf.OptionalMembers);
         }
 

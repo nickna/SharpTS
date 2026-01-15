@@ -146,6 +146,31 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         base.VisitForIn(stmt);
     }
 
+    protected override void VisitFor(Stmt.For stmt)
+    {
+        // Visit initializer first (may declare loop variable)
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+
+        // Track variables used in condition and increment
+        if (stmt.Condition != null)
+            Visit(stmt.Condition);
+
+        // Track the for loop body for yield detection
+        bool hadYieldBefore = _seenYield;
+        Visit(stmt.Body);
+
+        // If body contains yield, variables declared in initializer need hoisting
+        if (_seenYield && !hadYieldBefore)
+        {
+            // The loop will re-execute, so any variable used in condition/increment/body
+            // that was declared before the loop needs to be hoisted
+        }
+
+        if (stmt.Increment != null)
+            Visit(stmt.Increment);
+    }
+
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         // Visit try block

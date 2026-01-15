@@ -182,6 +182,20 @@ public class ClosureAnalyzer : AstVisitorBase
         ExitScope();
     }
 
+    protected override void VisitFor(Stmt.For stmt)
+    {
+        // For loops create a scope for the loop variable (e.g., let i in "for (let i = 0; ...)")
+        EnterScope();
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+        if (stmt.Condition != null)
+            Visit(stmt.Condition);
+        if (stmt.Increment != null)
+            Visit(stmt.Increment);
+        Visit(stmt.Body);
+        ExitScope();
+    }
+
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         foreach (var s in stmt.TryBlock)

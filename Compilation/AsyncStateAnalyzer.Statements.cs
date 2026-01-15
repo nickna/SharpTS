@@ -36,6 +36,23 @@ public partial class AsyncStateAnalyzer
         base.VisitForIn(stmt);
     }
 
+    protected override void VisitFor(Stmt.For stmt)
+    {
+        // Visit initializer first (may declare loop variable)
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+
+        // Track variables used in condition and increment
+        if (stmt.Condition != null)
+            Visit(stmt.Condition);
+
+        // Visit body for await detection
+        Visit(stmt.Body);
+
+        if (stmt.Increment != null)
+            Visit(stmt.Increment);
+    }
+
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         _hasTryCatch = true;

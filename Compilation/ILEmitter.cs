@@ -147,8 +147,12 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitDoWhile(dw);
                 break;
 
-            case Stmt.ForOf f:
-                EmitForOf(f);
+            case Stmt.For f:
+                EmitFor(f);
+                break;
+
+            case Stmt.ForOf forOf:
+                EmitForOf(forOf);
                 break;
 
             case Stmt.ForIn fi:

@@ -232,6 +232,75 @@ public class SharpTSAsyncGenerator
                 }
                 return ExecutionResult.Success();
 
+            case Stmt.For forStmt:
+                // Execute initializer once
+                if (forStmt.Initializer != null)
+                {
+                    var initResult = await ExecuteStatementAsync(forStmt.Initializer);
+                    if (initResult.IsAbrupt) return initResult;
+                }
+
+                // Loop
+                while (true)
+                {
+                    // Check condition
+                    if (forStmt.Condition != null)
+                    {
+                        object? forCond;
+                        try
+                        {
+                            forCond = await EvaluateAsync(forStmt.Condition);
+                        }
+                        catch (YieldException yield)
+                        {
+                            await HandleYieldAsync(yield);
+                            forCond = false;
+                        }
+
+                        if (!IsTruthy(forCond)) break;
+                    }
+
+                    // Execute body
+                    var result = await ExecuteStatementAsync(forStmt.Body);
+
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null)
+                        break;
+
+                    // On continue OR normal completion, execute increment
+                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                    {
+                        // Execute increment before continuing
+                        if (forStmt.Increment != null)
+                        {
+                            try
+                            {
+                                await EvaluateAsync(forStmt.Increment);
+                            }
+                            catch (YieldException yield)
+                            {
+                                await HandleYieldAsync(yield);
+                            }
+                        }
+                        continue;
+                    }
+
+                    if (result.IsAbrupt) return result;
+
+                    // Normal completion: execute increment
+                    if (forStmt.Increment != null)
+                    {
+                        try
+                        {
+                            await EvaluateAsync(forStmt.Increment);
+                        }
+                        catch (YieldException yield)
+                        {
+                            await HandleYieldAsync(yield);
+                        }
+                    }
+                }
+                return ExecutionResult.Success();
+
             case Stmt.ForOf forOf:
                 object? iterable;
                 try

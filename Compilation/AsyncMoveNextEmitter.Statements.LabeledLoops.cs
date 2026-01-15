@@ -16,7 +16,7 @@ public partial class AsyncMoveNextEmitter
         var breakLabel = _il.DefineLabel();
 
         // Check if the inner statement is a loop - if so, we handle it specially
-        if (ls.Statement is Stmt.While or Stmt.ForOf or Stmt.DoWhile or Stmt.ForIn)
+        if (ls.Statement is Stmt.While or Stmt.For or Stmt.ForOf or Stmt.DoWhile or Stmt.ForIn)
         {
             // Emit the loop with the label name in the loop label stack
             EmitLabeledLoop(ls.Label.Lexeme, ls.Statement, breakLabel);
@@ -46,6 +46,9 @@ public partial class AsyncMoveNextEmitter
                 break;
             case Stmt.DoWhile dw:
                 EmitLabeledDoWhile(labelName, dw, outerBreakLabel);
+                break;
+            case Stmt.For f:
+                EmitLabeledFor(labelName, f, outerBreakLabel);
                 break;
             case Stmt.ForIn fi:
                 EmitLabeledForIn(labelName, fi, outerBreakLabel);
@@ -207,6 +210,46 @@ public partial class AsyncMoveNextEmitter
         _il.Emit(OpCodes.Ldc_I4_1);
         _il.Emit(OpCodes.Add);
         _il.Emit(OpCodes.Stloc, indexLocal);
+
+        _il.Emit(OpCodes.Br, startLabel);
+
+        _loopLabels.Pop();
+    }
+
+    private void EmitLabeledFor(string labelName, Stmt.For f, Label outerBreakLabel)
+    {
+        // Emit initializer (once, outside the loop)
+        if (f.Initializer != null)
+            EmitStatement(f.Initializer);
+
+        var startLabel = _il.DefineLabel();
+        var continueLabel = _il.DefineLabel();  // Points to increment
+
+        // Push labels with the label name
+        _loopLabels.Push((outerBreakLabel, continueLabel, labelName));
+
+        _il.MarkLabel(startLabel);
+
+        // Check condition (if present)
+        if (f.Condition != null)
+        {
+            EmitExpression(f.Condition);
+            EnsureBoxed();
+            EmitTruthyCheck();
+            _il.Emit(OpCodes.Brfalse, outerBreakLabel);
+        }
+
+        // Emit body
+        EmitStatement(f.Body);
+
+        // Continue target: increment goes here
+        _il.MarkLabel(continueLabel);
+        if (f.Increment != null)
+        {
+            EmitExpression(f.Increment);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Pop);  // Discard increment result
+        }
 
         _il.Emit(OpCodes.Br, startLabel);
 

@@ -46,6 +46,31 @@ public partial class AsyncGeneratorStateAnalyzer
         base.VisitForIn(stmt);
     }
 
+    protected override void VisitFor(Stmt.For stmt)
+    {
+        // Visit initializer first (may declare loop variable)
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+
+        // Track variables used in condition and increment
+        if (stmt.Condition != null)
+            Visit(stmt.Condition);
+
+        // Track the for loop body for suspension detection
+        bool hadSuspensionBefore = _seenSuspension;
+        Visit(stmt.Body);
+
+        // If body contains suspension, variables declared in initializer need hoisting
+        if (_seenSuspension && !hadSuspensionBefore)
+        {
+            // The loop will re-execute, so any variable used in condition/increment/body
+            // that was declared before the loop needs to be hoisted
+        }
+
+        if (stmt.Increment != null)
+            Visit(stmt.Increment);
+    }
+
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         _hasTryCatch = true;

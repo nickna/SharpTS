@@ -239,6 +239,15 @@ public partial class ILCompiler
                 AnalyzeArrowExprForAwaits(f.Iterable, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 AnalyzeArrowStmtForAwaits(f.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
+            case Stmt.For forStmt:
+                if (forStmt.Initializer != null)
+                    AnalyzeArrowStmtForAwaits(forStmt.Initializer, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                if (forStmt.Condition != null)
+                    AnalyzeArrowExprForAwaits(forStmt.Condition, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                if (forStmt.Increment != null)
+                    AnalyzeArrowExprForAwaits(forStmt.Increment, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                AnalyzeArrowStmtForAwaits(forStmt.Body, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Stmt.Block b:
                 foreach (var s in b.Statements)
                     AnalyzeArrowStmtForAwaits(s, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);

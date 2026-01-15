@@ -45,6 +45,7 @@ public partial class TypeChecker
 
                     // Determine if this label is on a loop (for continue validation)
                     bool isOnLoop = labeledStmt.Statement is Stmt.While
+                                 or Stmt.For
                                  or Stmt.DoWhile
                                  or Stmt.ForOf
                                  or Stmt.ForIn
@@ -269,6 +270,24 @@ public partial class TypeChecker
                     _loopDepth--;
                 }
                 CheckExpr(doWhileStmt.Condition);
+                break;
+
+            case Stmt.For forStmt:
+                if (forStmt.Initializer != null)
+                    CheckStmt(forStmt.Initializer);
+                if (forStmt.Condition != null)
+                    CheckExpr(forStmt.Condition);
+                _loopDepth++;
+                try
+                {
+                    CheckStmt(forStmt.Body);
+                }
+                finally
+                {
+                    _loopDepth--;
+                }
+                if (forStmt.Increment != null)
+                    CheckExpr(forStmt.Increment);
                 break;
 
             case Stmt.ForOf forOf:
