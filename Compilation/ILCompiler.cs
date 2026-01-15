@@ -32,73 +32,29 @@ public partial class ILCompiler
     private readonly PersistedAssemblyBuilder _assemblyBuilder;
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeMapper _typeMapper;
-    private readonly Dictionary<string, TypeBuilder> _classBuilders = [];
-    private readonly Dictionary<string, Type> _externalTypes = [];  // @DotNetType classes mapped to .NET types
     private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
     private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = new();  // Built-in module emitters
     private readonly Dictionary<string, string> _builtInModuleNamespaces = [];  // Variable name -> module name for direct dispatch
-    private readonly Dictionary<string, MethodBuilder> _functionBuilders = [];
-    private readonly Dictionary<string, List<MethodBuilder>> _functionOverloads = [];  // Overloads by arity for default params
-    private readonly Dictionary<string, Dictionary<string, List<MethodBuilder>>> _methodOverloads = [];  // className -> methodName -> overloads
-    private readonly Dictionary<string, List<ConstructorBuilder>> _constructorOverloads = [];  // className -> constructor overloads
-    private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _staticFields = [];
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _staticMethods = [];
-    private readonly Dictionary<string, FieldBuilder> _instanceFieldsField = []; // _fields dict field per class
-    private readonly Dictionary<string, ConstructorBuilder> _classConstructors = [];
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceMethods = [];
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceGetters = [];
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _instanceSetters = [];
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _preDefinedMethods = []; // Methods pre-defined before body emission
-    private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _preDefinedAccessors = []; // Accessors pre-defined before body emission
-    private readonly Dictionary<string, string?> _classSuperclass = [];
-    private readonly Dictionary<string, (int RestParamIndex, int RegularParamCount)> _functionRestParams = [];
     private TypeBuilder _programType = null!;
 
-    // Closure support
-    private ClosureAnalyzer _closureAnalyzer = null!;
-    private readonly Dictionary<Expr.ArrowFunction, MethodBuilder> _arrowMethods = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ArrowFunction, TypeBuilder> _displayClasses = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ArrowFunction, Dictionary<string, FieldBuilder>> _displayClassFields = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ArrowFunction, ConstructorBuilder> _displayClassConstructors = new(ReferenceEqualityComparer.Instance);
-    private int _arrowMethodCounter = 0;
-    private int _displayClassCounter = 0;
+    // Organized state containers (see ILCompiler.State.cs for definitions)
+    private readonly ClassCompilationState _classes = new();
+    private readonly FunctionCompilationState _functions = new();
+    private readonly ClosureCompilationState _closures = new();
+    private readonly AsyncCompilationState _async = new();
+    private readonly GeneratorCompilationState _generators = new();
+    private readonly AsyncGeneratorCompilationState _asyncGenerators = new();
+    private readonly ModuleCompilationState _modules = new();
+    private readonly EnumCompilationState _enums = new();
+    private readonly ClassExpressionCompilationState _classExprs = new();
+    private readonly TypedInteropState _typedInterop = new();
+    private readonly LockDecoratorState _locks = new();
 
-    // Class expression support
-    private readonly Dictionary<Expr.ClassExpr, TypeBuilder> _classExprBuilders = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, string> _classExprNames = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<string, Expr.ClassExpr> _varToClassExpr = [];
-    private readonly List<Expr.ClassExpr> _classExprsToDefine = [];
-    private int _classExprCounter = 0;
-
-    // Class expression extended tracking
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> _classExprBackingFields = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, PropertyBuilder>> _classExprProperties = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, Type>> _classExprPropertyTypes = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, HashSet<string>> _classExprDeclaredProperties = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, HashSet<string>> _classExprReadonlyProperties = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> _classExprStaticFields = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprStaticMethods = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprInstanceMethods = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprGetters = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>> _classExprSetters = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, ConstructorBuilder> _classExprConstructors = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]> _classExprGenericParams = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ClassExpr, string?> _classExprSuperclass = new(ReferenceEqualityComparer.Instance);
-
-    // Enum support
-    private readonly Dictionary<string, Dictionary<string, object>> _enumMembers = [];
-    private readonly Dictionary<string, Dictionary<double, string>> _enumReverse = [];
-    private readonly Dictionary<string, EnumKind> _enumKinds = [];
-    private readonly HashSet<string> _constEnums = [];
+    // Configuration options
     private readonly bool _preserveConstEnums;
 
     // Namespace support: namespace path -> static field
     private readonly Dictionary<string, FieldBuilder> _namespaceFields = [];
-
-    // Generic type parameter support
-    private readonly Dictionary<string, GenericTypeParameterBuilder[]> _classGenericParams = [];
-    private readonly Dictionary<string, GenericTypeParameterBuilder[]> _functionGenericParams = [];
-    private readonly Dictionary<string, bool> _isGenericFunction = [];
 
     // Emitted runtime (for standalone DLLs)
     private EmittedRuntime _runtime = null!;
@@ -109,68 +65,7 @@ public partial class ILCompiler
     // Dead code analysis results
     private DeadCodeInfo? _deadCodeInfo;
 
-    // Async method compilation (native IL state machine generation)
-    private readonly AsyncStateAnalyzer _asyncAnalyzer = new();
-    private readonly Dictionary<string, AsyncStateMachineBuilder> _asyncStateMachines = [];
-    private readonly Dictionary<string, Stmt.Function> _asyncFunctions = [];
-    private int _asyncStateMachineCounter = 0;
-    private int _asyncArrowCounter = 0;
-
-    // Generator method compilation (generator state machine generation)
-    private readonly GeneratorStateAnalyzer _generatorAnalyzer = new();
-    private readonly Dictionary<string, GeneratorStateMachineBuilder> _generatorStateMachines = [];
-    private readonly Dictionary<string, Stmt.Function> _generatorFunctions = [];
-    private int _generatorStateMachineCounter = 0;
-
-    // Async generator method compilation (combined async + generator state machine)
-    private readonly AsyncGeneratorStateAnalyzer _asyncGeneratorAnalyzer = new();
-    private readonly Dictionary<string, AsyncGeneratorStateMachineBuilder> _asyncGeneratorStateMachines = [];
-    private readonly Dictionary<string, Stmt.Function> _asyncGeneratorFunctions = [];
-    private int _asyncGeneratorStateMachineCounter = 0;
-
-    // Async arrow function state machines (one per async arrow in async methods)
-    private readonly Dictionary<Expr.ArrowFunction, AsyncArrowStateMachineBuilder> _asyncArrowBuilders = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Expr.ArrowFunction, AsyncStateMachineBuilder> _asyncArrowOuterBuilders = new(ReferenceEqualityComparer.Instance);
-    // For nested async arrows, maps to the parent arrow's builder (not the function's builder)
-    private readonly Dictionary<Expr.ArrowFunction, AsyncArrowStateMachineBuilder> _asyncArrowParentBuilders = new(ReferenceEqualityComparer.Instance);
-
-    // Pooled HashSets for async arrow analysis (reduces allocation churn)
-    private readonly HashSet<string> _asyncArrowDeclaredVars = [];
-    private readonly HashSet<string> _asyncArrowUsedAfterAwait = [];
-    private readonly HashSet<string> _asyncArrowDeclaredBeforeAwait = [];
-
-    // Module support
-    private readonly Dictionary<string, TypeBuilder> _moduleTypes = [];
-    private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _moduleExportFields = [];
-    private readonly Dictionary<string, MethodBuilder> _moduleInitMethods = [];
-    private ModuleResolver? _moduleResolver;
-    private string? _currentModulePath; // Current module being compiled (for qualified type names)
-    private readonly Dictionary<string, string> _classToModule = []; // Maps class name to module path for lookups
-    private readonly Dictionary<string, string> _functionToModule = []; // Maps function name to module path for lookups
-    private readonly Dictionary<string, string> _enumToModule = []; // Maps enum name to module path for lookups
-
-    // .NET namespace support via @Namespace decorator
-    private string? _currentDotNetNamespace; // Current .NET namespace for compiled types
-    private readonly Dictionary<string, string?> _moduleNamespaces = []; // Per-module .NET namespaces
-
-    // Typed Interop: Real .NET property support
-    private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _propertyBackingFields = [];
-    private readonly Dictionary<string, Dictionary<string, PropertyBuilder>> _classProperties = [];
-    private readonly Dictionary<string, HashSet<string>> _declaredPropertyNames = [];
-    private readonly Dictionary<string, HashSet<string>> _readonlyPropertyNames = [];
-    private readonly Dictionary<string, Dictionary<string, Type>> _propertyTypes = [];
-    private readonly Dictionary<string, FieldBuilder> _extrasFields = []; // _extras dict field for dynamic properties
-
-    // @lock decorator support: Thread-safe method execution
-    private readonly Dictionary<string, FieldBuilder> _syncLockFields = [];           // class -> _syncLock field (object for Monitor)
-    private readonly Dictionary<string, FieldBuilder> _asyncLockFields = [];          // class -> _asyncLock field (SemaphoreSlim)
-    private readonly Dictionary<string, FieldBuilder> _lockReentrancyFields = [];     // class -> _lockReentrancy field (AsyncLocal<int>)
-    private readonly Dictionary<string, FieldBuilder> _staticSyncLockFields = [];     // class -> static _syncLock field
-    private readonly Dictionary<string, FieldBuilder> _staticAsyncLockFields = [];    // class -> static _asyncLock field
-    private readonly Dictionary<string, FieldBuilder> _staticLockReentrancyFields = []; // class -> static _lockReentrancy field
     private UnionTypeGenerator? _unionGenerator;
-    // Explicit accessor tracking for PropertyBuilder creation (TypeScript get/set syntax)
-    private readonly Dictionary<string, Dictionary<string, (MethodBuilder? Getter, MethodBuilder? Setter, Type PropertyType)>> _explicitAccessors = [];
 
     // Shared context for definition phase (module name resolution)
     private CompilationContext? _definitionContext;
@@ -309,14 +204,14 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext GetDefinitionContext()
     {
-        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functionBuilders, _classBuilders, _types)
+        _definitionContext ??= new CompilationContext(null!, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule
         };
-        _definitionContext.CurrentModulePath = _currentModulePath;
-        _definitionContext.DotNetNamespace = _currentDotNetNamespace;
+        _definitionContext.CurrentModulePath = _modules.CurrentPath;
+        _definitionContext.DotNetNamespace = _modules.CurrentDotNetNamespace;
         return _definitionContext;
     }
 
@@ -347,30 +242,67 @@ public partial class ILCompiler
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
-        // Store the type map and dead code info for use by ILEmitter
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
 
-        // Phase 0: Extract .NET namespace from @Namespace file directive
-        _currentDotNetNamespace = ExtractNamespaceFromStatements(statements);
+        Phase0_ExtractNamespace(statements);
+        Phase1_EmitRuntimeTypes();
+        Phase2_AnalyzeClosures(statements);
+        Phase3_CreateProgramType();
+        Phase4_DefineDeclarations(statements);
+        Phase5_CollectArrowFunctions(statements);
+        Phase6_EmitArrowAndStateMachineBodies(statements);
+        Phase7_EmitMethodBodies(statements);
+        Phase8_EmitEntryPoint(statements);
+        Phase9_FinalizeTypes();
+    }
 
-        // Phase 1: Emit runtime support types into the generated assembly
-        // This makes compiled DLLs standalone without requiring SharpTS.dll
-        // Phase 1: Emit runtime support types into the generated assembly
-        // This makes compiled DLLs standalone without requiring SharpTS.dll
+    #region Compile Phases
+
+    /// <summary>
+    /// Phase 0: Extract .NET namespace from @Namespace file directive.
+    /// </summary>
+    private void Phase0_ExtractNamespace(List<Stmt> statements)
+    {
+        _modules.CurrentDotNetNamespace = ExtractNamespaceFromStatements(statements);
+    }
+
+    /// <summary>
+    /// Phase 1: Emit runtime support types into the generated assembly.
+    /// This makes compiled DLLs standalone without requiring SharpTS.dll.
+    /// </summary>
+    private void Phase1_EmitRuntimeTypes()
+    {
         _runtime = new RuntimeEmitter(_types).EmitAll(_moduleBuilder);
+    }
 
-        // Phase 2: Analyze closures
-        _closureAnalyzer = new ClosureAnalyzer();
-        _closureAnalyzer.Analyze(statements);
+    /// <summary>
+    /// Phase 2: Analyze closures to detect captured variables.
+    /// </summary>
+    private void Phase2_AnalyzeClosures(List<Stmt> statements)
+    {
+        _closures.Analyzer = new ClosureAnalyzer();
+        _closures.Analyzer.Analyze(statements);
+    }
 
-        // Phase 3: Create the main program type for top-level code
+    /// <summary>
+    /// Phase 3: Create the main program type for top-level code.
+    /// </summary>
+    private void Phase3_CreateProgramType()
+    {
         _programType = _moduleBuilder.DefineType(
             "$Program",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
         );
+    }
 
-        // Phase 4: Collect and define all class and function declarations
+    /// <summary>
+    /// Phase 4: Define all class, function, enum, and namespace declarations.
+    /// Also initializes typed interop and type emitter registries.
+    /// </summary>
+    private void Phase4_DefineDeclarations(List<Stmt> statements)
+    {
+        // Define all declarations
         foreach (var stmt in statements)
         {
             if (stmt is Stmt.Class classStmt)
@@ -379,8 +311,7 @@ public partial class ILCompiler
             }
             else if (stmt is Stmt.Function funcStmt)
             {
-                // Skip overload signatures (no body)
-                if (funcStmt.Body == null) continue;
+                if (funcStmt.Body == null) continue; // Skip overload signatures
                 DefineFunction(funcStmt);
             }
             else if (stmt is Stmt.Enum enumStmt)
@@ -393,88 +324,43 @@ public partial class ILCompiler
             }
         }
 
-        // Phase 4.4: Define static fields for top-level variables captured by async functions
+        // Define static fields for top-level variables captured by async functions
         DefineTopLevelCapturedVariables(statements);
 
-        // Phase 4.5: Initialize typed interop support now that all classes are defined
-        _unionGenerator = new UnionTypeGenerator(_typeMapper);
-        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface; // Use emitted interface for standalone DLLs
-        _typeMapper.SetClassBuilders(_classBuilders);
-        _typeMapper.SetUnionGenerator(_unionGenerator);
+        // Initialize typed interop support
+        InitializeTypedInterop();
 
-        // Phase 4.6: Initialize type emitter registry with external types for type-first dispatch
-        _typeEmitterRegistry.SetExternalTypes(_externalTypes);
+        // Initialize type emitter registries
+        InitializeTypeEmitterRegistries();
+    }
 
-        // Register type-specific emitters
-        var stringEmitter = new StringEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
-
-        var arrayEmitter = new ArrayEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(arrayEmitter);
-
-        var dateEmitter = new DateEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(dateEmitter);
-
-        var mapEmitter = new MapEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(mapEmitter);
-
-        var setEmitter = new SetEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(setEmitter);
-
-        var weakMapEmitter = new WeakMapEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(weakMapEmitter);
-
-        var weakSetEmitter = new WeakSetEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(weakSetEmitter);
-
-        var regExpEmitter = new RegExpEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
-
-        var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
-
-        // Register static type emitters
-        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
-
-        // Register built-in module emitters
-        _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
-
-        // Phase 5: Collect all arrow functions and generate methods/display classes
+    /// <summary>
+    /// Phase 5: Collect all arrow functions and define class expressions.
+    /// </summary>
+    private void Phase5_CollectArrowFunctions(List<Stmt> statements)
+    {
         CollectAndDefineArrowFunctions(statements);
-
-        // Phase 5.5: Define class expression types (collected during arrow collection)
         DefineClassExpressionTypes();
-
-        // Phase 5.6: Define class expression method signatures
         DefineClassExpressionMethods();
+    }
 
-        // Phase 6: Emit arrow function method bodies
+    /// <summary>
+    /// Phase 6: Emit arrow function bodies and async/generator state machine bodies.
+    /// </summary>
+    private void Phase6_EmitArrowAndStateMachineBodies(List<Stmt> statements)
+    {
         EmitArrowFunctionBodies();
-
-        // Phase 6.3: Define all class methods (without bodies) so they're available for async
-        // This populates _instanceMethods, _instanceGetters, _instanceSetters for direct dispatch
         DefineAllClassMethods(statements);
-
-        // Phase 6.5: Emit async state machine bodies
         EmitAsyncStateMachineBodies();
-
-        // Phase 6.6: Emit generator state machine bodies
         EmitGeneratorStateMachineBodies();
-
-        // Phase 6.7: Emit async generator state machine bodies
         EmitAsyncGeneratorStateMachineBodies();
+    }
 
-        // Phase 7: Emit method bodies for all classes and functions
+    /// <summary>
+    /// Phase 7: Emit method bodies for all classes, functions, and namespaces.
+    /// </summary>
+    private void Phase7_EmitMethodBodies(List<Stmt> statements)
+    {
         foreach (var stmt in statements)
         {
             if (stmt is Stmt.Class classStmt)
@@ -483,8 +369,7 @@ public partial class ILCompiler
             }
             else if (stmt is Stmt.Function funcStmt)
             {
-                // Skip overload signatures (no body)
-                if (funcStmt.Body == null) continue;
+                if (funcStmt.Body == null) continue; // Skip overload signatures
                 EmitFunctionBody(funcStmt);
                 EmitFunctionOverloads(funcStmt);
             }
@@ -494,30 +379,87 @@ public partial class ILCompiler
             }
         }
 
-        // Phase 7.5: Emit class expression bodies (methods, constructors, accessors)
         EmitClassExpressionBodies();
+    }
 
-        // Phase 8: Emit entry point (top-level statements)
+    /// <summary>
+    /// Phase 8: Emit entry point (top-level statements).
+    /// </summary>
+    private void Phase8_EmitEntryPoint(List<Stmt> statements)
+    {
         EmitEntryPoint(statements);
+    }
 
-        // Phase 9: Finalize all types
-        // Finalize union types first (they don't depend on other types)
+    /// <summary>
+    /// Phase 9: Finalize all types by calling CreateType().
+    /// </summary>
+    private void Phase9_FinalizeTypes()
+    {
         _unionGenerator?.FinalizeAllUnionTypes();
 
-        foreach (var tb in _displayClasses.Values)
+        foreach (var tb in _closures.DisplayClasses.Values)
         {
             tb.CreateType();
         }
-        foreach (var tb in _classBuilders.Values)
+        foreach (var tb in _classes.Builders.Values)
         {
             tb.CreateType();
         }
-        foreach (var tb in _classExprBuilders.Values)
+        foreach (var tb in _classExprs.Builders.Values)
         {
             tb.CreateType();
         }
         _programType.CreateType();
     }
+
+    /// <summary>
+    /// Initializes typed interop support (union generator, type mapper).
+    /// </summary>
+    private void InitializeTypedInterop()
+    {
+        _unionGenerator = new UnionTypeGenerator(_typeMapper);
+        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface;
+        _typeMapper.SetClassBuilders(_classes.Builders);
+        _typeMapper.SetUnionGenerator(_unionGenerator);
+    }
+
+    /// <summary>
+    /// Initializes type emitter registries for type-first method dispatch.
+    /// </summary>
+    private void InitializeTypeEmitterRegistries()
+    {
+        _typeEmitterRegistry.SetExternalTypes(_classes.ExternalTypes);
+
+        // Instance type emitters
+        var stringEmitter = new StringEmitter();
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(new ArrayEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(new DateEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(new MapEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(new SetEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(new WeakMapEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(new WeakSetEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(new RegExpEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(new AsyncGeneratorEmitter());
+
+        // Static type emitters
+        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
+
+        // Built-in module emitters
+        _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
+    }
+
+    #endregion
 
     /// <summary>
     /// Compiles multiple modules into a single merged DLL.
@@ -530,214 +472,196 @@ public partial class ILCompiler
     {
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
-        _moduleResolver = resolver;
+        _modules.Resolver = resolver;
 
-        // Phase 0: Extract .NET namespaces from @Namespace directives in each module
+        var allStatements = modules.SelectMany(m => m.Statements).ToList();
+
+        ModulePhase0_ExtractNamespaces(modules);
+        Phase1_EmitRuntimeTypes();
+        Phase2_AnalyzeClosures(allStatements);
+        Phase3_CreateProgramType();
+        ModulePhase4_DefineModuleTypes(modules);
+        ModulePhase5_DefineDeclarations(modules);
+        InitializeTypedInterop();
+        InitializeTypeEmitterRegistries();
+        ModulePhase6_CollectArrowFunctions(allStatements);
+        ModulePhase7_EmitArrowBodies();
+        ModulePhase8_EmitMethodBodies(modules);
+        ModulePhase9_EmitModuleInits(modules);
+        ModulePhase10_EmitEntryPoint(modules);
+        ModulePhase11_FinalizeTypes();
+    }
+
+    #region CompileModules Phases
+
+    /// <summary>
+    /// Module Phase 0: Extract .NET namespaces from @Namespace directives in each module.
+    /// </summary>
+    private void ModulePhase0_ExtractNamespaces(List<ParsedModule> modules)
+    {
         foreach (var module in modules)
         {
-            _moduleNamespaces[module.Path] = ExtractNamespaceFromStatements(module.Statements);
+            _modules.Namespaces[module.Path] = ExtractNamespaceFromStatements(module.Statements);
         }
+    }
 
-        // Phase 1: Emit runtime support types
-        // Phase 1: Emit runtime support types into the generated assembly
-        // This makes compiled DLLs standalone without requiring SharpTS.dll
-        _runtime = new RuntimeEmitter(_types).EmitAll(_moduleBuilder);
-
-        // Phase 2: Collect all statements for closure analysis
-        var allStatements = modules.SelectMany(m => m.Statements).ToList();
-        _closureAnalyzer = new ClosureAnalyzer();
-        _closureAnalyzer.Analyze(allStatements);
-
-        // Phase 3: Create the main program type
-        _programType = _moduleBuilder.DefineType(
-            "$Program",
-            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
-        );
-
-        // Phase 4: Define module types with export fields
+    /// <summary>
+    /// Module Phase 4: Define module types with export fields.
+    /// </summary>
+    private void ModulePhase4_DefineModuleTypes(List<ParsedModule> modules)
+    {
         foreach (var module in modules)
         {
             DefineModuleType(module);
         }
+    }
 
-        // Phase 5: Collect and define all class and function declarations
+    /// <summary>
+    /// Module Phase 5: Define all class, function, enum, and namespace declarations across modules.
+    /// </summary>
+    private void ModulePhase5_DefineDeclarations(List<ParsedModule> modules)
+    {
         foreach (var module in modules)
         {
-            _currentModulePath = module.Path; // Track which module we're processing
-            _currentDotNetNamespace = _moduleNamespaces.GetValueOrDefault(module.Path); // Set .NET namespace for this module
+            _modules.CurrentPath = module.Path;
+            _modules.CurrentDotNetNamespace = _modules.Namespaces.GetValueOrDefault(module.Path);
+
             foreach (var stmt in module.Statements)
             {
-                if (stmt is Stmt.Class classStmt)
-                {
-                    DefineClass(classStmt);
-                }
-                else if (stmt is Stmt.Function funcStmt && funcStmt.Body != null)
-                {
-                    DefineFunction(funcStmt);
-                }
-                else if (stmt is Stmt.Enum enumStmt)
-                {
-                    DefineEnum(enumStmt);
-                }
-                else if (stmt is Stmt.Namespace nsStmt)
-                {
-                    DefineNamespaceFields(nsStmt);
-                }
-                else if (stmt is Stmt.Export export && export.Declaration != null)
-                {
-                    // Handle exported declarations
-                    if (export.Declaration is Stmt.Class classDecl)
-                    {
-                        DefineClass(classDecl);
-                    }
-                    else if (export.Declaration is Stmt.Function funcDecl && funcDecl.Body != null)
-                    {
-                        DefineFunction(funcDecl);
-                    }
-                    else if (export.Declaration is Stmt.Enum enumDecl)
-                    {
-                        DefineEnum(enumDecl);
-                    }
-                    else if (export.Declaration is Stmt.Namespace nsDecl)
-                    {
-                        DefineNamespaceFields(nsDecl);
-                    }
-                }
+                DefineDeclarationFromStatement(stmt);
             }
         }
-        _currentModulePath = null;
-        _currentDotNetNamespace = null;
+        _modules.CurrentPath = null;
+        _modules.CurrentDotNetNamespace = null;
+    }
 
-        // Phase 5.5: Initialize typed interop support now that all classes are defined
-        _unionGenerator = new UnionTypeGenerator(_typeMapper);
-        _unionGenerator.UnionTypeInterface = _runtime.IUnionTypeInterface; // Use emitted interface for standalone DLLs
-        _typeMapper.SetClassBuilders(_classBuilders);
-        _typeMapper.SetUnionGenerator(_unionGenerator);
+    /// <summary>
+    /// Defines a declaration from a statement (class, function, enum, namespace, or export).
+    /// </summary>
+    private void DefineDeclarationFromStatement(Stmt stmt)
+    {
+        switch (stmt)
+        {
+            case Stmt.Class classStmt:
+                DefineClass(classStmt);
+                break;
+            case Stmt.Function funcStmt when funcStmt.Body != null:
+                DefineFunction(funcStmt);
+                break;
+            case Stmt.Enum enumStmt:
+                DefineEnum(enumStmt);
+                break;
+            case Stmt.Namespace nsStmt:
+                DefineNamespaceFields(nsStmt);
+                break;
+            case Stmt.Export { Declaration: not null } export:
+                DefineDeclarationFromStatement(export.Declaration);
+                break;
+        }
+    }
 
-        // Phase 5.6: Initialize type emitter registry with external types for type-first dispatch
-        _typeEmitterRegistry.SetExternalTypes(_externalTypes);
-
-        // Register type-specific emitters
-        var stringEmitter = new StringEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
-
-        var arrayEmitter = new ArrayEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(arrayEmitter);
-
-        var dateEmitter = new DateEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(dateEmitter);
-
-        var mapEmitter = new MapEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(mapEmitter);
-
-        var setEmitter = new SetEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(setEmitter);
-
-        var weakMapEmitter = new WeakMapEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakMap>(weakMapEmitter);
-
-        var weakSetEmitter = new WeakSetEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(weakSetEmitter);
-
-        var regExpEmitter = new RegExpEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(regExpEmitter);
-
-        var asyncGeneratorEmitter = new AsyncGeneratorEmitter();
-        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(asyncGeneratorEmitter);
-
-        // Register static type emitters
-        _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
-        _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
-
-        // Register built-in module emitters
-        _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new OsModuleEmitter());
-        _builtInModuleEmitterRegistry.Register(new FsModuleEmitter());
-
-        // Phase 6: Collect all arrow functions
+    /// <summary>
+    /// Module Phase 6: Collect all arrow functions and define class expressions.
+    /// </summary>
+    private void ModulePhase6_CollectArrowFunctions(List<Stmt> allStatements)
+    {
         CollectAndDefineArrowFunctions(allStatements);
-
-        // Phase 6.5: Define class expression types (collected during arrow collection)
         DefineClassExpressionTypes();
-
-        // Phase 6.6: Define class expression method signatures
         DefineClassExpressionMethods();
+    }
 
-        // Phase 7: Emit arrow function bodies
+    /// <summary>
+    /// Module Phase 7: Emit arrow function bodies.
+    /// </summary>
+    private void ModulePhase7_EmitArrowBodies()
+    {
         EmitArrowFunctionBodies();
+    }
 
-        // Phase 8: Emit method bodies
+    /// <summary>
+    /// Module Phase 8: Emit method bodies for all modules.
+    /// </summary>
+    private void ModulePhase8_EmitMethodBodies(List<ParsedModule> modules)
+    {
         foreach (var module in modules)
         {
-            _currentModulePath = module.Path; // Track which module we're processing
+            _modules.CurrentPath = module.Path;
             foreach (var stmt in module.Statements)
             {
-                if (stmt is Stmt.Class classStmt)
-                {
-                    EmitClassMethods(classStmt);
-                }
-                else if (stmt is Stmt.Function funcStmt && funcStmt.Body != null)
-                {
-                    EmitFunctionBody(funcStmt);
-                    EmitFunctionOverloads(funcStmt);
-                }
-                else if (stmt is Stmt.Export export && export.Declaration != null)
-                {
-                    if (export.Declaration is Stmt.Class classDecl)
-                    {
-                        EmitClassMethods(classDecl);
-                    }
-                    else if (export.Declaration is Stmt.Function funcDecl && funcDecl.Body != null)
-                    {
-                        EmitFunctionBody(funcDecl);
-                        EmitFunctionOverloads(funcDecl);
-                    }
-                }
+                EmitMethodBodyFromStatement(stmt);
             }
         }
-        _currentModulePath = null;
+        _modules.CurrentPath = null;
 
-        // Phase 8.5: Emit class expression bodies (methods, constructors, accessors)
         EmitClassExpressionBodies();
+    }
 
-        // Phase 9: Emit module initialization methods
+    /// <summary>
+    /// Emits method body from a statement (class, function, or export).
+    /// </summary>
+    private void EmitMethodBodyFromStatement(Stmt stmt)
+    {
+        switch (stmt)
+        {
+            case Stmt.Class classStmt:
+                EmitClassMethods(classStmt);
+                break;
+            case Stmt.Function funcStmt when funcStmt.Body != null:
+                EmitFunctionBody(funcStmt);
+                EmitFunctionOverloads(funcStmt);
+                break;
+            case Stmt.Export { Declaration: not null } export:
+                EmitMethodBodyFromStatement(export.Declaration);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Module Phase 9: Emit module initialization methods.
+    /// </summary>
+    private void ModulePhase9_EmitModuleInits(List<ParsedModule> modules)
+    {
         foreach (var module in modules)
         {
             EmitModuleInit(module);
         }
+    }
 
-        // Phase 10: Emit entry point that initializes modules in order
+    /// <summary>
+    /// Module Phase 10: Emit entry point that initializes modules in order.
+    /// </summary>
+    private void ModulePhase10_EmitEntryPoint(List<ParsedModule> modules)
+    {
         EmitModulesEntryPoint(modules);
+    }
 
-        // Phase 11: Finalize all types
-        // Finalize union types first (they don't depend on other types)
+    /// <summary>
+    /// Module Phase 11: Finalize all types including module types.
+    /// </summary>
+    private void ModulePhase11_FinalizeTypes()
+    {
         _unionGenerator?.FinalizeAllUnionTypes();
 
-        foreach (var tb in _displayClasses.Values)
+        foreach (var tb in _closures.DisplayClasses.Values)
         {
             tb.CreateType();
         }
-        foreach (var tb in _classBuilders.Values)
+        foreach (var tb in _classes.Builders.Values)
         {
             tb.CreateType();
         }
-        foreach (var tb in _classExprBuilders.Values)
+        foreach (var tb in _classExprs.Builders.Values)
         {
             tb.CreateType();
         }
-        foreach (var tb in _moduleTypes.Values)
+        foreach (var tb in _modules.Types.Values)
         {
             tb.CreateType();
         }
         _programType.CreateType();
     }
+
+    #endregion
 
     public void Save(string outputPath)
     {
@@ -820,7 +744,7 @@ public partial class ILCompiler
         {
             if (stmt is Stmt.Function funcStmt && !funcStmt.IsAsync && !funcStmt.IsGenerator)
             {
-                var captures = _closureAnalyzer.GetCaptures(funcStmt);
+                var captures = _closures.Analyzer.GetCaptures(funcStmt);
                 foreach (var capturedVar in captures)
                 {
                     if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
@@ -836,9 +760,9 @@ public partial class ILCompiler
         }
 
         // Check which top-level variables are captured by async functions
-        foreach (var funcStmt in _asyncFunctions.Values)
+        foreach (var funcStmt in _async.Functions.Values)
         {
-            var captures = _closureAnalyzer.GetCaptures(funcStmt);
+            var captures = _closures.Analyzer.GetCaptures(funcStmt);
             foreach (var capturedVar in captures)
             {
                 if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
@@ -855,9 +779,9 @@ public partial class ILCompiler
         }
 
         // Also check async generator functions
-        foreach (var funcStmt in _asyncGeneratorFunctions.Values)
+        foreach (var funcStmt in _asyncGenerators.Functions.Values)
         {
-            var captures = _closureAnalyzer.GetCaptures(funcStmt);
+            var captures = _closures.Analyzer.GetCaptures(funcStmt);
             foreach (var capturedVar in captures)
             {
                 if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
@@ -876,7 +800,7 @@ public partial class ILCompiler
         {
             if (stmt is Stmt.Function funcStmt && funcStmt.IsGenerator && !funcStmt.IsAsync)
             {
-                var analysis = _generatorAnalyzer.Analyze(funcStmt);
+                var analysis = _generators.Analyzer.Analyze(funcStmt);
                 foreach (var capturedVar in analysis.CapturedVariables)
                 {
                     if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))

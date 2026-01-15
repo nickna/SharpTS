@@ -40,9 +40,9 @@ public partial class ILCompiler
         string qualifiedFunctionName = ctx.GetQualifiedFunctionName(funcStmt.Name.Lexeme);
 
         // Track simple name -> module mapping for later lookups
-        if (_currentModulePath != null)
+        if (_modules.CurrentPath != null)
         {
-            _functionToModule[funcStmt.Name.Lexeme] = _currentModulePath;
+            _modules.FunctionToModule[funcStmt.Name.Lexeme] = _modules.CurrentPath;
         }
 
         // Resolve typed parameters from TypeMap
@@ -61,7 +61,7 @@ public partial class ILCompiler
 
         // Handle generic type parameters
         bool isGeneric = funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0;
-        _isGenericFunction[qualifiedFunctionName] = isGeneric;
+        _functions.IsGeneric[qualifiedFunctionName] = isGeneric;
 
         if (isGeneric)
         {
@@ -82,17 +82,17 @@ public partial class ILCompiler
                 }
             }
 
-            _functionGenericParams[qualifiedFunctionName] = genericParams;
+            _functions.GenericParams[qualifiedFunctionName] = genericParams;
         }
 
-        _functionBuilders[qualifiedFunctionName] = methodBuilder;
+        _functions.Builders[qualifiedFunctionName] = methodBuilder;
 
         // Generate overloads for functions with default parameters
         var overloadSignatures = OverloadGenerator.GetOverloadSignatures(
             funcStmt.Parameters, paramTypes);
         if (overloadSignatures.Count > 0)
         {
-            _functionOverloads[qualifiedFunctionName] = [];
+            _functions.Overloads[qualifiedFunctionName] = [];
             foreach (var overloadParams in overloadSignatures)
             {
                 var overload = _programType.DefineMethod(
@@ -101,7 +101,7 @@ public partial class ILCompiler
                     typeof(object),
                     overloadParams
                 );
-                _functionOverloads[qualifiedFunctionName].Add(overload);
+                _functions.Overloads[qualifiedFunctionName].Add(overload);
             }
         }
 
@@ -111,7 +111,7 @@ public partial class ILCompiler
         {
             int restIndex = funcStmt.Parameters.IndexOf(restParam);
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
-            _functionRestParams[qualifiedFunctionName] = (restIndex, regularCount);
+            _functions.RestParams[qualifiedFunctionName] = (restIndex, regularCount);
         }
     }
 
@@ -121,57 +121,57 @@ public partial class ILCompiler
         string qualifiedFunctionName = GetDefinitionContext().GetQualifiedFunctionName(funcStmt.Name.Lexeme);
 
         // Skip async functions - they use native state machine emission
-        if (funcStmt.IsAsync || _asyncStateMachines.ContainsKey(qualifiedFunctionName))
+        if (funcStmt.IsAsync || _async.StateMachines.ContainsKey(qualifiedFunctionName))
             return;
 
         // Skip generator functions - they use generator state machine emission
-        if (funcStmt.IsGenerator || _generatorStateMachines.ContainsKey(qualifiedFunctionName))
+        if (funcStmt.IsGenerator || _generators.StateMachines.ContainsKey(qualifiedFunctionName))
             return;
 
-        var methodBuilder = _functionBuilders[qualifiedFunctionName];
+        var methodBuilder = _functions.Builders[qualifiedFunctionName];
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            FunctionOverloads = _functionOverloads,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            FunctionOverloads = _functions.Overloads,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders,
+            ClassExprBuilders = _classExprs.Builders,
             UnionGenerator = _unionGenerator
         };
 
         // Add generic type parameters to context if this is a generic function
-        if (_functionGenericParams.TryGetValue(qualifiedFunctionName, out var genericParams))
+        if (_functions.GenericParams.TryGetValue(qualifiedFunctionName, out var genericParams))
         {
             foreach (var gp in genericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;
@@ -286,45 +286,45 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            ClassExprBuilders = _classExprBuilders,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            FunctionOverloads = _functionOverloads,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            ClassExprBuilders = _classExprs.Builders,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            FunctionOverloads = _functions.Overloads,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
-            DotNetNamespace = _currentDotNetNamespace,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             // Class expression support
-            VarToClassExpr = _varToClassExpr,
-            ClassExprStaticFields = _classExprStaticFields,
-            ClassExprStaticMethods = _classExprStaticMethods,
-            ClassExprConstructors = _classExprConstructors,
-            ClassExprSuperclass = _classExprSuperclass,
+            VarToClassExpr = _classExprs.VarToClassExpr,
+            ClassExprStaticFields = _classExprs.StaticFields,
+            ClassExprStaticMethods = _classExprs.StaticMethods,
+            ClassExprConstructors = _classExprs.Constructors,
+            ClassExprSuperclass = _classExprs.Superclass,
             UnionGenerator = _unionGenerator
         };
 
@@ -400,44 +400,44 @@ public partial class ILCompiler
         _entryPoint = mainMethod;
 
         var il = mainMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            ClassExprBuilders = _classExprBuilders,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            FunctionOverloads = _functionOverloads,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            ClassExprBuilders = _classExprs.Builders,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            FunctionOverloads = _functions.Overloads,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
-            DotNetNamespace = _currentDotNetNamespace,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            VarToClassExpr = _varToClassExpr,
-            ClassExprStaticFields = _classExprStaticFields,
-            ClassExprStaticMethods = _classExprStaticMethods,
-            ClassExprConstructors = _classExprConstructors,
-            ClassExprSuperclass = _classExprSuperclass,
+            VarToClassExpr = _classExprs.VarToClassExpr,
+            ClassExprStaticFields = _classExprs.StaticFields,
+            ClassExprStaticMethods = _classExprs.StaticMethods,
+            ClassExprConstructors = _classExprs.Constructors,
+            ClassExprSuperclass = _classExprs.Superclass,
             UnionGenerator = _unionGenerator
         };
 
@@ -495,7 +495,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldarg_0);  // Load string[] args (reference types implicitly convert to object)
 
         // Call the user's main function
-        var userMainMethod = _functionBuilders[mainFunc.Name.Lexeme];
+        var userMainMethod = _functions.Builders[mainFunc.Name.Lexeme];
         il.Emit(OpCodes.Call, userMainMethod);
 
         if (isAsync)
@@ -531,7 +531,7 @@ public partial class ILCompiler
             "number" => typeof(double),
             "string" => typeof(string),
             "boolean" => typeof(bool),
-            _ when _classBuilders.TryGetValue(constraint, out var tb) => tb,
+            _ when _classes.Builders.TryGetValue(constraint, out var tb) => tb,
             _ => typeof(object)
         };
     }
@@ -545,10 +545,10 @@ public partial class ILCompiler
         string qualifiedFunctionName = GetDefinitionContext().GetQualifiedFunctionName(funcStmt.Name.Lexeme);
 
         // Skip if no overloads were generated
-        if (!_functionOverloads.TryGetValue(qualifiedFunctionName, out var overloads) || overloads.Count == 0)
+        if (!_functions.Overloads.TryGetValue(qualifiedFunctionName, out var overloads) || overloads.Count == 0)
             return;
 
-        var fullMethod = _functionBuilders[qualifiedFunctionName];
+        var fullMethod = _functions.Builders[qualifiedFunctionName];
 
         // For each overload, emit a forwarding body that calls the full method
         int overloadIndex = 0;
@@ -558,7 +558,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
             {
                 Runtime = _runtime,
                 TypeMap = _typeMap

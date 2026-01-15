@@ -12,10 +12,10 @@ public partial class ILCompiler
     private void DefineAsyncFunction(Stmt.Function funcStmt)
     {
         // Analyze the async function for await points and hoisted variables
-        var analysis = _asyncAnalyzer.Analyze(funcStmt);
+        var analysis = _async.Analyzer.Analyze(funcStmt);
 
         // Create state machine builder
-        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(funcStmt.Name.Lexeme, analysis, _types.Object, false, hasAsyncArrows);
 
@@ -29,9 +29,9 @@ public partial class ILCompiler
         );
 
         // Store for later body emission
-        _functionBuilders[funcStmt.Name.Lexeme] = stubMethod;
-        _asyncStateMachines[funcStmt.Name.Lexeme] = smBuilder;
-        _asyncFunctions[funcStmt.Name.Lexeme] = funcStmt;
+        _functions.Builders[funcStmt.Name.Lexeme] = stubMethod;
+        _async.StateMachines[funcStmt.Name.Lexeme] = smBuilder;
+        _async.Functions[funcStmt.Name.Lexeme] = funcStmt;
 
         // Build state machines for any async arrows found in this function
         DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
@@ -72,7 +72,7 @@ public partial class ILCompiler
                 _types,
                 arrowInfo.Arrow,
                 arrowInfo.Captures,
-                _asyncArrowCounter++);
+                _async.ArrowCounter++);
 
             // Determine the outer state machine type and hoisted fields
             Type outerStateMachineType;
@@ -86,12 +86,12 @@ public partial class ILCompiler
                 // Direct child of the function - use function's state machine
                 outerStateMachineType = outerBuilder.StateMachineType;
                 outerHoistedFields = functionHoistedFields;
-                _asyncArrowOuterBuilders[arrowInfo.Arrow] = outerBuilder;
+                _async.ArrowOuterBuilders[arrowInfo.Arrow] = outerBuilder;
             }
             else
             {
                 // Nested arrow - use parent arrow's state machine
-                if (!_asyncArrowBuilders.TryGetValue(arrowInfo.ParentArrow, out var parentBuilder))
+                if (!_async.ArrowBuilders.TryGetValue(arrowInfo.ParentArrow, out var parentBuilder))
                 {
                     throw new InvalidOperationException(
                         $"Parent async arrow not found. Nesting level: {arrowInfo.NestingLevel}");
@@ -119,7 +119,7 @@ public partial class ILCompiler
                     transitiveCaptures.Add(name);
                 }
 
-                _asyncArrowParentBuilders[arrowInfo.Arrow] = parentBuilder;
+                _async.ArrowParentBuilders[arrowInfo.Arrow] = parentBuilder;
 
                 // Pass transitive info for nested arrows
                 arrowBuilder.DefineStateMachine(
@@ -136,7 +136,7 @@ public partial class ILCompiler
                 // Define the stub method that will be called to invoke the async arrow
                 arrowBuilder.DefineStubMethod(_programType);
 
-                _asyncArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
+                _async.ArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
                 continue; // Already handled the full setup
             }
 
@@ -151,7 +151,7 @@ public partial class ILCompiler
             // Define the stub method that will be called to invoke the async arrow
             arrowBuilder.DefineStubMethod(_programType);
 
-            _asyncArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
+            _async.ArrowBuilders[arrowInfo.Arrow] = arrowBuilder;
         }
     }
 
@@ -165,36 +165,36 @@ public partial class ILCompiler
         var seenAwait = false;
 
         // Clear and reuse pooled HashSets
-        _asyncArrowDeclaredVars.Clear();
-        _asyncArrowUsedAfterAwait.Clear();
-        _asyncArrowDeclaredBeforeAwait.Clear();
+        _async.DeclaredVars.Clear();
+        _async.UsedAfterAwait.Clear();
+        _async.DeclaredBeforeAwait.Clear();
 
         // Add parameters as declared variables
         foreach (var param in arrow.Parameters)
         {
-            _asyncArrowDeclaredVars.Add(param.Name.Lexeme);
-            _asyncArrowDeclaredBeforeAwait.Add(param.Name.Lexeme);
+            _async.DeclaredVars.Add(param.Name.Lexeme);
+            _async.DeclaredBeforeAwait.Add(param.Name.Lexeme);
         }
 
         // Analyze expression body or block body
         if (arrow.ExpressionBody != null)
         {
             AnalyzeArrowExprForAwaits(arrow.ExpressionBody, ref awaitCount, ref seenAwait,
-                _asyncArrowDeclaredVars, _asyncArrowUsedAfterAwait, _asyncArrowDeclaredBeforeAwait);
+                _async.DeclaredVars, _async.UsedAfterAwait, _async.DeclaredBeforeAwait);
         }
         else if (arrow.BlockBody != null)
         {
             foreach (var stmt in arrow.BlockBody)
             {
                 AnalyzeArrowStmtForAwaits(stmt, ref awaitCount, ref seenAwait,
-                    _asyncArrowDeclaredVars, _asyncArrowUsedAfterAwait, _asyncArrowDeclaredBeforeAwait);
+                    _async.DeclaredVars, _async.UsedAfterAwait, _async.DeclaredBeforeAwait);
             }
         }
 
         // Variables that need hoisting: declared before await AND used after await
         // This result must be a new allocation since ownership is transferred to caller
-        var hoistedLocals = new HashSet<string>(_asyncArrowDeclaredBeforeAwait);
-        hoistedLocals.IntersectWith(_asyncArrowUsedAfterAwait);
+        var hoistedLocals = new HashSet<string>(_async.DeclaredBeforeAwait);
+        hoistedLocals.IntersectWith(_async.UsedAfterAwait);
 
         // Remove parameters from hoisted locals (they're stored separately)
         foreach (var param in arrow.Parameters)
@@ -402,57 +402,57 @@ public partial class ILCompiler
 
     private void EmitAsyncStateMachineBodies()
     {
-        foreach (var (funcName, smBuilder) in _asyncStateMachines)
+        foreach (var (funcName, smBuilder) in _async.StateMachines)
         {
-            var func = _asyncFunctions[funcName];
-            var stubMethod = _functionBuilders[funcName];
-            var analysis = _asyncAnalyzer.Analyze(func);
+            var func = _async.Functions[funcName];
+            var stubMethod = _functions.Builders[funcName];
+            var analysis = _async.Analyzer.Analyze(func);
 
             // Emit stub method body
             EmitAsyncStubMethod(stubMethod, smBuilder, func.Parameters);
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
-            var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
             {
                 Runtime = _runtime,
-                ClassConstructors = _classConstructors,
-                ClosureAnalyzer = _closureAnalyzer,
-                ArrowMethods = _arrowMethods,
-                DisplayClasses = _displayClasses,
-                DisplayClassFields = _displayClassFields,
-                DisplayClassConstructors = _displayClassConstructors,
-                StaticFields = _staticFields,
-                StaticMethods = _staticMethods,
-                EnumMembers = _enumMembers,
-                EnumReverse = _enumReverse,
-                EnumKinds = _enumKinds,
+                ClassConstructors = _classes.Constructors,
+                ClosureAnalyzer = _closures.Analyzer,
+                ArrowMethods = _closures.ArrowMethods,
+                DisplayClasses = _closures.DisplayClasses,
+                DisplayClassFields = _closures.DisplayClassFields,
+                DisplayClassConstructors = _closures.DisplayClassConstructors,
+                StaticFields = _classes.StaticFields,
+                StaticMethods = _classes.StaticMethods,
+                EnumMembers = _enums.Members,
+                EnumReverse = _enums.Reverse,
+                EnumKinds = _enums.Kinds,
                 NamespaceFields = _namespaceFields,
                 TopLevelStaticVars = _topLevelStaticVars,
-                FunctionRestParams = _functionRestParams,
-                ClassGenericParams = _classGenericParams,
-                FunctionGenericParams = _functionGenericParams,
-                IsGenericFunction = _isGenericFunction,
+                FunctionRestParams = _functions.RestParams,
+                ClassGenericParams = _classes.GenericParams,
+                FunctionGenericParams = _functions.GenericParams,
+                IsGenericFunction = _functions.IsGeneric,
                 TypeMap = _typeMap,
                 DeadCode = _deadCodeInfo,
-                InstanceMethods = _instanceMethods,
-                InstanceGetters = _instanceGetters,
-                InstanceSetters = _instanceSetters,
-                ClassSuperclass = _classSuperclass,
+                InstanceMethods = _classes.InstanceMethods,
+                InstanceGetters = _classes.InstanceGetters,
+                InstanceSetters = _classes.InstanceSetters,
+                ClassSuperclass = _classes.Superclass,
                 AsyncMethods = null,
-                AsyncArrowBuilders = _asyncArrowBuilders,
-                AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-                AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+                AsyncArrowBuilders = _async.ArrowBuilders,
+                AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
+                AsyncArrowParentBuilders = _async.ArrowParentBuilders,
                 // Module support for multi-module compilation
-                CurrentModulePath = _currentModulePath,
-                ClassToModule = _classToModule,
-                FunctionToModule = _functionToModule,
-                EnumToModule = _enumToModule,
-                DotNetNamespace = _currentDotNetNamespace,
+                CurrentModulePath = _modules.CurrentPath,
+                ClassToModule = _modules.ClassToModule,
+                FunctionToModule = _modules.FunctionToModule,
+                EnumToModule = _modules.EnumToModule,
+                DotNetNamespace = _modules.CurrentDotNetNamespace,
                 TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                ClassExprBuilders = _classExprBuilders
+                ClassExprBuilders = _classExprs.Builders
             };
 
             // Emit MoveNext body
@@ -462,7 +462,7 @@ public partial class ILCompiler
             // Emit async arrow MoveNext bodies
             foreach (var arrowInfo in analysis.AsyncArrows)
             {
-                if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+                if (_async.ArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
                 {
                     EmitAsyncArrowMoveNext(arrowBuilder, arrowInfo.Arrow, ctx);
                 }
@@ -473,7 +473,7 @@ public partial class ILCompiler
         }
 
         // Finalize all async arrow state machine types
-        foreach (var (_, arrowBuilder) in _asyncArrowBuilders)
+        foreach (var (_, arrowBuilder) in _async.ArrowBuilders)
         {
             arrowBuilder.CreateType();
         }
@@ -524,9 +524,9 @@ public partial class ILCompiler
             InstanceSetters = parentCtx.InstanceSetters,
             ClassSuperclass = parentCtx.ClassSuperclass,
             AsyncMethods = null,
-            AsyncArrowBuilders = _asyncArrowBuilders,
-            AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            AsyncArrowBuilders = _async.ArrowBuilders,
+            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
+            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Inherit module support from parent context
             CurrentModulePath = parentCtx.CurrentModulePath,
             ClassToModule = parentCtx.ClassToModule,
@@ -698,13 +698,13 @@ public partial class ILCompiler
     private void EmitAsyncMethodBody(MethodBuilder methodBuilder, Stmt.Function method, FieldInfo fieldsField)
     {
         // Analyze async function to determine await points and hoisted variables
-        var analysis = _asyncAnalyzer.Analyze(method);
+        var analysis = _async.Analyzer.Analyze(method);
 
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
 
         // Build state machine type
-        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             $"{methodBuilder.DeclaringType!.Name}_{method.Name.Lexeme}",
@@ -724,8 +724,8 @@ public partial class ILCompiler
         if (hasLock)
         {
             var className = methodBuilder.DeclaringType!.Name;
-            _asyncLockFields.TryGetValue(className, out asyncLockField);
-            _lockReentrancyFields.TryGetValue(className, out lockReentrancyField);
+            _locks.AsyncLockFields.TryGetValue(className, out asyncLockField);
+            _locks.ReentrancyFields.TryGetValue(className, out lockReentrancyField);
         }
 
         // Emit stub method body (creates state machine and starts it)
@@ -739,55 +739,55 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
-            AsyncArrowBuilders = _asyncArrowBuilders,
-            AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            AsyncArrowBuilders = _async.ArrowBuilders,
+            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
+            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             // @lock decorator support
-            SyncLockFields = _syncLockFields,
-            AsyncLockFields = _asyncLockFields,
-            LockReentrancyFields = _lockReentrancyFields,
-            StaticSyncLockFields = _staticSyncLockFields,
-            StaticAsyncLockFields = _staticAsyncLockFields,
-            StaticLockReentrancyFields = _staticLockReentrancyFields,
+            SyncLockFields = _locks.SyncLockFields,
+            AsyncLockFields = _locks.AsyncLockFields,
+            LockReentrancyFields = _locks.ReentrancyFields,
+            StaticSyncLockFields = _locks.StaticSyncLockFields,
+            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
+            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Emit MoveNext body
@@ -799,7 +799,7 @@ public partial class ILCompiler
         // Emit MoveNext bodies for async arrows
         foreach (var arrowInfo in analysis.AsyncArrows)
         {
-            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            if (_async.ArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
             {
                 var arrowAnalysis = AnalyzeAsyncArrow(arrowInfo.Arrow);
                 var arrow = arrowInfo.Arrow;
@@ -827,7 +827,7 @@ public partial class ILCompiler
                         [],  // HoistedParameters - arrow params are in ParameterFields
                         false, // HasTryCatch
                         false, // UsesThis
-                        []     // AsyncArrows - handled separately via _asyncArrowBuilders
+                        []     // AsyncArrows - handled separately via _async.ArrowBuilders
                     ), _types);
                 arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
             }
@@ -836,7 +836,7 @@ public partial class ILCompiler
         // Finalize async arrow state machine types
         foreach (var arrowInfo in analysis.AsyncArrows)
         {
-            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            if (_async.ArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
             {
                 arrowBuilder.CreateType();
             }

@@ -21,7 +21,7 @@ public partial class ILCompiler
         MethodBuilder methodBuilder;
 
         // Check if accessor was pre-defined in DefineClassMethodsOnly
-        if (_preDefinedAccessors.TryGetValue(className, out var preDefinedAcc) &&
+        if (_classes.PreDefinedAccessors.TryGetValue(className, out var preDefinedAcc) &&
             preDefinedAcc.TryGetValue(methodName, out var existingAccessor))
         {
             methodBuilder = existingAccessor;
@@ -49,19 +49,19 @@ public partial class ILCompiler
             // Track getter/setter for direct dispatch (using PascalCase key)
             if (accessor.Kind.Type == TokenType.GET)
             {
-                if (!_instanceGetters.TryGetValue(className, out var classGetters))
+                if (!_classes.InstanceGetters.TryGetValue(className, out var classGetters))
                 {
                     classGetters = [];
-                    _instanceGetters[className] = classGetters;
+                    _classes.InstanceGetters[className] = classGetters;
                 }
                 classGetters[pascalName] = methodBuilder;
             }
             else
             {
-                if (!_instanceSetters.TryGetValue(className, out var classSetters))
+                if (!_classes.InstanceSetters.TryGetValue(className, out var classSetters))
                 {
                     classSetters = [];
-                    _instanceSetters[className] = classSetters;
+                    _classes.InstanceSetters[className] = classSetters;
                 }
                 classSetters[pascalName] = methodBuilder;
             }
@@ -80,47 +80,47 @@ public partial class ILCompiler
         }
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Add class generic type parameters to context
-        if (_classGenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
+        if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;

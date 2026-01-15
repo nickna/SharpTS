@@ -12,7 +12,7 @@ public partial class ILCompiler
     private void DefineStaticMethod(TypeBuilder typeBuilder, string className, Stmt.Function method)
     {
         // Skip if already pre-defined in DefineClassMethodsOnly
-        if (_staticMethods.TryGetValue(className, out var existingMethods) &&
+        if (_classes.StaticMethods.TryGetValue(className, out var existingMethods) &&
             existingMethods.ContainsKey(method.Name.Lexeme))
         {
             return;
@@ -31,18 +31,18 @@ public partial class ILCompiler
         );
 
         // Initialize dictionary if needed
-        if (!_staticMethods.ContainsKey(className))
+        if (!_classes.StaticMethods.ContainsKey(className))
         {
-            _staticMethods[className] = [];
+            _classes.StaticMethods[className] = [];
         }
-        _staticMethods[className][method.Name.Lexeme] = methodBuilder;
+        _classes.StaticMethods[className][method.Name.Lexeme] = methodBuilder;
     }
 
     private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
         // Check if we need a static constructor
         var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.Initializer != null).ToList();
-        bool hasStaticLockFields = _staticSyncLockFields.ContainsKey(qualifiedClassName);
+        bool hasStaticLockFields = _locks.StaticSyncLockFields.ContainsKey(qualifiedClassName);
 
         // Only emit if there are static fields with initializers OR static lock fields
         if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields) return;
@@ -54,54 +54,54 @@ public partial class ILCompiler
         );
 
         var il = cctor.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
-            StaticFields = _staticFields,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            StaticFields = _classes.StaticFields,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         var emitter = new ILEmitter(ctx);
 
         // Initialize static @lock decorator fields
-        if (_staticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
+        if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
         {
             // _staticSyncLock = new object();
             il.Emit(OpCodes.Newobj, typeof(object).GetConstructor([])!);
             il.Emit(OpCodes.Stsfld, staticSyncLockField);
         }
 
-        if (_staticAsyncLockFields.TryGetValue(qualifiedClassName, out var staticAsyncLockField))
+        if (_locks.StaticAsyncLockFields.TryGetValue(qualifiedClassName, out var staticAsyncLockField))
         {
             // _staticAsyncLock = new SemaphoreSlim(1, 1);
             il.Emit(OpCodes.Ldc_I4_1);  // initialCount = 1
@@ -110,7 +110,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stsfld, staticAsyncLockField);
         }
 
-        if (_staticLockReentrancyFields.TryGetValue(qualifiedClassName, out var staticReentrancyField))
+        if (_locks.StaticReentrancyFields.TryGetValue(qualifiedClassName, out var staticReentrancyField))
         {
             // _staticLockReentrancy = new AsyncLocal<int>();
             il.Emit(OpCodes.Newobj, typeof(AsyncLocal<int>).GetConstructor([])!);
@@ -118,7 +118,7 @@ public partial class ILCompiler
         }
 
         // Initialize static field initializers
-        var classStaticFields = _staticFields[qualifiedClassName];
+        var classStaticFields = _classes.StaticFields[qualifiedClassName];
         foreach (var field in staticFieldsWithInit)
         {
             // Emit the initializer expression
@@ -142,57 +142,57 @@ public partial class ILCompiler
             return;
         }
 
-        var typeBuilder = _classBuilders[className];
-        var methodBuilder = _staticMethods[className][method.Name.Lexeme];
+        var typeBuilder = _classes.Builders[className];
+        var methodBuilder = _classes.StaticMethods[className][method.Name.Lexeme];
 
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             IsInstanceMethod = false,
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             // @lock decorator support
-            SyncLockFields = _syncLockFields,
-            AsyncLockFields = _asyncLockFields,
-            LockReentrancyFields = _lockReentrancyFields,
-            StaticSyncLockFields = _staticSyncLockFields,
-            StaticAsyncLockFields = _staticAsyncLockFields,
-            StaticLockReentrancyFields = _staticLockReentrancyFields,
+            SyncLockFields = _locks.SyncLockFields,
+            AsyncLockFields = _locks.AsyncLockFields,
+            LockReentrancyFields = _locks.ReentrancyFields,
+            StaticSyncLockFields = _locks.StaticSyncLockFields,
+            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
+            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')
@@ -214,8 +214,8 @@ public partial class ILCompiler
         FieldBuilder? staticReentrancyField = null;
 
         // Set up @lock decorator - reentrancy-aware Monitor pattern for static methods
-        if (hasLock && _staticSyncLockFields.TryGetValue(className, out staticSyncLockField) &&
-            _staticLockReentrancyFields.TryGetValue(className, out staticReentrancyField))
+        if (hasLock && _locks.StaticSyncLockFields.TryGetValue(className, out staticSyncLockField) &&
+            _locks.StaticReentrancyFields.TryGetValue(className, out staticReentrancyField))
         {
             prevReentrancyLocal = il.DeclareLocal(typeof(int));     // int __prevReentrancy
             lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken
@@ -322,17 +322,17 @@ public partial class ILCompiler
 
     private void EmitStaticAsyncMethodBody(string className, Stmt.Function method)
     {
-        var typeBuilder = _classBuilders[className];
-        var methodBuilder = _staticMethods[className][method.Name.Lexeme];
+        var typeBuilder = _classes.Builders[className];
+        var methodBuilder = _classes.StaticMethods[className][method.Name.Lexeme];
 
         // Analyze async function to determine await points and hoisted variables
-        var analysis = _asyncAnalyzer.Analyze(method);
+        var analysis = _async.Analyzer.Analyze(method);
 
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
 
         // Build state machine type
-        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _asyncStateMachineCounter++);
+        var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
         smBuilder.DefineStateMachine(
             $"{className}_{method.Name.Lexeme}",
@@ -351,8 +351,8 @@ public partial class ILCompiler
         FieldBuilder? staticLockReentrancyField = null;
         if (hasLock)
         {
-            _staticAsyncLockFields.TryGetValue(className, out staticAsyncLockField);
-            _staticLockReentrancyFields.TryGetValue(className, out staticLockReentrancyField);
+            _locks.StaticAsyncLockFields.TryGetValue(className, out staticAsyncLockField);
+            _locks.StaticReentrancyFields.TryGetValue(className, out staticLockReentrancyField);
         }
 
         // Emit stub method body (creates state machine and starts it)
@@ -367,53 +367,53 @@ public partial class ILCompiler
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             IsInstanceMethod = false,  // Static method!
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
-            AsyncArrowBuilders = _asyncArrowBuilders,
-            AsyncArrowOuterBuilders = _asyncArrowOuterBuilders,
-            AsyncArrowParentBuilders = _asyncArrowParentBuilders,
+            AsyncArrowBuilders = _async.ArrowBuilders,
+            AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
+            AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             // @lock decorator support
-            SyncLockFields = _syncLockFields,
-            AsyncLockFields = _asyncLockFields,
-            LockReentrancyFields = _lockReentrancyFields,
-            StaticSyncLockFields = _staticSyncLockFields,
-            StaticAsyncLockFields = _staticAsyncLockFields,
-            StaticLockReentrancyFields = _staticLockReentrancyFields,
+            SyncLockFields = _locks.SyncLockFields,
+            AsyncLockFields = _locks.AsyncLockFields,
+            LockReentrancyFields = _locks.ReentrancyFields,
+            StaticSyncLockFields = _locks.StaticSyncLockFields,
+            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
+            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Emit MoveNext body
@@ -423,7 +423,7 @@ public partial class ILCompiler
         // Emit MoveNext bodies for async arrows
         foreach (var arrowInfo in analysis.AsyncArrows)
         {
-            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            if (_async.ArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
             {
                 var arrowAnalysis = AnalyzeAsyncArrow(arrowInfo.Arrow);
                 var arrow = arrowInfo.Arrow;
@@ -451,7 +451,7 @@ public partial class ILCompiler
                         [],  // HoistedParameters - arrow params are in ParameterFields
                         false, // HasTryCatch
                         false, // UsesThis
-                        []     // AsyncArrows - handled separately via _asyncArrowBuilders
+                        []     // AsyncArrows - handled separately via _async.ArrowBuilders
                     ), _types);
                 arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
             }
@@ -460,7 +460,7 @@ public partial class ILCompiler
         // Finalize async arrow state machine types
         foreach (var arrowInfo in analysis.AsyncArrows)
         {
-            if (_asyncArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
+            if (_async.ArrowBuilders.TryGetValue(arrowInfo.Arrow, out var arrowBuilder))
             {
                 arrowBuilder.CreateType();
             }

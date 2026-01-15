@@ -18,14 +18,14 @@ public partial class ILCompiler
         string funcName = funcStmt.Name.Lexeme;
 
         // Analyze the async generator function for yield/await points and hoisted variables
-        var analysis = _asyncGeneratorAnalyzer.Analyze(funcStmt);
+        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt);
 
         // Create the state machine builder
-        var smBuilder = new AsyncGeneratorStateMachineBuilder(_moduleBuilder, _types, _asyncGeneratorStateMachineCounter++);
+        var smBuilder = new AsyncGeneratorStateMachineBuilder(_moduleBuilder, _types, _asyncGenerators.StateMachineCounter++);
         smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false, runtime: _runtime);
 
-        _asyncGeneratorStateMachines[funcName] = smBuilder;
-        _asyncGeneratorFunctions[funcName] = funcStmt;
+        _asyncGenerators.StateMachines[funcName] = smBuilder;
+        _asyncGenerators.Functions[funcName] = funcStmt;
 
         // Define the stub method that creates and returns the state machine
         var paramTypes = funcStmt.Parameters.Select(_ => _types.Object).ToArray();
@@ -36,7 +36,7 @@ public partial class ILCompiler
             paramTypes
         );
 
-        _functionBuilders[funcName] = methodBuilder;
+        _functions.Builders[funcName] = methodBuilder;
 
         // Track rest parameter info
         var restParam = funcStmt.Parameters.FirstOrDefault(p => p.IsRest);
@@ -44,7 +44,7 @@ public partial class ILCompiler
         {
             int restIndex = funcStmt.Parameters.IndexOf(restParam);
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
-            _functionRestParams[funcName] = (restIndex, regularCount);
+            _functions.RestParams[funcName] = (restIndex, regularCount);
         }
     }
 
@@ -54,10 +54,10 @@ public partial class ILCompiler
     /// </summary>
     private void EmitAsyncGeneratorStateMachineBodies()
     {
-        foreach (var (funcName, smBuilder) in _asyncGeneratorStateMachines)
+        foreach (var (funcName, smBuilder) in _asyncGenerators.StateMachines)
         {
-            var funcStmt = _asyncGeneratorFunctions[funcName];
-            var methodBuilder = _functionBuilders[funcName];
+            var funcStmt = _asyncGenerators.Functions[funcName];
+            var methodBuilder = _functions.Builders[funcName];
 
             // Emit the stub method body (creates and returns the state machine)
             EmitAsyncGeneratorStubMethod(methodBuilder, smBuilder, funcStmt);
@@ -103,45 +103,45 @@ public partial class ILCompiler
     /// </summary>
     private void EmitAsyncGeneratorMoveNextAsyncBody(AsyncGeneratorStateMachineBuilder smBuilder, Stmt.Function funcStmt)
     {
-        var analysis = _asyncGeneratorAnalyzer.Analyze(funcStmt);
+        var analysis = _asyncGenerators.Analyzer.Analyze(funcStmt);
 
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Use the new emitter for full async generator body emission

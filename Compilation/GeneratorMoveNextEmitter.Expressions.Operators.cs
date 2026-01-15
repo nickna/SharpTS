@@ -12,49 +12,13 @@ public partial class GeneratorMoveNextEmitter
         EmitExpression(b.Right);
         EnsureBoxed();
 
-        var op = b.Operator.Type;
-        switch (op)
+        // Use consolidated binary operator helper
+        if (!_helpers.TryEmitBinaryOperator(b.Operator.Type, _ctx!.Runtime!.Add, _ctx!.Runtime!.Equals))
         {
-            case TokenType.PLUS:
-                _helpers.EmitCallUnknown(_ctx!.Runtime!.Add);
-                break;
-            case TokenType.MINUS:
-                _helpers.EmitArithmeticBinary(OpCodes.Sub);
-                break;
-            case TokenType.STAR:
-                _helpers.EmitArithmeticBinary(OpCodes.Mul);
-                break;
-            case TokenType.SLASH:
-                _helpers.EmitArithmeticBinary(OpCodes.Div);
-                break;
-            case TokenType.PERCENT:
-                _helpers.EmitArithmeticBinary(OpCodes.Rem);
-                break;
-            case TokenType.LESS:
-                _helpers.EmitNumericComparison(OpCodes.Clt);
-                break;
-            case TokenType.LESS_EQUAL:
-                _helpers.EmitNumericComparisonLe();
-                break;
-            case TokenType.GREATER:
-                _helpers.EmitNumericComparison(OpCodes.Cgt);
-                break;
-            case TokenType.GREATER_EQUAL:
-                _helpers.EmitNumericComparisonGe();
-                break;
-            case TokenType.EQUAL_EQUAL:
-            case TokenType.EQUAL_EQUAL_EQUAL:
-                _helpers.EmitRuntimeEquals(_ctx!.Runtime!.Equals);
-                break;
-            case TokenType.BANG_EQUAL:
-            case TokenType.BANG_EQUAL_EQUAL:
-                _helpers.EmitRuntimeNotEquals(_ctx!.Runtime!.Equals);
-                break;
-            default:
-                _il.Emit(OpCodes.Pop);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
-                break;
+            // Unsupported operator - return null
+            _il.Emit(OpCodes.Pop);
+            _il.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
         }
     }
 
