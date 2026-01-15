@@ -33,6 +33,20 @@ public partial class Interpreter
 
         // Create namespace scope
         var namespaceEnv = new RuntimeEnvironment(_environment);
+
+        // For merged namespaces, propagate existing nested namespaces into the new scope
+        // This allows GetNamespace() to find previously-defined nested namespaces
+        if (existingNs != null)
+        {
+            foreach (var (memberName, memberValue) in existingNs.Members)
+            {
+                if (memberValue is SharpTSNamespace nestedNs)
+                {
+                    namespaceEnv.DefineNamespace(memberName, nestedNs);
+                }
+            }
+        }
+
         var savedEnv = _environment;
         _environment = namespaceEnv;
 

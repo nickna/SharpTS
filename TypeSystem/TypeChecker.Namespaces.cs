@@ -38,6 +38,19 @@ public partial class TypeChecker
         // Create new scope for namespace body
         var namespaceEnv = new TypeEnvironment(_environment);
 
+        // For merged namespaces, propagate existing nested namespaces into the new scope
+        // This allows GetNamespace() to find previously-defined nested namespaces
+        if (existingNs != null)
+        {
+            foreach (var (nestedName, nestedType) in existingNs.Types)
+            {
+                if (nestedType is TypeInfo.Namespace nestedNs)
+                {
+                    namespaceEnv.DefineNamespace(nestedName, nestedNs);
+                }
+            }
+        }
+
         using (new EnvironmentScope(this, namespaceEnv))
         {
             // First pass: collect all type declarations (classes, interfaces, enums, nested namespaces)

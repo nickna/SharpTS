@@ -49,6 +49,11 @@ public class SharpTSNamespace
     public IEnumerable<string> GetMemberNames() => _members.Keys;
 
     /// <summary>
+    /// Gets all members as key-value pairs (for iteration during namespace merging).
+    /// </summary>
+    public IEnumerable<KeyValuePair<string, object?>> Members => _members;
+
+    /// <summary>
     /// Merges another namespace's members into this one (for declaration merging).
     /// </summary>
     public void Merge(SharpTSNamespace other)

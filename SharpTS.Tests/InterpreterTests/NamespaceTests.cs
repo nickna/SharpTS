@@ -182,7 +182,7 @@ public class NamespaceTests
         Assert.Equal("1.0.0\n", TestHarness.RunInterpreted(code));
     }
 
-    [Fact(Skip = "Dotted namespace merging requires enhanced type checker support")]
+    [Fact]
     public void NamespaceMergingWithDottedSyntax()
     {
         var code = @"
