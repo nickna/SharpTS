@@ -67,12 +67,12 @@ public partial class ILCompiler
         Type propertyType = GetFieldType(field, className, classGenericParams);
 
         // Track as declared property (using PascalCase for .NET interop)
-        _declaredPropertyNames[className].Add(pascalName);
-        _propertyTypes[className][pascalName] = propertyType;
+        _typedInterop.DeclaredPropertyNames[className].Add(pascalName);
+        _typedInterop.PropertyTypes[className][pascalName] = propertyType;
 
         if (field.IsReadonly)
         {
-            _readonlyPropertyNames[className].Add(pascalName);
+            _typedInterop.ReadonlyPropertyNames[className].Add(pascalName);
         }
 
         // Define private backing field with __ prefix to avoid conflicts
@@ -82,7 +82,7 @@ public partial class ILCompiler
             propertyType,
             FieldAttributes.Private
         );
-        _propertyBackingFields[className][pascalName] = backingField;
+        _typedInterop.PropertyBackingFields[className][pascalName] = backingField;
 
         // Apply field-level decorators as .NET attributes
         if (_decoratorMode != DecoratorMode.None)
@@ -97,7 +97,7 @@ public partial class ILCompiler
             propertyType,
             null
         );
-        _classProperties[className][pascalName] = property;
+        _typedInterop.ClassProperties[className][pascalName] = property;
 
         // Define getter method - returns actual property type for proper C# interop
         var getter = typeBuilder.DefineMethod(
@@ -115,10 +115,10 @@ public partial class ILCompiler
         property.SetGetMethod(getter);
 
         // Track getter for direct dispatch (using PascalCase key)
-        if (!_instanceGetters.TryGetValue(className, out var classGetters))
+        if (!_classes.InstanceGetters.TryGetValue(className, out var classGetters))
         {
             classGetters = [];
-            _instanceGetters[className] = classGetters;
+            _classes.InstanceGetters[className] = classGetters;
         }
         classGetters[pascalName] = getter;
 
@@ -150,10 +150,10 @@ public partial class ILCompiler
             // constructor assignment via runtime SetFieldsProperty
             if (!field.IsReadonly)
             {
-                if (!_instanceSetters.TryGetValue(className, out var classSetters))
+                if (!_classes.InstanceSetters.TryGetValue(className, out var classSetters))
                 {
                     classSetters = [];
-                    _instanceSetters[className] = classSetters;
+                    _classes.InstanceSetters[className] = classSetters;
                 }
                 classSetters[pascalName] = setter;
             }

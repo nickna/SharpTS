@@ -46,6 +46,22 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     public CompilationContext Context => _ctx;
 
     /// <summary>
+    /// Provides public access to the IL generator for call handlers.
+    /// </summary>
+    public ILGenerator ILGen => _ctx.IL;
+
+    /// <summary>
+    /// Resets the stack type tracking to unknown state.
+    /// Exposed for call handlers that emit code changing the stack.
+    /// </summary>
+    public void ResetStackType() => _helpers.SetStackUnknown();
+
+    /// <summary>
+    /// Provides access to the emit helpers for call handlers.
+    /// </summary>
+    public StateMachineEmitHelpers Helpers => _helpers;
+
+    /// <summary>
     /// Current type on top of the IL evaluation stack.
     /// Used for unboxed numeric optimization.
     /// Delegates to the shared helpers instance for consistency.

@@ -26,9 +26,9 @@ public partial class ILCompiler
         string qualifiedClassName = ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
 
         // Track simple name -> module mapping for later lookups
-        if (_currentModulePath != null)
+        if (_modules.CurrentPath != null)
         {
-            _classToModule[classStmt.Name.Lexeme] = _currentModulePath;
+            _modules.ClassToModule[classStmt.Name.Lexeme] = _modules.CurrentPath;
         }
 
         // Check for @DotNetType decorator - external .NET type mapping
@@ -44,8 +44,8 @@ public partial class ILCompiler
             if (externalType != null)
             {
                 // Register the external type mapping
-                _externalTypes[qualifiedClassName] = externalType;
-                _externalTypes[classStmt.Name.Lexeme] = externalType; // Also register simple name
+                _classes.ExternalTypes[qualifiedClassName] = externalType;
+                _classes.ExternalTypes[classStmt.Name.Lexeme] = externalType; // Also register simple name
 
                 // Register in TypeMapper for type resolution during IL emission
                 _typeMapper.RegisterExternalType(qualifiedClassName, externalType);
@@ -68,7 +68,7 @@ public partial class ILCompiler
             // Resolve superclass name (includes module prefix and .NET namespace if set)
             qualifiedSuperclassName = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
 
-            if (_classBuilders.TryGetValue(qualifiedSuperclassName, out var superBuilder))
+            if (_classes.Builders.TryGetValue(qualifiedSuperclassName, out var superBuilder))
             {
                 baseType = superBuilder;
             }
@@ -88,7 +88,7 @@ public partial class ILCompiler
         );
 
         // Track superclass for inheritance-aware method resolution
-        _classSuperclass[qualifiedClassName] = qualifiedSuperclassName;
+        _classes.Superclass[qualifiedClassName] = qualifiedSuperclassName;
 
         // Handle generic type parameters
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
@@ -110,17 +110,17 @@ public partial class ILCompiler
                 }
             }
 
-            _classGenericParams[qualifiedClassName] = genericParams;
+            _classes.GenericParams[qualifiedClassName] = genericParams;
         }
 
         string className = qualifiedClassName;
 
         // Initialize property tracking dictionaries for this class
-        _propertyBackingFields[className] = [];
-        _classProperties[className] = [];
-        _declaredPropertyNames[className] = [];
-        _readonlyPropertyNames[className] = [];
-        _propertyTypes[className] = [];
+        _typedInterop.PropertyBackingFields[className] = [];
+        _typedInterop.ClassProperties[className] = [];
+        _typedInterop.DeclaredPropertyNames[className] = [];
+        _typedInterop.ReadonlyPropertyNames[className] = [];
+        _typedInterop.PropertyTypes[className] = [];
 
         // Add _fields dictionary for dynamic property storage
         // Note: We keep this as _fields for now to maintain compatibility with RuntimeEmitter.Objects.cs
@@ -130,8 +130,8 @@ public partial class ILCompiler
             typeof(Dictionary<string, object>),
             FieldAttributes.Private
         );
-        _extrasFields[className] = fieldsField;
-        _instanceFieldsField[className] = fieldsField;
+        _typedInterop.ExtrasFields[className] = fieldsField;
+        _classes.InstanceFieldsField[className] = fieldsField;
 
         // Analyze @lock decorator requirements and emit lock fields
         var (needsSyncLock, needsAsyncLock, needsStaticSyncLock, needsStaticAsyncLock) = AnalyzeLockRequirements(classStmt);
@@ -145,7 +145,7 @@ public partial class ILCompiler
                 typeof(object),
                 FieldAttributes.Private | FieldAttributes.InitOnly
             );
-            _syncLockFields[className] = syncLockField;
+            _locks.SyncLockFields[className] = syncLockField;
 
             // Async lock using SemaphoreSlim (permits: 1, max: 1)
             var asyncLockField = typeBuilder.DefineField(
@@ -153,7 +153,7 @@ public partial class ILCompiler
                 typeof(SemaphoreSlim),
                 FieldAttributes.Private | FieldAttributes.InitOnly
             );
-            _asyncLockFields[className] = asyncLockField;
+            _locks.AsyncLockFields[className] = asyncLockField;
 
             // Reentrancy tracking using AsyncLocal<int>
             var reentrancyField = typeBuilder.DefineField(
@@ -161,7 +161,7 @@ public partial class ILCompiler
                 typeof(AsyncLocal<int>),
                 FieldAttributes.Private | FieldAttributes.InitOnly
             );
-            _lockReentrancyFields[className] = reentrancyField;
+            _locks.ReentrancyFields[className] = reentrancyField;
         }
 
         // Emit static lock fields
@@ -173,7 +173,7 @@ public partial class ILCompiler
                 typeof(object),
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
             );
-            _staticSyncLockFields[className] = staticSyncLockField;
+            _locks.StaticSyncLockFields[className] = staticSyncLockField;
 
             // Static async lock
             var staticAsyncLockField = typeBuilder.DefineField(
@@ -181,7 +181,7 @@ public partial class ILCompiler
                 typeof(SemaphoreSlim),
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
             );
-            _staticAsyncLockFields[className] = staticAsyncLockField;
+            _locks.StaticAsyncLockFields[className] = staticAsyncLockField;
 
             // Static reentrancy tracking
             var staticReentrancyField = typeBuilder.DefineField(
@@ -189,11 +189,11 @@ public partial class ILCompiler
                 typeof(AsyncLocal<int>),
                 FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
             );
-            _staticLockReentrancyFields[className] = staticReentrancyField;
+            _locks.StaticReentrancyFields[className] = staticReentrancyField;
         }
 
         // Get class generic params if any
-        _classGenericParams.TryGetValue(className, out var classGenericParams);
+        _classes.GenericParams.TryGetValue(className, out var classGenericParams);
 
         // Define real .NET properties with typed backing fields for instance fields
         // Skip fields with generic type parameters - they'll use _extras dictionary instead
@@ -235,8 +235,8 @@ public partial class ILCompiler
             }
         }
 
-        _classBuilders[className] = typeBuilder;
-        _staticFields[className] = staticFieldBuilders;
+        _classes.Builders[className] = typeBuilder;
+        _classes.StaticFields[className] = staticFieldBuilders;
 
         // Apply class-level decorators as .NET attributes
         if (_decoratorMode != DecoratorMode.None)
@@ -318,7 +318,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassExpressionTypes()
     {
-        foreach (var classExpr in _classExprsToDefine)
+        foreach (var classExpr in _classExprs.ToDefine)
         {
             DefineClassExpression(classExpr);
         }
@@ -330,7 +330,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassExpression(Expr.ClassExpr classExpr)
     {
-        string className = _classExprNames[classExpr];
+        string className = _classExprs.Names[classExpr];
 
         // Resolve superclass - check both class declarations and other class expressions
         Type? baseType = null;
@@ -341,16 +341,16 @@ public partial class ILCompiler
 
             // Check class declarations first (with module resolution)
             var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
-            if (_classBuilders.TryGetValue(resolvedSuperName, out var superTypeBuilder))
+            if (_classes.Builders.TryGetValue(resolvedSuperName, out var superTypeBuilder))
             {
                 baseType = superTypeBuilder;
             }
             else
             {
                 // Check other class expressions by their generated name
-                foreach (var (expr, name) in _classExprNames)
+                foreach (var (expr, name) in _classExprs.Names)
                 {
-                    if (name == superclassName && _classExprBuilders.TryGetValue(expr, out var superExprBuilder))
+                    if (name == superclassName && _classExprs.Builders.TryGetValue(expr, out var superExprBuilder))
                     {
                         baseType = superExprBuilder;
                         break;
@@ -358,7 +358,7 @@ public partial class ILCompiler
                 }
             }
         }
-        _classExprSuperclass[classExpr] = superclassName;
+        _classExprs.Superclass[classExpr] = superclassName;
 
         // Create TypeBuilder with appropriate attributes
         TypeAttributes typeAttrs = TypeAttributes.Public | TypeAttributes.Class;
@@ -394,20 +394,20 @@ public partial class ILCompiler
                 }
             }
 
-            _classExprGenericParams[classExpr] = classGenericParams;
+            _classExprs.GenericParams[classExpr] = classGenericParams;
         }
 
         // Initialize tracking dictionaries for this class expression
-        _classExprBackingFields[classExpr] = [];
-        _classExprProperties[classExpr] = [];
-        _classExprPropertyTypes[classExpr] = [];
-        _classExprDeclaredProperties[classExpr] = [];
-        _classExprReadonlyProperties[classExpr] = [];
-        _classExprStaticFields[classExpr] = [];
-        _classExprStaticMethods[classExpr] = [];
-        _classExprInstanceMethods[classExpr] = [];
-        _classExprGetters[classExpr] = [];
-        _classExprSetters[classExpr] = [];
+        _classExprs.BackingFields[classExpr] = [];
+        _classExprs.Properties[classExpr] = [];
+        _classExprs.PropertyTypes[classExpr] = [];
+        _classExprs.DeclaredProperties[classExpr] = [];
+        _classExprs.ReadonlyProperties[classExpr] = [];
+        _classExprs.StaticFields[classExpr] = [];
+        _classExprs.StaticMethods[classExpr] = [];
+        _classExprs.InstanceMethods[classExpr] = [];
+        _classExprs.Getters[classExpr] = [];
+        _classExprs.Setters[classExpr] = [];
 
         // Add _fields dictionary for dynamic property storage (extras)
         var fieldsField = typeBuilder.DefineField(
@@ -415,8 +415,8 @@ public partial class ILCompiler
             typeof(Dictionary<string, object>),
             FieldAttributes.Private
         );
-        _extrasFields[className] = fieldsField;
-        _instanceFieldsField[className] = fieldsField;
+        _typedInterop.ExtrasFields[className] = fieldsField;
+        _classes.InstanceFieldsField[className] = fieldsField;
 
         // Define typed instance properties
         foreach (var field in classExpr.Fields.Where(f => !f.IsStatic))
@@ -432,11 +432,11 @@ public partial class ILCompiler
                 typeof(object),  // Keep as object type like class declarations
                 FieldAttributes.Public | FieldAttributes.Static
             );
-            _classExprStaticFields[classExpr][field.Name.Lexeme] = staticField;
+            _classExprs.StaticFields[classExpr][field.Name.Lexeme] = staticField;
         }
 
         // Store the type builder
-        _classExprBuilders[classExpr] = typeBuilder;
+        _classExprs.Builders[classExpr] = typeBuilder;
     }
 
     /// <summary>
@@ -453,12 +453,12 @@ public partial class ILCompiler
         Type propertyType = GetClassExprFieldType(classExpr, field, classGenericParams);
 
         // Track as declared property
-        _classExprDeclaredProperties[classExpr].Add(pascalName);
-        _classExprPropertyTypes[classExpr][pascalName] = propertyType;
+        _classExprs.DeclaredProperties[classExpr].Add(pascalName);
+        _classExprs.PropertyTypes[classExpr][pascalName] = propertyType;
 
         if (field.IsReadonly)
         {
-            _classExprReadonlyProperties[classExpr].Add(pascalName);
+            _classExprs.ReadonlyProperties[classExpr].Add(pascalName);
         }
 
         // Define private backing field
@@ -467,7 +467,7 @@ public partial class ILCompiler
             propertyType,
             FieldAttributes.Private
         );
-        _classExprBackingFields[classExpr][pascalName] = backingField;
+        _classExprs.BackingFields[classExpr][pascalName] = backingField;
 
         // Define the property
         var property = typeBuilder.DefineProperty(
@@ -476,7 +476,7 @@ public partial class ILCompiler
             propertyType,
             null
         );
-        _classExprProperties[classExpr][pascalName] = property;
+        _classExprs.Properties[classExpr][pascalName] = property;
 
         // Define getter
         var getter = typeBuilder.DefineMethod(
@@ -490,7 +490,7 @@ public partial class ILCompiler
         getterIL.Emit(OpCodes.Ldfld, backingField);
         getterIL.Emit(OpCodes.Ret);
         property.SetGetMethod(getter);
-        _classExprGetters[classExpr][pascalName] = getter;
+        _classExprs.Getters[classExpr][pascalName] = getter;
 
         // Define setter (always needed for constructor initialization)
         var setter = typeBuilder.DefineMethod(
@@ -509,7 +509,7 @@ public partial class ILCompiler
         if (!field.IsReadonly)
         {
             property.SetSetMethod(setter);
-            _classExprSetters[classExpr][pascalName] = setter;
+            _classExprs.Setters[classExpr][pascalName] = setter;
         }
     }
 
@@ -541,7 +541,7 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassExpressionMethods()
     {
-        foreach (var classExpr in _classExprsToDefine)
+        foreach (var classExpr in _classExprs.ToDefine)
         {
             DefineClassExpressionMethodSignatures(classExpr);
         }
@@ -552,10 +552,10 @@ public partial class ILCompiler
     /// </summary>
     private void DefineClassExpressionMethodSignatures(Expr.ClassExpr classExpr)
     {
-        if (!_classExprBuilders.TryGetValue(classExpr, out var typeBuilder))
+        if (!_classExprs.Builders.TryGetValue(classExpr, out var typeBuilder))
             return;
 
-        string className = _classExprNames[classExpr];
+        string className = _classExprs.Names[classExpr];
 
         // Find user-defined constructor or use default
         var constructor = classExpr.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
@@ -566,8 +566,8 @@ public partial class ILCompiler
             CallingConventions.Standard,
             ctorParamTypes
         );
-        _classExprConstructors[classExpr] = ctorBuilder;
-        _classConstructors[className] = ctorBuilder;
+        _classExprs.Constructors[classExpr] = ctorBuilder;
+        _classes.Constructors[className] = ctorBuilder;
 
         // Define static methods
         foreach (var method in classExpr.Methods.Where(m => m.Body != null && m.IsStatic && m.Name.Lexeme != "constructor"))
@@ -581,7 +581,7 @@ public partial class ILCompiler
                 returnType,
                 paramTypes
             );
-            _classExprStaticMethods[classExpr][method.Name.Lexeme] = methodBuilder;
+            _classExprs.StaticMethods[classExpr][method.Name.Lexeme] = methodBuilder;
         }
 
         // Define instance methods
@@ -601,7 +601,7 @@ public partial class ILCompiler
                 returnType,
                 paramTypes
             );
-            _classExprInstanceMethods[classExpr][method.Name.Lexeme] = methodBuilder;
+            _classExprs.InstanceMethods[classExpr][method.Name.Lexeme] = methodBuilder;
         }
 
         // Define user-defined accessors (overrides property accessors)
@@ -632,9 +632,9 @@ public partial class ILCompiler
                 );
 
                 if (accessor.Kind.Type == TokenType.GET)
-                    _classExprGetters[classExpr][pascalName] = methodBuilder;
+                    _classExprs.Getters[classExpr][pascalName] = methodBuilder;
                 else
-                    _classExprSetters[classExpr][pascalName] = methodBuilder;
+                    _classExprs.Setters[classExpr][pascalName] = methodBuilder;
             }
         }
     }
@@ -645,7 +645,7 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionBodies()
     {
-        foreach (var classExpr in _classExprsToDefine)
+        foreach (var classExpr in _classExprs.ToDefine)
         {
             EmitClassExpressionBody(classExpr);
         }
@@ -656,11 +656,11 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionBody(Expr.ClassExpr classExpr)
     {
-        if (!_classExprBuilders.TryGetValue(classExpr, out var typeBuilder))
+        if (!_classExprs.Builders.TryGetValue(classExpr, out var typeBuilder))
             return;
 
-        string className = _classExprNames[classExpr];
-        var fieldsField = _instanceFieldsField[className];
+        string className = _classExprs.Names[classExpr];
+        var fieldsField = _classes.InstanceFieldsField[className];
 
         // Emit static constructor if there are static field initializers
         EmitClassExpressionStaticConstructor(classExpr, typeBuilder);
@@ -702,65 +702,65 @@ public partial class ILCompiler
         TypeBuilder typeBuilder,
         FieldInfo? fieldsField)
     {
-        string className = _classExprNames[classExpr];
+        string className = _classExprs.Names[classExpr];
 
-        return new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             FieldsField = fieldsField,
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
-            PropertyBackingFields = _propertyBackingFields,
-            ClassProperties = _classProperties,
-            DeclaredPropertyNames = _declaredPropertyNames,
-            ReadonlyPropertyNames = _readonlyPropertyNames,
-            PropertyTypes = _propertyTypes,
-            ExtrasFields = _extrasFields,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
+            PropertyBackingFields = _typedInterop.PropertyBackingFields,
+            ClassProperties = _typedInterop.ClassProperties,
+            DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames,
+            ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames,
+            PropertyTypes = _typedInterop.PropertyTypes,
+            ExtrasFields = _typedInterop.ExtrasFields,
             UnionGenerator = _unionGenerator,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders,
-            ClassExprBackingFields = _classExprBackingFields,
-            ClassExprProperties = _classExprProperties,
-            ClassExprPropertyTypes = _classExprPropertyTypes,
-            ClassExprDeclaredProperties = _classExprDeclaredProperties,
-            ClassExprReadonlyProperties = _classExprReadonlyProperties,
-            ClassExprStaticFields = _classExprStaticFields,
-            ClassExprStaticMethods = _classExprStaticMethods,
-            ClassExprInstanceMethods = _classExprInstanceMethods,
-            ClassExprGetters = _classExprGetters,
-            ClassExprSetters = _classExprSetters,
-            ClassExprConstructors = _classExprConstructors,
-            ClassExprGenericParams = _classExprGenericParams,
-            ClassExprSuperclass = _classExprSuperclass,
+            ClassExprBuilders = _classExprs.Builders,
+            ClassExprBackingFields = _classExprs.BackingFields,
+            ClassExprProperties = _classExprs.Properties,
+            ClassExprPropertyTypes = _classExprs.PropertyTypes,
+            ClassExprDeclaredProperties = _classExprs.DeclaredProperties,
+            ClassExprReadonlyProperties = _classExprs.ReadonlyProperties,
+            ClassExprStaticFields = _classExprs.StaticFields,
+            ClassExprStaticMethods = _classExprs.StaticMethods,
+            ClassExprInstanceMethods = _classExprs.InstanceMethods,
+            ClassExprGetters = _classExprs.Getters,
+            ClassExprSetters = _classExprs.Setters,
+            ClassExprConstructors = _classExprs.Constructors,
+            ClassExprGenericParams = _classExprs.GenericParams,
+            ClassExprSuperclass = _classExprs.Superclass,
             CurrentClassExpr = classExpr,
-            VarToClassExpr = _varToClassExpr
+            VarToClassExpr = _classExprs.VarToClassExpr
         };
     }
 
@@ -784,7 +784,7 @@ public partial class ILCompiler
 
         foreach (var field in staticFieldsWithInit)
         {
-            var staticField = _classExprStaticFields[classExpr][field.Name.Lexeme];
+            var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
 
             emitter.EmitExpression(field.Initializer!);
 
@@ -806,8 +806,8 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionConstructor(Expr.ClassExpr classExpr, TypeBuilder typeBuilder, FieldInfo fieldsField)
     {
-        string className = _classExprNames[classExpr];
-        var ctorBuilder = _classExprConstructors[classExpr];
+        string className = _classExprs.Names[classExpr];
+        var ctorBuilder = _classExprs.Constructors[classExpr];
         var constructor = classExpr.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
@@ -815,7 +815,7 @@ public partial class ILCompiler
         ctx.IsInstanceMethod = true;
 
         // Add generic type parameters to context
-        if (_classExprGenericParams.TryGetValue(classExpr, out var genericParams))
+        if (_classExprs.GenericParams.TryGetValue(classExpr, out var genericParams))
         {
             foreach (var gp in genericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;
@@ -866,13 +866,13 @@ public partial class ILCompiler
             string fieldName = field.Name.Lexeme;
             string pascalName = NamingConventions.ToPascalCase(fieldName);
 
-            if (_classExprBackingFields[classExpr].TryGetValue(pascalName, out var backingField))
+            if (_classExprs.BackingFields[classExpr].TryGetValue(pascalName, out var backingField))
             {
                 // Store in backing field
                 il.Emit(OpCodes.Ldarg_0);
                 emitter.EmitExpression(field.Initializer!);
 
-                Type targetType = _classExprPropertyTypes[classExpr][pascalName];
+                Type targetType = _classExprs.PropertyTypes[classExpr][pascalName];
                 EmitTypeConversion(il, emitter, field.Initializer!, targetType);
 
                 il.Emit(OpCodes.Stfld, backingField);
@@ -934,7 +934,7 @@ public partial class ILCompiler
     {
         if (method.IsAbstract) return;
 
-        if (!_classExprInstanceMethods[classExpr].TryGetValue(method.Name.Lexeme, out var methodBuilder))
+        if (!_classExprs.InstanceMethods[classExpr].TryGetValue(method.Name.Lexeme, out var methodBuilder))
             return;
 
         // Handle async methods via state machine
@@ -981,10 +981,10 @@ public partial class ILCompiler
     /// </summary>
     private void EmitClassExpressionStaticMethodBody(Expr.ClassExpr classExpr, Stmt.Function method)
     {
-        if (!_classExprStaticMethods[classExpr].TryGetValue(method.Name.Lexeme, out var methodBuilder))
+        if (!_classExprs.StaticMethods[classExpr].TryGetValue(method.Name.Lexeme, out var methodBuilder))
             return;
 
-        var typeBuilder = _classExprBuilders[classExpr];
+        var typeBuilder = _classExprs.Builders[classExpr];
 
         if (method.IsAsync)
         {
@@ -1035,8 +1035,8 @@ public partial class ILCompiler
     {
         string pascalName = NamingConventions.ToPascalCase(accessor.Name.Lexeme);
         MethodBuilder? methodBuilder = accessor.Kind.Type == TokenType.GET
-            ? _classExprGetters[classExpr].GetValueOrDefault(pascalName)
-            : _classExprSetters[classExpr].GetValueOrDefault(pascalName);
+            ? _classExprs.Getters[classExpr].GetValueOrDefault(pascalName)
+            : _classExprs.Setters[classExpr].GetValueOrDefault(pascalName);
 
         if (methodBuilder == null) return;
 

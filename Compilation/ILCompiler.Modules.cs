@@ -26,7 +26,7 @@ public partial class ILCompiler
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed | TypeAttributes.Abstract
         );
 
-        _moduleTypes[module.Path] = moduleType;
+        _modules.Types[module.Path] = moduleType;
         Dictionary<string, FieldBuilder> exportFields = [];
 
         // Create export fields
@@ -75,10 +75,10 @@ public partial class ILCompiler
                         }
                     }
                 }
-                else if (export.FromModulePath != null && _moduleResolver != null)
+                else if (export.FromModulePath != null && _modules.Resolver != null)
                 {
                     // Re-export: export { x } from './module' or export * from './module'
-                    string sourcePath = _moduleResolver.ResolveModulePath(export.FromModulePath, module.Path);
+                    string sourcePath = _modules.Resolver.ResolveModulePath(export.FromModulePath, module.Path);
 
                     if (export.NamedExports != null)
                     {
@@ -101,7 +101,7 @@ public partial class ILCompiler
                     {
                         // export * from './module' - need source module's exports
                         // Source module is processed first (topological order)
-                        if (_moduleExportFields.TryGetValue(sourcePath, out var sourceFields))
+                        if (_modules.ExportFields.TryGetValue(sourcePath, out var sourceFields))
                         {
                             foreach (var (name, _) in sourceFields)
                             {
@@ -122,7 +122,7 @@ public partial class ILCompiler
             }
         }
 
-        _moduleExportFields[module.Path] = exportFields;
+        _modules.ExportFields[module.Path] = exportFields;
 
         // Create $GetNamespace method that returns all exports as SharpTSObject
         EmitModuleGetNamespace(module, moduleType, exportFields);
@@ -188,8 +188,8 @@ public partial class ILCompiler
     /// </summary>
     private void EmitModuleInit(ParsedModule module)
     {
-        var moduleType = _moduleTypes[module.Path];
-        var exportFields = _moduleExportFields[module.Path];
+        var moduleType = _modules.Types[module.Path];
+        var exportFields = _modules.ExportFields[module.Path];
 
         // Create _initialized field for caching guard
         var initializedField = moduleType.DefineField(
@@ -205,7 +205,7 @@ public partial class ILCompiler
             typeof(void),
             Type.EmptyTypes
         );
-        _moduleInitMethods[module.Path] = initMethod;
+        _modules.InitMethods[module.Path] = initMethod;
 
         var il = initMethod.GetILGenerator();
 
@@ -220,9 +220,9 @@ public partial class ILCompiler
 
         var ctx = CreateCompilationContext(il);
         ctx.CurrentModulePath = module.Path;
-        ctx.ModuleExportFields = _moduleExportFields;
-        ctx.ModuleTypes = _moduleTypes;
-        ctx.ModuleResolver = _moduleResolver;
+        ctx.ModuleExportFields = _modules.ExportFields;
+        ctx.ModuleTypes = _modules.Types;
+        ctx.ModuleResolver = _modules.Resolver;
 
         var emitter = new ILEmitter(ctx);
 
@@ -285,7 +285,7 @@ public partial class ILCompiler
         // Call each module's $Initialize method in dependency order
         foreach (var module in modules)
         {
-            var initMethod = _moduleInitMethods[module.Path];
+            var initMethod = _modules.InitMethods[module.Path];
             il.Emit(OpCodes.Call, initMethod);
         }
 
@@ -332,40 +332,40 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateCompilationContext(ILGenerator il)
     {
-        return new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             NamespaceFields = _namespaceFields,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
     }
 }

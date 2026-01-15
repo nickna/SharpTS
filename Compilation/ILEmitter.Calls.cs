@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Compilation.CallHandlers;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -10,8 +11,17 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    /// <summary>
+    /// Registry of call handlers for Chain of Responsibility dispatch.
+    /// </summary>
+    private static readonly CallHandlerRegistry _callHandlers = new();
+
     protected override void EmitCall(Expr.Call c)
     {
+        // Try handler chain first (handles simple cases)
+        if (_callHandlers.TryHandle(this, c))
+            return;
+
         // Special case: super() or super.constructor() call in derived class
         if (c.Callee is Expr.Super superExpr && (superExpr.Method == null || superExpr.Method.Lexeme == "constructor"))
         {

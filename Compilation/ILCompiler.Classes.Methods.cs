@@ -229,7 +229,7 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Defines method signatures and registers them in _instanceMethods without emitting bodies.
+    /// Defines method signatures and registers them in _classes.InstanceMethods without emitting bodies.
     /// Also pre-defines the constructor so it's available for EmitNew in async contexts.
     /// </summary>
     private void DefineClassMethodsOnly(Stmt.Class classStmt)
@@ -242,15 +242,15 @@ public partial class ILCompiler
         string qualifiedClassName = ctx.ResolveClassName(classStmt.Name.Lexeme);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
-        if (_externalTypes.ContainsKey(qualifiedClassName) ||
-            _externalTypes.ContainsKey(classStmt.Name.Lexeme))
+        if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
+            _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
             return;
 
-        if (!_classBuilders.TryGetValue(qualifiedClassName, out var typeBuilder))
+        if (!_classes.Builders.TryGetValue(qualifiedClassName, out var typeBuilder))
             return;  // Skip if no TypeBuilder exists for this class
 
         // Pre-define constructor (if not already defined)
-        if (!_classConstructors.ContainsKey(qualifiedClassName))
+        if (!_classes.Constructors.ContainsKey(qualifiedClassName))
         {
             var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
             // Use typed parameters from TypeMap
@@ -265,13 +265,13 @@ public partial class ILCompiler
                 ctorParamTypes
             );
 
-            _classConstructors[qualifiedClassName] = ctorBuilder;
+            _classes.Constructors[qualifiedClassName] = ctorBuilder;
         }
 
         // Initialize static methods dictionary for this class
-        if (!_staticMethods.ContainsKey(qualifiedClassName))
+        if (!_classes.StaticMethods.ContainsKey(qualifiedClassName))
         {
-            _staticMethods[qualifiedClassName] = [];
+            _classes.StaticMethods[qualifiedClassName] = [];
         }
 
         // Pre-define static methods (so they're available during async MoveNext emission)
@@ -290,7 +290,7 @@ public partial class ILCompiler
                 paramTypes
             );
 
-            _staticMethods[qualifiedClassName][method.Name.Lexeme] = methodBuilder;
+            _classes.StaticMethods[qualifiedClassName][method.Name.Lexeme] = methodBuilder;
         }
 
         // Define instance methods (skip overload signatures with no body)
@@ -320,18 +320,18 @@ public partial class ILCompiler
             );
 
             // Track instance method for direct dispatch
-            if (!_instanceMethods.TryGetValue(typeBuilder.Name, out var classMethods))
+            if (!_classes.InstanceMethods.TryGetValue(typeBuilder.Name, out var classMethods))
             {
                 classMethods = [];
-                _instanceMethods[typeBuilder.Name] = classMethods;
+                _classes.InstanceMethods[typeBuilder.Name] = classMethods;
             }
             classMethods[method.Name.Lexeme] = methodBuilder;
 
             // Store the method builder for body emission later
-            if (!_preDefinedMethods.TryGetValue(classStmt.Name.Lexeme, out var preDefined))
+            if (!_classes.PreDefinedMethods.TryGetValue(classStmt.Name.Lexeme, out var preDefined))
             {
                 preDefined = [];
-                _preDefinedMethods[classStmt.Name.Lexeme] = preDefined;
+                _classes.PreDefinedMethods[classStmt.Name.Lexeme] = preDefined;
             }
             preDefined[method.Name.Lexeme] = methodBuilder;
         }
@@ -372,36 +372,36 @@ public partial class ILCompiler
                 // Track getter/setter using PascalCase key
                 if (accessor.Kind.Type == TokenType.GET)
                 {
-                    if (!_instanceGetters.TryGetValue(className, out var classGetters))
+                    if (!_classes.InstanceGetters.TryGetValue(className, out var classGetters))
                     {
                         classGetters = [];
-                        _instanceGetters[className] = classGetters;
+                        _classes.InstanceGetters[className] = classGetters;
                     }
                     classGetters[pascalName] = methodBuilder;
                 }
                 else
                 {
-                    if (!_instanceSetters.TryGetValue(className, out var classSetters))
+                    if (!_classes.InstanceSetters.TryGetValue(className, out var classSetters))
                     {
                         classSetters = [];
-                        _instanceSetters[className] = classSetters;
+                        _classes.InstanceSetters[className] = classSetters;
                     }
                     classSetters[pascalName] = methodBuilder;
                 }
 
                 // Store for body emission
-                if (!_preDefinedAccessors.TryGetValue(classStmt.Name.Lexeme, out var preDefinedAcc))
+                if (!_classes.PreDefinedAccessors.TryGetValue(classStmt.Name.Lexeme, out var preDefinedAcc))
                 {
                     preDefinedAcc = [];
-                    _preDefinedAccessors[classStmt.Name.Lexeme] = preDefinedAcc;
+                    _classes.PreDefinedAccessors[classStmt.Name.Lexeme] = preDefinedAcc;
                 }
                 preDefinedAcc[methodName] = methodBuilder;
 
                 // Track for PropertyBuilder creation
-                if (!_explicitAccessors.TryGetValue(className, out var accessors))
+                if (!_typedInterop.ExplicitAccessors.TryGetValue(className, out var accessors))
                 {
                     accessors = [];
-                    _explicitAccessors[className] = accessors;
+                    _typedInterop.ExplicitAccessors[className] = accessors;
                 }
 
                 if (!accessors.TryGetValue(pascalName, out var accessorInfo))
@@ -429,7 +429,7 @@ public partial class ILCompiler
     /// </summary>
     private void CreateExplicitAccessorProperties(TypeBuilder typeBuilder, string className)
     {
-        if (!_explicitAccessors.TryGetValue(className, out var accessors))
+        if (!_typedInterop.ExplicitAccessors.TryGetValue(className, out var accessors))
             return;
 
         foreach (var (pascalName, (getter, setter, propertyType)) in accessors)
@@ -465,10 +465,10 @@ public partial class ILCompiler
                 property.SetSetMethod(setter);
 
             // Track the property
-            if (!_classProperties.TryGetValue(className, out var classProps))
+            if (!_typedInterop.ClassProperties.TryGetValue(className, out var classProps))
             {
                 classProps = [];
-                _classProperties[className] = classProps;
+                _typedInterop.ClassProperties[className] = classProps;
             }
             classProps[pascalName] = property;
         }
@@ -484,18 +484,18 @@ public partial class ILCompiler
         string qualifiedClassName = GetDefinitionContext().GetQualifiedClassName(classStmt.Name.Lexeme);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
-        if (_externalTypes.ContainsKey(qualifiedClassName) ||
-            _externalTypes.ContainsKey(classStmt.Name.Lexeme))
+        if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
+            _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
             return;
 
-        if (!_classBuilders.TryGetValue(qualifiedClassName, out var typeBuilder))
+        if (!_classes.Builders.TryGetValue(qualifiedClassName, out var typeBuilder))
             return;  // Skip if no TypeBuilder exists for this class
-        var fieldsField = _instanceFieldsField[qualifiedClassName];
+        var fieldsField = _classes.InstanceFieldsField[qualifiedClassName];
 
         // Initialize static methods dictionary for this class
-        if (!_staticMethods.ContainsKey(qualifiedClassName))
+        if (!_classes.StaticMethods.ContainsKey(qualifiedClassName))
         {
-            _staticMethods[qualifiedClassName] = [];
+            _classes.StaticMethods[qualifiedClassName] = [];
         }
 
         // Define static methods first (so we can reference them in the static constructor)
@@ -545,7 +545,7 @@ public partial class ILCompiler
         MethodBuilder methodBuilder;
 
         // Check if method was pre-defined in DefineClassMethodsOnly
-        if (_preDefinedMethods.TryGetValue(typeBuilder.Name, out var preDefined) &&
+        if (_classes.PreDefinedMethods.TryGetValue(typeBuilder.Name, out var preDefined) &&
             preDefined.TryGetValue(method.Name.Lexeme, out var existingMethod))
         {
             methodBuilder = existingMethod;
@@ -574,10 +574,10 @@ public partial class ILCompiler
             );
 
             // Track instance method for direct dispatch
-            if (!_instanceMethods.TryGetValue(typeBuilder.Name, out var classMethods))
+            if (!_classes.InstanceMethods.TryGetValue(typeBuilder.Name, out var classMethods))
             {
                 classMethods = [];
-                _instanceMethods[typeBuilder.Name] = classMethods;
+                _classes.InstanceMethods[typeBuilder.Name] = classMethods;
             }
             classMethods[method.Name.Lexeme] = methodBuilder;
         }
@@ -605,54 +605,54 @@ public partial class ILCompiler
         bool hasLock = HasLockDecorator(method);
 
         var il = methodBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             FieldsField = fieldsField,
             IsInstanceMethod = true,
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             // @lock decorator support
-            SyncLockFields = _syncLockFields,
-            AsyncLockFields = _asyncLockFields,
-            LockReentrancyFields = _lockReentrancyFields,
-            StaticSyncLockFields = _staticSyncLockFields,
-            StaticAsyncLockFields = _staticAsyncLockFields,
-            StaticLockReentrancyFields = _staticLockReentrancyFields,
+            SyncLockFields = _locks.SyncLockFields,
+            AsyncLockFields = _locks.AsyncLockFields,
+            LockReentrancyFields = _locks.ReentrancyFields,
+            StaticSyncLockFields = _locks.StaticSyncLockFields,
+            StaticAsyncLockFields = _locks.StaticAsyncLockFields,
+            StaticLockReentrancyFields = _locks.StaticReentrancyFields,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Add class generic type parameters to context
-        if (_classGenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
+        if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;
@@ -676,8 +676,8 @@ public partial class ILCompiler
         FieldBuilder? reentrancyField = null;
 
         // Set up @lock decorator - reentrancy-aware Monitor pattern
-        if (hasLock && _syncLockFields.TryGetValue(typeBuilder.Name, out syncLockField) &&
-            _lockReentrancyFields.TryGetValue(typeBuilder.Name, out reentrancyField))
+        if (hasLock && _locks.SyncLockFields.TryGetValue(typeBuilder.Name, out syncLockField) &&
+            _locks.ReentrancyFields.TryGetValue(typeBuilder.Name, out reentrancyField))
         {
             prevReentrancyLocal = il.DeclareLocal(typeof(int));     // int __prevReentrancy
             lockTakenLocal = il.DeclareLocal(typeof(bool));         // bool __lockTaken

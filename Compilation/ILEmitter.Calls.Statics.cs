@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
-    private void EmitGlobalParseInt(List<Expr> arguments)
+    internal void EmitGlobalParseInt(List<Expr> arguments)
     {
         // Emit string argument
         if (arguments.Count > 0)
@@ -39,7 +39,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
     }
 
-    private void EmitGlobalParseFloat(List<Expr> arguments)
+    internal void EmitGlobalParseFloat(List<Expr> arguments)
     {
         if (arguments.Count > 0)
         {
@@ -55,7 +55,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
     }
 
-    private void EmitGlobalIsNaN(List<Expr> arguments)
+    internal void EmitGlobalIsNaN(List<Expr> arguments)
     {
         // Global isNaN coerces to number first
         if (arguments.Count > 0)
@@ -71,7 +71,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
     }
 
-    private void EmitGlobalIsFinite(List<Expr> arguments)
+    internal void EmitGlobalIsFinite(List<Expr> arguments)
     {
         // Global isFinite coerces to number first
         if (arguments.Count > 0)

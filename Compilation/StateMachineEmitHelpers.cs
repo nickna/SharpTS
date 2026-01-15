@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -708,6 +709,183 @@ public class StateMachineEmitHelpers
         _il.Emit(OpCodes.Ceq);
         _il.Emit(OpCodes.Box, _types.Boolean);
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Mapping of arithmetic operators to their IL opcodes.
+    /// </summary>
+    private static readonly Dictionary<TokenType, OpCode> ArithmeticOps = new()
+    {
+        { TokenType.MINUS, OpCodes.Sub },
+        { TokenType.STAR, OpCodes.Mul },
+        { TokenType.SLASH, OpCodes.Div },
+        { TokenType.PERCENT, OpCodes.Rem }
+    };
+
+    /// <summary>
+    /// Mapping of comparison operators to their IL opcodes.
+    /// </summary>
+    private static readonly Dictionary<TokenType, OpCode> ComparisonOps = new()
+    {
+        { TokenType.LESS, OpCodes.Clt },
+        { TokenType.GREATER, OpCodes.Cgt }
+    };
+
+    /// <summary>
+    /// Attempts to emit a binary operator. Returns true if the operator was handled.
+    /// This method handles arithmetic (+, -, *, /, %), comparison (<, >, <=, >=),
+    /// and equality (==, !=, ===, !==) operators.
+    /// Stack: [left, right] -> [result_boxed]
+    /// </summary>
+    /// <param name="op">The operator token type.</param>
+    /// <param name="runtimeAdd">Runtime.Add method for string concatenation support.</param>
+    /// <param name="runtimeEquals">Runtime.Equals method for equality comparison.</param>
+    /// <returns>True if the operator was handled, false otherwise.</returns>
+    public bool TryEmitBinaryOperator(TokenType op, MethodInfo runtimeAdd, MethodInfo runtimeEquals)
+    {
+        // Handle PLUS via runtime (supports string concatenation)
+        if (op == TokenType.PLUS)
+        {
+            EmitCallUnknown(runtimeAdd);
+            return true;
+        }
+
+        // Handle arithmetic operators (-, *, /, %)
+        if (ArithmeticOps.TryGetValue(op, out var arithOp))
+        {
+            EmitArithmeticBinary(arithOp);
+            return true;
+        }
+
+        // Handle simple comparisons (< and >)
+        if (ComparisonOps.TryGetValue(op, out var cmpOp))
+        {
+            EmitNumericComparison(cmpOp);
+            return true;
+        }
+
+        // Handle <= (negated >)
+        if (op == TokenType.LESS_EQUAL)
+        {
+            EmitNumericComparisonLe();
+            return true;
+        }
+
+        // Handle >= (negated <)
+        if (op == TokenType.GREATER_EQUAL)
+        {
+            EmitNumericComparisonGe();
+            return true;
+        }
+
+        // Handle equality (== and ===)
+        if (op is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL)
+        {
+            EmitRuntimeEquals(runtimeEquals);
+            return true;
+        }
+
+        // Handle inequality (!= and !==)
+        if (op is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL)
+        {
+            EmitRuntimeNotEquals(runtimeEquals);
+            return true;
+        }
+
+        return false;
+    }
+
+    #endregion
+
+    #region Increment/Decrement Helpers
+
+    /// <summary>
+    /// Gets the increment delta (+1.0 for ++, -1.0 for --).
+    /// </summary>
+    public static double GetIncrementDelta(TokenType op)
+        => op == TokenType.PLUS_PLUS ? 1.0 : -1.0;
+
+    /// <summary>
+    /// Emits the core increment arithmetic.
+    /// Stack: [double] -> [double+delta]
+    /// </summary>
+    public void EmitIncrementArithmetic(TokenType op)
+    {
+        _il.Emit(OpCodes.Ldc_R8, GetIncrementDelta(op));
+        _il.Emit(OpCodes.Add);
+    }
+
+    /// <summary>
+    /// Unboxes stack top to double using Convert.ToDouble.
+    /// Stack: [object] -> [double]
+    /// </summary>
+    public void EmitUnboxToDouble()
+    {
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", [_types.Object]));
+        _stackType = StackType.Double;
+    }
+
+    /// <summary>
+    /// Emits prefix increment for a value already on stack (as object).
+    /// The storeNewValue action should store the boxed value from stack to the target location.
+    /// Stack before: [object value]
+    /// Stack after storeNewValue: storeNewValue consumes the value, then we reload it
+    /// Final stack: [boxed new value]
+    /// </summary>
+    /// <param name="op">The operator token type (PLUS_PLUS or MINUS_MINUS).</param>
+    /// <param name="storeNewValue">Action to store the new value. Stack will have [boxed new value].</param>
+    public void EmitPrefixIncrementCore(TokenType op, Action storeNewValue)
+    {
+        // Stack: [object value]
+        EmitUnboxToDouble();              // Stack: [double]
+        EmitIncrementArithmetic(op);      // Stack: [double+1]
+        _il.Emit(OpCodes.Box, _types.Double);  // Stack: [boxed new value]
+        _il.Emit(OpCodes.Dup);            // Stack: [boxed, boxed] (one for store, one for return)
+        storeNewValue();                  // Stack: [boxed] (return value)
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits postfix increment for a value already on stack (as object).
+    /// Returns old value on stack (boxed).
+    /// </summary>
+    /// <param name="op">The operator token type (PLUS_PLUS or MINUS_MINUS).</param>
+    /// <param name="storeNewValue">Action to store the new value. Stack will have [boxed new value].</param>
+    /// <param name="tempLocal">A local builder to store the old double value temporarily.</param>
+    public void EmitPostfixIncrementCore(TokenType op, Action storeNewValue, LocalBuilder tempLocal)
+    {
+        // Stack: [object value]
+        EmitUnboxToDouble();                    // Stack: [double]
+        _il.Emit(OpCodes.Dup);                  // Stack: [double, double]
+        _il.Emit(OpCodes.Stloc, tempLocal);     // Save old value; Stack: [double]
+        EmitIncrementArithmetic(op);            // Stack: [double+1]
+        _il.Emit(OpCodes.Box, _types.Double);   // Stack: [boxed new value]
+        storeNewValue();                        // Stack: []
+        _il.Emit(OpCodes.Ldloc, tempLocal);     // Stack: [old double]
+        _il.Emit(OpCodes.Box, _types.Double);   // Stack: [boxed old value]
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits prefix increment for a variable that can be loaded and stored via actions.
+    /// This is the simplest form where load/store are straightforward.
+    /// Stack: [] -> [boxed new value]
+    /// </summary>
+    public void EmitPrefixIncrementVariable(TokenType op, Action loadVariable, Action storeVariable)
+    {
+        loadVariable();                         // Stack: [object value]
+        EmitPrefixIncrementCore(op, storeVariable);
+    }
+
+    /// <summary>
+    /// Emits postfix increment for a variable that can be loaded and stored via actions.
+    /// Stack: [] -> [boxed old value]
+    /// </summary>
+    public void EmitPostfixIncrementVariable(TokenType op, Action loadVariable, Action storeVariable)
+    {
+        var tempLocal = _il.DeclareLocal(_types.Double);
+        loadVariable();                         // Stack: [object value]
+        EmitPostfixIncrementCore(op, storeVariable, tempLocal);
     }
 
     #endregion

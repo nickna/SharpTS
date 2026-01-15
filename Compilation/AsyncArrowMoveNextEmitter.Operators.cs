@@ -12,94 +12,14 @@ public partial class AsyncArrowMoveNextEmitter
         EmitExpression(b.Right);
         EnsureBoxed();
 
-        // Handle binary operations based on operator type
-        var op = b.Operator.Type;
-        switch (op)
+        // Use consolidated binary operator helper
+        if (!_helpers.TryEmitBinaryOperator(b.Operator.Type, _ctx!.Runtime!.Add, _ctx!.Runtime!.Equals))
         {
-            case TokenType.PLUS:
-                // Use runtime Add for string concatenation support
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.Add);
-                break;
-            case TokenType.MINUS:
-                EmitNumericOp(OpCodes.Sub);
-                break;
-            case TokenType.STAR:
-                EmitNumericOp(OpCodes.Mul);
-                break;
-            case TokenType.SLASH:
-                EmitNumericOp(OpCodes.Div);
-                break;
-            case TokenType.PERCENT:
-                EmitNumericOp(OpCodes.Rem);
-                break;
-            case TokenType.LESS:
-            case TokenType.LESS_EQUAL:
-            case TokenType.GREATER:
-            case TokenType.GREATER_EQUAL:
-                EmitComparisonOp(op);
-                break;
-            case TokenType.EQUAL_EQUAL:
-            case TokenType.EQUAL_EQUAL_EQUAL:
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.Equals);
-                _il.Emit(OpCodes.Box, typeof(bool));
-                break;
-            case TokenType.BANG_EQUAL:
-            case TokenType.BANG_EQUAL_EQUAL:
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.Equals);
-                _il.Emit(OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Ceq);
-                _il.Emit(OpCodes.Box, typeof(bool));
-                break;
-            default:
-                // Fallback: pop both and push null
-                _il.Emit(OpCodes.Pop);
-                _il.Emit(OpCodes.Ldnull);
-                break;
+            // Unsupported operator - return null
+            _il.Emit(OpCodes.Pop);
+            _il.Emit(OpCodes.Ldnull);
         }
         SetStackUnknown();
-    }
-
-    private void EmitNumericOp(OpCode opcode)
-    {
-        // Convert to double and apply operation
-        var rightLocal = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-        _il.Emit(OpCodes.Ldloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-        _il.Emit(opcode);
-        _il.Emit(OpCodes.Box, typeof(double));
-    }
-
-    private void EmitComparisonOp(TokenType op)
-    {
-        // Convert to double for comparison
-        var rightLocal = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-        _il.Emit(OpCodes.Ldloc, rightLocal);
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
-
-        switch (op)
-        {
-            case TokenType.LESS:
-                _il.Emit(OpCodes.Clt);
-                break;
-            case TokenType.LESS_EQUAL:
-                _il.Emit(OpCodes.Cgt);
-                _il.Emit(OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Ceq);
-                break;
-            case TokenType.GREATER:
-                _il.Emit(OpCodes.Cgt);
-                break;
-            case TokenType.GREATER_EQUAL:
-                _il.Emit(OpCodes.Clt);
-                _il.Emit(OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Ceq);
-                break;
-        }
-        _il.Emit(OpCodes.Box, typeof(bool));
     }
 
     protected override void EmitCall(Expr.Call c)

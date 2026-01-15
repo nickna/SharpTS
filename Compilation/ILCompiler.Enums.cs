@@ -16,9 +16,9 @@ public partial class ILCompiler
         string qualifiedEnumName = ctx.GetQualifiedEnumName(enumStmt.Name.Lexeme);
 
         // Track simple name -> module mapping for later lookups
-        if (_currentModulePath != null)
+        if (_modules.CurrentPath != null)
         {
-            _enumToModule[enumStmt.Name.Lexeme] = _currentModulePath;
+            _modules.EnumToModule[enumStmt.Name.Lexeme] = _modules.CurrentPath;
         }
 
         Dictionary<string, object> members = [];
@@ -81,14 +81,14 @@ public partial class ILCompiler
             _ => EnumKind.Numeric
         };
 
-        _enumMembers[qualifiedEnumName] = members;
-        _enumReverse[qualifiedEnumName] = reverse;
-        _enumKinds[qualifiedEnumName] = kind;
+        _enums.Members[qualifiedEnumName] = members;
+        _enums.Reverse[qualifiedEnumName] = reverse;
+        _enums.Kinds[qualifiedEnumName] = kind;
 
         // Track const enums
         if (enumStmt.IsConst)
         {
-            _constEnums.Add(qualifiedEnumName);
+            _enums.ConstEnums.Add(qualifiedEnumName);
         }
     }
 

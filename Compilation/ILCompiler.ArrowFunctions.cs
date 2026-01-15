@@ -40,7 +40,7 @@ public partial class ILCompiler
             {
                 // Non-capturing: static method on $Program
                 var methodBuilder = _programType.DefineMethod(
-                    $"<>Arrow_{_arrowMethodCounter++}",
+                    $"<>Arrow_{_closures.ArrowMethodCounter++}",
                     MethodAttributes.Private | MethodAttributes.Static,
                     _types.Object,
                     paramTypes
@@ -59,13 +59,13 @@ public partial class ILCompiler
                         methodBuilder.DefineParameter(i + 1, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
                 }
 
-                _arrowMethods[arrow] = methodBuilder;
+                _closures.ArrowMethods[arrow] = methodBuilder;
             }
             else
             {
                 // Capturing: create display class
                 var displayClass = _moduleBuilder.DefineType(
-                    $"<>c__DisplayClass{_displayClassCounter++}",
+                    $"<>c__DisplayClass{_closures.DisplayClassCounter++}",
                     TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
                     _types.Object
                 );
@@ -77,7 +77,7 @@ public partial class ILCompiler
                     var field = displayClass.DefineField(capturedVar, _types.Object, FieldAttributes.Public);
                     fieldMap[capturedVar] = field;
                 }
-                _displayClassFields[arrow] = fieldMap;
+                _closures.DisplayClassFields[arrow] = fieldMap;
 
                 // Add default constructor
                 var ctorBuilder = displayClass.DefineConstructor(
@@ -89,7 +89,7 @@ public partial class ILCompiler
                 ctorIL.Emit(OpCodes.Ldarg_0);
                 ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
                 ctorIL.Emit(OpCodes.Ret);
-                _displayClassConstructors[arrow] = ctorBuilder;
+                _closures.DisplayClassConstructors[arrow] = ctorBuilder;
 
                 // Add Invoke method
                 var invokeMethod = displayClass.DefineMethod(
@@ -112,8 +112,8 @@ public partial class ILCompiler
                         invokeMethod.DefineParameter(i + 1, ParameterAttributes.None, arrow.Parameters[i].Name.Lexeme);
                 }
 
-                _displayClasses[arrow] = displayClass;
-                _arrowMethods[arrow] = invokeMethod;
+                _closures.DisplayClasses[arrow] = displayClass;
+                _closures.ArrowMethods[arrow] = invokeMethod;
             }
         }
     }
@@ -131,7 +131,7 @@ public partial class ILCompiler
                     // If initializing with a class expression, track variable name → class expr mapping
                     if (v.Initializer is Expr.ClassExpr classExpr)
                     {
-                        _varToClassExpr[v.Name.Lexeme] = classExpr;
+                        _classExprs.VarToClassExpr[v.Name.Lexeme] = classExpr;
                     }
                     CollectArrowsFromExpr(v.Initializer);
                 }
@@ -217,7 +217,7 @@ public partial class ILCompiler
         switch (expr)
         {
             case Expr.ArrowFunction af:
-                var captures = _closureAnalyzer.GetCaptures(af);
+                var captures = _closures.Analyzer.GetCaptures(af);
                 _collectedArrows.Add((af, captures));
                 // Also collect arrows inside this arrow's body
                 if (af.ExpressionBody != null)
@@ -348,13 +348,13 @@ public partial class ILCompiler
     /// </summary>
     private void CollectClassExpression(Expr.ClassExpr classExpr)
     {
-        if (_classExprNames.ContainsKey(classExpr))
+        if (_classExprs.Names.ContainsKey(classExpr))
             return; // Already collected
 
         // Generate unique name
-        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
-        _classExprNames[classExpr] = className;
-        _classExprsToDefine.Add(classExpr);
+        string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprs.Counter}";
+        _classExprs.Names[classExpr] = className;
+        _classExprs.ToDefine.Add(classExpr);
     }
 
     private void EmitArrowFunctionBodies()
@@ -368,7 +368,7 @@ public partial class ILCompiler
                 continue;
             }
 
-            var methodBuilder = _arrowMethods[arrow];
+            var methodBuilder = _closures.ArrowMethods[arrow];
 
             if (captures.Count == 0)
             {
@@ -378,7 +378,7 @@ public partial class ILCompiler
             else
             {
                 // Capturing: emit body into display class method
-                var displayClass = _displayClasses[arrow];
+                var displayClass = _closures.DisplayClasses[arrow];
                 EmitArrowBody(arrow, methodBuilder, displayClass);
             }
         }
@@ -387,39 +387,39 @@ public partial class ILCompiler
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {
         var il = method.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
-            DotNetNamespace = _currentDotNetNamespace,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         if (displayClass != null)
@@ -428,7 +428,7 @@ public partial class ILCompiler
             ctx.IsInstanceMethod = true;
 
             // Use the pre-stored field mapping
-            if (_displayClassFields.TryGetValue(arrow, out var fieldMap))
+            if (_closures.DisplayClassFields.TryGetValue(arrow, out var fieldMap))
             {
                 ctx.CapturedFields = fieldMap;
             }

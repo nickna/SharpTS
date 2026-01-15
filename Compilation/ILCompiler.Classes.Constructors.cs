@@ -20,7 +20,7 @@ public partial class ILCompiler
 
         // Reuse pre-defined constructor if available (from DefineClassMethodsOnly)
         ConstructorBuilder ctorBuilder;
-        if (_classConstructors.TryGetValue(className, out var existingCtor))
+        if (_classes.Constructors.TryGetValue(className, out var existingCtor))
         {
             ctorBuilder = existingCtor;
         }
@@ -35,59 +35,59 @@ public partial class ILCompiler
                 CallingConventions.Standard,
                 paramTypes
             );
-            _classConstructors[className] = ctorBuilder;
+            _classes.Constructors[className] = ctorBuilder;
         }
 
         var il = ctorBuilder.GetILGenerator();
-        var ctx = new CompilationContext(il, _typeMapper, _functionBuilders, _classBuilders, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
-            ClosureAnalyzer = _closureAnalyzer,
-            ArrowMethods = _arrowMethods,
-            DisplayClasses = _displayClasses,
-            DisplayClassFields = _displayClassFields,
-            DisplayClassConstructors = _displayClassConstructors,
-            StaticFields = _staticFields,
-            StaticMethods = _staticMethods,
-            ClassConstructors = _classConstructors,
-            FunctionRestParams = _functionRestParams,
-            EnumMembers = _enumMembers,
-            EnumReverse = _enumReverse,
-            EnumKinds = _enumKinds,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
             Runtime = _runtime,
             CurrentSuperclassName = classStmt.Superclass?.Lexeme,
-            ClassGenericParams = _classGenericParams,
-            FunctionGenericParams = _functionGenericParams,
-            IsGenericFunction = _isGenericFunction,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _instanceMethods,
-            InstanceGetters = _instanceGetters,
-            InstanceSetters = _instanceSetters,
-            ClassSuperclass = _classSuperclass,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Typed interop support
-            PropertyBackingFields = _propertyBackingFields,
-            ClassProperties = _classProperties,
-            DeclaredPropertyNames = _declaredPropertyNames,
-            ReadonlyPropertyNames = _readonlyPropertyNames,
-            PropertyTypes = _propertyTypes,
-            ExtrasFields = _extrasFields,
+            PropertyBackingFields = _typedInterop.PropertyBackingFields,
+            ClassProperties = _typedInterop.ClassProperties,
+            DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames,
+            ReadonlyPropertyNames = _typedInterop.ReadonlyPropertyNames,
+            PropertyTypes = _typedInterop.PropertyTypes,
+            ExtrasFields = _typedInterop.ExtrasFields,
             UnionGenerator = _unionGenerator,
             // Module support for multi-module compilation
-            CurrentModulePath = _currentModulePath,
-            ClassToModule = _classToModule,
-            FunctionToModule = _functionToModule,
-            EnumToModule = _enumToModule,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
             // .NET namespace support
-            DotNetNamespace = _currentDotNetNamespace,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprBuilders
+            ClassExprBuilders = _classExprs.Builders
         };
 
         // Add class generic type parameters to context
-        if (_classGenericParams.TryGetValue(className, out var classGenericParams))
+        if (_classes.GenericParams.TryGetValue(className, out var classGenericParams))
         {
             foreach (var gp in classGenericParams)
                 ctx.GenericTypeParameters[gp.Name] = gp;
@@ -100,7 +100,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Stfld, fieldsField);
 
         // Initialize @lock decorator fields if present
-        if (_syncLockFields.TryGetValue(className, out var syncLockField))
+        if (_locks.SyncLockFields.TryGetValue(className, out var syncLockField))
         {
             // this._syncLock = new object();
             il.Emit(OpCodes.Ldarg_0);
@@ -108,7 +108,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stfld, syncLockField);
         }
 
-        if (_asyncLockFields.TryGetValue(className, out var asyncLockField))
+        if (_locks.AsyncLockFields.TryGetValue(className, out var asyncLockField))
         {
             // this._asyncLock = new SemaphoreSlim(1, 1);
             il.Emit(OpCodes.Ldarg_0);
@@ -118,7 +118,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stfld, asyncLockField);
         }
 
-        if (_lockReentrancyFields.TryGetValue(className, out var reentrancyField))
+        if (_locks.ReentrancyFields.TryGetValue(className, out var reentrancyField))
         {
             // this._lockReentrancy = new AsyncLocal<int>();
             il.Emit(OpCodes.Ldarg_0);
@@ -131,7 +131,7 @@ public partial class ILCompiler
         // If the class has no explicit constructor but has a superclass, we must call the parent constructor.
         // If the class has no superclass, we call Object constructor.
         string? qualifiedSuperclass = classStmt.Superclass != null ? defCtx.ResolveClassName(classStmt.Superclass.Lexeme) : null;
-        if (constructor == null && qualifiedSuperclass != null && _classConstructors.TryGetValue(qualifiedSuperclass, out var parentCtor))
+        if (constructor == null && qualifiedSuperclass != null && _classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor))
         {
             // No explicit constructor but has superclass - call parent's parameterless constructor
             il.Emit(OpCodes.Ldarg_0);
@@ -158,7 +158,7 @@ public partial class ILCompiler
                 string pascalName = NamingConventions.ToPascalCase(fieldName);
 
                 // Check if this is a declared property with a backing field (using PascalCase key)
-                if (_propertyBackingFields.TryGetValue(className, out var backingFields) &&
+                if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&
                     backingFields.TryGetValue(pascalName, out var backingField))
                 {
                     // Store directly in backing field
@@ -168,7 +168,7 @@ public partial class ILCompiler
                     initEmitter.EmitExpression(field.Initializer!);
 
                     // Convert to proper type if needed
-                    Type targetType = _propertyTypes[className][pascalName];
+                    Type targetType = _typedInterop.PropertyTypes[className][pascalName];
                     EmitTypeConversion(il, initEmitter, field.Initializer!, targetType);
 
                     il.Emit(OpCodes.Stfld, backingField);
