@@ -373,7 +373,7 @@ public class NominalTypingTests
         Assert.Equal("printed\nsaved\n", result);
     }
 
-    [Fact(Skip = "TypeChecker does not validate interface method signature compatibility (parameter count/types)")]
+    [Fact]
     public void InterfaceMethodWrongSignature_Fails()
     {
         var source = """

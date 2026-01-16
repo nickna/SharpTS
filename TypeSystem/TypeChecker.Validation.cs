@@ -31,11 +31,101 @@ public partial class TypeChecker
                 throw new TypeCheckException($" Class '{className}' does not implement '{memberName}' from interface '{interfaceType.Name}'.");
             }
 
-            if (actualType != null && !IsCompatible(expectedType, actualType))
+            if (actualType != null)
             {
-                throw new TypeCheckException($" '{className}.{memberName}' has incompatible type. Expected '{expectedType}', got '{actualType}'.");
+                // Special handling for method signature validation
+                if (expectedType is TypeInfo.Function expectedFunc && actualType is TypeInfo.Function actualFunc)
+                {
+                    ValidateMethodSignature(expectedFunc, actualFunc, memberName, className, interfaceType.Name);
+                }
+                else if (expectedType is TypeInfo.OverloadedFunction expectedOverload && actualType is TypeInfo.Function actualFuncForOverload)
+                {
+                    // For overloaded interface methods, check against each signature
+                    bool matchesAny = false;
+                    foreach (var signature in expectedOverload.Signatures)
+                    {
+                        if (IsMethodSignatureCompatible(signature, actualFuncForOverload))
+                        {
+                            matchesAny = true;
+                            break;
+                        }
+                    }
+                    if (!matchesAny)
+                    {
+                        // Use first signature for error message
+                        ValidateMethodSignature(expectedOverload.Signatures[0], actualFuncForOverload, memberName, className, interfaceType.Name);
+                    }
+                }
+                else if (!IsCompatible(expectedType, actualType))
+                {
+                    throw new TypeCheckException($" '{className}.{memberName}' has incompatible type. Expected '{expectedType}', got '{actualType}'.");
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// Validates that a class method signature is compatible with an interface method signature.
+    /// For interface implementation, the class method must:
+    /// 1. Accept at least as many required parameters as the interface method requires
+    /// 2. Have compatible parameter types at each position
+    /// 3. Have a compatible return type
+    /// </summary>
+    private void ValidateMethodSignature(TypeInfo.Function expected, TypeInfo.Function actual, string methodName, string className, string interfaceName)
+    {
+        // Check parameter count: actual must declare at least the required params from expected
+        // The interface's MinArity tells us how many parameters callers will pass
+        if (actual.ParamTypes.Count < expected.MinArity)
+        {
+            throw new TypeCheckException(
+                $" Method '{className}.{methodName}' has {actual.ParamTypes.Count} parameter(s) but interface '{interfaceName}' requires at least {expected.MinArity}.");
+        }
+
+        // Check parameter types at each position (up to what the actual method declares)
+        // Parameter types are contravariant: actual's param types can be supertypes of expected's
+        // But for simplicity and TypeScript compatibility, we check that expected param is compatible with actual param
+        int paramsToCheck = Math.Min(expected.ParamTypes.Count, actual.ParamTypes.Count);
+        for (int i = 0; i < paramsToCheck; i++)
+        {
+            TypeInfo expectedParamType = expected.ParamTypes[i];
+            TypeInfo actualParamType = actual.ParamTypes[i];
+
+            // Check bidirectional compatibility for parameters (TypeScript uses bivariant checking for method params)
+            if (!IsCompatible(expectedParamType, actualParamType) && !IsCompatible(actualParamType, expectedParamType))
+            {
+                throw new TypeCheckException(
+                    $" Parameter {i + 1} of '{className}.{methodName}' has incompatible type. Interface '{interfaceName}' expects '{expectedParamType}', but got '{actualParamType}'.");
+            }
+        }
+
+        // Check return type compatibility (covariant: actual's return can be subtype of expected's)
+        if (!IsCompatible(expected.ReturnType, actual.ReturnType))
+        {
+            throw new TypeCheckException(
+                $" Return type of '{className}.{methodName}' is incompatible. Interface '{interfaceName}' expects '{expected.ReturnType}', but got '{actual.ReturnType}'.");
+        }
+    }
+
+    /// <summary>
+    /// Checks if a method signature is compatible with an expected signature (non-throwing version).
+    /// </summary>
+    private bool IsMethodSignatureCompatible(TypeInfo.Function expected, TypeInfo.Function actual)
+    {
+        // Check parameter count
+        if (actual.ParamTypes.Count < expected.MinArity)
+            return false;
+
+        // Check parameter types
+        int paramsToCheck = Math.Min(expected.ParamTypes.Count, actual.ParamTypes.Count);
+        for (int i = 0; i < paramsToCheck; i++)
+        {
+            if (!IsCompatible(expected.ParamTypes[i], actual.ParamTypes[i]) &&
+                !IsCompatible(actual.ParamTypes[i], expected.ParamTypes[i]))
+                return false;
+        }
+
+        // Check return type
+        return IsCompatible(expected.ReturnType, actual.ReturnType);
     }
 
     /// <summary>

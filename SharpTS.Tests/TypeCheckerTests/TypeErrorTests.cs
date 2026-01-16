@@ -342,7 +342,7 @@ public class TypeErrorTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "TypeChecker does not validate interface method signature compatibility (parameter count/types)")]
+    [Fact]
     public void WrongInterfaceMethodSignature_Fails()
     {
         var source = """
