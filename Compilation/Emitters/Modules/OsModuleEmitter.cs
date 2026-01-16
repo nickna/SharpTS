@@ -293,18 +293,10 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // Use available memory from GC info
-        il.Emit(OpCodes.Call, typeof(GC).GetMethod("GetGCMemoryInfo", Type.EmptyTypes)!);
-        var infoLocal = il.DeclareLocal(typeof(GCMemoryInfo));
-        il.Emit(OpCodes.Stloc, infoLocal);
-
-        // TotalAvailableMemoryBytes - HeapSizeBytes gives an approximation
-        il.Emit(OpCodes.Ldloca, infoLocal);
-        il.Emit(OpCodes.Call, typeof(GCMemoryInfo).GetProperty("TotalAvailableMemoryBytes")!.GetMethod!);
-        il.Emit(OpCodes.Ldloca, infoLocal);
-        il.Emit(OpCodes.Call, typeof(GCMemoryInfo).GetProperty("HeapSizeBytes")!.GetMethod!);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Conv_R8);
+        // Call SystemInfoHelper.GetFreeMemoryBytes() for accurate cross-platform memory info
+        var helperType = typeof(SharpTS.Runtime.BuiltIns.SystemInfoHelper);
+        var method = helperType.GetMethod("GetFreeMemoryBytes")!;
+        il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }
