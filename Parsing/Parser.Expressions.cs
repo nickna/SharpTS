@@ -531,6 +531,9 @@ public partial class Parser
             {
                 do
                 {
+                    // Handle trailing comma: [1, 2, 3,]
+                    if (Check(TokenType.RIGHT_BRACKET)) break;
+
                     if (Match(TokenType.DOT_DOT_DOT))
                     {
                         elements.Add(new Expr.Spread(Expression()));
@@ -552,6 +555,9 @@ public partial class Parser
             {
                 do
                 {
+                    // Handle trailing comma: { a: 1, b: 2, }
+                    if (Check(TokenType.RIGHT_BRACE)) break;
+
                     // Check for spread: { ...obj }
                     if (Match(TokenType.DOT_DOT_DOT))
                     {
@@ -791,24 +797,42 @@ public partial class Parser
                     // Array destructure parameter: ([a, b]) => ...
                     int line = Peek().Line;
                     Consume(TokenType.LEFT_BRACKET, "");
-                    var pattern = ParseArrayPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
-                    destructuredParams.Add((synthName, pattern));
+                    try
+                    {
+                        var pattern = ParseArrayPattern();
+                        Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                        string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                        Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                        destructuredParams.Add((synthName, pattern));
+                    }
+                    catch
+                    {
+                        // Not a valid destructuring pattern, backtrack
+                        _current = savedPosition;
+                        return null;
+                    }
                 }
                 else if (Check(TokenType.LEFT_BRACE))
                 {
                     // Object destructure parameter: ({ x, y }) => ...
                     int line = Peek().Line;
                     Consume(TokenType.LEFT_BRACE, "");
-                    var pattern = ParseObjectPattern();
-                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
-                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
-                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
-                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
-                    destructuredParams.Add((synthName, pattern));
+                    try
+                    {
+                        var pattern = ParseObjectPattern();
+                        Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                        string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                        Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                        parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                        destructuredParams.Add((synthName, pattern));
+                    }
+                    catch
+                    {
+                        // Not a valid destructuring pattern (e.g., it's an object literal), backtrack
+                        _current = savedPosition;
+                        return null;
+                    }
                 }
                 else
                 {

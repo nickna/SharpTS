@@ -39,6 +39,9 @@ public partial class Parser
         {
             do
             {
+                // Handle trailing comma: function foo(a, b,) {}
+                if (Check(TokenType.RIGHT_PAREN)) break;
+
                 // Parse parameter decorators
                 List<Decorator>? paramDecorators = ParseDecorators();
 

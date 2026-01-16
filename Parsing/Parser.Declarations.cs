@@ -56,7 +56,7 @@ public partial class Parser
             // Check for const enum
             if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: true);
             // Otherwise it's a const variable declaration
-            return VarDeclaration();
+            return VarDeclaration(isConst: true);
         }
         if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: false);
         if (Match(TokenType.NAMESPACE)) return NamespaceDeclaration();
@@ -307,7 +307,7 @@ public partial class Parser
         return new Stmt.Enum(name, members, isConst);
     }
 
-    private Stmt VarDeclaration()
+    private Stmt VarDeclaration(bool isConst = false)
     {
         // Check for destructuring patterns
         if (Check(TokenType.LEFT_BRACKET))
@@ -328,6 +328,12 @@ public partial class Parser
         if (Match(TokenType.EQUAL))
         {
             initializer = Expression();
+        }
+
+        // const declarations require an initializer
+        if (isConst && initializer == null)
+        {
+            throw new Exception($"Parse Error at line {name.Line}: 'const' declarations must be initialized.");
         }
 
         Consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");

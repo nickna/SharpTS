@@ -4,6 +4,9 @@ public partial class Parser
 {
     private Stmt Statement()
     {
+        // Handle empty statements (just semicolons)
+        if (Match(TokenType.SEMICOLON)) return new Stmt.Expression(new Expr.Literal(null));
+
         if (Match(TokenType.BREAK)) return BreakStatement();
         if (Match(TokenType.CONTINUE)) return ContinueStatement();
         if (Match(TokenType.FOR)) return ForStatement();
