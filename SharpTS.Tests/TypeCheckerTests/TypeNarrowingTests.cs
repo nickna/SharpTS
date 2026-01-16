@@ -51,10 +51,10 @@ public class TypeNarrowingTests
         Assert.Equal("42\n0\n", result);
     }
 
-    [Fact(Skip = "Type narrowing after typeof check not yet implemented - TypeChecker doesn't narrow union types")]
+    [Fact]
     public void TypeofString_NarrowsUnionType()
     {
-        // This would be the ideal behavior where typeof narrows the type
+        // typeof narrows the type - value is narrowed to string in the if branch
         var source = """
             function process(value: string | number): string {
                 if (typeof value === "string") {
@@ -106,10 +106,10 @@ public class TypeNarrowingTests
         Assert.Equal("woof\n...\n", result);
     }
 
-    [Fact(Skip = "Type narrowing after instanceof check not yet implemented")]
+    [Fact]
     public void Instanceof_NarrowsToClass()
     {
-        // Ideal behavior: instanceof should narrow the type so we don't need explicit cast
+        // instanceof narrows the type - animal is narrowed to Dog in the if branch
         var source = """
             class Animal {
                 speak(): void {
@@ -124,7 +124,7 @@ public class TypeNarrowingTests
 
             function handle(animal: Animal): void {
                 if (animal instanceof Dog) {
-                    animal.bark();  // Should work without cast after instanceof
+                    animal.bark();  // Works without cast after instanceof
                 } else {
                     animal.speak();
                 }
@@ -213,7 +213,7 @@ public class TypeNarrowingTests
         Assert.Equal("meow\nwoof\n", result);
     }
 
-    [Fact(Skip = "Type narrowing with 'in' operator not yet implemented")]
+    [Fact]
     public void InOperator_NarrowsTypeWithProperty()
     {
         // Ideal behavior: 'in' operator should narrow union types
@@ -245,7 +245,7 @@ public class TypeNarrowingTests
 
     #region Discriminated Unions
 
-    [Fact(Skip = "Discriminated union narrowing not yet implemented")]
+    [Fact]
     public void DiscriminatedUnion_StringLiteralDiscriminant()
     {
         var source = """
@@ -281,16 +281,16 @@ public class TypeNarrowingTests
 
     #region Equality Narrowing
 
-    [Fact(Skip = "Type narrowing after null check not yet implemented")]
-    public void NullCheck_RuntimeBehavior()
+    [Fact]
+    public void NullCheck_NarrowsType()
     {
-        // Without type narrowing, returning `value` after null check still fails
+        // Type narrowing after null check - value is narrowed to string after early return
         var source = """
             function process(value: string | null): string {
                 if (value === null) {
                     return "was null";
                 }
-                return value;  // Would need type narrowing to know value is string here
+                return value;  // Type narrowing knows value is string here
             }
 
             console.log(process(null));
@@ -321,15 +321,16 @@ public class TypeNarrowingTests
         Assert.Equal("was null\nhello\n", result);
     }
 
-    [Fact(Skip = "Type narrowing after undefined check not yet implemented")]
-    public void UndefinedCheck_RuntimeBehavior()
+    [Fact]
+    public void UndefinedCheck_NarrowsType()
     {
+        // Type narrowing after undefined check - value is narrowed to number after early return
         var source = """
             function process(value: number | undefined): number {
                 if (value === undefined) {
                     return 0;
                 }
-                return value;
+                return value;  // Type narrowing knows value is number here
             }
 
             console.log(process(undefined));
@@ -344,15 +345,16 @@ public class TypeNarrowingTests
 
     #region Control Flow
 
-    [Fact(Skip = "Type narrowing after control flow not yet implemented")]
+    [Fact]
     public void ControlFlow_EarlyReturn()
     {
+        // Type narrowing with early return - value is narrowed to string after if
         var source = """
             function process(value: string | null): string {
                 if (value === null) {
                     return "null";
                 }
-                return value;
+                return value;  // Type narrowing knows value is string after null check
             }
 
             console.log(process(null));
@@ -414,7 +416,7 @@ public class TypeNarrowingTests
 
     #region Array Type Narrowing
 
-    [Fact(Skip = "Array.isArray type narrowing not yet implemented")]
+    [Fact]
     public void ArrayIsArray_Narrows()
     {
         var source = """

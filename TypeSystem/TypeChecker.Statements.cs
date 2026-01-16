@@ -238,6 +238,20 @@ public partial class TypeChecker
                     {
                         CheckStmt(ifStmt.ElseBranch);
                     }
+
+                    // Control flow narrowing: if then-branch terminates and no else branch,
+                    // subsequent code in the same scope sees the excluded type
+                    if (ifStmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(ifStmt.ThenBranch))
+                    {
+                        _environment.Define(guard.VarName, guard.ExcludedType);
+                    }
+                    // If else-branch terminates and then-branch doesn't,
+                    // subsequent code sees the narrowed type
+                    else if (ifStmt.ElseBranch != null && guard.NarrowedType != null &&
+                             AlwaysTerminates(ifStmt.ElseBranch) && !AlwaysTerminates(ifStmt.ThenBranch))
+                    {
+                        _environment.Define(guard.VarName, guard.NarrowedType);
+                    }
                 }
                 else
                 {
@@ -472,4 +486,19 @@ public partial class TypeChecker
             }
         }
     }
+
+    /// <summary>
+    /// Determines if a statement always terminates (returns, throws, etc.).
+    /// Used for control flow analysis to determine if narrowed types persist.
+    /// </summary>
+    private static bool AlwaysTerminates(Stmt stmt) => stmt switch
+    {
+        Stmt.Return => true,
+        Stmt.Throw => true,
+        Stmt.Block block => block.Statements.Count > 0 && AlwaysTerminates(block.Statements[^1]),
+        Stmt.Sequence seq => seq.Statements.Count > 0 && AlwaysTerminates(seq.Statements[^1]),
+        Stmt.If ifStmt => AlwaysTerminates(ifStmt.ThenBranch) &&
+                         ifStmt.ElseBranch != null && AlwaysTerminates(ifStmt.ElseBranch),
+        _ => false
+    };
 }
