@@ -193,11 +193,10 @@ public partial class Interpreter
         if (mainFunc == null)
             return;
 
-        // Get the main function from the environment
-        if (!_environment.IsDefined(mainFunc.Name.Lexeme))
+        // Get the main function from the environment (single scope traversal)
+        if (!_environment.TryGet(mainFunc.Name.Lexeme, out object? mainValue))
             return;
 
-        var mainValue = _environment.Get(mainFunc.Name);
         if (mainValue is not SharpTSFunction mainFn)
             return;
 
