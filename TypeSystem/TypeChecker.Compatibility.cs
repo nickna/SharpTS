@@ -497,7 +497,10 @@ public partial class TypeChecker
             {
                 if (!IsCompatible(f1.ParamTypes[i], f2.ParamTypes[i])) return false;
             }
-            // Return type: actual must be compatible with expected
+            // Return type: if expected return type is void, any return type is acceptable
+            // This is standard TypeScript behavior - void context ignores the return value
+            if (f1.ReturnType is TypeInfo.Void) return true;
+            // Otherwise, actual must be compatible with expected
             return IsCompatible(f1.ReturnType, f2.ReturnType);
         }
 

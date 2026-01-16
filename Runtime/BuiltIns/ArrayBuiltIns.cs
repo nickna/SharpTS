@@ -6,7 +6,7 @@ namespace SharpTS.Runtime.BuiltIns;
 public static class ArrayBuiltIns
 {
     // Cache unbound methods to avoid allocation of the delegate and method definition on every access
-    private static readonly BuiltInMethod _push = new("push", 1, Push);
+    private static readonly BuiltInMethod _push = new("push", 1, int.MaxValue, Push); // variadic: push(item1, item2, ...)
     private static readonly BuiltInMethod _pop = new("pop", 0, Pop);
     private static readonly BuiltInMethod _shift = new("shift", 0, Shift);
     private static readonly BuiltInMethod _unshift = new("unshift", 1, Unshift);
@@ -57,7 +57,11 @@ public static class ArrayBuiltIns
     private static object? Push(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
-        arr.Elements.Add(args[0]);
+        // Add all arguments (variadic push)
+        foreach (var arg in args)
+        {
+            arr.Elements.Add(arg);
+        }
         return (double)arr.Elements.Count;
     }
 

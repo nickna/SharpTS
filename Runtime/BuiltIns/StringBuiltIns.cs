@@ -13,7 +13,7 @@ public static class StringBuiltIns
     private static readonly BuiltInMethod _toLowerCase = new("toLowerCase", 0, ToLowerCase);
     private static readonly BuiltInMethod _trim = new("trim", 0, Trim);
     private static readonly BuiltInMethod _replace = new("replace", 2, Replace);
-    private static readonly BuiltInMethod _split = new("split", 1, Split);
+    private static readonly BuiltInMethod _split = new("split", 1, 2, Split); // optional limit parameter
     private static readonly BuiltInMethod _match = new("match", 1, Match);
     private static readonly BuiltInMethod _search = new("search", 1, Search);
     private static readonly BuiltInMethod _includes = new("includes", 1, Includes);
@@ -126,12 +126,17 @@ public static class StringBuiltIns
     private static object? Split(Interpreter _, object? recv, List<object?> args)
     {
         var str = (string)recv!;
+        int? limit = args.Count > 1 && args[1] is double d ? (int)d : null;
 
         // Handle RegExp separator
         if (args[0] is SharpTSRegExp regex)
         {
-            var parts = regex.Split(str);
-            return new SharpTSArray(parts.Select(p => (object?)p).ToList());
+            string[] parts = regex.Split(str);
+            // Apply limit if specified
+            IEnumerable<string> resultParts = limit.HasValue && limit.Value >= 0
+                ? parts.Take(limit.Value)
+                : parts;
+            return new SharpTSArray(resultParts.Select(p => (object?)p).ToList());
         }
 
         // String separator
@@ -146,6 +151,13 @@ public static class StringBuiltIns
         {
             stringParts = str.Split(separator);
         }
+
+        // Apply limit if specified (JavaScript behavior: limit restricts number of results)
+        if (limit.HasValue && limit.Value >= 0)
+        {
+            stringParts = stringParts.Take(limit.Value).ToArray();
+        }
+
         var elements = stringParts.Select(p => (object?)p).ToList();
         return new SharpTSArray(elements);
     }

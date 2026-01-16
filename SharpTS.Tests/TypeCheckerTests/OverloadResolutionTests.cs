@@ -122,7 +122,7 @@ public class OverloadResolutionTests
 
     #region Array Method Overloads
 
-    [Fact(Skip = "Array.push() with multiple arguments not yet supported")]
+    [Fact]
     public void ArrayPush_AcceptsElementType()
     {
         var source = """
@@ -358,7 +358,7 @@ public class OverloadResolutionTests
         Assert.Equal("hello\nworld\n", result);
     }
 
-    [Fact(Skip = "String.split() with limit parameter not yet supported")]
+    [Fact]
     public void StringSplit_WithLimit()
     {
         var source = """

@@ -118,7 +118,7 @@ public class FunctionCompatibilityTests
         Assert.Equal("Animal\n", result);
     }
 
-    [Fact(Skip = "TypeChecker doesn't allow assigning non-void returning functions to void function types")]
+    [Fact]
     public void VoidReturnType_AcceptsAnyReturn()
     {
         var source = """

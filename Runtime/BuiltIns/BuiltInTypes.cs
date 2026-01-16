@@ -23,7 +23,7 @@ public static class BuiltInTypes
             "toLowerCase" => new TypeInfo.Function([], StringType),
             "trim" => new TypeInfo.Function([], StringType),
             "replace" => new TypeInfo.Function([StringType, StringType], StringType),
-            "split" => new TypeInfo.Function([StringType], new TypeInfo.Array(StringType)),
+            "split" => new TypeInfo.Function([StringType, NumberType], new TypeInfo.Array(StringType), RequiredParams: 1), // limit is optional
             "includes" => new TypeInfo.Function([StringType], BooleanType),
             "startsWith" => new TypeInfo.Function([StringType], BooleanType),
             "endsWith" => new TypeInfo.Function([StringType], BooleanType),
@@ -47,7 +47,7 @@ public static class BuiltInTypes
         return name switch
         {
             "length" => NumberType,
-            "push" => new TypeInfo.Function([elementType], NumberType),
+            "push" => new TypeInfo.Function([new TypeInfo.Array(elementType)], NumberType, RequiredParams: 1, HasRestParam: true), // variadic: push(...items: T[])
             "pop" => new TypeInfo.Function([], elementType),
             "shift" => new TypeInfo.Function([], elementType),
             "unshift" => new TypeInfo.Function([elementType], NumberType),
