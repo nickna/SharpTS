@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-14 (Added `import.meta.url`, named tuple elements, `import type`, `as const`)
+**Last Updated:** 2026-01-16 (Added missing feature tracking for sections 1-12)
 
 ## Legend
 - ✅ Implemented
@@ -36,6 +36,12 @@ This document tracks TypeScript language features and their implementation statu
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
 | Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
+| `object` type | ❌ | Non-primitive type (excludes string, number, etc.) |
+| `unique symbol` type | ❌ | For const symbol declarations |
+| `asserts` type predicates | ❌ | Assertion functions (`asserts x is T`) |
+| `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |
+| Variadic tuple types | ❌ | `[...T]` where T is a tuple type |
+| Definite assignment assertion | ❌ | `let x!: number` syntax |
 
 ---
 
@@ -67,6 +73,10 @@ This document tracks TypeScript language features and their implementation statu
 | `implements` keyword | ✅ | Class implementing interface |
 | Method overloading | ✅ | Multiple signatures with implementation function |
 | `override` keyword | ✅ | Explicit override marker for methods/accessors |
+| Private fields (`#field`) | ❌ | ES2022 hard private fields |
+| Static blocks | ❌ | `static { }` for static initialization |
+| `accessor` keyword | ❌ | Auto-accessor class fields (TS 4.9+) |
+| `declare` field modifier | ❌ | Ambient field declarations |
 
 ---
 
@@ -84,6 +94,8 @@ This document tracks TypeScript language features and their implementation statu
 | Overloads | ✅ | Multiple signatures with implementation function |
 | `this` parameter typing | ✅ | Explicit `this` type in function declarations |
 | Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
+| Named function expressions | ❌ | `const f = function myFunc() {}` |
+| Constructor signatures | ❌ | `new (...args): T` in interfaces |
 
 ---
 
@@ -99,6 +111,7 @@ This document tracks TypeScript language features and their implementation statu
 | Try/catch in async | ✅ | Await inside try/catch/finally blocks |
 | Nested await in args | ✅ | `await fn(await getValue())` |
 | `Promise.all/race/any/allSettled` | ✅ | Full interpreter support; IL compiler: all/race/allSettled as pure IL state machines, any delegates to runtime |
+| `Promise.resolve/reject` | ❌ | Static factory methods |
 
 ---
 
@@ -116,6 +129,10 @@ This document tracks TypeScript language features and their implementation statu
 | Dynamic imports | ✅ | `await import('./file')` with module registry for compiled mode, `typeof import()` typing for literal paths |
 | `import type` | ✅ | Statement-level (`import type { T }`) and inline (`import { type T }`) type-only imports |
 | `import.meta` | ✅ | `import.meta.url` for module metadata |
+| `export =` / `import =` | ❌ | CommonJS interop syntax |
+| Ambient module declarations | ❌ | `declare module 'x' { }` |
+| Module augmentation | ❌ | Extending existing module types |
+| Triple-slash references | ❌ | `/// <reference>` directives |
 
 ---
 
@@ -139,6 +156,9 @@ This document tracks TypeScript language features and their implementation statu
 | Exponentiation (`**`) | ✅ | Right-associative |
 | Spread operator (`...`) | ✅ | In arrays/objects/calls |
 | Non-null assertion (`x!`) | ✅ | Postfix operator to assert non-null |
+| Logical assignment (`&&=`, `\|\|=`, `??=`) | ❌ | Compound logical assignment operators |
+| `keyof` operator | ❌ | Extract keys as union type |
+| `typeof` in type position | ❌ | Extract type from value |
 
 ---
 
@@ -175,6 +195,7 @@ This document tracks TypeScript language features and their implementation statu
 | `for...in` loops | ✅ | Object key iteration |
 | `do...while` loops | ✅ | Post-condition loop |
 | Label statements | ✅ | `label: for (...)` with break/continue support |
+| Optional catch binding | ❌ | `catch { }` without parameter |
 
 ---
 
@@ -194,6 +215,16 @@ This document tracks TypeScript language features and their implementation statu
 | `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys; ES2025 Set operations (union, intersection, difference, symmetricDifference, isSubsetOf, isSupersetOf, isDisjointFrom) |
 | `WeakMap`/`WeakSet` | ✅ | Full API (get, set, has, delete for WeakMap; add, has, delete for WeakSet); object-only keys/values; no iteration or size |
 | `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
+| `Array.from()` | ❌ | Create array from iterable |
+| `Array.of()` | ❌ | Create array from arguments |
+| `Object.assign()` | ❌ | Merge objects |
+| `Object.fromEntries()` | ❌ | Inverse of `Object.entries()` |
+| `Object.hasOwn()` | ❌ | Safer `hasOwnProperty` check |
+| `Object.freeze()`/`seal()` | ❌ | Object immutability |
+| `Error` class | ❌ | Error and subtypes (TypeError, RangeError, etc.) |
+| `setTimeout`/`setInterval` | ❌ | Timer functions |
+| `clearTimeout`/`clearInterval` | ❌ | Cancel timer functions |
+| `globalThis` | ❌ | Global object reference |
 
 ---
 
@@ -212,6 +243,8 @@ This document tracks TypeScript language features and their implementation statu
 | Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
 | Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
+| Tagged template literals | ❌ | `` tag`template` `` syntax |
+| Numeric separators | ❌ | `1_000_000` for readability |
 
 ---
 
@@ -233,6 +266,11 @@ This document tracks TypeScript language features and their implementation statu
 | Conditional types | ✅ | `T extends U ? X : Y`, `infer` keyword, distribution over unions |
 | Template literal types | ✅ | `` `prefix${string}` ``, union expansion, pattern matching, `infer` support |
 | Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>`, `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>` |
+| Additional utility types | ❌ | `ReturnType<T>`, `Parameters<T>`, `ConstructorParameters<T>`, `InstanceType<T>`, `ThisType<T>`, `Awaited<T>`, `NonNullable<T>`, `Extract<T, U>`, `Exclude<T, U>` |
+| `using`/`await using` | ❌ | Explicit resource management (TS 5.2+) |
+| Const type parameters | ❌ | `<const T>` syntax (TS 5.0+) |
+| Variance annotations | ❌ | `in`/`out` modifiers on type parameters |
+| Recursive type aliases | ❌ | Self-referential type definitions |
 
 ---
 
