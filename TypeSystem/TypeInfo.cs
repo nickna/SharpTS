@@ -88,6 +88,20 @@ public abstract record TypeInfo
             $"overloaded ({Signatures.Count} signatures) => {Implementation.ReturnType}";
     }
 
+    /// <summary>
+    /// Represents a generic overloaded function with type parameters shared across all signatures.
+    /// TypeScript-style: all overload signatures share the same type parameter names.
+    /// </summary>
+    public record GenericOverloadedFunction(
+        List<TypeParameter> TypeParams,       // Shared type parameters across all overloads
+        List<TypeInfo.Function> Signatures,   // Callable overload signatures (with TypeParameter placeholders)
+        TypeInfo.Function Implementation      // The actual implementation's signature
+    ) : TypeInfo
+    {
+        public override string ToString() =>
+            $"<{string.Join(", ", TypeParams.Select(tp => tp.Name))}> overloaded ({Signatures.Count} signatures) => {Implementation.ReturnType}";
+    }
+
     public record Class(
         string Name,
         TypeInfo? Superclass,  // Can be Class or InstantiatedGeneric (for extends Box<number>)

@@ -189,6 +189,9 @@ public partial class TypeChecker
     // Track pending overload signatures for top-level functions
     private readonly Dictionary<string, List<TypeInfo.Function>> _pendingOverloadSignatures = [];
 
+    // Track type parameters for generic overloaded functions
+    private readonly Dictionary<string, List<TypeInfo.TypeParameter>> _pendingOverloadTypeParams = [];
+
     // Decorator mode configuration
     private DecoratorMode _decoratorMode = DecoratorMode.None;
 

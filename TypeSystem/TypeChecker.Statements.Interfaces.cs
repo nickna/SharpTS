@@ -21,35 +21,49 @@ public partial class TypeChecker
         if (_environment.IsDefinedLocally(interfaceStmt.Name.Lexeme))
             return;
 
-        // Handle generic type parameters
+        // Handle generic type parameters with two-pass approach to support recursive constraints
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
         if (interfaceStmt.TypeParams != null && interfaceStmt.TypeParams.Count > 0)
         {
             interfaceTypeParams = [];
+
+            // First pass: define all type parameters without constraints
             foreach (var tp in interfaceStmt.TypeParams)
             {
-                // During pre-registration, we use a simple constraint parsing
-                // that may fail on forward references - that's OK, we catch the error
-                TypeInfo? constraint = null;
-                TypeInfo? defaultType = null;
-                try
-                {
-                    constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                    defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                }
-                catch
-                {
-                    // Ignore constraint/default parsing errors during pre-registration
-                }
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
-                interfaceTypeParams.Add(typeParam);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+
+            // Second pass: parse constraints (which may reference other type parameters)
+            using (new EnvironmentScope(this, interfaceTypeEnv))
+            {
+                foreach (var tp in interfaceStmt.TypeParams)
+                {
+                    // During pre-registration, we use a simple constraint parsing
+                    // that may fail on forward references - that's OK, we catch the error
+                    TypeInfo? constraint = null;
+                    TypeInfo? defaultType = null;
+                    try
+                    {
+                        constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                        defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                    }
+                    catch
+                    {
+                        // Ignore constraint/default parsing errors during pre-registration
+                    }
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                    interfaceTypeParams.Add(typeParam);
+                    // Redefine with the actual constraint
+                    interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                }
             }
         }
 
         // Parse member types (may have forward references that resolve to Any, which is OK)
         Dictionary<string, TypeInfo> members = [];
+        Dictionary<string, List<TypeInfo.Function>> pendingOverloads = [];
         HashSet<string> optionalMembers = [];
 
         using (new EnvironmentScope(this, interfaceTypeEnv))
@@ -58,7 +72,26 @@ public partial class TypeChecker
             {
                 try
                 {
-                    members[member.Name.Lexeme] = ToTypeInfo(member.Type);
+                    var memberType = ToTypeInfo(member.Type);
+
+                    // Check if this is a duplicate member name (overload)
+                    if (members.TryGetValue(member.Name.Lexeme, out var existingType))
+                    {
+                        // This is an overloaded method - collect signatures
+                        if (!pendingOverloads.TryGetValue(member.Name.Lexeme, out var overloadList))
+                        {
+                            overloadList = [];
+                            pendingOverloads[member.Name.Lexeme] = overloadList;
+                            if (existingType is TypeInfo.Function existingFunc)
+                                overloadList.Add(existingFunc);
+                        }
+                        if (memberType is TypeInfo.Function newFunc)
+                            overloadList.Add(newFunc);
+                    }
+                    else
+                    {
+                        members[member.Name.Lexeme] = memberType;
+                    }
                 }
                 catch
                 {
@@ -69,6 +102,12 @@ public partial class TypeChecker
                 {
                     optionalMembers.Add(member.Name.Lexeme);
                 }
+            }
+
+            // Convert collected overloads to OverloadedFunction types
+            foreach (var (name, signatures) in pendingOverloads)
+            {
+                members[name] = new TypeInfo.OverloadedFunction(signatures, signatures[0]);
             }
         }
 
@@ -123,24 +162,38 @@ public partial class TypeChecker
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
     {
-        // Handle generic type parameters
+        // Handle generic type parameters with two-pass approach to support recursive constraints (e.g., T extends TreeNode<T>)
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
         if (interfaceStmt.TypeParams != null && interfaceStmt.TypeParams.Count > 0)
         {
             interfaceTypeParams = [];
+
+            // First pass: define all type parameters without constraints so they can reference each other
             foreach (var tp in interfaceStmt.TypeParams)
             {
-                TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
-                interfaceTypeParams.Add(typeParam);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+
+            // Second pass: parse constraints (which may reference other type parameters, including themselves)
+            using (new EnvironmentScope(this, interfaceTypeEnv))
+            {
+                foreach (var tp in interfaceStmt.TypeParams)
+                {
+                    TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                    TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                    interfaceTypeParams.Add(typeParam);
+                    // Redefine with the actual constraint
+                    interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                }
             }
         }
 
         // Use interfaceTypeEnv for member type resolution so T resolves correctly
         Dictionary<string, TypeInfo> members = [];
+        Dictionary<string, List<TypeInfo.Function>> pendingOverloads = []; // Track overloaded methods
         HashSet<string> optionalMembers = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
@@ -150,11 +203,43 @@ public partial class TypeChecker
         {
         foreach (var member in interfaceStmt.Members)
         {
-            members[member.Name.Lexeme] = ToTypeInfo(member.Type);
+            var memberType = ToTypeInfo(member.Type);
+
+            // Check if this is a duplicate member name (overload)
+            if (members.TryGetValue(member.Name.Lexeme, out var existingType))
+            {
+                // This is an overloaded method - collect signatures
+                if (!pendingOverloads.TryGetValue(member.Name.Lexeme, out var overloadList))
+                {
+                    overloadList = [];
+                    pendingOverloads[member.Name.Lexeme] = overloadList;
+
+                    // Add the first signature to the overload list
+                    if (existingType is TypeInfo.Function existingFunc)
+                        overloadList.Add(existingFunc);
+                }
+
+                // Add the new signature
+                if (memberType is TypeInfo.Function newFunc)
+                    overloadList.Add(newFunc);
+            }
+            else
+            {
+                members[member.Name.Lexeme] = memberType;
+            }
+
             if (member.IsOptional)
             {
                 optionalMembers.Add(member.Name.Lexeme);
             }
+        }
+
+        // Convert collected overloads to OverloadedFunction types
+        foreach (var (name, signatures) in pendingOverloads)
+        {
+            // Use the first signature as the "implementation" for the overloaded function
+            // In interfaces, there's no true implementation, so we just need the signatures
+            members[name] = new TypeInfo.OverloadedFunction(signatures, signatures[0]);
         }
 
         // Process index signatures

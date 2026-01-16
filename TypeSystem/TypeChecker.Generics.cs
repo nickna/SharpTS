@@ -257,13 +257,24 @@ public partial class TypeChecker
         // Fill in defaults for missing type arguments
         var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, generic.Name);
 
-        // Validate constraints
+        // Build substitution map first (needed for recursive constraints)
+        Dictionary<string, TypeInfo> substitutions = [];
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
+        {
+            substitutions[generic.TypeParams[i].Name] = resolvedTypeArgs[i];
+        }
+
+        // Validate constraints - substitute type params in constraint first to handle recursive constraints
         for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
+            if (tp.Constraint != null)
             {
-                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                var substitutedConstraint = Substitute(tp.Constraint, substitutions);
+                if (!IsCompatible(substitutedConstraint, resolvedTypeArgs[i]))
+                {
+                    throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{substitutedConstraint}' for type parameter '{tp.Name}'.");
+                }
             }
         }
 
@@ -279,13 +290,25 @@ public partial class TypeChecker
         // Fill in defaults for missing type arguments
         var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, generic.Name);
 
-        // Validate constraints
+        // Build substitution map first (needed for recursive constraints like T extends TreeNode<T>)
+        Dictionary<string, TypeInfo> substitutions = [];
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
+        {
+            substitutions[generic.TypeParams[i].Name] = resolvedTypeArgs[i];
+        }
+
+        // Validate constraints - substitute type params in constraint first to handle recursive constraints
         for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
+            if (tp.Constraint != null)
             {
-                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                // Substitute type parameters in the constraint (e.g., TreeNode<T> becomes TreeNode<MyNode>)
+                var substitutedConstraint = Substitute(tp.Constraint, substitutions);
+                if (!IsCompatible(substitutedConstraint, resolvedTypeArgs[i]))
+                {
+                    throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{substitutedConstraint}' for type parameter '{tp.Name}'.");
+                }
             }
         }
 
@@ -301,21 +324,25 @@ public partial class TypeChecker
         // Fill in defaults for missing type arguments
         var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, "function");
 
-        // Validate constraints
-        for (int i = 0; i < resolvedTypeArgs.Count; i++)
-        {
-            var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
-            {
-                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
-            }
-        }
-
-        // Create substitution map
+        // Create substitution map first (needed for recursive constraints)
         Dictionary<string, TypeInfo> substitutions = [];
         for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             substitutions[generic.TypeParams[i].Name] = resolvedTypeArgs[i];
+        }
+
+        // Validate constraints - substitute type params in constraint first to handle recursive constraints
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
+        {
+            var tp = generic.TypeParams[i];
+            if (tp.Constraint != null)
+            {
+                var substitutedConstraint = Substitute(tp.Constraint, substitutions);
+                if (!IsCompatible(substitutedConstraint, resolvedTypeArgs[i]))
+                {
+                    throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{substitutedConstraint}' for type parameter '{tp.Name}'.");
+                }
+            }
         }
 
         // Substitute type parameters in the function signature

@@ -413,7 +413,7 @@ public class GenericConstraintTests
 
     #region Recursive Constraints
 
-    [Fact(Skip = "Recursive constraints need special handling")]
+    [Fact]
     public void RecursiveConstraint_Works()
     {
         var source = """

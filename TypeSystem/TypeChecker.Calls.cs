@@ -215,6 +215,12 @@ public partial class TypeChecker
             return ResolveOverloadedCall(call, overloadedFunc);
         }
 
+        // Handle generic overloaded function calls
+        if (calleeType is TypeInfo.GenericOverloadedFunction genericOverloadedFunc)
+        {
+            return ResolveGenericOverloadedCall(call, genericOverloadedFunc);
+        }
+
         if (calleeType is TypeInfo.Function funcType)
         {
             // Count non-spread arguments and check for spreads
@@ -378,6 +384,87 @@ public partial class TypeChecker
             if (TryMatchSignature(signature, argTypes))
             {
                 matchingSignatures.Add(signature);
+            }
+        }
+
+        if (matchingSignatures.Count == 0)
+        {
+            string argTypesStr = string.Join(", ", argTypes);
+            throw new TypeCheckException($" No overload matches call with arguments ({argTypesStr}).");
+        }
+
+        // If multiple signatures match, select the most specific one
+        TypeInfo.Function bestMatch = SelectMostSpecificOverload(matchingSignatures, argTypes);
+
+        return bestMatch.ReturnType;
+    }
+
+    /// <summary>
+    /// Resolve a generic overloaded function call by inferring type arguments and finding the best matching signature.
+    /// </summary>
+    private TypeInfo ResolveGenericOverloadedCall(Expr.Call call, TypeInfo.GenericOverloadedFunction genericOverloadedFunc)
+    {
+        // Collect argument types
+        List<TypeInfo> argTypes = [];
+        foreach (var arg in call.Arguments)
+        {
+            if (arg is Expr.Spread spread)
+            {
+                argTypes.Add(CheckExpr(spread.Expression));
+            }
+            else
+            {
+                argTypes.Add(CheckExpr(arg));
+            }
+        }
+
+        // Determine type arguments (explicit or inferred)
+        List<TypeInfo> typeArgs;
+        if (call.TypeArgs != null && call.TypeArgs.Count > 0)
+        {
+            // Explicit type arguments provided
+            typeArgs = call.TypeArgs.Select(ToTypeInfo).ToList();
+        }
+        else
+        {
+            // Infer type arguments from call arguments
+            // Create a temporary GenericFunction to use the existing inference logic
+            // We use the implementation signature as a base for inference
+            var tempGenericFunc = new TypeInfo.GenericFunction(
+                genericOverloadedFunc.TypeParams,
+                genericOverloadedFunc.Implementation.ParamTypes,
+                genericOverloadedFunc.Implementation.ReturnType,
+                genericOverloadedFunc.Implementation.RequiredParams,
+                genericOverloadedFunc.Implementation.HasRestParam,
+                genericOverloadedFunc.Implementation.ThisType);
+            typeArgs = InferTypeArguments(tempGenericFunc, argTypes);
+        }
+
+        // Create substitution map
+        Dictionary<string, TypeInfo> substitutions = [];
+        for (int i = 0; i < typeArgs.Count && i < genericOverloadedFunc.TypeParams.Count; i++)
+        {
+            substitutions[genericOverloadedFunc.TypeParams[i].Name] = typeArgs[i];
+        }
+
+        // Instantiate each signature with the inferred type arguments and find matches
+        List<TypeInfo.Function> matchingSignatures = [];
+
+        foreach (var signature in genericOverloadedFunc.Signatures)
+        {
+            // Substitute type parameters in the signature
+            var instantiatedParams = signature.ParamTypes.Select(p => Substitute(p, substitutions)).ToList();
+            var instantiatedReturn = Substitute(signature.ReturnType, substitutions);
+            var instantiatedSig = new TypeInfo.Function(
+                instantiatedParams,
+                instantiatedReturn,
+                signature.RequiredParams,
+                signature.HasRestParam,
+                signature.ThisType);
+
+            if (TryMatchSignature(instantiatedSig, argTypes))
+            {
+                matchingSignatures.Add(instantiatedSig);
             }
         }
 

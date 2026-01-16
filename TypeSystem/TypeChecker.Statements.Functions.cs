@@ -222,6 +222,12 @@ public partial class TypeChecker
                 _pendingOverloadSignatures[funcName] = signatures;
             }
             signatures.Add(thisFuncType);
+
+            // Also save type parameters if this is a generic overload
+            if (typeParams != null && typeParams.Count > 0)
+            {
+                _pendingOverloadTypeParams[funcName] = typeParams;
+            }
             return;
         }
 
@@ -240,8 +246,18 @@ public partial class TypeChecker
                 }
             }
 
-            // Create overloaded function type
-            funcType = new TypeInfo.OverloadedFunction(pendingSignatures, thisFuncType);
+            // Check if we have type parameters (generic overloaded function)
+            if (_pendingOverloadTypeParams.TryGetValue(funcName, out var overloadTypeParams))
+            {
+                // Create generic overloaded function type
+                funcType = new TypeInfo.GenericOverloadedFunction(overloadTypeParams, pendingSignatures, thisFuncType);
+                _pendingOverloadTypeParams.Remove(funcName);
+            }
+            else
+            {
+                // Create non-generic overloaded function type
+                funcType = new TypeInfo.OverloadedFunction(pendingSignatures, thisFuncType);
+            }
 
             // Clear pending signatures
             _pendingOverloadSignatures.Remove(funcName);
@@ -259,7 +275,7 @@ public partial class TypeChecker
 
         // Define or update the function type (may have been hoisted earlier)
         // For overloaded functions, we need to update with the complete type
-        if (!_environment.IsDefinedLocally(funcName) || funcType is TypeInfo.OverloadedFunction)
+        if (!_environment.IsDefinedLocally(funcName) || funcType is TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction)
         {
             _environment.Define(funcName, funcType);
         }
@@ -273,6 +289,11 @@ public partial class TypeChecker
         else if (funcType is TypeInfo.OverloadedFunction of)
         {
             _typeMap.SetFunctionType(funcName, of.Implementation);
+        }
+        else if (funcType is TypeInfo.GenericOverloadedFunction gof)
+        {
+            // For generic overloaded functions, use the implementation type
+            _typeMap.SetFunctionType(funcName, gof.Implementation);
         }
         else if (funcType is TypeInfo.GenericFunction gf)
         {

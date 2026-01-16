@@ -47,7 +47,7 @@ public class OverloadResolutionTests
         Assert.Equal("42\ntrue\n", result);
     }
 
-    [Fact(Skip = "parseInt() global function not available in SharpTS")]
+    [Fact]
     public void OverloadReturnType_DependsOnOverload()
     {
         var source = """
@@ -222,7 +222,7 @@ public class OverloadResolutionTests
 
     #region Generic Overloads
 
-    [Fact(Skip = "Generic function overload type inference not yet fully implemented")]
+    [Fact]
     public void GenericOverload_InfersTypeArg()
     {
         var source = """
@@ -297,7 +297,7 @@ public class OverloadResolutionTests
 
     #region Interface Method Overloads
 
-    [Fact(Skip = "Interface with overloaded methods cannot be satisfied by object literal with union parameter")]
+    [Fact]
     public void InterfaceMethodOverload_Works()
     {
         var source = """

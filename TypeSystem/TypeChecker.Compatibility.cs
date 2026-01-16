@@ -54,10 +54,17 @@ public partial class TypeChecker
             return true; // Unconstrained type parameter accepts anything
         }
 
-        // Type parameter as actual: can be assigned to any or same type parameter
-        if (actual is TypeInfo.TypeParameter)
+        // Type parameter as actual: can be assigned to any, same type parameter, or a union containing the type parameter
+        if (actual is TypeInfo.TypeParameter actualTpOnly)
         {
-            return expected is TypeInfo.Any;
+            if (expected is TypeInfo.Any) return true;
+            // T is assignable to T | U (union containing T)
+            if (expected is TypeInfo.Union expUnionForTp)
+            {
+                return expUnionForTp.FlattenedTypes.Any(t =>
+                    t is TypeInfo.TypeParameter unionTp && unionTp.Name == actualTpOnly.Name);
+            }
+            return false;
         }
 
         // never as actual: assignable to anything (bottom type)
@@ -495,6 +502,19 @@ public partial class TypeChecker
 
         if (expected is TypeInfo.Void && actual is TypeInfo.Void) return true;
 
+        // OverloadedFunction expected: actual function must satisfy all overload signatures
+        // This handles cases like interface method overloads being satisfied by a union-parameter function
+        if (expected is TypeInfo.OverloadedFunction overloadedFunc && actual is TypeInfo.Function actualFunc)
+        {
+            // The actual function must satisfy ALL overload signatures
+            foreach (var signature in overloadedFunc.Signatures)
+            {
+                if (!IsFunctionCompatibleWithSignature(actualFunc, signature))
+                    return false;
+            }
+            return true;
+        }
+
         // Function type compatibility
         if (expected is TypeInfo.Function f1 && actual is TypeInfo.Function f2)
         {
@@ -512,6 +532,39 @@ public partial class TypeChecker
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if an actual function can satisfy a specific signature from an overloaded function.
+    /// Used for structural typing when an interface has overloaded methods.
+    /// The actual function with union parameters can satisfy multiple specific signatures.
+    /// </summary>
+    private bool IsFunctionCompatibleWithSignature(TypeInfo.Function actualFunc, TypeInfo.Function signature)
+    {
+        // The actual function must have at least as many parameters as the signature requires
+        // But it can have more parameters (they'd be optional or union parameters)
+        if (actualFunc.ParamTypes.Count < signature.MinArity)
+            return false;
+
+        // For each parameter position in the signature, the signature's param type
+        // must be assignable to the actual param type (contravariance)
+        // This ensures the actual function can accept calls matching the signature
+        for (int i = 0; i < signature.ParamTypes.Count && i < actualFunc.ParamTypes.Count; i++)
+        {
+            // Signature param must be assignable to actual param (contravariance for function params)
+            // If signature expects (number), actual can accept (number | string)
+            if (!IsCompatible(actualFunc.ParamTypes[i], signature.ParamTypes[i]))
+                return false;
+        }
+
+        // Return type: actual must be assignable to signature (covariance)
+        if (signature.ReturnType is not TypeInfo.Void)
+        {
+            if (!IsCompatible(signature.ReturnType, actualFunc.ReturnType))
+                return false;
+        }
+
+        return true;
     }
 
     private bool IsTupleCompatible(TypeInfo.Tuple expected, TypeInfo.Tuple actual)
@@ -1274,10 +1327,14 @@ public partial class TypeChecker
             if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
                 ig.GenericDefinition is TypeInfo.GenericClass gc)
             {
+                // Check fields first, then methods
+                if (gc.FieldTypes.TryGetValue(name, out var fieldType)) return fieldType;
                 if (gc.Methods.TryGetValue(name, out var methodType)) return methodType;
                 TypeInfo? current = gc.Superclass;
                 while (current != null)
                 {
+                    var fields = GetFieldTypes(current);
+                    if (fields != null && fields.TryGetValue(name, out var superField)) return superField;
                     var methods = GetMethods(current);
                     if (methods != null && methods.TryGetValue(name, out var superMethod)) return superMethod;
                     current = GetSuperclass(current);
@@ -1288,6 +1345,9 @@ public partial class TypeChecker
                 TypeInfo? current = classType;
                 while (current != null)
                 {
+                    // Check fields first, then methods
+                    var fields = GetFieldTypes(current);
+                    if (fields != null && fields.TryGetValue(name, out var fieldType)) return fieldType;
                     var methods = GetMethods(current);
                     if (methods != null && methods.TryGetValue(name, out var methodType)) return methodType;
                     current = GetSuperclass(current);
@@ -1296,6 +1356,8 @@ public partial class TypeChecker
             // Handle MutableClass (during signature collection)
             else if (instance.ClassType is TypeInfo.MutableClass mutableClass)
             {
+                // Check fields first, then methods
+                if (mutableClass.FieldTypes.TryGetValue(name, out var fieldType)) return fieldType;
                 if (mutableClass.Methods.TryGetValue(name, out var methodType)) return methodType;
                 // Check frozen version if available (may have superclass methods)
                 if (mutableClass.Frozen is TypeInfo.Class frozen)
@@ -1303,6 +1365,8 @@ public partial class TypeChecker
                     TypeInfo? current = frozen.Superclass;
                     while (current != null)
                     {
+                        var fields = GetFieldTypes(current);
+                        if (fields != null && fields.TryGetValue(name, out var superField)) return superField;
                         var methods = GetMethods(current);
                         if (methods != null && methods.TryGetValue(name, out var superMethod)) return superMethod;
                         current = GetSuperclass(current);

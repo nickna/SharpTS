@@ -307,13 +307,59 @@ public partial class TypeChecker
         // Validate implemented interfaces (skip for generic classes - validated at instantiation)
         if (classStmt.Interfaces != null && classTypeParams == null)
         {
-            foreach (var interfaceToken in classStmt.Interfaces)
+            for (int i = 0; i < classStmt.Interfaces.Count; i++)
             {
+                var interfaceToken = classStmt.Interfaces[i];
                 TypeInfo? itfTypeInfo = _environment.Get(interfaceToken.Lexeme);
-                if (itfTypeInfo is not TypeInfo.Interface interfaceType)
+
+                // Get type arguments for this interface if provided
+                List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
+                    ? classStmt.InterfaceTypeArgs[i]
+                    : null;
+
+                TypeInfo.Interface? interfaceType = null;
+
+                if (itfTypeInfo is TypeInfo.Interface plainInterface && (typeArgs == null || typeArgs.Count == 0))
+                {
+                    // Non-generic interface
+                    interfaceType = plainInterface;
+                }
+                else if (itfTypeInfo is TypeInfo.GenericInterface genericInterface)
+                {
+                    // Generic interface - need to instantiate it
+                    if (typeArgs == null || typeArgs.Count == 0)
+                    {
+                        throw new TypeCheckException($" Generic interface '{interfaceToken.Lexeme}' requires type arguments.");
+                    }
+
+                    // Resolve type arguments
+                    var resolvedTypeArgs = typeArgs.Select(ta => ToTypeInfo(ta)).ToList();
+
+                    // Instantiate the generic interface
+                    var instantiated = InstantiateGenericInterface(genericInterface, resolvedTypeArgs);
+
+                    // For validation, we need the concrete interface members
+                    // Create a substitution map and substitute members
+                    Dictionary<string, TypeInfo> substitutions = [];
+                    for (int j = 0; j < genericInterface.TypeParams.Count && j < resolvedTypeArgs.Count; j++)
+                    {
+                        substitutions[genericInterface.TypeParams[j].Name] = resolvedTypeArgs[j];
+                    }
+
+                    var substitutedMembers = genericInterface.Members.ToDictionary(
+                        m => m.Key,
+                        m => Substitute(m.Value, substitutions)).ToFrozenDictionary();
+
+                    interfaceType = new TypeInfo.Interface(
+                        genericInterface.Name,
+                        substitutedMembers,
+                        genericInterface.OptionalMembers);
+                }
+                else
                 {
                     throw new TypeCheckException($" '{interfaceToken.Lexeme}' is not an interface.");
                 }
+
                 ValidateInterfaceImplementation(classTypeForBody, interfaceType, classStmt.Name.Lexeme);
             }
         }
