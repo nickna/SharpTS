@@ -294,7 +294,12 @@ public partial class Parser
 
         if (thisType != null)
         {
-            return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+            // Only add comma between this and params if there are params
+            if (paramTypes.Count > 0)
+            {
+                return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+            }
+            return $"(this: {thisType}) => {returnType}";
         }
         return $"({string.Join(", ", paramTypes)}) => {returnType}";
     }

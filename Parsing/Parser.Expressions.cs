@@ -519,6 +519,12 @@ public partial class Parser
             return ClassExpression();
         }
 
+        // Anonymous function expression: function(params) { body } or function name(params) { body }
+        if (Match(TokenType.FUNCTION))
+        {
+            return FunctionExpression();
+        }
+
         if (Match(TokenType.IDENTIFIER)) return new Expr.Variable(Previous());
 
         // Symbol and BigInt are special callable constructors
@@ -940,6 +946,134 @@ public partial class Parser
         }
 
         return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType, IsAsync: isAsync);  // TODO: Parse type params
+    }
+
+    /// <summary>
+    /// Parses a function expression: function [name](params) { body }
+    /// Supports optional name, this parameter, and type annotations.
+    /// </summary>
+    private Expr FunctionExpression()
+    {
+        // Check for generator function: function* () { } - skip for now
+        Match(TokenType.STAR);
+
+        // Optional function name (for named function expressions) - ignore, not used in ArrowFunction
+        if (Check(TokenType.IDENTIFIER)) Advance();
+
+        // Parse type parameters: function<T, U>(params) { }
+        List<TypeParam>? typeParams = ParseTypeParameters();
+
+        Consume(TokenType.LEFT_PAREN, "Expect '(' after function name.");
+        List<Stmt.Parameter> parameters = [];
+        List<(Token SynthName, DestructurePattern Pattern)> destructuredParams = [];
+
+        // Check for 'this' parameter (explicit this type annotation)
+        string? thisType = null;
+        if (Check(TokenType.THIS))
+        {
+            Advance(); // consume 'this'
+            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+            thisType = ParseTypeAnnotation();
+            // If there are more parameters, consume the comma
+            if (Check(TokenType.COMMA))
+            {
+                Advance();
+            }
+        }
+
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            do
+            {
+                // Handle trailing comma: function(a, b,) {}
+                if (Check(TokenType.RIGHT_PAREN)) break;
+
+                // Check for destructuring pattern parameter
+                if (Check(TokenType.LEFT_BRACKET))
+                {
+                    // Array destructure: function([a, b]) {}
+                    int line = Peek().Line;
+                    Consume(TokenType.LEFT_BRACKET, "");
+                    var pattern = ParseArrayPattern();
+                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    destructuredParams.Add((synthName, pattern));
+                }
+                else if (Check(TokenType.LEFT_BRACE))
+                {
+                    // Object destructure: function({ x, y }) {}
+                    int line = Peek().Line;
+                    Consume(TokenType.LEFT_BRACE, "");
+                    var pattern = ParseObjectPattern();
+                    Token synthName = new Token(TokenType.IDENTIFIER, $"_param{parameters.Count}", null, line);
+                    string? paramType = Match(TokenType.COLON) ? ParseTypeAnnotation() : null;
+                    Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
+                    parameters.Add(new Stmt.Parameter(synthName, paramType, defaultValue));
+                    destructuredParams.Add((synthName, pattern));
+                }
+                else
+                {
+                    // Check for rest parameter
+                    bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                    Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+
+                    // Check for optional parameter marker (?)
+                    bool isOptional = Match(TokenType.QUESTION);
+
+                    string? paramType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        paramType = ParseTypeAnnotation();
+                    }
+                    Expr? defaultValue = null;
+                    if (Match(TokenType.EQUAL))
+                    {
+                        defaultValue = Expression();
+                    }
+                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+
+                    // Rest parameter must be last
+                    if (isRest && Check(TokenType.COMMA))
+                    {
+                        throw new Exception("Parse Error: Rest parameter must be last.");
+                    }
+                }
+            } while (Match(TokenType.COMMA));
+        }
+        Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+        string? returnType = null;
+        if (Match(TokenType.COLON))
+        {
+            returnType = ParseTypeAnnotation();
+        }
+
+        Consume(TokenType.LEFT_BRACE, "Expect '{' before function body.");
+        List<Stmt> body = Block();
+
+        // Prepend destructuring statements for patterned parameters
+        if (destructuredParams.Count > 0)
+        {
+            List<Stmt> prologue = [];
+            foreach (var (synthName, pattern) in destructuredParams)
+            {
+                var paramVar = new Expr.Variable(synthName);
+                Stmt desugar = pattern switch
+                {
+                    ArrayPattern ap => DesugarArrayPattern(ap, paramVar),
+                    ObjectPattern op => DesugarObjectPattern(op, paramVar),
+                    _ => throw new Exception("Unknown pattern type")
+                };
+                prologue.Add(desugar);
+            }
+            body = prologue.Concat(body).ToList();
+        }
+
+        // Return as ArrowFunction with block body (IsObjectMethod controls 'this' binding)
+        return new Expr.ArrowFunction(typeParams, thisType, parameters, null, body, returnType, IsObjectMethod: true);
     }
 
     // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"

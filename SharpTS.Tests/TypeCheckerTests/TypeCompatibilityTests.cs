@@ -457,7 +457,7 @@ public class TypeCompatibilityTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "Intersection of incompatible primitives not automatically reduced to never type")]
+    [Fact]
     public void IntersectionOfPrimitives_NeverType()
     {
         // Intersection of incompatible types should result in never
@@ -516,7 +516,7 @@ public class TypeCompatibilityTests
         Assert.Equal("30\n", result);
     }
 
-    [Fact(Skip = "Optional fields in type aliases with ? syntax not yet supported in parser")]
+    [Fact]
     public void ObjectLiteral_OptionalField_CanBeOmitted()
     {
         var source = """

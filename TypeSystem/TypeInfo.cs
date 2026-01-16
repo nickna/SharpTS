@@ -400,11 +400,18 @@ public abstract record TypeInfo
         FrozenDictionary<string, TypeInfo> Fields,
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
-        TypeInfo? SymbolIndexType = null
+        TypeInfo? SymbolIndexType = null,
+        FrozenSet<string>? OptionalFields = null
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
-        public override string ToString() => $"{{ {string.Join(", ", Fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
+
+        /// <summary>
+        /// Checks if a field is optional.
+        /// </summary>
+        public bool IsFieldOptional(string name) => OptionalFields?.Contains(name) ?? false;
+
+        public override string ToString() => $"{{ {string.Join(", ", Fields.Select(f => $"{f.Key}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}"))} }}";
     }
     
     public record Void() : TypeInfo

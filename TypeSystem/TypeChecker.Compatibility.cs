@@ -447,13 +447,20 @@ public partial class TypeChecker
         // Record-to-Record compatibility (inline object types)
         if (expected is TypeInfo.Record expRecord && actual is TypeInfo.Record actRecord)
         {
-            // All explicit fields in expected must exist in actual with compatible types
+            // All required fields in expected must exist in actual with compatible types
+            // Optional fields can be omitted
             foreach (var (name, expectedFieldType) in expRecord.Fields)
             {
                 if (!actRecord.Fields.TryGetValue(name, out var actualFieldType))
+                {
+                    // Field missing - only OK if the field is optional
+                    if (!expRecord.IsFieldOptional(name))
+                        return false;
+                }
+                else if (!IsCompatible(expectedFieldType, actualFieldType))
+                {
                     return false;
-                if (!IsCompatible(expectedFieldType, actualFieldType))
-                    return false;
+                }
             }
             // If expected has only index signatures (no explicit fields), empty object is compatible
             // Index signatures allow any number of keys (including zero)
@@ -465,7 +472,7 @@ public partial class TypeChecker
         if (expected is TypeInfo.Record expRec)
         {
             // Use CheckStructuralCompatibility to check if actual type has all required fields
-            return CheckStructuralCompatibility(expRec.Fields, actual, null);
+            return CheckStructuralCompatibility(expRec.Fields, actual, expRec.OptionalFields);
         }
 
         // Tuple-to-tuple compatibility

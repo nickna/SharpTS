@@ -584,7 +584,7 @@ public class NominalTypingTests
         Assert.Equal("7\n", result);
     }
 
-    [Fact(Skip = "Static fields with initializers in class definition not yet supported")]
+    [Fact]
     public void StaticField_AccessedViaClassName()
     {
         var source = """

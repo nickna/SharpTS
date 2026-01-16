@@ -20,6 +20,9 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case SharpTSClass klass:
+                value = klass.GetStaticProperty(name.Lexeme);
+                return true;
             case SharpTSInstance instance:
                 instance.SetInterpreter(this);
                 value = instance.Get(name);

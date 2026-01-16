@@ -483,7 +483,7 @@ public class FunctionCompatibilityTests
 
     #region This Parameter
 
-    [Fact(Skip = "Explicit this: parameter syntax not supported by parser")]
+    [Fact]
     public void ExplicitThisParameter_Works()
     {
         var source = """

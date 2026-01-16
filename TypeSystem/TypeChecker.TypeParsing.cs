@@ -262,13 +262,22 @@ public partial class TypeChecker
         if (types.Count == 1) return types[0];
 
         // Check for conflicting primitives (e.g., string & number = never)
-        var primitives = types.OfType<TypeInfo.Primitive>().ToList();
-        if (primitives.Count > 1)
-        {
-            var distinctPrimitives = primitives.Select(p => p.Type).Distinct().ToList();
-            if (distinctPrimitives.Count > 1)
-                return new TypeInfo.Never();  // Conflicting primitives
-        }
+        // Count each primitive type (string, number, boolean are all incompatible with each other)
+        bool hasString = types.Any(t => t is TypeInfo.String or TypeInfo.StringLiteral);
+        bool hasNumber = types.Any(t => t is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral);
+        bool hasBoolean = types.Any(t => t is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral);
+        bool hasNull = types.Any(t => t is TypeInfo.Null);
+        bool hasUndefined = types.Any(t => t is TypeInfo.Undefined);
+        bool hasSymbol = types.Any(t => t is TypeInfo.Symbol);
+        bool hasBigInt = types.Any(t => t is TypeInfo.BigInt);
+
+        // Count how many different primitive categories are present
+        int primitiveCount = (hasString ? 1 : 0) + (hasNumber ? 1 : 0) + (hasBoolean ? 1 : 0)
+                           + (hasNull ? 1 : 0) + (hasUndefined ? 1 : 0) + (hasSymbol ? 1 : 0) + (hasBigInt ? 1 : 0);
+
+        // If more than one primitive category is present, it's a conflict
+        if (primitiveCount > 1)
+            return new TypeInfo.Never();  // Conflicting primitives
 
         // Collect object-like types for merging
         var records = types.OfType<TypeInfo.Record>().ToList();
@@ -610,6 +619,7 @@ public partial class TypeChecker
         }
 
         Dictionary<string, TypeInfo> fields = [];
+        HashSet<string> optionalFields = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
@@ -659,16 +669,23 @@ public partial class TypeChecker
             string propName = m[..regularColonIdx].Trim();
             string propType = m[(regularColonIdx + 1)..].Trim();
 
-            // Check for optional marker (?) and remove it
-            if (propName.EndsWith("?"))
+            // Check for optional marker (?) and track it
+            bool isOptional = propName.EndsWith("?");
+            if (isOptional)
             {
                 propName = propName[..^1].Trim();
+                optionalFields.Add(propName);
             }
 
             fields[propName] = ToTypeInfo(propType);
         }
 
-        return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType);
+        return new TypeInfo.Record(
+            fields.ToFrozenDictionary(),
+            stringIndexType,
+            numberIndexType,
+            symbolIndexType,
+            optionalFields.Count > 0 ? optionalFields.ToFrozenSet() : null);
     }
 
     private List<string> SplitObjectMembers(ReadOnlySpan<char> inner)
