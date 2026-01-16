@@ -28,7 +28,7 @@ public class GenericConstraintTests
         Assert.Equal("42\nhello\ntrue\n", result);
     }
 
-    [Fact(Skip = "Generic class constructor type inference not yet implemented")]
+    [Fact]
     public void UnconstrainedClass_AcceptsAnyType()
     {
         var source = """

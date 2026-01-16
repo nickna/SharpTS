@@ -156,7 +156,7 @@ public class NominalTypingTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "Generic class constructor type argument inference not yet implemented")]
+    [Fact]
     public void GenericClass_InferredTypeArg_Works()
     {
         var source = """

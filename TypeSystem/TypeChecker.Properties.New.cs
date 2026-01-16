@@ -273,12 +273,25 @@ public partial class TypeChecker
         // Handle generic class instantiation
         if (type is TypeInfo.GenericClass genericClass)
         {
+            List<TypeInfo> typeArgs;
+
             if (newExpr.TypeArgs == null || newExpr.TypeArgs.Count == 0)
             {
-                throw new TypeCheckException($" Generic class '{qualifiedName}' requires type arguments.");
-            }
+                // Try to infer type arguments from constructor parameters
+                List<TypeInfo> argTypes = newExpr.Arguments.Select(CheckExpr).ToList();
+                var inferredArgs = InferConstructorTypeArguments(genericClass, argTypes);
 
-            var typeArgs = newExpr.TypeArgs.Select(ToTypeInfo).ToList();
+                if (inferredArgs == null)
+                {
+                    throw new TypeCheckException($" Generic class '{qualifiedName}' requires type arguments and they could not be inferred.");
+                }
+
+                typeArgs = inferredArgs;
+            }
+            else
+            {
+                typeArgs = newExpr.TypeArgs.Select(ToTypeInfo).ToList();
+            }
             var instantiated = InstantiateGenericClass(genericClass, typeArgs);
 
             // Build substitution map for constructor parameter types
@@ -393,5 +406,203 @@ public partial class TypeChecker
             return new TypeInfo.Instance(classType);
         }
         throw new TypeCheckException($" '{qualifiedName}' is not a class.");
+    }
+
+    /// <summary>
+    /// Infers type arguments for a generic class constructor from the provided argument types.
+    /// Returns null if inference fails (no constructor or unable to infer all type parameters).
+    /// </summary>
+    private List<TypeInfo>? InferConstructorTypeArguments(TypeInfo.GenericClass genericClass, List<TypeInfo> argTypes)
+    {
+        // Get the constructor - if no constructor, inference isn't possible
+        if (!genericClass.Methods.TryGetValue("constructor", out var ctorTypeInfo))
+        {
+            // No constructor - can't infer type arguments without parameters
+            // If the class has zero type parameters that need inference from constructor, this could succeed,
+            // but that's an edge case. For safety, return null.
+            return null;
+        }
+
+        // Get the constructor parameter types (may be overloaded)
+        List<TypeInfo> constructorParamTypes;
+        if (ctorTypeInfo is TypeInfo.OverloadedFunction overloadedCtor)
+        {
+            // Try each overload to find one that matches
+            foreach (var sig in overloadedCtor.Signatures)
+            {
+                var result = TryInferFromConstructorSignature(genericClass, sig.ParamTypes, argTypes);
+                if (result != null)
+                    return result;
+            }
+            return null;
+        }
+        else if (ctorTypeInfo is TypeInfo.Function ctorFunc)
+        {
+            constructorParamTypes = ctorFunc.ParamTypes;
+        }
+        else
+        {
+            return null;
+        }
+
+        return TryInferFromConstructorSignature(genericClass, constructorParamTypes, argTypes);
+    }
+
+    /// <summary>
+    /// Tries to infer type arguments from a specific constructor signature.
+    /// </summary>
+    private List<TypeInfo>? TryInferFromConstructorSignature(
+        TypeInfo.GenericClass genericClass,
+        List<TypeInfo> constructorParamTypes,
+        List<TypeInfo> argTypes)
+    {
+        Dictionary<string, TypeInfo> inferred = [];
+
+        // Try to infer each type parameter from the corresponding argument
+        for (int i = 0; i < constructorParamTypes.Count && i < argTypes.Count; i++)
+        {
+            InferFromTypeForConstructor(constructorParamTypes[i], argTypes[i], inferred);
+        }
+
+        // Build result list in order of type parameters
+        List<TypeInfo> result = [];
+        foreach (var tp in genericClass.TypeParams)
+        {
+            if (inferred.TryGetValue(tp.Name, out var inferredType))
+            {
+                // Validate constraint if present
+                if (tp.Constraint != null && tp.Constraint is not TypeInfo.Any)
+                {
+                    // For Record constraints, check that actual type has all required fields
+                    if (tp.Constraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
+                    {
+                        foreach (var (fieldName, _) in constraintRecord.Fields)
+                        {
+                            if (!actualRecord.Fields.ContainsKey(fieldName))
+                            {
+                                // Constraint violation - inference failed
+                                return null;
+                            }
+                        }
+                    }
+                    else if (!IsCompatible(tp.Constraint, inferredType))
+                    {
+                        // Constraint violation - inference failed
+                        return null;
+                    }
+                }
+                result.Add(inferredType);
+            }
+            else
+            {
+                // Type parameter could not be inferred
+                // If there's a default, we could use it, but for now return null
+                if (tp.Constraint != null)
+                {
+                    // Use constraint as fallback (similar to how we do for functions)
+                    result.Add(tp.Constraint);
+                }
+                else
+                {
+                    // Cannot infer this type parameter - return null
+                    return null;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Recursively infers type parameter bindings from a parameter type and an argument type.
+    /// Similar to InferFromType in TypeChecker.Generics.cs but for constructor inference.
+    /// </summary>
+    private void InferFromTypeForConstructor(TypeInfo paramType, TypeInfo argType, Dictionary<string, TypeInfo> inferred)
+    {
+        if (paramType is TypeInfo.TypeParameter tp)
+        {
+            // Direct type parameter - infer from argument
+            if (!inferred.ContainsKey(tp.Name))
+            {
+                inferred[tp.Name] = argType;
+            }
+            else
+            {
+                // Already inferred - check if we should unify (use wider type)
+                var existing = inferred[tp.Name];
+                if (!TypeInfoEquals(existing, argType))
+                {
+                    // If both are compatible with a common supertype, use union
+                    // For simplicity, keep the existing inference
+                    // More sophisticated inference could find a common supertype
+                }
+            }
+        }
+        else if (paramType is TypeInfo.Array paramArr && argType is TypeInfo.Array argArr)
+        {
+            // Recurse into array element types
+            InferFromTypeForConstructor(paramArr.ElementType, argArr.ElementType, inferred);
+        }
+        else if (paramType is TypeInfo.Function paramFunc && argType is TypeInfo.Function argFunc)
+        {
+            // Recurse into function types
+            for (int i = 0; i < paramFunc.ParamTypes.Count && i < argFunc.ParamTypes.Count; i++)
+            {
+                InferFromTypeForConstructor(paramFunc.ParamTypes[i], argFunc.ParamTypes[i], inferred);
+            }
+            InferFromTypeForConstructor(paramFunc.ReturnType, argFunc.ReturnType, inferred);
+        }
+        else if (paramType is TypeInfo.InstantiatedGeneric paramGen && argType is TypeInfo.InstantiatedGeneric argGen)
+        {
+            // Same generic base - infer from type arguments
+            for (int i = 0; i < paramGen.TypeArguments.Count && i < argGen.TypeArguments.Count; i++)
+            {
+                InferFromTypeForConstructor(paramGen.TypeArguments[i], argGen.TypeArguments[i], inferred);
+            }
+        }
+        else if (paramType is TypeInfo.Union paramUnion)
+        {
+            // For union parameter types, try to find a matching branch
+            foreach (var unionMember in paramUnion.FlattenedTypes)
+            {
+                if (IsCompatible(unionMember, argType))
+                {
+                    InferFromTypeForConstructor(unionMember, argType, inferred);
+                    break;
+                }
+            }
+        }
+        else if (paramType is TypeInfo.Tuple paramTuple && argType is TypeInfo.Tuple argTuple)
+        {
+            // Recurse into tuple element types
+            for (int i = 0; i < paramTuple.ElementTypes.Count && i < argTuple.ElementTypes.Count; i++)
+            {
+                InferFromTypeForConstructor(paramTuple.ElementTypes[i], argTuple.ElementTypes[i], inferred);
+            }
+        }
+        else if (paramType is TypeInfo.Promise paramPromise && argType is TypeInfo.Promise argPromise)
+        {
+            // Recurse into Promise value types
+            InferFromTypeForConstructor(paramPromise.ValueType, argPromise.ValueType, inferred);
+        }
+        else if (paramType is TypeInfo.Record paramRec && argType is TypeInfo.Record argRec)
+        {
+            // Recurse into Record field types
+            foreach (var (fieldName, fieldType) in paramRec.Fields)
+            {
+                if (argRec.Fields.TryGetValue(fieldName, out var argFieldType))
+                {
+                    InferFromTypeForConstructor(fieldType, argFieldType, inferred);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Helper to check if two TypeInfo instances are structurally equal.
+    /// </summary>
+    private static bool TypeInfoEquals(TypeInfo a, TypeInfo b)
+    {
+        return a.ToString() == b.ToString();
     }
 }
