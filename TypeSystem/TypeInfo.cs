@@ -90,7 +90,7 @@ public abstract record TypeInfo
 
     public record Class(
         string Name,
-        TypeInfo.Class? Superclass,
+        TypeInfo? Superclass,  // Can be Class or InstantiatedGeneric (for extends Box<number>)
         FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
         FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
         FrozenDictionary<string, TypeInfo> StaticProperties,
@@ -124,7 +124,7 @@ public abstract record TypeInfo
     /// </remarks>
     public sealed record MutableClass(string Name) : TypeInfo
     {
-        public TypeInfo.Class? Superclass { get; set; }
+        public TypeInfo? Superclass { get; set; }  // Can be Class or InstantiatedGeneric
         public Dictionary<string, TypeInfo> Methods { get; } = [];
         public Dictionary<string, TypeInfo> StaticMethods { get; } = [];
         public Dictionary<string, TypeInfo> StaticProperties { get; } = [];
@@ -599,7 +599,7 @@ public abstract record TypeInfo
     public record GenericClass(
         string Name,
         List<TypeParameter> TypeParams,
-        TypeInfo.Class? Superclass,
+        TypeInfo? Superclass,  // Can be Class or InstantiatedGeneric (for extends Box<number>)
         FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
         FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
         FrozenDictionary<string, TypeInfo> StaticProperties,

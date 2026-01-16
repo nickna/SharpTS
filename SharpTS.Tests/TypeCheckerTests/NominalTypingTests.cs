@@ -172,7 +172,7 @@ public class NominalTypingTests
         Assert.Equal("42\n", result);
     }
 
-    [Fact(Skip = "Known limitation: extending generic classes with type arguments (extends Box<number>) not yet supported - SuperclassTypeArgs not handled in TypeChecker")]
+    [Fact]
     public void GenericClassInheritance_Compatible()
     {
         var source = """
@@ -192,6 +192,110 @@ public class NominalTypingTests
 
         var result = TestHarness.RunInterpreted(source);
         Assert.Equal("42\n", result);
+    }
+
+    [Fact]
+    public void GenericClassInheritance_PropertyTypeSubstitution()
+    {
+        // Tests that inherited generic properties have their types properly substituted
+        var source = """
+            class Container<T> {
+                constructor(public item: T) {}
+                getItem(): T { return this.item; }
+            }
+
+            class NumberContainer extends Container<number> {
+                constructor(n: number) {
+                    super(n);
+                }
+                double(): number {
+                    return this.item * 2;
+                }
+            }
+
+            let nc: NumberContainer = new NumberContainer(21);
+            console.log(nc.double());
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("42\n", result);
+    }
+
+    [Fact]
+    public void GenericClassInheritance_MultipleTypeParams()
+    {
+        // Tests generic inheritance with multiple type parameters
+        var source = """
+            class Pair<K, V> {
+                constructor(public key: K, public value: V) {}
+            }
+
+            class StringNumberPair extends Pair<string, number> {
+                constructor(key: string, value: number) {
+                    super(key, value);
+                }
+                describe(): string {
+                    return this.key;
+                }
+            }
+
+            let p: StringNumberPair = new StringNumberPair("age", 25);
+            console.log(p.describe());
+            console.log(p.value);
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("age\n25\n", result);
+    }
+
+    [Fact]
+    public void GenericClassInheritance_MethodReturnType()
+    {
+        // Tests that inherited generic methods have return types properly substituted
+        var source = """
+            class Box<T> {
+                constructor(private content: T) {}
+                getContent(): T { return this.content; }
+            }
+
+            class StringBox extends Box<string> {
+                constructor(s: string) {
+                    super(s);
+                }
+                getUpperContent(): string {
+                    return this.getContent();
+                }
+            }
+
+            let sb: StringBox = new StringBox("hello");
+            console.log(sb.getUpperContent());
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("hello\n", result);
+    }
+
+    [Fact]
+    public void GenericClassInheritance_TypeMismatch_Fails()
+    {
+        // Tests that type mismatches are caught when assigning incompatible generic types
+        var source = """
+            class Box<T> {
+                constructor(public value: T) {}
+            }
+
+            class NumberBox extends Box<number> {
+                constructor(value: number) {
+                    super(value);
+                }
+            }
+
+            let nb: NumberBox = new NumberBox(42);
+            let sb: Box<string> = nb;
+            """;
+
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
+        Assert.Contains("not assignable", ex.Message);
     }
 
     #endregion

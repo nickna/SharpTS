@@ -46,38 +46,50 @@ public partial class TypeChecker
         // Collect all unimplemented abstract members from the superclass chain
         List<string> missingMembers = [];
 
-        TypeInfo.Class? current = classType.Superclass;
+        TypeInfo? current = classType.Superclass;
         while (current != null)
         {
             // Check abstract methods from this superclass
-            foreach (var abstractMethod in current.AbstractMethodSet)
+            var abstractMethods = GetAbstractMethods(current);
+            if (abstractMethods != null)
             {
-                // Check if this class or any class in between implements it
-                if (!IsMethodImplemented(classType, abstractMethod, current))
+                foreach (var abstractMethod in abstractMethods)
                 {
-                    missingMembers.Add(abstractMethod + "()");
+                    // Check if this class or any class in between implements it
+                    if (!IsMethodImplemented(classType, abstractMethod, current))
+                    {
+                        missingMembers.Add(abstractMethod + "()");
+                    }
                 }
             }
 
             // Check abstract getters
-            foreach (var abstractGetter in current.AbstractGetterSet)
+            var abstractGetters = GetAbstractGetters(current);
+            if (abstractGetters != null)
             {
-                if (!IsGetterImplemented(classType, abstractGetter, current))
+                foreach (var abstractGetter in abstractGetters)
                 {
-                    missingMembers.Add("get " + abstractGetter);
+                    if (!IsGetterImplemented(classType, abstractGetter, current))
+                    {
+                        missingMembers.Add("get " + abstractGetter);
+                    }
                 }
             }
 
             // Check abstract setters
-            foreach (var abstractSetter in current.AbstractSetterSet)
+            var abstractSetters = GetAbstractSetters(current);
+            if (abstractSetters != null)
             {
-                if (!IsSetterImplemented(classType, abstractSetter, current))
+                foreach (var abstractSetter in abstractSetters)
                 {
-                    missingMembers.Add("set " + abstractSetter);
+                    if (!IsSetterImplemented(classType, abstractSetter, current))
+                    {
+                        missingMembers.Add("set " + abstractSetter);
+                    }
                 }
             }
 
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
 
         if (missingMembers.Count > 0)
@@ -89,58 +101,67 @@ public partial class TypeChecker
     /// <summary>
     /// Checks if a method is implemented in the class chain between classType and the abstract superclass.
     /// </summary>
-    private bool IsMethodImplemented(TypeInfo.Class classType, string methodName, TypeInfo.Class abstractSuperclass)
+    private bool IsMethodImplemented(TypeInfo.Class classType, string methodName, TypeInfo abstractSuperclass)
     {
-        TypeInfo.Class? current = classType;
+        TypeInfo? current = classType;
         while (current != null && current != abstractSuperclass)
         {
             // Check if this class has the method and it's NOT abstract
-            if (current.Methods.ContainsKey(methodName) && !current.AbstractMethodSet.Contains(methodName))
+            var methods = GetMethods(current);
+            var abstractMethods = GetAbstractMethods(current);
+            if (methods != null && methods.ContainsKey(methodName) && (abstractMethods == null || !abstractMethods.Contains(methodName)))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }
 
-    private bool IsGetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo.Class abstractSuperclass)
+    private bool IsGetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo abstractSuperclass)
     {
-        TypeInfo.Class? current = classType;
+        TypeInfo? current = classType;
         while (current != null && current != abstractSuperclass)
         {
-            if (current.Getters.ContainsKey(propertyName) && !current.AbstractGetterSet.Contains(propertyName))
+            var getters = GetGetters(current);
+            var abstractGetters = GetAbstractGetters(current);
+            if (getters != null && getters.ContainsKey(propertyName) && (abstractGetters == null || !abstractGetters.Contains(propertyName)))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }
 
-    private bool IsSetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo.Class abstractSuperclass)
+    private bool IsSetterImplemented(TypeInfo.Class classType, string propertyName, TypeInfo abstractSuperclass)
     {
-        TypeInfo.Class? current = classType;
+        TypeInfo? current = classType;
         while (current != null && current != abstractSuperclass)
         {
-            if (current.Setters.ContainsKey(propertyName) && !current.AbstractSetterSet.Contains(propertyName))
+            var setters = GetSetters(current);
+            var abstractSetters = GetAbstractSetters(current);
+            if (setters != null && setters.ContainsKey(propertyName) && (abstractSetters == null || !abstractSetters.Contains(propertyName)))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }
 
     private TypeInfo? FindMemberInClass(TypeInfo.Class classType, string name)
     {
-        TypeInfo.Class? current = classType;
+        TypeInfo? current = classType;
         while (current != null)
         {
-            if (current.FieldTypes.TryGetValue(name, out var ft)) return ft;
-            if (current.Getters.TryGetValue(name, out var gt)) return gt;
-            if (current.Methods.TryGetValue(name, out var mt)) return mt;
-            current = current.Superclass;
+            var fieldTypes = GetFieldTypes(current);
+            var getters = GetGetters(current);
+            var methods = GetMethods(current);
+            if (fieldTypes != null && fieldTypes.TryGetValue(name, out var ft)) return ft;
+            if (getters != null && getters.TryGetValue(name, out var gt)) return gt;
+            if (methods != null && methods.TryGetValue(name, out var mt)) return mt;
+            current = GetSuperclass(current);
         }
         return null;
     }
@@ -195,16 +216,17 @@ public partial class TypeChecker
     /// <summary>
     /// Checks if a method exists in the superclass chain.
     /// </summary>
-    private bool HasParentMethod(TypeInfo.Class? superclass, string methodName)
+    private bool HasParentMethod(TypeInfo? superclass, string methodName)
     {
-        TypeInfo.Class? current = superclass;
+        TypeInfo? current = superclass;
         while (current != null)
         {
-            if (current.Methods.ContainsKey(methodName))
+            var methods = GetMethods(current);
+            if (methods != null && methods.ContainsKey(methodName))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }
@@ -212,16 +234,17 @@ public partial class TypeChecker
     /// <summary>
     /// Checks if a getter exists in the superclass chain.
     /// </summary>
-    private bool HasParentGetter(TypeInfo.Class? superclass, string propertyName)
+    private bool HasParentGetter(TypeInfo? superclass, string propertyName)
     {
-        TypeInfo.Class? current = superclass;
+        TypeInfo? current = superclass;
         while (current != null)
         {
-            if (current.Getters.ContainsKey(propertyName))
+            var getters = GetGetters(current);
+            if (getters != null && getters.ContainsKey(propertyName))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }
@@ -229,16 +252,17 @@ public partial class TypeChecker
     /// <summary>
     /// Checks if a setter exists in the superclass chain.
     /// </summary>
-    private bool HasParentSetter(TypeInfo.Class? superclass, string propertyName)
+    private bool HasParentSetter(TypeInfo? superclass, string propertyName)
     {
-        TypeInfo.Class? current = superclass;
+        TypeInfo? current = superclass;
         while (current != null)
         {
-            if (current.Setters.ContainsKey(propertyName))
+            var setters = GetSetters(current);
+            if (setters != null && setters.ContainsKey(propertyName))
             {
                 return true;
             }
-            current = current.Superclass;
+            current = GetSuperclass(current);
         }
         return false;
     }

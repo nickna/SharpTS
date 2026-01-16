@@ -316,25 +316,36 @@ public partial class TypeChecker
 
         if (expected is TypeInfo.Instance i1 && actual is TypeInfo.Instance i2)
         {
-            // Handle InstantiatedGeneric comparison
-            if (i1.ClassType is TypeInfo.InstantiatedGeneric expectedIG &&
-                i2.ClassType is TypeInfo.InstantiatedGeneric actualIG)
+            // Handle InstantiatedGeneric expected type - check if actual's class hierarchy includes it
+            if (i1.ClassType is TypeInfo.InstantiatedGeneric expectedIG)
             {
-                // Same generic definition and compatible type arguments
-                if (expectedIG.GenericDefinition is TypeInfo.GenericClass gc1 &&
-                    actualIG.GenericDefinition is TypeInfo.GenericClass gc2 &&
-                    gc1.Name == gc2.Name)
+                // Check if actual is also the same InstantiatedGeneric
+                if (i2.ClassType is TypeInfo.InstantiatedGeneric actualIG)
                 {
-                    if (expectedIG.TypeArguments.Count != actualIG.TypeArguments.Count)
-                        return false;
-                    for (int i = 0; i < expectedIG.TypeArguments.Count; i++)
+                    // Same generic definition and compatible type arguments
+                    if (expectedIG.GenericDefinition is TypeInfo.GenericClass gc1 &&
+                        actualIG.GenericDefinition is TypeInfo.GenericClass gc2 &&
+                        gc1.Name == gc2.Name)
                     {
-                        if (!IsCompatible(expectedIG.TypeArguments[i], actualIG.TypeArguments[i]))
+                        if (expectedIG.TypeArguments.Count != actualIG.TypeArguments.Count)
                             return false;
+                        for (int i = 0; i < expectedIG.TypeArguments.Count; i++)
+                        {
+                            if (!IsCompatible(expectedIG.TypeArguments[i], actualIG.TypeArguments[i]))
+                                return false;
+                        }
+                        return true;
                     }
-                    return true;
+                    // Check if actualIG's hierarchy includes expectedIG
+                    return IsInSuperclassChain(actualIG, expectedIG);
                 }
-                return false;
+
+                // Check if actual is a regular Class that extends the expected InstantiatedGeneric
+                // e.g., NumberBox extends Box<number>, checking if NumberBox assignable to Box<number>
+                if (i2.ClassType is TypeInfo.Class actualClassForIG)
+                {
+                    return IsInSuperclassChain(actualClassForIG, expectedIG);
+                }
             }
 
             // Handle regular Class comparison (including MutableClass resolution)
@@ -344,11 +355,12 @@ public partial class TypeChecker
 
             if (resolvedExpected is TypeInfo.Class expectedClass && resolvedActual is TypeInfo.Class actualClass)
             {
-                TypeInfo.Class? current = actualClass;
+                // Check direct class hierarchy (by name)
+                TypeInfo? current = actualClass;
                 while (current != null)
                 {
-                    if (current.Name == expectedClass.Name) return true;
-                    current = current.Superclass;
+                    if (current is TypeInfo.Class cls && cls.Name == expectedClass.Name) return true;
+                    current = GetSuperclass(current);
                 }
             }
             // Handle MutableClass (unfrozen) comparison by name - occurs during signature collection
@@ -357,7 +369,7 @@ public partial class TypeChecker
                 return mc1.Name == mc2.Name;
             }
 
-            // Mixed case: InstantiatedGeneric vs regular Class - not compatible
+            // Mixed case: InstantiatedGeneric vs regular Class - not compatible unless in hierarchy
             return false;
         }
 
@@ -821,7 +833,7 @@ public partial class TypeChecker
 
         if (targetClass == null) return false;
 
-        TypeInfo.Class? current = inst.ClassType switch
+        TypeInfo? current = inst.ClassType switch
         {
             TypeInfo.Class c => c,
             TypeInfo.MutableClass mc => mc.Frozen,
@@ -830,8 +842,8 @@ public partial class TypeChecker
 
         while (current != null)
         {
-            if (current.Name == targetClass.Name) return true;
-            current = current.Superclass;
+            if (GetClassName(current) == targetClass.Name) return true;
+            current = GetSuperclass(current);
         }
 
         return false;
@@ -1177,20 +1189,22 @@ public partial class TypeChecker
                 ig.GenericDefinition is TypeInfo.GenericClass gc)
             {
                 if (gc.Methods.TryGetValue(name, out var methodType)) return methodType;
-                var current = gc.Superclass;
+                TypeInfo? current = gc.Superclass;
                 while (current != null)
                 {
-                    if (current.Methods.TryGetValue(name, out var superMethod)) return superMethod;
-                    current = current.Superclass;
+                    var methods = GetMethods(current);
+                    if (methods != null && methods.TryGetValue(name, out var superMethod)) return superMethod;
+                    current = GetSuperclass(current);
                 }
             }
             else if (instance.ClassType is TypeInfo.Class classType)
             {
-                TypeInfo.Class? current = classType;
+                TypeInfo? current = classType;
                 while (current != null)
                 {
-                    if (current.Methods.TryGetValue(name, out var methodType)) return methodType;
-                    current = current.Superclass;
+                    var methods = GetMethods(current);
+                    if (methods != null && methods.TryGetValue(name, out var methodType)) return methodType;
+                    current = GetSuperclass(current);
                 }
             }
             // Handle MutableClass (during signature collection)
@@ -1200,11 +1214,12 @@ public partial class TypeChecker
                 // Check frozen version if available (may have superclass methods)
                 if (mutableClass.Frozen is TypeInfo.Class frozen)
                 {
-                    var current = frozen.Superclass;
+                    TypeInfo? current = frozen.Superclass;
                     while (current != null)
                     {
-                        if (current.Methods.TryGetValue(name, out var superMethod)) return superMethod;
-                        current = current.Superclass;
+                        var methods = GetMethods(current);
+                        if (methods != null && methods.TryGetValue(name, out var superMethod)) return superMethod;
+                        current = GetSuperclass(current);
                     }
                 }
             }
@@ -1245,12 +1260,294 @@ public partial class TypeChecker
     private bool IsSubclassOf(TypeInfo.Class? subclass, TypeInfo.Class target)
     {
         if (subclass == null) return false;
-        TypeInfo.Class? current = subclass;
+        TypeInfo? current = subclass;
         while (current != null)
         {
-            if (current.Name == target.Name) return true;
-            current = current.Superclass;
+            if (current is TypeInfo.Class cls && cls.Name == target.Name) return true;
+            current = GetSuperclass(current);
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the superclass of a class type, handling both Class and InstantiatedGeneric.
+    /// </summary>
+    private static TypeInfo? GetSuperclass(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.Superclass,
+        TypeInfo.GenericClass gc => gc.Superclass,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.Superclass,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the methods dictionary from a class-like type (Class, GenericClass, or InstantiatedGeneric).
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetMethods(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.Methods,
+        TypeInfo.GenericClass gc => gc.Methods,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.Methods,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the name of a class-like type (Class, GenericClass, or InstantiatedGeneric).
+    /// </summary>
+    private static string? GetClassName(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.Name,
+        TypeInfo.GenericClass gc => gc.Name,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.Name,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the static methods dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetStaticMethods(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.StaticMethods,
+        TypeInfo.GenericClass gc => gc.StaticMethods,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.StaticMethods,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the static properties dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetStaticProperties(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.StaticProperties,
+        TypeInfo.GenericClass gc => gc.StaticProperties,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.StaticProperties,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Converts a class-like type to a TypeInfo.Class for walking hierarchy.
+    /// Returns null if the type is not class-like.
+    /// </summary>
+    private static TypeInfo.Class? AsClass(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c,
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the field types dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetFieldTypes(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.FieldTypes,
+        TypeInfo.GenericClass gc => gc.FieldTypes,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.FieldTypes,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the getters dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetGetters(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.Getters,
+        TypeInfo.GenericClass gc => gc.Getters,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.Getters,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the setters dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, TypeInfo>? GetSetters(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.Setters,
+        TypeInfo.GenericClass gc => gc.Setters,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.Setters,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the method access dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, AccessModifier>? GetMethodAccess(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.MethodAccess,
+        TypeInfo.GenericClass gc => gc.MethodAccess,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.MethodAccess,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the field access dictionary from a class-like type.
+    /// </summary>
+    private static FrozenDictionary<string, AccessModifier>? GetFieldAccess(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.FieldAccess,
+        TypeInfo.GenericClass gc => gc.FieldAccess,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.FieldAccess,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the readonly fields set from a class-like type.
+    /// </summary>
+    private static FrozenSet<string>? GetReadonlyFields(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.ReadonlyFields,
+        TypeInfo.GenericClass gc => gc.ReadonlyFields,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.ReadonlyFields,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the abstract methods set from a class-like type.
+    /// </summary>
+    private static FrozenSet<string>? GetAbstractMethods(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.AbstractMethodSet,
+        TypeInfo.GenericClass gc => gc.AbstractMethodSet,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.AbstractMethodSet,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the abstract getters set from a class-like type.
+    /// </summary>
+    private static FrozenSet<string>? GetAbstractGetters(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.AbstractGetterSet,
+        TypeInfo.GenericClass gc => gc.AbstractGetterSet,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.AbstractGetterSet,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the abstract setters set from a class-like type.
+    /// </summary>
+    private static FrozenSet<string>? GetAbstractSetters(TypeInfo? classType) => classType switch
+    {
+        TypeInfo.Class c => c.AbstractSetterSet,
+        TypeInfo.GenericClass gc => gc.AbstractSetterSet,
+        TypeInfo.InstantiatedGeneric ig => ig.GenericDefinition switch
+        {
+            TypeInfo.GenericClass gc => gc.AbstractSetterSet,
+            _ => null
+        },
+        _ => null
+    };
+
+    /// <summary>
+    /// Checks if a target InstantiatedGeneric is in the superclass chain of a class.
+    /// Used for checking if NumberBox (extends Box&lt;number&gt;) is assignable to Box&lt;number&gt;.
+    /// </summary>
+    private bool IsInSuperclassChain(TypeInfo classType, TypeInfo.InstantiatedGeneric target)
+    {
+        TypeInfo? current = classType switch
+        {
+            TypeInfo.Class c => c.Superclass,
+            TypeInfo.InstantiatedGeneric ig => GetSuperclass(ig),
+            _ => null
+        };
+
+        while (current != null)
+        {
+            if (current is TypeInfo.InstantiatedGeneric ig)
+            {
+                // Check if this InstantiatedGeneric matches the target
+                if (InstantiatedGenericsMatch(ig, target))
+                    return true;
+
+                // Continue up the chain
+                current = GetSuperclass(ig);
+            }
+            else if (current is TypeInfo.Class c)
+            {
+                // Regular class in chain, continue up
+                current = c.Superclass;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if two InstantiatedGeneric types match (same generic definition and compatible type arguments).
+    /// </summary>
+    private bool InstantiatedGenericsMatch(TypeInfo.InstantiatedGeneric a, TypeInfo.InstantiatedGeneric b)
+    {
+        // Must be the same generic definition
+        if (a.GenericDefinition is TypeInfo.GenericClass gcA &&
+            b.GenericDefinition is TypeInfo.GenericClass gcB &&
+            gcA.Name == gcB.Name)
+        {
+            if (a.TypeArguments.Count != b.TypeArguments.Count)
+                return false;
+
+            for (int i = 0; i < a.TypeArguments.Count; i++)
+            {
+                if (!IsCompatible(a.TypeArguments[i], b.TypeArguments[i]))
+                    return false;
+            }
+            return true;
+        }
+
         return false;
     }
 

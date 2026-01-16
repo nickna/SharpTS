@@ -25,10 +25,14 @@ public partial class TypeChecker
             throw new TypeCheckException($" Class '{_currentClass.Name}' does not have a superclass.");
         }
 
+        // Get methods from superclass, handling both Class and InstantiatedGeneric
+        var superMethods = GetMethods(_currentClass.Superclass);
+        var superName = GetClassName(_currentClass.Superclass) ?? "unknown";
+
         // super() constructor call - Method is null
         if (expr.Method == null)
         {
-            if (_currentClass.Superclass.Methods.TryGetValue("constructor", out var ctorType))
+            if (superMethods != null && superMethods.TryGetValue("constructor", out var ctorType))
             {
                 return ctorType;
             }
@@ -36,12 +40,12 @@ public partial class TypeChecker
             return new TypeInfo.Function([], new TypeInfo.Void());
         }
 
-        if (_currentClass.Superclass.Methods.TryGetValue(expr.Method.Lexeme, out var methodType))
+        if (superMethods != null && superMethods.TryGetValue(expr.Method.Lexeme, out var methodType))
         {
             return methodType;
         }
 
-        throw new TypeCheckException($" Property '{expr.Method.Lexeme}' does not exist on superclass '{_currentClass.Superclass.Name}'.");
+        throw new TypeCheckException($" Property '{expr.Method.Lexeme}' does not exist on superclass '{superName}'.");
     }
 
     private TypeInfo CheckThis(Expr.This expr)
@@ -70,19 +74,21 @@ public partial class TypeChecker
         // Handle static member access on class type
         if (objType is TypeInfo.Class classType)
         {
-            // Check static methods
-            TypeInfo.Class? current = classType;
+            // Check static methods up the hierarchy
+            TypeInfo? current = classType;
             while (current != null)
             {
-                if (current.StaticMethods.TryGetValue(get.Name.Lexeme, out var staticMethodType))
+                var staticMethods = GetStaticMethods(current);
+                var staticProps = GetStaticProperties(current);
+                if (staticMethods != null && staticMethods.TryGetValue(get.Name.Lexeme, out var staticMethodType))
                 {
                     return staticMethodType;
                 }
-                if (current.StaticProperties.TryGetValue(get.Name.Lexeme, out var staticPropType))
+                if (staticProps != null && staticProps.TryGetValue(get.Name.Lexeme, out var staticPropType))
                 {
                     return staticPropType;
                 }
-                current = current.Superclass;
+                current = GetSuperclass(current);
             }
             return new TypeInfo.Any();
         }
@@ -168,17 +174,19 @@ public partial class TypeChecker
                     return methodType; // Fallback - shouldn't happen
                 }
 
-                // Check superclass if any
+                // Check superclass if any (could be Class or InstantiatedGeneric)
                 if (gc.Superclass != null)
                 {
-                    TypeInfo.Class? current = gc.Superclass;
-                    while (current != null)
+                    TypeInfo? currentSuper = gc.Superclass;
+                    while (currentSuper != null)
                     {
-                        if (current.Methods.TryGetValue(memberName, out var superMethod))
+                        var superMethods = GetMethods(currentSuper);
+                        var superFields = GetFieldTypes(currentSuper);
+                        if (superMethods != null && superMethods.TryGetValue(memberName, out var superMethod))
                             return superMethod;
-                        if (current.FieldTypes?.TryGetValue(memberName, out var superField) == true)
+                        if (superFields != null && superFields.TryGetValue(memberName, out var superField))
                             return superField;
-                        current = current.Superclass;
+                        currentSuper = GetSuperclass(currentSuper);
                     }
                 }
 
@@ -188,43 +196,63 @@ public partial class TypeChecker
             // Handle regular class instance
             if (instance.ClassType is TypeInfo.Class instanceClassType)
             {
-                TypeInfo.Class? current = instanceClassType;
+                TypeInfo? current = instanceClassType;
+                // Track type substitutions as we walk up the inheritance chain
+                Dictionary<string, TypeInfo> substitutions = [];
+
                 while (current != null)
                 {
-                    // Check for getter first
-                    if (current.Getters.TryGetValue(memberName, out var getterType))
+                    // If current is an InstantiatedGeneric, build/extend the substitution map
+                    if (current is TypeInfo.InstantiatedGeneric igCurrent &&
+                        igCurrent.GenericDefinition is TypeInfo.GenericClass gcCurrent)
                     {
-                        return getterType;
+                        for (int i = 0; i < gcCurrent.TypeParams.Count && i < igCurrent.TypeArguments.Count; i++)
+                        {
+                            substitutions[gcCurrent.TypeParams[i].Name] = igCurrent.TypeArguments[i];
+                        }
+                    }
+
+                    // Check for getter first
+                    var getters = GetGetters(current);
+                    if (getters != null && getters.TryGetValue(memberName, out var getterType))
+                    {
+                        return substitutions.Count > 0 ? Substitute(getterType, substitutions) : getterType;
                     }
 
                     // Check access modifier
                     AccessModifier access = AccessModifier.Public;
-                    if (current.MethodAccess.TryGetValue(memberName, out var ma))
+                    var methodAccess = GetMethodAccess(current);
+                    var fieldAccess = GetFieldAccess(current);
+                    if (methodAccess != null && methodAccess.TryGetValue(memberName, out var ma))
                         access = ma;
-                    else if (current.FieldAccess.TryGetValue(memberName, out var fa))
+                    else if (fieldAccess != null && fieldAccess.TryGetValue(memberName, out var fa))
                         access = fa;
 
-                    if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
+                    var currentName = GetClassName(current);
+                    if (access == AccessModifier.Private && _currentClass?.Name != currentName)
                     {
-                        throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{current.Name}'.");
+                        throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{currentName}'.");
                     }
-                    if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, current))
+                    var currentClassForAccess = AsClass(current);
+                    if (access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
                     {
-                        throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
+                        throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{currentName}' and its subclasses.");
                     }
 
-                    if (current.Methods.TryGetValue(memberName, out var methodType))
+                    var methods = GetMethods(current);
+                    if (methods != null && methods.TryGetValue(memberName, out var methodType))
                     {
-                        return methodType;
+                        return substitutions.Count > 0 ? Substitute(methodType, substitutions) : methodType;
                     }
 
                     // Check for field
-                    if (current.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
+                    var fieldTypes = GetFieldTypes(current);
+                    if (fieldTypes != null && fieldTypes.TryGetValue(memberName, out var fieldType))
                     {
-                        return fieldType;
+                        return substitutions.Count > 0 ? Substitute(fieldType, substitutions) : fieldType;
                     }
 
-                    current = current.Superclass;
+                    current = GetSuperclass(current);
                 }
                 return new TypeInfo.Any();
             }
@@ -334,10 +362,11 @@ public partial class TypeChecker
         // Handle static property assignment
         if (objType is TypeInfo.Class classType)
         {
-            TypeInfo.Class? current = classType;
+            TypeInfo? current = classType;
             while (current != null)
             {
-                if (current.StaticProperties.TryGetValue(set.Name.Lexeme, out var staticPropType))
+                var staticProps = GetStaticProperties(current);
+                if (staticProps != null && staticProps.TryGetValue(set.Name.Lexeme, out var staticPropType))
                 {
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticPropType, valueType))
@@ -346,7 +375,7 @@ public partial class TypeChecker
                     }
                     return valueType;
                 }
-                current = current.Superclass;
+                current = GetSuperclass(current);
             }
             return CheckExpr(set.Value);
         }
@@ -395,12 +424,14 @@ public partial class TypeChecker
              if (instance.ClassType is not TypeInfo.Class startClass)
                  return CheckExpr(set.Value);
 
-             TypeInfo.Class? current = startClass;
+             TypeInfo? current = startClass;
 
              // Check for setter first
              while (current != null)
              {
-                 if (current.Setters.TryGetValue(memberName, out var setterType))
+                 var setters = GetSetters(current);
+                 var getters = GetGetters(current);
+                 if (setters != null && setters.TryGetValue(memberName, out var setterType))
                  {
                      TypeInfo valueType = CheckExpr(set.Value);
                      if (!IsCompatible(setterType, valueType))
@@ -411,12 +442,12 @@ public partial class TypeChecker
                  }
 
                  // Check if there's a getter but no setter (read-only property)
-                 if (current.Getters.ContainsKey(memberName) && !current.Setters.ContainsKey(memberName))
+                 if (getters != null && getters.ContainsKey(memberName) && (setters == null || !setters.ContainsKey(memberName)))
                  {
                      throw new TypeCheckException($" Cannot assign to '{memberName}' because it is a read-only property (has getter but no setter).");
                  }
 
-                 current = current.Superclass;
+                 current = GetSuperclass(current);
              }
 
              // Reset to check access and readonly
@@ -427,32 +458,36 @@ public partial class TypeChecker
              {
                  // Check access modifier
                  AccessModifier access = AccessModifier.Public;
-                 if (current.FieldAccess.TryGetValue(memberName, out var fa))
+                 var fieldAccess = GetFieldAccess(current);
+                 if (fieldAccess != null && fieldAccess.TryGetValue(memberName, out var fa))
                      access = fa;
 
-                 if (access == AccessModifier.Private && _currentClass?.Name != current.Name)
+                 var currentName = GetClassName(current);
+                 if (access == AccessModifier.Private && _currentClass?.Name != currentName)
                  {
-                     throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{current.Name}'.");
+                     throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{currentName}'.");
                  }
-                 if (access == AccessModifier.Protected && !IsSubclassOf(_currentClass, current))
+                 var currentClass2 = AsClass(current);
+                 if (access == AccessModifier.Protected && currentClass2 != null && !IsSubclassOf(_currentClass, currentClass2))
                  {
-                     throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{current.Name}' and its subclasses.");
+                     throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{currentName}' and its subclasses.");
                  }
 
                  // Check readonly - only allow assignment in constructor
-                 if (current.ReadonlyFields.Contains(memberName))
+                 var readonlyFields = GetReadonlyFields(current);
+                 if (readonlyFields != null && readonlyFields.Contains(memberName))
                  {
                      // Allow in constructor
-                     bool inConstructor = _currentClass?.Name == current.Name &&
+                     bool inConstructor = _currentClass?.Name == currentName &&
                          _environment.IsDefined("this");
                      // Simplified check - just allow if we're in the same class
-                     if (_currentClass?.Name != current.Name)
+                     if (_currentClass?.Name != currentName)
                      {
                          throw new TypeCheckException($" Cannot assign to '{memberName}' because it is a read-only property.");
                      }
                  }
 
-                 current = current.Superclass;
+                 current = GetSuperclass(current);
              }
 
              return CheckExpr(set.Value);

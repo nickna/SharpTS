@@ -22,14 +22,35 @@ public partial class TypeChecker
             return;
         }
 
-        TypeInfo.Class? superclass = null;
+        TypeInfo? superclass = null;
         if (classStmt.Superclass != null)
         {
             TypeInfo superType = LookupVariable(classStmt.Superclass);
-            if (superType is TypeInfo.Instance si && si.ClassType is TypeInfo.Class sic)
+
+            // Handle generic class with type arguments: extends Box<number>
+            if (classStmt.SuperclassTypeArgs != null && classStmt.SuperclassTypeArgs.Count > 0)
+            {
+                if (superType is TypeInfo.GenericClass gc)
+                {
+                    // Convert type argument strings to TypeInfo
+                    var typeArgs = classStmt.SuperclassTypeArgs.Select(ToTypeInfo).ToList();
+                    // Instantiate the generic class with the type arguments
+                    superclass = InstantiateGenericClass(gc, typeArgs);
+                }
+                else
+                {
+                    throw new TypeCheckException($"Cannot use type arguments with non-generic class '{classStmt.Superclass.Lexeme}'");
+                }
+            }
+            else if (superType is TypeInfo.Instance si && si.ClassType is TypeInfo.Class sic)
                 superclass = sic;
             else if (superType is TypeInfo.Class sc)
                 superclass = sc;
+            else if (superType is TypeInfo.GenericClass gc)
+            {
+                // Generic class without type arguments - error
+                throw new TypeCheckException($"Generic class '{gc.Name}' requires type arguments");
+            }
             else
                 throw new TypeCheckException("Superclass must be a class");
         }
