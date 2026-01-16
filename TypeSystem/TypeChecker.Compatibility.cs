@@ -731,22 +731,30 @@ public partial class TypeChecker
         return null;
     }
 
-    private bool IsNumber(TypeInfo t) =>
-        t is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER ||
-        t is TypeInfo.NumberLiteral ||
+    /// <summary>
+    /// Generic helper for type checking with union support.
+    /// Checks if a type matches a predicate, with automatic handling for Any and Union types.
+    /// </summary>
+    /// <param name="t">The type to check.</param>
+    /// <param name="baseTypeCheck">Predicate for checking base (non-Any, non-Union) types.</param>
+    /// <returns>True if the type matches or is Any, or if all union members match.</returns>
+    private bool IsTypeOfKind(TypeInfo t, Func<TypeInfo, bool> baseTypeCheck) =>
+        baseTypeCheck(t) ||
         t is TypeInfo.Any ||
-        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsNumber));
+        (t is TypeInfo.Union u && u.FlattenedTypes.All(inner => IsTypeOfKind(inner, baseTypeCheck)));
+
+    private bool IsNumber(TypeInfo t) =>
+        IsTypeOfKind(t, type =>
+            type is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER ||
+            type is TypeInfo.NumberLiteral);
 
     private bool IsString(TypeInfo t) =>
-        t is TypeInfo.String ||
-        t is TypeInfo.StringLiteral ||
-        t is TypeInfo.Any ||
-        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsString));
+        IsTypeOfKind(t, type =>
+            type is TypeInfo.String ||
+            type is TypeInfo.StringLiteral);
 
     private bool IsBigInt(TypeInfo t) =>
-        t is TypeInfo.BigInt ||
-        t is TypeInfo.Any ||
-        (t is TypeInfo.Union u && u.FlattenedTypes.All(IsBigInt));
+        IsTypeOfKind(t, type => type is TypeInfo.BigInt);
 
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
