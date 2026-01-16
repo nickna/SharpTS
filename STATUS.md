@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added missing feature tracking for sections 1-12)
+**Last Updated:** 2026-01-16 (Added numeric separators support, added missing feature tracking for sections 1-12)
 
 ## Legend
 - ✅ Implemented
@@ -244,7 +244,7 @@ This document tracks TypeScript language features and their implementation statu
 | Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
 | Tagged template literals | ❌ | `` tag`template` `` syntax |
-| Numeric separators | ❌ | `1_000_000` for readability |
+| Numeric separators | ✅ | `1_000_000` for readability |
 
 ---
 

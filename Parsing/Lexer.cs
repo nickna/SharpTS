@@ -295,24 +295,60 @@ public class Lexer(string source)
 
     private void NumberLiteral()
     {
-        while (char.IsDigit(Peek())) Advance();
+        // Consume digits and numeric separators (underscores)
+        while (char.IsDigit(Peek()) || Peek() == '_')
+        {
+            if (Peek() == '_')
+            {
+                // Underscore must be between digits
+                char prev = _source[_current - 1];
+                char next = PeekNext();
+                if (!char.IsDigit(prev) || !char.IsDigit(next))
+                {
+                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                }
+            }
+            Advance();
+        }
 
         // Check for bigint suffix BEFORE decimal point (123n is valid, 123.5n is not)
         if (Peek() == 'n')
         {
-            string numStr = _source[_start.._current];
+            string numStr = _source[_start.._current].Replace("_", "");
             Advance(); // consume 'n'
             AddToken(TokenType.BIGINT_LITERAL, BigInteger.Parse(numStr));
             return;
         }
 
-        if (Peek() == '.' && char.IsDigit(PeekNext()))
+        if (Peek() == '.' && (char.IsDigit(PeekNext()) || PeekNext() == '_'))
         {
-            Advance();
-            while (char.IsDigit(Peek())) Advance();
+            Advance(); // consume '.'
+
+            // Check for underscore immediately after decimal point (invalid)
+            if (Peek() == '_')
+            {
+                throw new Exception($"Numeric separator must be between digits at line {_line}");
+            }
+
+            // Consume fractional digits and numeric separators
+            while (char.IsDigit(Peek()) || Peek() == '_')
+            {
+                if (Peek() == '_')
+                {
+                    // Underscore must be between digits
+                    char prev = _source[_current - 1];
+                    char next = PeekNext();
+                    if (!char.IsDigit(prev) || !char.IsDigit(next))
+                    {
+                        throw new Exception($"Numeric separator must be between digits at line {_line}");
+                    }
+                }
+                Advance();
+            }
         }
 
-        AddToken(TokenType.NUMBER, double.Parse(_source[_start.._current]));
+        string numberStr = _source[_start.._current].Replace("_", "");
+        AddToken(TokenType.NUMBER, double.Parse(numberStr));
     }
 
     private void StringLiteral(char delimiter)
