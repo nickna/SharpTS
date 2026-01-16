@@ -580,7 +580,7 @@ public class TypeCompatibilityTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "Interface extending interface not yet implemented")]
+    [Fact]
     public void InterfaceToInterface_SubtypeCompatible()
     {
         var source = """

@@ -510,7 +510,7 @@ public partial class TypeChecker
         }
     }
 
-    private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow)
+    private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow, TypeInfo? expectedType = null)
     {
         // Parse explicit 'this' type if present (for object literal method shorthand)
         // Note: Arrow function expressions shouldn't have 'this' parameter in standard TypeScript,
@@ -524,14 +524,39 @@ public partial class TypeChecker
             thisType = new TypeInfo.Any();
         }
 
+        // Extract expected function type for parameter inference
+        TypeInfo.Function? expectedFuncType = expectedType switch
+        {
+            TypeInfo.Function f => f,
+            TypeInfo.GenericFunction gf => new TypeInfo.Function(gf.ParamTypes, gf.ReturnType, gf.RequiredParams, gf.HasRestParam, gf.ThisType),
+            _ => null
+        };
+
         // Build parameter types and check defaults
         List<TypeInfo> paramTypes = [];
         int requiredParams = 0;
         bool seenDefault = false;
 
-        foreach (var param in arrow.Parameters)
+        for (int i = 0; i < arrow.Parameters.Count; i++)
         {
-            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
+            var param = arrow.Parameters[i];
+            TypeInfo paramType;
+
+            if (param.Type != null)
+            {
+                // Explicit type annotation - use it
+                paramType = ToTypeInfo(param.Type);
+            }
+            else if (expectedFuncType != null && i < expectedFuncType.ParamTypes.Count)
+            {
+                // Infer from expected type
+                paramType = expectedFuncType.ParamTypes[i];
+            }
+            else
+            {
+                // No type annotation and no expected type - use Any
+                paramType = new TypeInfo.Any();
+            }
             paramTypes.Add(paramType);
 
             // Rest parameters are not counted toward required params
@@ -563,10 +588,20 @@ public partial class TypeChecker
             }
         }
 
-        // Determine return type
-        TypeInfo returnType = arrow.ReturnType != null
-            ? ToTypeInfo(arrow.ReturnType)
-            : new TypeInfo.Any();
+        // Determine return type (use expected type if available and no explicit annotation)
+        TypeInfo returnType;
+        if (arrow.ReturnType != null)
+        {
+            returnType = ToTypeInfo(arrow.ReturnType);
+        }
+        else if (expectedFuncType != null)
+        {
+            returnType = expectedFuncType.ReturnType;
+        }
+        else
+        {
+            returnType = new TypeInfo.Any();
+        }
 
         // Create new environment with parameters
         TypeEnvironment arrowEnv = new(_environment);
@@ -613,13 +648,13 @@ public partial class TypeChecker
                 else
                 {
                     // For async arrow functions, the return type is Promise<T> but we can return T directly
-                    TypeInfo expectedType = returnType;
+                    TypeInfo expectedRetType = returnType;
                     if (arrow.IsAsync && returnType is TypeInfo.Promise promiseType)
                     {
-                        expectedType = promiseType.ValueType;
+                        expectedRetType = promiseType.ValueType;
                     }
 
-                    if (!IsCompatible(expectedType, exprType))
+                    if (!IsCompatible(expectedRetType, exprType))
                     {
                         throw new TypeCheckException($" Arrow function declared to return '{returnType}' but expression evaluates to '{exprType}'.");
                     }

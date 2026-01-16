@@ -178,10 +178,64 @@ public abstract record TypeInfo
         FrozenSet<string> OptionalMembers,
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
-        TypeInfo? SymbolIndexType = null
+        TypeInfo? SymbolIndexType = null,
+        FrozenSet<TypeInfo.Interface>? Extends = null
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
+
+        /// <summary>
+        /// Gets all members including inherited members from extended interfaces.
+        /// </summary>
+        public IEnumerable<KeyValuePair<string, TypeInfo>> GetAllMembers()
+        {
+            // Return own members first
+            foreach (var member in Members)
+            {
+                yield return member;
+            }
+
+            // Then inherited members (that don't shadow own members)
+            if (Extends != null)
+            {
+                foreach (var baseInterface in Extends)
+                {
+                    foreach (var member in baseInterface.GetAllMembers())
+                    {
+                        if (!Members.ContainsKey(member.Key))
+                        {
+                            yield return member;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets all optional member names including inherited optional members.
+        /// </summary>
+        public IEnumerable<string> GetAllOptionalMembers()
+        {
+            foreach (var name in OptionalMembers)
+            {
+                yield return name;
+            }
+
+            if (Extends != null)
+            {
+                foreach (var baseInterface in Extends)
+                {
+                    foreach (var name in baseInterface.GetAllOptionalMembers())
+                    {
+                        if (!OptionalMembers.Contains(name))
+                        {
+                            yield return name;
+                        }
+                    }
+                }
+            }
+        }
+
         public override string ToString() => $"interface {Name}";
     }
 

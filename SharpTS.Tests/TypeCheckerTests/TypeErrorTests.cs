@@ -180,7 +180,7 @@ public class TypeErrorTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "TypeChecker does not validate missing return statements in non-void functions")]
+    [Fact]
     public void MissingReturn_InNonVoidFunction_Fails()
     {
         var source = """

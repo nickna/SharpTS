@@ -378,13 +378,17 @@ public partial class TypeChecker
             // If actual is also an interface, compare member-to-member structurally
             if (actual is TypeInfo.Interface actualItf)
             {
-                // Check that actual has all required members with compatible types
-                foreach (var member in itf.Members)
+                // Check that actual has all required members with compatible types (including inherited)
+                var allExpectedMembers = itf.GetAllMembers().ToDictionary(m => m.Key, m => m.Value);
+                var allExpectedOptional = itf.GetAllOptionalMembers().ToHashSet();
+                var allActualMembers = actualItf.GetAllMembers().ToDictionary(m => m.Key, m => m.Value);
+
+                foreach (var member in allExpectedMembers)
                 {
-                    if (!actualItf.Members.TryGetValue(member.Key, out var actualMemberType))
+                    if (!allActualMembers.TryGetValue(member.Key, out var actualMemberType))
                     {
                         // Member missing - check if optional
-                        if (!(itf.OptionalMembers?.Contains(member.Key) ?? false))
+                        if (!allExpectedOptional.Contains(member.Key))
                             return false;
                     }
                     else if (!IsCompatible(member.Value, actualMemberType))
@@ -394,7 +398,10 @@ public partial class TypeChecker
                 }
                 return true;
             }
-            return CheckStructuralCompatibility(itf.Members, actual, itf.OptionalMembers);
+            // Use GetAllMembers to include inherited members when checking structural compatibility
+            var allMembers = itf.GetAllMembers().ToDictionary(m => m.Key, m => m.Value);
+            var allOptional = itf.GetAllOptionalMembers().ToHashSet();
+            return CheckStructuralCompatibility(allMembers, actual, allOptional);
         }
 
         // Handle InstantiatedGeneric interface (e.g., Container<number>)
@@ -1116,7 +1123,8 @@ public partial class TypeChecker
         }
         else if (expected is TypeInfo.Interface iface)
         {
-            foreach (var member in iface.Members)
+            // Include inherited members from extended interfaces
+            foreach (var member in iface.GetAllMembers())
             {
                 expectedKeys.Add(member.Key);
             }

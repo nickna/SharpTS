@@ -131,7 +131,16 @@ public partial class TypeChecker
                             checkExcessProps = true;
                         }
 
-                        TypeInfo initializerType = CheckExpr(initializer);
+                        // Pass contextual type to arrow functions for parameter type inference
+                        TypeInfo initializerType;
+                        if (declaredType != null && initializer is Expr.ArrowFunction arrowFn)
+                        {
+                            initializerType = CheckArrowFunction(arrowFn, declaredType);
+                        }
+                        else
+                        {
+                            initializerType = CheckExpr(initializer);
+                        }
 
                         if (declaredType != null)
                         {

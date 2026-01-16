@@ -70,6 +70,32 @@ public partial class TypeChecker
             }
         }
 
+        // Resolve extended interfaces
+        FrozenSet<TypeInfo.Interface>? extends = null;
+        if (interfaceStmt.Extends != null && interfaceStmt.Extends.Count > 0)
+        {
+            var extendsList = new HashSet<TypeInfo.Interface>();
+            foreach (var extendTypeName in interfaceStmt.Extends)
+            {
+                try
+                {
+                    var extendType = ToTypeInfo(extendTypeName);
+                    if (extendType is TypeInfo.Interface extendInterface)
+                    {
+                        extendsList.Add(extendInterface);
+                    }
+                }
+                catch
+                {
+                    // Ignore resolution errors during pre-registration
+                }
+            }
+            if (extendsList.Count > 0)
+            {
+                extends = extendsList.ToFrozenSet();
+            }
+        }
+
         // Register the interface (skip index signatures during pre-registration - they'll be added during full check)
         if (interfaceTypeParams != null && interfaceTypeParams.Count > 0)
         {
@@ -86,7 +112,8 @@ public partial class TypeChecker
             TypeInfo.Interface itfType = new(
                 interfaceStmt.Name.Lexeme,
                 members.ToFrozenDictionary(),
-                optionalMembers.ToFrozenSet()
+                optionalMembers.ToFrozenSet(),
+                Extends: extends
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }
@@ -176,6 +203,26 @@ public partial class TypeChecker
         }
         }
 
+        // Resolve extended interfaces
+        FrozenSet<TypeInfo.Interface>? extends = null;
+        if (interfaceStmt.Extends != null && interfaceStmt.Extends.Count > 0)
+        {
+            var extendsList = new HashSet<TypeInfo.Interface>();
+            foreach (var extendTypeName in interfaceStmt.Extends)
+            {
+                var extendType = ToTypeInfo(extendTypeName);
+                if (extendType is TypeInfo.Interface extendInterface)
+                {
+                    extendsList.Add(extendInterface);
+                }
+                else
+                {
+                    throw new TypeCheckException($" Interface '{interfaceStmt.Name.Lexeme}' can only extend other interfaces, but '{extendTypeName}' is not an interface.");
+                }
+            }
+            extends = extendsList.ToFrozenSet();
+        }
+
         // Create GenericInterface or regular Interface
         if (interfaceTypeParams != null && interfaceTypeParams.Count > 0)
         {
@@ -195,7 +242,8 @@ public partial class TypeChecker
                 optionalMembers.ToFrozenSet(),
                 stringIndexType,
                 numberIndexType,
-                symbolIndexType
+                symbolIndexType,
+                extends
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }

@@ -287,6 +287,20 @@ public partial class TypeChecker
             {
                 CheckStmt(bodyStmt);
             }
+
+            // Validate that non-void functions return a value on all code paths
+            // Skip for void, generators (which use yield), and async functions (which return Promise)
+            if (returnType is not TypeInfo.Void &&
+                returnType is not TypeInfo.Generator &&
+                returnType is not TypeInfo.AsyncGenerator &&
+                !funcStmt.IsGenerator &&
+                !funcStmt.IsAsync)
+            {
+                if (!DoesBlockDefinitelyReturn(funcStmt.Body))
+                {
+                    throw new TypeCheckException($" Function '{funcStmt.Name.Lexeme}' must return a value of type '{returnType}'.");
+                }
+            }
         }
         finally
         {

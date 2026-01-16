@@ -271,7 +271,7 @@ public class FunctionCompatibilityTests
 
     #region Function Type Expressions
 
-    [Fact(Skip = "Arrow function parameter type inference from context not yet implemented")]
+    [Fact]
     public void ArrowFunctionType_Compatible()
     {
         var source = """
@@ -283,7 +283,7 @@ public class FunctionCompatibilityTests
         Assert.Equal("7\n", result);
     }
 
-    [Fact(Skip = "Arrow function parameter type inference from context not yet implemented")]
+    [Fact]
     public void FunctionTypeAlias_Works()
     {
         var source = """

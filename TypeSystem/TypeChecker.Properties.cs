@@ -259,12 +259,16 @@ public partial class TypeChecker
 
             return new TypeInfo.Any();
         }
-        // Handle interface member access
+        // Handle interface member access (including inherited members)
         if (objType is TypeInfo.Interface itf)
         {
-            if (itf.Members.TryGetValue(get.Name.Lexeme, out var memberType))
+            // First check own members, then inherited
+            foreach (var member in itf.GetAllMembers())
             {
-                return memberType;
+                if (member.Key == get.Name.Lexeme)
+                {
+                    return member.Value;
+                }
             }
             throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on interface '{itf.Name}'.");
         }

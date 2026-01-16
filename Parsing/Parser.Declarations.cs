@@ -131,6 +131,18 @@ public partial class Parser
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect interface name.");
         List<TypeParam>? typeParams = ParseTypeParameters();
+
+        // Parse extends clause: interface Foo extends Bar, Baz { ... }
+        List<string>? extends = null;
+        if (Match(TokenType.EXTENDS))
+        {
+            extends = [];
+            do
+            {
+                extends.Add(ParseTypeAnnotation());
+            } while (Match(TokenType.COMMA));
+        }
+
         Consume(TokenType.LEFT_BRACE, "Expect '{' before interface body.");
 
         List<Stmt.InterfaceMember> members = [];
@@ -170,7 +182,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");
-        return new Stmt.Interface(name, typeParams, members, indexSignatures.Count > 0 ? indexSignatures : null);
+        return new Stmt.Interface(name, typeParams, members, indexSignatures.Count > 0 ? indexSignatures : null, extends);
     }
 
     /// <summary>
