@@ -301,16 +301,15 @@ public class ParserRecoveryTests
     }
 
     [Fact]
-    public void Parse_ClassExpressionInGrouping_ParsesCorrectly()
+    public void Parse_ClassExpressionInGroupingWithNewlines_ParsesCorrectly()
     {
         // This tests that 'class' inside a grouping is correctly parsed as a class expression
-        var source = "let x = (class Foo { });";
+        // even when there are newlines inside the grouping
+        var source = "let x = (\nclass Foo { }\n);";
         var result = Parse(source);
 
-        var errorDetails = result.Errors.Count > 0
-            ? $"Errors: {string.Join(", ", result.Errors.Select(e => e.Message))}"
-            : "No errors";
-        Assert.True(result.IsSuccess, $"Expected success but got: {errorDetails}");
+        Assert.True(result.IsSuccess,
+            $"Expected success but got errors: {string.Join(", ", result.Errors.Select(e => e.Message))}");
         // The class is parsed as a class EXPRESSION, not a class statement
         var varStatements = result.Statements.OfType<Stmt.Var>().ToList();
         Assert.Single(varStatements);
