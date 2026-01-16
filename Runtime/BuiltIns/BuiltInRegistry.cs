@@ -140,6 +140,7 @@ public sealed class BuiltInRegistry
         RegisterStdinType(registry);
         RegisterStdoutType(registry);
         RegisterStderrType(registry);
+        RegisterHashType(registry);
 
         return registry;
     }
@@ -378,6 +379,13 @@ public sealed class BuiltInRegistry
         // Stderr members accessed via property access (process.stderr.write)
         registry.RegisterInstanceType(typeof(SharpTSStderr), (instance, name) =>
             StderrBuiltIns.GetMember((SharpTSStderr)instance, name));
+    }
+
+    private static void RegisterHashType(BuiltInRegistry registry)
+    {
+        // Hash members accessed via property access (hash.update, hash.digest)
+        registry.RegisterInstanceType(typeof(SharpTSHash), (instance, name) =>
+            ((SharpTSHash)instance).GetMember(name));
     }
 
     private static string Stringify(object? obj)

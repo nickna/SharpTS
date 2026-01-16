@@ -129,17 +129,20 @@ public static class ProcessBuiltIns
         var elements = new List<object?>();
         var args = Environment.GetCommandLineArgs();
 
-        // Node.js format: [node_path, script_path, ...args]
-        // .NET format: [exe_path, ...args]
-        // We prepend the executable path to maintain compatibility with slice(2)
-        // argv[0] = executable path (acts as "runtime")
-        // argv[1] = executable path (acts as "script" path, from GetCommandLineArgs)
-        // argv[2+] = actual arguments
+        // Node.js format: [node_path, script_path, ...user_args]
+        // .NET GetCommandLineArgs format: [dll_path, script_path, ...user_args]
+        //
+        // Transform to match Node.js conventions:
+        // argv[0] = executable path (runtime) - use ProcessPath
+        // argv[1] = script path (from args[1])
+        // argv[2+] = user arguments (from args[2+])
+        //
+        // Skip args[0] (the DLL path) since it's not user-relevant
         elements.Add(Environment.ProcessPath ?? args[0]);
 
-        foreach (var arg in args)
+        for (int i = 1; i < args.Length; i++)
         {
-            elements.Add(arg);
+            elements.Add(args[i]);
         }
         _argvArray = new SharpTSArray(elements);
         return _argvArray;
