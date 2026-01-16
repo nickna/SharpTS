@@ -17,7 +17,7 @@ public class NestedGenericsTokenSplittingTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        return parser.Parse();
+        return parser.ParseOrThrow();
     }
 
     private static string GetVariableType(List<Stmt> statements, string varName)
@@ -253,7 +253,7 @@ public class NestedGenericsTokenSplittingTests
 
         // But parser should still parse correctly
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
         var type = GetVariableType(statements, "x");
         Assert.Equal("A<B<C>>", type);
     }
@@ -271,7 +271,7 @@ public class NestedGenericsTokenSplittingTests
 
         // But parser should still parse correctly
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
         var type = GetVariableType(statements, "x");
         Assert.Equal("A<B<C<D>>>", type);
     }

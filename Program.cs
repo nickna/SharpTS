@@ -332,7 +332,8 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
         var entryModule = resolver.LoadModule(absolutePath, decoratorMode);
         var allModules = resolver.GetModulesInOrder(entryModule);
 
-        // Type checking across all modules
+        // Type checking across all modules (still uses Check-style API for modules)
+        // Module type checking has its own error handling
         var checker = new TypeChecker();
         checker.SetDecoratorMode(decoratorMode);
         var typeMap = checker.CheckModules(allModules, resolver);
@@ -376,17 +377,35 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     List<Token> tokens = lexer.ScanTokens();
 
     Parser parser = new(tokens, decoratorMode);
+    ParseResult parseResult = parser.Parse();
+
+    if (!parseResult.IsSuccess)
+    {
+        foreach (var error in parseResult.Errors)
+            Console.WriteLine($"Error: {error}");
+        if (parseResult.HitErrorLimit)
+            Console.WriteLine("Too many errors, stopping.");
+        return;
+    }
+
     try
     {
-        List<Stmt> statements = parser.Parse();
-
         // Static Analysis Phase
         TypeChecker checker = new();
         checker.SetDecoratorMode(decoratorMode);
-        TypeMap typeMap = checker.Check(statements);
+        TypeCheckResult typeResult = checker.CheckWithRecovery(parseResult.Statements);
+
+        if (!typeResult.IsSuccess)
+        {
+            foreach (var error in typeResult.Errors)
+                Console.WriteLine($"Error: {error}");
+            if (typeResult.HitErrorLimit)
+                Console.WriteLine("Too many errors, stopping.");
+            return;
+        }
 
         // Interpretation Phase
-        interpreter.Interpret(statements, typeMap);
+        interpreter.Interpret(parseResult.Statements, typeResult.TypeMap);
     }
     catch (Exception ex)
     {
@@ -449,7 +468,23 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         Lexer lexer = new(source);
         List<Token> tokens = lexer.ScanTokens();
         Parser parser = new(tokens, decoratorMode);
-        List<Stmt> statements = parser.Parse();
+        ParseResult parseResult = parser.Parse();
+
+        if (!parseResult.IsSuccess)
+        {
+            foreach (var error in parseResult.Errors)
+            {
+                if (outputOptions.MsBuildErrors)
+                    Console.Error.WriteLine($"{inputPath}({error.Line},1): error SHARPTS001: {error.Message}");
+                else
+                    Console.WriteLine($"Error: {error}");
+            }
+            if (parseResult.HitErrorLimit)
+                Console.WriteLine("Too many errors, stopping.");
+            Environment.Exit(1);
+        }
+
+        var statements = parseResult.Statements;
 
         // Check AST for import/export statements
         bool hasModules = statements.Any(s => s is Stmt.Import or Stmt.Export);
@@ -581,7 +616,23 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
     // Static Analysis Phase
     TypeChecker checker = new();
     checker.SetDecoratorMode(decoratorMode);
-    TypeMap typeMap = checker.Check(statements);
+    TypeCheckResult typeResult = checker.CheckWithRecovery(statements);
+
+    if (!typeResult.IsSuccess)
+    {
+        foreach (var error in typeResult.Errors)
+        {
+            if (outputOptions.MsBuildErrors)
+                Console.Error.WriteLine($"{outputPath}({error.Line ?? 1},1): error SHARPTS002: {error.Message}");
+            else
+                Console.WriteLine($"Error: {error}");
+        }
+        if (typeResult.HitErrorLimit)
+            Console.WriteLine("Too many errors, stopping.");
+        Environment.Exit(1);
+    }
+
+    TypeMap typeMap = typeResult.TypeMap;
 
     // Dead Code Analysis Phase
     DeadCodeAnalyzer deadCodeAnalyzer = new(typeMap);

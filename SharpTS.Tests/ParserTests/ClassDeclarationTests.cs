@@ -16,7 +16,7 @@ public class ClassDeclarationTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        return parser.Parse();
+        return parser.ParseOrThrow();
     }
 
     private static Stmt.Class ParseClass(string source)

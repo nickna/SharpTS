@@ -16,7 +16,7 @@ public class ArrowFunctionTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        return parser.Parse();
+        return parser.ParseOrThrow();
     }
 
     private static Stmt.Var ParseVarWithArrow(string source)

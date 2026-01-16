@@ -53,6 +53,11 @@ public partial class TypeChecker
     // Memoization cache for IsCompatible checks - cleared per Check() call
     private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;
 
+    // Error recovery support
+    private readonly List<TypeCheckError> _errors = [];
+    private bool _collectErrors = false;
+    private const int MaxErrors = 10;
+
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.
     /// Automatically restores the previous environment on disposal, even if an exception is thrown.
@@ -242,6 +247,91 @@ public partial class TypeChecker
         }
 
         return _typeMap;
+    }
+
+    /// <summary>
+    /// Type-checks the given statements with error recovery, collecting multiple errors.
+    /// </summary>
+    /// <param name="statements">The AST statements to check.</param>
+    /// <returns>A TypeCheckResult containing the type map and any errors encountered.</returns>
+    public TypeCheckResult CheckWithRecovery(List<Stmt> statements)
+    {
+        _collectErrors = true;
+        _errors.Clear();
+        _compatibilityCache = null;
+
+        // Pre-define built-ins
+        _environment.Define("console", new TypeInfo.Any());
+        _environment.Define("Reflect", new TypeInfo.Any());
+        _environment.Define("process", new TypeInfo.Any());
+
+        // Pre-register type declarations
+        PreRegisterTypeDeclarations(statements);
+
+        // Hoist function declarations
+        HoistFunctionDeclarations(statements);
+
+        foreach (Stmt statement in statements)
+        {
+            if (_errors.Count >= MaxErrors)
+                return new TypeCheckResult(_typeMap, _errors) { HitErrorLimit = true };
+
+            try
+            {
+                CheckStmt(statement);
+            }
+            catch (TypeMismatchException ex)
+            {
+                RecordTypeError(ex);
+            }
+            catch (TypeCheckException ex)
+            {
+                RecordTypeError(ex);
+            }
+            catch (Exception ex)
+            {
+                RecordTypeError(ex.Message);
+            }
+        }
+
+        _collectErrors = false;
+        return new TypeCheckResult(_typeMap, _errors);
+    }
+
+    /// <summary>
+    /// Records a type checking error from a TypeCheckException.
+    /// </summary>
+    private void RecordTypeError(TypeCheckException ex)
+    {
+        TypeInfo? expected = null, actual = null;
+        if (ex is TypeMismatchException m)
+        {
+            expected = m.Expected;
+            actual = m.Actual;
+        }
+
+        // Extract the core message by removing the "Type Error: " or "Type Error at line X: " prefix
+        string message = ex.Message;
+        if (message.StartsWith("Type Error at line"))
+        {
+            var colonIndex = message.IndexOf(": ", 15); // Skip past "Type Error at line X"
+            if (colonIndex > 0)
+                message = message[(colonIndex + 2)..];
+        }
+        else if (message.StartsWith("Type Error: "))
+        {
+            message = message["Type Error: ".Length..];
+        }
+
+        _errors.Add(new TypeCheckError(message, ex.Line, ex.Column, expected, actual));
+    }
+
+    /// <summary>
+    /// Records a type checking error from a raw message.
+    /// </summary>
+    private void RecordTypeError(string message, int? line = null)
+    {
+        _errors.Add(new TypeCheckError(message, line));
     }
 
     /// <summary>

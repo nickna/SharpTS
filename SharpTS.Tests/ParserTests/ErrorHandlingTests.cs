@@ -16,7 +16,7 @@ public class ErrorHandlingTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        return Assert.Throws<Exception>(() => parser.Parse());
+        return Assert.Throws<Exception>(() => parser.ParseOrThrow());
     }
 
     private static List<Stmt> TryParse(string source)
@@ -24,7 +24,7 @@ public class ErrorHandlingTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        return parser.Parse();
+        return parser.ParseOrThrow();
     }
 
     #endregion

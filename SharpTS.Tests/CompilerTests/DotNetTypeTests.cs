@@ -28,7 +28,7 @@ public class DotNetTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens, DecoratorMode.Legacy);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var classStmt = Assert.IsType<Stmt.Class>(statements[0]);
@@ -50,7 +50,7 @@ public class DotNetTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var classStmt = Assert.IsType<Stmt.Class>(statements[0]);
@@ -71,7 +71,7 @@ public class DotNetTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens, DecoratorMode.Legacy);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         var classStmt = Assert.IsType<Stmt.Class>(statements[0]);
         Assert.NotNull(classStmt.Decorators);
@@ -106,7 +106,7 @@ public class DotNetTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens, DecoratorMode.Legacy);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         // Should not throw - DotNetType is a built-in decorator
         var checker = new TypeChecker();
@@ -131,7 +131,7 @@ public class DotNetTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens, DecoratorMode.Legacy);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         var checker = new TypeChecker();
         checker.SetDecoratorMode(DecoratorMode.Legacy);

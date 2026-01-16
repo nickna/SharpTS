@@ -18,7 +18,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -38,7 +38,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -65,7 +65,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -86,7 +86,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -107,7 +107,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -126,7 +126,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);
@@ -145,7 +145,7 @@ public class ImportTypeTests
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         Assert.Single(statements);
         var import = Assert.IsType<Stmt.Import>(statements[0]);

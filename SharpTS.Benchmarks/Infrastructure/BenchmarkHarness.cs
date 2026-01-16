@@ -33,7 +33,7 @@ public static class BenchmarkHarness
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
-        var statements = parser.Parse();
+        var statements = parser.ParseOrThrow();
 
         var checker = new TypeChecker();
         var typeMap = checker.Check(statements);

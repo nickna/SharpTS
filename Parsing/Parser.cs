@@ -34,6 +34,10 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private int _current = 0;
     private int _tempVarCounter = 0;
 
+    // Error recovery support
+    private readonly List<ParseError> _errors = [];
+    private const int MaxErrors = 10;
+
     // Internal pattern representation for destructuring (not AST nodes)
     private abstract record DestructurePattern;
     private record ArrayPattern(List<ArrayPatternElement> Elements, int Line) : DestructurePattern;
@@ -47,14 +51,94 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private Token GenerateTempVar(int line) =>
         new Token(TokenType.IDENTIFIER, $"_dest{_tempVarCounter++}", null, line);
 
-    public List<Stmt> Parse()
+    /// <summary>
+    /// Parses the token stream with error recovery, collecting multiple errors.
+    /// </summary>
+    /// <returns>A ParseResult containing parsed statements and any errors encountered.</returns>
+    public ParseResult Parse()
     {
         List<Stmt> statements = [];
         while (!IsAtEnd())
         {
-            statements.Add(Declaration());
+            try
+            {
+                var decl = Declaration();
+                if (decl != null) statements.Add(decl);
+            }
+            catch (Exception ex)
+            {
+                RecordError(ex.Message);
+                Synchronize();
+                if (_errors.Count >= MaxErrors)
+                    return new ParseResult(statements, _errors) { HitErrorLimit = true };
+            }
         }
-        return statements;
+        return new ParseResult(statements, _errors);
+    }
+
+    /// <summary>
+    /// Parses the token stream, throwing on the first error (legacy behavior).
+    /// </summary>
+    /// <returns>The list of parsed statements.</returns>
+    /// <exception cref="Exception">Thrown when a parse error is encountered.</exception>
+    public List<Stmt> ParseOrThrow()
+    {
+        var result = Parse();
+        if (!result.IsSuccess) throw new Exception(result.Errors[0].ToString());
+        return result.Statements;
+    }
+
+    /// <summary>
+    /// Records a parse error at the current token position.
+    /// </summary>
+    private void RecordError(string message)
+    {
+        Token current = IsAtEnd() ? Previous() : Peek();
+        _errors.Add(new ParseError(message, current.Line, null, current.Lexeme));
+    }
+
+    /// <summary>
+    /// Synchronizes the parser state after an error by advancing to a safe recovery point.
+    /// Recovery points are: after a semicolon, or at a keyword that starts a new declaration/statement.
+    /// </summary>
+    private void Synchronize()
+    {
+        while (!IsAtEnd())
+        {
+            // Check if we're already at a token that starts a new statement/declaration
+            // This handles the case where the error was detected AT a keyword
+            switch (Peek().Type)
+            {
+                case TokenType.CLASS:
+                case TokenType.FUNCTION:
+                case TokenType.INTERFACE:
+                case TokenType.LET:
+                case TokenType.CONST:
+                case TokenType.VAR:
+                case TokenType.IMPORT:
+                case TokenType.EXPORT:
+                case TokenType.TYPE:
+                case TokenType.ENUM:
+                case TokenType.NAMESPACE:
+                case TokenType.IF:
+                case TokenType.FOR:
+                case TokenType.WHILE:
+                case TokenType.DO:
+                case TokenType.SWITCH:
+                case TokenType.TRY:
+                case TokenType.RETURN:
+                case TokenType.THROW:
+                    return;
+                case TokenType.RIGHT_BRACE:
+                    // At a closing brace - let the caller handle block termination
+                    return;
+            }
+
+            Advance();
+
+            // Check if we just passed a semicolon (statement boundary)
+            if (Previous().Type == TokenType.SEMICOLON) return;
+        }
     }
 
     // ============== TOKEN NAVIGATION ==============

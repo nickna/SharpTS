@@ -193,8 +193,15 @@ public class ModuleResolver
             var lexer = new Lexer(source);
             var tokens = lexer.ScanTokens();
             var parser = new Parser(tokens, decoratorMode);
-            var statements = parser.Parse();
+            var parseResult = parser.Parse();
 
+            // For module loading, we throw on parse errors (backward compatible)
+            if (!parseResult.IsSuccess)
+            {
+                throw new Exception(parseResult.Errors[0].ToString());
+            }
+
+            var statements = parseResult.Statements;
             var module = new ParsedModule(absolutePath, statements);
             _moduleCache[absolutePath] = module;
 

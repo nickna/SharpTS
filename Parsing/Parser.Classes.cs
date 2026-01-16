@@ -38,6 +38,8 @@ public partial class Parser
         List<Stmt.Accessor> accessors = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
+            try
+            {
             // Parse member decorators before modifiers
             List<Decorator>? memberDecorators = ParseDecorators();
 
@@ -231,10 +233,54 @@ public partial class Parser
                     }
                 }
             }
+            }
+            catch (Exception ex)
+            {
+                RecordError(ex.Message);
+                SynchronizeInClassBody();
+                if (_errors.Count >= MaxErrors) break;
+            }
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
+    }
+
+    /// <summary>
+    /// Synchronizes within a class body, stopping at member boundaries or the closing brace.
+    /// </summary>
+    private void SynchronizeInClassBody()
+    {
+        while (!IsAtEnd())
+        {
+            // Stop at closing brace (end of class body)
+            if (Check(TokenType.RIGHT_BRACE)) return;
+
+            // Check if we're at a token that starts a new member
+            switch (Peek().Type)
+            {
+                case TokenType.PUBLIC:
+                case TokenType.PRIVATE:
+                case TokenType.PROTECTED:
+                case TokenType.STATIC:
+                case TokenType.READONLY:
+                case TokenType.ABSTRACT:
+                case TokenType.OVERRIDE:
+                case TokenType.ASYNC:
+                case TokenType.GET:
+                case TokenType.SET:
+                case TokenType.CONSTRUCTOR:
+                    return;
+                case TokenType.IDENTIFIER:
+                    // Could be the start of a field or method
+                    return;
+            }
+
+            Advance();
+
+            // Check if we just passed a semicolon (field boundary)
+            if (Previous().Type == TokenType.SEMICOLON) return;
+        }
     }
 
     // ============== CLASS EXPRESSION ==============
@@ -283,6 +329,8 @@ public partial class Parser
         List<Stmt.Accessor> accessors = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
+            try
+            {
             // Parse modifiers (no decorators on class expression members per TypeScript spec)
             AccessModifier access = AccessModifier.Public;
             bool isStatic = false;
@@ -381,6 +429,13 @@ public partial class Parser
                         }
                     }
                 }
+            }
+            }
+            catch (Exception ex)
+            {
+                RecordError(ex.Message);
+                SynchronizeInClassBody();
+                if (_errors.Count >= MaxErrors) break;
             }
         }
 

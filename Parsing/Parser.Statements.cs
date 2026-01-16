@@ -300,11 +300,60 @@ public partial class Parser
         List<Stmt> statements = [];
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
-            statements.Add(Declaration());
+            try
+            {
+                var decl = Declaration();
+                if (decl != null) statements.Add(decl);
+            }
+            catch (Exception ex)
+            {
+                RecordError(ex.Message);
+                SynchronizeInBlock();
+                if (_errors.Count >= MaxErrors) break;
+            }
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after block.");
         return statements;
+    }
+
+    /// <summary>
+    /// Synchronizes within a block, stopping at statement boundaries or the closing brace.
+    /// </summary>
+    private void SynchronizeInBlock()
+    {
+        while (!IsAtEnd())
+        {
+            // Stop at closing brace (end of block)
+            if (Check(TokenType.RIGHT_BRACE)) return;
+
+            // Check if we're at a token that starts a new statement
+            switch (Peek().Type)
+            {
+                case TokenType.CLASS:
+                case TokenType.FUNCTION:
+                case TokenType.INTERFACE:
+                case TokenType.LET:
+                case TokenType.CONST:
+                case TokenType.VAR:
+                case TokenType.IF:
+                case TokenType.FOR:
+                case TokenType.WHILE:
+                case TokenType.DO:
+                case TokenType.SWITCH:
+                case TokenType.TRY:
+                case TokenType.RETURN:
+                case TokenType.THROW:
+                case TokenType.BREAK:
+                case TokenType.CONTINUE:
+                    return;
+            }
+
+            Advance();
+
+            // Check if we just passed a semicolon
+            if (Previous().Type == TokenType.SEMICOLON) return;
+        }
     }
 
     private Stmt ExpressionStatement()
