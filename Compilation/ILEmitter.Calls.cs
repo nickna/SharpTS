@@ -698,7 +698,8 @@ public partial class ILEmitter
 
         // Methods that exist on both strings and arrays - runtime dispatch for any/unknown/union types
         // Note: String and Array types are handled by TypeEmitterRegistry above
-        if (methodName is "slice" or "concat" or "includes" or "indexOf")
+        // startsWith/endsWith are string-only but included here for Any-typed values
+        if (methodName is "slice" or "concat" or "includes" or "indexOf" or "startsWith" or "endsWith")
         {
             EmitAmbiguousMethodCall(methodGet.Object, methodName, arguments);
             return;
@@ -830,6 +831,36 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringConcat);
                 break;
+
+            case "startsWith":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringStartsWith);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                break;
+
+            case "endsWith":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.String);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldstr, "");
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringEndsWith);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                break;
         }
         builder.Emit_Br(doneLabel);
 
@@ -894,6 +925,14 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.ListOfObject));
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayConcat);
+                break;
+
+            case "startsWith":
+            case "endsWith":
+                // Arrays don't have startsWith/endsWith - pop the list and return false
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
         }
 
