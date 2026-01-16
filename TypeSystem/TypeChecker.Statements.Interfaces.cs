@@ -32,15 +32,17 @@ public partial class TypeChecker
                 // During pre-registration, we use a simple constraint parsing
                 // that may fail on forward references - that's OK, we catch the error
                 TypeInfo? constraint = null;
+                TypeInfo? defaultType = null;
                 try
                 {
                     constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+                    defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
                 }
                 catch
                 {
-                    // Ignore constraint parsing errors during pre-registration
+                    // Ignore constraint/default parsing errors during pre-registration
                 }
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 interfaceTypeParams.Add(typeParam);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
@@ -130,7 +132,8 @@ public partial class TypeChecker
             foreach (var tp in interfaceStmt.TypeParams)
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 interfaceTypeParams.Add(typeParam);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }

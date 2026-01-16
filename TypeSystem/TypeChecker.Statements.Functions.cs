@@ -52,23 +52,35 @@ public partial class TypeChecker
             // Build the function type
             TypeEnvironment funcEnv = new(_environment);
 
+            // Set up environment for parsing type parameters and constraints
+            TypeEnvironment previousEnvForParsing = _environment;
+            _environment = funcEnv;
+
             // Handle generic type parameters
+            // First pass: define all type parameters so they can reference each other
             List<TypeInfo.TypeParameter>? typeParams = null;
             if (funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0)
             {
                 typeParams = [];
+                // First, define all type parameters without constraints
+                foreach (var tp in funcStmt.TypeParams)
+                {
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
+                    funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+                }
+                // Second, parse constraints (which may reference other type parameters)
                 foreach (var tp in funcStmt.TypeParams)
                 {
                     TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                    TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                     typeParams.Add(typeParam);
+                    // Redefine with the actual constraint
                     funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
                 }
             }
 
-            // Parse parameter types and return type
-            TypeEnvironment previousEnvForParsing = _environment;
-            _environment = funcEnv;
+            // Parse parameter types and return type (environment already set above)
 
             try
             {
@@ -139,23 +151,35 @@ public partial class TypeChecker
         // Build the function type for this declaration
         TypeEnvironment funcEnv = new(_environment);
 
+        // Set up environment for parsing type parameters and constraints
+        TypeEnvironment previousEnvForParsing = _environment;
+        _environment = funcEnv;
+
         // Handle generic type parameters
+        // First pass: define all type parameters so they can reference each other
         List<TypeInfo.TypeParameter>? typeParams = null;
         if (funcStmt.TypeParams != null && funcStmt.TypeParams.Count > 0)
         {
             typeParams = [];
+            // First, define all type parameters without constraints
+            foreach (var tp in funcStmt.TypeParams)
+            {
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
+                funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
+            }
+            // Second, parse constraints (which may reference other type parameters)
             foreach (var tp in funcStmt.TypeParams)
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 typeParams.Add(typeParam);
+                // Redefine with the actual constraint
                 funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
         }
 
-        // Parse parameter types and return type
-        TypeEnvironment previousEnvForParsing = _environment;
-        _environment = funcEnv;
+        // Parse parameter types and return type (environment already set above)
 
         var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
             funcStmt.Parameters,

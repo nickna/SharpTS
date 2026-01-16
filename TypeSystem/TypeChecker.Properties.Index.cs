@@ -23,6 +23,66 @@ public partial class TypeChecker
             return new TypeInfo.Any();
         }
 
+        // Handle TypeParameter with constraint - delegate to constraint for indexing
+        if (objType is TypeInfo.TypeParameter objTp)
+        {
+            // If index is a TypeParameter with keyof constraint matching this type param, allow it
+            if (indexType is TypeInfo.TypeParameter indexTp && indexTp.Constraint is TypeInfo.KeyOf keyOf)
+            {
+                // keyof T where T is the same type parameter we're indexing - return the indexed access type
+                if (keyOf.SourceType is TypeInfo.TypeParameter keyOfTp && keyOfTp.Name == objTp.Name)
+                {
+                    // Return IndexedAccess type that will be resolved when concrete types are provided
+                    // For now, return Any since we can't know the exact property type until instantiation
+                    return new TypeInfo.Any();
+                }
+            }
+
+            // Delegate to constraint type if available
+            if (objTp.Constraint != null)
+            {
+                var constrainedResult = CheckGetIndexOnType(objTp.Constraint, indexType, getIndex);
+                if (constrainedResult != null) return constrainedResult;
+            }
+
+            // Check if the index type has a keyof constraint on this type parameter
+            // This handles cases like T[K] where K extends keyof T, and T is unconstrained
+            if (indexType is TypeInfo.TypeParameter indexTp2 && indexTp2.Constraint is TypeInfo.KeyOf keyOf2)
+            {
+                if (keyOf2.SourceType is TypeInfo.TypeParameter keyOfTp2 && keyOfTp2.Name == objTp.Name)
+                {
+                    // K extends keyof T and we're indexing T with K - allow it
+                    return new TypeInfo.Any();
+                }
+            }
+
+            // If index is a string/number type, return Any for generic flexibility
+            if (IsString(indexType) || IsNumber(indexType))
+            {
+                return new TypeInfo.Any();
+            }
+
+            // Unconstrained type parameter can't be indexed with arbitrary types
+            throw new TypeCheckException($" Cannot index type parameter '{objTp.Name}' with type '{indexType}'.");
+        }
+
+        // Handle TypeParameter index type with keyof constraint
+        if (indexType is TypeInfo.TypeParameter indexTpOnly && indexTpOnly.Constraint is TypeInfo.KeyOf keyOfConstraint)
+        {
+            // Check if the keyof constraint's source type is compatible with objType
+            var keyOfSourceType = keyOfConstraint.SourceType;
+            if (keyOfSourceType is TypeInfo.TypeParameter)
+            {
+                // The keyof is on a type parameter - in generic context, allow it
+                return new TypeInfo.Any();
+            }
+            // If we can verify the keyof source matches objType, allow it
+            if (IsCompatible(keyOfSourceType, objType))
+            {
+                return new TypeInfo.Any();
+            }
+        }
+
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
@@ -227,5 +287,49 @@ public partial class TypeChecker
         }
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for assigning to '{objType}'.");
+    }
+
+    /// <summary>
+    /// Checks index access on a given type (used for delegating from TypeParameter constraints).
+    /// Returns null if the index type is not valid for the object type.
+    /// </summary>
+    private TypeInfo? CheckGetIndexOnType(TypeInfo objType, TypeInfo indexType, Expr.GetIndex getIndex)
+    {
+        // Recursive case for nested type parameters
+        if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
+        {
+            return CheckGetIndexOnType(tp.Constraint, indexType, getIndex);
+        }
+
+        // Handle string index
+        if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
+        {
+            if (getIndex.Index is Expr.Literal { Value: string propName })
+            {
+                if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
+                    return fieldType;
+                if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))
+                    return memberType;
+            }
+            if (objType is TypeInfo.Record rec2 && rec2.StringIndexType != null)
+                return rec2.StringIndexType;
+            if (objType is TypeInfo.Interface itf2 && itf2.StringIndexType != null)
+                return itf2.StringIndexType;
+            if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
+                return new TypeInfo.Any();
+        }
+
+        // Handle number index
+        if (IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+        {
+            if (objType is TypeInfo.Array arrayType)
+                return arrayType.ElementType;
+            if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
+                return itf3.NumberIndexType;
+            if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
+                return rec3.NumberIndexType;
+        }
+
+        return null;
     }
 }

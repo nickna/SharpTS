@@ -1,4 +1,5 @@
 using SharpTS.TypeSystem.Exceptions;
+using SharpTS.Runtime.BuiltIns;
 using System.Collections.Frozen;
 using SharpTS.Parsing;
 
@@ -164,13 +165,30 @@ public partial class TypeChecker
         }
 
         // KeyOf type compatibility - must evaluate to compare
+        // Special handling for keyof T where T is a type parameter - don't try to expand
         if (expected is TypeInfo.KeyOf expectedKeyOf)
         {
+            // If source is a type parameter, don't expand to avoid infinite recursion
+            if (expectedKeyOf.SourceType is TypeInfo.TypeParameter)
+            {
+                // keyof T is compatible with string, number, symbol, or any
+                return actual is TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.Any or
+                       TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or
+                       TypeInfo.NumberLiteral or TypeInfo.Symbol or TypeInfo.TypeParameter;
+            }
             TypeInfo expandedExpected = EvaluateKeyOf(expectedKeyOf.SourceType);
             return IsCompatible(expandedExpected, actual);
         }
         if (actual is TypeInfo.KeyOf actualKeyOf)
         {
+            // If source is a type parameter, don't expand to avoid infinite recursion
+            if (actualKeyOf.SourceType is TypeInfo.TypeParameter)
+            {
+                // keyof T is compatible with string, number, symbol, or any
+                return expected is TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.Any or
+                       TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or
+                       TypeInfo.NumberLiteral or TypeInfo.Symbol or TypeInfo.KeyOf;
+            }
             TypeInfo expandedActual = EvaluateKeyOf(actualKeyOf.SourceType);
             return IsCompatible(expected, expandedActual);
         }
@@ -440,6 +458,14 @@ public partial class TypeChecker
             // If expected has only index signatures (no explicit fields), empty object is compatible
             // Index signatures allow any number of keys (including zero)
             return true;
+        }
+
+        // Record constraint compatibility with types that have members (String, Array, etc.)
+        // This handles cases like `T extends { length: number }` with strings or arrays
+        if (expected is TypeInfo.Record expRec)
+        {
+            // Use CheckStructuralCompatibility to check if actual type has all required fields
+            return CheckStructuralCompatibility(expRec.Fields, actual, null);
         }
 
         // Tuple-to-tuple compatibility
@@ -1190,6 +1216,48 @@ public partial class TypeChecker
         {
             return record.Fields.TryGetValue(name, out var t) ? t : null;
         }
+
+        // Handle String type - has length property and string methods
+        if (type is TypeInfo.String or TypeInfo.StringLiteral)
+        {
+            return BuiltInTypes.GetStringMemberType(name);
+        }
+
+        // Handle Array type - has length property and array methods
+        if (type is TypeInfo.Array arr)
+        {
+            return BuiltInTypes.GetArrayMemberType(name, arr.ElementType);
+        }
+
+        // Handle Tuple type - treat as array for member access
+        if (type is TypeInfo.Tuple tuple)
+        {
+            var allTypes = tuple.ElementTypes.ToList();
+            if (tuple.RestElementType != null)
+                allTypes.Add(tuple.RestElementType);
+            var unique = allTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            TypeInfo unionElem = unique.Count == 0
+                ? new TypeInfo.Any()
+                : (unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique));
+            return BuiltInTypes.GetArrayMemberType(name, unionElem);
+        }
+
+        // Handle TypeParameter with constraint - delegate to constraint
+        if (type is TypeInfo.TypeParameter tp && tp.Constraint != null)
+        {
+            return GetMemberType(tp.Constraint, name);
+        }
+
+        // Handle Interface type
+        if (type is TypeInfo.Interface itf)
+        {
+            foreach (var member in itf.GetAllMembers())
+            {
+                if (member.Key == name) return member.Value;
+            }
+            return null;
+        }
+
         if (type is TypeInfo.Instance instance)
         {
             // Handle InstantiatedGeneric
@@ -1237,15 +1305,16 @@ public partial class TypeChecker
 
     /// <summary>
     /// Generic helper for type checking with union support.
-    /// Checks if a type matches a predicate, with automatic handling for Any and Union types.
+    /// Checks if a type matches a predicate, with automatic handling for Any, Union, and TypeParameter types.
     /// </summary>
     /// <param name="t">The type to check.</param>
     /// <param name="baseTypeCheck">Predicate for checking base (non-Any, non-Union) types.</param>
-    /// <returns>True if the type matches or is Any, or if all union members match.</returns>
+    /// <returns>True if the type matches or is Any, or if all union members match, or if TypeParameter constraint matches.</returns>
     private bool IsTypeOfKind(TypeInfo t, Func<TypeInfo, bool> baseTypeCheck) =>
         baseTypeCheck(t) ||
         t is TypeInfo.Any ||
-        (t is TypeInfo.Union u && u.FlattenedTypes.All(inner => IsTypeOfKind(inner, baseTypeCheck)));
+        (t is TypeInfo.Union u && u.FlattenedTypes.All(inner => IsTypeOfKind(inner, baseTypeCheck))) ||
+        (t is TypeInfo.TypeParameter tp && tp.Constraint != null && IsTypeOfKind(tp.Constraint, baseTypeCheck));
 
     private bool IsNumber(TypeInfo t) =>
         IsTypeOfKind(t, type =>

@@ -569,23 +569,42 @@ public partial class Parser
     // ============== GENERIC TYPE PARAMETER PARSING ==============
 
     /// <summary>
-    /// Parses type parameters like &lt;T, U extends Base&gt;.
+    /// Parses type parameters like &lt;T, U extends Base&gt; or &lt;T = string, U extends Base = number&gt;.
     /// Returns null if no type parameters are present.
+    /// Supports optional constraints (extends) and default types (=).
     /// </summary>
     private List<TypeParam>? ParseTypeParameters()
     {
         if (!Match(TokenType.LESS)) return null;
 
         List<TypeParam> typeParams = [];
+        bool sawDefault = false;
+
         do
         {
             Token name = Consume(TokenType.IDENTIFIER, "Expect type parameter name.");
             string? constraint = null;
+            string? defaultType = null;
+
+            // Parse optional constraint: extends SomeType
             if (Match(TokenType.EXTENDS))
             {
                 constraint = ParseTypeAnnotation();
             }
-            typeParams.Add(new TypeParam(name, constraint));
+
+            // Parse optional default: = SomeType
+            if (Match(TokenType.EQUAL))
+            {
+                defaultType = ParseTypeAnnotation();
+                sawDefault = true;
+            }
+            else if (sawDefault)
+            {
+                // TypeScript requires: required type parameters cannot follow optional ones
+                throw new Exception($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
+            }
+
+            typeParams.Add(new TypeParam(name, constraint, defaultType));
         } while (Match(TokenType.COMMA));
 
         ConsumeGreaterInTypeContext("Expect '>' after type parameters.");

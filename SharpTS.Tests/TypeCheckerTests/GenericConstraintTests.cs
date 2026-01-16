@@ -68,7 +68,7 @@ public class GenericConstraintTests
 
     #region Primitive Constraints (extends)
 
-    [Fact(Skip = "TypeParameter with primitive constraint not recognized for arithmetic operations")]
+    [Fact]
     public void ExtendsNumber_AcceptsNumber()
     {
         var source = """
@@ -83,7 +83,7 @@ public class GenericConstraintTests
         Assert.Equal("42\n", result);
     }
 
-    [Fact(Skip = "TypeParameter with primitive constraint not recognized for method calls")]
+    [Fact]
     public void ExtendsString_AcceptsString()
     {
         var source = """
@@ -117,7 +117,7 @@ public class GenericConstraintTests
 
     #region Union Constraints
 
-    [Fact(Skip = "Union constraints not fully working with type parameter operations")]
+    [Fact]
     public void ExtendsUnion_AcceptsUnionMembers()
     {
         var source = """
@@ -152,7 +152,7 @@ public class GenericConstraintTests
 
     #region Interface Constraints
 
-    [Fact(Skip = "Interface constraint on type parameter not fully implemented")]
+    [Fact]
     public void ExtendsInterface_AcceptsImplementor()
     {
         var source = """
@@ -319,7 +319,7 @@ public class GenericConstraintTests
 
     #region Keyof Constraint
 
-    [Fact(Skip = "Keyof constraint not fully implemented")]
+    [Fact]
     public void KeyofConstraint_Works()
     {
         var source = """
@@ -356,7 +356,7 @@ public class GenericConstraintTests
 
     #region Type Inference with Constraints
 
-    [Fact(Skip = "Type inference with constraints not fully working")]
+    [Fact]
     public void TypeInference_RespectsConstraint()
     {
         var source = """
@@ -369,7 +369,7 @@ public class GenericConstraintTests
             """;
 
         var result = TestHarness.RunInterpreted(source);
-        Assert.Equal("hello\n1,2,3\n", result);
+        Assert.Equal("hello\n[1, 2, 3]\n", result);
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public class GenericConstraintTests
 
     #region Default Type Parameters
 
-    [Fact(Skip = "Default type parameters not yet implemented")]
+    [Fact]
     public void DefaultTypeParam_UsedWhenNotSpecified()
     {
         var source = """

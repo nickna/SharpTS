@@ -767,7 +767,8 @@ public partial class TypeChecker
             foreach (var tp in classExpr.TypeParams)
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint);
+                TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 classTypeParams.Add(typeParam);
                 classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }

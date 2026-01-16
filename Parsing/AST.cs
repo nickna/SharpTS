@@ -6,9 +6,12 @@ namespace SharpTS.Parsing;
 public enum AccessModifier { Public, Private, Protected }
 
 /// <summary>
-/// Type parameter in generic declarations (e.g., T in &lt;T extends Base&gt;).
+/// Type parameter in generic declarations (e.g., T in &lt;T extends Base&gt; or &lt;T = string&gt;).
 /// </summary>
-public record TypeParam(Token Name, string? Constraint);
+/// <param name="Name">The type parameter identifier token.</param>
+/// <param name="Constraint">Optional constraint type (after extends keyword).</param>
+/// <param name="Default">Optional default type (after = sign).</param>
+public record TypeParam(Token Name, string? Constraint, string? Default = null);
 
 /// <summary>
 /// Base record for all expression AST nodes.

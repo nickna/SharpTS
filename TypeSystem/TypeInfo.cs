@@ -624,10 +624,21 @@ public abstract record TypeInfo
     }
 
     // Type parameter placeholder (T in <T>)
-    public record TypeParameter(string Name, TypeInfo? Constraint = null) : TypeInfo
+    /// <summary>
+    /// Represents a type parameter in a generic declaration.
+    /// </summary>
+    /// <param name="Name">The name of the type parameter (e.g., "T").</param>
+    /// <param name="Constraint">Optional constraint type (from extends clause).</param>
+    /// <param name="Default">Optional default type (from = clause).</param>
+    public record TypeParameter(string Name, TypeInfo? Constraint = null, TypeInfo? Default = null) : TypeInfo
     {
-        public override string ToString() => Constraint != null
-            ? $"{Name} extends {Constraint}" : Name;
+        public override string ToString()
+        {
+            var result = Name;
+            if (Constraint != null) result += $" extends {Constraint}";
+            if (Default != null) result += $" = {Default}";
+            return result;
+        }
     }
 
     /// <summary>

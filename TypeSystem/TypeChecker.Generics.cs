@@ -250,75 +250,72 @@ public partial class TypeChecker
 
     /// <summary>
     /// Instantiates a generic class with concrete type arguments.
+    /// Supports default type parameters - missing arguments are filled with defaults.
     /// </summary>
     private TypeInfo InstantiateGenericClass(TypeInfo.GenericClass generic, List<TypeInfo> typeArgs)
     {
-        if (typeArgs.Count != generic.TypeParams.Count)
-        {
-            throw new TypeCheckException($" Generic class '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
-        }
+        // Fill in defaults for missing type arguments
+        var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, generic.Name);
 
         // Validate constraints
-        for (int i = 0; i < typeArgs.Count; i++)
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
+            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
             {
-                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
-        return new TypeInfo.InstantiatedGeneric(generic, typeArgs);
+        return new TypeInfo.InstantiatedGeneric(generic, resolvedTypeArgs);
     }
 
     /// <summary>
     /// Instantiates a generic interface with concrete type arguments.
+    /// Supports default type parameters - missing arguments are filled with defaults.
     /// </summary>
     private TypeInfo InstantiateGenericInterface(TypeInfo.GenericInterface generic, List<TypeInfo> typeArgs)
     {
-        if (typeArgs.Count != generic.TypeParams.Count)
-        {
-            throw new TypeCheckException($" Generic interface '{generic.Name}' requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
-        }
+        // Fill in defaults for missing type arguments
+        var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, generic.Name);
 
         // Validate constraints
-        for (int i = 0; i < typeArgs.Count; i++)
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
+            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
             {
-                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
-        return new TypeInfo.InstantiatedGeneric(generic, typeArgs);
+        return new TypeInfo.InstantiatedGeneric(generic, resolvedTypeArgs);
     }
 
     /// <summary>
     /// Instantiates a generic function with concrete type arguments.
+    /// Supports default type parameters - missing arguments are filled with defaults.
     /// </summary>
     private TypeInfo InstantiateGenericFunction(TypeInfo.GenericFunction generic, List<TypeInfo> typeArgs)
     {
-        if (typeArgs.Count != generic.TypeParams.Count)
-        {
-            throw new TypeCheckException($" Generic function requires {generic.TypeParams.Count} type argument(s), got {typeArgs.Count}.");
-        }
+        // Fill in defaults for missing type arguments
+        var resolvedTypeArgs = ResolveTypeArgumentsWithDefaults(generic.TypeParams, typeArgs, "function");
 
         // Validate constraints
-        for (int i = 0; i < typeArgs.Count; i++)
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
             var tp = generic.TypeParams[i];
-            if (tp.Constraint != null && !IsCompatible(tp.Constraint, typeArgs[i]))
+            if (tp.Constraint != null && !IsCompatible(tp.Constraint, resolvedTypeArgs[i]))
             {
-                throw new TypeCheckException($" Type '{typeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
+                throw new TypeCheckException($" Type '{resolvedTypeArgs[i]}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
             }
         }
 
         // Create substitution map
         Dictionary<string, TypeInfo> substitutions = [];
-        for (int i = 0; i < typeArgs.Count; i++)
+        for (int i = 0; i < resolvedTypeArgs.Count; i++)
         {
-            substitutions[generic.TypeParams[i].Name] = typeArgs[i];
+            substitutions[generic.TypeParams[i].Name] = resolvedTypeArgs[i];
         }
 
         // Substitute type parameters in the function signature
@@ -326,6 +323,61 @@ public partial class TypeChecker
         var substitutedReturn = Substitute(generic.ReturnType, substitutions);
 
         return new TypeInfo.Function(substitutedParams, substitutedReturn, generic.RequiredParams, generic.HasRestParam);
+    }
+
+    /// <summary>
+    /// Resolves type arguments, filling in defaults for missing arguments.
+    /// </summary>
+    /// <param name="typeParams">The type parameter definitions (with potential defaults).</param>
+    /// <param name="typeArgs">The provided type arguments.</param>
+    /// <param name="contextName">Name for error messages (e.g., class name).</param>
+    /// <returns>Complete list of type arguments with defaults filled in.</returns>
+    private List<TypeInfo> ResolveTypeArgumentsWithDefaults(
+        List<TypeInfo.TypeParameter> typeParams,
+        List<TypeInfo> typeArgs,
+        string contextName)
+    {
+        // Count required type parameters (those without defaults)
+        int requiredCount = typeParams.TakeWhile(tp => tp.Default == null).Count();
+
+        if (typeArgs.Count < requiredCount)
+        {
+            throw new TypeCheckException($" Generic '{contextName}' requires at least {requiredCount} type argument(s), got {typeArgs.Count}.");
+        }
+
+        if (typeArgs.Count > typeParams.Count)
+        {
+            throw new TypeCheckException($" Generic '{contextName}' has {typeParams.Count} type parameter(s), but got {typeArgs.Count} type argument(s).");
+        }
+
+        // Build the resolved list
+        List<TypeInfo> resolved = new(typeParams.Count);
+        Dictionary<string, TypeInfo> substitutions = [];
+
+        for (int i = 0; i < typeParams.Count; i++)
+        {
+            TypeInfo argType;
+            if (i < typeArgs.Count)
+            {
+                // Use provided type argument
+                argType = typeArgs[i];
+            }
+            else if (typeParams[i].Default != null)
+            {
+                // Use default, substituting any already-resolved type parameters
+                argType = Substitute(typeParams[i].Default!, substitutions);
+            }
+            else
+            {
+                // Should not happen due to requiredCount check, but handle gracefully
+                throw new TypeCheckException($" Missing type argument for type parameter '{typeParams[i].Name}' in generic '{contextName}'.");
+            }
+
+            resolved.Add(argType);
+            substitutions[typeParams[i].Name] = argType;
+        }
+
+        return resolved;
     }
 
     /// <summary>
@@ -410,8 +462,12 @@ public partial class TypeChecker
                 // Validate constraint if present
                 if (tp.Constraint != null && tp.Constraint is not TypeInfo.Any)
                 {
+                    // Substitute already-inferred type parameters in the constraint
+                    // This handles cases like K extends keyof T where T is already inferred
+                    var substitutedConstraint = Substitute(tp.Constraint, inferred);
+
                     // For Record constraints, check that actual type has all required fields
-                    if (tp.Constraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
+                    if (substitutedConstraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
                     {
                         foreach (var (fieldName, _) in constraintRecord.Fields)
                         {
@@ -421,7 +477,7 @@ public partial class TypeChecker
                             }
                         }
                     }
-                    else if (!IsCompatible(tp.Constraint, inferredType))
+                    else if (!IsCompatible(substitutedConstraint, inferredType))
                     {
                         throw new TypeCheckException($" Type Error: Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.");
                     }

@@ -71,6 +71,19 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(get.Object);
 
+        // Handle TypeParameter - delegate to constraint type for member access
+        if (objType is TypeInfo.TypeParameter tp)
+        {
+            if (tp.Constraint != null)
+            {
+                // Create a synthetic Get expression to check the property on the constraint type
+                // and recursively call CheckGet with the constraint as the object type
+                return CheckGetOnType(tp.Constraint, get.Name);
+            }
+            // Unconstrained type parameter - can't access any properties safely
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.");
+        }
+
         // Handle static member access on class type
         if (objType is TypeInfo.Class classType)
         {
@@ -363,6 +376,23 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(set.Object);
 
+        // Handle TypeParameter - delegate to constraint type for property assignment
+        if (objType is TypeInfo.TypeParameter tp)
+        {
+            if (tp.Constraint != null)
+            {
+                // Check that the property exists on the constraint
+                var propType = CheckGetOnType(tp.Constraint, set.Name);
+                TypeInfo valueType = CheckExpr(set.Value);
+                if (!IsCompatible(propType, valueType))
+                {
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to property '{set.Name.Lexeme}' of type '{propType}'.");
+                }
+                return valueType;
+            }
+            throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.");
+        }
+
         // Handle static property assignment
         if (objType is TypeInfo.Class classType)
         {
@@ -516,5 +546,240 @@ public partial class TypeChecker
             return CheckExpr(set.Value);
         }
         throw new TypeCheckException(" Only instances and objects have properties.");
+    }
+
+    /// <summary>
+    /// Resolves member access on a given type without needing an actual expression.
+    /// Used for TypeParameter constraint delegation and other scenarios where we need
+    /// to check member access on a type directly.
+    /// </summary>
+    private TypeInfo CheckGetOnType(TypeInfo objType, Token memberName)
+    {
+        // Handle TypeParameter recursively - delegate to constraint
+        if (objType is TypeInfo.TypeParameter tp)
+        {
+            if (tp.Constraint != null)
+            {
+                return CheckGetOnType(tp.Constraint, memberName);
+            }
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.");
+        }
+
+        // Handle Interface - check own and inherited members
+        if (objType is TypeInfo.Interface itf)
+        {
+            foreach (var member in itf.GetAllMembers())
+            {
+                if (member.Key == memberName.Lexeme)
+                {
+                    return member.Value;
+                }
+            }
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.");
+        }
+
+        // Handle Record type - check fields and index signatures
+        if (objType is TypeInfo.Record record)
+        {
+            if (record.Fields.TryGetValue(memberName.Lexeme, out var fieldType))
+            {
+                return fieldType;
+            }
+            if (record.StringIndexType != null)
+            {
+                return record.StringIndexType;
+            }
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{record}'.");
+        }
+
+        // Handle String type - check string methods
+        if (objType is TypeInfo.String or TypeInfo.StringLiteral)
+        {
+            var memberType = BuiltInTypes.GetStringMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'string'.");
+        }
+
+        // Handle primitive number type - no methods
+        if (objType is TypeInfo.Primitive p && p.Type == TokenType.TYPE_NUMBER)
+        {
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'number'.");
+        }
+
+        // Handle Array type - check array methods
+        if (objType is TypeInfo.Array arrayType)
+        {
+            var memberType = BuiltInTypes.GetArrayMemberType(memberName.Lexeme, arrayType.ElementType);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'array'.");
+        }
+
+        // Handle Tuple type - treat as array with union element type
+        if (objType is TypeInfo.Tuple tupleType)
+        {
+            var allTypes = tupleType.ElementTypes.ToList();
+            if (tupleType.RestElementType != null)
+                allTypes.Add(tupleType.RestElementType);
+            var unique = allTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            TypeInfo unionElem = unique.Count == 0
+                ? new TypeInfo.Any()
+                : (unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique));
+            var memberType = BuiltInTypes.GetArrayMemberType(memberName.Lexeme, unionElem);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on tuple type.");
+        }
+
+        // Handle Class type - check static members
+        if (objType is TypeInfo.Class classType)
+        {
+            TypeInfo? current = classType;
+            while (current != null)
+            {
+                var staticMethods = GetStaticMethods(current);
+                var staticProps = GetStaticProperties(current);
+                if (staticMethods != null && staticMethods.TryGetValue(memberName.Lexeme, out var staticMethodType))
+                {
+                    return staticMethodType;
+                }
+                if (staticProps != null && staticProps.TryGetValue(memberName.Lexeme, out var staticPropType))
+                {
+                    return staticPropType;
+                }
+                current = GetSuperclass(current);
+            }
+            return new TypeInfo.Any();
+        }
+
+        // Handle Instance type - check instance members
+        if (objType is TypeInfo.Instance instance)
+        {
+            if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
+                ig.GenericDefinition is TypeInfo.GenericClass gc)
+            {
+                Dictionary<string, TypeInfo> subs = [];
+                for (int i = 0; i < gc.TypeParams.Count; i++)
+                    subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
+
+                if (gc.Getters?.TryGetValue(memberName.Lexeme, out var getterType) == true)
+                    return Substitute(getterType, subs);
+                if (gc.FieldTypes?.TryGetValue(memberName.Lexeme, out var fieldType) == true)
+                    return Substitute(fieldType, subs);
+                if (gc.Methods.TryGetValue(memberName.Lexeme, out var methodType))
+                {
+                    if (methodType is TypeInfo.Function funcType)
+                    {
+                        var substitutedParams = funcType.ParamTypes.Select(pt => Substitute(pt, subs)).ToList();
+                        var substitutedReturn = Substitute(funcType.ReturnType, subs);
+                        return new TypeInfo.Function(substitutedParams, substitutedReturn, funcType.RequiredParams, funcType.HasRestParam);
+                    }
+                    return methodType;
+                }
+            }
+
+            if (instance.ClassType is TypeInfo.Class instanceClassType)
+            {
+                TypeInfo? current = instanceClassType;
+                while (current != null)
+                {
+                    var getters = GetGetters(current);
+                    if (getters != null && getters.TryGetValue(memberName.Lexeme, out var getterType))
+                        return getterType;
+                    var methods = GetMethods(current);
+                    if (methods != null && methods.TryGetValue(memberName.Lexeme, out var methodType))
+                        return methodType;
+                    var fieldTypes = GetFieldTypes(current);
+                    if (fieldTypes != null && fieldTypes.TryGetValue(memberName.Lexeme, out var fieldType))
+                        return fieldType;
+                    current = GetSuperclass(current);
+                }
+            }
+            return new TypeInfo.Any();
+        }
+
+        // Handle Union type - check if all members have the property
+        if (objType is TypeInfo.Union union)
+        {
+            List<TypeInfo> memberTypes = [];
+            foreach (var member in union.FlattenedTypes)
+            {
+                try
+                {
+                    var memberType = CheckGetOnType(member, memberName);
+                    memberTypes.Add(memberType);
+                }
+                catch (TypeCheckException)
+                {
+                    // If any member doesn't have the property, it's an error
+                    throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on all members of union type '{union}'.");
+                }
+            }
+            // Return union of all member types
+            var unique = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+        }
+
+        // Handle Intersection type - merge members from all types
+        if (objType is TypeInfo.Intersection intersection)
+        {
+            // Try each type in the intersection - first match wins
+            foreach (var member in intersection.FlattenedTypes)
+            {
+                try
+                {
+                    return CheckGetOnType(member, memberName);
+                }
+                catch (TypeCheckException)
+                {
+                    // Continue to next type in intersection
+                }
+            }
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{intersection}'.");
+        }
+
+        // Handle Date, RegExp, Map, Set, WeakMap, WeakSet
+        if (objType is TypeInfo.Date)
+        {
+            var memberType = BuiltInTypes.GetDateInstanceMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Date'.");
+        }
+        if (objType is TypeInfo.RegExp)
+        {
+            var memberType = BuiltInTypes.GetRegExpMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'RegExp'.");
+        }
+        if (objType is TypeInfo.Map mapType)
+        {
+            var memberType = BuiltInTypes.GetMapMemberType(memberName.Lexeme, mapType.KeyType, mapType.ValueType);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Map'.");
+        }
+        if (objType is TypeInfo.Set setType)
+        {
+            var memberType = BuiltInTypes.GetSetMemberType(memberName.Lexeme, setType.ElementType);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Set'.");
+        }
+        if (objType is TypeInfo.WeakMap weakMapType)
+        {
+            var memberType = BuiltInTypes.GetWeakMapMemberType(memberName.Lexeme, weakMapType.KeyType, weakMapType.ValueType);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'WeakMap'.");
+        }
+        if (objType is TypeInfo.WeakSet weakSetType)
+        {
+            var memberType = BuiltInTypes.GetWeakSetMemberType(memberName.Lexeme, weakSetType.ElementType);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'WeakSet'.");
+        }
+
+        // Handle Any type
+        if (objType is TypeInfo.Any)
+        {
+            return new TypeInfo.Any();
+        }
+
+        return new TypeInfo.Any();
     }
 }
