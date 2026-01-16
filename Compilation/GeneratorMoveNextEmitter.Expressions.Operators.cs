@@ -24,29 +24,7 @@ public partial class GeneratorMoveNextEmitter
 
     private void EmitCompoundOperation(TokenType opType)
     {
-        if (opType == TokenType.PLUS_EQUAL)
-        {
-            _helpers.EmitCallUnknown(_ctx!.Runtime!.Add);
-            return;
-        }
-
-        switch (opType)
-        {
-            case TokenType.MINUS_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Sub);
-                break;
-            case TokenType.STAR_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Mul);
-                break;
-            case TokenType.SLASH_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Div);
-                break;
-            case TokenType.PERCENT_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Rem);
-                break;
-            default:
-                _helpers.EmitArithmeticBinary(OpCodes.Add);
-                break;
-        }
+        // Use centralized helper for compound operations
+        _helpers.EmitCompoundOperation(opType, _ctx!.Runtime!.Add);
     }
 }

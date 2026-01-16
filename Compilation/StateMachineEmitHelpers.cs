@@ -824,6 +824,71 @@ public class StateMachineEmitHelpers
 
     #endregion
 
+    #region Compound Assignment Helpers
+
+    /// <summary>
+    /// Emits a compound assignment operation.
+    /// Stack: [currentValue (object), operandValue (object)] -> [result_boxed]
+    /// </summary>
+    /// <param name="opType">The compound assignment operator type.</param>
+    /// <param name="runtimeAdd">Runtime.Add method for PLUS_EQUAL (supports string concatenation).</param>
+    public void EmitCompoundOperation(TokenType opType, MethodInfo runtimeAdd)
+    {
+        // PLUS_EQUAL uses runtime Add for string concatenation support
+        if (opType == TokenType.PLUS_EQUAL)
+        {
+            EmitCallUnknown(runtimeAdd);
+            return;
+        }
+
+        // Get the opcode for this operator
+        var opcode = CompoundOperatorHelper.GetOpcode(opType);
+        if (opcode.HasValue)
+        {
+            if (CompoundOperatorHelper.IsBitwise(opType))
+            {
+                // Bitwise operations need int32 conversion
+                EmitBitwiseBinary(opcode.Value);
+            }
+            else
+            {
+                // Arithmetic operations use double conversion
+                EmitArithmeticBinary(opcode.Value);
+            }
+        }
+        else
+        {
+            // Fallback for unsupported operators - use Add
+            EmitArithmeticBinary(OpCodes.Add);
+        }
+    }
+
+    /// <summary>
+    /// Emit bitwise binary operation with int32 conversion.
+    /// Stack: [left (object), right (object)] -> [result_boxed]
+    /// </summary>
+    public void EmitBitwiseBinary(OpCode bitwiseOp)
+    {
+        // Convert left to int32
+        var rightLocal = _il.DeclareLocal(_types.Object);
+        _il.Emit(OpCodes.Stloc, rightLocal);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", [_types.Object]));
+
+        // Convert right to int32
+        _il.Emit(OpCodes.Ldloc, rightLocal);
+        _il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", [_types.Object]));
+
+        // Apply bitwise operation
+        _il.Emit(bitwiseOp);
+
+        // Convert back to double and box
+        _il.Emit(OpCodes.Conv_R8);
+        _il.Emit(OpCodes.Box, _types.Double);
+        SetStackUnknown();
+    }
+
+    #endregion
+
     #region Increment/Decrement Helpers
 
     /// <summary>

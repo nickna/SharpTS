@@ -719,79 +719,31 @@ public partial class ILEmitter
         EmitExpression(b.Right);
         EmitBoxIfNeeded(b.Right);
 
-        switch (b.Operator.Type)
-        {
-            // Arithmetic
-            case TokenType.PLUS:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntAdd);
-                break;
-            case TokenType.MINUS:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntSubtract);
-                break;
-            case TokenType.STAR:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntMultiply);
-                break;
-            case TokenType.SLASH:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntDivide);
-                break;
-            case TokenType.PERCENT:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntRemainder);
-                break;
-            case TokenType.STAR_STAR:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntPow);
-                break;
+        // Use centralized helper to get the runtime method and result type
+        var (method, resultType) = BigIntOperatorHelper.GetRuntimeMethod(b.Operator.Type, _ctx.Runtime!);
 
-            // Comparison
-            case TokenType.LESS:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThan);
+        if (method == null || resultType == BigIntResultType.Unsupported)
+        {
+            if (b.Operator.Type == TokenType.GREATER_GREATER_GREATER)
+                throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint.");
+            throw new Exception($"Unsupported bigint operator: {b.Operator.Type}");
+        }
+
+        // Call the runtime method
+        IL.Emit(OpCodes.Call, method);
+
+        // Handle result based on type
+        switch (resultType)
+        {
+            case BigIntResultType.Boolean:
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
-            case TokenType.LESS_EQUAL:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLessThanOrEqual);
-                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                break;
-            case TokenType.GREATER:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThan);
-                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                break;
-            case TokenType.GREATER_EQUAL:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntGreaterThanOrEqual);
-                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                break;
-            case TokenType.EQUAL_EQUAL:
-            case TokenType.EQUAL_EQUAL_EQUAL:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
-                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                break;
-            case TokenType.BANG_EQUAL:
-            case TokenType.BANG_EQUAL_EQUAL:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntEquals);
+            case BigIntResultType.NegatedBoolean:
                 IL.Emit(OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ceq);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
-
-            // Bitwise
-            case TokenType.AMPERSAND:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseAnd);
-                break;
-            case TokenType.PIPE:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseOr);
-                break;
-            case TokenType.CARET:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntBitwiseXor);
-                break;
-            case TokenType.LESS_LESS:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLeftShift);
-                break;
-            case TokenType.GREATER_GREATER:
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntRightShift);
-                break;
-            case TokenType.GREATER_GREATER_GREATER:
-                throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint.");
-
-            default:
-                throw new Exception($"Unsupported bigint operator: {b.Operator.Type}");
+            // BigIntResultType.Value - no additional boxing needed
         }
 
         SetStackUnknown();

@@ -216,33 +216,7 @@ public partial class AsyncMoveNextEmitter
     private void EmitCompoundOperation(TokenType opType)
     {
         // Stack has: currentValue (object), operandValue (object)
-        // Apply the compound operation
-
-        if (opType == TokenType.PLUS_EQUAL)
-        {
-            // Use runtime Add for string concatenation support
-            _helpers.EmitCallUnknown(_ctx!.Runtime!.Add);
-            return;
-        }
-
-        // For other operations, use helpers
-        switch (opType)
-        {
-            case TokenType.MINUS_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Sub);
-                break;
-            case TokenType.STAR_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Mul);
-                break;
-            case TokenType.SLASH_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Div);
-                break;
-            case TokenType.PERCENT_EQUAL:
-                _helpers.EmitArithmeticBinary(OpCodes.Rem);
-                break;
-            default:
-                _helpers.EmitArithmeticBinary(OpCodes.Add);
-                break;
-        }
+        // Use centralized helper for compound operations
+        _helpers.EmitCompoundOperation(opType, _ctx!.Runtime!.Add);
     }
 }
