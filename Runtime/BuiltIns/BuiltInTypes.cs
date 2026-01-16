@@ -17,7 +17,7 @@ public static class BuiltInTypes
         {
             "length" => NumberType,
             "charAt" => new TypeInfo.Function([NumberType], StringType),
-            "substring" => new TypeInfo.Function([NumberType], StringType), // end is optional
+            "substring" => new TypeInfo.Function([NumberType, NumberType], StringType, RequiredParams: 1), // end is optional
             "indexOf" => new TypeInfo.Function([StringType], NumberType),
             "toUpperCase" => new TypeInfo.Function([], StringType),
             "toLowerCase" => new TypeInfo.Function([], StringType),
@@ -27,12 +27,12 @@ public static class BuiltInTypes
             "includes" => new TypeInfo.Function([StringType], BooleanType),
             "startsWith" => new TypeInfo.Function([StringType], BooleanType),
             "endsWith" => new TypeInfo.Function([StringType], BooleanType),
-            "slice" => new TypeInfo.Function([NumberType], StringType), // end is optional
+            "slice" => new TypeInfo.Function([NumberType, NumberType], StringType, RequiredParams: 1), // end is optional
             "repeat" => new TypeInfo.Function([NumberType], StringType),
-            "padStart" => new TypeInfo.Function([NumberType], StringType), // padString is optional
-            "padEnd" => new TypeInfo.Function([NumberType], StringType), // padString is optional
+            "padStart" => new TypeInfo.Function([NumberType, StringType], StringType, RequiredParams: 1), // padString is optional
+            "padEnd" => new TypeInfo.Function([NumberType, StringType], StringType, RequiredParams: 1), // padString is optional
             "charCodeAt" => new TypeInfo.Function([NumberType], NumberType),
-            "concat" => new TypeInfo.Function([], StringType), // variadic - takes 0 or more string arguments
+            "concat" => new TypeInfo.Function([new TypeInfo.Array(StringType)], StringType, RequiredParams: 0, HasRestParam: true), // variadic - takes 0 or more string arguments
             "lastIndexOf" => new TypeInfo.Function([StringType], NumberType),
             "trimStart" => new TypeInfo.Function([], StringType),
             "trimEnd" => new TypeInfo.Function([], StringType),
@@ -51,7 +51,7 @@ public static class BuiltInTypes
             "pop" => new TypeInfo.Function([], elementType),
             "shift" => new TypeInfo.Function([], elementType),
             "unshift" => new TypeInfo.Function([elementType], NumberType),
-            "slice" => new TypeInfo.Function([], new TypeInfo.Array(elementType)), // start/end are optional
+            "slice" => new TypeInfo.Function([NumberType, NumberType], new TypeInfo.Array(elementType), RequiredParams: 0), // start/end are optional
             "map" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType], AnyType)], // callback with just element param
                 new TypeInfo.Array(AnyType)),
@@ -74,11 +74,11 @@ public static class BuiltInTypes
                 [new TypeInfo.Function([elementType], BooleanType)],
                 BooleanType),
             "reduce" => new TypeInfo.Function(
-                [new TypeInfo.Function([AnyType, elementType], AnyType)],
-                AnyType),
+                [new TypeInfo.Function([AnyType, elementType], AnyType), AnyType],
+                AnyType, RequiredParams: 1), // initialValue is optional
             "includes" => new TypeInfo.Function([elementType], BooleanType),
             "indexOf" => new TypeInfo.Function([elementType], NumberType),
-            "join" => new TypeInfo.Function([], StringType),  // separator is optional
+            "join" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0),  // separator is optional
             "concat" => new TypeInfo.Function(
                 [new TypeInfo.Array(elementType)],
                 new TypeInfo.Array(elementType)),

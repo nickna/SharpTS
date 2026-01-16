@@ -152,7 +152,7 @@ public class TypeErrorTests
         Assert.Contains("Type Error", ex.Message);
     }
 
-    [Fact(Skip = "TypeChecker does not validate extra arguments - they are silently ignored")]
+    [Fact]
     public void TooManyArguments_Fails()
     {
         var source = """

@@ -227,6 +227,12 @@ public partial class TypeChecker
                 throw new TypeCheckException($" Expected at least {funcType.MinArity} arguments but got {nonSpreadCount}.");
             }
 
+            // Check for too many arguments (when there's no rest parameter)
+            if (!hasSpread && !funcType.HasRestParam && nonSpreadCount > funcType.ParamTypes.Count)
+            {
+                throw new TypeCheckException($" Expected {funcType.ParamTypes.Count} arguments but got {nonSpreadCount}.");
+            }
+
             // Get rest param element type if function has rest parameter
             TypeInfo? restElementType = null;
             if (funcType.HasRestParam && funcType.ParamTypes.Count > 0)
