@@ -385,7 +385,7 @@ public partial class Interpreter
     {
         return op switch
         {
-            TokenType.PLUS_EQUAL => left is string ? Stringify(left) + Stringify(right) : (double)left! + (double)right!,
+            TokenType.PLUS_EQUAL => left is string s ? string.Concat(s, Stringify(right)) : (double)left! + (double)right!,
             TokenType.MINUS_EQUAL => (double)left! - (double)right!,
             TokenType.STAR_EQUAL => (double)left! * (double)right!,
             TokenType.SLASH_EQUAL => (double)left! / (double)right!,

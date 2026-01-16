@@ -11,7 +11,10 @@ public static partial class RuntimeTypes
         // String concatenation if either operand is a string
         if (left is string || right is string)
         {
-            return Stringify(left) + Stringify(right);
+            // Use string.Concat and avoid Stringify for values already strings
+            return string.Concat(
+                left as string ?? Stringify(left),
+                right as string ?? Stringify(right));
         }
         return ToNumber(left) + ToNumber(right);
     }
