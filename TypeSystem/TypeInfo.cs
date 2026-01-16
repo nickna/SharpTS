@@ -501,14 +501,21 @@ public abstract record TypeInfo
 
     public record Union(List<TypeInfo> Types) : TypeInfo
     {
-        public List<TypeInfo> FlattenedTypes => Types
+        // Cached flattened types to avoid repeated computation
+        private List<TypeInfo>? _flattenedTypes;
+
+        public List<TypeInfo> FlattenedTypes => _flattenedTypes ??= Types
             .SelectMany(t => t is Union u ? u.FlattenedTypes : [t])
             .Distinct(TypeInfoEqualityComparer.Instance)
             .ToList();
 
-        public bool ContainsNull => FlattenedTypes.Any(t => t is Null);
+        // Cache these boolean properties since they depend on FlattenedTypes
+        private bool? _containsNull;
+        private bool? _containsUndefined;
 
-        public bool ContainsUndefined => FlattenedTypes.Any(t => t is Undefined);
+        public bool ContainsNull => _containsNull ??= FlattenedTypes.Any(t => t is Null);
+
+        public bool ContainsUndefined => _containsUndefined ??= FlattenedTypes.Any(t => t is Undefined);
 
         public override string ToString() => string.Join(" | ", FlattenedTypes);
     }
@@ -524,6 +531,9 @@ public abstract record TypeInfo
     /// </remarks>
     public record Intersection(List<TypeInfo> Types) : TypeInfo
     {
+        // Cached flattened types to avoid repeated computation
+        private List<TypeInfo>? _flattenedTypes;
+
         /// <summary>
         /// Returns a flattened list of all intersected types, collapsing nested intersections.
         /// Applies simplification: never absorbs all, any absorbs all, unknown is removed (identity).
@@ -532,6 +542,8 @@ public abstract record TypeInfo
         {
             get
             {
+                if (_flattenedTypes != null) return _flattenedTypes;
+
                 var flattened = Types
                     .SelectMany(t => t is Intersection i ? i.FlattenedTypes : [t])
                     .Distinct(TypeInfoEqualityComparer.Instance)
@@ -539,18 +551,18 @@ public abstract record TypeInfo
 
                 // never absorbs everything in intersection
                 if (flattened.Any(t => t is Never))
-                    return [new Never()];
+                    return _flattenedTypes = [new Never()];
 
                 // any absorbs in intersection
                 if (flattened.Any(t => t is Any))
-                    return [new Any()];
+                    return _flattenedTypes = [new Any()];
 
                 // unknown is identity element - remove it
                 flattened = flattened.Where(t => t is not Unknown).ToList();
                 if (flattened.Count == 0)
-                    return [new Unknown()];
+                    return _flattenedTypes = [new Unknown()];
 
-                return flattened;
+                return _flattenedTypes = flattened;
             }
         }
 
