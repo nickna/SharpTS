@@ -55,7 +55,6 @@ public partial class TypeChecker
 
     // Error recovery support
     private readonly List<TypeCheckError> _errors = [];
-    private bool _collectErrors = false;
     private const int MaxErrors = 10;
 
     /// <summary>
@@ -256,7 +255,6 @@ public partial class TypeChecker
     /// <returns>A TypeCheckResult containing the type map and any errors encountered.</returns>
     public TypeCheckResult CheckWithRecovery(List<Stmt> statements)
     {
-        _collectErrors = true;
         _errors.Clear();
         _compatibilityCache = null;
 
@@ -294,7 +292,6 @@ public partial class TypeChecker
             }
         }
 
-        _collectErrors = false;
         return new TypeCheckResult(_typeMap, _errors);
     }
 
