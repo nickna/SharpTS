@@ -66,7 +66,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     {
         if (IsFrozen)
         {
-            // Frozen objects silently ignore property modifications (JavaScript behavior)
+            // Frozen objects silently ignore property modifications (JavaScript behavior in non-strict mode)
             return;
         }
 
@@ -81,6 +81,37 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     }
 
     /// <summary>
+    /// Sets a property value with strict mode behavior.
+    /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
+    /// </summary>
+    /// <param name="name">The property name to set.</param>
+    /// <param name="value">The value to set.</param>
+    /// <param name="strictMode">Whether strict mode is enabled.</param>
+    public void SetPropertyStrict(string name, object? value, bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only property '{name}' of object");
+            }
+            return;
+        }
+
+        bool exists = _fields.ContainsKey(name);
+        if (IsSealed && !exists)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add property '{name}' to a sealed object");
+            }
+            return;
+        }
+
+        _fields[name] = value;
+    }
+
+    /// <summary>
     /// Removes a property by name. Respects frozen/sealed state.
     /// </summary>
     public bool DeleteProperty(string name)
@@ -88,6 +119,26 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsFrozen || IsSealed)
         {
             // Frozen and sealed objects silently ignore property deletions
+            return false;
+        }
+        return _fields.Remove(name);
+    }
+
+    /// <summary>
+    /// Removes a property by name with strict mode behavior.
+    /// In strict mode, throws TypeError for deletions on frozen/sealed objects.
+    /// </summary>
+    /// <param name="name">The property name to delete.</param>
+    /// <param name="strictMode">Whether strict mode is enabled.</param>
+    /// <returns>True if the property was deleted, false otherwise.</returns>
+    public bool DeletePropertyStrict(string name, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot delete property '{name}' of a frozen or sealed object");
+            }
             return false;
         }
         return _fields.Remove(name);
@@ -119,6 +170,33 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         bool exists = _symbolFields.ContainsKey(symbol);
         if (IsSealed && !exists)
         {
+            return;
+        }
+
+        _symbolFields[symbol] = value;
+    }
+
+    /// <summary>
+    /// Sets a value by symbol key with strict mode behavior.
+    /// </summary>
+    public void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only symbol property of object");
+            }
+            return;
+        }
+
+        bool exists = _symbolFields.ContainsKey(symbol);
+        if (IsSealed && !exists)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add symbol property to a sealed object");
+            }
             return;
         }
 

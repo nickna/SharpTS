@@ -69,6 +69,28 @@ public class SharpTSArray(List<object?> elements)
     }
 
     /// <summary>
+    /// Sets an element at the given index with strict mode behavior.
+    /// In strict mode, throws TypeError for modifications to frozen arrays.
+    /// </summary>
+    public void SetStrict(int index, object? value, bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only property '{index}' of array");
+            }
+            return;
+        }
+
+        if (index < 0 || index >= Elements.Count)
+        {
+            throw new Exception("Index out of bounds.");
+        }
+        Elements[index] = value;
+    }
+
+    /// <summary>
     /// Adds an element to the end of the array. Respects frozen/sealed state.
     /// </summary>
     /// <returns>True if the element was added, false if blocked by frozen/sealed state.</returns>
@@ -83,12 +105,53 @@ public class SharpTSArray(List<object?> elements)
     }
 
     /// <summary>
+    /// Adds an element to the end of the array with strict mode behavior.
+    /// In strict mode, throws TypeError for additions to frozen/sealed arrays.
+    /// </summary>
+    public bool TryAddStrict(object? value, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add elements to a frozen or sealed array");
+            }
+            return false;
+        }
+        Elements.Add(value);
+        return true;
+    }
+
+    /// <summary>
     /// Removes the last element. Respects frozen/sealed state.
     /// </summary>
     /// <returns>The removed element, or null if blocked or empty.</returns>
     public object? TryPop()
     {
         if (IsFrozen || IsSealed || Elements.Count == 0)
+        {
+            return null;
+        }
+        var last = Elements[^1];
+        Elements.RemoveAt(Elements.Count - 1);
+        return last;
+    }
+
+    /// <summary>
+    /// Removes the last element with strict mode behavior.
+    /// In strict mode, throws TypeError for removals from frozen/sealed arrays.
+    /// </summary>
+    public object? TryPopStrict(bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode && Elements.Count > 0)
+            {
+                throw new Exception($"TypeError: Cannot remove elements from a frozen or sealed array");
+            }
+            return null;
+        }
+        if (Elements.Count == 0)
         {
             return null;
         }
@@ -113,6 +176,29 @@ public class SharpTSArray(List<object?> elements)
     }
 
     /// <summary>
+    /// Removes the first element with strict mode behavior.
+    /// In strict mode, throws TypeError for removals from frozen/sealed arrays.
+    /// </summary>
+    public object? TryShiftStrict(bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode && Elements.Count > 0)
+            {
+                throw new Exception($"TypeError: Cannot remove elements from a frozen or sealed array");
+            }
+            return null;
+        }
+        if (Elements.Count == 0)
+        {
+            return null;
+        }
+        var first = Elements[0];
+        Elements.RemoveAt(0);
+        return first;
+    }
+
+    /// <summary>
     /// Adds an element to the beginning. Respects frozen/sealed state.
     /// </summary>
     /// <returns>True if the element was added, false if blocked.</returns>
@@ -127,6 +213,24 @@ public class SharpTSArray(List<object?> elements)
     }
 
     /// <summary>
+    /// Adds an element to the beginning with strict mode behavior.
+    /// In strict mode, throws TypeError for additions to frozen/sealed arrays.
+    /// </summary>
+    public bool TryUnshiftStrict(object? value, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add elements to a frozen or sealed array");
+            }
+            return false;
+        }
+        Elements.Insert(0, value);
+        return true;
+    }
+
+    /// <summary>
     /// Reverses the array in place. Respects frozen state (sealed allows in-place modification).
     /// </summary>
     /// <returns>True if reversed, false if frozen.</returns>
@@ -134,6 +238,24 @@ public class SharpTSArray(List<object?> elements)
     {
         if (IsFrozen)
         {
+            return false;
+        }
+        Elements.Reverse();
+        return true;
+    }
+
+    /// <summary>
+    /// Reverses the array in place with strict mode behavior.
+    /// In strict mode, throws TypeError for modifications to frozen arrays.
+    /// </summary>
+    public bool TryReverseStrict(bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot modify a frozen array");
+            }
             return false;
         }
         Elements.Reverse();

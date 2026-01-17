@@ -129,13 +129,16 @@ public class EmittedRuntime
     public MethodBuilder CreateObject { get; set; } = null!;
     public MethodBuilder GetProperty { get; set; } = null!;
     public MethodBuilder SetProperty { get; set; } = null!;
+    public MethodBuilder SetPropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
+    public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;
     public MethodBuilder MergeIntoObject { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
+    public MethodBuilder SetIndexStrict { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
@@ -143,6 +146,8 @@ public class EmittedRuntime
     public MethodBuilder ObjectSeal { get; set; } = null!;
     public MethodBuilder ObjectIsFrozen { get; set; } = null!;
     public MethodBuilder ObjectIsSealed { get; set; } = null!;
+    public FieldBuilder FrozenObjectsField { get; set; } = null!;
+    public FieldBuilder SealedObjectsField { get; set; } = null!;
 
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;

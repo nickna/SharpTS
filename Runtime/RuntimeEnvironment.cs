@@ -13,11 +13,17 @@ namespace SharpTS.Runtime;
 /// for lexical scoping and by <see cref="SharpTSFunction"/> for closures.
 /// </remarks>
 /// <seealso cref="TypeEnvironment"/>
-public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null)
+public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
 {
     private readonly Dictionary<string, object?> _values = [];
     private readonly Dictionary<string, SharpTSNamespace> _namespaces = [];
     public RuntimeEnvironment? Enclosing { get; } = enclosing;
+
+    /// <summary>
+    /// Whether this environment is in JavaScript strict mode.
+    /// Strict mode is inherited from enclosing scopes unless explicitly set.
+    /// </summary>
+    public bool IsStrictMode { get; } = strictMode ?? enclosing?.IsStrictMode ?? false;
 
     public void Define(string name, object? value)
     {

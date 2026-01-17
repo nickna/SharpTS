@@ -466,6 +466,11 @@ public partial class TypeChecker
                 // Validate file-level directives like @Namespace
                 ValidateFileDirective(directive);
                 break;
+
+            case Stmt.Directive:
+                // Directives like "use strict" are processed at the start of type checking.
+                // They have no type checking side effects beyond setting strict mode.
+                break;
         }
     }
 

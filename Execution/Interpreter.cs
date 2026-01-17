@@ -91,6 +91,14 @@ public partial class Interpreter
         _typeMap = typeMap;
         try
         {
+            // Check for "use strict" directive at file level
+            bool isStrict = CheckForUseStrict(statements);
+            if (isStrict)
+            {
+                // Wrap the current environment with strict mode enabled
+                _environment = new RuntimeEnvironment(_environment, strictMode: true);
+            }
+
             // Hoist function declarations first
             HoistFunctionDeclarations(statements);
 
@@ -130,6 +138,7 @@ public partial class Interpreter
         catch (Exception error)
         {
             Console.WriteLine($"Runtime Error: {error.Message}");
+            throw;
         }
     }
 
@@ -160,6 +169,7 @@ public partial class Interpreter
         catch (Exception error)
         {
             Console.WriteLine($"Runtime Error: {error.Message}");
+            throw;
         }
     }
 
@@ -451,6 +461,32 @@ public partial class Interpreter
     /// </summary>
     private bool IsTypeOnlyDeclaration(Stmt decl) =>
         decl is Stmt.Interface or Stmt.TypeAlias;
+
+    /// <summary>
+    /// Checks if the statements begin with a "use strict" directive.
+    /// </summary>
+    /// <param name="statements">The list of statements to check.</param>
+    /// <returns>True if "use strict" directive is found at the beginning.</returns>
+    private static bool CheckForUseStrict(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Directive directive)
+            {
+                if (directive.Value == "use strict")
+                {
+                    return true;
+                }
+                // Continue checking other directives at the start
+            }
+            else
+            {
+                // Non-directive statement encountered, stop checking
+                break;
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// Hoists function declarations by defining them before other statements execute.
@@ -784,6 +820,10 @@ public partial class Interpreter
                 return ExecutionResult.Success();
             case Stmt.Export exportStmt:
                 return ExecuteExport(exportStmt);
+            case Stmt.Directive:
+                // Directives are processed at the start of interpretation for their side effects (strict mode)
+                // When encountered during execution, they are a no-op
+                return ExecutionResult.Success();
             default:
                 return ExecutionResult.Success();
         }

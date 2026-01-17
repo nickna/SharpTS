@@ -58,6 +58,11 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     public ParseResult Parse()
     {
         List<Stmt> statements = [];
+
+        // Parse directive prologue at the start of the file
+        var directives = ParseDirectivePrologue();
+        statements.AddRange(directives);
+
         while (!IsAtEnd())
         {
             try
@@ -74,6 +79,37 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             }
         }
         return new ParseResult(statements, _errors);
+    }
+
+    /// <summary>
+    /// Parses directive prologue statements at the beginning of a script or function body.
+    /// Directives are string literal expression statements (e.g., "use strict";).
+    /// </summary>
+    /// <returns>List of parsed directive statements.</returns>
+    private List<Stmt.Directive> ParseDirectivePrologue()
+    {
+        var directives = new List<Stmt.Directive>();
+
+        // Directives must be string literals followed by semicolons at the beginning
+        while (Check(TokenType.STRING))
+        {
+            int saved = _current;
+            Token stringToken = Advance();
+
+            // Must be followed by semicolon (or end of input for single-statement case)
+            if (!Match(TokenType.SEMICOLON))
+            {
+                // Not a directive - restore position and stop
+                _current = saved;
+                break;
+            }
+
+            // It's a valid directive
+            string directiveValue = (string)stringToken.Literal!;
+            directives.Add(new Stmt.Directive(directiveValue, stringToken));
+        }
+
+        return directives;
     }
 
     /// <summary>

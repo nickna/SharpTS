@@ -167,7 +167,9 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
-            UnionGenerator = _unionGenerator
+            UnionGenerator = _unionGenerator,
+            // Check for function-level "use strict" directive
+            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body)
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -333,7 +335,8 @@ public partial class ILCompiler
             ClassExprStaticMethods = _classExprs.StaticMethods,
             ClassExprConstructors = _classExprs.Constructors,
             ClassExprSuperclass = _classExprs.Superclass,
-            UnionGenerator = _unionGenerator
+            UnionGenerator = _unionGenerator,
+            IsStrictMode = _isStrictMode
         };
 
         // Initialize namespace static fields before any code that might reference them
@@ -446,7 +449,8 @@ public partial class ILCompiler
             ClassExprStaticMethods = _classExprs.StaticMethods,
             ClassExprConstructors = _classExprs.Constructors,
             ClassExprSuperclass = _classExprs.Superclass,
-            UnionGenerator = _unionGenerator
+            UnionGenerator = _unionGenerator,
+            IsStrictMode = _isStrictMode
         };
 
         // Initialize namespace static fields before any code
@@ -588,7 +592,9 @@ public partial class ILCompiler
             var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
             {
                 Runtime = _runtime,
-                TypeMap = _typeMap
+                TypeMap = _typeMap,
+                // Check for function-level "use strict" directive
+                IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body)
             };
             var emitter = new ILEmitter(ctx);
 

@@ -153,7 +153,7 @@ public partial class Parser
         }
 
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
-        List<Stmt> body = Block();
+        List<Stmt> body = Block(parseFunctionPrologue: true);
 
         // Prepend destructuring statements for patterned parameters
         if (destructuredParams.Count > 0)

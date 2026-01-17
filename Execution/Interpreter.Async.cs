@@ -998,24 +998,54 @@ public partial class Interpreter
 
     private object? EvaluateIndexSet(object? obj, object? index, object? value)
     {
+        bool strictMode = _environment.IsStrictMode;
+
         if (obj is SharpTSArray array && index is double idx)
         {
-            array.Set((int)idx, value);
+            if (strictMode)
+            {
+                array.SetStrict((int)idx, value, strictMode);
+            }
+            else
+            {
+                array.Set((int)idx, value);
+            }
             return value;
         }
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            sharpObj.SetProperty(strKey, value);
+            if (strictMode)
+            {
+                sharpObj.SetPropertyStrict(strKey, value, strictMode);
+            }
+            else
+            {
+                sharpObj.SetProperty(strKey, value);
+            }
             return value;
         }
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            numObj.SetProperty(numKey.ToString(), value);
+            if (strictMode)
+            {
+                numObj.SetPropertyStrict(numKey.ToString(), value, strictMode);
+            }
+            else
+            {
+                numObj.SetProperty(numKey.ToString(), value);
+            }
             return value;
         }
         if (obj is SharpTSInstance instance && index is string instanceKey)
         {
-            instance.SetRawField(instanceKey, value);
+            if (strictMode)
+            {
+                instance.SetRawFieldStrict(instanceKey, value, strictMode);
+            }
+            else
+            {
+                instance.SetRawField(instanceKey, value);
+            }
             return value;
         }
         throw new Exception("Index assignment not supported on this type.");

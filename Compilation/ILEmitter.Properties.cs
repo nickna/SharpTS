@@ -284,7 +284,7 @@ public partial class ILEmitter
             }
         }
 
-        // Build stack for SetProperty(obj, name, value)
+        // Build stack for SetProperty(obj, name, value) or SetPropertyStrict(obj, name, value, strictMode)
         EmitExpression(s.Object);
         EmitBoxIfNeeded(s.Object);
         IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
@@ -297,8 +297,16 @@ public partial class ILEmitter
         var resultTemp = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultTemp);
 
-        // Stack: [obj, name, value] - call SetProperty
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        // Stack: [obj, name, value] - call SetProperty or SetPropertyStrict
+        if (_ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetPropertyStrict);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        }
 
         // Put result back on stack
         IL.Emit(OpCodes.Ldloc, resultTemp);
@@ -373,13 +381,22 @@ public partial class ILEmitter
         var valueLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, valueLocal);
 
-        // Call SetIndex(object, index, value)
+        // Call SetIndex(object, index, value) or SetIndexStrict(object, index, value, strictMode)
         EmitExpression(si.Object);
         EmitBoxIfNeeded(si.Object);
         EmitExpression(si.Index);
         EmitBoxIfNeeded(si.Index);
         IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+
+        if (_ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        }
 
         // Push value back for expression result
         IL.Emit(OpCodes.Ldloc, valueLocal);

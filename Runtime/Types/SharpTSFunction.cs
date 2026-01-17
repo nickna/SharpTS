@@ -47,13 +47,18 @@ public class SharpTSFunction : ISharpTSCallable
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        RuntimeEnvironment environment = new(_closure);
-        ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
-
         if (_declaration.Body == null)
         {
             throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
         }
+
+        // Check for function-level "use strict" directive
+        bool functionStrict = CheckForUseStrict(_declaration.Body);
+        RuntimeEnvironment environment = functionStrict
+            ? new RuntimeEnvironment(_closure, strictMode: true)
+            : new RuntimeEnvironment(_closure);
+
+        ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
@@ -66,6 +71,28 @@ public class SharpTSFunction : ISharpTSCallable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks if the statements begin with a "use strict" directive.
+    /// </summary>
+    private static bool CheckForUseStrict(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Directive directive)
+            {
+                if (directive.Value == "use strict")
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return false;
     }
 
     public SharpTSFunction Bind(SharpTSInstance instance)
@@ -113,7 +140,12 @@ public class SharpTSArrowFunction : ISharpTSCallable
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        RuntimeEnvironment environment = new(_closure);
+        // Check for function-level "use strict" directive in block body
+        bool functionStrict = _declaration.BlockBody != null && CheckForUseStrict(_declaration.BlockBody);
+        RuntimeEnvironment environment = functionStrict
+            ? new RuntimeEnvironment(_closure, strictMode: true)
+            : new RuntimeEnvironment(_closure);
+
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         if (_declaration.ExpressionBody != null)
@@ -145,6 +177,28 @@ public class SharpTSArrowFunction : ISharpTSCallable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks if the statements begin with a "use strict" directive.
+    /// </summary>
+    private static bool CheckForUseStrict(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Directive directive)
+            {
+                if (directive.Value == "use strict")
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+        return false;
     }
 
     /// <summary>

@@ -461,7 +461,9 @@ public partial class ILCompiler
                 TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-                ClassExprBuilders = _classExprs.Builders
+                ClassExprBuilders = _classExprs.Builders,
+                // Check for function-level "use strict" directive
+                IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body)
             };
 
             // Emit MoveNext body
@@ -542,7 +544,8 @@ public partial class ILCompiler
             FunctionToModule = parentCtx.FunctionToModule,
             EnumToModule = parentCtx.EnumToModule,
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
-            ClassExprBuilders = parentCtx.ClassExprBuilders
+            ClassExprBuilders = parentCtx.ClassExprBuilders,
+            IsStrictMode = parentCtx.IsStrictMode
         };
 
         // Create arrow-specific emitter
@@ -796,7 +799,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode
         };
 
         // Emit MoveNext body

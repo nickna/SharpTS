@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added Object.freeze(), Object.seal(), Object.isFrozen(), Object.isSealed())
+**Last Updated:** 2026-01-17 (Added JavaScript strict mode support)
 
 ## Legend
 - ✅ Implemented
@@ -222,6 +222,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Object.hasOwn()` | ✅ | Safer `hasOwnProperty` check - returns true for own properties, false for methods |
 | `Object.freeze()`/`seal()`/`isFrozen()`/`isSealed()` | ✅ | Object immutability - freeze prevents all changes, seal allows modification but prevents adding/removing properties; shallow freeze/seal (nested objects unaffected); works on objects, arrays, class instances |
 | `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
+| Strict mode (`"use strict"`) | ✅ | File-level and function-level strict mode; frozen/sealed object mutations throw TypeError in strict mode |
 | `setTimeout`/`setInterval` | ❌ | Timer functions |
 | `clearTimeout`/`clearInterval` | ❌ | Cancel timer functions |
 | `globalThis` | ❌ | Global object reference |
@@ -276,9 +277,9 @@ This document tracks TypeScript language features and their implementation statu
 
 ## Known Bugs
 
-### IL Compiler Bugs
+### IL Compiler Limitations
 
-- Nested function declarations (functions defined inside other functions) are not supported. Workaround: define functions at module level.
+- **Inner function declarations** (`function inner() {}` inside another function) are not supported. The compiler skips inner function definitions, causing crashes when they are called. **Workaround:** Use arrow functions instead (`const inner = () => { ... }`), which are fully supported with proper closure capture.
 
 ### Type Checker Limitations
 
@@ -679,3 +680,13 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ `as const` assertions with deep readonly inference for arrays, objects, and literals
 - ✅ Type-only imports skipped at runtime (interpreter and compiler)
 - ✅ Full interpreter and IL compiler support with 31 test cases
+
+### Phase 36 Features (Strict Mode)
+- ✅ `"use strict";` directive prologue parsing at file and function level
+- ✅ Strict mode tracking in `RuntimeEnvironment` (interpreter) and `CompilationContext` (compiler)
+- ✅ Frozen object mutations throw `TypeError` in strict mode (silent fail in non-strict)
+- ✅ Sealed object new property additions throw `TypeError` in strict mode
+- ✅ Strict mode inheritance to nested functions and arrow functions
+- ✅ Works with `Object.freeze()`, `Object.seal()` for objects, arrays, and class instances
+- ✅ Strict-aware property setters: `SetPropertyStrict`, `SetIndexStrict`, `SetFieldsPropertyStrict`
+- ✅ Full interpreter and IL compiler support with 28 test cases (14 each)

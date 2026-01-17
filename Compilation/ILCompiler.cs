@@ -65,6 +65,9 @@ public partial class ILCompiler
     // Dead code analysis results
     private DeadCodeInfo? _deadCodeInfo;
 
+    // Strict mode setting (from "use strict" directive)
+    private bool _isStrictMode;
+
     private UnionTypeGenerator? _unionGenerator;
 
     // Shared context for definition phase (module name resolution)
@@ -208,10 +211,12 @@ public partial class ILCompiler
         {
             ClassToModule = _modules.ClassToModule,
             FunctionToModule = _modules.FunctionToModule,
-            EnumToModule = _modules.EnumToModule
+            EnumToModule = _modules.EnumToModule,
+            IsStrictMode = _isStrictMode
         };
         _definitionContext.CurrentModulePath = _modules.CurrentPath;
         _definitionContext.DotNetNamespace = _modules.CurrentDotNetNamespace;
+        _definitionContext.IsStrictMode = _isStrictMode;
         return _definitionContext;
     }
 
@@ -245,6 +250,9 @@ public partial class ILCompiler
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
 
+        // Check for "use strict" directive at file level
+        _isStrictMode = CheckForUseStrict(statements);
+
         Phase0_ExtractNamespace(statements);
         Phase1_EmitRuntimeTypes();
         Phase2_AnalyzeClosures(statements);
@@ -259,6 +267,33 @@ public partial class ILCompiler
     }
 
     #region Compile Phases
+
+    /// <summary>
+    /// Checks if the statements begin with a "use strict" directive.
+    /// </summary>
+    /// <param name="statements">The list of statements to check.</param>
+    /// <returns>True if "use strict" directive is found at the beginning.</returns>
+    private static bool CheckForUseStrict(List<Stmt>? statements)
+    {
+        if (statements == null) return false;
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Directive directive)
+            {
+                if (directive.Value == "use strict")
+                {
+                    return true;
+                }
+                // Continue checking other directives at the start
+            }
+            else
+            {
+                // Non-directive statement encountered, stop checking
+                break;
+            }
+        }
+        return false;
+    }
 
     /// <summary>
     /// Phase 0: Extract .NET namespace from @Namespace file directive.

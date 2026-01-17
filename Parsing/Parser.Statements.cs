@@ -301,9 +301,23 @@ public partial class Parser
         return new Stmt.Throw(keyword, value);
     }
 
-    private List<Stmt> Block()
+    private List<Stmt> Block() => Block(parseFunctionPrologue: false);
+
+    /// <summary>
+    /// Parses a block of statements enclosed in braces.
+    /// </summary>
+    /// <param name="parseFunctionPrologue">If true, parses directive prologue at the start (for function bodies).</param>
+    private List<Stmt> Block(bool parseFunctionPrologue)
     {
         List<Stmt> statements = [];
+
+        // Parse directive prologue at the start of function bodies
+        if (parseFunctionPrologue)
+        {
+            var directives = ParseDirectivePrologue();
+            statements.AddRange(directives);
+        }
+
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             try

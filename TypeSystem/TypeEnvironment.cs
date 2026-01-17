@@ -15,7 +15,7 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 /// <seealso cref="RuntimeEnvironment"/>
 /// <seealso cref="TypeInfo"/>
-public class TypeEnvironment(TypeEnvironment? enclosing = null)
+public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode = null)
 {
     private readonly Dictionary<string, TypeInfo> _types = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _typeAliases = new(StringComparer.Ordinal);
@@ -24,6 +24,12 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null)
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (TypeInfo Type, bool IsValue)> _importAliases = new(StringComparer.Ordinal);
     private readonly TypeEnvironment? _enclosing = enclosing;
+
+    /// <summary>
+    /// Whether this environment is in JavaScript strict mode.
+    /// Strict mode is inherited from enclosing scopes unless explicitly set.
+    /// </summary>
+    public bool IsStrictMode { get; } = strictMode ?? enclosing?.IsStrictMode ?? false;
 
     public void Define(string name, TypeInfo type)
     {

@@ -648,7 +648,9 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            // Check for method-level "use strict" directive
+            IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body)
         };
 
         // Add class generic type parameters to context

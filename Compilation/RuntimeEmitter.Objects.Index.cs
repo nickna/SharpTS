@@ -236,6 +236,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
+        // Check if list is frozen (silently ignore in non-strict mode)
+        var listSetLabel = il.DefineLabel();
+        var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, listFrozenCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, nullLabel); // Frozen - silently return
+        // Check if sealed (sealed allows modifications but not additions - for array index, allow it)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);

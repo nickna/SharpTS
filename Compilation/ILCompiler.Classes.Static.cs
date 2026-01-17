@@ -88,7 +88,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode
         };
 
         var emitter = new ILEmitter(ctx);
@@ -192,7 +193,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode
         };
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')
@@ -413,7 +415,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode
         };
 
         // Emit MoveNext body

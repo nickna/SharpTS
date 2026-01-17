@@ -162,7 +162,9 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            // Check for function-level "use strict" directive
+            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body)
         };
 
         // Use the new emitter for full generator body emission

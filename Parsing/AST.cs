@@ -260,4 +260,12 @@ public abstract record Stmt
     /// Applied to all types in the file during IL compilation.
     /// </summary>
     public record FileDirective(List<Decorator> Decorators) : Stmt;
+
+    /// <summary>
+    /// Directive prologue statement (e.g., "use strict").
+    /// Directives are string literal statements at the beginning of a script or function body.
+    /// </summary>
+    /// <param name="Value">The directive value without quotes (e.g., "use strict")</param>
+    /// <param name="StringToken">The original string token for error reporting</param>
+    public record Directive(string Value, Token StringToken) : Stmt;
 }

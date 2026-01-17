@@ -1224,11 +1224,13 @@ public partial class RuntimeEmitter
             _types.ConditionalWeakTable,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
         );
+        runtime.FrozenObjectsField = frozenObjectsField;
         var sealedObjectsField = typeBuilder.DefineField(
             "_sealedObjects",
             _types.ConditionalWeakTable,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
         );
+        runtime.SealedObjectsField = sealedObjectsField;
 
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
@@ -1273,14 +1275,17 @@ public partial class RuntimeEmitter
         EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitGetFieldsProperty(typeBuilder, runtime);
         EmitSetFieldsProperty(typeBuilder, runtime);
+        EmitSetFieldsPropertyStrict(typeBuilder, runtime);
         EmitGetProperty(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
+        EmitSetPropertyStrict(typeBuilder, runtime);
         EmitMergeIntoObject(typeBuilder, runtime);
         // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
         EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
         EmitIsSymbol(typeBuilder, runtime);
         EmitGetIndex(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
+        EmitSetIndexStrict(typeBuilder, runtime);
         EmitInvokeValue(typeBuilder, runtime);
         EmitInvokeMethodValue(typeBuilder, runtime);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)

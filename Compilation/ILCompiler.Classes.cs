@@ -760,7 +760,8 @@ public partial class ILCompiler
             ClassExprGenericParams = _classExprs.GenericParams,
             ClassExprSuperclass = _classExprs.Superclass,
             CurrentClassExpr = classExpr,
-            VarToClassExpr = _classExprs.VarToClassExpr
+            VarToClassExpr = _classExprs.VarToClassExpr,
+            IsStrictMode = _isStrictMode
         };
     }
 

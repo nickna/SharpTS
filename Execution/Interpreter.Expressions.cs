@@ -467,46 +467,89 @@ public partial class Interpreter
         object? obj = Evaluate(setIndex.Object);
         object? index = Evaluate(setIndex.Index);
         object? value = Evaluate(setIndex.Value);
+        bool strictMode = _environment.IsStrictMode;
 
         // Array with numeric index
         if (obj is SharpTSArray array && index is double idx)
         {
-            array.Set((int)idx, value);
+            if (strictMode)
+            {
+                array.SetStrict((int)idx, value, strictMode);
+            }
+            else
+            {
+                array.Set((int)idx, value);
+            }
             return value;
         }
 
         // Object with string key
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
-            sharpObj.SetProperty(strKey, value);
+            if (strictMode)
+            {
+                sharpObj.SetPropertyStrict(strKey, value, strictMode);
+            }
+            else
+            {
+                sharpObj.SetProperty(strKey, value);
+            }
             return value;
         }
 
         // Object with number key (convert to string)
         if (obj is SharpTSObject numObj && index is double numKey)
         {
-            numObj.SetProperty(numKey.ToString(), value);
+            if (strictMode)
+            {
+                numObj.SetPropertyStrict(numKey.ToString(), value, strictMode);
+            }
+            else
+            {
+                numObj.SetProperty(numKey.ToString(), value);
+            }
             return value;
         }
 
         // Object with symbol key
         if (obj is SharpTSObject symbolObj && index is SharpTSSymbol symbol)
         {
-            symbolObj.SetBySymbol(symbol, value);
+            if (strictMode)
+            {
+                symbolObj.SetBySymbolStrict(symbol, value, strictMode);
+            }
+            else
+            {
+                symbolObj.SetBySymbol(symbol, value);
+            }
             return value;
         }
 
         // Class instance with string key
         if (obj is SharpTSInstance instance && index is string instanceKey)
         {
-            instance.SetRawField(instanceKey, value);
+            if (strictMode)
+            {
+                instance.SetRawFieldStrict(instanceKey, value, strictMode);
+            }
+            else
+            {
+                instance.SetRawField(instanceKey, value);
+            }
             return value;
         }
 
         // Class instance with symbol key
         if (obj is SharpTSInstance symInstance && index is SharpTSSymbol symKey)
         {
-            symInstance.SetBySymbol(symKey, value);
+            if (strictMode)
+            {
+                symInstance.SetBySymbolStrict(symKey, value, strictMode);
+            }
+            else
+            {
+                symInstance.SetBySymbol(symKey, value);
+            }
             return value;
         }
 

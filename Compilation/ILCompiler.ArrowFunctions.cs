@@ -428,7 +428,8 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
-            ClassExprBuilders = _classExprs.Builders
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode
         };
 
         if (displayClass != null)

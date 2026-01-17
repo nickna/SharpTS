@@ -295,8 +295,22 @@ public class ExpressionParsingTests
     [Fact]
     public void Literal_String()
     {
-        var expr = ParseExpression("\"hello\";");
-        var literal = Assert.IsType<Expr.Literal>(expr);
+        // String literals at the start of a file are parsed as directive prologue (like "use strict")
+        // This is correct JavaScript/TypeScript behavior
+        var statements = Parse("\"hello\";");
+        Assert.Single(statements);
+        var directive = Assert.IsType<Stmt.Directive>(statements[0]);
+        Assert.Equal("hello", directive.Value);
+    }
+
+    [Fact]
+    public void Literal_String_InExpression()
+    {
+        // Test string literal in a non-directive position (after a non-directive statement)
+        var statements = Parse("0; \"hello\";");
+        Assert.Equal(2, statements.Count);
+        var exprStmt = Assert.IsType<Stmt.Expression>(statements[1]);
+        var literal = Assert.IsType<Expr.Literal>(exprStmt.Expr);
         Assert.Equal("hello", literal.Value);
     }
 

@@ -165,6 +165,7 @@ public class TypeProvider
     public Type ListOfObject => MakeGenericType(ListOpen, Object);
     public Type ListOfObjectNullable => typeof(List<object?>);
     public Type SharpTSArray => typeof(SharpTS.Runtime.Types.SharpTSArray);
+    public Type SharpTSObject => typeof(SharpTS.Runtime.Types.SharpTSObject);
     public Type IEqualityComparerOfObject => MakeGenericType(IEqualityComparerOpen, Object);
     public Type DictionaryObjectObject => MakeGenericType(DictionaryOpen, Object, Object);
     public Type DictionaryStringObject => MakeGenericType(DictionaryOpen, String, Object);

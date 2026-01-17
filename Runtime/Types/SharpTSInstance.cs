@@ -167,6 +167,54 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
         }
     }
 
+    /// <summary>
+    /// Sets a property with strict mode behavior.
+    /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
+    /// </summary>
+    public void SetStrict(Token name, object? value, bool strictMode)
+    {
+        string propName = name.Lexeme;
+
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only property '{propName}' of object");
+            }
+            return;
+        }
+
+        bool exists = _fields.ContainsKey(propName);
+        if (IsSealed && !exists)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add property '{propName}' to a sealed object");
+            }
+            return;
+        }
+
+        // Check cache for setter resolution
+        if (!_setterCache.TryGetValue(propName, out SharpTSFunction? cachedSetter))
+        {
+            cachedSetter = _klass.FindSetter(propName);
+            _setterCache[propName] = cachedSetter;
+        }
+
+        if (cachedSetter != null && _interpreter != null)
+        {
+            cachedSetter.Bind(this).Call(_interpreter, [value]);
+            return;
+        }
+
+        _fields[propName] = value;
+
+        if (!_lookupCache.ContainsKey(propName))
+        {
+            _lookupCache[propName] = new PropertyResolution { Type = ResolutionType.Field };
+        }
+    }
+
     public bool HasProperty(string name)
     {
         if (!_lookupCache.TryGetValue(name, out PropertyResolution? resolution))
@@ -218,12 +266,57 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     }
 
     /// <summary>
+    /// Sets a field value directly with strict mode behavior.
+    /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
+    /// </summary>
+    public void SetRawFieldStrict(string name, object? value, bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only property '{name}' of object");
+            }
+            return;
+        }
+
+        bool exists = _fields.ContainsKey(name);
+        if (IsSealed && !exists)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add property '{name}' to a sealed object");
+            }
+            return;
+        }
+
+        _fields[name] = value;
+    }
+
+    /// <summary>
     /// Removes a field by name. Respects frozen/sealed state.
     /// </summary>
     public bool DeleteField(string name)
     {
         if (IsFrozen || IsSealed)
         {
+            return false;
+        }
+        return _fields.Remove(name);
+    }
+
+    /// <summary>
+    /// Removes a field by name with strict mode behavior.
+    /// In strict mode, throws TypeError for deletions on frozen/sealed objects.
+    /// </summary>
+    public bool DeleteFieldStrict(string name, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot delete property '{name}' of a frozen or sealed object");
+            }
             return false;
         }
         return _fields.Remove(name);
@@ -253,6 +346,33 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
         bool exists = _symbolFields.ContainsKey(symbol);
         if (IsSealed && !exists)
         {
+            return;
+        }
+
+        _symbolFields[symbol] = value;
+    }
+
+    /// <summary>
+    /// Sets a value by symbol key with strict mode behavior.
+    /// </summary>
+    public void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+    {
+        if (IsFrozen)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot assign to read only symbol property of object");
+            }
+            return;
+        }
+
+        bool exists = _symbolFields.ContainsKey(symbol);
+        if (IsSealed && !exists)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot add symbol property to a sealed object");
+            }
             return;
         }
 

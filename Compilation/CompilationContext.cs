@@ -95,6 +95,12 @@ public partial class CompilationContext
     // Miscellaneous State
     // ============================================
 
+    /// <summary>
+    /// Whether the current compilation context is in JavaScript strict mode.
+    /// Affects property assignment behavior on frozen/sealed objects.
+    /// </summary>
+    public bool IsStrictMode { get; set; }
+
     // Namespace support: namespace path -> static field
     public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
 

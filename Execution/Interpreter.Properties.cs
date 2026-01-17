@@ -336,6 +336,8 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateSetOnObject(Expr.Set set, object? obj, object? value)
     {
+        bool strictMode = _environment.IsStrictMode;
+
         // Handle static property assignment
         if (obj is SharpTSClass klass)
         {
@@ -346,12 +348,26 @@ public partial class Interpreter
         if (obj is SharpTSInstance instance)
         {
             instance.SetInterpreter(this);
-            instance.Set(set.Name, value);
+            if (strictMode)
+            {
+                instance.SetStrict(set.Name, value, strictMode);
+            }
+            else
+            {
+                instance.Set(set.Name, value);
+            }
             return value;
         }
         if (obj is SharpTSObject simpleObj)
         {
-            simpleObj.SetProperty(set.Name.Lexeme, value);
+            if (strictMode)
+            {
+                simpleObj.SetPropertyStrict(set.Name.Lexeme, value, strictMode);
+            }
+            else
+            {
+                simpleObj.SetProperty(set.Name.Lexeme, value);
+            }
             return value;
         }
 

@@ -338,6 +338,160 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Emits SetFieldsPropertyStrict(object obj, string name, object value, bool strictMode) -> void
+    /// In strict mode, throws TypeError for modifications to frozen objects.
+    /// </summary>
+    private void EmitSetFieldsPropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetFieldsPropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.String, _types.Object, _types.Boolean]
+        );
+        runtime.SetFieldsPropertyStrict = method;
+
+        var il = method.GetILGenerator();
+        var endLabel = il.DefineLabel();
+        var notFrozenLabel = il.DefineLabel();
+        var tryFieldsLabel = il.DefineLabel();
+
+        // Declare locals upfront
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsLocal = il.DeclareLocal(_types.Object);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
+        var frozenCheckLocal = il.DeclareLocal(_types.Object);
+
+        // if (obj == null) return;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, endLabel);
+
+        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, frozenCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Frozen - check strictMode and throw if true
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        var frozenSilentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, frozenSilentLabel);
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot assign to read only property '");
+        il.Emit(OpCodes.Ldarg_1); // name
+        il.Emit(OpCodes.Ldstr, "' of object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(frozenSilentLabel);
+        il.Emit(OpCodes.Ret); // Silently return in non-strict mode
+
+        il.MarkLabel(notFrozenLabel);
+
+        // Check for setter method first: var setterMethod = obj.GetType().GetMethod("set_" + ToPascalCase(name));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "set_");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToPascalCase);  // Convert to PascalCase
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Stloc, setterMethodLocal);
+
+        // if (setterMethod == null) goto tryFields;
+        il.Emit(OpCodes.Ldloc, setterMethodLocal);
+        il.Emit(OpCodes.Brfalse, tryFieldsLabel);
+
+        // Create args array: new object[] { value }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsArrayLocal);
+        il.Emit(OpCodes.Ldloc, argsArrayLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        // setterMethod.Invoke(obj, args); return;
+        il.Emit(OpCodes.Ldloc, setterMethodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, argsArrayLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Pop); // Discard return value (setters return void but Invoke returns object)
+        il.Emit(OpCodes.Ret);
+
+        // Try _fields dictionary - walk up type hierarchy to find non-null _fields
+        il.MarkLabel(tryFieldsLabel);
+
+        // Add currentType local
+        var currentTypeLocal = il.DeclareLocal(_types.Type);
+
+        // currentType = obj.GetType();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, currentTypeLocal);
+
+        // Loop through type hierarchy
+        var loopStart = il.DefineLabel();
+        var nextType = il.DefineLabel();
+
+        il.MarkLabel(loopStart);
+
+        // if (currentType == null) return;
+        il.Emit(OpCodes.Ldloc, currentTypeLocal);
+        il.Emit(OpCodes.Brfalse, endLabel);
+
+        // var fieldsField = currentType.GetField("_fields", DeclaredOnly | Instance | NonPublic);
+        il.Emit(OpCodes.Ldloc, currentTypeLocal);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.NonPublic));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, _types.BindingFlags));
+        il.Emit(OpCodes.Stloc, fieldsFieldLocal);
+
+        // if (fieldsField == null) goto nextType;
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Brfalse, nextType);
+
+        // var fields = fieldsField.GetValue(obj);
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // if (fields == null) goto nextType;
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, nextType);
+
+        // var dict = fields as Dictionary<string, object>;
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // if (dict == null) goto nextType;
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brfalse, nextType);
+
+        // Found a non-null _fields dictionary - set the value and return
+        // dict[name] = value;
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+
+        // nextType: currentType = currentType.BaseType; goto loopStart;
+        il.MarkLabel(nextType);
+        il.Emit(OpCodes.Ldloc, currentTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, currentTypeLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitGetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -540,9 +694,253 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
+        // For dictionaries, check frozen/sealed tables and silently ignore if frozen/sealed
+        var sealedCheckLabel = il.DefineLabel();
+        var doSetLabel = il.DefineLabel();
+        var valueLocal = il.DeclareLocal(_types.Object);
+
+        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, nullLabel); // Frozen - silently return
+
+        // Check if sealed and property doesn't exist
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, doSetLabel); // Not sealed, proceed to set
+
+        // Object is sealed - check if property exists
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brfalse, nullLabel); // Property doesn't exist, silently return
+
+        // Actually set the property
+        il.MarkLabel(doSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits SetPropertyStrict(object obj, string name, object value, bool strictMode) -> void
+    /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
+    /// </summary>
+    private void EmitSetPropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetPropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.String, _types.Object, _types.Boolean]
+        );
+        runtime.SetPropertyStrict = method;
+
+        var il = method.GetILGenerator();
+        var nullLabel = il.DefineLabel();
+        var dictLabel = il.DefineLabel();
+
+        // null check
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Check if SharpTSObject
+        var sharpTSObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.SharpTSObject);
+        il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
+
+        // Dictionary
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Not a dict or SharpTSObject - fall back to SetFieldsPropertyStrict
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        il.Emit(OpCodes.Call, runtime.SetFieldsPropertyStrict);
+        il.Emit(OpCodes.Ret);
+
+        // SharpTSObject - call SetPropertyStrict
+        il.MarkLabel(sharpTSObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.SharpTSObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.SharpTSObject, "SetPropertyStrict", _types.String, _types.Object, _types.Boolean));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictLabel);
+        // For dictionaries, check frozen/sealed tables
+        var frozenCheckLabel = il.DefineLabel();
+        var sealedCheckLabel = il.DefineLabel();
+        var doSetLabel = il.DefineLabel();
+        var valueLocal = il.DeclareLocal(_types.Object);
+
+        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, sealedCheckLabel); // Not frozen, check sealed
+
+        // Object is frozen - check strict mode
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        il.Emit(OpCodes.Brfalse, nullLabel); // Not strict, silently return
+
+        // Strict mode and frozen - throw TypeError
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot assign to read only property '");
+        il.Emit(OpCodes.Ldarg_1); // name
+        il.Emit(OpCodes.Ldstr, "' of object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Check if sealed and property doesn't exist
+        il.MarkLabel(sealedCheckLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, doSetLabel); // Not sealed, proceed to set
+
+        // Object is sealed - check if property exists
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brtrue, doSetLabel); // Property exists, can modify
+
+        // Property doesn't exist and object is sealed - check strict mode
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        il.Emit(OpCodes.Brfalse, nullLabel); // Not strict, silently return
+
+        // Strict mode and sealed with new property - throw TypeError
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot add property '");
+        il.Emit(OpCodes.Ldarg_1); // name
+        il.Emit(OpCodes.Ldstr, "' to a sealed object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Actually set the property
+        il.MarkLabel(doSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits SetIndexStrict(object obj, object index, object value, bool strictMode) -> void
+    /// In strict mode, throws TypeError for modifications to frozen/sealed arrays.
+    /// </summary>
+    private void EmitSetIndexStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetIndexStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object, _types.Object, _types.Boolean]
+        );
+        runtime.SetIndexStrict = method;
+
+        var il = method.GetILGenerator();
+        var nullLabel = il.DefineLabel();
+        var sharpTSArrayLabel = il.DefineLabel();
+        var listLabel = il.DefineLabel();
+        var dictLabel = il.DefineLabel();
+
+        // null check
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // Check if SharpTSArray (for strict mode support)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.SharpTSArray);
+        il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
+
+        // List<object?>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObjectNullable);
+        il.Emit(OpCodes.Brtrue, listLabel);
+
+        // Dictionary
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Default - just return
+        il.Emit(OpCodes.Ret);
+
+        // SharpTSArray - call SetStrict with index and strictMode
+        il.MarkLabel(sharpTSArrayLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.SharpTSArray);
+        // Convert index to int: (int)(double)index
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_2); // value
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.SharpTSArray, "SetStrict", _types.Int32, _types.Object, _types.Boolean));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(listLabel);
+        // Check if frozen - in strict mode, throw TypeError
+        var listSetLabel = il.DefineLabel();
+        var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, listFrozenCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var listNotFrozenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, listNotFrozenLabel);
+        // Frozen - check strictMode and throw if true
+        il.Emit(OpCodes.Ldarg_3); // strictMode
+        var listFrozenSilentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, listFrozenSilentLabel);
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot assign to read only property of frozen array");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(listFrozenSilentLabel);
+        il.Emit(OpCodes.Ret); // Silently return in non-strict mode
+        il.MarkLabel(listNotFrozenLabel);
+        // Not frozen - set normally
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObjectNullable);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "set_Item", _types.Int32, _types.Object));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictLabel);
+        // Dictionary uses string keys - convert index to string and set
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
