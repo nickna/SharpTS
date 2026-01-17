@@ -208,7 +208,7 @@ This document tracks TypeScript language features and their implementation statu
 | String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at |
 | Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, some, every, reduce, includes, indexOf, join |
 | `JSON.parse`/`stringify` | ✅ | With reviver, replacer, indentation, class instances, toJSON(), BigInt TypeError |
-| `Object.keys`/`values`/`entries` | ✅ | Full support for object literals and class instances |
+| `Object.keys`/`values`/`entries`/`fromEntries`/`hasOwn` | ✅ | Full support for object literals and class instances |
 | `Array.isArray` | ✅ | Type guard for array detection |
 | `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
 | `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
@@ -218,8 +218,8 @@ This document tracks TypeScript language features and their implementation statu
 | `Array.from()` | ✅ | Create array from iterable with optional map function |
 | `Array.of()` | ✅ | Create array from arguments |
 | `Object.assign()` | ❌ | Merge objects |
-| `Object.fromEntries()` | ❌ | Inverse of `Object.entries()` |
-| `Object.hasOwn()` | ❌ | Safer `hasOwnProperty` check |
+| `Object.fromEntries()` | ✅ | Inverse of `Object.entries()` - converts iterable of [key, value] pairs to object |
+| `Object.hasOwn()` | ✅ | Safer `hasOwnProperty` check - returns true for own properties, false for methods |
 | `Object.freeze()`/`seal()` | ❌ | Object immutability |
 | `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
 | `setTimeout`/`setInterval` | ❌ | Timer functions |

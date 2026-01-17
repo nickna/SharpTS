@@ -55,6 +55,43 @@ public static class ObjectBuiltIns
                 }
                 throw new Exception("Object.entries() requires an object argument");
             }),
+            "fromEntries" => new BuiltInMethod("fromEntries", 1, (interpreter, _, args) =>
+            {
+                if (args[0] == null)
+                    throw new Exception("Runtime Error: Object.fromEntries() requires an iterable argument");
+
+                var elements = interpreter.GetIterableElements(args[0]);
+                Dictionary<string, object?> result = [];
+
+                foreach (var element in elements)
+                {
+                    if (element is SharpTSArray pair && pair.Elements.Count >= 2)
+                    {
+                        string key = pair.Get(0)?.ToString() ?? "";
+                        result[key] = pair.Get(1);
+                    }
+                    else if (element is List<object?> listPair && listPair.Count >= 2)
+                    {
+                        string key = listPair[0]?.ToString() ?? "";
+                        result[key] = listPair[1];
+                    }
+                    else
+                    {
+                        throw new Exception("Runtime Error: Object.fromEntries() requires [key, value] pairs");
+                    }
+                }
+                return new SharpTSObject(result);
+            }),
+            "hasOwn" => new BuiltInMethod("hasOwn", 2, (_, _, args) =>
+            {
+                var key = args[1]?.ToString() ?? "";
+                return args[0] switch
+                {
+                    SharpTSObject obj => obj.Fields.ContainsKey(key),
+                    SharpTSInstance inst => inst.GetFieldNames().Contains(key),
+                    _ => false
+                };
+            }),
             _ => null
         };
     }

@@ -136,6 +136,8 @@ public class EmittedRuntime
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
+    public MethodBuilder ObjectFromEntries { get; set; } = null!;
+    public MethodBuilder ObjectHasOwn { get; set; } = null!;
 
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;

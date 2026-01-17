@@ -879,5 +879,306 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits Object.fromEntries(entries) - converts iterable of [key, value] pairs to object.
+    /// Signature: Dictionary&lt;string, object&gt; ObjectFromEntries(object entries, $TSSymbol iteratorSymbol, Type runtimeType)
+    /// </summary>
+    private void EmitObjectFromEntries(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectFromEntries",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.DictionaryStringObject,
+            [_types.Object, runtime.TSSymbolType, _types.Type]
+        );
+        runtime.ObjectFromEntries = method;
+
+        var il = method.GetILGenerator();
+        var dictType = _types.DictionaryStringObject;
+        var listType = _types.ListOfObject;
+
+        // Locals
+        var resultLocal = il.DeclareLocal(dictType);
+        var iterableLocal = il.DeclareLocal(listType);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var entryLocal = il.DeclareLocal(_types.Object);
+        var entryListLocal = il.DeclareLocal(listType);
+        var keyLocal = il.DeclareLocal(_types.String);
+        var valueLocal = il.DeclareLocal(_types.Object);
+
+        var loopStartLabel = il.DefineLabel();
+        var loopEndLabel = il.DefineLabel();
+        var notNullLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Check for null input
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, notNullLabel);
+
+        // Input is null - throw exception
+        il.Emit(OpCodes.Ldstr, "Runtime Error: Object.fromEntries() requires an iterable argument");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(notNullLabel);
+
+        // Convert input to list using IterateToList(entries, iteratorSymbol, runtimeType)
+        il.Emit(OpCodes.Ldarg_0);  // entries
+        il.Emit(OpCodes.Ldarg_1);  // iteratorSymbol
+        il.Emit(OpCodes.Ldarg_2);  // runtimeType
+        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Stloc, iterableLocal);
+
+        // Create result dictionary
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(dictType));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // Initialize loop counter
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        // Loop start
+        il.MarkLabel(loopStartLabel);
+
+        // Check if index < iterable.Count
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, iterableLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Bge, loopEndLabel);
+
+        // Get entry = iterable[index]
+        il.Emit(OpCodes.Ldloc, iterableLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, entryLocal);
+
+        // Cast entry to List<object>
+        il.Emit(OpCodes.Ldloc, entryLocal);
+        il.Emit(OpCodes.Isinst, listType);
+        il.Emit(OpCodes.Stloc, entryListLocal);
+
+        // If not a list, throw
+        il.Emit(OpCodes.Ldloc, entryListLocal);
+        il.Emit(OpCodes.Brfalse, throwLabel);
+
+        // Check if list has at least 2 elements
+        il.Emit(OpCodes.Ldloc, entryListLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        // Get key = entryList[0]?.ToString() ?? ""
+        il.Emit(OpCodes.Ldloc, entryListLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item")!.GetGetMethod()!);
+        var keyNullLabel = il.DefineLabel();
+        var keyDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, keyNullLabel);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Br, keyDoneLabel);
+        il.MarkLabel(keyNullLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, "");
+        il.MarkLabel(keyDoneLabel);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        // Get value = entryList[1]
+        il.Emit(OpCodes.Ldloc, entryListLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        // result[key] = value
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
+
+        // Increment index
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStartLabel);
+
+        // Throw error for invalid entry
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "Runtime Error: Object.fromEntries() requires [key, value] pairs");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Return result
+        il.MarkLabel(loopEndLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Object.hasOwn(obj, key) - checks if object has own property.
+    /// </summary>
+    private void EmitObjectHasOwn(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectHasOwn",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]
+        );
+        runtime.ObjectHasOwn = method;
+
+        var il = method.GetILGenerator();
+        var dictType = _types.DictionaryStringObject;
+
+        var checkClassLabel = il.DefineLabel();
+        var returnFalseLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+        var keyStringLocal = il.DeclareLocal(_types.String);
+        var keyPascalLocal = il.DeclareLocal(_types.String);
+
+        // Convert key to string: key?.ToString() ?? ""
+        il.Emit(OpCodes.Ldarg_1);
+        var keyNullLabel = il.DefineLabel();
+        var keyDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, keyNullLabel);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Br, keyDoneLabel);
+        il.MarkLabel(keyNullLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, "");
+        il.MarkLabel(keyDoneLabel);
+        il.Emit(OpCodes.Stloc, keyStringLocal);
+
+        // Convert key to PascalCase for backing field lookup
+        il.Emit(OpCodes.Ldloc, keyStringLocal);
+        il.Emit(OpCodes.Call, runtime.ToPascalCase);
+        il.Emit(OpCodes.Stloc, keyPascalLocal);
+
+        // Check if obj is null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnFalseLabel);
+
+        // Check if obj is Dictionary<string, object>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Brfalse, checkClassLabel);
+
+        // It's a dictionary - call ContainsKey
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, dictType);
+        il.Emit(OpCodes.Ldloc, keyStringLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Check class instance
+        il.MarkLabel(checkClassLabel);
+
+        // Use reflection to find field named "__<PascalKey>" or check _fields dictionary
+        var typeLocal = il.DeclareLocal(_types.Type);
+        var fieldsLocal = il.DeclareLocal(_types.FieldInfoArray);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var fieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldNameLocal = il.DeclareLocal(_types.String);
+        var expectedNameLocal = il.DeclareLocal(_types.String);
+
+        // expectedName = "__" + keyPascal (PascalCase)
+        il.Emit(OpCodes.Ldstr, "__");
+        il.Emit(OpCodes.Ldloc, keyPascalLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Stloc, expectedNameLocal);
+
+        // type = obj.GetType()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        // fields = type.GetFields(BindingFlags.NonPublic | BindingFlags.Instance)
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetFields", [_types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+
+        // Loop through fields to find matching __<PascalKey> field
+        var fieldLoopStart = il.DefineLabel();
+        var fieldLoopEnd = il.DefineLabel();
+        var nextField = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(fieldLoopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, fieldLoopEnd);
+
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, fieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldLocal);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetProperty("Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, fieldNameLocal);
+
+        // if (fieldName == expectedName) return true
+        il.Emit(OpCodes.Ldloc, fieldNameLocal);
+        il.Emit(OpCodes.Ldloc, expectedNameLocal);
+        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        var foundField = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, foundField);
+
+        il.MarkLabel(nextField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, fieldLoopStart);
+
+        // Found matching field - return true
+        il.MarkLabel(foundField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(fieldLoopEnd);
+
+        // Check _fields dictionary
+        var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
+        var fieldsDictLocal = il.DeclareLocal(dictType);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldstr, "_fields");
+        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.Type.GetMethod("GetField", [_types.String, _types.BindingFlags])!);
+        il.Emit(OpCodes.Stloc, fieldsFieldLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Brfalse, returnFalseLabel);
+
+        il.Emit(OpCodes.Ldloc, fieldsFieldLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfo.GetMethod("GetValue", [_types.Object])!);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, fieldsDictLocal);
+
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Brfalse, returnFalseLabel);
+
+        // Check if _fields contains key (using original key, not PascalCase)
+        il.Emit(OpCodes.Ldloc, fieldsDictLocal);
+        il.Emit(OpCodes.Ldloc, keyStringLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Return false
+        il.MarkLabel(returnFalseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+
+        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

@@ -485,4 +485,189 @@ public class ObjectFeatureTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("15\n30\n", output);
     }
+
+    // Object.fromEntries tests
+    [Fact]
+    public void Object_FromEntries_BasicArray()
+    {
+        var source = """
+            let entries: any[] = [["a", 1], ["b", 2], ["c", 3]];
+            let obj = Object.fromEntries(entries);
+            console.log(obj.a);
+            console.log(obj.b);
+            console.log(obj.c);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void Object_FromEntries_EmptyArray()
+    {
+        var source = """
+            let entries: any[] = [];
+            let obj = Object.fromEntries(entries);
+            console.log(Object.keys(obj).length);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("0\n", output);
+    }
+
+    [Fact]
+    public void Object_FromEntries_DuplicateKeys()
+    {
+        var source = """
+            let entries: any[] = [["a", 1], ["a", 2], ["a", 3]];
+            let obj = Object.fromEntries(entries);
+            console.log(obj.a);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void Object_FromEntries_RoundTrip()
+    {
+        var source = """
+            let original: { x: number, y: number, z: number } = { x: 1, y: 2, z: 3 };
+            let entries: any[] = Object.entries(original);
+            let restored = Object.fromEntries(entries);
+            console.log(restored.x);
+            console.log(restored.y);
+            console.log(restored.z);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void Object_FromEntries_MixedValueTypes()
+    {
+        var source = """
+            let entries: any[] = [["name", "Alice"], ["age", 30], ["active", true]];
+            let obj = Object.fromEntries(entries);
+            console.log(obj.name);
+            console.log(obj.age);
+            console.log(obj.active);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("Alice\n30\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_FromEntries_WithMap()
+    {
+        var source = """
+            let map = new Map<string, number>();
+            map.set("x", 10);
+            map.set("y", 20);
+            let obj = Object.fromEntries(map);
+            console.log(obj.x);
+            console.log(obj.y);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("10\n20\n", output);
+    }
+
+    // Object.hasOwn tests
+    [Fact]
+    public void Object_HasOwn_ReturnsTrueForOwnProperty()
+    {
+        var source = """
+            let obj: { a: number, b: number } = { a: 1, b: 2 };
+            console.log(Object.hasOwn(obj, "a"));
+            console.log(Object.hasOwn(obj, "b"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_HasOwn_ReturnsFalseForMissingProperty()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            console.log(Object.hasOwn(obj, "b"));
+            console.log(Object.hasOwn(obj, "c"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\nfalse\n", output);
+    }
+
+    [Fact]
+    public void Object_HasOwn_EmptyObject()
+    {
+        var source = """
+            let obj: {} = {};
+            console.log(Object.hasOwn(obj, "a"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_HasOwn_ClassInstanceField()
+    {
+        var source = """
+            class Person {
+                name: string;
+                age: number;
+                constructor(n: string, a: number) {
+                    this.name = n;
+                    this.age = a;
+                }
+                greet(): string {
+                    return "Hello";
+                }
+            }
+            let p = new Person("Alice", 30);
+            console.log(Object.hasOwn(p, "name"));
+            console.log(Object.hasOwn(p, "age"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_HasOwn_ClassInstanceMethod()
+    {
+        var source = """
+            class Person {
+                name: string;
+                constructor(n: string) {
+                    this.name = n;
+                }
+                greet(): string {
+                    return "Hello";
+                }
+            }
+            let p = new Person("Alice");
+            console.log(Object.hasOwn(p, "greet"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_HasOwn_WithNumberKey()
+    {
+        var source = """
+            let obj: any = { "123": "value" };
+            console.log(Object.hasOwn(obj, "123"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
 }

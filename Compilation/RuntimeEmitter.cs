@@ -1277,6 +1277,8 @@ public partial class RuntimeEmitter
         EmitGetKeys(typeBuilder, runtime);
         EmitGetValues(typeBuilder, runtime);
         EmitGetEntries(typeBuilder, runtime);
+        EmitObjectFromEntries(typeBuilder, runtime);
+        EmitObjectHasOwn(typeBuilder, runtime);
         EmitIsArray(typeBuilder, runtime);
         EmitSpreadArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
