@@ -269,7 +269,9 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         Check(TokenType.TRUE) ||  // for boolean literal type true
         Check(TokenType.FALSE) ||  // for boolean literal type false
         Check(TokenType.TEMPLATE_FULL) ||  // for template literal types: `literal`
-        Check(TokenType.TEMPLATE_HEAD);  // for template literal types: `prefix${
+        Check(TokenType.TEMPLATE_HEAD) ||  // for template literal types: `prefix${
+        Check(TokenType.TYPEOF) ||  // for typeof in type position: typeof someVar
+        Check(TokenType.KEYOF);  // for keyof operator: keyof T
 
     // ============== GENERIC TYPE CLOSING BRACKET HANDLING ==============
     //

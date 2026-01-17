@@ -48,7 +48,7 @@ SharpTS supports two execution modes:
 
 - Static type checking with helpful error messages
 - Nominal typing for classes, structural typing for interfaces
-- Compile to standalone .NET executables
+- Compile to standalone executables or .NET assemblies
 - Reference assembly output for C# interop (`--ref-asm`)
 - IL verification (`--verify`)
 
@@ -64,7 +64,7 @@ SharpTS supports two execution modes:
 ### Prerequisites
 
 - **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)** or later (required)
-- **Visual Studio 2026 18.0+** (optional, for IDE support)
+- **Visual Studio 2026 18.0+** or **Visual Studio Code** (optional, for IDE support)
 
 **Note for MSBuild SDK users:** SharpTS.Sdk requires .NET 10 SDK and uses modern C# features for optimal performance.
 
@@ -76,7 +76,7 @@ SharpTS supports two execution modes:
 dotnet tool install -g SharpTS
 ```
 
-**Or use the MSBuild SDK in a .NET project:**
+**Or use TypeScript in a .NET project:**
 
 ```xml
 <Project Sdk="SharpTS.Sdk/1.0.0">

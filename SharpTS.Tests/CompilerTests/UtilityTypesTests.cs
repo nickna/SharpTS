@@ -750,7 +750,7 @@ public class UtilityTypesTests
     public void ReturnType_WrongArgCount_Throws()
     {
         var source = """
-            type R = ReturnType<string, number>;
+            let x: ReturnType<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("ReturnType<T> requires exactly 1 type argument", ex.Message);
@@ -805,7 +805,7 @@ public class UtilityTypesTests
     public void Parameters_WrongArgCount_Throws()
     {
         var source = """
-            type P = Parameters<string, number>;
+            let x: Parameters<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Parameters<T> requires exactly 1 type argument", ex.Message);
@@ -848,7 +848,7 @@ public class UtilityTypesTests
     public void ConstructorParameters_WrongArgCount_Throws()
     {
         var source = """
-            type CP = ConstructorParameters<string, number>;
+            let x: ConstructorParameters<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("ConstructorParameters<T> requires exactly 1 type argument", ex.Message);
@@ -878,7 +878,7 @@ public class UtilityTypesTests
     public void InstanceType_WrongArgCount_Throws()
     {
         var source = """
-            type I = InstanceType<string, number>;
+            let x: InstanceType<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("InstanceType<T> requires exactly 1 type argument", ex.Message);
@@ -905,7 +905,7 @@ public class UtilityTypesTests
     public void ThisType_WrongArgCount_Throws()
     {
         var source = """
-            type T = ThisType<string, number>;
+            let x: ThisType<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("ThisType<T> requires exactly 1 type argument", ex.Message);
@@ -955,7 +955,7 @@ public class UtilityTypesTests
     public void Awaited_WrongArgCount_Throws()
     {
         var source = """
-            type A = Awaited<string, number>;
+            let x: Awaited<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Awaited<T> requires exactly 1 type argument", ex.Message);
@@ -1017,7 +1017,7 @@ public class UtilityTypesTests
     public void NonNullable_WrongArgCount_Throws()
     {
         var source = """
-            type NN = NonNullable<string, number>;
+            let x: NonNullable<string, number> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("NonNullable<T> requires exactly 1 type argument", ex.Message);
@@ -1068,7 +1068,7 @@ public class UtilityTypesTests
     public void Extract_WrongArgCount_Throws()
     {
         var source = """
-            type E = Extract<string>;
+            let x: Extract<string> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Extract<T, U> requires exactly 2 type arguments", ex.Message);
@@ -1119,7 +1119,7 @@ public class UtilityTypesTests
     public void Exclude_WrongArgCount_Throws()
     {
         var source = """
-            type E = Exclude<string>;
+            let x: Exclude<string> = null;
             """;
         var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
         Assert.Contains("Exclude<T, U> requires exactly 2 type arguments", ex.Message);

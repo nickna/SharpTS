@@ -280,6 +280,10 @@ This document tracks TypeScript language features and their implementation statu
 
 - Nested function declarations (functions defined inside other functions) are not supported. Workaround: define functions at module level.
 
+### Type Checker Limitations
+
+- Type alias declarations are lazily validated - errors in type alias definitions (e.g., `type R = ReturnType<string, number>;` with wrong arg count) are only caught when the alias is used, not at declaration time. TypeScript catches these at declaration.
+
 ### Recently Fixed Bugs (2026-01-13)
 - ~~`yield await expr` NullReferenceException~~ - Fixed: State analyzer now assigns yield state before visiting nested await, matching emitter execution order
 - ~~Generator variable capture for module-level variables~~ - Fixed: Generators correctly capture and use module-level variables including with `yield*`
