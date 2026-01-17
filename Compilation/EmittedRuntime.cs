@@ -138,6 +138,7 @@ public class EmittedRuntime
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
+    public MethodBuilder ObjectAssign { get; set; } = null!;
 
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;

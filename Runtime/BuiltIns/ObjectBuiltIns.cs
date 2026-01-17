@@ -92,6 +92,56 @@ public static class ObjectBuiltIns
                     _ => false
                 };
             }),
+            "assign" => new BuiltInMethod("assign", 1, int.MaxValue, (_, _, args) =>
+            {
+                // Object.assign(target, ...sources)
+                if (args.Count == 0 || args[0] == null)
+                    throw new Exception("Runtime Error: Object.assign() requires a target object");
+
+                // Handle SharpTSObject target
+                if (args[0] is SharpTSObject targetObj)
+                {
+                    for (int i = 1; i < args.Count; i++)
+                    {
+                        if (args[i] == null) continue;
+
+                        if (args[i] is SharpTSObject srcObj)
+                        {
+                            foreach (var kv in srcObj.Fields)
+                                targetObj.SetProperty(kv.Key, kv.Value);
+                        }
+                        else if (args[i] is SharpTSInstance srcInst)
+                        {
+                            foreach (var key in srcInst.GetFieldNames())
+                                targetObj.SetProperty(key, srcInst.GetRawField(key));
+                        }
+                    }
+                    return args[0];
+                }
+
+                // Handle SharpTSInstance target
+                if (args[0] is SharpTSInstance targetInst)
+                {
+                    for (int i = 1; i < args.Count; i++)
+                    {
+                        if (args[i] == null) continue;
+
+                        if (args[i] is SharpTSObject srcObj)
+                        {
+                            foreach (var kv in srcObj.Fields)
+                                targetInst.SetRawField(kv.Key, kv.Value);
+                        }
+                        else if (args[i] is SharpTSInstance srcInst)
+                        {
+                            foreach (var key in srcInst.GetFieldNames())
+                                targetInst.SetRawField(key, srcInst.GetRawField(key));
+                        }
+                    }
+                    return args[0];
+                }
+
+                throw new Exception("Runtime Error: Object.assign() target must be an object");
+            }),
             _ => null
         };
     }

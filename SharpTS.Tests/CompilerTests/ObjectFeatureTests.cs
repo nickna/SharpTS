@@ -673,4 +673,146 @@ public class ObjectFeatureTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("true\n", output);
     }
+
+    // Object.assign tests
+    [Fact]
+    public void Object_Assign_BasicMerge()
+    {
+        var source = """
+            let target: { a: number, b?: number } = { a: 1 };
+            let source: { b: number } = { b: 2 };
+            let result = Object.assign(target, source);
+            console.log(result.a);
+            console.log(result.b);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_ModifiesTarget()
+    {
+        var source = """
+            let target: { a: number, b?: number } = { a: 1 };
+            Object.assign(target, { b: 2 });
+            console.log(target.a);
+            console.log(target.b);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_MultipleSources()
+    {
+        var source = """
+            let target: any = { a: 1 };
+            let source1: { b: number } = { b: 2 };
+            let source2: { c: number } = { c: 3 };
+            Object.assign(target, source1, source2);
+            console.log(target.a);
+            console.log(target.b);
+            console.log(target.c);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_OverridesProperties()
+    {
+        var source = """
+            let target: { a: number } = { a: 1 };
+            Object.assign(target, { a: 100 });
+            console.log(target.a);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_LaterSourceWins()
+    {
+        var source = """
+            let target: { a: number } = { a: 1 };
+            Object.assign(target, { a: 2 }, { a: 3 });
+            console.log(target.a);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_ReturnsTarget()
+    {
+        var source = """
+            let target: { a: number } = { a: 1 };
+            let result = Object.assign(target, { b: 2 });
+            console.log(result === target);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_EmptySource()
+    {
+        var source = """
+            let target: { a: number } = { a: 1 };
+            Object.assign(target, {});
+            console.log(target.a);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_EmptyTarget()
+    {
+        var source = """
+            let target: any = {};
+            Object.assign(target, { a: 1, b: 2 });
+            console.log(target.a);
+            console.log(target.b);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_MixedTypes()
+    {
+        var source = """
+            let target: any = { a: 1 };
+            Object.assign(target, { b: "hello", c: true });
+            console.log(target.a);
+            console.log(target.b);
+            console.log(target.c);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\nhello\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_Assign_NestedObjects()
+    {
+        var source = """
+            let target: any = { a: 1 };
+            Object.assign(target, { nested: { x: 10 } });
+            console.log(target.a);
+            console.log(target.nested.x);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n10\n", output);
+    }
 }

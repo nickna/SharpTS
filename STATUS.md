@@ -217,7 +217,7 @@ This document tracks TypeScript language features and their implementation statu
 | `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
 | `Array.from()` | ✅ | Create array from iterable with optional map function |
 | `Array.of()` | ✅ | Create array from arguments |
-| `Object.assign()` | ❌ | Merge objects |
+| `Object.assign()` | ✅ | Merge objects - copies properties from one or more source objects to a target object, returns the target |
 | `Object.fromEntries()` | ✅ | Inverse of `Object.entries()` - converts iterable of [key, value] pairs to object |
 | `Object.hasOwn()` | ✅ | Safer `hasOwnProperty` check - returns true for own properties, false for methods |
 | `Object.freeze()`/`seal()` | ❌ | Object immutability |

@@ -62,6 +62,28 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 // Box the bool result for consistency with other methods
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
+            case "assign":
+                // Object.assign(target, ...sources)
+                // First argument (target) is already on the stack
+                // Create a List<object> for all source arguments
+                var listType = typeof(List<object?>);
+                var listCtor = listType.GetConstructor(Type.EmptyTypes)!;
+                var listAdd = listType.GetMethod("Add")!;
+
+                // Create the sources list
+                il.Emit(OpCodes.Newobj, listCtor);
+
+                // Add each source argument to the list
+                for (int i = 1; i < arguments.Count; i++)
+                {
+                    il.Emit(OpCodes.Dup);  // Duplicate list reference
+                    emitter.EmitExpression(arguments[i]);
+                    emitter.EmitBoxIfNeeded(arguments[i]);
+                    il.Emit(OpCodes.Callvirt, listAdd);
+                }
+
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectAssign);
+                return true;
             default:
                 // Pop the argument we pushed and return false
                 il.Emit(OpCodes.Pop);

@@ -1180,5 +1180,139 @@ public partial class RuntimeEmitter
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits Object.assign(target, sources) - copies properties from sources to target.
+    /// Signature: object ObjectAssign(object target, List&lt;object&gt; sources)
+    /// </summary>
+    private void EmitObjectAssign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectAssign",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ListOfObject]
+        );
+        runtime.ObjectAssign = method;
+
+        var il = method.GetILGenerator();
+        var dictType = _types.DictionaryStringObject;
+        var listType = _types.ListOfObject;
+        var kvpType = typeof(KeyValuePair<string, object?>);
+
+        // Locals
+        var targetDictLocal = il.DeclareLocal(dictType);
+        var sourceIndexLocal = il.DeclareLocal(_types.Int32);
+        var sourceLocal = il.DeclareLocal(_types.Object);
+        var sourceDictLocal = il.DeclareLocal(dictType);
+        var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object?>.Enumerator));
+        var kvpLocal = il.DeclareLocal(kvpType);
+
+        var targetNullLabel = il.DefineLabel();
+        var notDictLabel = il.DefineLabel();
+        var sourceLoopStart = il.DefineLabel();
+        var sourceLoopEnd = il.DefineLabel();
+        var nextSource = il.DefineLabel();
+        var sourceNotDict = il.DefineLabel();
+        var copyLoopStart = il.DefineLabel();
+        var copyLoopEnd = il.DefineLabel();
+        var returnLabel = il.DefineLabel();
+
+        // Check if target is null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, targetNullLabel);
+
+        // Check if target is Dictionary<string, object>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, targetDictLocal);
+        il.Emit(OpCodes.Ldloc, targetDictLocal);
+        il.Emit(OpCodes.Brfalse, notDictLabel);
+
+        // Iterate over sources
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, sourceIndexLocal);
+
+        il.MarkLabel(sourceLoopStart);
+        // Check if sourceIndex < sources.Count
+        il.Emit(OpCodes.Ldloc, sourceIndexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Bge, sourceLoopEnd);
+
+        // Get source = sources[sourceIndex]
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, sourceIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, sourceLocal);
+
+        // If source is null, skip
+        il.Emit(OpCodes.Ldloc, sourceLocal);
+        il.Emit(OpCodes.Brfalse, nextSource);
+
+        // Check if source is Dictionary<string, object>
+        il.Emit(OpCodes.Ldloc, sourceLocal);
+        il.Emit(OpCodes.Isinst, dictType);
+        il.Emit(OpCodes.Stloc, sourceDictLocal);
+        il.Emit(OpCodes.Ldloc, sourceDictLocal);
+        il.Emit(OpCodes.Brfalse, nextSource);  // Skip non-dict sources for now
+
+        // Get enumerator for source dictionary
+        il.Emit(OpCodes.Ldloc, sourceDictLocal);
+        il.Emit(OpCodes.Callvirt, dictType.GetMethod("GetEnumerator")!);
+        il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        // Copy loop
+        il.MarkLabel(copyLoopStart);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, typeof(Dictionary<string, object?>.Enumerator).GetMethod("MoveNext")!);
+        il.Emit(OpCodes.Brfalse, copyLoopEnd);
+
+        // Get current kvp
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, typeof(Dictionary<string, object?>.Enumerator).GetProperty("Current")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, kvpLocal);
+
+        // target[kvp.Key] = kvp.Value
+        il.Emit(OpCodes.Ldloc, targetDictLocal);
+        il.Emit(OpCodes.Ldloca, kvpLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Key")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloca, kvpLocal);
+        il.Emit(OpCodes.Call, kvpType.GetProperty("Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
+
+        il.Emit(OpCodes.Br, copyLoopStart);
+
+        il.MarkLabel(copyLoopEnd);
+        // Dispose enumerator (it's a struct, so just call Dispose)
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, typeof(Dictionary<string, object?>.Enumerator).GetMethod("Dispose")!);
+
+        il.MarkLabel(nextSource);
+        // Increment sourceIndex
+        il.Emit(OpCodes.Ldloc, sourceIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, sourceIndexLocal);
+        il.Emit(OpCodes.Br, sourceLoopStart);
+
+        il.MarkLabel(sourceLoopEnd);
+        il.Emit(OpCodes.Br, returnLabel);
+
+        // Target is not a dictionary - just return it unchanged for now
+        il.MarkLabel(notDictLabel);
+        il.Emit(OpCodes.Br, returnLabel);
+
+        // Target is null - throw exception
+        il.MarkLabel(targetNullLabel);
+        il.Emit(OpCodes.Ldstr, "Runtime Error: Object.assign() requires a target object");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Return target
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

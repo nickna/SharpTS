@@ -107,6 +107,7 @@ public static class BuiltInTypes
             "entries" => new TypeInfo.Function([AnyType], new TypeInfo.Array(AnyType)),
             "fromEntries" => new TypeInfo.Function([AnyType], AnyType),
             "hasOwn" => new TypeInfo.Function([AnyType, StringType], BooleanType),
+            "assign" => new TypeInfo.Function([AnyType], AnyType),  // target, ...sources
             _ => null
         };
     }
