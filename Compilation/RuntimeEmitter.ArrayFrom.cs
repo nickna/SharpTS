@@ -113,4 +113,26 @@ public partial class RuntimeEmitter
         il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits ArrayOf: creates an array from arguments.
+    /// Signature: List&lt;object&gt; ArrayOf(object[] args)
+    /// </summary>
+    private void EmitArrayOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayOf",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ObjectArray]
+        );
+        runtime.ArrayOf = method;
+
+        var il = method.GetILGenerator();
+
+        // Create new List<object>(args) using the IEnumerable<T> constructor
+        il.Emit(OpCodes.Ldarg_0);  // args array
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, typeof(IEnumerable<object>)));
+        il.Emit(OpCodes.Ret);
+    }
 }

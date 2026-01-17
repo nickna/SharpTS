@@ -61,6 +61,22 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFrom);
                 return true;
+            case "of":
+                // Create an object[] from all arguments
+                il.Emit(OpCodes.Ldc_I4, arguments.Count);
+                il.Emit(OpCodes.Newarr, ctx.Types.Object);
+
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, i);
+                    emitter.EmitExpression(arguments[i]);
+                    emitter.EmitBoxIfNeeded(arguments[i]);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOf);
+                return true;
             default:
                 return false;
         }

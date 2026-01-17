@@ -121,6 +121,11 @@ public static class BuiltInTypes
                 [AnyType, new TypeInfo.Function([AnyType, NumberType], AnyType)],
                 new TypeInfo.Array(AnyType),
                 RequiredParams: 1),  // mapFn is optional
+            "of" => new TypeInfo.Function(
+                [new TypeInfo.Array(AnyType)],  // rest parameter
+                new TypeInfo.Array(AnyType),
+                RequiredParams: 0,
+                HasRestParam: true),
             _ => null
         };
     }

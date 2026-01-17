@@ -78,6 +78,7 @@ public class EmittedRuntime
     public MethodBuilder GetEntries { get; set; } = null!;
     public MethodBuilder IsArray { get; set; } = null!;
     public MethodBuilder ArrayFrom { get; set; } = null!;
+    public MethodBuilder ArrayOf { get; set; } = null!;
     public MethodBuilder SpreadArray { get; set; } = null!;
     public MethodBuilder ConcatArrays { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;

@@ -200,4 +200,73 @@ public class ArrayStaticTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("3\n", output);
     }
+
+    [Fact]
+    public void Array_Of_CreatesArrayFromArguments()
+    {
+        var source = """
+            let arr = Array.of(1, 2, 3);
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[1]);
+            console.log(arr[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("3\n1\n2\n3\n", output);
+    }
+
+    [Fact]
+    public void Array_Of_SingleNumber()
+    {
+        var source = """
+            let arr = Array.of(7);
+            console.log(arr.length);
+            console.log(arr[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n7\n", output);
+    }
+
+    [Fact]
+    public void Array_Of_NoArguments()
+    {
+        var source = """
+            let arr = Array.of();
+            console.log(arr.length);
+            console.log(Array.isArray(arr));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Array_Of_MixedTypes()
+    {
+        var source = """
+            let arr = Array.of(1, "two", true, null);
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[1]);
+            console.log(arr[2]);
+            console.log(arr[3]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("4\n1\ntwo\ntrue\nnull\n", output);
+    }
+
+    [Fact]
+    public void Array_Of_WithStrings()
+    {
+        var source = """
+            let arr = Array.of("a", "b", "c");
+            console.log(arr.join("-"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("a-b-c\n", output);
+    }
 }

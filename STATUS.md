@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added optional catch binding and Array.from())
+**Last Updated:** 2026-01-16 (Added optional catch binding, Array.from(), and Array.of())
 
 ## Legend
 - ✅ Implemented
@@ -216,7 +216,7 @@ This document tracks TypeScript language features and their implementation statu
 | `WeakMap`/`WeakSet` | ✅ | Full API (get, set, has, delete for WeakMap; add, has, delete for WeakSet); object-only keys/values; no iteration or size |
 | `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
 | `Array.from()` | ✅ | Create array from iterable with optional map function |
-| `Array.of()` | ❌ | Create array from arguments |
+| `Array.of()` | ✅ | Create array from arguments |
 | `Object.assign()` | ❌ | Merge objects |
 | `Object.fromEntries()` | ❌ | Inverse of `Object.entries()` |
 | `Object.hasOwn()` | ❌ | Safer `hasOwnProperty` check |

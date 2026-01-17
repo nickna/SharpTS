@@ -34,6 +34,11 @@ public static class ArrayStaticBuiltIns
 
                 return new SharpTSArray(elements);
             }),
+            "of" => new BuiltInMethod("of", 0, int.MaxValue, (_, _, args) =>
+            {
+                // Array.of() creates an array from all arguments
+                return new SharpTSArray(args.ToList());
+            }),
             _ => null
         };
     }
