@@ -3,6 +3,14 @@ using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.BuiltIns;
 
+/// <summary>
+/// Provides type signatures for built-in JavaScript types (strings, arrays, errors, etc.).
+/// Used by the TypeChecker to validate method calls and property access on built-in types.
+/// </summary>
+/// <remarks>
+/// For Error types, this class provides type information while <see cref="ErrorBuiltIns"/>
+/// provides the runtime implementation. These must be kept in sync.
+/// </remarks>
 public static class BuiltInTypes
 {
     private static readonly TypeInfo NumberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
@@ -257,6 +265,11 @@ public static class BuiltInTypes
     /// </summary>
     /// <param name="name">The member name to look up</param>
     /// <param name="errorTypeName">The specific error type name (e.g., "Error", "TypeError")</param>
+    /// <remarks>
+    /// Runtime implementation is in <see cref="ErrorBuiltIns.GetMember"/>.
+    /// Property mutability is controlled by <see cref="ErrorBuiltIns.CanSetProperty"/>.
+    /// Valid error type names are defined in <see cref="ErrorBuiltIns.TypeNames"/>.
+    /// </remarks>
     public static TypeInfo? GetErrorMemberType(string name, string errorTypeName)
     {
         return name switch

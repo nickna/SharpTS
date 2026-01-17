@@ -407,11 +407,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Checks if a type name is a built-in Error type.
+    /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
-    private static bool IsErrorType(string name) => name switch
-    {
-        "Error" or "TypeError" or "RangeError" or "ReferenceError" or
-        "SyntaxError" or "URIError" or "EvalError" or "AggregateError" => true,
-        _ => false
-    };
+    private static bool IsErrorType(string name) => ErrorBuiltIns.IsErrorTypeName(name);
 }

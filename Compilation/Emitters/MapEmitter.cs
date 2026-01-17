@@ -94,6 +94,15 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         return true;
     }
 
+    /// <summary>
+    /// Attempts to emit IL for a property set on a Map receiver.
+    /// Map properties are not directly settable.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        return false;
+    }
+
     #region Helper Methods
 
     private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)

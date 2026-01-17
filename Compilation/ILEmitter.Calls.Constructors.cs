@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -367,8 +368,7 @@ public partial class ILEmitter
 
     /// <summary>
     /// Checks if a name is a built-in Error type name.
+    /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
-    private static bool IsErrorTypeName(string name) => name is
-        "Error" or "TypeError" or "RangeError" or "ReferenceError" or
-        "SyntaxError" or "URIError" or "EvalError" or "AggregateError";
+    private static bool IsErrorTypeName(string name) => ErrorBuiltIns.IsErrorTypeName(name);
 }

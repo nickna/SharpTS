@@ -55,6 +55,15 @@ public sealed class WeakSetEmitter : ITypeEmitterStrategy
         return false;
     }
 
+    /// <summary>
+    /// Attempts to emit IL for a property set on a WeakSet receiver.
+    /// WeakSet properties are not directly settable.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        return false;
+    }
+
     #region Helper Methods
 
     private static void EmitSingleArgOrNull(IEmitterContext emitter, List<Expr> arguments)

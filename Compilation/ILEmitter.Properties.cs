@@ -1,5 +1,6 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -272,34 +273,15 @@ public partial class ILEmitter
             return;
         }
 
-        // Special case: Error property setters (name, message, stack)
-        if (objType is TypeInfo.Error && s.Name.Lexeme is "name" or "message" or "stack")
+        // Type-first dispatch: Use TypeEmitterRegistry for property setters
+        if (objType != null && _ctx.TypeEmitterRegistry != null)
         {
-            EmitExpression(s.Object);
-            EmitBoxIfNeeded(s.Object);
-            EmitExpression(s.Value);
-            EmitBoxIfNeeded(s.Value);
-            // Dup value for expression result
-            IL.Emit(OpCodes.Dup);
-            var valueTemp = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, valueTemp);
-            // Convert to string
-            IL.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString", Type.EmptyTypes)!);
-            switch (s.Name.Lexeme)
+            var strategy = _ctx.TypeEmitterRegistry.GetStrategy(objType);
+            if (strategy != null && strategy.TryEmitPropertySet(this, s.Object, s.Name.Lexeme, s.Value))
             {
-                case "name":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetName);
-                    break;
-                case "message":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetMessage);
-                    break;
-                case "stack":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetStack);
-                    break;
+                SetStackUnknown();
+                return;
             }
-            // Put value back on stack
-            IL.Emit(OpCodes.Ldloc, valueTemp);
-            return;
         }
 
         // Build stack for SetProperty(obj, name, value)

@@ -26,6 +26,16 @@ public interface ITypeEmitterStrategy
     /// <param name="propertyName">The name of the property being accessed.</param>
     /// <returns>True if this strategy handled the property access; false to try the next strategy.</returns>
     bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName);
+
+    /// <summary>
+    /// Attempts to emit IL for a property set on the receiver.
+    /// </summary>
+    /// <param name="emitter">The emitter context for code generation.</param>
+    /// <param name="receiver">The expression representing the receiver object.</param>
+    /// <param name="propertyName">The name of the property being set.</param>
+    /// <param name="value">The expression representing the value to set.</param>
+    /// <returns>True if this strategy handled the property set; false to try the next strategy.</returns>
+    bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value);
 }
 
 /// <summary>

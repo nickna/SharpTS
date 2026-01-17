@@ -134,6 +134,15 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         return false;
     }
 
+    /// <summary>
+    /// Attempts to emit IL for a property set on an array receiver.
+    /// Array properties are not directly settable.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        return false;
+    }
+
     #region Helper Methods
 
     /// <summary>

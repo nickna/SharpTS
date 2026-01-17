@@ -87,4 +87,13 @@ public sealed class AsyncGeneratorEmitter : ITypeEmitterStrategy
         // Async generators don't have special properties we need to handle
         return false;
     }
+
+    /// <summary>
+    /// Attempts to emit IL for a property set on an async generator receiver.
+    /// Async generators don't have settable properties.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        return false;
+    }
 }

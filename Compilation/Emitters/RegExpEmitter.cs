@@ -88,6 +88,16 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         }
     }
 
+    /// <summary>
+    /// Attempts to emit IL for a property set on a RegExp receiver.
+    /// Only lastIndex is mutable, but it's handled inline in ILEmitter.Properties.cs.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        // RegExp.lastIndex is handled specially in ILEmitter.Properties.cs
+        return false;
+    }
+
     #region Helper Methods
 
     /// <summary>

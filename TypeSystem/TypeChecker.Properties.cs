@@ -551,7 +551,7 @@ public partial class TypeChecker
         if (objType is TypeInfo.Error)
         {
             string propName = set.Name.Lexeme;
-            if (propName is "name" or "message" or "stack")
+            if (ErrorBuiltIns.CanSetProperty(propName))
             {
                 TypeInfo valueType = CheckExpr(set.Value);
                 if (!IsCompatible(new TypeInfo.String(), valueType))

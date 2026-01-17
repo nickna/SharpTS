@@ -5,9 +5,47 @@ namespace SharpTS.Runtime.BuiltIns;
 /// <summary>
 /// Provides implementations for JavaScript Error object members.
 /// Handles property access (name, message, stack) and methods (toString).
+/// This class is the central source of truth for Error type knowledge.
 /// </summary>
+/// <remarks>
+/// IMPORTANT: This class must be kept in sync with BuiltInTypes.RegisterErrorTypes().
+/// When adding new Error types, update both TypeNames here and the registration in BuiltInTypes.
+/// </remarks>
 public static class ErrorBuiltIns
 {
+    /// <summary>
+    /// The set of all built-in JavaScript Error type names.
+    /// Used by TypeChecker, Interpreter, and ILEmitter to identify Error types.
+    /// </summary>
+    public static readonly HashSet<string> TypeNames = new(StringComparer.Ordinal)
+    {
+        "Error", "TypeError", "RangeError", "ReferenceError",
+        "SyntaxError", "URIError", "EvalError", "AggregateError"
+    };
+
+    /// <summary>
+    /// Checks if a name is a built-in JavaScript Error type name.
+    /// </summary>
+    /// <param name="name">The type name to check.</param>
+    /// <returns>True if the name is a built-in Error type; otherwise false.</returns>
+    public static bool IsErrorTypeName(string name) => TypeNames.Contains(name);
+
+    /// <summary>
+    /// The set of mutable property names on Error objects.
+    /// These properties (name, message, stack) can be assigned new values.
+    /// </summary>
+    public static readonly HashSet<string> MutableProperties = new(StringComparer.Ordinal)
+    {
+        "name", "message", "stack"
+    };
+
+    /// <summary>
+    /// Checks if a property on an Error object can be set (is mutable).
+    /// </summary>
+    /// <param name="propertyName">The property name to check.</param>
+    /// <returns>True if the property can be set; otherwise false.</returns>
+    public static bool CanSetProperty(string propertyName) => MutableProperties.Contains(propertyName);
+
     /// <summary>
     /// Gets an instance member (property or method) for an Error object.
     /// </summary>

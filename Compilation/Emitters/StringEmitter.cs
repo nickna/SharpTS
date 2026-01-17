@@ -149,6 +149,15 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         return true;
     }
 
+    /// <summary>
+    /// Attempts to emit IL for a property set on a string receiver.
+    /// Strings are immutable in TypeScript/JavaScript.
+    /// </summary>
+    public bool TryEmitPropertySet(IEmitterContext emitter, Expr receiver, string propertyName, Expr value)
+    {
+        return false;
+    }
+
     #region String Method Implementations
 
     private static void EmitCharAt(IEmitterContext emitter, List<Expr> arguments)
