@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(RandomNumberGenerator).GetMethod("GetBytes", [typeof(int)])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // Create List<object?> for SharpTSArray
+        // Create List<object?> for $Array
         var listType = _types.ListOfObject;
         var listCtor = _types.GetConstructor(listType, _types.Int32);
         var listAdd = _types.GetMethod(listType, "Add", _types.Object);
@@ -101,11 +101,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
 
-        // Return new SharpTSArray(list)
-        var arrayType = typeof(Runtime.Types.SharpTSArray);
-        var arrayCtor = arrayType.GetConstructor([typeof(List<object?>)])!;
+        // Return new $Array(list)
         il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, arrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
         il.Emit(OpCodes.Ret);
     }
 }

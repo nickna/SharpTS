@@ -2,7 +2,6 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Modules;
 using SharpTS.Parsing;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -163,9 +162,9 @@ public partial class ILCompiler
             il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
         }
 
-        // return new SharpTSObject(dict);
+        // return $Runtime.CreateObject(dict);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, typeof(SharpTSObject).GetConstructor([dictType])!);
+        il.Emit(OpCodes.Call, _runtime.CreateObject);
         il.Emit(OpCodes.Ret);
     }
 

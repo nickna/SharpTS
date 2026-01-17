@@ -293,10 +293,8 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // Call SystemInfoHelper.GetFreeMemoryBytes() for accurate cross-platform memory info
-        var helperType = typeof(SharpTS.Runtime.BuiltIns.SystemInfoHelper);
-        var method = helperType.GetMethod("GetFreeMemoryBytes")!;
-        il.Emit(OpCodes.Call, method);
+        // Call emitted OsFreemem helper for standalone assemblies
+        il.Emit(OpCodes.Call, ctx.Runtime!.OsFreemem);
         il.Emit(OpCodes.Box, ctx.Types.Double);
         return true;
     }

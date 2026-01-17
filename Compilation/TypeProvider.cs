@@ -117,6 +117,8 @@ public class TypeProvider
     public Type Activator => Resolve("System.Activator");
     public Type Random => Resolve("System.Random");
     public Type Stopwatch => Resolve("System.Diagnostics.Stopwatch");
+    public Type StackTrace => Resolve("System.Diagnostics.StackTrace");
+    public Type StackFrame => Resolve("System.Diagnostics.StackFrame");
     public Type Interlocked => Resolve("System.Threading.Interlocked");
     public Type Version => Resolve("System.Version");
     public Type GC => Resolve("System.GC");

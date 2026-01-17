@@ -356,7 +356,52 @@ public class EmittedRuntime
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
     public MethodBuilder StringSplitRegExp { get; set; } = null!;
 
-    // Error support
+    // Error support - emitted types for standalone assemblies
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
+
+    // $Error base class
+    public Type TSErrorType { get; set; } = null!;
+    public ConstructorBuilder TSErrorCtorMessage { get; set; } = null!;
+    public ConstructorBuilder TSErrorCtorNameMessage { get; set; } = null!;
+    public MethodBuilder TSErrorNameGetter { get; set; } = null!;
+    public MethodBuilder TSErrorNameSetter { get; set; } = null!;
+    public MethodBuilder TSErrorMessageGetter { get; set; } = null!;
+    public MethodBuilder TSErrorMessageSetter { get; set; } = null!;
+    public MethodBuilder TSErrorStackGetter { get; set; } = null!;
+    public MethodBuilder TSErrorStackSetter { get; set; } = null!;
+    public MethodBuilder TSErrorToStringMethod { get; set; } = null!;
+    public MethodBuilder TSErrorCaptureStackTrace { get; set; } = null!;
+
+    // $TypeError
+    public Type TSTypeErrorType { get; set; } = null!;
+    public ConstructorBuilder TSTypeErrorCtor { get; set; } = null!;
+
+    // $RangeError
+    public Type TSRangeErrorType { get; set; } = null!;
+    public ConstructorBuilder TSRangeErrorCtor { get; set; } = null!;
+
+    // $ReferenceError
+    public Type TSReferenceErrorType { get; set; } = null!;
+    public ConstructorBuilder TSReferenceErrorCtor { get; set; } = null!;
+
+    // $SyntaxError
+    public Type TSSyntaxErrorType { get; set; } = null!;
+    public ConstructorBuilder TSSyntaxErrorCtor { get; set; } = null!;
+
+    // $URIError
+    public Type TSURIErrorType { get; set; } = null!;
+    public ConstructorBuilder TSURIErrorCtor { get; set; } = null!;
+
+    // $EvalError
+    public Type TSEvalErrorType { get; set; } = null!;
+    public ConstructorBuilder TSEvalErrorCtor { get; set; } = null!;
+
+    // $AggregateError
+    public Type TSAggregateErrorType { get; set; } = null!;
+    public ConstructorBuilder TSAggregateErrorCtor { get; set; } = null!;
+    public MethodBuilder TSAggregateErrorErrorsGetter { get; set; } = null!;
+
+    // Error helper methods in $Runtime
     public MethodBuilder CreateError { get; set; } = null!;
     public MethodBuilder ErrorGetName { get; set; } = null!;
     public MethodBuilder ErrorGetMessage { get; set; } = null!;
@@ -367,9 +412,54 @@ public class EmittedRuntime
     public MethodBuilder ErrorToString { get; set; } = null!;
     public MethodBuilder AggregateErrorGetErrors { get; set; } = null!;
 
+    // Promise type - emitted for standalone assemblies
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
+    public Type TSPromiseType { get; set; } = null!;
+    public ConstructorBuilder TSPromiseCtor { get; set; } = null!;
+    public MethodBuilder TSPromiseTaskGetter { get; set; } = null!;
+    public MethodBuilder TSPromiseResolve { get; set; } = null!;
+    public MethodBuilder TSPromiseReject { get; set; } = null!;
+    public MethodBuilder TSPromiseGetValueAsync { get; set; } = null!;
+
+    // Promise rejected exception
+    public Type TSPromiseRejectedExceptionType { get; set; } = null!;
+    public ConstructorBuilder TSPromiseRejectedExceptionCtor { get; set; } = null!;
+    public MethodBuilder TSPromiseRejectedExceptionReasonGetter { get; set; } = null!;
+
     // Dynamic import support
     public MethodBuilder DynamicImportModule { get; set; } = null!;
     public MethodBuilder WrapTaskAsPromise { get; set; } = null!;
+
+    // $Array type - emitted for standalone assemblies
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
+    public Type TSArrayType { get; set; } = null!;
+    public ConstructorBuilder TSArrayCtor { get; set; } = null!;
+    public MethodBuilder TSArrayElementsGetter { get; set; } = null!;
+    public MethodBuilder TSArrayIsFrozenGetter { get; set; } = null!;
+    public MethodBuilder TSArrayIsSealedGetter { get; set; } = null!;
+    public MethodBuilder TSArrayFreeze { get; set; } = null!;
+    public MethodBuilder TSArraySeal { get; set; } = null!;
+    public MethodBuilder TSArrayGet { get; set; } = null!;
+    public MethodBuilder TSArraySet { get; set; } = null!;
+    public MethodBuilder TSArraySetStrict { get; set; } = null!;
+    public MethodBuilder TSArrayToString { get; set; } = null!;
+
+    // $Object type - emitted for standalone assemblies
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
+    public Type TSObjectType { get; set; } = null!;
+    public ConstructorBuilder TSObjectCtor { get; set; } = null!;
+    public MethodBuilder TSObjectFieldsGetter { get; set; } = null!;
+    public MethodBuilder TSObjectIsFrozenGetter { get; set; } = null!;
+    public MethodBuilder TSObjectIsSealedGetter { get; set; } = null!;
+    public MethodBuilder TSObjectFreeze { get; set; } = null!;
+    public MethodBuilder TSObjectSeal { get; set; } = null!;
+    public MethodBuilder TSObjectGetProperty { get; set; } = null!;
+    public MethodBuilder TSObjectSetProperty { get; set; } = null!;
+    public MethodBuilder TSObjectSetPropertyStrict { get; set; } = null!;
+    public MethodBuilder TSObjectHasProperty { get; set; } = null!;
+    public MethodBuilder TSObjectDeleteProperty { get; set; } = null!;
+    public MethodBuilder TSObjectGetKeys { get; set; } = null!;
+    public MethodBuilder TSObjectToString { get; set; } = null!;
 
     // Module registry for dynamic imports
     // Stores mapping from module path -> factory function that returns module namespace
@@ -405,6 +495,9 @@ public class EmittedRuntime
 
     // Async Generator await continuation helper
     public MethodBuilder AsyncGeneratorAwaitContinue { get; set; } = null!;
+
+    // OS module methods
+    public MethodBuilder OsFreemem { get; set; } = null!;
 
     // Path module methods
     public MethodBuilder PathFormat { get; set; } = null!;

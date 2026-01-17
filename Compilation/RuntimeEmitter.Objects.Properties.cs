@@ -528,10 +528,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
-        // SharpTSArray - check for "length" (wrapper around List<object?>)
+        // $Array - check for "length" (wrapper around List<object?>)
         var sharpTSArrayLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.SharpTSArray);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
 
         // String - check for "length"
@@ -620,7 +620,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
         il.Emit(OpCodes.Ret);
 
-        // SharpTSArray handler - access Elements.Count for "length"
+        // $Array handler - access Elements.Count for "length"
         il.MarkLabel(sharpTSArrayLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
@@ -629,14 +629,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notSharpTSArrayLengthLabel);
         // Get arr.Elements.Count
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.SharpTSArray);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.SharpTSArray, "Elements").GetGetMethod()!);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObjectNullable, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSharpTSArrayLengthLabel);
-        // For other properties on SharpTSArray, fall through to GetFieldsProperty
+        // For other properties on $Array, fall through to GetFieldsProperty
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
@@ -752,10 +752,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check if SharpTSObject
+        // Check if $Object
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.SharpTSObject);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
 
         // Dictionary
@@ -763,7 +763,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
-        // Not a dict or SharpTSObject - fall back to SetFieldsPropertyStrict
+        // Not a dict or $Object - fall back to SetFieldsPropertyStrict
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
@@ -771,14 +771,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.SetFieldsPropertyStrict);
         il.Emit(OpCodes.Ret);
 
-        // SharpTSObject - call SetPropertyStrict
+        // $Object - call SetPropertyStrict
         il.MarkLabel(sharpTSObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.SharpTSObject);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_3); // strictMode
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.SharpTSObject, "SetPropertyStrict", _types.String, _types.Object, _types.Boolean));
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectSetPropertyStrict);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);
@@ -871,9 +871,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check if SharpTSArray (for strict mode support)
+        // Check if $Array (for strict mode support)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.SharpTSArray);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
 
         // List<object?>
@@ -889,17 +889,17 @@ public partial class RuntimeEmitter
         // Default - just return
         il.Emit(OpCodes.Ret);
 
-        // SharpTSArray - call SetStrict with index and strictMode
+        // $Array - call SetStrict with index and strictMode
         il.MarkLabel(sharpTSArrayLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.SharpTSArray);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         // Convert index to int: (int)(double)index
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_2); // value
         il.Emit(OpCodes.Ldarg_3); // strictMode
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.SharpTSArray, "SetStrict", _types.Int32, _types.Object, _types.Boolean));
+        il.Emit(OpCodes.Callvirt, runtime.TSArraySetStrict);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

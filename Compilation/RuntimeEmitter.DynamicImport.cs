@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -104,24 +103,24 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits WrapTaskAsPromise: wraps Task&lt;object?&gt; in SharpTSPromise.
-    /// Signature: SharpTSPromise WrapTaskAsPromise(Task&lt;object?&gt; task)
+    /// Emits WrapTaskAsPromise: wraps Task&lt;object?&gt; in $Promise.
+    /// Signature: $Promise WrapTaskAsPromise(Task&lt;object?&gt; task)
     /// </summary>
     private void EmitWrapTaskAsPromise(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "WrapTaskAsPromise",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(SharpTSPromise),
+            runtime.TSPromiseType,
             [_types.TaskOfObject]
         );
         runtime.WrapTaskAsPromise = method;
 
         var il = method.GetILGenerator();
 
-        // return new SharpTSPromise(task);
+        // return new $Promise(task);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(SharpTSPromise).GetConstructor([typeof(Task<object?>)])!);
+        il.Emit(OpCodes.Newobj, runtime.TSPromiseCtor);
         il.Emit(OpCodes.Ret);
     }
 

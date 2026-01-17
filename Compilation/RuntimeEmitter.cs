@@ -55,6 +55,22 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDate
         EmitTSDateClass(moduleBuilder, runtime);
 
+        // Emit $Error class hierarchy for standalone error support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
+        EmitTSErrorClasses(moduleBuilder, runtime);
+
+        // Emit $Promise class for standalone Promise support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
+        EmitTSPromiseClass(moduleBuilder, runtime);
+
+        // Emit $Array class for standalone array support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
+        EmitTSArrayClass(moduleBuilder, runtime);
+
+        // Emit $Object class for standalone object support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
+        EmitTSObjectClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -1397,6 +1413,7 @@ public partial class RuntimeEmitter
         // Built-in module methods (path, fs, os)
         EmitPathModuleMethods(typeBuilder, runtime);
         EmitFsModuleMethods(typeBuilder, runtime);
+        EmitOsModuleMethods(typeBuilder, runtime);
         // Emit wrapper methods for named imports
         EmitFsModuleMethodWrappers(typeBuilder, runtime);
         EmitPathModulePropertyWrappers(typeBuilder, runtime);
