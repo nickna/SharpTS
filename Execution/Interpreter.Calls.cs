@@ -93,6 +93,13 @@ public partial class Interpreter
             return new SharpTSDate().ToString();
         }
 
+        // Handle Error() and error subtypes called without 'new' - still creates an error object
+        if (call.Callee is Expr.Variable errorVar && IsErrorType(errorVar.Name.Lexeme))
+        {
+            List<object?> args = call.Arguments.Select(Evaluate).ToList();
+            return ErrorBuiltIns.CreateError(errorVar.Name.Lexeme, args);
+        }
+
         // Handle global parseInt()
         if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
         {

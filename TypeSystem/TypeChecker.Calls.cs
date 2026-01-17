@@ -63,6 +63,51 @@ public partial class TypeChecker
             return new TypeInfo.String();
         }
 
+        // Handle Error() and error subtypes called without 'new' - still creates error objects
+        if (call.Callee is Expr.Variable errorVar && IsErrorTypeName(errorVar.Name.Lexeme))
+        {
+            // Error constructors accept 0-1 argument (optional message)
+            // AggregateError accepts 0-2 arguments (errors array, optional message)
+            int maxArgs = errorVar.Name.Lexeme == "AggregateError" ? 2 : 1;
+            if (call.Arguments.Count > maxArgs)
+            {
+                throw new TypeCheckException($" {errorVar.Name.Lexeme}() accepts at most {maxArgs} argument(s).");
+            }
+
+            // Validate argument types
+            if (call.Arguments.Count >= 1)
+            {
+                var firstArgType = CheckExpr(call.Arguments[0]);
+                if (errorVar.Name.Lexeme == "AggregateError")
+                {
+                    // First argument should be an array of errors
+                    if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($" AggregateError first argument must be an array, got '{firstArgType}'.");
+                    }
+                }
+                else
+                {
+                    // For other error types, first argument should be a string message
+                    if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($" {errorVar.Name.Lexeme}() message must be a string, got '{firstArgType}'.");
+                    }
+                }
+            }
+
+            if (call.Arguments.Count == 2)
+            {
+                var secondArgType = CheckExpr(call.Arguments[1]);
+                if (!IsString(secondArgType) && secondArgType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($" AggregateError message must be a string, got '{secondArgType}'.");
+                }
+            }
+
+            return new TypeInfo.Error(errorVar.Name.Lexeme);
+        }
+
         // Handle Object.keys(), Object.values(), Object.entries()
         if (call.Callee is Expr.Get get &&
             get.Object is Expr.Variable objVar &&

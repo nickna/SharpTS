@@ -4,8 +4,9 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.CallHandlers;
 
 /// <summary>
-/// Handles built-in constructor-like function calls: Symbol(), BigInt(), Date().
+/// Handles built-in constructor-like function calls: Symbol(), BigInt(), Date(), Error(), etc.
 /// Note: Date() without 'new' returns current date as string.
+/// Note: Error() without 'new' still creates an error object (same as with 'new').
 /// </summary>
 public class BuiltInConstructorHandler : ICallHandler
 {
@@ -21,6 +22,9 @@ public class BuiltInConstructorHandler : ICallHandler
             "Symbol" => EmitSymbol(emitter, call),
             "BigInt" => EmitBigInt(emitter, call),
             "Date" => EmitDate(emitter, call),
+            "Error" or "TypeError" or "RangeError" or "ReferenceError" or
+            "SyntaxError" or "URIError" or "EvalError" or "AggregateError" =>
+                EmitError(emitter, call, v.Name.Lexeme),
             _ => false
         };
     }
@@ -70,6 +74,33 @@ public class BuiltInConstructorHandler : ICallHandler
         // Date() without 'new' returns current date as string
         il.Emit(OpCodes.Call, ctx.Runtime!.CreateDateNoArgs);
         il.Emit(OpCodes.Call, ctx.Runtime!.DateToString);
+        return true;
+    }
+
+    private static bool EmitError(ILEmitter emitter, Expr.Call call, string errorTypeName)
+    {
+        var il = emitter.ILGen;
+        var ctx = emitter.Context;
+
+        // Error() and subtypes called without 'new' still create error objects
+        // Push the error type name
+        il.Emit(OpCodes.Ldstr, errorTypeName);
+
+        // Create arguments list
+        il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+        il.Emit(OpCodes.Newarr, typeof(object));
+
+        for (int i = 0; i < call.Arguments.Count; i++)
+        {
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4, i);
+            emitter.EmitExpression(call.Arguments[i]);
+            emitter.EmitBoxIfNeeded(call.Arguments[i]);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // Call runtime CreateError(errorTypeName, args)
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateError);
         return true;
     }
 }

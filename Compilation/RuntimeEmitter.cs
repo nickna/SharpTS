@@ -1344,6 +1344,8 @@ public partial class RuntimeEmitter
         EmitDateMethods(typeBuilder, runtime);
         // RegExp methods
         EmitRegExpMethods(typeBuilder, runtime);
+        // Error methods
+        EmitErrorMethods(typeBuilder, runtime);
         // Map methods
         EmitMapMethods(typeBuilder, runtime);
         // Set methods

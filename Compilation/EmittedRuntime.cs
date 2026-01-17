@@ -342,6 +342,17 @@ public class EmittedRuntime
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
     public MethodBuilder StringSplitRegExp { get; set; } = null!;
 
+    // Error support
+    public MethodBuilder CreateError { get; set; } = null!;
+    public MethodBuilder ErrorGetName { get; set; } = null!;
+    public MethodBuilder ErrorGetMessage { get; set; } = null!;
+    public MethodBuilder ErrorGetStack { get; set; } = null!;
+    public MethodBuilder ErrorSetName { get; set; } = null!;
+    public MethodBuilder ErrorSetMessage { get; set; } = null!;
+    public MethodBuilder ErrorSetStack { get; set; } = null!;
+    public MethodBuilder ErrorToString { get; set; } = null!;
+    public MethodBuilder AggregateErrorGetErrors { get; set; } = null!;
+
     // Dynamic import support
     public MethodBuilder DynamicImportModule { get; set; } = null!;
     public MethodBuilder WrapTaskAsPromise { get; set; } = null!;

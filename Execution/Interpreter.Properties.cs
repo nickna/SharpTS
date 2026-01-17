@@ -120,6 +120,13 @@ public partial class Interpreter
             return new SharpTSWeakSet();
         }
 
+        // Handle new Error(...) and error subtype constructors
+        if (isSimpleName && IsErrorType(newExpr.ClassName.Lexeme))
+        {
+            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            return ErrorBuiltIns.CreateError(newExpr.ClassName.Lexeme, args);
+        }
+
         object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {
@@ -359,6 +366,16 @@ public partial class Interpreter
             throw new Exception($"Runtime Error: Cannot set property '{set.Name.Lexeme}' on RegExp.");
         }
 
+        // Handle Error property assignment (name, message, stack)
+        if (obj is SharpTSError error)
+        {
+            if (ErrorBuiltIns.SetMember(error, set.Name.Lexeme, value))
+            {
+                return value;
+            }
+            throw new Exception($"Runtime Error: Cannot set property '{set.Name.Lexeme}' on Error.");
+        }
+
         throw new Exception("Only instances and objects have fields.");
     }
 
@@ -384,7 +401,17 @@ public partial class Interpreter
         {
             _environment.Assign(assign.Name, value);
         }
-        
+
         return value;
     }
+
+    /// <summary>
+    /// Checks if a type name is a built-in Error type.
+    /// </summary>
+    private static bool IsErrorType(string name) => name switch
+    {
+        "Error" or "TypeError" or "RangeError" or "ReferenceError" or
+        "SyntaxError" or "URIError" or "EvalError" or "AggregateError" => true,
+        _ => false
+    };
 }

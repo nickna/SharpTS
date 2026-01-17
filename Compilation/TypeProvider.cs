@@ -163,6 +163,8 @@ public class TypeProvider
     public Type RuntimeHelpers => Resolve("System.Runtime.CompilerServices.RuntimeHelpers");
 
     public Type ListOfObject => MakeGenericType(ListOpen, Object);
+    public Type ListOfObjectNullable => typeof(List<object?>);
+    public Type SharpTSArray => typeof(SharpTS.Runtime.Types.SharpTSArray);
     public Type IEqualityComparerOfObject => MakeGenericType(IEqualityComparerOpen, Object);
     public Type DictionaryObjectObject => MakeGenericType(DictionaryOpen, Object, Object);
     public Type DictionaryStringObject => MakeGenericType(DictionaryOpen, String, Object);

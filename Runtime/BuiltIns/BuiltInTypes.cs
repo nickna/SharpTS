@@ -252,6 +252,32 @@ public static class BuiltInTypes
     }
 
     /// <summary>
+    /// Type signatures for instance members on Error objects.
+    /// All error types share the same structure: name, message, stack properties and toString() method.
+    /// </summary>
+    /// <param name="name">The member name to look up</param>
+    /// <param name="errorTypeName">The specific error type name (e.g., "Error", "TypeError")</param>
+    public static TypeInfo? GetErrorMemberType(string name, string errorTypeName)
+    {
+        return name switch
+        {
+            // Properties - all string
+            "name" => StringType,
+            "message" => StringType,
+            "stack" => StringType,
+
+            // Methods
+            "toString" => new TypeInfo.Function([], StringType),
+
+            // AggregateError has an additional "errors" property
+            "errors" when errorTypeName == "AggregateError" =>
+                new TypeInfo.Array(new TypeInfo.Error()),
+
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Type signatures for instance methods on Map objects
     /// </summary>
     public static TypeInfo? GetMapMemberType(string name, TypeInfo keyType, TypeInfo valueType)

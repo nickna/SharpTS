@@ -163,6 +163,32 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: Error properties (name, message, stack, errors for AggregateError)
+        if (objType is TypeInfo.Error)
+        {
+            EmitExpression(g.Object);
+            EmitBoxIfNeeded(g.Object);
+            switch (g.Name.Lexeme)
+            {
+                case "name":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetName);
+                    SetStackType(StackType.String);
+                    return;
+                case "message":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetMessage);
+                    SetStackType(StackType.String);
+                    return;
+                case "stack":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetStack);
+                    SetStackType(StackType.String);
+                    return;
+                case "errors":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.AggregateErrorGetErrors);
+                    SetStackUnknown();
+                    return;
+            }
+        }
+
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 
@@ -243,6 +269,36 @@ public partial class ILEmitter
             // Put value back on stack as boxed result
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            return;
+        }
+
+        // Special case: Error property setters (name, message, stack)
+        if (objType is TypeInfo.Error && s.Name.Lexeme is "name" or "message" or "stack")
+        {
+            EmitExpression(s.Object);
+            EmitBoxIfNeeded(s.Object);
+            EmitExpression(s.Value);
+            EmitBoxIfNeeded(s.Value);
+            // Dup value for expression result
+            IL.Emit(OpCodes.Dup);
+            var valueTemp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, valueTemp);
+            // Convert to string
+            IL.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString", Type.EmptyTypes)!);
+            switch (s.Name.Lexeme)
+            {
+                case "name":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetName);
+                    break;
+                case "message":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetMessage);
+                    break;
+                case "stack":
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorSetStack);
+                    break;
+            }
+            // Put value back on stack
+            IL.Emit(OpCodes.Ldloc, valueTemp);
             return;
         }
 

@@ -703,6 +703,20 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateNewAsync(Expr.New newExpr)
     {
+        // Built-in types only apply when there's no namespace path
+        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+
+        // Handle built-in Error types
+        if (isSimpleName && IsErrorType(newExpr.ClassName.Lexeme))
+        {
+            List<object?> args = [];
+            foreach (var arg in newExpr.Arguments)
+            {
+                args.Add(await EvaluateAsync(arg));
+            }
+            return ErrorBuiltIns.CreateError(newExpr.ClassName.Lexeme, args);
+        }
+
         object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
         if (klass is not SharpTSClass sharpClass)
         {

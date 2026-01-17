@@ -341,6 +341,13 @@ public partial class TypeChecker
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'RegExp'.");
         }
+        // Handle Error instance members
+        if (objType is TypeInfo.Error errorType)
+        {
+            var memberType = BuiltInTypes.GetErrorMemberType(get.Name.Lexeme, errorType.Name);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{errorType.Name}'.");
+        }
         // Handle Map instance methods
         if (objType is TypeInfo.Map mapType)
         {
@@ -539,6 +546,21 @@ public partial class TypeChecker
              }
              // For now, disallow adding new properties to records via assignment to mimic strictness
              throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{record}'.");
+        }
+        // Handle Error property assignment (name, message, stack are all mutable strings)
+        if (objType is TypeInfo.Error)
+        {
+            string propName = set.Name.Lexeme;
+            if (propName is "name" or "message" or "stack")
+            {
+                TypeInfo valueType = CheckExpr(set.Value);
+                if (!IsCompatible(new TypeInfo.String(), valueType))
+                {
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to property '{propName}' of type 'string'.");
+                }
+                return valueType;
+            }
+            throw new TypeCheckException($" Property '{propName}' does not exist on type 'Error'.");
         }
         // Allow property assignment on Any type (e.g., 'this' in object method shorthand)
         if (objType is TypeInfo.Any)
@@ -748,6 +770,12 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetRegExpMemberType(memberName.Lexeme);
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'RegExp'.");
+        }
+        if (objType is TypeInfo.Error errorType)
+        {
+            var memberType = BuiltInTypes.GetErrorMemberType(memberName.Lexeme, errorType.Name);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type '{errorType.Name}'.");
         }
         if (objType is TypeInfo.Map mapType)
         {

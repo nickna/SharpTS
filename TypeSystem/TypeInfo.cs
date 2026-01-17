@@ -485,6 +485,16 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents an Error type (Error, TypeError, RangeError, etc.).
+    /// All error types share the same structure: name, message, stack properties.
+    /// </summary>
+    /// <param name="Name">The specific error type name (e.g., "Error", "TypeError")</param>
+    public record Error(string Name = "Error") : TypeInfo
+    {
+        public override string ToString() => Name;
+    }
+
+    /// <summary>
     /// Represents a Promise type (Promise&lt;T&gt;).
     /// Promise types automatically flatten - Promise&lt;Promise&lt;T&gt;&gt; becomes Promise&lt;T&gt;.
     /// </summary>

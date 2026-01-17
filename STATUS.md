@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added numeric separators support, added missing feature tracking for sections 1-12)
+**Last Updated:** 2026-01-16 (Added Error class with all subtypes, updated Promise.resolve/reject status)
 
 ## Legend
 - ✅ Implemented
@@ -111,7 +111,7 @@ This document tracks TypeScript language features and their implementation statu
 | Try/catch in async | ✅ | Await inside try/catch/finally blocks |
 | Nested await in args | ✅ | `await fn(await getValue())` |
 | `Promise.all/race/any/allSettled` | ✅ | Full interpreter support; IL compiler: all/race/allSettled as pure IL state machines, any delegates to runtime |
-| `Promise.resolve/reject` | ❌ | Static factory methods |
+| `Promise.resolve/reject` | ✅ | Static factory methods with Promise flattening |
 
 ---
 
@@ -221,7 +221,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Object.fromEntries()` | ❌ | Inverse of `Object.entries()` |
 | `Object.hasOwn()` | ❌ | Safer `hasOwnProperty` check |
 | `Object.freeze()`/`seal()` | ❌ | Object immutability |
-| `Error` class | ❌ | Error and subtypes (TypeError, RangeError, etc.) |
+| `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
 | `setTimeout`/`setInterval` | ❌ | Timer functions |
 | `clearTimeout`/`clearInterval` | ❌ | Cancel timer functions |
 | `globalThis` | ❌ | Global object reference |

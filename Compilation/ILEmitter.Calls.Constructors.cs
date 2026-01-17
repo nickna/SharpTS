@@ -57,6 +57,13 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new Error(...) and error subtype constructors
+        if (isSimpleName && IsErrorTypeName(n.ClassName.Lexeme))
+        {
+            EmitNewError(n.ClassName.Lexeme, n.Arguments);
+            return;
+        }
+
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
         if (n.NamespacePath != null && n.NamespacePath.Count > 0)
@@ -331,4 +338,37 @@ public partial class ILEmitter
         }
         SetStackUnknown();
     }
+
+    /// <summary>
+    /// Emits code for new Error(...) and error subtype construction.
+    /// </summary>
+    private void EmitNewError(string errorTypeName, List<Expr> arguments)
+    {
+        // Push the error type name
+        IL.Emit(OpCodes.Ldstr, errorTypeName);
+
+        // Create arguments list
+        IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+        IL.Emit(OpCodes.Newarr, typeof(object));
+
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(arguments[i]);
+            EmitBoxIfNeeded(arguments[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // Call runtime CreateError(errorTypeName, args)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateError);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Checks if a name is a built-in Error type name.
+    /// </summary>
+    private static bool IsErrorTypeName(string name) => name is
+        "Error" or "TypeError" or "RangeError" or "ReferenceError" or
+        "SyntaxError" or "URIError" or "EvalError" or "AggregateError";
 }

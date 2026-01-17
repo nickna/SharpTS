@@ -257,6 +257,51 @@ public partial class TypeChecker
             return new TypeInfo.WeakSet(elementType);
         }
 
+        // Handle new Error(...) and error subtype constructors
+        if (isSimpleName && IsErrorTypeName(newExpr.ClassName.Lexeme))
+        {
+            // Error constructors accept 0-1 argument (optional message)
+            // AggregateError accepts 0-2 arguments (errors array, optional message)
+            int maxArgs = newExpr.ClassName.Lexeme == "AggregateError" ? 2 : 1;
+            if (newExpr.Arguments.Count > maxArgs)
+            {
+                throw new TypeCheckException($" {newExpr.ClassName.Lexeme} constructor accepts at most {maxArgs} argument(s).");
+            }
+
+            // Validate argument types
+            if (newExpr.Arguments.Count >= 1)
+            {
+                var firstArgType = CheckExpr(newExpr.Arguments[0]);
+                if (newExpr.ClassName.Lexeme == "AggregateError")
+                {
+                    // First argument should be an array of errors
+                    if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($" AggregateError first argument must be an array, got '{firstArgType}'.");
+                    }
+                }
+                else
+                {
+                    // For other error types, first argument should be a string message
+                    if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException($" {newExpr.ClassName.Lexeme} message must be a string, got '{firstArgType}'.");
+                    }
+                }
+            }
+
+            if (newExpr.Arguments.Count == 2)
+            {
+                var secondArgType = CheckExpr(newExpr.Arguments[1]);
+                if (!IsString(secondArgType) && secondArgType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($" AggregateError message must be a string, got '{secondArgType}'.");
+                }
+            }
+
+            return new TypeInfo.Error(newExpr.ClassName.Lexeme);
+        }
+
         string qualifiedName = GetQualifiedClassName(newExpr);
         TypeInfo type = ResolveQualifiedType(newExpr.NamespacePath, newExpr.ClassName);
 

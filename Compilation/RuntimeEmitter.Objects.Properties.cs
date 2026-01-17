@@ -374,6 +374,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, listLabel);
 
+        // SharpTSArray - check for "length" (wrapper around List<object?>)
+        var sharpTSArrayLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.SharpTSArray);
+        il.Emit(OpCodes.Brtrue, sharpTSArrayLabel);
+
         // String - check for "length"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -455,6 +461,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notLengthLabel);
         // For other properties on List (like methods push, pop, etc.), use GetFieldsProperty
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Ret);
+
+        // SharpTSArray handler - access Elements.Count for "length"
+        il.MarkLabel(sharpTSArrayLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notSharpTSArrayLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notSharpTSArrayLengthLabel);
+        // Get arr.Elements.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.SharpTSArray);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.SharpTSArray, "Elements").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObjectNullable, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notSharpTSArrayLengthLabel);
+        // For other properties on SharpTSArray, fall through to GetFieldsProperty
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);

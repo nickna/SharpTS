@@ -478,6 +478,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.WeakSet>(new WeakSetEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(new RegExpEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(new AsyncGeneratorEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Error>(new ErrorEmitter());
 
         // Static type emitters
         _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());

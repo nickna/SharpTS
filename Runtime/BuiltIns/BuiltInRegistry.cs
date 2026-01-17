@@ -141,6 +141,7 @@ public sealed class BuiltInRegistry
         RegisterStdoutType(registry);
         RegisterStderrType(registry);
         RegisterHashType(registry);
+        RegisterErrorTypes(registry);
 
         return registry;
     }
@@ -386,6 +387,22 @@ public sealed class BuiltInRegistry
         // Hash members accessed via property access (hash.update, hash.digest)
         registry.RegisterInstanceType(typeof(SharpTSHash), (instance, name) =>
             ((SharpTSHash)instance).GetMember(name));
+    }
+
+    private static void RegisterErrorTypes(BuiltInRegistry registry)
+    {
+        // Register all Error types - they share the same member lookup
+        Func<object, string, object?> getMember = (instance, name) =>
+            ErrorBuiltIns.GetMember((SharpTSError)instance, name);
+
+        registry.RegisterInstanceType(typeof(SharpTSError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSTypeError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSRangeError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSReferenceError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSSyntaxError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSURIError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSEvalError), getMember);
+        registry.RegisterInstanceType(typeof(SharpTSAggregateError), getMember);
     }
 
     private static string Stringify(object? obj)

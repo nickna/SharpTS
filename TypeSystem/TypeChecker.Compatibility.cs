@@ -1408,6 +1408,13 @@ public partial class TypeChecker
     /// </summary>
     private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol;
 
+    /// <summary>
+    /// Checks if a name is a built-in Error type name.
+    /// </summary>
+    private static bool IsErrorTypeName(string name) => name is
+        "Error" or "TypeError" or "RangeError" or "ReferenceError" or
+        "SyntaxError" or "URIError" or "EvalError" or "AggregateError";
+
     private bool IsSubclassOf(TypeInfo.Class? subclass, TypeInfo.Class target)
     {
         if (subclass == null) return false;
