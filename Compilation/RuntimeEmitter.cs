@@ -71,6 +71,14 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
         EmitTSObjectClass(moduleBuilder, runtime);
 
+        // Emit $RegExp class for standalone regex support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp
+        EmitTSRegExpClass(moduleBuilder, runtime);
+
+        // Emit $AssertionError class for standalone assert module support
+        // NOTE: Must stay in sync with AssertionError in AssertModuleInterpreter.cs
+        EmitTSAssertionErrorClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 

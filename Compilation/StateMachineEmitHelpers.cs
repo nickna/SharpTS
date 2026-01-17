@@ -214,8 +214,9 @@ public class StateMachineEmitHelpers
         }
         else
         {
-            // Fallback to SharpTS.Runtime type (for interpreter mode or tests)
-            _il.Emit(OpCodes.Ldsfld, typeof(Runtime.Types.SharpTSUndefined).GetField("Instance")!);
+            // Fallback: emit null for standalone execution compatibility
+            // This avoids a dependency on SharpTS.dll at runtime
+            _il.Emit(OpCodes.Ldnull);
         }
         _stackType = StackType.Unknown;  // Treat as boxed object
     }

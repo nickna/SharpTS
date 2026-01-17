@@ -123,6 +123,7 @@ public class TypeProvider
     public Type Version => Resolve("System.Version");
     public Type GC => Resolve("System.GC");
     public Type Process => Resolve("System.Diagnostics.Process");
+    public Type ProcessStartInfo => Resolve("System.Diagnostics.ProcessStartInfo");
 
     #endregion
 
@@ -296,6 +297,11 @@ public class TypeProvider
     public Type IDictionaryEnumerator => Resolve("System.Collections.IDictionaryEnumerator");
     public Type DictionaryEntry => Resolve("System.Collections.DictionaryEntry");
     public Type IDisposable => Resolve("System.IDisposable");
+    public Type Uri => Resolve("System.Uri");
+    public Type UriKind => Resolve("System.UriKind");
+    public Type OSPlatform => Resolve("System.Runtime.InteropServices.OSPlatform");
+    public Type RuntimeInformation => Resolve("System.Runtime.InteropServices.RuntimeInformation");
+    public Type StreamReader => Resolve("System.IO.StreamReader");
 
     #endregion
 
@@ -359,7 +365,9 @@ public class TypeProvider
                 ?? typeof(System.Convert).Assembly.GetType(fullName)
                 ?? typeof(System.Text.Json.JsonSerializer).Assembly.GetType(fullName)
                 ?? typeof(System.Diagnostics.Process).Assembly.GetType(fullName)
-                ?? typeof(System.Diagnostics.Stopwatch).Assembly.GetType(fullName);
+                ?? typeof(System.Diagnostics.Stopwatch).Assembly.GetType(fullName)
+                ?? typeof(System.Uri).Assembly.GetType(fullName)
+                ?? typeof(System.Runtime.InteropServices.RuntimeInformation).Assembly.GetType(fullName);
         }
 
         if (type == null)

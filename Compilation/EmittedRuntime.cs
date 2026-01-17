@@ -243,6 +243,12 @@ public class EmittedRuntime
     public MethodBuilder NumberToExponential { get; set; } = null!;
     public MethodBuilder NumberToStringRadix { get; set; } = null!;
 
+    // Number helper methods (for standalone execution)
+    public MethodBuilder ParseIntHelper { get; set; } = null!;
+    public MethodBuilder GetDigitValue { get; set; } = null!;
+    public MethodBuilder ConvertIntToRadix { get; set; } = null!;
+    public MethodBuilder GetValidFloatPart { get; set; } = null!;
+
     // Map support
     public MethodBuilder CreateMap { get; set; } = null!;
     public MethodBuilder CreateMapFromEntries { get; set; } = null!;
@@ -338,7 +344,7 @@ public class EmittedRuntime
     public MethodBuilder DateToTimeString { get; set; } = null!;
     public MethodBuilder DateValueOf { get; set; } = null!;
 
-    // RegExp support
+    // RegExp support - $Runtime wrapper methods
     public MethodBuilder CreateRegExp { get; set; } = null!;
     public MethodBuilder CreateRegExpWithFlags { get; set; } = null!;
     public MethodBuilder RegExpTest { get; set; } = null!;
@@ -355,6 +361,23 @@ public class EmittedRuntime
     public MethodBuilder StringReplaceRegExp { get; set; } = null!;
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
     public MethodBuilder StringSplitRegExp { get; set; } = null!;
+
+    // RegExp support - emitted $RegExp type for standalone assemblies
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp
+    public TypeBuilder TSRegExpType { get; set; } = null!;
+    public ConstructorBuilder TSRegExpCtorPattern { get; set; } = null!;
+    public ConstructorBuilder TSRegExpCtorPatternFlags { get; set; } = null!;
+    public MethodBuilder TSRegExpNormalizeFlags { get; set; } = null!;
+    public MethodBuilder TSRegExpSourceGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpFlagsGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpGlobalGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpIgnoreCaseGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpMultilineGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpLastIndexGetter { get; set; } = null!;
+    public MethodBuilder TSRegExpLastIndexSetter { get; set; } = null!;
+    public MethodBuilder TSRegExpTestMethod { get; set; } = null!;
+    public MethodBuilder TSRegExpExecMethod { get; set; } = null!;
+    public MethodBuilder TSRegExpToStringMethod { get; set; } = null!;
 
     // Error support - emitted types for standalone assemblies
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
@@ -555,6 +578,20 @@ public class EmittedRuntime
     public MethodBuilder QuerystringParse { get; set; } = null!;
     public MethodBuilder QuerystringStringify { get; set; } = null!;
 
+    // Assert module - emitted $AssertionError type for standalone assemblies
+    // NOTE: Must stay in sync with AssertionError in AssertModuleInterpreter.cs
+    public TypeBuilder TSAssertionErrorType { get; set; } = null!;
+    public ConstructorBuilder TSAssertionErrorCtor { get; set; } = null!;
+    public MethodBuilder TSAssertionErrorActualGetter { get; set; } = null!;
+    public MethodBuilder TSAssertionErrorExpectedGetter { get; set; } = null!;
+    public MethodBuilder TSAssertionErrorOperatorGetter { get; set; } = null!;
+
+    // Assert module - helper methods
+    public MethodBuilder AssertIsTruthy { get; set; } = null!;
+    public MethodBuilder AssertStrictEquals { get; set; } = null!;
+    public MethodBuilder AssertLooseEquals { get; set; } = null!;
+    public MethodBuilder AssertDeepEquals { get; set; } = null!;
+
     // Assert module methods
     public MethodBuilder AssertOk { get; set; } = null!;
     public MethodBuilder AssertStrictEqual { get; set; } = null!;
@@ -568,6 +605,7 @@ public class EmittedRuntime
     public MethodBuilder AssertNotEqual { get; set; } = null!;
 
     // URL module methods
+    public MethodBuilder UrlCreateUrlObject { get; set; } = null!;
     public MethodBuilder UrlParse { get; set; } = null!;
     public MethodBuilder UrlFormat { get; set; } = null!;
     public MethodBuilder UrlResolve { get; set; } = null!;
