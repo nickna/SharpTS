@@ -46,6 +46,9 @@ public partial class Interpreter
             Expr.CompoundAssign compound => EvaluateCompoundAssign(compound),
             Expr.CompoundSet compoundSet => EvaluateCompoundSet(compoundSet),
             Expr.CompoundSetIndex compoundSetIndex => EvaluateCompoundSetIndex(compoundSetIndex),
+            Expr.LogicalAssign logical => EvaluateLogicalAssign(logical),
+            Expr.LogicalSet logicalSet => EvaluateLogicalSet(logicalSet),
+            Expr.LogicalSetIndex logicalSetIndex => EvaluateLogicalSetIndex(logicalSetIndex),
             Expr.PrefixIncrement prefix => EvaluatePrefixIncrement(prefix),
             Expr.PostfixIncrement postfix => EvaluatePostfixIncrement(postfix),
             Expr.ArrowFunction arrow => EvaluateArrowFunction(arrow),
@@ -107,6 +110,9 @@ public partial class Interpreter
             case Expr.CompoundAssign compound: return await EvaluateCompoundAssignAsync(compound);
             case Expr.CompoundSet compoundSet: return await EvaluateCompoundSetAsync(compoundSet);
             case Expr.CompoundSetIndex compoundSetIndex: return await EvaluateCompoundSetIndexAsync(compoundSetIndex);
+            case Expr.LogicalAssign logical: return await EvaluateLogicalAssignAsync(logical);
+            case Expr.LogicalSet logicalSet: return await EvaluateLogicalSetAsync(logicalSet);
+            case Expr.LogicalSetIndex logicalSetIndex: return await EvaluateLogicalSetIndexAsync(logicalSetIndex);
             case Expr.PrefixIncrement prefix: return await EvaluatePrefixIncrementAsync(prefix);
             case Expr.PostfixIncrement postfix: return await EvaluatePostfixIncrementAsync(postfix);
             case Expr.ArrowFunction arrow: return EvaluateArrowFunction(arrow);

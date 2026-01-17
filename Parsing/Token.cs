@@ -24,7 +24,9 @@ public enum TokenType
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL,
     AND_AND, OR_OR,
+    AND_AND_EQUAL, OR_OR_EQUAL,  // Logical assignment operators
     QUESTION_QUESTION, QUESTION_DOT,
+    QUESTION_QUESTION_EQUAL,  // Nullish coalescing assignment
     PLUS_PLUS, MINUS_MINUS,
     PLUS_EQUAL, MINUS_EQUAL, STAR_EQUAL, SLASH_EQUAL, PERCENT_EQUAL,
     STAR_STAR,

@@ -156,7 +156,7 @@ This document tracks TypeScript language features and their implementation statu
 | Exponentiation (`**`) | ✅ | Right-associative |
 | Spread operator (`...`) | ✅ | In arrays/objects/calls |
 | Non-null assertion (`x!`) | ✅ | Postfix operator to assert non-null |
-| Logical assignment (`&&=`, `\|\|=`, `??=`) | ❌ | Compound logical assignment operators |
+| Logical assignment (`&&=`, `\|\|=`, `??=`) | ✅ | Compound logical assignment operators with short-circuit evaluation |
 | `keyof` operator | ❌ | Extract keys as union type |
 | `typeof` in type position | ❌ | Extract type from value |
 

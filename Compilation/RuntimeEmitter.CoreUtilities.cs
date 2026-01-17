@@ -263,6 +263,8 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
         var checkBool = il.DefineLabel();
+        var checkDouble = il.DefineLabel();
+        var checkString = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
         // null => false
@@ -279,13 +281,53 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, checkBool);
 
+        // double => check for 0 and NaN
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, checkDouble);
+
+        // string => check for empty
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, checkString);
+
         // everything else => true
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
+        // Check bool value
         il.MarkLabel(checkBool);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+
+        // Check double: 0 and NaN are falsy
+        il.MarkLabel(checkDouble);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        var dLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Stloc, dLocal);
+        // Check if d == 0
+        il.Emit(OpCodes.Ldloc, dLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        // Check if d is NaN (NaN != NaN)
+        il.Emit(OpCodes.Ldloc, dLocal);
+        il.Emit(OpCodes.Ldloc, dLocal);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, falseLabel); // If d != d, it's NaN
+        // Not 0 and not NaN => truthy
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // Check string: empty is falsy
+        il.MarkLabel(checkString);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "get_Length"));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Cgt);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(falseLabel);

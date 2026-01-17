@@ -47,6 +47,9 @@ public abstract class AstVisitorBase
             case Expr.CompoundAssign e: VisitCompoundAssign(e); break;
             case Expr.CompoundSet e: VisitCompoundSet(e); break;
             case Expr.CompoundSetIndex e: VisitCompoundSetIndex(e); break;
+            case Expr.LogicalAssign e: VisitLogicalAssign(e); break;
+            case Expr.LogicalSet e: VisitLogicalSet(e); break;
+            case Expr.LogicalSetIndex e: VisitLogicalSetIndex(e); break;
             case Expr.PrefixIncrement e: VisitPrefixIncrement(e); break;
             case Expr.PostfixIncrement e: VisitPostfixIncrement(e); break;
             case Expr.ArrowFunction e: VisitArrowFunction(e); break;
@@ -231,6 +234,24 @@ public abstract class AstVisitorBase
     }
 
     protected virtual void VisitCompoundSetIndex(Expr.CompoundSetIndex expr)
+    {
+        Visit(expr.Object);
+        Visit(expr.Index);
+        Visit(expr.Value);
+    }
+
+    protected virtual void VisitLogicalAssign(Expr.LogicalAssign expr)
+    {
+        Visit(expr.Value);
+    }
+
+    protected virtual void VisitLogicalSet(Expr.LogicalSet expr)
+    {
+        Visit(expr.Object);
+        Visit(expr.Value);
+    }
+
+    protected virtual void VisitLogicalSetIndex(Expr.LogicalSetIndex expr)
     {
         Visit(expr.Object);
         Visit(expr.Index);

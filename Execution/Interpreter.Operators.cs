@@ -81,6 +81,108 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Evaluates a logical assignment expression on a variable (e.g., <c>x &&= y</c>, <c>x ||= y</c>, <c>x ??= y</c>).
+    /// </summary>
+    /// <param name="logical">The logical assignment expression AST node.</param>
+    /// <returns>The result of the logical assignment (the final value of x).</returns>
+    /// <remarks>
+    /// Unlike compound assignment, logical assignment has short-circuit semantics:
+    /// - <c>x &&= y</c>: Only assigns y to x if x is truthy
+    /// - <c>x ||= y</c>: Only assigns y to x if x is falsy
+    /// - <c>x ??= y</c>: Only assigns y to x if x is null/undefined
+    /// </remarks>
+    private object? EvaluateLogicalAssign(Expr.LogicalAssign logical)
+    {
+        object? currentValue = _environment.Get(logical.Name);
+
+        switch (logical.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                if (!IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.OR_OR_EQUAL:
+                if (IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                if (currentValue != null && currentValue is not SharpTSUndefined) return currentValue;
+                break;
+        }
+
+        // Short-circuit condition not met, evaluate and assign
+        object? newValue = Evaluate(logical.Value);
+        _environment.Assign(logical.Name, newValue);
+        return newValue;
+    }
+
+    /// <summary>
+    /// Evaluates a logical assignment expression on an object property (e.g., <c>obj.x &&= y</c>).
+    /// </summary>
+    private object? EvaluateLogicalSet(Expr.LogicalSet logical)
+    {
+        object? obj = Evaluate(logical.Object);
+
+        if (!TryGetProperty(obj, logical.Name, out object? currentValue))
+        {
+            throw new Exception("Only instances and objects have fields.");
+        }
+
+        switch (logical.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                if (!IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.OR_OR_EQUAL:
+                if (IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                if (currentValue != null && currentValue is not SharpTSUndefined) return currentValue;
+                break;
+        }
+
+        // Short-circuit condition not met, evaluate and assign
+        object? newValue = Evaluate(logical.Value);
+        if (!TrySetProperty(obj, logical.Name, newValue))
+        {
+            throw new Exception("Only instances and objects have fields.");
+        }
+        return newValue;
+    }
+
+    /// <summary>
+    /// Evaluates a logical assignment expression on an array element (e.g., <c>arr[i] &&= y</c>).
+    /// </summary>
+    private object? EvaluateLogicalSetIndex(Expr.LogicalSetIndex logical)
+    {
+        object? obj = Evaluate(logical.Object);
+        object? index = Evaluate(logical.Index);
+
+        if (obj is SharpTSArray array && index is double idx)
+        {
+            object? currentValue = array.Get((int)idx);
+
+            switch (logical.Operator.Type)
+            {
+                case TokenType.AND_AND_EQUAL:
+                    if (!IsTruthy(currentValue)) return currentValue;
+                    break;
+                case TokenType.OR_OR_EQUAL:
+                    if (IsTruthy(currentValue)) return currentValue;
+                    break;
+                case TokenType.QUESTION_QUESTION_EQUAL:
+                    if (currentValue != null && currentValue is not SharpTSUndefined) return currentValue;
+                    break;
+            }
+
+            // Short-circuit condition not met, evaluate and assign
+            object? newValue = Evaluate(logical.Value);
+            array.Set((int)idx, newValue);
+            return newValue;
+        }
+
+        throw new Exception("Logical index assignment not supported on this type.");
+    }
+
+    /// <summary>
     /// Evaluates a prefix increment or decrement expression (<c>++x</c> or <c>--x</c>).
     /// </summary>
     /// <param name="prefix">The prefix increment expression AST node.</param>

@@ -130,6 +130,15 @@ public abstract class ExpressionEmitterBase
             case Expr.CompoundSetIndex csi:
                 EmitCompoundSetIndex(csi);
                 break;
+            case Expr.LogicalAssign la:
+                EmitLogicalAssign(la);
+                break;
+            case Expr.LogicalSet ls:
+                EmitLogicalSet(ls);
+                break;
+            case Expr.LogicalSetIndex lsi:
+                EmitLogicalSetIndex(lsi);
+                break;
             case Expr.PrefixIncrement pi:
                 EmitPrefixIncrement(pi);
                 break;
@@ -195,6 +204,9 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitCompoundAssign(Expr.CompoundAssign ca);
     protected abstract void EmitCompoundSet(Expr.CompoundSet cs);
     protected abstract void EmitCompoundSetIndex(Expr.CompoundSetIndex csi);
+    protected abstract void EmitLogicalAssign(Expr.LogicalAssign la);
+    protected abstract void EmitLogicalSet(Expr.LogicalSet ls);
+    protected abstract void EmitLogicalSetIndex(Expr.LogicalSetIndex lsi);
     protected abstract void EmitPrefixIncrement(Expr.PrefixIncrement pi);
     protected abstract void EmitPostfixIncrement(Expr.PostfixIncrement poi);
     protected abstract void EmitArrowFunction(Expr.ArrowFunction af);

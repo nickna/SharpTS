@@ -337,6 +337,197 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
+    protected override void EmitLogicalAssign(Expr.LogicalAssign la)
+    {
+        var builder = _ctx.ILBuilder;
+        var endLabel = builder.DefineLabel("logical_assign_end");
+        var local = _ctx.Locals.GetLocal(la.Name.Lexeme);
+
+        // Load current value
+        EmitVariable(new Expr.Variable(la.Name));
+        EmitBoxIfNeeded(new Expr.Variable(la.Name));
+        IL.Emit(OpCodes.Dup);
+
+        switch (la.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                // x &&= y: Only assign if x is truthy
+                EmitTruthyCheck();
+                builder.Emit_Brfalse(endLabel); // If falsy, keep current value
+                break;
+            case TokenType.OR_OR_EQUAL:
+                // x ||= y: Only assign if x is falsy
+                EmitTruthyCheck();
+                builder.Emit_Brtrue(endLabel); // If truthy, keep current value
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                // x ??= y: Only assign if x is nullish
+                var assignLabel = builder.DefineLabel("nullish_assign");
+                // Check for null
+                IL.Emit(OpCodes.Dup);
+                builder.Emit_Brfalse(assignLabel);
+                // Check for undefined
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                builder.Emit_Brtrue(assignLabel);
+                // Not nullish - pop extra value and keep current value
+                IL.Emit(OpCodes.Pop);
+                builder.Emit_Br(endLabel);
+                builder.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                IL.Emit(OpCodes.Pop);
+                break;
+        }
+
+        // Pop the duplicate current value
+        IL.Emit(OpCodes.Pop);
+
+        // Evaluate and assign the right side
+        EmitExpression(la.Value);
+        EmitBoxIfNeeded(la.Value);
+        IL.Emit(OpCodes.Dup);
+        if (local != null)
+        {
+            IL.Emit(OpCodes.Stloc, local);
+        }
+
+        builder.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
+    protected override void EmitLogicalSet(Expr.LogicalSet ls)
+    {
+        var builder = _ctx.ILBuilder;
+        var skipAssignLabel = builder.DefineLabel("logical_set_skip");
+        var endLabel = builder.DefineLabel("logical_set_end");
+
+        // Store object in a local for later use
+        EmitExpression(ls.Object);
+        EmitBoxIfNeeded(ls.Object);
+        var objLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, objLocal);
+
+        // Get current property value
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+        IL.Emit(OpCodes.Dup);
+
+        switch (ls.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                EmitTruthyCheck();
+                builder.Emit_Brfalse(skipAssignLabel);
+                break;
+            case TokenType.OR_OR_EQUAL:
+                EmitTruthyCheck();
+                builder.Emit_Brtrue(skipAssignLabel);
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                var assignLabel = builder.DefineLabel("nullish_set_assign");
+                IL.Emit(OpCodes.Dup);
+                builder.Emit_Brfalse(assignLabel);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                builder.Emit_Brtrue(assignLabel);
+                // Not nullish - pop extra value and skip assignment
+                IL.Emit(OpCodes.Pop);
+                builder.Emit_Br(skipAssignLabel);
+                builder.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                IL.Emit(OpCodes.Pop);
+                break;
+        }
+
+        // Pop current value and assign new value
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
+        EmitExpression(ls.Value);
+        EmitBoxIfNeeded(ls.Value);
+        var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stloc, resultLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
+        IL.Emit(OpCodes.Ldloc, resultLocal);
+        builder.Emit_Br(endLabel);
+
+        builder.MarkLabel(skipAssignLabel);
+        // Current value is on stack, just use it
+
+        builder.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
+    protected override void EmitLogicalSetIndex(Expr.LogicalSetIndex lsi)
+    {
+        var builder = _ctx.ILBuilder;
+        var skipAssignLabel = builder.DefineLabel("logical_setindex_skip");
+        var endLabel = builder.DefineLabel("logical_setindex_end");
+
+        // Store object and index in locals
+        EmitExpression(lsi.Object);
+        EmitBoxIfNeeded(lsi.Object);
+        var objLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, objLocal);
+
+        EmitExpression(lsi.Index);
+        EmitBoxIfNeeded(lsi.Index);
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, indexLocal);
+
+        // Get current value at index
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        IL.Emit(OpCodes.Dup);
+
+        switch (lsi.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                EmitTruthyCheck();
+                builder.Emit_Brfalse(skipAssignLabel);
+                break;
+            case TokenType.OR_OR_EQUAL:
+                EmitTruthyCheck();
+                builder.Emit_Brtrue(skipAssignLabel);
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                var assignLabel = builder.DefineLabel("nullish_setindex_assign");
+                IL.Emit(OpCodes.Dup);
+                builder.Emit_Brfalse(assignLabel);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+                builder.Emit_Brtrue(assignLabel);
+                // Not nullish - pop extra value and skip assignment
+                IL.Emit(OpCodes.Pop);
+                builder.Emit_Br(skipAssignLabel);
+                builder.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                IL.Emit(OpCodes.Pop);
+                break;
+        }
+
+        // Pop current value and assign new value
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        EmitExpression(lsi.Value);
+        EmitBoxIfNeeded(lsi.Value);
+        var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stloc, resultLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        IL.Emit(OpCodes.Ldloc, resultLocal);
+        builder.Emit_Br(endLabel);
+
+        builder.MarkLabel(skipAssignLabel);
+        // Current value is on stack, just use it
+
+        builder.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)

@@ -237,6 +237,12 @@ public class ClosureAnalyzer : AstVisitorBase
         base.VisitCompoundAssign(expr);
     }
 
+    protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+    {
+        ReferenceVariable(expr.Name.Lexeme);
+        base.VisitLogicalAssign(expr);
+    }
+
     protected override void VisitArrowFunction(Expr.ArrowFunction expr)
     {
         AnalyzeArrowFunctionBody(expr);

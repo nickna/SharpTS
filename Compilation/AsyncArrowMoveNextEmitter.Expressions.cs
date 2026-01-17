@@ -179,6 +179,173 @@ public partial class AsyncArrowMoveNextEmitter
         SetStackUnknown();
     }
 
+    protected override void EmitLogicalAssign(Expr.LogicalAssign la)
+    {
+        string name = la.Name.Lexeme;
+        var endLabel = _il.DefineLabel();
+
+        // Load current value
+        LoadVariable(name);
+        EnsureBoxed();
+        _il.Emit(OpCodes.Dup);
+
+        switch (la.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brfalse, endLabel);
+                break;
+            case TokenType.OR_OR_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brtrue, endLabel);
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                var assignLabel = _il.DefineLabel();
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Brfalse, assignLabel);
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
+                _il.Emit(OpCodes.Brtrue, assignLabel);
+                // Not nullish - pop extra value and keep current
+                _il.Emit(OpCodes.Pop);
+                _il.Emit(OpCodes.Br, endLabel);
+                _il.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                _il.Emit(OpCodes.Pop);
+                break;
+        }
+
+        _il.Emit(OpCodes.Pop);
+        EmitExpression(la.Value);
+        EnsureBoxed();
+        _il.Emit(OpCodes.Dup);
+        StoreVariable(name);
+
+        _il.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
+    protected override void EmitLogicalSet(Expr.LogicalSet ls)
+    {
+        var skipLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+
+        EmitExpression(ls.Object);
+        EnsureBoxed();
+        var objLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, objLocal);
+
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetProperty);
+        _il.Emit(OpCodes.Dup);
+
+        switch (ls.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brfalse, skipLabel);
+                break;
+            case TokenType.OR_OR_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brtrue, skipLabel);
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                var assignLabel = _il.DefineLabel();
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Brfalse, assignLabel);
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
+                _il.Emit(OpCodes.Brtrue, assignLabel);
+                // Not nullish - pop extra value and skip assignment
+                _il.Emit(OpCodes.Pop);
+                _il.Emit(OpCodes.Br, skipLabel);
+                _il.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                _il.Emit(OpCodes.Pop);
+                break;
+        }
+
+        _il.Emit(OpCodes.Pop);
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Ldstr, ls.Name.Lexeme);
+        EmitExpression(ls.Value);
+        EnsureBoxed();
+        var resultLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Stloc, resultLocal);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetProperty);
+        _il.Emit(OpCodes.Ldloc, resultLocal);
+        _il.Emit(OpCodes.Br, endLabel);
+
+        _il.MarkLabel(skipLabel);
+        _il.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
+    protected override void EmitLogicalSetIndex(Expr.LogicalSetIndex lsi)
+    {
+        var skipLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+
+        EmitExpression(lsi.Object);
+        EnsureBoxed();
+        var objLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, objLocal);
+
+        EmitExpression(lsi.Index);
+        EnsureBoxed();
+        var indexLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, indexLocal);
+
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Ldloc, indexLocal);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIndex);
+        _il.Emit(OpCodes.Dup);
+
+        switch (lsi.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brfalse, skipLabel);
+                break;
+            case TokenType.OR_OR_EQUAL:
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IsTruthy);
+                _il.Emit(OpCodes.Brtrue, skipLabel);
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                var assignLabel = _il.DefineLabel();
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Brfalse, assignLabel);
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
+                _il.Emit(OpCodes.Brtrue, assignLabel);
+                // Not nullish - pop extra value and skip assignment
+                _il.Emit(OpCodes.Pop);
+                _il.Emit(OpCodes.Br, skipLabel);
+                _il.MarkLabel(assignLabel);
+                // At assignLabel we have [value, value], pop one to match other cases
+                _il.Emit(OpCodes.Pop);
+                break;
+        }
+
+        _il.Emit(OpCodes.Pop);
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        _il.Emit(OpCodes.Ldloc, indexLocal);
+        EmitExpression(lsi.Value);
+        EnsureBoxed();
+        var resultLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Stloc, resultLocal);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetIndex);
+        _il.Emit(OpCodes.Ldloc, resultLocal);
+        _il.Emit(OpCodes.Br, endLabel);
+
+        _il.MarkLabel(skipLabel);
+        _il.MarkLabel(endLabel);
+        SetStackUnknown();
+    }
+
     private void EmitCompoundOperation(TokenType opType)
     {
         if (opType == TokenType.PLUS_EQUAL)

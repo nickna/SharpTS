@@ -171,17 +171,20 @@ public class Lexer(string source)
             case '%': AddToken(Match('=') ? TokenType.PERCENT_EQUAL : TokenType.PERCENT); break;
             case ':': AddToken(TokenType.COLON); break;
             case '?':
-                if (Match('?')) AddToken(TokenType.QUESTION_QUESTION);
+                if (Match('?'))
+                    AddToken(Match('=') ? TokenType.QUESTION_QUESTION_EQUAL : TokenType.QUESTION_QUESTION);
                 else if (Match('.')) AddToken(TokenType.QUESTION_DOT);
                 else AddToken(TokenType.QUESTION);
                 break;
             case '&':
-                if (Match('&')) AddToken(TokenType.AND_AND);
+                if (Match('&'))
+                    AddToken(Match('=') ? TokenType.AND_AND_EQUAL : TokenType.AND_AND);
                 else if (Match('=')) AddToken(TokenType.AMPERSAND_EQUAL);
                 else AddToken(TokenType.AMPERSAND);
                 break;
             case '|':
-                if (Match('|')) AddToken(TokenType.OR_OR);
+                if (Match('|'))
+                    AddToken(Match('=') ? TokenType.OR_OR_EQUAL : TokenType.OR_OR);
                 else if (Match('=')) AddToken(TokenType.PIPE_EQUAL);
                 else AddToken(TokenType.PIPE);
                 break;

@@ -174,6 +174,14 @@ internal class CaptureAnalysisVisitor : ControlledAstVisitor
         base.VisitCompoundAssign(expr);
     }
 
+    protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+    {
+        var name = expr.Name.Lexeme;
+        if (!_locals.Contains(name) && _outerScopeVariables.Contains(name))
+            _captures.Add(name);
+        base.VisitLogicalAssign(expr);
+    }
+
     protected override void VisitThis(Expr.This expr)
     {
         _captures.Add("this");

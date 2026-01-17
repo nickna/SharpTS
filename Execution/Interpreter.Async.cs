@@ -853,6 +853,81 @@ public partial class Interpreter
         return EvaluateIndexSet(obj, index, result);
     }
 
+    private async Task<object?> EvaluateLogicalAssignAsync(Expr.LogicalAssign logical)
+    {
+        object? currentValue = _environment.Get(logical.Name);
+
+        switch (logical.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                if (!IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.OR_OR_EQUAL:
+                if (IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                if (currentValue != null) return currentValue;
+                break;
+        }
+
+        object? newValue = await EvaluateAsync(logical.Value);
+        _environment.Assign(logical.Name, newValue);
+        return newValue;
+    }
+
+    private async Task<object?> EvaluateLogicalSetAsync(Expr.LogicalSet logical)
+    {
+        object? obj = await EvaluateAsync(logical.Object);
+
+        if (!TryGetProperty(obj, logical.Name, out object? currentValue))
+        {
+            throw new Exception("Only instances and objects have fields.");
+        }
+
+        switch (logical.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                if (!IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.OR_OR_EQUAL:
+                if (IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                if (currentValue != null) return currentValue;
+                break;
+        }
+
+        object? newValue = await EvaluateAsync(logical.Value);
+        if (!TrySetProperty(obj, logical.Name, newValue))
+        {
+            throw new Exception("Only instances and objects have fields.");
+        }
+        return newValue;
+    }
+
+    private async Task<object?> EvaluateLogicalSetIndexAsync(Expr.LogicalSetIndex logical)
+    {
+        object? obj = await EvaluateAsync(logical.Object);
+        object? index = await EvaluateAsync(logical.Index);
+        object? currentValue = EvaluateIndexGet(obj, index);
+
+        switch (logical.Operator.Type)
+        {
+            case TokenType.AND_AND_EQUAL:
+                if (!IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.OR_OR_EQUAL:
+                if (IsTruthy(currentValue)) return currentValue;
+                break;
+            case TokenType.QUESTION_QUESTION_EQUAL:
+                if (currentValue != null) return currentValue;
+                break;
+        }
+
+        object? newValue = await EvaluateAsync(logical.Value);
+        return EvaluateIndexSet(obj, index, newValue);
+    }
+
     private async Task<object?> EvaluatePrefixIncrementAsync(Expr.PrefixIncrement prefix)
     {
         // Delegate to sync version since prefix increment evaluates operand once

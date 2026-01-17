@@ -80,6 +80,28 @@ public partial class Parser
             throw new Exception("Invalid compound assignment target.");
         }
 
+        // Logical assignment operators (&&=, ||=, ??=) - have short-circuit semantics
+        if (Match(TokenType.AND_AND_EQUAL, TokenType.OR_OR_EQUAL, TokenType.QUESTION_QUESTION_EQUAL))
+        {
+            Token op = Previous();
+            Expr value = Assignment();
+
+            if (expr is Expr.Variable variable)
+            {
+                return new Expr.LogicalAssign(variable.Name, op, value);
+            }
+            else if (expr is Expr.Get get)
+            {
+                return new Expr.LogicalSet(get.Object, get.Name, op, value);
+            }
+            else if (expr is Expr.GetIndex getIndex)
+            {
+                return new Expr.LogicalSetIndex(getIndex.Object, getIndex.Index, op, value);
+            }
+
+            throw new Exception("Invalid logical assignment target.");
+        }
+
         return expr;
     }
 

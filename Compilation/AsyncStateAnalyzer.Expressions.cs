@@ -65,6 +65,13 @@ public partial class AsyncStateAnalyzer
         base.VisitCompoundAssign(expr);
     }
 
+    protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+    {
+        if (_seenAwait && _declaredVariables.Contains(expr.Name.Lexeme))
+            _variablesUsedAfterAwait.Add(expr.Name.Lexeme);
+        base.VisitLogicalAssign(expr);
+    }
+
     protected override void VisitArrowFunction(Expr.ArrowFunction expr)
     {
         // Arrow functions capture 'this' from lexical scope, so we need to

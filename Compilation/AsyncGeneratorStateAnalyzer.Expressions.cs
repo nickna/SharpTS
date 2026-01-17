@@ -105,6 +105,13 @@ public partial class AsyncGeneratorStateAnalyzer
         base.VisitCompoundAssign(expr);
     }
 
+    protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+    {
+        if (_seenSuspension && _declaredVariables.Contains(expr.Name.Lexeme))
+            _variablesUsedAfterSuspension.Add(expr.Name.Lexeme);
+        base.VisitLogicalAssign(expr);
+    }
+
     protected override void VisitThis(Expr.This expr)
     {
         _usesThis = true;

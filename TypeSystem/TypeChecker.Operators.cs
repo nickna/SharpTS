@@ -195,6 +195,37 @@ public partial class TypeChecker
         return new TypeInfo.Any();
     }
 
+    private TypeInfo CheckLogicalAssign(Expr.LogicalAssign logical)
+    {
+        TypeInfo varType = LookupVariable(logical.Name);
+        TypeInfo valueType = CheckExpr(logical.Value);
+
+        // Logical assignment can return either the current value or the new value
+        // For simplicity, return union of both types or the variable type
+        return varType;
+    }
+
+    private TypeInfo CheckLogicalSet(Expr.LogicalSet logical)
+    {
+        CheckExpr(logical.Object);
+        CheckExpr(logical.Value);
+        return new TypeInfo.Any();
+    }
+
+    private TypeInfo CheckLogicalSetIndex(Expr.LogicalSetIndex logical)
+    {
+        TypeInfo objType = CheckExpr(logical.Object);
+        CheckExpr(logical.Index);
+        CheckExpr(logical.Value);
+
+        if (objType is TypeInfo.Array arrayType)
+        {
+            return arrayType.ElementType;
+        }
+
+        return new TypeInfo.Any();
+    }
+
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
         TypeInfo operandType = CheckExpr(prefix.Operand);
