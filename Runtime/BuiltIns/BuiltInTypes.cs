@@ -117,6 +117,10 @@ public static class BuiltInTypes
         return name switch
         {
             "isArray" => new TypeInfo.Function([AnyType], BooleanType),
+            "from" => new TypeInfo.Function(
+                [AnyType, new TypeInfo.Function([AnyType, NumberType], AnyType)],
+                new TypeInfo.Array(AnyType),
+                RequiredParams: 1),  // mapFn is optional
             _ => null
         };
     }

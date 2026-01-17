@@ -266,9 +266,15 @@ public partial class Parser
 
         if (Match(TokenType.CATCH))
         {
-            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'catch'.");
-            catchParam = Consume(TokenType.IDENTIFIER, "Expect catch parameter name.");
-            Consume(TokenType.RIGHT_PAREN, "Expect ')' after catch parameter.");
+            // Optional catch binding (ES2019): catch { } without parameter
+            if (Check(TokenType.LEFT_PAREN))
+            {
+                Consume(TokenType.LEFT_PAREN, "Expect '(' after 'catch'.");
+                catchParam = Consume(TokenType.IDENTIFIER, "Expect catch parameter name.");
+                Consume(TokenType.RIGHT_PAREN, "Expect ')' after catch parameter.");
+            }
+            // else: catchParam remains null for parameterless catch
+
             Consume(TokenType.LEFT_BRACE, "Expect '{' before catch block.");
             catchBlock = Block();
         }

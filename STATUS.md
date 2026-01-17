@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added additional utility types: ReturnType, Parameters, ConstructorParameters, InstanceType, ThisType, Awaited, NonNullable, Extract, Exclude)
+**Last Updated:** 2026-01-16 (Added optional catch binding and Array.from())
 
 ## Legend
 - ✅ Implemented
@@ -195,7 +195,7 @@ This document tracks TypeScript language features and their implementation statu
 | `for...in` loops | ✅ | Object key iteration |
 | `do...while` loops | ✅ | Post-condition loop |
 | Label statements | ✅ | `label: for (...)` with break/continue support |
-| Optional catch binding | ❌ | `catch { }` without parameter |
+| Optional catch binding | ✅ | `catch { }` without parameter (ES2019) |
 
 ---
 
@@ -215,7 +215,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys; ES2025 Set operations (union, intersection, difference, symmetricDifference, isSubsetOf, isSupersetOf, isDisjointFrom) |
 | `WeakMap`/`WeakSet` | ✅ | Full API (get, set, has, delete for WeakMap; add, has, delete for WeakSet); object-only keys/values; no iteration or size |
 | `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split) with regex support |
-| `Array.from()` | ❌ | Create array from iterable |
+| `Array.from()` | ✅ | Create array from iterable with optional map function |
 | `Array.of()` | ❌ | Create array from arguments |
 | `Object.assign()` | ❌ | Merge objects |
 | `Object.fromEntries()` | ❌ | Inverse of `Object.entries()` |

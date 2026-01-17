@@ -171,4 +171,72 @@ public class ErrorHandlingTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("caught\nafter\n", output);
     }
+
+    [Fact]
+    public void TryCatch_OptionalCatchBinding_CatchesThrow()
+    {
+        var source = """
+            try {
+                throw "error";
+            } catch {
+                console.log("caught without param");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("caught without param\n", output);
+    }
+
+    [Fact]
+    public void TryCatch_OptionalCatchBinding_WithFinally()
+    {
+        var source = """
+            try {
+                throw "error";
+            } catch {
+                console.log("caught");
+            } finally {
+                console.log("finally");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("caught\nfinally\n", output);
+    }
+
+    [Fact]
+    public void TryCatch_OptionalCatchBinding_NoError()
+    {
+        var source = """
+            try {
+                console.log("no error");
+            } catch {
+                console.log("should not print");
+            }
+            console.log("after");
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("no error\nafter\n", output);
+    }
+
+    [Fact]
+    public void TryCatch_NestedOptionalCatchBinding()
+    {
+        var source = """
+            try {
+                try {
+                    throw "inner";
+                } catch {
+                    console.log("inner caught");
+                    throw "outer";
+                }
+            } catch (e) {
+                console.log(e);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("inner caught\nouter\n", output);
+    }
 }

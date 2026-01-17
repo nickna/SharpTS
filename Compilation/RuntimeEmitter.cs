@@ -1300,6 +1300,7 @@ public partial class RuntimeEmitter
         EmitArrayJoin(typeBuilder, runtime);
         EmitArrayConcat(typeBuilder, runtime);
         EmitArrayReverse(typeBuilder, runtime);
+        EmitArrayFrom(typeBuilder, runtime);
         // String methods
         EmitStringCharAt(typeBuilder, runtime);
         EmitStringSubstring(typeBuilder, runtime);
