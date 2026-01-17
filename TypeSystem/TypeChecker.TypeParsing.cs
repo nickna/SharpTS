@@ -39,6 +39,13 @@ public partial class TypeChecker
             return new TypeInfo.KeyOf(innerType);
         }
 
+        // Handle typeof type operator: "typeof variableName"
+        if (typeName.StartsWith("typeof "))
+        {
+            string path = typeName[7..].Trim();
+            return EvaluateTypeOf(path);
+        }
+
         // Handle infer keyword for conditional types: "infer U"
         if (typeName.StartsWith("infer "))
         {
@@ -1151,4 +1158,194 @@ public partial class TypeChecker
 
         return results;
     }
+
+    // ============== TYPEOF EVALUATION ==============
+
+    /// <summary>
+    /// Accessor kind for typeof path parsing.
+    /// </summary>
+    private enum TypeOfAccessorKind { Property, NumericIndex, StringIndex }
+
+    /// <summary>
+    /// Represents a single accessor in a typeof path.
+    /// </summary>
+    private record TypeOfAccessor(string Name, TypeOfAccessorKind Kind);
+
+    /// <summary>
+    /// Evaluates typeof path to extract the static type of a variable/expression.
+    /// </summary>
+    private TypeInfo EvaluateTypeOf(string path)
+    {
+        // Parse path into segments, handling both dot access and bracket access
+        // Examples: "obj.prop", "arr[0]", "obj[\"key\"]", "obj.nested[0].value"
+        var accessors = ParseTypeOfPath(path);
+
+        if (accessors.Count == 0)
+            throw new TypeCheckException($"Invalid typeof expression: '{path}'");
+
+        // Look up first identifier in environment
+        string firstName = accessors[0].Name;
+        TypeInfo? currentType = _environment.Get(firstName);
+
+        if (currentType == null)
+            throw new TypeCheckException($"Cannot find name '{firstName}' for typeof.");
+
+        // Resolve what typeof returns for the value
+        currentType = ResolveTypeOfValue(currentType);
+
+        // Traverse access path
+        for (int i = 1; i < accessors.Count; i++)
+        {
+            var accessor = accessors[i];
+            currentType = accessor.Kind switch
+            {
+                TypeOfAccessorKind.Property => GetPropertyTypeForTypeOf(currentType, accessor.Name),
+                TypeOfAccessorKind.NumericIndex => GetIndexedTypeForTypeOf(currentType, int.Parse(accessor.Name)),
+                TypeOfAccessorKind.StringIndex => GetPropertyTypeForTypeOf(currentType, accessor.Name),
+                _ => null
+            };
+
+            if (currentType == null)
+                throw new TypeCheckException($"Cannot access '{accessor.Name}' on type in typeof.");
+        }
+
+        return currentType;
+    }
+
+    /// <summary>
+    /// Parses a typeof path into a list of accessors.
+    /// </summary>
+    private static List<TypeOfAccessor> ParseTypeOfPath(string path)
+    {
+        var result = new List<TypeOfAccessor>();
+        int i = 0;
+
+        while (i < path.Length)
+        {
+            // Skip leading whitespace
+            while (i < path.Length && char.IsWhiteSpace(path[i])) i++;
+            if (i >= path.Length) break;
+
+            // Parse identifier
+            int start = i;
+            while (i < path.Length && (char.IsLetterOrDigit(path[i]) || path[i] == '_'))
+                i++;
+
+            if (i > start)
+                result.Add(new TypeOfAccessor(path[start..i], TypeOfAccessorKind.Property));
+
+            // Skip whitespace
+            while (i < path.Length && char.IsWhiteSpace(path[i])) i++;
+            if (i >= path.Length) break;
+
+            // Check what follows
+            if (path[i] == '.')
+            {
+                i++; // skip dot
+            }
+            else if (path[i] == '[')
+            {
+                i++; // skip [
+
+                // Skip whitespace
+                while (i < path.Length && char.IsWhiteSpace(path[i])) i++;
+
+                if (i < path.Length && path[i] == '"')
+                {
+                    // String index: ["key"]
+                    i++; // skip opening quote
+                    start = i;
+                    while (i < path.Length && path[i] != '"') i++;
+                    result.Add(new TypeOfAccessor(path[start..i], TypeOfAccessorKind.StringIndex));
+                    i++; // skip closing quote
+                }
+                else
+                {
+                    // Numeric index: [0] or identifier index
+                    start = i;
+                    while (i < path.Length && (char.IsDigit(path[i]) || char.IsLetter(path[i]) || path[i] == '_'))
+                        i++;
+                    string indexValue = path[start..i];
+
+                    // Determine if it's a numeric index or identifier
+                    if (indexValue.All(char.IsDigit))
+                        result.Add(new TypeOfAccessor(indexValue, TypeOfAccessorKind.NumericIndex));
+                    else
+                        result.Add(new TypeOfAccessor(indexValue, TypeOfAccessorKind.Property));
+                }
+
+                // Skip whitespace and closing bracket
+                while (i < path.Length && char.IsWhiteSpace(path[i])) i++;
+                if (i < path.Length && path[i] == ']') i++; // skip ]
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves the type that typeof should return for a given value type.
+    /// </summary>
+    private TypeInfo ResolveTypeOfValue(TypeInfo type) => type switch
+    {
+        // For class types, typeof returns the class type itself (not an instance)
+        // This represents the constructor/static side of the class
+        TypeInfo.Class cls => cls,
+        TypeInfo.GenericClass gc => gc,
+        // For instances, typeof returns the instance type
+        TypeInfo.Instance => type,
+        // For function types, return as-is
+        TypeInfo.Function => type,
+        TypeInfo.GenericFunction => type,
+        // For other types, return as-is
+        _ => type
+    };
+
+    /// <summary>
+    /// Gets the type of a property for typeof evaluation.
+    /// </summary>
+    private TypeInfo? GetPropertyTypeForTypeOf(TypeInfo type, string propName) => type switch
+    {
+        TypeInfo.Class cls => cls.StaticMethods.GetValueOrDefault(propName)
+                           ?? cls.StaticProperties.GetValueOrDefault(propName)
+                           ?? cls.Methods.GetValueOrDefault(propName)
+                           ?? cls.FieldTypes.GetValueOrDefault(propName)
+                           ?? cls.Getters.GetValueOrDefault(propName),
+        TypeInfo.Instance inst => GetPropertyTypeForTypeOf(inst.ClassType, propName) switch
+        {
+            // For instance property access, return instance properties not static ones
+            TypeInfo t when inst.ClassType is TypeInfo.Class c &&
+                (c.Methods.ContainsKey(propName) || c.FieldTypes.ContainsKey(propName) || c.Getters.ContainsKey(propName)) => t,
+            _ => null
+        } ?? GetInstancePropertyType(inst, propName),
+        TypeInfo.Record rec => rec.Fields.GetValueOrDefault(propName),
+        TypeInfo.Interface itf => itf.Members.GetValueOrDefault(propName),
+        TypeInfo.InstantiatedGeneric ig => GetPropertyTypeFromInstantiatedGeneric(ig, propName),
+        TypeInfo.GenericClass gc => gc.StaticMethods.GetValueOrDefault(propName)
+                                 ?? gc.StaticProperties.GetValueOrDefault(propName),
+        TypeInfo.Namespace ns => ns.GetMember(propName),
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the type of an instance property (non-static).
+    /// </summary>
+    private static TypeInfo? GetInstancePropertyType(TypeInfo.Instance inst, string propName) => inst.ClassType switch
+    {
+        TypeInfo.Class cls => cls.Methods.GetValueOrDefault(propName)
+                           ?? cls.FieldTypes.GetValueOrDefault(propName)
+                           ?? cls.Getters.GetValueOrDefault(propName),
+        TypeInfo.InstantiatedGeneric => null, // Handled separately
+        _ => null
+    };
+
+    /// <summary>
+    /// Gets the type at a numeric index for typeof evaluation (arrays, tuples).
+    /// </summary>
+    private static TypeInfo? GetIndexedTypeForTypeOf(TypeInfo type, int index) => type switch
+    {
+        TypeInfo.Array arr => arr.ElementType,
+        TypeInfo.Tuple tup when index >= 0 && index < tup.ElementTypes.Count => tup.ElementTypes[index],
+        _ => null
+    };
 }

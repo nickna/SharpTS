@@ -97,6 +97,64 @@ public partial class Parser
             return $"keyof {innerType}";
         }
 
+        // Handle typeof in type position: typeof someVariable, typeof obj.prop, typeof arr[0]
+        if (Match(TokenType.TYPEOF))
+        {
+            StringBuilder sb = new();
+            sb.Append("typeof ");
+
+            Token first = Consume(TokenType.IDENTIFIER, "Expect identifier after 'typeof' in type position.");
+            sb.Append(first.Lexeme);
+
+            // Handle property paths and index access: typeof obj.prop, typeof arr[0], typeof obj["key"]
+            while (true)
+            {
+                if (Match(TokenType.DOT))
+                {
+                    Token next = Consume(TokenType.IDENTIFIER, "Expect property name after '.'");
+                    sb.Append('.');
+                    sb.Append(next.Lexeme);
+                }
+                else if (Match(TokenType.LEFT_BRACKET))
+                {
+                    sb.Append('[');
+                    // Handle numeric index: arr[0]
+                    if (Check(TokenType.NUMBER))
+                    {
+                        Token num = Advance();
+                        sb.Append(num.Lexeme);
+                    }
+                    // Handle string key: obj["key"]
+                    else if (Check(TokenType.STRING))
+                    {
+                        Token str = Advance();
+                        // Literal contains the parsed string value without quotes
+                        sb.Append('"');
+                        sb.Append((string)str.Literal!);
+                        sb.Append('"');
+                    }
+                    // Handle identifier key: obj[key] (where key is a const)
+                    else if (Check(TokenType.IDENTIFIER))
+                    {
+                        Token id = Advance();
+                        sb.Append(id.Lexeme);
+                    }
+                    else
+                    {
+                        throw new Exception("Expect number, string, or identifier in typeof index access.");
+                    }
+                    Consume(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
+                    sb.Append(']');
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return sb.ToString();
+        }
+
         // Handle tuple type syntax: [string, number, boolean?]
         if (Match(TokenType.LEFT_BRACKET))
         {

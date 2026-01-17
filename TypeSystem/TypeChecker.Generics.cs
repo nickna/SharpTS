@@ -445,6 +445,7 @@ public partial class TypeChecker
             // Handle new mapped type constructs
             TypeInfo.KeyOf keyOf =>
                 new TypeInfo.KeyOf(Substitute(keyOf.SourceType, substitutions)),
+            TypeInfo.TypeOf => type, // typeof doesn't contain type parameters, return as-is
             TypeInfo.MappedType mapped =>
                 new TypeInfo.MappedType(
                     mapped.ParameterName,
@@ -1518,6 +1519,7 @@ public partial class TypeChecker
                     ig.TypeArguments.Select(a => SubstituteWithoutConditionalEval(a, substitutions)).ToList()),
             TypeInfo.KeyOf keyOf =>
                 new TypeInfo.KeyOf(SubstituteWithoutConditionalEval(keyOf.SourceType, substitutions)),
+            TypeInfo.TypeOf => type, // typeof doesn't contain type parameters, return as-is
             TypeInfo.IndexedAccess ia =>
                 new TypeInfo.IndexedAccess(
                     SubstituteWithoutConditionalEval(ia.ObjectType, substitutions),

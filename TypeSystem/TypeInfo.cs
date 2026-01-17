@@ -760,6 +760,16 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents typeof in type position: typeof someVariable
+    /// Extracts the static type of a value/variable at compile time.
+    /// Path can include property access (obj.prop) and index access (arr[0], obj["key"]).
+    /// </summary>
+    public record TypeOf(string Path) : TypeInfo
+    {
+        public override string ToString() => $"typeof {Path}";
+    }
+
+    /// <summary>
     /// Represents a mapped type: { [K in Constraint]: ValueType } with optional modifiers and key remapping.
     /// Lazy evaluation: this type is not expanded until needed for compatibility checks or property access.
     /// </summary>
