@@ -562,6 +562,13 @@ public class EmittedRuntime
     public MethodBuilder CryptoCreateHash { get; set; } = null!;
     public MethodBuilder CryptoRandomBytes { get; set; } = null!;
 
+    // $Hash type - emitted for standalone crypto support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
+    public Type TSHashType { get; set; } = null!;
+    public ConstructorBuilder TSHashCtor { get; set; } = null!;
+    public MethodBuilder TSHashUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSHashDigestMethod { get; set; } = null!;
+
     // Util module methods
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;

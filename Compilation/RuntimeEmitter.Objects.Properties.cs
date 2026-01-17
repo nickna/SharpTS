@@ -186,19 +186,39 @@ public partial class RuntimeEmitter
 
         // Try reflection for regular methods
         il.MarkLabel(tryReflectionLabel);
-        // var methodInfo = obj.GetType().GetMethod(name);
+        var methodLocal = il.DeclareLocal(_types.MethodInfo);
+        var typeLocal = il.DeclareLocal(_types.Type);
+
+        // typeLocal = obj.GetType();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        // First try: methodInfo = type.GetMethod(name);
+        il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        var methodLocal = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Stloc, methodLocal);
+
+        // if (methodInfo != null) goto wrapMethod;
+        var wrapMethodLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, methodLocal);
+        il.Emit(OpCodes.Brtrue, wrapMethodLabel);
+
+        // Second try: methodInfo = type.GetMethod(ToPascalCase(name));
+        // This handles C# methods with PascalCase names (e.g., "Update" for "update")
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToPascalCase);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Stloc, methodLocal);
 
         // if (methodInfo == null) return null;
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // return new $TSFunction(obj, methodInfo);
+        // wrapMethod: return new $TSFunction(obj, methodInfo);
+        il.MarkLabel(wrapMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);

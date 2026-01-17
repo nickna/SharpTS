@@ -106,6 +106,8 @@ public class TypeProvider
     public Type Attribute => Resolve("System.Attribute");
     public Type Exception => Resolve("System.Exception");
     public Type NotSupportedException => Resolve("System.NotSupportedException");
+    public Type ArgumentException => Resolve("System.ArgumentException");
+    public Type InvalidOperationException => Resolve("System.InvalidOperationException");
     public Type TargetInvocationException => Resolve("System.Reflection.TargetInvocationException");
     public Type DateTime => Resolve("System.DateTime");
     public Type TimeSpan => Resolve("System.TimeSpan");
@@ -322,6 +324,14 @@ public class TypeProvider
 
     public Type JsonSerializer => Resolve("System.Text.Json.JsonSerializer");
     public Type JsonSerializerOptions => Resolve("System.Text.Json.JsonSerializerOptions");
+
+    #endregion
+
+    #region Crypto Types
+
+    public Type IncrementalHash => typeof(System.Security.Cryptography.IncrementalHash);
+    public Type HashAlgorithmName => typeof(System.Security.Cryptography.HashAlgorithmName);
+    public Type RandomNumberGenerator => typeof(System.Security.Cryptography.RandomNumberGenerator);
 
     #endregion
 

@@ -460,14 +460,13 @@ public partial class ILEmitter
         }
 
         // Named imports: import { readFileSync, writeFileSync } from 'fs'
+        // These are stored as static fields so they're accessible from functions
         if (import.NamedImports != null)
         {
             foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
             {
                 string importedName = spec.Imported.Lexeme;
                 string localName = spec.LocalName?.Lexeme ?? importedName;
-
-                var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
 
                 // Try property first, then method
                 if (!emitter.TryEmitPropertyGet(this, importedName))
@@ -476,7 +475,18 @@ public partial class ILEmitter
                 }
 
                 EnsureBoxed();
-                IL.Emit(OpCodes.Stloc, local);
+
+                // Store in static field (created in PreScanBuiltInModuleImports)
+                if (_ctx.TopLevelStaticVars?.TryGetValue(localName, out var staticField) == true)
+                {
+                    IL.Emit(OpCodes.Stsfld, staticField);
+                }
+                else
+                {
+                    // Fallback to local (shouldn't happen for built-in modules)
+                    var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+                    IL.Emit(OpCodes.Stloc, local);
+                }
             }
         }
 

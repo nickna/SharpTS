@@ -361,7 +361,22 @@ public partial class ILCompiler
                         _builtInModuleNamespaces[import.NamespaceImport.Lexeme] = builtInModuleName;
                     }
 
-                    // Named imports don't need special handling here - they bind to specific functions
+                    // Named imports: create static fields so they're accessible from functions
+                    if (import.NamedImports != null)
+                    {
+                        foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
+                        {
+                            string localName = spec.LocalName?.Lexeme ?? spec.Imported.Lexeme;
+                            if (!_topLevelStaticVars.ContainsKey(localName))
+                            {
+                                var field = _programType.DefineField(
+                                    $"$builtInImport_{localName}",
+                                    _types.Object,
+                                    FieldAttributes.Public | FieldAttributes.Static);
+                                _topLevelStaticVars[localName] = field;
+                            }
+                        }
+                    }
                 }
             }
         }

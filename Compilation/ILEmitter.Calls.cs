@@ -705,6 +705,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Number instance methods - runtime dispatch for any/unknown types
+        if (methodName is "toFixed" or "toPrecision" or "toExponential" or "valueOf" or "toString")
+        {
+            // Check if we know it's a number at compile time
+            if (objType is TypeSystem.TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or TypeSystem.TypeInfo.NumberLiteral)
+            {
+                EmitNumberMethodCallDirect(methodGet.Object, methodName, arguments);
+                return;
+            }
+            // For unknown types, use runtime dispatch
+            EmitNumberMethodCall(methodGet.Object, methodName, arguments);
+            return;
+        }
+
         // Note: Date, Map, Set, WeakMap, WeakSet, RegExp methods are handled by TypeEmitterRegistry above
 
         // For object method calls, we need to pass the receiver as 'this'
@@ -935,6 +949,198 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
                 break;
         }
+
+        builder.MarkLabel(doneLabel);
+    }
+
+    /// <summary>
+    /// Emits a number method call when we know the receiver is a number at compile time.
+    /// </summary>
+    private void EmitNumberMethodCallDirect(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the number value
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        // Emit appropriate runtime method call based on method name
+        switch (methodName)
+        {
+            case "toFixed":
+                // Emit digits argument (default 0)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_I4_0);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Int32);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToFixed);
+                break;
+
+            case "toPrecision":
+                // Emit precision argument (default null for default behavior)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToPrecision);
+                break;
+
+            case "toExponential":
+                // Emit digits argument (default null for default behavior)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToExponential);
+                break;
+
+            case "valueOf":
+                // valueOf just returns the number itself (already on stack, boxed)
+                break;
+
+            case "toString":
+                // Emit radix argument (default 10)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_I4, 10);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Int32);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToStringRadix);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Emits a number method call with runtime type checking for any/unknown types.
+    /// Checks if the receiver is a Double at runtime and dispatches accordingly.
+    /// </summary>
+    private void EmitNumberMethodCall(Expr obj, string methodName, List<Expr> arguments)
+    {
+        // Emit the object and store in local
+        EmitExpression(obj);
+        EmitBoxIfNeeded(obj);
+
+        var objLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, objLocal);
+
+        var builder = _ctx.ILBuilder;
+        var isDoubleLabel = builder.DefineLabel("number_method_double");
+        var fallbackLabel = builder.DefineLabel("number_method_fallback");
+        var doneLabel = builder.DefineLabel("number_method_done");
+
+        // Check if it's a Double
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Double);
+        builder.Emit_Brtrue(isDoubleLabel);
+
+        // Fall through to dynamic dispatch
+        builder.Emit_Br(fallbackLabel);
+
+        // Double path - call the appropriate number method
+        builder.MarkLabel(isDoubleLabel);
+        IL.Emit(OpCodes.Ldloc, objLocal);
+
+        switch (methodName)
+        {
+            case "toFixed":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_I4_0);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Int32);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToFixed);
+                break;
+
+            case "toPrecision":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToPrecision);
+                break;
+
+            case "toExponential":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToExponential);
+                break;
+
+            case "valueOf":
+                // valueOf just returns the number (already loaded)
+                break;
+
+            case "toString":
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldc_I4, 10);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Int32);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.NumberToStringRadix);
+                break;
+        }
+        builder.Emit_Br(doneLabel);
+
+        // Fallback path - use dynamic dispatch via GetProperty/InvokeMethodValue
+        builder.MarkLabel(fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, objLocal);  // receiver
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldstr, methodName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+
+        // Create args array
+        IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(arguments[i]);
+            EmitBoxIfNeeded(arguments[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
 
         builder.MarkLabel(doneLabel);
     }

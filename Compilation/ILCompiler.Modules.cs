@@ -346,6 +346,7 @@ public partial class ILCompiler
             EnumReverse = _enums.Reverse,
             EnumKinds = _enums.Kinds,
             NamespaceFields = _namespaceFields,
+            TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
             ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
