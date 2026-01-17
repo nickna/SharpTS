@@ -704,4 +704,456 @@ public class UtilityTypesTests
     }
 
     #endregion
+
+    #region ReturnType<T>
+
+    [Fact]
+    public void ReturnType_ExtractsFromSimpleFunction()
+    {
+        var source = """
+            function greet(): string { return "hello"; }
+            type R = ReturnType<typeof greet>;
+            let x: R = "world";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("world\n", output);
+    }
+
+    [Fact]
+    public void ReturnType_ExtractsFromFunctionType()
+    {
+        var source = """
+            type Fn = (x: number) => boolean;
+            type R = ReturnType<Fn>;
+            let result: R = true;
+            console.log(result);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ReturnType_ExtractsFromArrowFunction()
+    {
+        var source = """
+            const add = (a: number, b: number): number => a + b;
+            type R = ReturnType<typeof add>;
+            let sum: R = 42;
+            console.log(sum);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void ReturnType_WrongArgCount_Throws()
+    {
+        var source = """
+            type R = ReturnType<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("ReturnType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Parameters<T>
+
+    [Fact]
+    public void Parameters_ExtractsFromSimpleFunction()
+    {
+        var source = """
+            function add(a: number, b: number): number { return a + b; }
+            type P = Parameters<typeof add>;
+            let args: P = [1, 2];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Fact]
+    public void Parameters_ExtractsFromFunctionType()
+    {
+        var source = """
+            type Fn = (name: string, age: number) => void;
+            type P = Parameters<Fn>;
+            let args: P = ["Alice", 30];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Alice\n30\n", output);
+    }
+
+    [Fact]
+    public void Parameters_EmptyForNoArgs()
+    {
+        var source = """
+            function noArgs(): void {}
+            type P = Parameters<typeof noArgs>;
+            let args: P = [];
+            console.log(args.length);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n", output);
+    }
+
+    [Fact]
+    public void Parameters_WrongArgCount_Throws()
+    {
+        var source = """
+            type P = Parameters<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Parameters<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region ConstructorParameters<T>
+
+    [Fact]
+    public void ConstructorParameters_ExtractsFromClass()
+    {
+        var source = """
+            class Person {
+                constructor(public name: string, public age: number) {}
+            }
+            type CP = ConstructorParameters<typeof Person>;
+            let args: CP = ["Bob", 25];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Bob\n25\n", output);
+    }
+
+    [Fact]
+    public void ConstructorParameters_EmptyForNoArgs()
+    {
+        var source = """
+            class Empty {}
+            type CP = ConstructorParameters<typeof Empty>;
+            let args: CP = [];
+            console.log(args.length);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n", output);
+    }
+
+    [Fact]
+    public void ConstructorParameters_WrongArgCount_Throws()
+    {
+        var source = """
+            type CP = ConstructorParameters<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("ConstructorParameters<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region InstanceType<T>
+
+    [Fact]
+    public void InstanceType_ExtractsFromClass()
+    {
+        var source = """
+            class Animal {
+                name: string = "unknown";
+                speak(): string { return "..."; }
+            }
+            type I = InstanceType<typeof Animal>;
+            let a: I = new Animal();
+            console.log(a.name);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("unknown\n", output);
+    }
+
+    [Fact]
+    public void InstanceType_WrongArgCount_Throws()
+    {
+        var source = """
+            type I = InstanceType<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("InstanceType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region ThisType<T>
+
+    [Fact]
+    public void ThisType_AcceptsType()
+    {
+        // ThisType<T> is a marker type that just returns T
+        var source = """
+            type T = ThisType<string>;
+            let x: T = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Fact]
+    public void ThisType_WrongArgCount_Throws()
+    {
+        var source = """
+            type T = ThisType<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("ThisType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Awaited<T>
+
+    [Fact]
+    public void Awaited_UnwrapsPromise()
+    {
+        var source = """
+            type A = Awaited<Promise<string>>;
+            let x: A = "resolved";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("resolved\n", output);
+    }
+
+    [Fact]
+    public void Awaited_UnwrapsNestedPromise()
+    {
+        var source = """
+            type A = Awaited<Promise<Promise<number>>>;
+            let x: A = 42;
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void Awaited_PassesThroughNonPromise()
+    {
+        var source = """
+            type A = Awaited<string>;
+            let x: A = "direct";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("direct\n", output);
+    }
+
+    [Fact]
+    public void Awaited_WrongArgCount_Throws()
+    {
+        var source = """
+            type A = Awaited<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Awaited<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region NonNullable<T>
+
+    [Fact]
+    public void NonNullable_RemovesNull()
+    {
+        var source = """
+            type NN = NonNullable<string | null>;
+            let x: NN = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Fact]
+    public void NonNullable_RemovesUndefined()
+    {
+        var source = """
+            type NN = NonNullable<number | undefined>;
+            let x: NN = 42;
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void NonNullable_RemovesBothNullAndUndefined()
+    {
+        var source = """
+            type NN = NonNullable<string | null | undefined>;
+            let x: NN = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n", output);
+    }
+
+    [Fact]
+    public void NonNullable_PassesThroughNonNullable()
+    {
+        var source = """
+            type NN = NonNullable<string>;
+            let x: NN = "direct";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("direct\n", output);
+    }
+
+    [Fact]
+    public void NonNullable_WrongArgCount_Throws()
+    {
+        var source = """
+            type NN = NonNullable<string, number>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("NonNullable<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Extract<T, U>
+
+    [Fact]
+    public void Extract_FiltersByType()
+    {
+        var source = """
+            type E = Extract<string | number | boolean, string | boolean>;
+            let x: E = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Fact]
+    public void Extract_FiltersByLiteral()
+    {
+        var source = """
+            type Status = "pending" | "success" | "error";
+            type SuccessStatus = Extract<Status, "success">;
+            let x: SuccessStatus = "success";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("success\n", output);
+    }
+
+    [Fact]
+    public void Extract_CanExtractBoolean()
+    {
+        var source = """
+            type E = Extract<string | number | boolean, boolean>;
+            let x: E = true;
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Extract_WrongArgCount_Throws()
+    {
+        var source = """
+            type E = Extract<string>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Extract<T, U> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Exclude<T, U>
+
+    [Fact]
+    public void Exclude_RemovesByType()
+    {
+        var source = """
+            type E = Exclude<string | number | boolean, boolean>;
+            let x: E = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Fact]
+    public void Exclude_RemovesByLiteral()
+    {
+        var source = """
+            type Status = "pending" | "success" | "error";
+            type NonError = Exclude<Status, "error">;
+            let x: NonError = "pending";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("pending\n", output);
+    }
+
+    [Fact]
+    public void Exclude_RemovesNull()
+    {
+        var source = """
+            type E = Exclude<string | null, null>;
+            let x: E = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n", output);
+    }
+
+    [Fact]
+    public void Exclude_WrongArgCount_Throws()
+    {
+        var source = """
+            type E = Exclude<string>;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Exclude<T, U> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Utility Type Composition
+
+    [Fact]
+    public void NonNullable_Extract_Composed()
+    {
+        var source = """
+            type Mixed = string | number | null | undefined;
+            type StringOnly = NonNullable<Extract<Mixed, string | null>>;
+            let x: StringOnly = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Fact]
+    public void Exclude_NonNullable_Composed()
+    {
+        var source = """
+            type Mixed = string | number | boolean | null;
+            type NoNullNoBoolean = NonNullable<Exclude<Mixed, boolean>>;
+            let x: NoNullNoBoolean = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n", output);
+    }
+
+    #endregion
 }

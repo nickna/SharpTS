@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added Error class with all subtypes, updated Promise.resolve/reject status)
+**Last Updated:** 2026-01-16 (Added additional utility types: ReturnType, Parameters, ConstructorParameters, InstanceType, ThisType, Awaited, NonNullable, Extract, Exclude)
 
 ## Legend
 - ✅ Implemented
@@ -157,8 +157,8 @@ This document tracks TypeScript language features and their implementation statu
 | Spread operator (`...`) | ✅ | In arrays/objects/calls |
 | Non-null assertion (`x!`) | ✅ | Postfix operator to assert non-null |
 | Logical assignment (`&&=`, `\|\|=`, `??=`) | ✅ | Compound logical assignment operators with short-circuit evaluation |
-| `keyof` operator | ❌ | Extract keys as union type |
-| `typeof` in type position | ❌ | Extract type from value |
+| `keyof` operator | ✅ | Extract keys as union type |
+| `typeof` in type position | ✅ | Extract type from value |
 
 ---
 
@@ -266,7 +266,7 @@ This document tracks TypeScript language features and their implementation statu
 | Conditional types | ✅ | `T extends U ? X : Y`, `infer` keyword, distribution over unions |
 | Template literal types | ✅ | `` `prefix${string}` ``, union expansion, pattern matching, `infer` support |
 | Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>`, `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>` |
-| Additional utility types | ❌ | `ReturnType<T>`, `Parameters<T>`, `ConstructorParameters<T>`, `InstanceType<T>`, `ThisType<T>`, `Awaited<T>`, `NonNullable<T>`, `Extract<T, U>`, `Exclude<T, U>` |
+| Additional utility types | ✅ | `ReturnType<T>`, `Parameters<T>`, `ConstructorParameters<T>`, `InstanceType<T>`, `ThisType<T>`, `Awaited<T>`, `NonNullable<T>`, `Extract<T, U>`, `Exclude<T, U>` |
 | `using`/`await using` | ❌ | Explicit resource management (TS 5.2+) |
 | Const type parameters | ❌ | `<const T>` syntax (TS 5.0+) |
 | Variance annotations | ❌ | `in`/`out` modifiers on type parameters |

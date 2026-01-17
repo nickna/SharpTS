@@ -123,6 +123,62 @@ public partial class TypeChecker
                 throw new TypeCheckException($" Omit<T, K> requires exactly 2 type arguments, got {typeArgs.Count}.");
             result = ExpandOmit(typeArgs[0], typeArgs[1]);
         }
+        // Additional utility types
+        else if (baseName == "ReturnType")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" ReturnType<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandReturnType(typeArgs[0]);
+        }
+        else if (baseName == "Parameters")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" Parameters<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandParameters(typeArgs[0]);
+        }
+        else if (baseName == "ConstructorParameters")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" ConstructorParameters<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandConstructorParameters(typeArgs[0]);
+        }
+        else if (baseName == "InstanceType")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" InstanceType<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandInstanceType(typeArgs[0]);
+        }
+        else if (baseName == "ThisType")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" ThisType<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            // ThisType<T> is a marker type - it just wraps T for this-context typing
+            result = typeArgs[0];
+        }
+        else if (baseName == "Awaited")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" Awaited<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandAwaited(typeArgs[0]);
+        }
+        else if (baseName == "NonNullable")
+        {
+            if (typeArgs.Count != 1)
+                throw new TypeCheckException($" NonNullable<T> requires exactly 1 type argument, got {typeArgs.Count}.");
+            result = ExpandNonNullable(typeArgs[0]);
+        }
+        else if (baseName == "Extract")
+        {
+            if (typeArgs.Count != 2)
+                throw new TypeCheckException($" Extract<T, U> requires exactly 2 type arguments, got {typeArgs.Count}.");
+            result = ExpandExtract(typeArgs[0], typeArgs[1]);
+        }
+        else if (baseName == "Exclude")
+        {
+            if (typeArgs.Count != 2)
+                throw new TypeCheckException($" Exclude<T, U> requires exactly 2 type arguments, got {typeArgs.Count}.");
+            result = ExpandExclude(typeArgs[0], typeArgs[1]);
+        }
         else if (baseName is "Uppercase" or "Lowercase" or "Capitalize" or "Uncapitalize")
         {
             if (typeArgs.Count != 1)
@@ -1302,6 +1358,397 @@ public partial class TypeChecker
         return remainingOptionals.Count > 0
             ? new TypeInfo.Interface("", remainingProps.ToFrozenDictionary(), remainingOptionals.ToFrozenSet())
             : new TypeInfo.Record(remainingProps.ToFrozenDictionary());
+    }
+
+    // ==================== ADDITIONAL UTILITY TYPES ====================
+
+    /// <summary>
+    /// Expands ReturnType&lt;T&gt; to extract the return type of a function type.
+    /// Equivalent to: T extends (...args: any[]) => infer R ? R : never
+    /// </summary>
+    private TypeInfo ExpandReturnType(TypeInfo functionType)
+    {
+        // Handle type parameters - defer evaluation
+        if (functionType is TypeInfo.TypeParameter)
+        {
+            // Return a conditional type for lazy evaluation
+            return new TypeInfo.ConditionalType(
+                functionType,
+                new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Any(), HasRestParam: true),
+                new TypeInfo.InferredTypeParameter("R"),
+                new TypeInfo.Never()
+            );
+        }
+
+        // Handle unions - distribute over union members
+        if (functionType is TypeInfo.Union union)
+        {
+            var returnTypes = union.FlattenedTypes
+                .Select(ExpandReturnType)
+                .Where(t => t is not TypeInfo.Never)
+                .Distinct()
+                .ToList();
+
+            return returnTypes.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => returnTypes[0],
+                _ => new TypeInfo.Union(returnTypes)
+            };
+        }
+
+        // Extract return type from function types
+        return functionType switch
+        {
+            TypeInfo.Function fn => fn.ReturnType,
+            TypeInfo.OverloadedFunction of => of.Signatures.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => of.Signatures[0].ReturnType,
+                _ => new TypeInfo.Union(of.Signatures.Select(s => s.ReturnType).Distinct().ToList())
+            },
+            TypeInfo.GenericFunction gf => gf.ReturnType,
+            _ => new TypeInfo.Never()
+        };
+    }
+
+    /// <summary>
+    /// Expands Parameters&lt;T&gt; to extract the parameter types of a function as a tuple.
+    /// Equivalent to: T extends (...args: infer P) => any ? P : never
+    /// </summary>
+    private TypeInfo ExpandParameters(TypeInfo functionType)
+    {
+        // Handle type parameters - defer evaluation
+        if (functionType is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                functionType,
+                new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Any(), HasRestParam: true),
+                new TypeInfo.InferredTypeParameter("P"),
+                new TypeInfo.Never()
+            );
+        }
+
+        // Handle unions - distribute over union members
+        if (functionType is TypeInfo.Union union)
+        {
+            var paramTypes = union.FlattenedTypes
+                .Select(ExpandParameters)
+                .Where(t => t is not TypeInfo.Never)
+                .Distinct()
+                .ToList();
+
+            return paramTypes.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => paramTypes[0],
+                _ => new TypeInfo.Union(paramTypes)
+            };
+        }
+
+        // Extract parameter types as tuple from function types
+        return functionType switch
+        {
+            TypeInfo.Function fn => new TypeInfo.Tuple(fn.ParamTypes, fn.ParamTypes.Count),
+            TypeInfo.OverloadedFunction of when of.Signatures.Count > 0 =>
+                // Use the last (most general) signature for overloaded functions
+                new TypeInfo.Tuple(of.Signatures[^1].ParamTypes, of.Signatures[^1].ParamTypes.Count),
+            TypeInfo.GenericFunction gf => new TypeInfo.Tuple(gf.ParamTypes, gf.ParamTypes.Count),
+            _ => new TypeInfo.Never()
+        };
+    }
+
+    /// <summary>
+    /// Expands ConstructorParameters&lt;T&gt; to extract the constructor parameter types as a tuple.
+    /// Equivalent to: T extends abstract new (...args: infer P) => any ? P : never
+    /// </summary>
+    private TypeInfo ExpandConstructorParameters(TypeInfo classType)
+    {
+        // Handle type parameters - defer evaluation
+        if (classType is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                classType,
+                new TypeInfo.Any(), // Represents constructor type
+                new TypeInfo.InferredTypeParameter("P"),
+                new TypeInfo.Never()
+            );
+        }
+
+        // Handle unions - distribute
+        if (classType is TypeInfo.Union union)
+        {
+            var ctorParams = union.FlattenedTypes
+                .Select(ExpandConstructorParameters)
+                .Where(t => t is not TypeInfo.Never)
+                .Distinct()
+                .ToList();
+
+            return ctorParams.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => ctorParams[0],
+                _ => new TypeInfo.Union(ctorParams)
+            };
+        }
+
+        // Extract constructor parameters from class types
+        return classType switch
+        {
+            TypeInfo.Class cls => ExtractConstructorParams(cls),
+            TypeInfo.MutableClass mc => ExtractConstructorParams(mc.Freeze()),
+            TypeInfo.GenericClass gc => ExtractConstructorParams(gc),
+            TypeInfo.InstantiatedGeneric ig when ig.GenericDefinition is TypeInfo.GenericClass gc =>
+                SubstituteConstructorParams(gc, ig.TypeArguments),
+            _ => new TypeInfo.Never()
+        };
+    }
+
+    /// <summary>
+    /// Extracts constructor parameter types from a class.
+    /// </summary>
+    private static TypeInfo ExtractConstructorParams(TypeInfo.Class cls)
+    {
+        // Look for constructor in methods
+        if (cls.Methods.TryGetValue("constructor", out var ctorType) && ctorType is TypeInfo.Function fn)
+        {
+            return new TypeInfo.Tuple(fn.ParamTypes, fn.ParamTypes.Count);
+        }
+        // No explicit constructor - empty tuple
+        return new TypeInfo.Tuple([], 0);
+    }
+
+    /// <summary>
+    /// Extracts constructor parameter types from a generic class.
+    /// </summary>
+    private static TypeInfo ExtractConstructorParams(TypeInfo.GenericClass gc)
+    {
+        if (gc.Methods.TryGetValue("constructor", out var ctorType) && ctorType is TypeInfo.Function fn)
+        {
+            return new TypeInfo.Tuple(fn.ParamTypes, fn.ParamTypes.Count);
+        }
+        return new TypeInfo.Tuple([], 0);
+    }
+
+    /// <summary>
+    /// Substitutes type parameters in constructor parameters for instantiated generic classes.
+    /// </summary>
+    private TypeInfo SubstituteConstructorParams(TypeInfo.GenericClass gc, List<TypeInfo> typeArgs)
+    {
+        if (!gc.Methods.TryGetValue("constructor", out var ctorType) || ctorType is not TypeInfo.Function fn)
+        {
+            return new TypeInfo.Tuple([], 0);
+        }
+
+        // Build substitution map
+        var substitutions = new Dictionary<string, TypeInfo>();
+        for (int i = 0; i < gc.TypeParams.Count && i < typeArgs.Count; i++)
+        {
+            substitutions[gc.TypeParams[i].Name] = typeArgs[i];
+        }
+
+        // Substitute type parameters in param types
+        var substitutedParams = fn.ParamTypes.Select(p => Substitute(p, substitutions)).ToList();
+        return new TypeInfo.Tuple(substitutedParams, substitutedParams.Count);
+    }
+
+    /// <summary>
+    /// Expands InstanceType&lt;T&gt; to extract the instance type of a constructor/class.
+    /// Equivalent to: T extends abstract new (...args: any) => infer R ? R : never
+    /// </summary>
+    private TypeInfo ExpandInstanceType(TypeInfo classType)
+    {
+        // Handle type parameters - defer evaluation
+        if (classType is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                classType,
+                new TypeInfo.Any(),
+                new TypeInfo.InferredTypeParameter("R"),
+                new TypeInfo.Never()
+            );
+        }
+
+        // Handle unions - distribute
+        if (classType is TypeInfo.Union union)
+        {
+            var instanceTypes = union.FlattenedTypes
+                .Select(ExpandInstanceType)
+                .Where(t => t is not TypeInfo.Never)
+                .Distinct()
+                .ToList();
+
+            return instanceTypes.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => instanceTypes[0],
+                _ => new TypeInfo.Union(instanceTypes)
+            };
+        }
+
+        // Extract instance type from class types
+        return classType switch
+        {
+            TypeInfo.Class cls => new TypeInfo.Instance(cls),
+            TypeInfo.MutableClass mc => new TypeInfo.Instance(mc.Freeze()),
+            TypeInfo.GenericClass gc => new TypeInfo.Instance(gc),
+            TypeInfo.InstantiatedGeneric ig => new TypeInfo.Instance(ig),
+            _ => new TypeInfo.Never()
+        };
+    }
+
+    /// <summary>
+    /// Expands Awaited&lt;T&gt; to recursively unwrap Promise types.
+    /// Equivalent to: T extends PromiseLike&lt;infer U&gt; ? Awaited&lt;U&gt; : T
+    /// </summary>
+    private TypeInfo ExpandAwaited(TypeInfo type)
+    {
+        // Handle type parameters - defer evaluation
+        if (type is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                type,
+                new TypeInfo.Promise(new TypeInfo.Any()),
+                new TypeInfo.InferredTypeParameter("U"),
+                type
+            );
+        }
+
+        // Handle unions - distribute
+        if (type is TypeInfo.Union union)
+        {
+            var awaitedTypes = union.FlattenedTypes
+                .Select(ExpandAwaited)
+                .Distinct()
+                .ToList();
+
+            return awaitedTypes.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => awaitedTypes[0],
+                _ => new TypeInfo.Union(awaitedTypes)
+            };
+        }
+
+        // Recursively unwrap Promise types
+        return type switch
+        {
+            TypeInfo.Promise p => ExpandAwaited(p.ValueType),
+            _ => type
+        };
+    }
+
+    /// <summary>
+    /// Expands NonNullable&lt;T&gt; to remove null and undefined from a type.
+    /// Equivalent to: T extends null | undefined ? never : T
+    /// </summary>
+    private TypeInfo ExpandNonNullable(TypeInfo type)
+    {
+        // Handle type parameters - defer evaluation
+        if (type is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                type,
+                new TypeInfo.Union([new TypeInfo.Null(), new TypeInfo.Undefined()]),
+                new TypeInfo.Never(),
+                type
+            );
+        }
+
+        // Handle unions - filter out null and undefined
+        if (type is TypeInfo.Union union)
+        {
+            var filtered = union.FlattenedTypes
+                .Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined)
+                .ToList();
+
+            return filtered.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => filtered[0],
+                _ => new TypeInfo.Union(filtered)
+            };
+        }
+
+        // Single type - return never if null/undefined, otherwise return type
+        return type switch
+        {
+            TypeInfo.Null => new TypeInfo.Never(),
+            TypeInfo.Undefined => new TypeInfo.Never(),
+            _ => type
+        };
+    }
+
+    /// <summary>
+    /// Expands Extract&lt;T, U&gt; to extract union members from T that are assignable to U.
+    /// Equivalent to: T extends U ? T : never
+    /// </summary>
+    private TypeInfo ExpandExtract(TypeInfo type, TypeInfo constraint)
+    {
+        // Handle type parameters - defer evaluation
+        if (type is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                type,
+                constraint,
+                type,
+                new TypeInfo.Never()
+            );
+        }
+
+        // Handle unions - filter members assignable to constraint
+        if (type is TypeInfo.Union union)
+        {
+            var extracted = union.FlattenedTypes
+                .Where(t => IsCompatible(constraint, t))
+                .ToList();
+
+            return extracted.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => extracted[0],
+                _ => new TypeInfo.Union(extracted)
+            };
+        }
+
+        // Single type - keep if assignable to constraint
+        return IsCompatible(constraint, type) ? type : new TypeInfo.Never();
+    }
+
+    /// <summary>
+    /// Expands Exclude&lt;T, U&gt; to remove union members from T that are assignable to U.
+    /// Equivalent to: T extends U ? never : T
+    /// </summary>
+    private TypeInfo ExpandExclude(TypeInfo type, TypeInfo constraint)
+    {
+        // Handle type parameters - defer evaluation
+        if (type is TypeInfo.TypeParameter)
+        {
+            return new TypeInfo.ConditionalType(
+                type,
+                constraint,
+                new TypeInfo.Never(),
+                type
+            );
+        }
+
+        // Handle unions - filter out members assignable to constraint
+        if (type is TypeInfo.Union union)
+        {
+            var remaining = union.FlattenedTypes
+                .Where(t => !IsCompatible(constraint, t))
+                .ToList();
+
+            return remaining.Count switch
+            {
+                0 => new TypeInfo.Never(),
+                1 => remaining[0],
+                _ => new TypeInfo.Union(remaining)
+            };
+        }
+
+        // Single type - remove if assignable to constraint
+        return IsCompatible(constraint, type) ? new TypeInfo.Never() : type;
     }
 
     // ==================== UTILITY TYPE HELPERS ====================
