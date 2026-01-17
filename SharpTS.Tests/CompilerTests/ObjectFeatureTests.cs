@@ -815,4 +815,108 @@ public class ObjectFeatureTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("1\n10\n", output);
     }
+
+    // Object.freeze tests
+    [Fact]
+    public void Object_Freeze_ReturnsTheSameObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let frozen = Object.freeze(obj);
+            console.log(frozen === obj);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsTrueForFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.freeze(obj);
+            console.log(Object.isFrozen(obj));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsFalseForNonFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            console.log(Object.isFrozen(obj));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsTrueForPrimitives()
+    {
+        var source = """
+            console.log(Object.isFrozen(null));
+            console.log(Object.isFrozen(42));
+            console.log(Object.isFrozen("hello"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    // Object.seal tests
+    [Fact]
+    public void Object_Seal_ReturnsTheSameObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let sealed = Object.seal(obj);
+            console.log(sealed === obj);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsTrueForSealedObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.seal(obj);
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsFalseForNonSealedObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsTrueForFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.freeze(obj);
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
 }

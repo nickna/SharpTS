@@ -175,6 +175,7 @@ public class TypeProvider
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);
     public Type HashSetOfObject => MakeGenericType(HashSetOpen, Object);
     public Type ConditionalWeakTableObjectObject => MakeGenericType(ConditionalWeakTableOpen, Object, Object);
+    public Type ConditionalWeakTable => ConditionalWeakTableObjectObject;  // Alias for Object.freeze/seal tracking
 
     #endregion
 

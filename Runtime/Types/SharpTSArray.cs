@@ -14,6 +14,33 @@ public class SharpTSArray(List<object?> elements)
 {
     public List<object?> Elements { get; } = elements;
 
+    /// <summary>
+    /// Whether this array is frozen (no element additions, removals, or modifications).
+    /// </summary>
+    public bool IsFrozen { get; private set; }
+
+    /// <summary>
+    /// Whether this array is sealed (no element additions or removals, but modifications allowed).
+    /// </summary>
+    public bool IsSealed { get; private set; }
+
+    /// <summary>
+    /// Freezes this array, preventing any element changes.
+    /// </summary>
+    public void Freeze()
+    {
+        IsFrozen = true;
+        IsSealed = true; // Frozen implies sealed
+    }
+
+    /// <summary>
+    /// Seals this array, preventing element additions/removals but allowing modifications.
+    /// </summary>
+    public void Seal()
+    {
+        IsSealed = true;
+    }
+
     public object? Get(int index)
     {
         if (index < 0 || index >= Elements.Count)
@@ -25,7 +52,13 @@ public class SharpTSArray(List<object?> elements)
 
     public void Set(int index, object? value)
     {
-         if (index < 0 || index >= Elements.Count)
+        if (IsFrozen)
+        {
+            // Frozen arrays silently ignore element modifications (JavaScript behavior)
+            return;
+        }
+
+        if (index < 0 || index >= Elements.Count)
         {
             // Simplified: TS usually expands array, but let's be strict or expandable?
             // List<T> supports expansion via Add, but index access throws if OOB.
@@ -33,6 +66,78 @@ public class SharpTSArray(List<object?> elements)
             throw new Exception("Index out of bounds.");
         }
         Elements[index] = value;
+    }
+
+    /// <summary>
+    /// Adds an element to the end of the array. Respects frozen/sealed state.
+    /// </summary>
+    /// <returns>True if the element was added, false if blocked by frozen/sealed state.</returns>
+    public bool TryAdd(object? value)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            return false;
+        }
+        Elements.Add(value);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes the last element. Respects frozen/sealed state.
+    /// </summary>
+    /// <returns>The removed element, or null if blocked or empty.</returns>
+    public object? TryPop()
+    {
+        if (IsFrozen || IsSealed || Elements.Count == 0)
+        {
+            return null;
+        }
+        var last = Elements[^1];
+        Elements.RemoveAt(Elements.Count - 1);
+        return last;
+    }
+
+    /// <summary>
+    /// Removes the first element. Respects frozen/sealed state.
+    /// </summary>
+    /// <returns>The removed element, or null if blocked or empty.</returns>
+    public object? TryShift()
+    {
+        if (IsFrozen || IsSealed || Elements.Count == 0)
+        {
+            return null;
+        }
+        var first = Elements[0];
+        Elements.RemoveAt(0);
+        return first;
+    }
+
+    /// <summary>
+    /// Adds an element to the beginning. Respects frozen/sealed state.
+    /// </summary>
+    /// <returns>True if the element was added, false if blocked.</returns>
+    public bool TryUnshift(object? value)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            return false;
+        }
+        Elements.Insert(0, value);
+        return true;
+    }
+
+    /// <summary>
+    /// Reverses the array in place. Respects frozen state (sealed allows in-place modification).
+    /// </summary>
+    /// <returns>True if reversed, false if frozen.</returns>
+    public bool TryReverse()
+    {
+        if (IsFrozen)
+        {
+            return false;
+        }
+        Elements.Reverse();
+        return true;
     }
 
     public override string ToString() => $"[{string.Join(", ", Elements.Select(e => e?.ToString() ?? "null"))}]";

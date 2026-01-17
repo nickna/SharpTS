@@ -142,6 +142,68 @@ public static class ObjectBuiltIns
 
                 throw new Exception("Runtime Error: Object.assign() target must be an object");
             }),
+            "freeze" => new BuiltInMethod("freeze", 1, (_, _, args) =>
+            {
+                // Object.freeze(obj) - freezes the object and returns it
+                switch (args[0])
+                {
+                    case SharpTSObject obj:
+                        obj.Freeze();
+                        return obj;
+                    case SharpTSInstance inst:
+                        inst.Freeze();
+                        return inst;
+                    case SharpTSArray arr:
+                        arr.Freeze();
+                        return arr;
+                    default:
+                        // Non-objects are returned unchanged (JavaScript behavior)
+                        return args[0];
+                }
+            }),
+            "seal" => new BuiltInMethod("seal", 1, (_, _, args) =>
+            {
+                // Object.seal(obj) - seals the object and returns it
+                switch (args[0])
+                {
+                    case SharpTSObject obj:
+                        obj.Seal();
+                        return obj;
+                    case SharpTSInstance inst:
+                        inst.Seal();
+                        return inst;
+                    case SharpTSArray arr:
+                        arr.Seal();
+                        return arr;
+                    default:
+                        // Non-objects are returned unchanged (JavaScript behavior)
+                        return args[0];
+                }
+            }),
+            "isFrozen" => new BuiltInMethod("isFrozen", 1, (_, _, args) =>
+            {
+                // Object.isFrozen(obj) - returns true if the object is frozen
+                return args[0] switch
+                {
+                    SharpTSObject obj => obj.IsFrozen,
+                    SharpTSInstance inst => inst.IsFrozen,
+                    SharpTSArray arr => arr.IsFrozen,
+                    // Non-extensible primitives are considered frozen in JavaScript
+                    _ => true
+                };
+            }),
+            "isSealed" => new BuiltInMethod("isSealed", 1, (_, _, args) =>
+            {
+                // Object.isSealed(obj) - returns true if the object is sealed
+                return args[0] switch
+                {
+                    SharpTSObject obj => obj.IsSealed,
+                    SharpTSInstance inst => inst.IsSealed,
+                    SharpTSArray arr => arr.IsSealed,
+                    // Non-extensible primitives are considered sealed in JavaScript
+                    _ => true
+                };
+            }),
             _ => null
         };
     }

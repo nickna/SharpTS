@@ -84,6 +84,24 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
 
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectAssign);
                 return true;
+            case "freeze":
+                // Object.freeze(obj) - freezes the object and returns it
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectFreeze);
+                return true;
+            case "seal":
+                // Object.seal(obj) - seals the object and returns it
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectSeal);
+                return true;
+            case "isFrozen":
+                // Object.isFrozen(obj) - returns true if the object is frozen
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsFrozen);
+                il.Emit(OpCodes.Box, typeof(bool));
+                return true;
+            case "isSealed":
+                // Object.isSealed(obj) - returns true if the object is sealed
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectIsSealed);
+                il.Emit(OpCodes.Box, typeof(bool));
+                return true;
             default:
                 // Pop the argument we pushed and return false
                 il.Emit(OpCodes.Pop);

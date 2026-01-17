@@ -1314,5 +1314,269 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits Object.freeze(obj) - freezes an object to prevent property changes.
+    /// Uses ConditionalWeakTable to track frozen objects for compiled code.
+    /// Signature: object ObjectFreeze(object obj)
+    /// </summary>
+    private void EmitObjectFreeze(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenObjectsField, FieldBuilder sealedObjectsField)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectFreeze",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.ObjectFreeze = method;
+
+        var il = method.GetILGenerator();
+        var returnLabel = il.DefineLabel();
+        var addToTableLabel = il.DefineLabel();
+
+        // If obj is null, just return it
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnLabel);
+
+        // Add to frozen objects table
+        il.Emit(OpCodes.Ldsfld, frozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);  // true
+        il.Emit(OpCodes.Box, _types.Boolean);
+        var addMethod = _types.ConditionalWeakTable.GetMethod("AddOrUpdate")
+            ?? _types.ConditionalWeakTable.GetMethod("Add");
+        // ConditionalWeakTable doesn't have AddOrUpdate, we'll use GetOrCreateValue pattern
+        // Instead, use GetValue with a factory or just Add with a check
+        // For simplicity, let's use a try pattern - Add throws if already present, so catch
+        var addOrUpdateMethod = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<object, object>)
+            .GetMethod("AddOrUpdate");
+        if (addOrUpdateMethod != null)
+        {
+            il.Emit(OpCodes.Callvirt, addOrUpdateMethod);
+        }
+        else
+        {
+            // Fallback: use GetOrCreateValue doesn't work, just try Add and ignore exception
+            // Actually, let's use the indexer set which should work
+            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
+                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            if (setItem != null)
+            {
+                il.Emit(OpCodes.Callvirt, setItem);
+            }
+            else
+            {
+                // Last resort: just pop and continue
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+            }
+        }
+
+        // Also add to sealed objects table (frozen implies sealed)
+        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        if (addOrUpdateMethod != null)
+        {
+            il.Emit(OpCodes.Callvirt, addOrUpdateMethod);
+        }
+        else
+        {
+            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
+                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            if (setItem != null)
+            {
+                il.Emit(OpCodes.Callvirt, setItem);
+            }
+            else
+            {
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+            }
+        }
+
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Object.seal(obj) - seals an object to prevent property addition/removal.
+    /// Signature: object ObjectSeal(object obj)
+    /// </summary>
+    private void EmitObjectSeal(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder sealedObjectsField)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectSeal",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.ObjectSeal = method;
+
+        var il = method.GetILGenerator();
+        var returnLabel = il.DefineLabel();
+
+        // If obj is null, just return it
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnLabel);
+
+        // Add to sealed objects table
+        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        var addOrUpdateMethod = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<object, object>)
+            .GetMethod("AddOrUpdate");
+        if (addOrUpdateMethod != null)
+        {
+            il.Emit(OpCodes.Callvirt, addOrUpdateMethod);
+        }
+        else
+        {
+            var setItem = _types.ConditionalWeakTable.GetMethod("set_Item")
+                ?? _types.ConditionalWeakTable.GetProperty("Item")?.GetSetMethod();
+            if (setItem != null)
+            {
+                il.Emit(OpCodes.Callvirt, setItem);
+            }
+            else
+            {
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Pop);
+            }
+        }
+
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Object.isFrozen(obj) - checks if an object is frozen.
+    /// Signature: bool ObjectIsFrozen(object obj)
+    /// </summary>
+    private void EmitObjectIsFrozen(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder frozenObjectsField)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectIsFrozen",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]
+        );
+        runtime.ObjectIsFrozen = method;
+
+        var il = method.GetILGenerator();
+        var returnTrueLabel = il.DefineLabel();
+        var checkTableLabel = il.DefineLabel();
+        var checkStringLabel = il.DefineLabel();
+        var checkNumberLabel = il.DefineLabel();
+        var checkBooleanLabel = il.DefineLabel();
+
+        // If obj is null, return true (primitives are frozen by definition)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, checkStringLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is string, return true (immutable)
+        il.MarkLabel(checkStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, checkNumberLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is double (boxed number), return true (immutable)
+        il.MarkLabel(checkNumberLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, checkBooleanLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is bool (boxed boolean), return true (immutable)
+        il.MarkLabel(checkBooleanLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, checkTableLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(checkTableLabel);
+        // Check if obj is in frozen objects table
+        var valueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, frozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        il.Emit(OpCodes.Callvirt, tryGetValue!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits Object.isSealed(obj) - checks if an object is sealed.
+    /// Signature: bool ObjectIsSealed(object obj)
+    /// </summary>
+    private void EmitObjectIsSealed(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder sealedObjectsField)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ObjectIsSealed",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]
+        );
+        runtime.ObjectIsSealed = method;
+
+        var il = method.GetILGenerator();
+        var checkTableLabel = il.DefineLabel();
+        var checkStringLabel = il.DefineLabel();
+        var checkNumberLabel = il.DefineLabel();
+        var checkBooleanLabel = il.DefineLabel();
+
+        // If obj is null, return true (primitives are sealed by definition)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, checkStringLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is string, return true (immutable)
+        il.MarkLabel(checkStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, checkNumberLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is double (boxed number), return true (immutable)
+        il.MarkLabel(checkNumberLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, checkBooleanLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // If obj is bool (boxed boolean), return true (immutable)
+        il.MarkLabel(checkBooleanLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, checkTableLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(checkTableLabel);
+        // Check if obj is in sealed objects table
+        var valueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, sealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        var tryGetValue = _types.ConditionalWeakTable.GetMethod("TryGetValue");
+        il.Emit(OpCodes.Callvirt, tryGetValue!);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

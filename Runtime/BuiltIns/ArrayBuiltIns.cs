@@ -57,6 +57,11 @@ public static class ArrayBuiltIns
     private static object? Push(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
+        // Frozen/sealed arrays cannot have elements added
+        if (arr.IsFrozen || arr.IsSealed)
+        {
+            return (double)arr.Elements.Count;
+        }
         // Add all arguments (variadic push)
         foreach (var arg in args)
         {
@@ -68,6 +73,11 @@ public static class ArrayBuiltIns
     private static object? Pop(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
+        // Frozen/sealed arrays cannot have elements removed
+        if (arr.IsFrozen || arr.IsSealed)
+        {
+            return null;
+        }
         if (arr.Elements.Count == 0) return null;
         var last = arr.Elements[^1];
         arr.Elements.RemoveAt(arr.Elements.Count - 1);
@@ -77,6 +87,11 @@ public static class ArrayBuiltIns
     private static object? Shift(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
+        // Frozen/sealed arrays cannot have elements removed
+        if (arr.IsFrozen || arr.IsSealed)
+        {
+            return null;
+        }
         if (arr.Elements.Count == 0) return null;
         var first = arr.Elements[0];
         arr.Elements.RemoveAt(0);
@@ -86,6 +101,11 @@ public static class ArrayBuiltIns
     private static object? Unshift(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
+        // Frozen/sealed arrays cannot have elements added
+        if (arr.IsFrozen || arr.IsSealed)
+        {
+            return (double)arr.Elements.Count;
+        }
         arr.Elements.Insert(0, args[0]);
         return (double)arr.Elements.Count;
     }
@@ -310,6 +330,11 @@ public static class ArrayBuiltIns
     private static object? Reverse(Interpreter i, object? r, List<object?> args)
     {
         var arr = (SharpTSArray)r!;
+        // Frozen arrays cannot be modified; sealed arrays allow in-place modifications
+        if (arr.IsFrozen)
+        {
+            return arr;
+        }
         arr.Elements.Reverse();
         return arr;
     }

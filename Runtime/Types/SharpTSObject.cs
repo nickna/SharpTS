@@ -17,6 +17,33 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
 
     /// <summary>
+    /// Whether this object is frozen (no property additions, removals, or modifications).
+    /// </summary>
+    public bool IsFrozen { get; private set; }
+
+    /// <summary>
+    /// Whether this object is sealed (no property additions or removals, but modifications allowed).
+    /// </summary>
+    public bool IsSealed { get; private set; }
+
+    /// <summary>
+    /// Freezes this object, preventing any property changes.
+    /// </summary>
+    public void Freeze()
+    {
+        IsFrozen = true;
+        IsSealed = true; // Frozen implies sealed
+    }
+
+    /// <summary>
+    /// Seals this object, preventing property additions/removals but allowing modifications.
+    /// </summary>
+    public void Seal()
+    {
+        IsSealed = true;
+    }
+
+    /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
     /// </summary>
     public IReadOnlyDictionary<string, object?> Fields => _fields;
@@ -37,7 +64,33 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <inheritdoc />
     public void SetProperty(string name, object? value)
     {
+        if (IsFrozen)
+        {
+            // Frozen objects silently ignore property modifications (JavaScript behavior)
+            return;
+        }
+
+        bool exists = _fields.ContainsKey(name);
+        if (IsSealed && !exists)
+        {
+            // Sealed objects silently ignore new property additions
+            return;
+        }
+
         _fields[name] = value;
+    }
+
+    /// <summary>
+    /// Removes a property by name. Respects frozen/sealed state.
+    /// </summary>
+    public bool DeleteProperty(string name)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            // Frozen and sealed objects silently ignore property deletions
+            return false;
+        }
+        return _fields.Remove(name);
     }
 
     public bool HasProperty(string name)
@@ -58,6 +111,17 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void SetBySymbol(SharpTSSymbol symbol, object? value)
     {
+        if (IsFrozen)
+        {
+            return;
+        }
+
+        bool exists = _symbolFields.ContainsKey(symbol);
+        if (IsSealed && !exists)
+        {
+            return;
+        }
+
         _symbolFields[symbol] = value;
     }
 

@@ -812,4 +812,347 @@ public class ObjectFeatureTests
         var output = TestHarness.RunInterpreted(source);
         Assert.Equal("1\n10\n", output);
     }
+
+    // Object.freeze tests
+    [Fact]
+    public void Object_Freeze_ReturnsTheSameObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let frozen = Object.freeze(obj);
+            console.log(frozen === obj);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_Freeze_PreventsMutation()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.freeze(obj);
+            obj.a = 100;
+            console.log(obj.a);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n", output);
+    }
+
+    [Fact]
+    public void Object_Freeze_PreventsAddingProperties()
+    {
+        var source = """
+            let obj: any = { a: 1 };
+            Object.freeze(obj);
+            obj.b = 2;
+            console.log(obj.a);
+            console.log(obj.b === undefined || obj.b === null);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsTrueForFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.freeze(obj);
+            console.log(Object.isFrozen(obj));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsFalseForNonFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            console.log(Object.isFrozen(obj));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ReturnsTrueForPrimitives()
+    {
+        var source = """
+            console.log(Object.isFrozen(null));
+            console.log(Object.isFrozen(42));
+            console.log(Object.isFrozen("hello"));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    // Object.seal tests
+    [Fact]
+    public void Object_Seal_ReturnsTheSameObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            let sealed = Object.seal(obj);
+            console.log(sealed === obj);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_AllowsPropertyModification()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.seal(obj);
+            obj.a = 100;
+            console.log(obj.a);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_PreventsAddingProperties()
+    {
+        var source = """
+            let obj: any = { a: 1 };
+            Object.seal(obj);
+            obj.b = 2;
+            console.log(obj.a);
+            console.log(obj.b === undefined || obj.b === null);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsTrueForSealedObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.seal(obj);
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsFalseForNonSealedObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void Object_IsSealed_ReturnsTrueForFrozenObject()
+    {
+        var source = """
+            let obj: { a: number } = { a: 1 };
+            Object.freeze(obj);
+            console.log(Object.isSealed(obj));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    // Array freeze/seal tests
+    [Fact]
+    public void Object_Freeze_ArrayPreventsModification()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.freeze(arr);
+            arr[0] = 100;
+            console.log(arr[0]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n", output);
+    }
+
+    [Fact]
+    public void Object_Freeze_ArrayPreventsPush()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.freeze(arr);
+            arr.push(4);
+            console.log(arr.length);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_ArrayAllowsModification()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.seal(arr);
+            arr[0] = 100;
+            console.log(arr[0]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_ArrayPreventsPush()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.seal(arr);
+            arr.push(4);
+            console.log(arr.length);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ArrayReturnsTrueForFrozen()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.freeze(arr);
+            console.log(Object.isFrozen(arr));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    // Class instance freeze/seal tests
+    [Fact]
+    public void Object_Freeze_ClassInstancePreventsModification()
+    {
+        var source = """
+            class Point {
+                x: number;
+                y: number;
+                constructor(x: number, y: number) {
+                    this.x = x;
+                    this.y = y;
+                }
+            }
+            let p = new Point(10, 20);
+            Object.freeze(p);
+            p.x = 100;
+            console.log(p.x);
+            console.log(p.y);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("10\n20\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_ClassInstanceAllowsModification()
+    {
+        var source = """
+            class Point {
+                x: number;
+                y: number;
+                constructor(x: number, y: number) {
+                    this.x = x;
+                    this.y = y;
+                }
+            }
+            let p = new Point(10, 20);
+            Object.seal(p);
+            p.x = 100;
+            console.log(p.x);
+            console.log(p.y);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n20\n", output);
+    }
+
+    [Fact]
+    public void Object_IsFrozen_ClassInstanceReturnsTrueForFrozen()
+    {
+        var source = """
+            class Point {
+                x: number;
+                constructor(x: number) {
+                    this.x = x;
+                }
+            }
+            let p = new Point(10);
+            Object.freeze(p);
+            console.log(Object.isFrozen(p));
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("true\n", output);
+    }
+
+    // Shallow freeze tests
+    [Fact]
+    public void Object_Freeze_IsShallow()
+    {
+        var source = """
+            let obj: any = { nested: { value: 1 } };
+            Object.freeze(obj);
+            obj.nested.value = 100;
+            console.log(obj.nested.value);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
+    public void Object_Freeze_ArrayReverseFails()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.freeze(arr);
+            arr.reverse();
+            console.log(arr[0]);
+            console.log(arr[2]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n3\n", output);
+    }
+
+    [Fact]
+    public void Object_Seal_ArrayReverseSucceeds()
+    {
+        var source = """
+            let arr: number[] = [1, 2, 3];
+            Object.seal(arr);
+            arr.reverse();
+            console.log(arr[0]);
+            console.log(arr[2]);
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("3\n1\n", output);
+    }
 }

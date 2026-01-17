@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-16 (Added optional catch binding, Array.from(), and Array.of())
+**Last Updated:** 2026-01-16 (Added Object.freeze(), Object.seal(), Object.isFrozen(), Object.isSealed())
 
 ## Legend
 - ✅ Implemented
@@ -220,7 +220,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Object.assign()` | ✅ | Merge objects - copies properties from one or more source objects to a target object, returns the target |
 | `Object.fromEntries()` | ✅ | Inverse of `Object.entries()` - converts iterable of [key, value] pairs to object |
 | `Object.hasOwn()` | ✅ | Safer `hasOwnProperty` check - returns true for own properties, false for methods |
-| `Object.freeze()`/`seal()` | ❌ | Object immutability |
+| `Object.freeze()`/`seal()`/`isFrozen()`/`isSealed()` | ✅ | Object immutability - freeze prevents all changes, seal allows modification but prevents adding/removing properties; shallow freeze/seal (nested objects unaffected); works on objects, arrays, class instances |
 | `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
 | `setTimeout`/`setInterval` | ❌ | Timer functions |
 | `clearTimeout`/`clearInterval` | ❌ | Cancel timer functions |

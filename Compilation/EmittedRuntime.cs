@@ -139,6 +139,10 @@ public class EmittedRuntime
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
+    public MethodBuilder ObjectFreeze { get; set; } = null!;
+    public MethodBuilder ObjectSeal { get; set; } = null!;
+    public MethodBuilder ObjectIsFrozen { get; set; } = null!;
+    public MethodBuilder ObjectIsSealed { get; set; } = null!;
 
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;

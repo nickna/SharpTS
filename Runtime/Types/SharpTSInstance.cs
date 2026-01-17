@@ -25,6 +25,33 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     private readonly Dictionary<string, PropertyResolution> _lookupCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
 
+    /// <summary>
+    /// Whether this instance is frozen (no property additions, removals, or modifications).
+    /// </summary>
+    public bool IsFrozen { get; private set; }
+
+    /// <summary>
+    /// Whether this instance is sealed (no property additions or removals, but modifications allowed).
+    /// </summary>
+    public bool IsSealed { get; private set; }
+
+    /// <summary>
+    /// Freezes this instance, preventing any property changes.
+    /// </summary>
+    public void Freeze()
+    {
+        IsFrozen = true;
+        IsSealed = true; // Frozen implies sealed
+    }
+
+    /// <summary>
+    /// Seals this instance, preventing property additions/removals but allowing modifications.
+    /// </summary>
+    public void Seal()
+    {
+        IsSealed = true;
+    }
+
     private enum ResolutionType
     {
         Getter,      // Resolved to a getter (invoke on each access)
@@ -102,6 +129,21 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     {
         string propName = name.Lexeme;
 
+        // Check frozen state first
+        if (IsFrozen)
+        {
+            // Frozen objects silently ignore property modifications (JavaScript behavior)
+            return;
+        }
+
+        // Check sealed state for new property addition
+        bool exists = _fields.ContainsKey(propName);
+        if (IsSealed && !exists)
+        {
+            // Sealed objects silently ignore new property additions
+            return;
+        }
+
         // Check cache for setter resolution
         if (!_setterCache.TryGetValue(propName, out SharpTSFunction? cachedSetter))
         {
@@ -157,8 +199,35 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     /// <summary>
     /// Sets a field value directly without invoking setters.
     /// Used for bracket notation assignment and constructor initialization.
+    /// Respects frozen/sealed state.
     /// </summary>
-    public void SetRawField(string name, object? value) => _fields[name] = value;
+    public void SetRawField(string name, object? value)
+    {
+        if (IsFrozen)
+        {
+            return;
+        }
+
+        bool exists = _fields.ContainsKey(name);
+        if (IsSealed && !exists)
+        {
+            return;
+        }
+
+        _fields[name] = value;
+    }
+
+    /// <summary>
+    /// Removes a field by name. Respects frozen/sealed state.
+    /// </summary>
+    public bool DeleteField(string name)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            return false;
+        }
+        return _fields.Remove(name);
+    }
 
     /// <inheritdoc />
     public void SetProperty(string name, object? value) => SetRawField(name, value);
@@ -172,10 +241,21 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     }
 
     /// <summary>
-    /// Sets a value by symbol key.
+    /// Sets a value by symbol key. Respects frozen/sealed state.
     /// </summary>
     public void SetBySymbol(SharpTSSymbol symbol, object? value)
     {
+        if (IsFrozen)
+        {
+            return;
+        }
+
+        bool exists = _symbolFields.ContainsKey(symbol);
+        if (IsSealed && !exists)
+        {
+            return;
+        }
+
         _symbolFields[symbol] = value;
     }
 

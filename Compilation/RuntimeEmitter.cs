@@ -1218,6 +1218,18 @@ public partial class RuntimeEmitter
         );
         runtime.SymbolStorageField = symbolStorageField;
 
+        // Static fields for Object.freeze/seal tracking: ConditionalWeakTable<object, object>
+        var frozenObjectsField = typeBuilder.DefineField(
+            "_frozenObjects",
+            _types.ConditionalWeakTable,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+        );
+        var sealedObjectsField = typeBuilder.DefineField(
+            "_sealedObjects",
+            _types.ConditionalWeakTable,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+        );
+
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -1233,6 +1245,14 @@ public partial class RuntimeEmitter
         // Initialize _symbolStorage = new ConditionalWeakTable<object, Dictionary<object, object?>>()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(symbolStorageType));
         cctorIL.Emit(OpCodes.Stsfld, symbolStorageField);
+
+        // Initialize _frozenObjects = new ConditionalWeakTable<object, object>()
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
+        cctorIL.Emit(OpCodes.Stsfld, frozenObjectsField);
+
+        // Initialize _sealedObjects = new ConditionalWeakTable<object, object>()
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
+        cctorIL.Emit(OpCodes.Stsfld, sealedObjectsField);
 
         cctorIL.Emit(OpCodes.Ret);
 
@@ -1280,6 +1300,10 @@ public partial class RuntimeEmitter
         EmitObjectFromEntries(typeBuilder, runtime);
         EmitObjectHasOwn(typeBuilder, runtime);
         EmitObjectAssign(typeBuilder, runtime);
+        EmitObjectFreeze(typeBuilder, runtime, frozenObjectsField, sealedObjectsField);
+        EmitObjectSeal(typeBuilder, runtime, sealedObjectsField);
+        EmitObjectIsFrozen(typeBuilder, runtime, frozenObjectsField);
+        EmitObjectIsSealed(typeBuilder, runtime, sealedObjectsField);
         EmitIsArray(typeBuilder, runtime);
         EmitSpreadArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
