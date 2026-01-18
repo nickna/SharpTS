@@ -237,7 +237,7 @@ else if (remainingArgs[0] == "lsp-bridge")
 
     RunLspBridge(projectFile, references, sdkPath);
 }
-else if (remainingArgs.Length == 1)
+else if (remainingArgs.Length >= 1)
 {
     // Check if it looks like an unknown flag
     if (remainingArgs[0].StartsWith('-'))
@@ -247,11 +247,28 @@ else if (remainingArgs.Length == 1)
         Console.WriteLine("Use 'sharpts --help' for usage information.");
         Environment.Exit(64);
     }
-    RunFile(remainingArgs[0], options.DecoratorMode, options.EmitDecoratorMetadata);
+
+    // First arg is script path, rest are script arguments
+    string scriptPath = remainingArgs[0];
+
+    // Combine any additional args after script name with args after -- separator
+    string[] allScriptArgs;
+    if (remainingArgs.Length > 1)
+    {
+        // Script args from after script name + args from after --
+        var extraArgs = remainingArgs[1..];
+        allScriptArgs = [..extraArgs, ..options.ScriptArgs];
+    }
+    else
+    {
+        allScriptArgs = options.ScriptArgs;
+    }
+
+    RunFile(scriptPath, options.DecoratorMode, options.EmitDecoratorMetadata, allScriptArgs);
 }
 else
 {
-    Console.WriteLine("Usage: sharpts [script]");
+    Console.WriteLine("Usage: sharpts [script] [args...]");
     Console.WriteLine("       sharpts --compile <script.ts> [-o output.dll]");
     Console.WriteLine("       sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
     Console.WriteLine("       sharpts lsp-bridge [--project <csproj>] [-r <assembly.dll>]");
@@ -263,6 +280,21 @@ static GlobalOptions ParseGlobalOptions(string[] args)
     var decoratorMode = DecoratorMode.None;
     var emitDecoratorMetadata = false;
     List<string> remaining = [];
+    List<string> scriptArgs = [];
+
+    // Check for -- separator which indicates everything after is script args
+    int doubleDashIndex = Array.IndexOf(args, "--");
+
+    // If -- found, everything after it goes to scriptArgs
+    if (doubleDashIndex >= 0)
+    {
+        for (int i = doubleDashIndex + 1; i < args.Length; i++)
+        {
+            scriptArgs.Add(args[i]);
+        }
+        // Process only args before --
+        args = args[..doubleDashIndex];
+    }
 
     foreach (var arg in args)
     {
@@ -283,7 +315,7 @@ static GlobalOptions ParseGlobalOptions(string[] args)
         }
     }
 
-    return new GlobalOptions(decoratorMode, emitDecoratorMetadata, remaining.ToArray());
+    return new GlobalOptions(decoratorMode, emitDecoratorMetadata, remaining.ToArray(), scriptArgs.ToArray());
 }
 
 static void RunLspBridge(string? projectFile, List<string> references, string? sdkPath)
@@ -307,15 +339,18 @@ static void RunLspBridge(string? projectFile, List<string> references, string? s
     }
 }
 
-static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
+static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null)
 {
     string absolutePath = Path.GetFullPath(path);
     string source = File.ReadAllText(absolutePath);
 
+    // Set script arguments for process.argv
+    SharpTS.Runtime.BuiltIns.ProcessBuiltIns.SetScriptArguments(absolutePath, scriptArgs ?? []);
+
     // Check if the file contains imports - if so, use module mode
     if (source.Contains("import ") || source.Contains("export "))
     {
-        RunModuleFile(absolutePath, decoratorMode, emitDecoratorMetadata);
+        RunModuleFile(absolutePath, decoratorMode, emitDecoratorMetadata, scriptArgs);
     }
     else
     {
@@ -323,7 +358,7 @@ static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecorator
     }
 }
 
-static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool emitDecoratorMetadata)
+static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null)
 {
     try
     {
@@ -881,7 +916,8 @@ static void PrintHelp()
 {
     PrintBanner();
     Console.WriteLine("Usage:");
-    Console.WriteLine("  sharpts [options] [script.ts]");
+    Console.WriteLine("  sharpts [options] [script.ts] [args...]");
+    Console.WriteLine("  sharpts [options] script.ts -- [script-args...]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
     Console.WriteLine("  sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
     Console.WriteLine("  sharpts lsp-bridge [--project <csproj>] [-r <assembly.dll>]");
@@ -892,6 +928,11 @@ static void PrintHelp()
     Console.WriteLine("  --experimentalDecorators      Enable Legacy (Stage 2) decorators");
     Console.WriteLine("  --decorators                  Enable TC39 Stage 3 decorators");
     Console.WriteLine("  --emitDecoratorMetadata       Emit design-time type metadata");
+    Console.WriteLine();
+    Console.WriteLine("Script Arguments:");
+    Console.WriteLine("  Arguments after script.ts are passed to process.argv");
+    Console.WriteLine("  Use -- separator when script args conflict with SharpTS flags");
+    Console.WriteLine("  process.argv format: [runtime_path, script_path, ...user_args]");
     Console.WriteLine();
     Console.WriteLine("Compile Options:");
     Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
@@ -915,6 +956,8 @@ static void PrintHelp()
     Console.WriteLine("Examples:");
     Console.WriteLine("  sharpts                           Start REPL");
     Console.WriteLine("  sharpts script.ts                 Run TypeScript file");
+    Console.WriteLine("  sharpts script.ts arg1 arg2       Run script with arguments");
+    Console.WriteLine("  sharpts script.ts -- --flag val   Pass flags to script (use -- separator)");
     Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
     Console.WriteLine("  sharpts --compile app.ts -t exe   Compile to executable");
     Console.WriteLine("  sharpts --compile app.ts --pack   Compile and create NuGet package");
@@ -942,6 +985,6 @@ static void PrintCompileUsage()
     Console.WriteLine("  --version <ver>        Override package version");
 }
 
-record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs);
+record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs, string[] ScriptArgs);
 record PackOptions(bool Pack, string? PushSource, string? ApiKey, string? PackageIdOverride, string? VersionOverride);
 record OutputOptions(bool MsBuildErrors, bool QuietMode);

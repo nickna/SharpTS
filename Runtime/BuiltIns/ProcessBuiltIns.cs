@@ -30,6 +30,10 @@ public static class ProcessBuiltIns
     private static SharpTSObject? _envObject;
     private static SharpTSArray? _argvArray;
 
+    // Script arguments set by the caller (for interpreted mode)
+    private static string? _scriptPath;
+    private static string[]? _scriptArgs;
+
     // Process start time for uptime calculation
     private static readonly DateTime _processStartTime = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
@@ -100,6 +104,29 @@ public static class ProcessBuiltIns
     }
 
     /// <summary>
+    /// Sets the script path and arguments for process.argv.
+    /// Call this before interpreting a script to populate process.argv correctly.
+    /// </summary>
+    /// <param name="scriptPath">The absolute path to the script being run.</param>
+    /// <param name="args">The user-provided arguments to pass to the script.</param>
+    public static void SetScriptArguments(string scriptPath, string[] args)
+    {
+        _scriptPath = scriptPath;
+        _scriptArgs = args;
+        _argvArray = null; // Clear cache to rebuild with new arguments
+    }
+
+    /// <summary>
+    /// Clears the script arguments. Call this for REPL mode or tests to reset state.
+    /// </summary>
+    public static void ClearScriptArguments()
+    {
+        _scriptPath = null;
+        _scriptArgs = null;
+        _argvArray = null;
+    }
+
+    /// <summary>
     /// Returns the process.env object containing environment variables.
     /// </summary>
     public static SharpTSObject GetEnv()
@@ -127,23 +154,38 @@ public static class ProcessBuiltIns
             return _argvArray;
 
         var elements = new List<object?>();
-        var args = Environment.GetCommandLineArgs();
 
         // Node.js format: [node_path, script_path, ...user_args]
-        // .NET GetCommandLineArgs format: [dll_path, script_path, ...user_args]
-        //
-        // Transform to match Node.js conventions:
-        // argv[0] = executable path (runtime) - use ProcessPath
-        // argv[1] = script path (from args[1])
-        // argv[2+] = user arguments (from args[2+])
-        //
-        // Skip args[0] (the DLL path) since it's not user-relevant
-        elements.Add(Environment.ProcessPath ?? args[0]);
+        // argv[0] = executable path (runtime)
+        // argv[1] = script path
+        // argv[2+] = user arguments
 
-        for (int i = 1; i < args.Length; i++)
+        // Always use ProcessPath for argv[0] (the runtime)
+        var cmdArgs = Environment.GetCommandLineArgs();
+        elements.Add(Environment.ProcessPath ?? cmdArgs[0]);
+
+        // If script arguments were explicitly set (interpreted mode), use them
+        if (_scriptPath != null)
         {
-            elements.Add(args[i]);
+            elements.Add(_scriptPath);
+            if (_scriptArgs != null)
+            {
+                foreach (var arg in _scriptArgs)
+                {
+                    elements.Add(arg);
+                }
+            }
         }
+        else
+        {
+            // Fall back to command line args (for compiled mode or when not explicitly set)
+            // Skip args[0] (the DLL path) since it's not user-relevant
+            for (int i = 1; i < cmdArgs.Length; i++)
+            {
+                elements.Add(cmdArgs[i]);
+            }
+        }
+
         _argvArray = new SharpTSArray(elements);
         return _argvArray;
     }
