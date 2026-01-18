@@ -170,14 +170,24 @@ public partial class TypeChecker
                 r.SymbolIndexType
             ),
 
-            // Widen union members
-            TypeInfo.Union u => new TypeInfo.Union(
-                u.Types.Select(t => WidenLiteralType(t, false)).Distinct().ToList()
+            // Widen union members and collapse single-element unions
+            TypeInfo.Union u => CollapseOrCreateUnion(
+                u.Types.Select(t => WidenLiteralType(t, false)).Distinct(TypeInfoEqualityComparer.Instance).ToList()
             ),
 
             // Other types pass through unchanged
             _ => type
         };
+    }
+
+    /// <summary>
+    /// Collapses a list of types into a single type or union.
+    /// If the list has only one element, returns that element directly.
+    /// Otherwise, creates a Union type.
+    /// </summary>
+    private static TypeInfo CollapseOrCreateUnion(List<TypeInfo> types)
+    {
+        return types.Count == 1 ? types[0] : new TypeInfo.Union(types);
     }
 
     private int _loopDepth = 0;
