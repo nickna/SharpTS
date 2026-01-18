@@ -699,7 +699,9 @@ public partial class ILEmitter
         // Methods that exist on both strings and arrays - runtime dispatch for any/unknown/union types
         // Note: String and Array types are handled by TypeEmitterRegistry above
         // startsWith/endsWith are string-only but included here for Any-typed values
-        if (methodName is "slice" or "concat" or "includes" or "indexOf" or "startsWith" or "endsWith")
+        // substring/charAt are string-only but need runtime dispatch for union types (string | undefined)
+        if (methodName is "slice" or "concat" or "includes" or "indexOf" or "startsWith" or "endsWith"
+            or "substring" or "charAt")
         {
             EmitAmbiguousMethodCall(methodGet.Object, methodName, arguments);
             return;
@@ -874,6 +876,36 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringEndsWith);
                 IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                break;
+
+            case "substring":
+                // str.substring(start, end?)
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSubstring);
+                break;
+
+            case "charAt":
+                // str.charAt(index)
+                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+                for (int i = 0; i < arguments.Count; i++)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldc_I4, i);
+                    EmitExpression(arguments[i]);
+                    EmitBoxIfNeeded(arguments[i]);
+                    IL.Emit(OpCodes.Stelem_Ref);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharAt);
                 break;
         }
         builder.Emit_Br(doneLabel);

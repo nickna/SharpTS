@@ -121,13 +121,10 @@ public partial class ILEmitter
             // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
-        else if (i.Condition is Expr.Logical)
-        {
-            // Logical expressions already leave int on stack
-        }
         else
         {
-            // For other expressions, apply truthy check
+            // For other expressions (including Expr.Logical which returns boxed object),
+            // apply truthy check to convert to int for Brfalse
             EnsureBoxed();
             EmitTruthyCheck();
         }
@@ -165,13 +162,10 @@ public partial class ILEmitter
             // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
-        else if (w.Condition is Expr.Logical)
-        {
-            // Logical expressions already leave int on stack
-        }
         else
         {
-            // For other expressions, apply truthy check
+            // For other expressions (including Expr.Logical which returns boxed object),
+            // apply truthy check to convert to int for Brfalse
             EnsureBoxed();
             EmitTruthyCheck();
         }
@@ -212,13 +206,10 @@ public partial class ILEmitter
             // Boxed boolean from comparison - unbox it
             IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Boolean);
         }
-        else if (dw.Condition is Expr.Logical)
-        {
-            // Logical expressions already leave int on stack
-        }
         else
         {
-            // For other expressions, apply truthy check
+            // For other expressions (including Expr.Logical which returns boxed object),
+            // apply truthy check to convert to int for Brtrue
             EnsureBoxed();
             EmitTruthyCheck();
         }

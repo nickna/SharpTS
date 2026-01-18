@@ -36,8 +36,10 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Create new Dictionary<string, object?>
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        // Create new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        // This ensures case-insensitive lookup for environment variables (Windows uses "Path" not "PATH")
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.StringComparer, "OrdinalIgnoreCase"));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject, _types.IEqualityComparerOfString));
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
