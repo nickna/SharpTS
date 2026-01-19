@@ -138,9 +138,51 @@ $Script:TestCases = @{
         File = "password-generator.ts"
         Tests = @(
             @{
+                Name = "GenerateWithAllChars"
+                RequiresArgs = $true
+                Args = { @("16", "--all") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Password Generator" }
+                    @{ Type = "Contains"; Value = "Generated Passwords:" }
+                    @{ Type = "Contains"; Value = "Charset size: 88 characters" }
+                    @{ Type = "Contains"; Value = "Password length: 16" }
+                    @{ Type = "Contains"; Value = "Entropy:" }
+                )
+            },
+            @{
+                Name = "GenerateWithLowercaseOnly"
+                RequiresArgs = $true
+                Args = { @("12", "--lowercase") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Generated Passwords:" }
+                    @{ Type = "Contains"; Value = "Charset size: 26 characters" }
+                    @{ Type = "Contains"; Value = "Password length: 12" }
+                )
+            },
+            @{
+                Name = "GenerateWithMultipleFlags"
+                RequiresArgs = $true
+                Args = { @("20", "-l", "-u", "-d") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Generated Passwords:" }
+                    @{ Type = "Contains"; Value = "Charset size: 62 characters" }
+                    @{ Type = "Contains"; Value = "Password length: 20" }
+                )
+            },
+            @{
+                Name = "ShowHelp"
+                RequiresArgs = $true
+                Args = { @("--help") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Usage:" }
+                    @{ Type = "Contains"; Value = "--lowercase" }
+                    @{ Type = "Contains"; Value = "--all" }
+                )
+            },
+            @{
                 Name = "InvalidLengthTooSmall"
                 RequiresArgs = $true
-                Args = { @("2") }
+                Args = { @("2", "--all") }
                 Assertions = @(
                     @{ Type = "Contains"; Value = "Error: Length must be between 4 and 128" }
                 )
@@ -148,7 +190,7 @@ $Script:TestCases = @{
             @{
                 Name = "InvalidLengthTooLarge"
                 RequiresArgs = $true
-                Args = { @("500") }
+                Args = { @("500", "--all") }
                 Assertions = @(
                     @{ Type = "Contains"; Value = "Error: Length must be between 4 and 128" }
                 )
@@ -331,18 +373,20 @@ function Invoke-ProcessWithTimeout {
 function Invoke-Interpreted {
     param(
         [string]$TsFile,
-        [string[]]$Arguments
+        [string[]]$Arguments,
+        [int]$Timeout = $Script:ProcessTimeout
     )
 
     $allArgs = @("run", "--", $TsFile) + $Arguments
-    return Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $allArgs
+    return Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $allArgs -Timeout $Timeout
 }
 
 function Invoke-CompiledDll {
     param(
         [string]$TsFile,
         [string[]]$Arguments,
-        [string]$TestName
+        [string]$TestName,
+        [int]$Timeout = $Script:ProcessTimeout
     )
 
     $outputDir = Join-Path $Script:TempRoot "dll-$TestName"
@@ -383,7 +427,7 @@ function Invoke-CompiledDll {
 
     # Run the DLL
     $runArgs = @($dllPath) + $Arguments
-    $runResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $runArgs -WorkingDirectory $outputDir
+    $runResult = Invoke-ProcessWithTimeout -FilePath "dotnet" -Arguments $runArgs -WorkingDirectory $outputDir -Timeout $Timeout
     $runResult.Duration += $compileResult.Duration
     $runResult.CompileOutput = $compileResult.Output
 
@@ -394,7 +438,8 @@ function Invoke-CompiledExe {
     param(
         [string]$TsFile,
         [string[]]$Arguments,
-        [string]$TestName
+        [string]$TestName,
+        [int]$Timeout = $Script:ProcessTimeout
     )
 
     $outputDir = Join-Path $Script:TempRoot "exe-$TestName"
@@ -427,7 +472,7 @@ function Invoke-CompiledExe {
     }
 
     # Run the EXE
-    $runResult = Invoke-ProcessWithTimeout -FilePath $exePath -Arguments $Arguments -WorkingDirectory $outputDir
+    $runResult = Invoke-ProcessWithTimeout -FilePath $exePath -Arguments $Arguments -WorkingDirectory $outputDir -Timeout $Timeout
     $runResult.Duration += $compileResult.Duration
     $runResult.CompileOutput = $compileResult.Output
 
@@ -499,11 +544,14 @@ function Invoke-TestCase {
         $args = & $TestCase.Args $testContext
     }
 
+    # Get per-test timeout or use default
+    $runTimeout = if ($TestCase.Timeout) { $TestCase.Timeout } else { $Script:ProcessTimeout }
+
     # Execute based on mode
     $result = switch ($ExecutionMode) {
-        "interpreted" { Invoke-Interpreted -TsFile $tsFile -Arguments $args }
-        "dll" { Invoke-CompiledDll -TsFile $tsFile -Arguments $args -TestName "$ExampleName-$($TestCase.Name)" }
-        "exe" { Invoke-CompiledExe -TsFile $tsFile -Arguments $args -TestName "$ExampleName-$($TestCase.Name)" }
+        "interpreted" { Invoke-Interpreted -TsFile $tsFile -Arguments $args -Timeout $runTimeout }
+        "dll" { Invoke-CompiledDll -TsFile $tsFile -Arguments $args -TestName "$ExampleName-$($TestCase.Name)" -Timeout $runTimeout }
+        "exe" { Invoke-CompiledExe -TsFile $tsFile -Arguments $args -TestName "$ExampleName-$($TestCase.Name)" -Timeout $runTimeout }
     }
 
     # Combine stdout and stderr for assertion testing
@@ -542,6 +590,21 @@ function Invoke-AllTests {
         default { @($Mode) }
     }
 
+    # Count total tests for progress
+    $plannedTests = 0
+    foreach ($exampleName in $Script:TestCases.Keys) {
+        if ($exampleName -like $Filter) {
+            $example = $Script:TestCases[$exampleName]
+            $plannedTests += $example.Tests.Count * $modesToTest.Count
+        }
+    }
+
+    # Show progress header for table mode
+    if ($OutputFormat -eq "table" -and $plannedTests -gt 0) {
+        Write-Host "Running $plannedTests tests..." -ForegroundColor Cyan
+        Write-Host ""
+    }
+
     foreach ($exampleName in $Script:TestCases.Keys | Sort-Object) {
         # Apply filter
         if ($exampleName -notlike $Filter) {
@@ -553,6 +616,11 @@ function Invoke-AllTests {
             Name = $exampleName
             File = $example.File
             TestCases = @()
+        }
+
+        # Show example name in table mode
+        if ($OutputFormat -eq "table") {
+            Write-Host "  $exampleName " -NoNewline
         }
 
         foreach ($testCase in $example.Tests) {
@@ -585,6 +653,8 @@ function Invoke-AllTests {
                         $passedTests++
                         if ($OutputFormat -eq "verbose") {
                             Write-Host "PASSED" -ForegroundColor Green
+                        } elseif ($OutputFormat -eq "table") {
+                            Write-Host "." -NoNewline -ForegroundColor Green
                         }
                     } else {
                         $failedTests++
@@ -597,6 +667,8 @@ function Invoke-AllTests {
                             if ($result.Error) {
                                 Write-Host "  - Error: $($result.Error)" -ForegroundColor Yellow
                             }
+                        } elseif ($OutputFormat -eq "table") {
+                            Write-Host "X" -NoNewline -ForegroundColor Red
                         }
                     }
                 }
@@ -611,11 +683,18 @@ function Invoke-AllTests {
                     }
                     if ($OutputFormat -eq "verbose") {
                         Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+                    } elseif ($OutputFormat -eq "table") {
+                        Write-Host "E" -NoNewline -ForegroundColor Red
                     }
                 }
             }
 
             $exampleResults.TestCases += $testCaseResult
+        }
+
+        # End line for example in table mode
+        if ($OutputFormat -eq "table") {
+            Write-Host ""
         }
 
         $results.Examples += $exampleResults
