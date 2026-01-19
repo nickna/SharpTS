@@ -683,10 +683,12 @@ public class DotNetTypeTests
     [Fact]
     public void StringFormat_WithParams_Works()
     {
+        // Note: Use 'any[]' for .NET interop because TypeScript 'object' excludes primitives,
+        // while .NET System.Object accepts everything including primitives.
         var source = """
             @DotNetType("System.String")
             declare class String {
-                static format(format: string, ...args: object[]): string;
+                static format(format: string, ...args: any[]): string;
             }
             let result: string = String.format("Hello {0}!", "World");
             console.log(result);
@@ -699,10 +701,12 @@ public class DotNetTypeTests
     [Fact]
     public void StringFormat_WithMultipleParams_Works()
     {
+        // Note: Use 'any[]' for .NET interop because TypeScript 'object' excludes primitives,
+        // while .NET System.Object accepts everything including primitives.
         var source = """
             @DotNetType("System.String")
             declare class String {
-                static format(format: string, ...args: object[]): string;
+                static format(format: string, ...args: any[]): string;
             }
             let result: string = String.format("{0} + {1} = {2}", 1, 2, 3);
             console.log(result);
@@ -715,10 +719,12 @@ public class DotNetTypeTests
     [Fact]
     public void StringFormat_WithMixedTypes_Works()
     {
+        // Note: Use 'any[]' for .NET interop because TypeScript 'object' excludes primitives,
+        // while .NET System.Object accepts everything including primitives.
         var source = """
             @DotNetType("System.String")
             declare class String {
-                static format(format: string, ...args: object[]): string;
+                static format(format: string, ...args: any[]): string;
             }
             let result: string = String.format("Name: {0}, Age: {1}, Active: {2}", "Alice", 30, true);
             console.log(result);

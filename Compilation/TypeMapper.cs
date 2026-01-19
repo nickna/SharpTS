@@ -88,6 +88,7 @@ public class TypeMapper
         TypeInfo.Union => _types.Object, // Union types are dynamic at runtime
         TypeInfo.Intersection => _types.Object, // Intersection types are dynamic at runtime
         TypeInfo.Null => _types.Object, // Null maps to object
+        TypeInfo.Object => _types.Object, // object type maps to System.Object
         TypeInfo.Unknown => _types.Object, // Unknown is dynamic at runtime
         TypeInfo.Never => _types.Void, // Never represents no return
         // Generic types erase to object at runtime (type checking is compile-time only)
@@ -157,6 +158,7 @@ public class TypeMapper
         TypeInfo.Union u => MapUnionTypeStrict(u),
         TypeInfo.Intersection => _types.Object, // Intersections are complex, fall back to object
         TypeInfo.Null => _types.Object,
+        TypeInfo.Object => _types.Object, // object type maps to System.Object
         TypeInfo.Unknown => _types.Object,
         TypeInfo.Never => _types.Void,
         TypeInfo.Map m => MapMapTypeStrict(m),

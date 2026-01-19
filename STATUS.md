@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-17 (Added JavaScript strict mode support)
+**Last Updated:** 2026-01-19 (Added TypeScript `object` type)
 
 ## Legend
 - ✅ Implemented
@@ -36,7 +36,7 @@ This document tracks TypeScript language features and their implementation statu
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
 | Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
-| `object` type | ❌ | Non-primitive type (excludes string, number, etc.) |
+| `object` type | ✅ | Non-primitive type (excludes string, number, boolean, bigint, symbol, null, undefined) |
 | `unique symbol` type | ❌ | For const symbol declarations |
 | `asserts` type predicates | ❌ | Assertion functions (`asserts x is T`) |
 | `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |

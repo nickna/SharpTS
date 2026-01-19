@@ -80,6 +80,24 @@ public partial class TypeChecker
         if (actual is TypeInfo.Unknown)
             return expected is TypeInfo.Unknown || expected is TypeInfo.Any;
 
+        // object type: accepts non-primitive, non-null values
+        if (expected is TypeInfo.Object)
+        {
+            if (actual is TypeInfo.Never) return true;  // never is bottom type
+            if (actual is TypeInfo.Any) return true;    // any is assignable to anything
+            if (actual is TypeInfo.Object) return true; // object to object
+            if (IsPrimitiveType(actual)) return false;  // reject primitives
+            if (actual is TypeInfo.Null or TypeInfo.Undefined) return false;
+            // Accept: Record, Array, Instance, Class, Function, Map, Set, etc.
+            return true;
+        }
+
+        // object as actual: can only assign to object, any, unknown
+        if (actual is TypeInfo.Object)
+        {
+            return expected is TypeInfo.Object or TypeInfo.Any or TypeInfo.Unknown;
+        }
+
         // Null compatibility
         if (actual is TypeInfo.Null)
         {
@@ -834,7 +852,7 @@ public partial class TypeChecker
         "boolean" => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
         "bigint" => new TypeInfo.BigInt(),
         "function" => new TypeInfo.Function([], new TypeInfo.Any(), 0, false),
-        "object" => new TypeInfo.Any(), // object could be many things
+        "object" => new TypeInfo.Object(),
         "symbol" => new TypeInfo.Symbol(),
         "undefined" => new TypeInfo.Undefined(),
         _ => null
@@ -1161,7 +1179,7 @@ public partial class TypeChecker
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral,
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "bigint" => type is TypeInfo.BigInt,
-        "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance,
+        "object" => type is TypeInfo.Null or TypeInfo.Record or TypeInfo.Array or TypeInfo.Instance or TypeInfo.Object,
         "function" => type is TypeInfo.Function,
         _ => false
     };

@@ -468,6 +468,16 @@ public abstract record TypeInfo
         public override string ToString() => "bigint";
     }
 
+    /// <summary>
+    /// The TypeScript 'object' type - any non-primitive value.
+    /// Excludes: string, number, boolean, bigint, symbol, null, undefined.
+    /// Includes: arrays, functions, class instances, records, Map/Set, etc.
+    /// </summary>
+    public record Object() : TypeInfo
+    {
+        public override string ToString() => "object";
+    }
+
     /// <summary>String type - represents the TypeScript string primitive.</summary>
     public record String() : TypeInfo
     {
