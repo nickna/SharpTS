@@ -143,6 +143,12 @@ public partial class ILEmitter
                     {
                         EmitStoreLocalToExportField(local, defaultField);
                     }
+                    else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var staticField) == true)
+                    {
+                        // Top-level variable stored as static field
+                        IL.Emit(OpCodes.Ldsfld, staticField);
+                        IL.Emit(OpCodes.Stsfld, defaultField);
+                    }
                     else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(name), out var funcBuilder))
                     {
                         // Create TSFunction for function
@@ -188,6 +194,12 @@ public partial class ILEmitter
                 {
                     EmitStoreLocalToExportField(local, field);
                 }
+                else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var staticField) == true)
+                {
+                    // Top-level variable stored as static field
+                    IL.Emit(OpCodes.Ldsfld, staticField);
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
                 else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(name), out var funcBuilder))
                 {
                     EmitFunctionReference(_ctx.GetQualifiedFunctionName(name), funcBuilder);
@@ -221,6 +233,12 @@ public partial class ILEmitter
                     if (local != null)
                     {
                         EmitStoreLocalToExportField(local, field);
+                    }
+                    else if (_ctx.TopLevelStaticVars?.TryGetValue(localName, out var staticField) == true)
+                    {
+                        // Top-level variable stored as static field
+                        IL.Emit(OpCodes.Ldsfld, staticField);
+                        IL.Emit(OpCodes.Stsfld, field);
                     }
                     else if (_ctx.Functions.TryGetValue(_ctx.GetQualifiedFunctionName(localName), out var funcBuilder))
                     {

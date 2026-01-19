@@ -269,6 +269,8 @@ public partial class ILEmitter
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         var local = _ctx.Locals.GetLocal(ca.Name.Lexeme);
+        FieldBuilder? topLevelField = null;
+        _ctx.TopLevelStaticVars?.TryGetValue(ca.Name.Lexeme, out topLevelField);
 
         // Special case: string concatenation with +=
         if (ca.Operator.Type == TokenType.PLUS_EQUAL && IsStringExpression(ca.Value))
@@ -288,6 +290,10 @@ public partial class ILEmitter
             if (local != null)
             {
                 IL.Emit(OpCodes.Stloc, local);
+            }
+            else if (topLevelField != null)
+            {
+                IL.Emit(OpCodes.Stsfld, topLevelField);
             }
             SetStackType(StackType.String);
             return;
@@ -334,6 +340,10 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Stloc, local);
         }
+        else if (topLevelField != null)
+        {
+            IL.Emit(OpCodes.Stsfld, topLevelField);
+        }
         SetStackUnknown();
     }
 
@@ -342,6 +352,8 @@ public partial class ILEmitter
         var builder = _ctx.ILBuilder;
         var endLabel = builder.DefineLabel("logical_assign_end");
         var local = _ctx.Locals.GetLocal(la.Name.Lexeme);
+        FieldBuilder? topLevelField = null;
+        _ctx.TopLevelStaticVars?.TryGetValue(la.Name.Lexeme, out topLevelField);
 
         // Load current value
         EmitVariable(new Expr.Variable(la.Name));
@@ -389,6 +401,10 @@ public partial class ILEmitter
         if (local != null)
         {
             IL.Emit(OpCodes.Stloc, local);
+        }
+        else if (topLevelField != null)
+        {
+            IL.Emit(OpCodes.Stsfld, topLevelField);
         }
 
         builder.MarkLabel(endLabel);
@@ -554,6 +570,10 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Stloc, local);
             }
+            else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
+            {
+                IL.Emit(OpCodes.Stsfld, topLevelField);
+            }
             SetStackUnknown();
             return;
         }
@@ -656,6 +676,10 @@ public partial class ILEmitter
             if (local != null)
             {
                 IL.Emit(OpCodes.Stloc, local);
+            }
+            else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
+            {
+                IL.Emit(OpCodes.Stsfld, topLevelField);
             }
 
             // Original value is still on stack, box it

@@ -476,4 +476,186 @@ public class StringMethodTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("-----hello\nbcab\n", output);
     }
+
+    #region String Methods on Any-Typed Values
+
+    [Fact]
+    public void String_PadEnd_OnAnyTypedFunctionReturn()
+    {
+        // Tests that string methods work on any-typed function return values
+        var source = """
+            function getString(): any {
+                return "hello";
+            }
+            const s = getString();
+            console.log(s.padEnd(10, "-"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello-----\n", output);
+    }
+
+    [Fact]
+    public void String_PadStart_OnAnyTypedFunctionReturn()
+    {
+        var source = """
+            function getString(): any {
+                return "world";
+            }
+            const s = getString();
+            console.log(s.padStart(10, "*"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("*****world\n", output);
+    }
+
+    [Fact]
+    public void String_Methods_OnAnyTypedArrayElements()
+    {
+        // Tests that string methods work on elements from any[] arrays
+        var source = """
+            const arr: any[] = ["hello", "world"];
+            console.log(arr[0].padEnd(10));
+            console.log(arr[1].toUpperCase());
+            console.log(arr[0].trim());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello     \nWORLD\nhello\n", output);
+    }
+
+    [Fact]
+    public void String_Methods_OnObjectPropertyFromAnyReturn()
+    {
+        // Tests that string methods work on properties of objects returned as any
+        var source = """
+            function getObj(): any {
+                return { name: "test", value: "  data  " };
+            }
+            const obj = getObj();
+            console.log(obj.name.padEnd(10, "-"));
+            console.log(obj.value.trim());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test------\ndata\n", output);
+    }
+
+    [Fact]
+    public void String_AllMethods_OnAnyTypedValue()
+    {
+        // Comprehensive test for all string-only methods on any-typed values
+        var source = """
+            function getString(): any {
+                return "  Hello World  ";
+            }
+            const s = getString();
+            console.log(s.trim());
+            console.log(s.trimStart());
+            console.log(s.trimEnd());
+            console.log(s.toUpperCase());
+            console.log(s.toLowerCase());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello World\nHello World  \n  Hello World\n  HELLO WORLD  \n  hello world  \n", output);
+    }
+
+    [Fact]
+    public void String_Replace_OnAnyTypedValue()
+    {
+        var source = """
+            function getString(): any {
+                return "hello world";
+            }
+            const s = getString();
+            console.log(s.replace("world", "there"));
+            console.log(s.replaceAll("l", "L"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello there\nheLLo worLd\n", output);
+    }
+
+    [Fact]
+    public void String_Split_OnAnyTypedValue()
+    {
+        var source = """
+            function getString(): any {
+                return "a,b,c";
+            }
+            const s = getString();
+            const parts = s.split(",");
+            console.log(parts.length);
+            console.log(parts[1]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("3\nb\n", output);
+    }
+
+    [Fact]
+    public void String_Repeat_OnAnyTypedValue()
+    {
+        var source = """
+            function getString(): any {
+                return "ab";
+            }
+            const s = getString();
+            console.log(s.repeat(3));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("ababab\n", output);
+    }
+
+    [Fact]
+    public void String_CharCodeAt_OnAnyTypedValue()
+    {
+        var source = """
+            function getString(): any {
+                return "ABC";
+            }
+            const s = getString();
+            console.log(s.charCodeAt(0));
+            console.log(s.charCodeAt(1));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("65\n66\n", output);
+    }
+
+    [Fact]
+    public void String_LastIndexOf_OnAnyTypedValue()
+    {
+        var source = """
+            function getString(): any {
+                return "hello world hello";
+            }
+            const s = getString();
+            console.log(s.lastIndexOf("hello"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("12\n", output);
+    }
+
+    [Fact]
+    public void String_ChainedMethods_OnAnyTypedValue()
+    {
+        // Tests chaining multiple string methods on any-typed values
+        var source = """
+            function getString(): any {
+                return "  hello  ";
+            }
+            const s = getString();
+            console.log(s.trim().toUpperCase().padEnd(10, "!"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("HELLO!!!!!\n", output);
+    }
+
+    #endregion
 }

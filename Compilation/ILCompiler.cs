@@ -577,6 +577,7 @@ public partial class ILCompiler
         Phase3_CreateProgramType();
         PreScanBuiltInModuleImports(allStatements);
         ModulePhase4_DefineModuleTypes(modules);
+        DefineTopLevelCapturedVariables(allStatements);
         ModulePhase5_DefineDeclarations(modules);
         InitializeTypedInterop();
         InitializeTypeEmitterRegistries();
@@ -819,95 +820,32 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Defines static fields for top-level variables that are captured by functions.
-    /// These variables cannot be accessed as locals from the entry point because functions
-    /// may run in separate contexts (async state machines, nested calls, etc).
+    /// Defines static fields for all top-level (module-level) variables.
+    /// These use static fields so all functions can access them regardless of
+    /// execution context (closures, async, nested calls, arrow functions, etc).
     /// </summary>
+    /// <remarks>
+    /// In JavaScript/TypeScript, module-level variables have module scope - they persist
+    /// for the application lifetime and are accessible from any function. This maps
+    /// directly to static fields in .NET, which is the correct semantic representation.
+    /// </remarks>
     private void DefineTopLevelCapturedVariables(List<Stmt> statements)
     {
-        // Collect all top-level variable names
-        var topLevelVars = new HashSet<string>();
         foreach (var stmt in statements)
         {
             if (stmt is Stmt.Var varStmt)
             {
-                topLevelVars.Add(varStmt.Name.Lexeme);
-            }
-        }
+                string varName = varStmt.Name.Lexeme;
 
-        // Check which top-level variables are captured by regular functions
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Function funcStmt && !funcStmt.IsAsync && !funcStmt.IsGenerator)
-            {
-                var captures = _closures.Analyzer.GetCaptures(funcStmt);
-                foreach (var capturedVar in captures)
-                {
-                    if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
-                    {
-                        var field = _programType.DefineField(
-                            $"$topLevel_{capturedVar}",
-                            _types.Object,
-                            FieldAttributes.Public | FieldAttributes.Static);
-                        _topLevelStaticVars[capturedVar] = field;
-                    }
-                }
-            }
-        }
+                // Skip if already defined (e.g., from built-in module imports)
+                if (_topLevelStaticVars.ContainsKey(varName))
+                    continue;
 
-        // Check which top-level variables are captured by async functions
-        foreach (var funcStmt in _async.Functions.Values)
-        {
-            var captures = _closures.Analyzer.GetCaptures(funcStmt);
-            foreach (var capturedVar in captures)
-            {
-                if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
-                {
-                    // Define a static field for this captured variable
-                    // Use Public so async state machines (nested types) can access them
-                    var field = _programType.DefineField(
-                        $"$topLevel_{capturedVar}",
-                        _types.Object,
-                        FieldAttributes.Public | FieldAttributes.Static);
-                    _topLevelStaticVars[capturedVar] = field;
-                }
-            }
-        }
-
-        // Also check async generator functions
-        foreach (var funcStmt in _asyncGenerators.Functions.Values)
-        {
-            var captures = _closures.Analyzer.GetCaptures(funcStmt);
-            foreach (var capturedVar in captures)
-            {
-                if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
-                {
-                    var field = _programType.DefineField(
-                        $"$topLevel_{capturedVar}",
-                        _types.Object,
-                        FieldAttributes.Public | FieldAttributes.Static);
-                    _topLevelStaticVars[capturedVar] = field;
-                }
-            }
-        }
-
-        // Check which top-level variables are captured by generator functions
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Function funcStmt && funcStmt.IsGenerator && !funcStmt.IsAsync)
-            {
-                var analysis = _generators.Analyzer.Analyze(funcStmt);
-                foreach (var capturedVar in analysis.CapturedVariables)
-                {
-                    if (topLevelVars.Contains(capturedVar) && !_topLevelStaticVars.ContainsKey(capturedVar))
-                    {
-                        var field = _programType.DefineField(
-                            $"$topLevel_{capturedVar}",
-                            _types.Object,
-                            FieldAttributes.Public | FieldAttributes.Static);
-                        _topLevelStaticVars[capturedVar] = field;
-                    }
-                }
+                var field = _programType.DefineField(
+                    $"$topLevel_{varName}",
+                    _types.Object,
+                    FieldAttributes.Public | FieldAttributes.Static);
+                _topLevelStaticVars[varName] = field;
             }
         }
     }

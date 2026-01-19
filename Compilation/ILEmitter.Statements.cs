@@ -11,14 +11,20 @@ public partial class ILEmitter
 {
     protected override void EmitVarDeclaration(Stmt.Var v)
     {
-        // Check if this is a top-level variable captured by async functions
-        // These use static fields instead of locals so async state machines can access them
+        // Check if this is a top-level variable - use static fields so all functions can access them
         if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var staticField) == true)
         {
             if (v.Initializer != null)
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                IL.Emit(OpCodes.Stsfld, staticField);
+            }
+            else if (v.TypeAnnotation == "number")
+            {
+                // Typed number without initializer defaults to 0
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 IL.Emit(OpCodes.Stsfld, staticField);
             }
             else

@@ -419,6 +419,8 @@ public partial class ILCompiler
             InstanceSetters = _classes.InstanceSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
+            // Top-level variables for module-level access
+            TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation
             CurrentModulePath = _modules.CurrentPath,
             ClassToModule = _modules.ClassToModule,
