@@ -17,6 +17,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static string UtilFormat(object[] args)
+    /// Calls into UtilHelpers.Format for proper format specifier handling.
     /// </summary>
     private void EmitUtilFormat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -29,69 +30,15 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Simple implementation: join args with space
-        var sbType = _types.StringBuilder;
-        var sbCtor = _types.GetDefaultConstructor(sbType);
-        var appendMethod = _types.GetMethod(sbType, "Append", _types.Object);
-        var appendStrMethod = _types.GetMethod(sbType, "Append", _types.String);
-        var toStringMethod = _types.GetMethodNoParams(sbType, "ToString");
-
-        var sbLocal = il.DeclareLocal(sbType);
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        // sb = new StringBuilder()
-        il.Emit(OpCodes.Newobj, sbCtor);
-        il.Emit(OpCodes.Stloc, sbLocal);
-
-        // i = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
+        // Call UtilHelpers.Format(args)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // if (i > 0) sb.Append(" ")
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        var skipSpace = il.DefineLabel();
-        il.Emit(OpCodes.Ble, skipSpace);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, " ");
-        il.Emit(OpCodes.Callvirt, appendStrMethod);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(skipSpace);
-
-        // sb.Append(args[i])
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, appendMethod);
-        il.Emit(OpCodes.Pop);
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // return sb.ToString()
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, toStringMethod);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Format))!);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static string UtilInspect(object obj, object options)
+    /// Calls into UtilHelpers.Inspect for proper formatting.
     /// </summary>
     private void EmitUtilInspect(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -104,21 +51,179 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Simple implementation: call ToString on the object
-        var nullLabel = il.DefineLabel();
-        var endLabel = il.DefineLabel();
-
+        // Call UtilHelpers.Inspect(obj, options)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, nullLabel);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Br, endLabel);
-
-        il.MarkLabel(nullLabel);
-        il.Emit(OpCodes.Ldstr, "null");
-
-        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Inspect))!);
         il.Emit(OpCodes.Ret);
+    }
+}
+
+/// <summary>
+/// Static helper methods for util module, called from emitted IL.
+/// These match the interpreter's behavior for parity.
+/// </summary>
+public static class UtilHelpers
+{
+    /// <summary>
+    /// util.types.isArray - checks if value is an array.
+    /// </summary>
+    public static bool IsArray(object? value) => value is IList<object?>;
+
+    /// <summary>
+    /// util.types.isFunction - checks if value is a function.
+    /// </summary>
+    public static bool IsFunction(object? value) => value is Delegate;
+
+    /// <summary>
+    /// util.types.isNull - checks if value is null.
+    /// </summary>
+    public static bool IsNull(object? value) => value is null;
+
+    /// <summary>
+    /// util.types.isUndefined - checks if value is undefined (null in SharpTS).
+    /// </summary>
+    public static bool IsUndefined(object? value) => value is null;
+
+    /// <summary>
+    /// util.types.isDate - checks if value is a date.
+    /// </summary>
+    public static bool IsDate(object? value) => value is DateTime or DateTimeOffset;
+
+    /// <summary>
+    /// Implements util.format() with proper format specifier handling.
+    /// </summary>
+    public static string Format(object?[] args)
+    {
+        if (args.Length == 0)
+            return "";
+
+        var format = args[0]?.ToString() ?? "";
+        if (args.Length == 1)
+            return format;
+
+        var result = new StringBuilder();
+        var argIndex = 1;
+        var i = 0;
+
+        while (i < format.Length)
+        {
+            if (format[i] == '%' && i + 1 < format.Length)
+            {
+                var specifier = format[i + 1];
+                switch (specifier)
+                {
+                    case 's': // String
+                        result.Append(argIndex < args.Length ? args[argIndex++]?.ToString() ?? "undefined" : "%s");
+                        i += 2;
+                        continue;
+                    case 'd': // Integer
+                    case 'i':
+                        if (argIndex < args.Length && args[argIndex] is double d)
+                        {
+                            result.Append((int)d);
+                            argIndex++;
+                        }
+                        else
+                            result.Append('%').Append(specifier);
+                        i += 2;
+                        continue;
+                    case 'f': // Float
+                        if (argIndex < args.Length && args[argIndex] is double f)
+                        {
+                            result.Append(f);
+                            argIndex++;
+                        }
+                        else
+                            result.Append("%f");
+                        i += 2;
+                        continue;
+                    case 'j': // JSON
+                        if (argIndex < args.Length)
+                        {
+                            result.Append(System.Text.Json.JsonSerializer.Serialize(args[argIndex++]));
+                        }
+                        else
+                            result.Append("%j");
+                        i += 2;
+                        continue;
+                    case 'o': // Object
+                    case 'O':
+                        if (argIndex < args.Length)
+                        {
+                            result.Append(InspectValue(args[argIndex++], 2, 0));
+                        }
+                        else
+                            result.Append('%').Append(specifier);
+                        i += 2;
+                        continue;
+                    case '%': // Literal %
+                        result.Append('%');
+                        i += 2;
+                        continue;
+                }
+            }
+            result.Append(format[i]);
+            i++;
+        }
+
+        // Append remaining arguments
+        while (argIndex < args.Length)
+        {
+            result.Append(' ');
+            result.Append(args[argIndex++]?.ToString() ?? "undefined");
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Implements util.inspect() with proper value formatting.
+    /// </summary>
+    public static string Inspect(object? obj, object? options)
+    {
+        int depth = 2;
+        if (options is IDictionary<string, object?> dict && dict.TryGetValue("depth", out var depthVal) && depthVal is double d)
+            depth = (int)d;
+
+        return InspectValue(obj, depth, 0);
+    }
+
+    private static string InspectValue(object? value, int depth, int currentDepth)
+    {
+        if (value == null)
+            return "null";
+
+        if (currentDepth > depth)
+            return "[Object]";
+
+        return value switch
+        {
+            string s => $"'{s}'",
+            double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            bool b => b ? "true" : "false",
+            IList<object?> list => InspectArray(list, depth, currentDepth),
+            IDictionary<string, object?> dict => InspectObject(dict, depth, currentDepth),
+            Delegate => "[Function]",
+            _ => value.ToString() ?? "undefined"
+        };
+    }
+
+    private static string InspectArray(IList<object?> arr, int depth, int currentDepth)
+    {
+        if (currentDepth >= depth)
+            return "[Array]";
+
+        var elements = arr.Select(e => InspectValue(e, depth, currentDepth + 1));
+        return $"[ {string.Join(", ", elements)} ]";
+    }
+
+    private static string InspectObject(IDictionary<string, object?> obj, int depth, int currentDepth)
+    {
+        if (currentDepth >= depth)
+            return "[Object]";
+
+        var props = obj.Select(kv => $"{kv.Key}: {InspectValue(kv.Value, depth, currentDepth + 1)}");
+        return $"{{ {string.Join(", ", props)} }}";
     }
 }

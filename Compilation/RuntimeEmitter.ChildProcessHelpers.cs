@@ -28,6 +28,7 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.String, _types.Object]);
         runtime.ChildProcessExecSync = method;
+        runtime.RegisterBuiltInModuleMethod("child_process", "execSync", method);
 
         var il = method.GetILGenerator();
 
@@ -226,6 +227,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.Object]);
         runtime.ChildProcessSpawnSync = method;
+        runtime.RegisterBuiltInModuleMethod("child_process", "spawnSync", method);
 
         var il = method.GetILGenerator();
 

@@ -863,9 +863,9 @@ public partial class RuntimeEmitter
         var trueLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
-        // Check if List<object>
+        // Check if IList<object?> (covers List<object?>, $Array, and any other array-like type)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Isinst, _types.IListOfObject);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
         // False

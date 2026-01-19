@@ -159,6 +159,7 @@ public class TypeProvider
     public Type IEnumerableOpen => Resolve("System.Collections.Generic.IEnumerable`1");
     public Type IEnumeratorOpen => Resolve("System.Collections.Generic.IEnumerator`1");
     public Type ICollectionOpen => Resolve("System.Collections.Generic.ICollection`1");
+    public Type IListOpen => Resolve("System.Collections.Generic.IList`1");
     public Type KeyValuePairOpen => Resolve("System.Collections.Generic.KeyValuePair`2");
     public Type IEnumerable => Resolve("System.Collections.IEnumerable");
     public Type IEnumerator => Resolve("System.Collections.IEnumerator");
@@ -178,6 +179,8 @@ public class TypeProvider
     public Type DictionaryStringObject => MakeGenericType(DictionaryOpen, String, Object);
     public Type IEnumerableOfObject => MakeGenericType(IEnumerableOpen, Object);
     public Type IEnumeratorOfObject => MakeGenericType(IEnumeratorOpen, Object);
+    public Type IListOfObject => MakeGenericType(IListOpen, Object);
+    public Type ICollectionOfObject => MakeGenericType(ICollectionOpen, Object);
     public Type KeyValuePairStringObject => MakeGenericType(KeyValuePairOpen, String, Object);
     public Type DictionaryStringObjectEnumerator => DictionaryStringObject.GetMethod("GetEnumerator")!.ReturnType;
     public Type HashSetOfString => MakeGenericType(HashSetOpen, String);

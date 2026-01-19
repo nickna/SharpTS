@@ -23,13 +23,19 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         {
             "format" => EmitFormat(emitter, arguments),
             "inspect" => EmitInspect(emitter, arguments),
+            // Handle util.types.* nested calls
+            "types.isArray" => EmitTypesIsArray(emitter, arguments),
+            "types.isFunction" => EmitTypesIsFunction(emitter, arguments),
+            "types.isNull" => EmitTypesIsNull(emitter, arguments),
+            "types.isUndefined" => EmitTypesIsUndefined(emitter, arguments),
+            "types.isDate" => EmitTypesIsDate(emitter, arguments),
             _ => false
         };
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // util.types is a nested object - for now, return false to use interpreter fallback
+        // util.types is a nested object - handled via nested call pattern in BuiltInModuleHandler
         return false;
     }
 
@@ -85,6 +91,56 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.UtilInspect);
+        return true;
+    }
+
+    private static bool EmitTypesIsArray(IEmitterContext emitter, List<Expr> arguments)
+    {
+        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsArray));
+    }
+
+    private static bool EmitTypesIsFunction(IEmitterContext emitter, List<Expr> arguments)
+    {
+        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsFunction));
+    }
+
+    private static bool EmitTypesIsNull(IEmitterContext emitter, List<Expr> arguments)
+    {
+        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsNull));
+    }
+
+    private static bool EmitTypesIsUndefined(IEmitterContext emitter, List<Expr> arguments)
+    {
+        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsUndefined));
+    }
+
+    private static bool EmitTypesIsDate(IEmitterContext emitter, List<Expr> arguments)
+    {
+        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsDate));
+    }
+
+    private static bool EmitTypesCheck(IEmitterContext emitter, List<Expr> arguments, string methodName)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit the argument (or null if no argument)
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call UtilHelpers.IsXxx(value)
+        var method = typeof(UtilHelpers).GetMethod(methodName)!;
+        il.Emit(OpCodes.Call, method);
+
+        // Box the boolean result
+        il.Emit(OpCodes.Box, ctx.Types.Boolean);
         return true;
     }
 }

@@ -124,7 +124,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call RandomNumberGenerator.GetInt32(min, max)
         il.Emit(OpCodes.Call, ctx.Types.GetMethod(
-            ctx.Types.Resolve("System.Security.Cryptography.RandomNumberGenerator"),
+            ctx.Types.RandomNumberGenerator,
             "GetInt32",
             ctx.Types.Int32, ctx.Types.Int32));
 

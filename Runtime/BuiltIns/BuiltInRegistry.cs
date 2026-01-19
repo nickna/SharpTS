@@ -142,6 +142,7 @@ public sealed class BuiltInRegistry
         RegisterStderrType(registry);
         RegisterHashType(registry);
         RegisterErrorTypes(registry);
+        RegisterReadlineInterfaceType(registry);
 
         return registry;
     }
@@ -387,6 +388,13 @@ public sealed class BuiltInRegistry
         // Hash members accessed via property access (hash.update, hash.digest)
         registry.RegisterInstanceType(typeof(SharpTSHash), (instance, name) =>
             ((SharpTSHash)instance).GetMember(name));
+    }
+
+    private static void RegisterReadlineInterfaceType(BuiltInRegistry registry)
+    {
+        // Readline Interface members accessed via property access (rl.question, rl.close, rl.prompt)
+        registry.RegisterInstanceType(typeof(SharpTSReadlineInterface), (instance, name) =>
+            ((SharpTSReadlineInterface)instance).GetMember(name));
     }
 
     private static void RegisterErrorTypes(BuiltInRegistry registry)
