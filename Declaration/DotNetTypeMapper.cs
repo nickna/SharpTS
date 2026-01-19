@@ -72,14 +72,14 @@ public static class DotNetTypeMapper
         if (type.IsArray)
         {
             var elementType = type.GetElementType()!;
-            return MapToTypeScript(elementType) + "[]";
+            return WrapForArrayContext(MapToTypeScript(elementType)) + "[]";
         }
 
         // List<T> -> T[]
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
         {
             var elementType = type.GetGenericArguments()[0];
-            return MapToTypeScript(elementType) + "[]";
+            return WrapForArrayContext(MapToTypeScript(elementType)) + "[]";
         }
 
         // IList<T>, IEnumerable<T>, ICollection<T> -> T[]
@@ -93,7 +93,7 @@ public static class DotNetTypeMapper
                 genericDef == typeof(IReadOnlyCollection<>))
             {
                 var elementType = type.GetGenericArguments()[0];
-                return MapToTypeScript(elementType) + "[]";
+                return WrapForArrayContext(MapToTypeScript(elementType)) + "[]";
             }
         }
 
@@ -167,6 +167,20 @@ public static class DotNetTypeMapper
 
         // Fallback
         return "unknown";
+    }
+
+    /// <summary>
+    /// Wraps a TypeScript type in parentheses if it's a union type being used in array context.
+    /// For example, "number | null" becomes "(number | null)" so that "[]" binds correctly.
+    /// </summary>
+    private static string WrapForArrayContext(string tsType)
+    {
+        // If the type is a union (contains " | "), wrap in parentheses
+        if (tsType.Contains(" | "))
+        {
+            return $"({tsType})";
+        }
+        return tsType;
     }
 
     /// <summary>

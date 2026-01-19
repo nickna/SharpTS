@@ -11,6 +11,12 @@ public class DeclarationGenerator
     private readonly TypeScriptEmitter _emitter = new();
 
     /// <summary>
+    /// Gets or sets whether to include nested types in the generated declarations.
+    /// Default is false for backward compatibility.
+    /// </summary>
+    public bool IncludeNestedTypes { get; set; } = false;
+
+    /// <summary>
     /// Generates a TypeScript declaration for a single type by name.
     /// </summary>
     /// <param name="typeName">The fully-qualified type name (e.g., "System.Console")</param>
@@ -63,7 +69,11 @@ public class DeclarationGenerator
         foreach (var type in assembly.GetExportedTypes())
         {
             // Skip compiler-generated types
-            if (type.Name.StartsWith("<") || type.Name.Contains("+"))
+            if (type.Name.StartsWith("<"))
+                continue;
+
+            // Skip nested types unless explicitly included
+            if (type.IsNested && !IncludeNestedTypes)
                 continue;
 
             // Skip generic type definitions for MVP
@@ -81,7 +91,7 @@ public class DeclarationGenerator
             }
         }
 
-        return _emitter.EmitAll(metadataList);
+        return _emitter.EmitAll(metadataList, IncludeNestedTypes);
     }
 
     /// <summary>
@@ -113,7 +123,11 @@ public class DeclarationGenerator
         foreach (var type in assembly.GetExportedTypes())
         {
             // Skip compiler-generated types
-            if (type.Name.StartsWith("<") || type.Name.Contains("+"))
+            if (type.Name.StartsWith("<"))
+                continue;
+
+            // Skip nested types unless explicitly included
+            if (type.IsNested && !IncludeNestedTypes)
                 continue;
 
             // Skip generic type definitions for MVP
@@ -135,7 +149,7 @@ public class DeclarationGenerator
             }
         }
 
-        return _emitter.EmitAll(metadataList);
+        return _emitter.EmitAll(metadataList, IncludeNestedTypes);
     }
 
     private static Type? ResolveType(string typeName)

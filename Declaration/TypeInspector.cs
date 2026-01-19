@@ -3,6 +3,11 @@ using System.Reflection;
 namespace SharpTS.Declaration;
 
 /// <summary>
+/// Metadata about the [Obsolete] attribute on a member or type.
+/// </summary>
+public record ObsoleteMetadata(string? Message, bool IsError);
+
+/// <summary>
 /// Metadata about a .NET type extracted via reflection.
 /// </summary>
 public record TypeMetadata(
@@ -17,14 +22,18 @@ public record TypeMetadata(
     List<PropertyMetadata> Properties,
     List<PropertyMetadata> StaticProperties,
     List<ConstructorMetadata> Constructors,
-    List<EnumMemberMetadata> EnumMembers
+    List<EnumMemberMetadata> EnumMembers,
+    ObsoleteMetadata? Obsolete = null,
+    bool IsNested = false,
+    string? DeclaringTypeName = null
 );
 
 public record MethodMetadata(
     string Name,
     string TypeScriptName,
     Type ReturnType,
-    List<ParameterMetadata> Parameters
+    List<ParameterMetadata> Parameters,
+    ObsoleteMetadata? Obsolete = null
 );
 
 public record PropertyMetadata(
@@ -32,11 +41,13 @@ public record PropertyMetadata(
     string TypeScriptName,
     Type PropertyType,
     bool CanRead,
-    bool CanWrite
+    bool CanWrite,
+    ObsoleteMetadata? Obsolete = null
 );
 
 public record ConstructorMetadata(
-    List<ParameterMetadata> Parameters
+    List<ParameterMetadata> Parameters,
+    ObsoleteMetadata? Obsolete = null
 );
 
 public record ParameterMetadata(
@@ -89,7 +100,10 @@ public class TypeInspector
                 Properties: [],
                 StaticProperties: [],
                 Constructors: [],
-                EnumMembers: enumMembers
+                EnumMembers: enumMembers,
+                Obsolete: ExtractObsoleteInfo(type),
+                IsNested: type.IsNested,
+                DeclaringTypeName: type.DeclaringType?.Name
             );
         }
 
@@ -146,7 +160,10 @@ public class TypeInspector
             Properties: properties,
             StaticProperties: staticProperties,
             Constructors: constructors,
-            EnumMembers: []
+            EnumMembers: [],
+            Obsolete: ExtractObsoleteInfo(type),
+            IsNested: type.IsNested,
+            DeclaringTypeName: type.DeclaringType?.Name
         );
     }
 
@@ -182,7 +199,8 @@ public class TypeInspector
             method.Name,
             DotNetTypeMapper.ToTypeScriptMethodName(method.Name),
             method.ReturnType,
-            parameters
+            parameters,
+            ExtractObsoleteInfo(method)
         );
     }
 
@@ -193,7 +211,8 @@ public class TypeInspector
             DotNetTypeMapper.ToTypeScriptPropertyName(property.Name),
             property.PropertyType,
             property.CanRead,
-            property.CanWrite
+            property.CanWrite,
+            ExtractObsoleteInfo(property)
         );
     }
 
@@ -208,6 +227,24 @@ public class TypeInspector
             ))
             .ToList();
 
-        return new ConstructorMetadata(parameters);
+        return new ConstructorMetadata(parameters, ExtractObsoleteInfo(ctor));
+    }
+
+    private static ObsoleteMetadata? ExtractObsoleteInfo(MemberInfo member)
+    {
+        var obsoleteAttr = member.GetCustomAttribute<ObsoleteAttribute>();
+        if (obsoleteAttr == null)
+            return null;
+
+        return new ObsoleteMetadata(obsoleteAttr.Message, obsoleteAttr.IsError);
+    }
+
+    private static ObsoleteMetadata? ExtractObsoleteInfo(Type type)
+    {
+        var obsoleteAttr = type.GetCustomAttribute<ObsoleteAttribute>();
+        if (obsoleteAttr == null)
+            return null;
+
+        return new ObsoleteMetadata(obsoleteAttr.Message, obsoleteAttr.IsError);
     }
 }

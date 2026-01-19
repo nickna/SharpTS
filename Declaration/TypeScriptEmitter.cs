@@ -26,11 +26,27 @@ public class TypeScriptEmitter
     /// <summary>
     /// Generates TypeScript declarations for multiple types.
     /// </summary>
-    public string EmitAll(IEnumerable<TypeMetadata> types)
+    public string EmitAll(IEnumerable<TypeMetadata> types, bool groupNestedTypes = false)
     {
         _sb.Clear();
         _indent = 0;
 
+        var typesList = types.ToList();
+
+        if (groupNestedTypes)
+        {
+            EmitWithNestedTypeGrouping(typesList);
+        }
+        else
+        {
+            EmitFlat(typesList);
+        }
+
+        return _sb.ToString();
+    }
+
+    private void EmitFlat(List<TypeMetadata> types)
+    {
         bool first = true;
         foreach (var metadata in types)
         {
@@ -41,8 +57,69 @@ public class TypeScriptEmitter
             EmitType(metadata);
             first = false;
         }
+    }
 
-        return _sb.ToString();
+    private void EmitWithNestedTypeGrouping(List<TypeMetadata> types)
+    {
+        // Separate nested types from top-level types
+        var topLevelTypes = types.Where(t => !t.IsNested).ToList();
+        var nestedTypes = types.Where(t => t.IsNested).ToList();
+
+        // Group nested types by their declaring type name
+        var nestedByParent = nestedTypes
+            .Where(t => t.DeclaringTypeName != null)
+            .GroupBy(t => t.DeclaringTypeName!)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        bool first = true;
+
+        // Emit top-level types
+        foreach (var metadata in topLevelTypes)
+        {
+            if (!first) AppendLine();
+            first = false;
+
+            EmitType(metadata);
+
+            // Check if this type has nested types
+            if (nestedByParent.TryGetValue(metadata.SimpleName, out var nested))
+            {
+                AppendLine();
+                EmitNamespaceWithNestedTypes(metadata.SimpleName, nested);
+            }
+        }
+
+        // Emit orphan nested types (whose parent wasn't in the list)
+        var emittedParents = topLevelTypes.Select(t => t.SimpleName).ToHashSet();
+        var orphanGroups = nestedByParent
+            .Where(kvp => !emittedParents.Contains(kvp.Key))
+            .ToList();
+
+        foreach (var group in orphanGroups)
+        {
+            if (!first) AppendLine();
+            first = false;
+
+            EmitNamespaceWithNestedTypes(group.Key, group.Value);
+        }
+    }
+
+    private void EmitNamespaceWithNestedTypes(string parentTypeName, List<TypeMetadata> nestedTypes)
+    {
+        AppendLine($"export namespace {parentTypeName} {{");
+        _indent++;
+
+        bool first = true;
+        foreach (var nested in nestedTypes)
+        {
+            if (!first) AppendLine();
+            first = false;
+
+            EmitType(nested);
+        }
+
+        _indent--;
+        AppendLine("}");
     }
 
     private void EmitType(TypeMetadata metadata)
@@ -52,6 +129,9 @@ public class TypeScriptEmitter
             EmitEnum(metadata);
             return;
         }
+
+        // Emit @deprecated JSDoc if type is obsolete
+        EmitDeprecatedJsDoc(metadata.Obsolete);
 
         // Emit decorator
         AppendLine($"@DotNetType(\"{metadata.FullName}\")");
@@ -118,6 +198,9 @@ public class TypeScriptEmitter
 
     private void EmitEnum(TypeMetadata metadata)
     {
+        // Emit @deprecated JSDoc if enum is obsolete
+        EmitDeprecatedJsDoc(metadata.Obsolete);
+
         AppendLine($"@DotNetType(\"{metadata.FullName}\")");
         AppendLine($"export declare enum {metadata.SimpleName} {{");
         _indent++;
@@ -135,12 +218,14 @@ public class TypeScriptEmitter
 
     private void EmitConstructor(ConstructorMetadata ctor)
     {
+        EmitDeprecatedJsDoc(ctor.Obsolete);
         var parameters = FormatParameters(ctor.Parameters);
         AppendLine($"constructor({parameters});");
     }
 
     private void EmitProperty(PropertyMetadata prop, bool isStatic)
     {
+        EmitDeprecatedJsDoc(prop.Obsolete);
         string staticModifier = isStatic ? "static " : "";
         string readonlyModifier = prop.CanRead && !prop.CanWrite ? "readonly " : "";
         string tsType = DotNetTypeMapper.MapToTypeScript(prop.PropertyType);
@@ -150,6 +235,7 @@ public class TypeScriptEmitter
 
     private void EmitMethod(MethodMetadata method, bool isStatic, bool isInterface)
     {
+        EmitDeprecatedJsDoc(method.Obsolete);
         string staticModifier = isStatic ? "static " : "";
         var parameters = FormatParameters(method.Parameters);
         string returnType = DotNetTypeMapper.MapToTypeScript(method.ReturnType);
@@ -183,6 +269,21 @@ public class TypeScriptEmitter
         }
 
         return string.Join(", ", parts);
+    }
+
+    private void EmitDeprecatedJsDoc(ObsoleteMetadata? obsolete)
+    {
+        if (obsolete == null)
+            return;
+
+        if (string.IsNullOrEmpty(obsolete.Message))
+        {
+            AppendLine("/** @deprecated */");
+        }
+        else
+        {
+            AppendLine($"/** @deprecated {obsolete.Message} */");
+        }
     }
 
     private void Append(string text)

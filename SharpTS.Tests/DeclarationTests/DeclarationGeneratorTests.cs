@@ -447,6 +447,80 @@ public class DeclarationGeneratorTests
 
     #endregion
 
+    #region Complex Nested Generics Tests
+
+    [Fact]
+    public void DotNetTypeMapper_MapsDictionaryWithListValue()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(Dictionary<string, List<int>>));
+        Assert.Equal("Map<string, number[]>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsTaskOfDictionary()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(System.Threading.Tasks.Task<Dictionary<string, int>>));
+        Assert.Equal("Promise<Map<string, number>>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsListOfDictionary()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(List<Dictionary<string, bool>>));
+        Assert.Equal("Map<string, boolean>[]", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsTripleNesting()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(System.Threading.Tasks.Task<Dictionary<string, List<int>>>));
+        Assert.Equal("Promise<Map<string, number[]>>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsHashSetOfList()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(HashSet<List<string>>));
+        Assert.Equal("Set<string[]>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsListWithNullable()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(List<int?>));
+        Assert.Equal("(number | null)[]", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsDictionaryWithNullableValue()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(Dictionary<string, int?>));
+        Assert.Equal("Map<string, number | null>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsNestedTuple()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(Tuple<string, List<int>>));
+        Assert.Equal("[string, number[]]", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsValueTaskOfDictionary()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(System.Threading.Tasks.ValueTask<Dictionary<int, string>>));
+        Assert.Equal("Promise<Map<number, string>>", result);
+    }
+
+    [Fact]
+    public void DotNetTypeMapper_MapsDictionaryOfLists()
+    {
+        var result = DotNetTypeMapper.MapToTypeScript(typeof(Dictionary<string, List<string>>));
+        Assert.Equal("Map<string, string[]>", result);
+    }
+
+    #endregion
+
     #region Optional Parameter Tests
 
     [Fact]
@@ -479,4 +553,356 @@ public class DeclarationGeneratorTests
     }
 
     #endregion
+
+    #region Obsolete Attribute Tests
+
+    [Fact]
+    public void TypeInspector_ExtractsObsoleteMethod_NoMessage()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(ObsoleteTestFixture));
+
+        var method = metadata.Methods.FirstOrDefault(m => m.Name == "ObsoleteMethodNoMessage");
+        Assert.NotNull(method);
+        Assert.NotNull(method.Obsolete);
+        Assert.Null(method.Obsolete.Message);
+        Assert.False(method.Obsolete.IsError);
+    }
+
+    [Fact]
+    public void TypeInspector_ExtractsObsoleteMethod_WithMessage()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(ObsoleteTestFixture));
+
+        var method = metadata.Methods.FirstOrDefault(m => m.Name == "ObsoleteMethodWithMessage");
+        Assert.NotNull(method);
+        Assert.NotNull(method.Obsolete);
+        Assert.Equal("Use NewMethod instead", method.Obsolete.Message);
+        Assert.False(method.Obsolete.IsError);
+    }
+
+    [Fact]
+    public void TypeInspector_ExtractsObsoleteMethod_IsError()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(ObsoleteTestFixture));
+
+        var method = metadata.Methods.FirstOrDefault(m => m.Name == "ObsoleteMethodError");
+        Assert.NotNull(method);
+        Assert.NotNull(method.Obsolete);
+        Assert.Equal("This will be removed", method.Obsolete.Message);
+        Assert.True(method.Obsolete.IsError);
+    }
+
+    [Fact]
+    public void TypeInspector_ExtractsObsoleteProperty()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(ObsoleteTestFixture));
+
+        var prop = metadata.Properties.FirstOrDefault(p => p.Name == "ObsoleteProperty");
+        Assert.NotNull(prop);
+        Assert.NotNull(prop.Obsolete);
+        Assert.Equal("Use NewProperty instead", prop.Obsolete.Message);
+    }
+
+    [Fact]
+    public void TypeInspector_ExtractsObsoleteClass()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(ObsoleteClass));
+
+        Assert.NotNull(metadata.Obsolete);
+        Assert.Equal("Use NewClass instead", metadata.Obsolete.Message);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsDeprecatedMethod_NoMessage()
+    {
+        var metadata = new TypeMetadata(
+            "Test.MyClass",
+            "MyClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [
+                new MethodMetadata("OldMethod", "oldMethod", typeof(void), [],
+                    Obsolete: new ObsoleteMetadata(null, false))
+            ],
+            StaticMethods: [],
+            Properties: [],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: []
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.Emit(metadata);
+
+        Assert.Contains("/** @deprecated */", result);
+        Assert.Contains("oldMethod(): void;", result);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsDeprecatedMethod_WithMessage()
+    {
+        var metadata = new TypeMetadata(
+            "Test.MyClass",
+            "MyClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [
+                new MethodMetadata("OldMethod", "oldMethod", typeof(void), [],
+                    Obsolete: new ObsoleteMetadata("Use newMethod instead", false))
+            ],
+            StaticMethods: [],
+            Properties: [],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: []
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.Emit(metadata);
+
+        Assert.Contains("/** @deprecated Use newMethod instead */", result);
+        Assert.Contains("oldMethod(): void;", result);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsDeprecatedProperty()
+    {
+        var metadata = new TypeMetadata(
+            "Test.MyClass",
+            "MyClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [
+                new PropertyMetadata("OldProp", "oldProp", typeof(string), true, false,
+                    Obsolete: new ObsoleteMetadata("Use newProp instead", false))
+            ],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: []
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.Emit(metadata);
+
+        Assert.Contains("/** @deprecated Use newProp instead */", result);
+        Assert.Contains("readonly oldProp: string;", result);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsDeprecatedClass()
+    {
+        var metadata = new TypeMetadata(
+            "Test.OldClass",
+            "OldClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: [],
+            Obsolete: new ObsoleteMetadata("Use NewClass instead", false)
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.Emit(metadata);
+
+        Assert.Contains("/** @deprecated Use NewClass instead */", result);
+        Assert.Contains("@DotNetType(\"Test.OldClass\")", result);
+    }
+
+    #endregion
+
+    #region Nested Types Tests
+
+    [Fact]
+    public void TypeInspector_DetectsNestedClass()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(OuterClass.NestedClass));
+
+        Assert.True(metadata.IsNested);
+        Assert.Equal("OuterClass", metadata.DeclaringTypeName);
+        Assert.Equal("NestedClass", metadata.SimpleName);
+    }
+
+    [Fact]
+    public void TypeInspector_DetectsNestedEnum()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(OuterClass.NestedEnum));
+
+        Assert.True(metadata.IsNested);
+        Assert.True(metadata.IsEnum);
+        Assert.Equal("OuterClass", metadata.DeclaringTypeName);
+    }
+
+    [Fact]
+    public void TypeInspector_DetectsNonNestedClass()
+    {
+        var inspector = new TypeInspector();
+        var metadata = inspector.Inspect(typeof(OuterClass));
+
+        Assert.False(metadata.IsNested);
+        Assert.Null(metadata.DeclaringTypeName);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsNestedTypesInNamespace()
+    {
+        var outerType = new TypeMetadata(
+            "Test.OuterClass",
+            "OuterClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [
+                new PropertyMetadata("Name", "name", typeof(string), true, true)
+            ],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: []
+        );
+
+        var nestedType = new TypeMetadata(
+            "Test.OuterClass+NestedClass",
+            "NestedClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [
+                new PropertyMetadata("Value", "value", typeof(int), true, true)
+            ],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: [],
+            IsNested: true,
+            DeclaringTypeName: "OuterClass"
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.EmitAll([outerType, nestedType], groupNestedTypes: true);
+
+        Assert.Contains("export declare class OuterClass", result);
+        Assert.Contains("export namespace OuterClass", result);
+        Assert.Contains("export declare class NestedClass", result);
+    }
+
+    [Fact]
+    public void TypeScriptEmitter_EmitsNestedEnumInNamespace()
+    {
+        var outerType = new TypeMetadata(
+            "Test.OuterClass",
+            "OuterClass",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: false,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: []
+        );
+
+        var nestedEnum = new TypeMetadata(
+            "Test.OuterClass+NestedEnum",
+            "NestedEnum",
+            IsStatic: false,
+            IsAbstract: false,
+            IsInterface: false,
+            IsEnum: true,
+            Methods: [],
+            StaticMethods: [],
+            Properties: [],
+            StaticProperties: [],
+            Constructors: [],
+            EnumMembers: [
+                new EnumMemberMetadata("A", 0L),
+                new EnumMemberMetadata("B", 1L)
+            ],
+            IsNested: true,
+            DeclaringTypeName: "OuterClass"
+        );
+
+        var emitter = new TypeScriptEmitter();
+        var result = emitter.EmitAll([outerType, nestedEnum], groupNestedTypes: true);
+
+        Assert.Contains("export namespace OuterClass", result);
+        Assert.Contains("export declare enum NestedEnum", result);
+        Assert.Contains("A = 0", result);
+    }
+
+    #endregion
 }
+
+#region Test Fixtures for Obsolete Attribute Tests
+
+public class ObsoleteTestFixture
+{
+    [Obsolete]
+    public void ObsoleteMethodNoMessage() { }
+
+    [Obsolete("Use NewMethod instead")]
+    public void ObsoleteMethodWithMessage() { }
+
+    [Obsolete("This will be removed", true)]
+    public void ObsoleteMethodError() { }
+
+    [Obsolete("Use NewProperty instead")]
+    public string? ObsoleteProperty { get; set; }
+
+    public void NotObsoleteMethod() { }
+}
+
+[Obsolete("Use NewClass instead")]
+public class ObsoleteClass
+{
+    public string? Value { get; set; }
+}
+
+#endregion
+
+#region Test Fixtures for Nested Types Tests
+
+public class OuterClass
+{
+    public string? Name { get; set; }
+
+    public class NestedClass
+    {
+        public string? Value { get; set; }
+    }
+
+    public enum NestedEnum
+    {
+        A,
+        B,
+        C
+    }
+}
+
+#endregion
