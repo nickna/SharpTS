@@ -34,6 +34,7 @@
 // =============================================================================
 
 using System.Reflection;
+using SharpTS.Cli;
 using SharpTS.Compilation;
 using SharpTS.Declaration;
 using SharpTS.Execution;
@@ -44,278 +45,60 @@ using SharpTS.Packaging;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
-// Handle --help and --version before other processing
-if (args.Length > 0)
+// Parse command-line arguments
+var parser = new CommandLineParser();
+var command = parser.Parse(args);
+
+switch (command)
 {
-    if (args[0] is "--help" or "-h")
-    {
+    case ParsedCommand.Help:
         PrintHelp();
         return;
-    }
-    if (args[0] is "--version" or "-v")
-    {
+
+    case ParsedCommand.Version:
         Console.WriteLine($"sharpts {GetVersion()}");
         return;
-    }
-}
 
-// Parse global options that apply to all modes
-var options = ParseGlobalOptions(args);
-var remainingArgs = options.RemainingArgs;
+    case ParsedCommand.Error error:
+        Console.WriteLine(error.Message);
+        if (error.ShowCompileUsage)
+            PrintCompileUsage();
+        Environment.Exit(error.ExitCode);
+        break;
 
-if (remainingArgs.Length == 0)
-{
-    RunPrompt(options.DecoratorMode);
-}
-else if (remainingArgs[0] == "--compile" || remainingArgs[0] == "-c")
-{
-    if (remainingArgs.Length < 2)
-    {
-        Console.WriteLine("Error: Missing input file");
-        PrintCompileUsage();
-        Environment.Exit(64);
-    }
+    case ParsedCommand.Repl repl:
+        RunPrompt(repl.Options.DecoratorMode);
+        break;
 
-    string inputFile = remainingArgs[1];
-    OutputTarget target = OutputTarget.Dll;
-    string? explicitOutput = null;
-    bool preserveConstEnums = false;
-    bool useReferenceAssemblies = false;
-    bool verifyIL = false;
-    bool msbuildErrors = false;
-    bool quietMode = false;
-    string? sdkPath = null;
+    case ParsedCommand.Script script:
+        RunFile(script.ScriptPath, script.Options.DecoratorMode, script.Options.EmitDecoratorMetadata, script.ScriptArgs);
+        break;
 
-    // Packaging options
-    bool pack = false;
-    string? pushSource = null;
-    string? apiKey = null;
-    string? packageIdOverride = null;
-    string? versionOverride = null;
+    case ParsedCommand.Compile compile:
+        var outputOptions = new OutputOptions(compile.CompileOptions.MsBuildErrors, compile.CompileOptions.QuietMode);
+        CompileFile(
+            compile.InputFile,
+            compile.OutputFile,
+            compile.CompileOptions.PreserveConstEnums,
+            compile.CompileOptions.UseReferenceAssemblies,
+            compile.CompileOptions.SdkPath,
+            compile.CompileOptions.VerifyIL,
+            compile.GlobalOptions.DecoratorMode,
+            compile.GlobalOptions.EmitDecoratorMetadata,
+            compile.PackOptions,
+            outputOptions,
+            compile.CompileOptions.References,
+            compile.CompileOptions.Target
+        );
+        break;
 
-    // Assembly references
-    List<string> references = [];
+    case ParsedCommand.GenDecl genDecl:
+        GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath);
+        break;
 
-    // Parse remaining arguments
-    for (int i = 2; i < remainingArgs.Length; i++)
-    {
-        if (remainingArgs[i] == "-o" && i + 1 < remainingArgs.Length)
-        {
-            explicitOutput = remainingArgs[++i];
-        }
-        else if (remainingArgs[i] == "-t" || remainingArgs[i] == "--target")
-        {
-            if (i + 1 >= remainingArgs.Length)
-            {
-                Console.WriteLine($"Error: {remainingArgs[i]} requires a value (dll or exe)");
-                PrintCompileUsage();
-                Environment.Exit(64);
-            }
-            var targetArg = remainingArgs[++i].ToLowerInvariant();
-            if (targetArg == "dll")
-            {
-                target = OutputTarget.Dll;
-            }
-            else if (targetArg == "exe")
-            {
-                target = OutputTarget.Exe;
-            }
-            else
-            {
-                Console.WriteLine($"Error: Invalid target '{targetArg}'. Use 'dll' or 'exe'.");
-                PrintCompileUsage();
-                Environment.Exit(64);
-            }
-        }
-        else if (remainingArgs[i] == "--preserveConstEnums")
-        {
-            preserveConstEnums = true;
-        }
-        else if (remainingArgs[i] == "--ref-asm")
-        {
-            useReferenceAssemblies = true;
-        }
-        else if (remainingArgs[i] == "--sdk-path" && i + 1 < remainingArgs.Length)
-        {
-            sdkPath = remainingArgs[++i];
-        }
-        else if (remainingArgs[i] == "--verify")
-        {
-            verifyIL = true;
-        }
-        else if (remainingArgs[i] == "--msbuild-errors")
-        {
-            msbuildErrors = true;
-        }
-        else if (remainingArgs[i] == "--quiet")
-        {
-            quietMode = true;
-        }
-        else if (remainingArgs[i] == "--pack")
-        {
-            pack = true;
-        }
-        else if (remainingArgs[i] == "--push" && i + 1 < remainingArgs.Length)
-        {
-            pushSource = remainingArgs[++i];
-            pack = true; // --push implies --pack
-        }
-        else if (remainingArgs[i] == "--api-key" && i + 1 < remainingArgs.Length)
-        {
-            apiKey = remainingArgs[++i];
-        }
-        else if (remainingArgs[i] == "--package-id" && i + 1 < remainingArgs.Length)
-        {
-            packageIdOverride = remainingArgs[++i];
-        }
-        else if (remainingArgs[i] == "--version" && i + 1 < remainingArgs.Length)
-        {
-            versionOverride = remainingArgs[++i];
-        }
-        else if ((remainingArgs[i] == "-r" || remainingArgs[i] == "--reference") && i + 1 < remainingArgs.Length)
-        {
-            references.Add(remainingArgs[++i]);
-        }
-    }
-
-    // Determine output file: use explicit output if provided, otherwise derive from input + target
-    string outputFile = explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
-
-    var packOptions = new PackOptions(pack, pushSource, apiKey, packageIdOverride, versionOverride);
-    var outputOptions = new OutputOptions(msbuildErrors, quietMode);
-    CompileFile(inputFile, outputFile, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, options.DecoratorMode, options.EmitDecoratorMetadata, packOptions, outputOptions, references, target);
-}
-else if (remainingArgs[0] == "--gen-decl")
-{
-    if (remainingArgs.Length < 2)
-    {
-        Console.WriteLine("Usage: sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
-        Console.WriteLine("Examples:");
-        Console.WriteLine("  sharpts --gen-decl System.Console              # Generate declaration for a type");
-        Console.WriteLine("  sharpts --gen-decl ./MyAssembly.dll            # Generate declarations for all types in assembly");
-        Console.WriteLine("  sharpts --gen-decl System.Console -o console.d.ts  # Write to file");
-        Environment.Exit(64);
-    }
-
-    string typeOrAssembly = remainingArgs[1];
-    string? outputPath = null;
-
-    // Parse options
-    for (int i = 2; i < remainingArgs.Length; i++)
-    {
-        if (remainingArgs[i] == "-o" && i + 1 < remainingArgs.Length)
-        {
-            outputPath = remainingArgs[++i];
-        }
-    }
-
-    GenerateDeclarations(typeOrAssembly, outputPath);
-}
-else if (remainingArgs[0] == "lsp-bridge")
-{
-    // LSP Bridge mode for IDE integration
-    string? projectFile = null;
-    string? sdkPath = null;
-    List<string> references = [];
-
-    // Parse lsp-bridge specific options
-    for (int i = 1; i < remainingArgs.Length; i++)
-    {
-        if (remainingArgs[i] == "--project" && i + 1 < remainingArgs.Length)
-        {
-            projectFile = remainingArgs[++i];
-        }
-        else if (remainingArgs[i] == "--sdk-path" && i + 1 < remainingArgs.Length)
-        {
-            sdkPath = remainingArgs[++i];
-        }
-        else if ((remainingArgs[i] == "-r" || remainingArgs[i] == "--reference") && i + 1 < remainingArgs.Length)
-        {
-            references.Add(remainingArgs[++i]);
-        }
-    }
-
-    RunLspBridge(projectFile, references, sdkPath);
-}
-else if (remainingArgs.Length >= 1)
-{
-    // Check if it looks like an unknown flag
-    if (remainingArgs[0].StartsWith('-'))
-    {
-        Console.WriteLine($"Error: Unknown option '{remainingArgs[0]}'");
-        Console.WriteLine();
-        Console.WriteLine("Use 'sharpts --help' for usage information.");
-        Environment.Exit(64);
-    }
-
-    // First arg is script path, rest are script arguments
-    string scriptPath = remainingArgs[0];
-
-    // Combine any additional args after script name with args after -- separator
-    string[] allScriptArgs;
-    if (remainingArgs.Length > 1)
-    {
-        // Script args from after script name + args from after --
-        var extraArgs = remainingArgs[1..];
-        allScriptArgs = [..extraArgs, ..options.ScriptArgs];
-    }
-    else
-    {
-        allScriptArgs = options.ScriptArgs;
-    }
-
-    RunFile(scriptPath, options.DecoratorMode, options.EmitDecoratorMetadata, allScriptArgs);
-}
-else
-{
-    Console.WriteLine("Usage: sharpts [script] [args...]");
-    Console.WriteLine("       sharpts --compile <script.ts> [-o output.dll]");
-    Console.WriteLine("       sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
-    Console.WriteLine("       sharpts lsp-bridge [--project <csproj>] [-r <assembly.dll>]");
-    Environment.Exit(64);
-}
-
-static GlobalOptions ParseGlobalOptions(string[] args)
-{
-    var decoratorMode = DecoratorMode.None;
-    var emitDecoratorMetadata = false;
-    List<string> remaining = [];
-    List<string> scriptArgs = [];
-
-    // Check for -- separator which indicates everything after is script args
-    int doubleDashIndex = Array.IndexOf(args, "--");
-
-    // If -- found, everything after it goes to scriptArgs
-    if (doubleDashIndex >= 0)
-    {
-        for (int i = doubleDashIndex + 1; i < args.Length; i++)
-        {
-            scriptArgs.Add(args[i]);
-        }
-        // Process only args before --
-        args = args[..doubleDashIndex];
-    }
-
-    foreach (var arg in args)
-    {
-        switch (arg)
-        {
-            case "--experimentalDecorators":
-                decoratorMode = DecoratorMode.Legacy;
-                break;
-            case "--decorators":
-                decoratorMode = DecoratorMode.Stage3;
-                break;
-            case "--emitDecoratorMetadata":
-                emitDecoratorMetadata = true;
-                break;
-            default:
-                remaining.Add(arg);
-                break;
-        }
-    }
-
-    return new GlobalOptions(decoratorMode, emitDecoratorMetadata, remaining.ToArray(), scriptArgs.ToArray());
+    case ParsedCommand.LspBridge lspBridge:
+        RunLspBridge(lspBridge.ProjectFile, lspBridge.References, lspBridge.SdkPath);
+        break;
 }
 
 static void RunLspBridge(string? projectFile, List<string> references, string? sdkPath)
@@ -985,6 +768,4 @@ static void PrintCompileUsage()
     Console.WriteLine("  --version <ver>        Override package version");
 }
 
-record GlobalOptions(DecoratorMode DecoratorMode, bool EmitDecoratorMetadata, string[] RemainingArgs, string[] ScriptArgs);
-record PackOptions(bool Pack, string? PushSource, string? ApiKey, string? PackageIdOverride, string? VersionOverride);
 record OutputOptions(bool MsBuildErrors, bool QuietMode);
