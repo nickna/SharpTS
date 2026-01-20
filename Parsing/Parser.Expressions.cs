@@ -481,6 +481,13 @@ public partial class Parser
                     expr = new Expr.TypeAssertion(expr, targetType);
                 }
             }
+            else if (Match(TokenType.SATISFIES))
+            {
+                // Satisfies operator: expr satisfies Type (TS 4.9+)
+                // Validates that expr matches Type without widening the inferred type
+                string constraintType = ParseTypeAnnotation();
+                expr = new Expr.Satisfies(expr, constraintType);
+            }
             else if (Match(TokenType.BANG))
             {
                 // Non-null assertion: expr!

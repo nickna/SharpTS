@@ -333,6 +333,9 @@ public partial class ILCompiler
             case Expr.TypeAssertion ta:
                 CollectArrowsFromExpr(ta.Expression);
                 break;
+            case Expr.Satisfies sat:
+                CollectArrowsFromExpr(sat.Expression);
+                break;
             case Expr.NonNullAssertion nna:
                 CollectArrowsFromExpr(nna.Expression);
                 break;

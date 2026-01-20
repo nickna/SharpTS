@@ -406,6 +406,9 @@ public partial class ILCompiler
             case Expr.TypeAssertion ta:
                 AnalyzeArrowExprForAwaits(ta.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
+            case Expr.Satisfies sat:
+                AnalyzeArrowExprForAwaits(sat.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.NonNullAssertion nna:
                 AnalyzeArrowExprForAwaits(nna.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;

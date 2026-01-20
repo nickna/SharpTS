@@ -172,6 +172,9 @@ public abstract class ExpressionEmitterBase
             case Expr.TypeAssertion ta:
                 EmitTypeAssertion(ta);
                 break;
+            case Expr.Satisfies sat:
+                EmitSatisfies(sat);
+                break;
             case Expr.NonNullAssertion nna:
                 EmitNonNullAssertion(nna);
                 break;
@@ -238,6 +241,11 @@ public abstract class ExpressionEmitterBase
     /// Emits a type assertion. Type assertions are compile-time only, just emit the inner expression.
     /// </summary>
     protected virtual void EmitTypeAssertion(Expr.TypeAssertion ta) => EmitExpression(ta.Expression);
+
+    /// <summary>
+    /// Emits a satisfies expression. Satisfies is compile-time only, just emit the inner expression.
+    /// </summary>
+    protected virtual void EmitSatisfies(Expr.Satisfies sat) => EmitExpression(sat.Expression);
 
     /// <summary>
     /// Emits a non-null assertion. These are compile-time only, just emit the inner expression.

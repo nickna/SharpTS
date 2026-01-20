@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added setTimeout/clearTimeout, globalThis)
+**Last Updated:** 2026-01-19 (Added `satisfies` operator)
 
 ## Legend
 - ✅ Implemented
@@ -39,7 +39,7 @@ This document tracks TypeScript language features and their implementation statu
 | `object` type | ✅ | Non-primitive type (excludes string, number, boolean, bigint, symbol, null, undefined) |
 | `unique symbol` type | ✅ | Nominally-typed symbols for const declarations |
 | Type predicates (`is`, `asserts`) | ✅ | User-defined type guards (`x is T`), assertion functions (`asserts x is T`, `asserts x`) |
-| `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |
+| `satisfies` operator | ✅ | Validates expression matches type without widening (TS 4.9+) |
 | Variadic tuple types | ✅ | `[...T]` spread in tuples, Prepend/Append/Concat patterns |
 | Definite assignment assertion | ✅ | `let x!: number` syntax for variables and class fields |
 
@@ -756,3 +756,15 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ `globalThis` property assignment and index access
 - ✅ Built-in constants: `globalThis.undefined`, `globalThis.NaN`, `globalThis.Infinity`
 - ✅ Full interpreter and IL compiler support
+
+### Phase 42 Features (Satisfies Operator)
+- ✅ `satisfies` operator syntax: `expr satisfies Type` (TypeScript 4.9+)
+- ✅ Validates expression matches constraint type without widening inferred type
+- ✅ Key difference from `as`: returns inferred type, not constraint type
+- ✅ One-way validation: inferred type must be assignable to constraint
+- ✅ Escape hatches: `any`/`unknown` constraints always pass, `any` values satisfy any constraint
+- ✅ Object literal support with excess properties allowed
+- ✅ Array and union type constraints
+- ✅ Chaining support: `x satisfies A satisfies B`
+- ✅ Works with `as const`: `[1,2] as const satisfies number[]`
+- ✅ Full interpreter and IL compiler support with 41 test cases

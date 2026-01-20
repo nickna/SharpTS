@@ -58,6 +58,7 @@ public partial class Interpreter
             Expr.TemplateLiteral template => EvaluateTemplateLiteral(template),
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
+            Expr.Satisfies sat => Evaluate(sat.Expression), // Satisfies is pass-through at runtime
             Expr.NonNullAssertion nna => Evaluate(nna.Expression), // Non-null assertions are pass-through at runtime
             Expr.Await => throw new Exception("Runtime Error: 'await' can only be used inside async functions."),
             Expr.DynamicImport di => EvaluateDynamicImport(di),
@@ -125,6 +126,7 @@ public partial class Interpreter
             case Expr.TemplateLiteral template: return await EvaluateTemplateLiteralAsync(template);
             case Expr.Spread spread: return await EvaluateAsync(spread.Expression);
             case Expr.TypeAssertion ta: return await EvaluateAsync(ta.Expression);
+            case Expr.Satisfies sat: return await EvaluateAsync(sat.Expression);
             case Expr.NonNullAssertion nna: return await EvaluateAsync(nna.Expression);
             case Expr.Await awaitExpr: return await EvaluateAwaitAsync(awaitExpr);
             case Expr.DynamicImport di: return EvaluateDynamicImport(di);

@@ -88,6 +88,8 @@ public abstract record Expr
     public record Spread(Expr Expression) : Expr;
     // Type assertion: value as Type
     public record TypeAssertion(Expr Expression, string TargetType) : Expr;
+    // Satisfies operator: value satisfies Type (TS 4.9+) - validates without widening
+    public record Satisfies(Expr Expression, string ConstraintType) : Expr;
     // Await expression: await expr (only valid inside async functions)
     public record Await(Token Keyword, Expr Expression) : Expr;
     // Dynamic import: import(pathExpr) - returns Promise of module namespace

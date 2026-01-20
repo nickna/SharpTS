@@ -52,6 +52,7 @@ public partial class TypeChecker
             Expr.TemplateLiteral template => CheckTemplateLiteral(template),
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
+            Expr.Satisfies sat => CheckSatisfies(sat),
             Expr.NonNullAssertion nna => CheckNonNullAssertion(nna),
             Expr.Await awaitExpr => CheckAwait(awaitExpr),
             Expr.DynamicImport di => CheckDynamicImport(di),
@@ -215,6 +216,30 @@ public partial class TypeChecker
             return targetType;
 
         throw new TypeCheckException($" Cannot assert type '{sourceType}' to '{targetType}'.");
+    }
+
+    private TypeInfo CheckSatisfies(Expr.Satisfies sat)
+    {
+        TypeInfo inferredType = CheckExpr(sat.Expression);
+        TypeInfo constraintType = ToTypeInfo(sat.ConstraintType);
+
+        // Escape hatches - any/unknown constraints always pass
+        if (constraintType is TypeInfo.Any or TypeInfo.Unknown)
+            return inferredType;
+
+        // any value satisfies any constraint
+        if (inferredType is TypeInfo.Any)
+            return inferredType;
+
+        // One-way validation: inferred must be assignable TO constraint
+        if (!IsCompatible(constraintType, inferredType))
+        {
+            throw new TypeCheckException(
+                $"Type '{inferredType}' does not satisfy constraint '{constraintType}'.");
+        }
+
+        // Key difference from 'as': return the inferred type, not the constraint type
+        return inferredType;
     }
 
     /// <summary>

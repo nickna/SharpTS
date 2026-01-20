@@ -74,6 +74,7 @@ public class Lexer(string source)
         { "public", TokenType.PUBLIC },
         { "readonly", TokenType.READONLY },
         { "return", TokenType.RETURN },
+        { "satisfies", TokenType.SATISFIES },
         { "set", TokenType.SET },
         { "static", TokenType.STATIC },
         { "super", TokenType.SUPER },
