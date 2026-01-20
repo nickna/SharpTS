@@ -85,9 +85,29 @@ public partial class ILEmitter
             return;
         }
 
-        // Populate captured fields
+        // Determine if this is a named function expression with self-reference
+        string? selfRefName = af.Name?.Lexeme;
+        FieldBuilder? selfRefField = null;
+        if (selfRefName != null && fieldMap.TryGetValue(selfRefName, out var srf))
+        {
+            selfRefField = srf;
+        }
+
+        // If we have a self-reference, save the display class instance for later use
+        LocalBuilder? displayClassLocal = null;
+        if (selfRefField != null)
+        {
+            displayClassLocal = IL.DeclareLocal(displayClass);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, displayClassLocal);
+        }
+
+        // Populate captured fields (except self-reference which needs to be set after TSFunction creation)
         foreach (var (capturedVar, field) in fieldMap)
         {
+            // Skip self-reference field - will be populated after TSFunction is created
+            if (selfRefField != null && capturedVar == selfRefName) continue;
+
             IL.Emit(OpCodes.Dup); // Keep display class on stack
 
             // Load the captured variable's current value
@@ -118,6 +138,11 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldarg_0); // this (display class)
                 IL.Emit(OpCodes.Ldfld, capturedField);
             }
+            else if (_ctx.TopLevelStaticVars != null && _ctx.TopLevelStaticVars.TryGetValue(capturedVar, out var topLevelField))
+            {
+                // Variable is a top-level static var
+                IL.Emit(OpCodes.Ldsfld, topLevelField);
+            }
             else
             {
                 var local = _ctx.Locals.GetLocal(capturedVar);
@@ -146,5 +171,22 @@ public partial class ILEmitter
 
         // Call $TSFunction constructor
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+
+        // For named function expressions, populate the self-reference field with the TSFunction
+        // Stack now has: TSFunction
+        if (selfRefField != null && displayClassLocal != null)
+        {
+            // Save TSFunction to local
+            var tsFuncLocal = IL.DeclareLocal(_ctx.Runtime!.TSFunctionType);
+            IL.Emit(OpCodes.Stloc, tsFuncLocal);
+
+            // Load display class, load TSFunction, store in self-reference field
+            IL.Emit(OpCodes.Ldloc, displayClassLocal);
+            IL.Emit(OpCodes.Ldloc, tsFuncLocal);
+            IL.Emit(OpCodes.Stfld, selfRefField);
+
+            // Leave TSFunction on stack for the return value
+            IL.Emit(OpCodes.Ldloc, tsFuncLocal);
+        }
     }
 }

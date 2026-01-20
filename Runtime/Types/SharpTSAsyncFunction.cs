@@ -97,7 +97,8 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable
 /// <remarks>
 /// Wraps an <see cref="Expr.ArrowFunction"/> AST node with IsAsync=true.
 /// Supports both expression bodies and block bodies.
-/// Like regular arrow functions, async arrows capture 'this' from the enclosing scope.
+/// For arrow functions (<c>HasOwnThis=false</c>), <c>this</c> is captured from the enclosing scope.
+/// For async function expressions (<c>HasOwnThis=true</c>), <c>this</c> is bound at call time.
 /// </remarks>
 public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
 {
@@ -105,13 +106,17 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
 
-    public bool IsObjectMethod { get; }
+    /// <summary>
+    /// Indicates whether this function has its own 'this' binding (function expressions)
+    /// versus capturing 'this' from enclosing scope (arrow functions).
+    /// </summary>
+    public bool HasOwnThis { get; }
 
-    public SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false)
+    public SharpTSAsyncArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool hasOwnThis = false)
     {
         _declaration = declaration;
         _closure = closure;
-        IsObjectMethod = isObjectMethod;
+        HasOwnThis = hasOwnThis;
         _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
     }
 
@@ -169,7 +174,7 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable
     {
         RuntimeEnvironment environment = new(_closure);
         environment.Define("this", thisObject);
-        return new SharpTSAsyncArrowFunction(_declaration, environment, isObjectMethod: true);
+        return new SharpTSAsyncArrowFunction(_declaration, environment, hasOwnThis: true);
     }
 
     public override string ToString() => "<async arrow fn>";

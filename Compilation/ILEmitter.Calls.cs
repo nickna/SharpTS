@@ -673,8 +673,15 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);
         }
 
-        // Call $TSFunction.Invoke(object[] args)
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSFunctionInvoke);
+        // Call $TSFunction.InvokeWithThis(null, object[] args)
+        // This handles both regular arrow functions (HasOwnThis=false) and function expressions (HasOwnThis=true)
+        // InvokeWithThis checks if the first parameter is named "__this" and prepends thisArg (null) if so
+        // Store args in a local, push null for thisArg, then push args
+        var argsLocal = IL.DeclareLocal(_ctx.Types.ObjectArray);
+        IL.Emit(OpCodes.Stloc, argsLocal);
+        IL.Emit(OpCodes.Ldnull);  // thisArg = null for non-method calls
+        IL.Emit(OpCodes.Ldloc, argsLocal);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSFunctionInvokeWithThis);
     }
 
     /// <summary>

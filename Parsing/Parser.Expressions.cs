@@ -26,7 +26,7 @@ public partial class Parser
             }
 
             var param = new Stmt.Parameter(paramName, null, null);
-            return new Expr.ArrowFunction(null, null, [param], exprBody, body, null);
+            return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null);
         }
 
         // Check for single-parameter async arrow function: async x => expr
@@ -703,13 +703,14 @@ public partial class Parser
                             List<Stmt> body = Block();
 
                             var methodExpr = new Expr.ArrowFunction(
+                                Name: null,
                                 TypeParams: null,
                                 ThisType: null,
                                 Parameters: parameters,
                                 ExpressionBody: null,
                                 BlockBody: body,
                                 ReturnType: returnType,
-                                IsObjectMethod: true
+                                HasOwnThis: true
                             );
                             properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), methodExpr));
                             continue;
@@ -791,7 +792,7 @@ public partial class Parser
 
                         Consume(TokenType.LEFT_BRACE, "Expect '{' before method body.");
                         List<Stmt> body = Block();
-                        value = new Expr.ArrowFunction(null, thisType, parameters, null, body, returnType, IsObjectMethod: true);
+                        value = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: thisType, Parameters: parameters, ExpressionBody: null, BlockBody: body, ReturnType: returnType, HasOwnThis: true);
                     }
                     else if (Match(TokenType.COLON))
                     {
@@ -1035,20 +1036,26 @@ public partial class Parser
             }
         }
 
-        return new Expr.ArrowFunction(null, null, parameters, exprBody, body, returnType, IsAsync: isAsync);  // TODO: Parse type params
+        return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync);  // TODO: Parse type params
     }
 
     /// <summary>
     /// Parses a function expression: function [name](params) { body }
-    /// Supports optional name, this parameter, and type annotations.
+    /// Supports optional name (for named function expressions), generator syntax (function*),
+    /// this parameter, and type annotations.
     /// </summary>
     private Expr FunctionExpression()
     {
-        // Check for generator function: function* () { } - skip for now
-        Match(TokenType.STAR);
+        // Check for generator function: function* () { }
+        bool isGenerator = Match(TokenType.STAR);
 
-        // Optional function name (for named function expressions) - ignore, not used in ArrowFunction
-        if (Check(TokenType.IDENTIFIER)) Advance();
+        // Optional function name (for named function expressions)
+        // Named function expressions have their name visible inside the function body for recursion
+        Token? functionName = null;
+        if (Check(TokenType.IDENTIFIER))
+        {
+            functionName = Advance();
+        }
 
         // Parse type parameters: function<T, U>(params) { }
         List<TypeParam>? typeParams = ParseTypeParameters();
@@ -1162,8 +1169,18 @@ public partial class Parser
             body = prologue.Concat(body).ToList();
         }
 
-        // Return as ArrowFunction with block body (IsObjectMethod controls 'this' binding)
-        return new Expr.ArrowFunction(typeParams, thisType, parameters, null, body, returnType, IsObjectMethod: true);
+        // Return as ArrowFunction with block body (HasOwnThis=true for function expressions)
+        return new Expr.ArrowFunction(
+            Name: functionName,
+            TypeParams: typeParams,
+            ThisType: thisType,
+            Parameters: parameters,
+            ExpressionBody: null,
+            BlockBody: body,
+            ReturnType: returnType,
+            HasOwnThis: true,
+            IsGenerator: isGenerator
+        );
     }
 
     // Parse function type annotation like "(number) => number" or "(this: Window, e: Event) => void"

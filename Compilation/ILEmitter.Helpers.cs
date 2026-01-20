@@ -31,9 +31,12 @@ public partial class ILEmitter
     /// Emit default parameter value checks at function entry.
     /// For each parameter with a default value, checks if arg is null and assigns default.
     /// </summary>
-    public void EmitDefaultParameters(List<Stmt.Parameter> parameters, bool isInstanceMethod)
+    /// <param name="parameters">The parameter list</param>
+    /// <param name="isInstanceMethod">True if this is an instance method (has implicit this at arg 0)</param>
+    /// <param name="hasOwnThis">True if function has __this as first explicit parameter</param>
+    public void EmitDefaultParameters(List<Stmt.Parameter> parameters, bool isInstanceMethod, bool hasOwnThis = false)
     {
-        int argOffset = isInstanceMethod ? 1 : 0;
+        int argOffset = (isInstanceMethod ? 1 : 0) + (hasOwnThis ? 1 : 0);
         var builder = _ctx.ILBuilder;
 
         for (int i = 0; i < parameters.Count; i++)

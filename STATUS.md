@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added IL compiler support for ES2022 private class fields and methods)
+**Last Updated:** 2026-01-20 (Added named function expressions with self-reference support)
 
 ## Legend
 - ✅ Implemented
@@ -94,7 +94,7 @@ This document tracks TypeScript language features and their implementation statu
 | Overloads | ✅ | Multiple signatures with implementation function |
 | `this` parameter typing | ✅ | Explicit `this` type in function declarations |
 | Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
-| Named function expressions | ❌ | `const f = function myFunc() {}` |
+| Named function expressions | ✅ | `const f = function myFunc() {}` with self-reference for recursion |
 | Constructor signatures | ✅ | `new (params): T` in interfaces, `new` on expressions |
 | Call signatures | ✅ | `(params): T` in interfaces, callable interface types |
 
@@ -796,3 +796,20 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Public and private fields with same name coexist correctly
 - ✅ Private methods can access private fields
 - ✅ Full IL compiler support with 23 test cases (all previously skipped tests now pass)
+
+### Phase 45 Features (Named Function Expressions)
+- ✅ Named function expression syntax: `const f = function myFunc() { }`
+- ✅ Self-reference for recursion: function name visible inside body only
+- ✅ Name not visible outside function body (proper scoping)
+- ✅ Parameter shadows function name when same identifier used
+- ✅ Nested named functions with closure capture
+- ✅ Named function expressions in object literals
+- ✅ Named function expressions as callback arguments
+- ✅ Works with default parameters and rest parameters
+- ✅ Immediately invoked function expressions (IIFE)
+- ✅ Mutual recursion with closures
+- ✅ AST: Added `Name` and `IsGenerator` to `ArrowFunction`, renamed `IsObjectMethod` to `HasOwnThis`
+- ✅ Closure analyzer detects self-references as captures only when actually used
+- ✅ IL compiler: self-reference stored in display class for capturing functions
+- ✅ Rest parameters use `List<object>` type for runtime detection in `TSFunction.Invoke`
+- ✅ Full interpreter and IL compiler parity with 28 test cases (14 each)

@@ -29,6 +29,9 @@ public class ClosureAnalyzer : AstVisitorBase
     // Current function being analyzed (for tracking captures)
     private object? _currentFunction;
 
+    // Current function's name (for self-reference detection in named function expressions)
+    private string? _currentFunctionName;
+
     // Set of variables defined in outer scopes relative to current function
     private readonly HashSet<string> _outerVariables = [];
 
@@ -83,6 +86,14 @@ public class ClosureAnalyzer : AstVisitorBase
         // Skip built-ins
         if (name is "console.log" or "Math" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
             return;
+
+        // Check for self-reference in named function expressions
+        // This needs to happen BEFORE the local variable check
+        if (name == _currentFunctionName)
+        {
+            _captures[_currentFunction].Add(name);
+            return;
+        }
 
         // Check if this is a local variable in the current function
         if (_localVars.TryGetValue(_currentFunction, out var locals) && locals.Contains(name))
@@ -258,8 +269,8 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         // Arrow functions capture 'this' from their lexical scope
         // Track this as a captured variable so display classes include a field for it
-        // EXCEPT for object methods which receive 'this' via the __this parameter
-        if (_currentFunction != null && _currentFunction is Expr.ArrowFunction arrowFunc && !arrowFunc.IsObjectMethod)
+        // EXCEPT for function expressions (HasOwnThis=true) which receive 'this' via the __this parameter
+        if (_currentFunction != null && _currentFunction is Expr.ArrowFunction arrowFunc && !arrowFunc.HasOwnThis)
             _captures[_currentFunction].Add("this");
     }
 
@@ -311,6 +322,7 @@ public class ClosureAnalyzer : AstVisitorBase
         // Save current context
         var previousFunction = _currentFunction;
         var previousOuter = new HashSet<string>(_outerVariables);
+        var previousFunctionName = _currentFunctionName;
 
         // Build set of outer variables for this function
         _outerVariables.Clear();
@@ -320,11 +332,22 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Set up new function context
         _currentFunction = af;
+        _currentFunctionName = af.Name?.Lexeme;
         _captures[af] = [];
         _localVars[af] = [];
 
-        // Enter function scope and declare parameters
+        // Enter function scope
         EnterScope();
+
+        // For named function expressions, declare the name as a local variable
+        // so that it doesn't get captured from outer scopes.
+        // Self-references will be detected by ReferenceVariable checking _currentFunctionName.
+        if (af.Name != null)
+        {
+            DeclareVariable(af.Name.Lexeme);
+        }
+
+        // Declare parameters (may shadow function name if same identifier)
         foreach (var param in af.Parameters)
         {
             DeclareVariable(param.Name.Lexeme);
@@ -343,6 +366,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _currentFunctionName = previousFunctionName;
         _outerVariables.Clear();
         foreach (var name in previousOuter)
             _outerVariables.Add(name);

@@ -570,6 +570,15 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Stloc, local);
             }
+            else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
+            {
+                // Store to captured field: need to use temp pattern
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                IL.Emit(OpCodes.Ldarg_0); // display class instance
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, capturedField);
+            }
             else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
             {
                 IL.Emit(OpCodes.Stsfld, topLevelField);
@@ -676,6 +685,15 @@ public partial class ILEmitter
             if (local != null)
             {
                 IL.Emit(OpCodes.Stloc, local);
+            }
+            else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
+            {
+                // Store to captured field: need to use temp pattern
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                IL.Emit(OpCodes.Ldarg_0); // display class instance
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, capturedField);
             }
             else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
             {

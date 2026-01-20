@@ -17,6 +17,7 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? stri
 {
     private readonly Dictionary<string, object?> _values = [];
     private readonly Dictionary<string, SharpTSNamespace> _namespaces = [];
+    private readonly HashSet<string> _readOnlyNames = [];
     public RuntimeEnvironment? Enclosing { get; } = enclosing;
 
     /// <summary>
@@ -79,6 +80,24 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? stri
     public bool IsDefinedLocally(string name)
     {
         return _values.ContainsKey(name);
+    }
+
+    /// <summary>
+    /// Marks a variable as read-only. Used for named function expressions
+    /// where the function name cannot be reassigned inside the function body.
+    /// </summary>
+    public void MarkAsReadOnly(string name)
+    {
+        _readOnlyNames.Add(name);
+    }
+
+    /// <summary>
+    /// Checks if a variable is read-only in the current or enclosing scopes.
+    /// </summary>
+    public bool IsReadOnly(string name)
+    {
+        if (_readOnlyNames.Contains(name)) return true;
+        return Enclosing?.IsReadOnly(name) ?? false;
     }
 
     public void Assign(Token name, object? value)

@@ -453,3 +453,220 @@ public class SharpTSGenerator : IEnumerable<object?>
 
     public override string ToString() => "[object Generator]";
 }
+
+/// <summary>
+/// Runtime object representing an active generator instance created from a function expression.
+/// </summary>
+/// <remarks>
+/// Similar to <see cref="SharpTSGenerator"/> but created from <see cref="Expr.ArrowFunction"/>
+/// with IsGenerator=true instead of <see cref="Stmt.Function"/>.
+/// </remarks>
+public class SharpTSArrowGenerator : IEnumerable<object?>
+{
+    private readonly Expr.ArrowFunction _declaration;
+    private readonly RuntimeEnvironment _environment;
+    private readonly Interpreter _interpreter;
+
+    private List<object?>? _values = null;
+    private int _index = 0;
+    private object? _returnValue = null;
+    private bool _closed = false;
+
+    public SharpTSArrowGenerator(Expr.ArrowFunction declaration, RuntimeEnvironment environment, Interpreter interpreter)
+    {
+        _declaration = declaration;
+        _environment = environment;
+        _interpreter = interpreter;
+    }
+
+    public SharpTSIteratorResult Next()
+    {
+        if (_closed)
+        {
+            return new SharpTSIteratorResult(_returnValue, done: true);
+        }
+
+        if (_values == null)
+        {
+            ExecuteBody();
+        }
+
+        if (_index < _values!.Count)
+        {
+            return new SharpTSIteratorResult(_values[_index++], done: false);
+        }
+
+        return new SharpTSIteratorResult(_returnValue, done: true);
+    }
+
+    public SharpTSIteratorResult Return(object? value = null)
+    {
+        _closed = true;
+        _returnValue = value;
+        return new SharpTSIteratorResult(value, done: true);
+    }
+
+    public SharpTSIteratorResult Throw(object? error = null)
+    {
+        _closed = true;
+        string message = error?.ToString() ?? "Generator.throw() called";
+        throw new ThrowException(error ?? message);
+    }
+
+    private void ExecuteBody()
+    {
+        _values = [];
+
+        RuntimeEnvironment previousEnv = _interpreter.Environment;
+        _interpreter.SetEnvironment(_environment);
+
+        try
+        {
+            if (_declaration.ExpressionBody != null)
+            {
+                // Expression body - just evaluate and return
+                try
+                {
+                    _returnValue = _interpreter.Evaluate(_declaration.ExpressionBody);
+                }
+                catch (YieldException yield)
+                {
+                    HandleYield(yield);
+                }
+            }
+            else if (_declaration.BlockBody != null && _declaration.BlockBody.Count > 0)
+            {
+                var result = ExecuteStatements(_declaration.BlockBody);
+                if (result.Type == ExecutionResult.ResultType.Return)
+                {
+                    _returnValue = result.Value;
+                }
+                else if (result.Type == ExecutionResult.ResultType.Throw)
+                {
+                    throw new Exception(_interpreter.Stringify(result.Value));
+                }
+            }
+        }
+        finally
+        {
+            _interpreter.SetEnvironment(previousEnv);
+        }
+    }
+
+    private ExecutionResult ExecuteStatements(List<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            var result = ExecuteStatement(stmt);
+            if (result.IsAbrupt) return result;
+        }
+        return ExecutionResult.Success();
+    }
+
+    private ExecutionResult ExecuteStatement(Stmt stmt)
+    {
+        // Delegate to interpreter but catch yields
+        switch (stmt)
+        {
+            case Stmt.Expression exprStmt:
+                try
+                {
+                    _interpreter.Evaluate(exprStmt.Expr);
+                }
+                catch (YieldException yield)
+                {
+                    HandleYield(yield);
+                }
+                return ExecutionResult.Success();
+
+            case Stmt.Block block:
+                if (block.Statements != null)
+                {
+                    var blockEnv = new RuntimeEnvironment(_interpreter.Environment);
+                    RuntimeEnvironment prevEnv = _interpreter.Environment;
+                    _interpreter.SetEnvironment(blockEnv);
+                    try
+                    {
+                        return ExecuteStatements(block.Statements);
+                    }
+                    finally
+                    {
+                        _interpreter.SetEnvironment(prevEnv);
+                    }
+                }
+                return ExecutionResult.Success();
+
+            case Stmt.Var varStmt:
+                object? value = null;
+                try
+                {
+                    if (varStmt.Initializer != null)
+                    {
+                        value = _interpreter.Evaluate(varStmt.Initializer);
+                    }
+                }
+                catch (YieldException yield)
+                {
+                    HandleYield(yield);
+                }
+                _environment.Define(varStmt.Name.Lexeme, value);
+                return ExecutionResult.Success();
+
+            case Stmt.Return returnStmt:
+                object? returnValue = null;
+                if (returnStmt.Value != null)
+                {
+                    try
+                    {
+                        returnValue = _interpreter.Evaluate(returnStmt.Value);
+                    }
+                    catch (YieldException yield)
+                    {
+                        HandleYield(yield);
+                    }
+                }
+                return ExecutionResult.Return(returnValue);
+
+            default:
+                try
+                {
+                    return _interpreter.ExecuteBlock([stmt], _environment);
+                }
+                catch (YieldException yield)
+                {
+                    HandleYield(yield);
+                    return ExecutionResult.Success();
+                }
+        }
+    }
+
+    private void HandleYield(YieldException yield)
+    {
+        if (yield.IsDelegating)
+        {
+            var elements = _interpreter.GetIterableElements(yield.Value);
+            foreach (var element in elements)
+            {
+                _values!.Add(element);
+            }
+        }
+        else
+        {
+            _values!.Add(yield.Value);
+        }
+    }
+
+    public IEnumerator<object?> GetEnumerator()
+    {
+        while (true)
+        {
+            var result = Next();
+            if (result.Done) yield break;
+            yield return result.Value;
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public override string ToString() => "[object Generator]";
+}

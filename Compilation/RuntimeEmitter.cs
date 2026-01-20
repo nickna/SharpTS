@@ -246,6 +246,9 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Stfld, methodField);
         ctorIL.Emit(OpCodes.Ret);
 
+        // Helper method: private static object[] AdjustArgs(MethodInfo method, object[] args)
+        var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(typeBuilder, runtime);
+
         // Helper method: private static void ConvertArgsForUnionTypes(MethodInfo method, object[] args)
         var convertArgsMethod = EmitTSFunctionConvertArgsHelper(typeBuilder, runtime);
 
@@ -261,17 +264,8 @@ public partial class RuntimeEmitter
         var invokeIL = invokeBuilder.GetILGenerator();
 
         // Local variables
-        var paramCountLocal = invokeIL.DeclareLocal(_types.Int32);
         var effectiveArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
         var invokeTargetLocal = invokeIL.DeclareLocal(_types.Object);
-
-        // Get parameter count: int paramCount = _method.GetParameters().Length
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, methodField);
-        invokeIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
-        invokeIL.Emit(OpCodes.Ldlen);
-        invokeIL.Emit(OpCodes.Conv_I4);
-        invokeIL.Emit(OpCodes.Stloc, paramCountLocal);
 
         // Check if this is a static method with a bound target
         // if (_method.IsStatic && _target != null)
@@ -329,57 +323,14 @@ public partial class RuntimeEmitter
 
         invokeIL.MarkLabel(afterArgPrep);
 
-        // Now handle padding/trimming based on paramCount
-        var argsLengthLocal = invokeIL.DeclareLocal(_types.Int32);
+        // Adjust args for rest parameters and padding/trimming
+        // adjustedArgs = AdjustArgs(_method, effectiveArgs)
         var adjustedArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
-
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, methodField);
         invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
-        invokeIL.Emit(OpCodes.Ldlen);
-        invokeIL.Emit(OpCodes.Conv_I4);
-        invokeIL.Emit(OpCodes.Stloc, argsLengthLocal);
-
-        var exactMatch = invokeIL.DefineLabel();
-        var doInvoke = invokeIL.DefineLabel();
-
-        // If effectiveArgs.Length == paramCount, use effectiveArgs directly
-        invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal);
-        invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Beq, exactMatch);
-
-        // If effectiveArgs.Length < paramCount, pad with nulls
-        var tooManyArgs = invokeIL.DefineLabel();
-        invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal);
-        invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Bge, tooManyArgs);
-
-        // Pad with nulls
-        invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Newarr, _types.Object);
+        invokeIL.Emit(OpCodes.Call, adjustArgsMethod);
         invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
-        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
-        invokeIL.Emit(OpCodes.Ldloc, argsLengthLocal); // length
-        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
-        invokeIL.Emit(OpCodes.Br, doInvoke);
-
-        // Too many args: trim
-        invokeIL.MarkLabel(tooManyArgs);
-        invokeIL.Emit(OpCodes.Ldloc, paramCountLocal);
-        invokeIL.Emit(OpCodes.Newarr, _types.Object);
-        invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal); // source
-        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal); // dest
-        invokeIL.Emit(OpCodes.Ldloc, paramCountLocal); // length
-        invokeIL.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
-        invokeIL.Emit(OpCodes.Br, doInvoke);
-
-        // Exact match - use effectiveArgs directly
-        invokeIL.MarkLabel(exactMatch);
-        invokeIL.Emit(OpCodes.Ldloc, effectiveArgsLocal);
-        invokeIL.Emit(OpCodes.Stloc, adjustedArgsLocal);
-
-        // Do invoke
-        invokeIL.MarkLabel(doInvoke);
 
         // Convert args for union types before invoking
         // ConvertArgsForUnionTypes(this._method, adjustedArgs)
@@ -580,6 +531,191 @@ public partial class RuntimeEmitter
         bindThisIL.Emit(OpCodes.Ret);
 
         typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Emits a private static helper method on $TSFunction to adjust arguments for rest parameters and padding/trimming.
+    /// </summary>
+    private MethodBuilder EmitTSFunctionAdjustArgsHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // private static object[] AdjustArgs(MethodInfo method, object[] args)
+        var method = typeBuilder.DefineMethod(
+            "AdjustArgs",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.ObjectArray,
+            [_types.MethodInfo, _types.ObjectArray]
+        );
+
+        var il = method.GetILGenerator();
+
+        // Local variables
+        var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
+        var paramCountLocal = il.DeclareLocal(_types.Int32);
+        var argsLengthLocal = il.DeclareLocal(_types.Int32);
+        var resultLocal = il.DeclareLocal(_types.ObjectArray);
+        var lastParamTypeLocal = il.DeclareLocal(_types.Type);
+        var restListLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var copyCountLocal = il.DeclareLocal(_types.Int32);
+
+        // params = method.GetParameters()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        il.Emit(OpCodes.Stloc, paramsLocal);
+
+        // paramCount = params.Length
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, paramCountLocal);
+
+        // argsLength = args.Length
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, argsLengthLocal);
+
+        // Labels
+        var notRestParam = il.DefineLabel();
+        var doReturn = il.DefineLabel();
+        var exactMatch = il.DefineLabel();
+        var needsPadding = il.DefineLabel();
+        var needsTrimming = il.DefineLabel();
+        var restLoopStart = il.DefineLabel();
+        var restLoopEnd = il.DefineLabel();
+
+        // Check if paramCount > 0
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, notRestParam);
+
+        // lastParamType = params[paramCount - 1].ParameterType
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lastParamTypeLocal);
+
+        // if (lastParamType != typeof(List<object>)) goto notRestParam
+        il.Emit(OpCodes.Ldloc, lastParamTypeLocal);
+        il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+        il.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, _types.Type.GetMethod("op_Inequality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Brtrue, notRestParam);
+
+        // === REST PARAMETER HANDLING ===
+        // result = new object[paramCount]
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // regularParamCount = paramCount - 1
+        // copyCount = min(argsLength, regularParamCount)
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.Math.GetMethod("Min", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Stloc, copyCountLocal);
+
+        // if (copyCount > 0) Array.Copy(args, result, copyCount)
+        var skipCopy = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, copyCountLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, skipCopy);
+        il.Emit(OpCodes.Ldarg_1); // source
+        il.Emit(OpCodes.Ldloc, resultLocal); // dest
+        il.Emit(OpCodes.Ldloc, copyCountLocal); // length
+        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.MarkLabel(skipCopy);
+
+        // restList = new List<object>()
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, restListLocal);
+
+        // for (i = paramCount - 1; i < argsLength; i++) restList.Add(args[i])
+        // i = paramCount - 1 (start of rest args)
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(restLoopStart);
+        // if (i >= argsLength) goto restLoopEnd
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Bge, restLoopEnd);
+
+        // restList.Add(args[i])
+        il.Emit(OpCodes.Ldloc, restListLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add")!);
+
+        // i++
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, restLoopStart);
+
+        il.MarkLabel(restLoopEnd);
+
+        // result[paramCount - 1] = restList
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, restListLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        // return result
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // === NOT A REST PARAMETER - STANDARD PADDING/TRIMMING ===
+        il.MarkLabel(notRestParam);
+
+        // if (argsLength == paramCount) return args
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Bne_Un, needsPadding);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(needsPadding);
+        // if (argsLength >= paramCount) goto needsTrimming
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Bge, needsTrimming);
+
+        // Pad with nulls: result = new object[paramCount]; Array.Copy(args, result, argsLength)
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, argsLengthLocal);
+        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Trim: result = new object[paramCount]; Array.Copy(args, result, paramCount)
+        il.MarkLabel(needsTrimming);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Call, _types.ArrayType.GetMethod("Copy", [_types.ArrayType, _types.ArrayType, _types.Int32])!);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        return method;
     }
 
     /// <summary>

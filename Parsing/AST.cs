@@ -79,13 +79,17 @@ public abstract record Expr
     // Increment/decrement
     public record PrefixIncrement(Token Operator, Expr Operand) : Expr;
     public record PostfixIncrement(Expr Operand, Token Operator) : Expr;
-    // Arrow function
+    // Arrow function and function expression
     /// <summary>
-    /// Arrow function expression. ThisType is for type annotations only (arrow expressions cannot have this parameter).
-    /// IsObjectMethod indicates this is an object literal method shorthand, which binds 'this' to the object.
-    /// IsAsync indicates this is an async arrow function that returns a Promise.
+    /// Arrow function or named function expression.
+    /// Name is the function expression name (null for arrow functions and anonymous function expressions).
+    /// Named function expressions have their name visible inside the function body for recursion.
+    /// ThisType is for type annotations only (arrow expressions cannot have this parameter).
+    /// HasOwnThis indicates this binds its own 'this' (function expressions) vs capturing from enclosing scope (arrows).
+    /// IsAsync indicates this is an async function that returns a Promise.
+    /// IsGenerator indicates this is a generator function (function*) that can yield values.
     /// </summary>
-    public record ArrowFunction(List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool IsObjectMethod = false, bool IsAsync = false) : Expr;
+    public record ArrowFunction(Token? Name, List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool HasOwnThis = false, bool IsAsync = false, bool IsGenerator = false) : Expr;
     // Template literal
     public record TemplateLiteral(List<string> Strings, List<Expr> Expressions) : Expr;
     // Spread expression for calls and array literals

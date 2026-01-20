@@ -256,8 +256,8 @@ public partial class Interpreter
         if (obj is SharpTSObject simpleObj)
         {
             var value = simpleObj.GetProperty(get.Name.Lexeme);
-            // Bind 'this' for object method shorthand functions
-            if (value is SharpTSArrowFunction arrowFunc && arrowFunc.IsObjectMethod)
+            // Bind 'this' for function expressions and object method shorthand (HasOwnThis=true)
+            if (value is SharpTSArrowFunction arrowFunc && arrowFunc.HasOwnThis)
             {
                 return arrowFunc.Bind(simpleObj);
             }

@@ -111,9 +111,8 @@ public class SharpTSFunction : ISharpTSCallable
 /// <remarks>
 /// Wraps an <see cref="Expr.ArrowFunction"/> AST node along with its closure environment.
 /// Supports both expression bodies (<c>x =&gt; x + 1</c>) and block bodies (<c>x =&gt; { return x + 1; }</c>).
-/// Unlike <see cref="SharpTSFunction"/>, arrow functions do not have their own <c>this</c> binding;
-/// they capture <c>this</c> from the enclosing scope via the closure.
-/// Object method arrow functions (IsObjectMethod=true) support binding <c>this</c> when accessed as object properties.
+/// For arrow functions (<c>HasOwnThis=false</c>), <c>this</c> is captured from the enclosing scope via the closure.
+/// For function expressions and object method shorthand (<c>HasOwnThis=true</c>), <c>this</c> is bound at call time.
 /// </remarks>
 /// <seealso cref="SharpTSFunction"/>
 public class SharpTSArrowFunction : ISharpTSCallable
@@ -123,16 +122,16 @@ public class SharpTSArrowFunction : ISharpTSCallable
     private readonly int _arity;
 
     /// <summary>
-    /// Indicates whether this arrow function was created from object method shorthand
-    /// and should bind 'this' when accessed as a property.
+    /// Indicates whether this function has its own 'this' binding (function expressions)
+    /// versus capturing 'this' from enclosing scope (arrow functions).
     /// </summary>
-    public bool IsObjectMethod { get; }
+    public bool HasOwnThis { get; }
 
-    public SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool isObjectMethod = false)
+    public SharpTSArrowFunction(Expr.ArrowFunction declaration, RuntimeEnvironment closure, bool hasOwnThis = false)
     {
         _declaration = declaration;
         _closure = closure;
-        IsObjectMethod = isObjectMethod;
+        HasOwnThis = hasOwnThis;
         _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
     }
 
@@ -202,7 +201,7 @@ public class SharpTSArrowFunction : ISharpTSCallable
     }
 
     /// <summary>
-    /// Binds 'this' to the given object. Only applicable for object method arrow functions.
+    /// Binds 'this' to the given object. Only applicable for function expressions with HasOwnThis=true.
     /// </summary>
     /// <param name="thisObject">The object to bind as 'this'.</param>
     /// <returns>A new SharpTSArrowFunction with 'this' bound in its closure.</returns>
@@ -210,8 +209,13 @@ public class SharpTSArrowFunction : ISharpTSCallable
     {
         RuntimeEnvironment environment = new(_closure);
         environment.Define("this", thisObject);
-        return new SharpTSArrowFunction(_declaration, environment, isObjectMethod: true);
+        return new SharpTSArrowFunction(_declaration, environment, hasOwnThis: true);
     }
 
-    public override string ToString() => "<arrow fn>";
+    public override string ToString()
+    {
+        if (_declaration.Name != null)
+            return $"<fn {_declaration.Name.Lexeme}>";
+        return "<arrow fn>";
+    }
 }

@@ -23,6 +23,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (TypeInfo Type, bool IsValue)> _importAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _constNames = new(StringComparer.Ordinal);
     private readonly TypeEnvironment? _enclosing = enclosing;
 
     /// <summary>
@@ -83,6 +84,24 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     public bool IsDefinedLocally(string name)
     {
         return _types.ContainsKey(name);
+    }
+
+    /// <summary>
+    /// Marks a variable as const (read-only). Used for named function expressions
+    /// where the function name cannot be reassigned inside the function body.
+    /// </summary>
+    public void MarkAsConst(string name)
+    {
+        _constNames.Add(name);
+    }
+
+    /// <summary>
+    /// Checks if a variable is marked as const in the current or enclosing scopes.
+    /// </summary>
+    public bool IsConst(string name)
+    {
+        if (_constNames.Contains(name)) return true;
+        return _enclosing?.IsConst(name) ?? false;
     }
 
     public void Assign(Token name, TypeInfo type)

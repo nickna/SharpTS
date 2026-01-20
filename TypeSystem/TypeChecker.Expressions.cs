@@ -657,9 +657,9 @@ public partial class TypeChecker
         // but we support it for object literal method shorthand which is parsed as ArrowFunction.
         TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
 
-        // For object method shorthand, allow 'this' even without explicit type annotation
+        // For function expressions and object method shorthand (HasOwnThis=true), allow 'this' even without explicit type annotation
         // TypeScript infers 'this' as the containing object type, but we use 'any' for simplicity
-        if (arrow.IsObjectMethod && thisType == null)
+        if (arrow.HasOwnThis && thisType == null)
         {
             thisType = new TypeInfo.Any();
         }
@@ -743,8 +743,23 @@ public partial class TypeChecker
             returnType = new TypeInfo.Any();
         }
 
-        // Create new environment with parameters
+        // Build the function type (needed for named function expressions self-reference)
+        bool hasRest = arrow.Parameters.Any(p => p.IsRest);
+        var funcType = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
+
+        // Create new environment for function body
         TypeEnvironment arrowEnv = new(_environment);
+
+        // For named function expressions, add the function name to the inner scope
+        // This enables recursion: const f = function myFunc(n) { return myFunc(n-1); }
+        // Note: Parameters can shadow the function name, so define name first
+        if (arrow.Name != null)
+        {
+            arrowEnv.Define(arrow.Name.Lexeme, funcType);
+            arrowEnv.MarkAsConst(arrow.Name.Lexeme);  // Function name is read-only in strict mode
+        }
+
+        // Define parameters (may shadow function name if same identifier)
         for (int i = 0; i < arrow.Parameters.Count; i++)
         {
             arrowEnv.Define(arrow.Parameters[i].Name.Lexeme, paramTypes[i]);
@@ -822,7 +837,6 @@ public partial class TypeChecker
                 _activeLabels[kvp.Key] = kvp.Value;
         }
 
-        bool hasRest = arrow.Parameters.Any(p => p.IsRest);
         List<string> paramNames = arrow.Parameters.Select(p => p.Name.Lexeme).ToList();
         return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
     }

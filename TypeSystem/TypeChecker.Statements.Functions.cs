@@ -27,6 +27,115 @@ public partial class TypeChecker
                 HoistSingleFunction(exportedFunc);
             }
         }
+
+        // Hoist const/let/var declarations with function expressions
+        // This enables mutual recursion like: const isEven = function(n) { return isOdd(n-1); };
+        HoistConstFunctionExpressions(statements);
+    }
+
+    /// <summary>
+    /// Hoists const/var declarations with function expression initializers.
+    /// This enables mutual recursion between function expressions declared with const/var.
+    /// Only registers the function type, does not check the function body.
+    /// </summary>
+    private void HoistConstFunctionExpressions(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            switch (stmt)
+            {
+                case Stmt.Const constStmt when constStmt.Initializer is Expr.ArrowFunction arrow:
+                    HoistConstFunctionExpression(constStmt.Name, constStmt.TypeAnnotation, arrow);
+                    break;
+
+                case Stmt.Var varStmt when varStmt.Initializer is Expr.ArrowFunction arrow:
+                    HoistConstFunctionExpression(varStmt.Name, varStmt.TypeAnnotation, arrow);
+                    break;
+
+                case Stmt.Export export when export.Declaration is Stmt.Const exportedConst
+                    && exportedConst.Initializer is Expr.ArrowFunction arrow:
+                    HoistConstFunctionExpression(exportedConst.Name, exportedConst.TypeAnnotation, arrow);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hoists a single const function expression by registering its type without checking the body.
+    /// </summary>
+    private void HoistConstFunctionExpression(Token name, string? typeAnnotation, Expr.ArrowFunction arrow)
+    {
+        // Skip if already defined
+        if (_environment.IsDefinedLocally(name.Lexeme)) return;
+
+        try
+        {
+            // Build parameter types from the arrow function's parameter declarations
+            var paramTypes = new List<TypeInfo>();
+            int requiredParams = 0;
+            bool hasRest = false;
+
+            foreach (var param in arrow.Parameters)
+            {
+                TypeInfo paramType = param.Type != null
+                    ? ToTypeInfo(param.Type)
+                    : new TypeInfo.Any();
+
+                if (param.IsRest)
+                {
+                    hasRest = true;
+                    paramTypes.Add(new TypeInfo.Array(paramType));
+                }
+                else
+                {
+                    paramTypes.Add(paramType);
+                    if (param.DefaultValue == null && !param.IsOptional)
+                        requiredParams++;
+                }
+            }
+
+            // Determine return type from declaration or annotation
+            TypeInfo returnType;
+            if (typeAnnotation != null)
+            {
+                // Use the declared type annotation on the const
+                var declaredType = ToTypeInfo(typeAnnotation);
+                if (declaredType is TypeInfo.Function funcType)
+                {
+                    returnType = funcType.ReturnType;
+                }
+                else
+                {
+                    returnType = new TypeInfo.Any();
+                }
+            }
+            else if (arrow.ReturnType != null)
+            {
+                // Use the return type from the arrow function
+                returnType = ToTypeInfo(arrow.ReturnType);
+            }
+            else
+            {
+                // No return type specified - use Any for hoisting
+                // The actual type will be checked during normal processing
+                returnType = new TypeInfo.Any();
+            }
+
+            // Handle 'this' type
+            TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
+            if (arrow.HasOwnThis && thisType == null)
+            {
+                thisType = new TypeInfo.Any();
+            }
+
+            // Build and register the function type
+            var funcType2 = new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
+            _environment.Define(name.Lexeme, funcType2);
+        }
+        catch
+        {
+            // If type resolution fails, skip hoisting - will be defined during normal processing
+        }
     }
 
     /// <summary>

@@ -23,17 +23,18 @@ public partial class ILCompiler
         foreach (var (arrow, captures) in _collectedArrows)
         {
             // For object methods, add __this as the first parameter
+            // Rest parameters use List<object> to enable detection at invoke time
             Type[] paramTypes;
-            if (arrow.IsObjectMethod)
+            if (arrow.HasOwnThis)
             {
                 paramTypes = new Type[arrow.Parameters.Count + 1];
                 paramTypes[0] = _types.Object;  // __this
                 for (int i = 0; i < arrow.Parameters.Count; i++)
-                    paramTypes[i + 1] = _types.Object;
+                    paramTypes[i + 1] = arrow.Parameters[i].IsRest ? _types.ListOfObject : _types.Object;
             }
             else
             {
-                paramTypes = arrow.Parameters.Select(_ => _types.Object).ToArray();
+                paramTypes = arrow.Parameters.Select(p => p.IsRest ? _types.ListOfObject : _types.Object).ToArray();
             }
 
             if (captures.Count == 0)
@@ -47,7 +48,7 @@ public partial class ILCompiler
                 );
 
                 // Define parameter names (important for InvokeWithThis to detect __this)
-                if (arrow.IsObjectMethod)
+                if (arrow.HasOwnThis)
                 {
                     methodBuilder.DefineParameter(1, ParameterAttributes.None, "__this");
                     for (int i = 0; i < arrow.Parameters.Count; i++)
@@ -100,7 +101,7 @@ public partial class ILCompiler
                 );
 
                 // Define parameter names (important for InvokeWithThis to detect __this)
-                if (arrow.IsObjectMethod)
+                if (arrow.HasOwnThis)
                 {
                     invokeMethod.DefineParameter(1, ParameterAttributes.None, "__this");
                     for (int i = 0; i < arrow.Parameters.Count; i++)
@@ -462,7 +463,7 @@ public partial class ILCompiler
 
             // For object methods, __this is the first parameter after 'this' (display class)
             // Parameters start at index 1 (display class is arg 0)
-            if (arrow.IsObjectMethod)
+            if (arrow.HasOwnThis)
             {
                 // __this is at index 1, actual parameters start at index 2
                 ctx.DefineParameter("__this", 1);
@@ -482,7 +483,7 @@ public partial class ILCompiler
         else
         {
             // Static method - parameters start at index 0
-            if (arrow.IsObjectMethod)
+            if (arrow.HasOwnThis)
             {
                 // __this is at index 0, actual parameters start at index 1
                 ctx.DefineParameter("__this", 0);
@@ -503,7 +504,7 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
 
         // Emit default parameter checks
-        emitter.EmitDefaultParameters(arrow.Parameters, displayClass != null);
+        emitter.EmitDefaultParameters(arrow.Parameters, displayClass != null, arrow.HasOwnThis);
 
         if (arrow.ExpressionBody != null)
         {

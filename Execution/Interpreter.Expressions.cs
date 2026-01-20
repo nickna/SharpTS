@@ -280,15 +280,46 @@ public partial class Interpreter
     /// <remarks>
     /// Arrow functions capture their lexical environment at creation time,
     /// enabling closures over outer variables. Async arrow functions return a Promise.
+    /// For named function expressions, the function name is visible inside the function body
+    /// for recursion, but not outside.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html#arrow-functions">TypeScript Arrow Functions</seealso>
     private object? EvaluateArrowFunction(Expr.ArrowFunction arrow)
     {
+        RuntimeEnvironment closure = _environment;
+
+        // For named function expressions, create a child environment for self-reference
+        // This enables recursion: const f = function myFunc(n) { return myFunc(n-1); }
+        if (arrow.Name != null)
+        {
+            closure = new RuntimeEnvironment(_environment);
+            closure.Define(arrow.Name.Lexeme, null);  // Placeholder, will be assigned after function creation
+            closure.MarkAsReadOnly(arrow.Name.Lexeme); // Function name is read-only in strict mode
+        }
+
+        ISharpTSCallable func;
         if (arrow.IsAsync)
         {
-            return new SharpTSAsyncArrowFunction(arrow, _environment, arrow.IsObjectMethod);
+            func = new SharpTSAsyncArrowFunction(arrow, closure, arrow.HasOwnThis);
         }
-        return new SharpTSArrowFunction(arrow, _environment, arrow.IsObjectMethod);
+        else if (arrow.IsGenerator)
+        {
+            // Generator function expressions - wrap in a generator-creating function
+            // Note: This uses a different wrapper than Stmt.Function generators
+            func = new SharpTSArrowGeneratorFunction(arrow, closure, arrow.HasOwnThis);
+        }
+        else
+        {
+            func = new SharpTSArrowFunction(arrow, closure, arrow.HasOwnThis);
+        }
+
+        // Complete the self-reference for named function expressions
+        if (arrow.Name != null)
+        {
+            closure.Assign(arrow.Name, func);
+        }
+
+        return func;
     }
 
     /// <summary>
