@@ -707,21 +707,23 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateNewAsync(Expr.New newExpr)
     {
-        // Built-in types only apply when there's no namespace path
-        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+        // Built-in types only apply when callee is a simple identifier
+        bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
+        string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle built-in Error types
-        if (isSimpleName && IsErrorType(newExpr.ClassName.Lexeme))
+        if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
         {
             List<object?> args = [];
             foreach (var arg in newExpr.Arguments)
             {
                 args.Add(await EvaluateAsync(arg));
             }
-            return ErrorBuiltIns.CreateError(newExpr.ClassName.Lexeme, args);
+            return ErrorBuiltIns.CreateError(simpleClassName, args);
         }
 
-        object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
+        // Evaluate the callee expression to get the class
+        object? klass = await EvaluateAsync(newExpr.Callee);
         if (klass is not SharpTSClass sharpClass)
         {
             throw new Exception("Can only instantiate classes.");

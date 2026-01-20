@@ -397,7 +397,8 @@ public class ExpressionParsingTests
     {
         var expr = ParseExpression("new Foo();");
         var newExpr = Assert.IsType<Expr.New>(expr);
-        Assert.Equal("Foo", newExpr.ClassName.Lexeme);
+        var callee = Assert.IsType<Expr.Variable>(newExpr.Callee);
+        Assert.Equal("Foo", callee.Name.Lexeme);
     }
 
     [Fact]

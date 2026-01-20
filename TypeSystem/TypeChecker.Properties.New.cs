@@ -8,71 +8,46 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 /// <remarks>
 /// Contains handler for new expressions:
-/// CheckNew - handles built-in types (Date, RegExp, Map, Set, WeakMap, WeakSet) and user-defined classes.
+/// CheckNew - handles built-in types (Date, RegExp, Map, Set, WeakMap, WeakSet) and user-defined classes,
+/// as well as interfaces with constructor signatures.
 /// </remarks>
 public partial class TypeChecker
 {
     /// <summary>
-    /// Gets the fully qualified name for error messages.
+    /// Extracts the simple class name from a new expression callee for error messages.
     /// </summary>
-    private static string GetQualifiedClassName(Expr.New newExpr)
+    private static string GetCalleeClassName(Expr callee)
     {
-        if (newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0)
-            return newExpr.ClassName.Lexeme;
-        return string.Join(".", newExpr.NamespacePath.Select(t => t.Lexeme)) + "." + newExpr.ClassName.Lexeme;
+        return callee switch
+        {
+            Expr.Variable v => v.Name.Lexeme,
+            Expr.Get g => GetCalleeClassName(g.Object) + "." + g.Name.Lexeme,
+            Expr.Grouping gr => GetCalleeClassName(gr.Expression),
+            _ => "<expression>"
+        };
     }
 
     /// <summary>
-    /// Resolves a qualified name (Namespace.SubNs.ClassName) to a TypeInfo.
+    /// Checks if the callee is a simple identifier (not a member access or complex expression).
     /// </summary>
-    private TypeInfo ResolveQualifiedType(List<Token>? namespacePath, Token className)
+    private static bool IsSimpleIdentifier(Expr callee) => callee is Expr.Variable;
+
+    /// <summary>
+    /// Gets the simple class name from a Variable callee, or null if not a simple identifier.
+    /// </summary>
+    private static string? GetSimpleClassName(Expr callee)
     {
-        if (namespacePath == null || namespacePath.Count == 0)
-        {
-            // Simple class name - use existing lookup
-            return LookupVariable(className);
-        }
-
-        // Start from first namespace
-        TypeInfo current = LookupVariable(namespacePath[0]);
-
-        // Traverse namespace chain
-        for (int i = 1; i < namespacePath.Count; i++)
-        {
-            if (current is not TypeInfo.Namespace ns)
-            {
-                throw new TypeCheckException($" '{namespacePath[i - 1].Lexeme}' is not a namespace.");
-            }
-            var member = ns.GetMember(namespacePath[i].Lexeme);
-            if (member == null)
-            {
-                throw new TypeCheckException($" '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
-            }
-            current = member;
-        }
-
-        // Now get the class from the final namespace
-        if (current is not TypeInfo.Namespace finalNs)
-        {
-            throw new TypeCheckException($" '{namespacePath[^1].Lexeme}' is not a namespace.");
-        }
-
-        var classType = finalNs.GetMember(className.Lexeme);
-        if (classType == null)
-        {
-            throw new TypeCheckException($" Class '{className.Lexeme}' does not exist in namespace '{finalNs.Name}'.");
-        }
-
-        return classType;
+        return callee is Expr.Variable v ? v.Name.Lexeme : null;
     }
 
     private TypeInfo CheckNew(Expr.New newExpr)
     {
-        // Built-in types only apply when there's no namespace path
-        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+        // Built-in types only apply when callee is a simple identifier
+        bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
+        string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle new Date() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Date")
+        if (isSimpleName && simpleClassName == "Date")
         {
             // Date() accepts 0-7 arguments
             if (newExpr.Arguments.Count > 7)
@@ -103,7 +78,7 @@ public partial class TypeChecker
         }
 
         // Handle new RegExp() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && simpleClassName == "RegExp")
         {
             // RegExp() accepts 0-2 arguments (pattern, flags)
             if (newExpr.Arguments.Count > 2)
@@ -134,7 +109,7 @@ public partial class TypeChecker
         }
 
         // Handle new Map() and new Map<K, V>() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Map")
+        if (isSimpleName && simpleClassName == "Map")
         {
             // Map() accepts 0-1 arguments (optional iterable of entries)
             if (newExpr.Arguments.Count > 1)
@@ -166,7 +141,7 @@ public partial class TypeChecker
         }
 
         // Handle new Set() and new Set<T>() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Set")
+        if (isSimpleName && simpleClassName == "Set")
         {
             // Set() accepts 0-1 arguments (optional iterable of values)
             if (newExpr.Arguments.Count > 1)
@@ -196,7 +171,7 @@ public partial class TypeChecker
         }
 
         // Handle new WeakMap() and new WeakMap<K, V>() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && simpleClassName == "WeakMap")
         {
             // WeakMap() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
@@ -228,7 +203,7 @@ public partial class TypeChecker
         }
 
         // Handle new WeakSet() and new WeakSet<T>() constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && simpleClassName == "WeakSet")
         {
             // WeakSet() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
@@ -258,21 +233,21 @@ public partial class TypeChecker
         }
 
         // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && IsErrorTypeName(newExpr.ClassName.Lexeme))
+        if (isSimpleName && IsErrorTypeName(simpleClassName))
         {
             // Error constructors accept 0-1 argument (optional message)
             // AggregateError accepts 0-2 arguments (errors array, optional message)
-            int maxArgs = newExpr.ClassName.Lexeme == "AggregateError" ? 2 : 1;
+            int maxArgs = simpleClassName == "AggregateError" ? 2 : 1;
             if (newExpr.Arguments.Count > maxArgs)
             {
-                throw new TypeCheckException($" {newExpr.ClassName.Lexeme} constructor accepts at most {maxArgs} argument(s).");
+                throw new TypeCheckException($" {simpleClassName} constructor accepts at most {maxArgs} argument(s).");
             }
 
             // Validate argument types
             if (newExpr.Arguments.Count >= 1)
             {
                 var firstArgType = CheckExpr(newExpr.Arguments[0]);
-                if (newExpr.ClassName.Lexeme == "AggregateError")
+                if (simpleClassName == "AggregateError")
                 {
                     // First argument should be an array of errors
                     if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
@@ -285,7 +260,7 @@ public partial class TypeChecker
                     // For other error types, first argument should be a string message
                     if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
                     {
-                        throw new TypeCheckException($" {newExpr.ClassName.Lexeme} message must be a string, got '{firstArgType}'.");
+                        throw new TypeCheckException($" {simpleClassName} message must be a string, got '{firstArgType}'.");
                     }
                 }
             }
@@ -299,11 +274,25 @@ public partial class TypeChecker
                 }
             }
 
-            return new TypeInfo.Error(newExpr.ClassName.Lexeme);
+            return new TypeInfo.Error(simpleClassName!);
         }
 
-        string qualifiedName = GetQualifiedClassName(newExpr);
-        TypeInfo type = ResolveQualifiedType(newExpr.NamespacePath, newExpr.ClassName);
+        // Evaluate the callee expression type
+        string qualifiedName = GetCalleeClassName(newExpr.Callee);
+        TypeInfo calleeType = CheckExpr(newExpr.Callee);
+
+        // Handle interfaces with constructor signatures
+        if (calleeType is TypeInfo.Interface itf && itf.IsConstructable)
+        {
+            return CheckInterfaceConstructorCall(itf, newExpr.TypeArgs, newExpr.Arguments, qualifiedName);
+        }
+        if (calleeType is TypeInfo.GenericInterface gi && gi.IsConstructable)
+        {
+            return CheckGenericInterfaceConstructorCall(gi, newExpr.TypeArgs, newExpr.Arguments, qualifiedName);
+        }
+
+        // For class types, continue with existing logic
+        TypeInfo type = calleeType;
 
         // Check for abstract class instantiation
         if (type is TypeInfo.GenericClass gc && gc.IsAbstract)
@@ -649,5 +638,158 @@ public partial class TypeChecker
     private static bool TypeInfoEquals(TypeInfo a, TypeInfo b)
     {
         return a.ToString() == b.ToString();
+    }
+
+    /// <summary>
+    /// Checks a constructor call on an interface with constructor signatures.
+    /// Returns the type produced by calling the constructor.
+    /// </summary>
+    private TypeInfo CheckInterfaceConstructorCall(
+        TypeInfo.Interface itf,
+        List<string>? typeArgs,
+        List<Expr> arguments,
+        string qualifiedName)
+    {
+        if (itf.ConstructorSignatures == null || itf.ConstructorSignatures.Count == 0)
+        {
+            throw new TypeCheckException($" Interface '{qualifiedName}' is not constructable.");
+        }
+
+        List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+
+        // Try each constructor signature
+        foreach (var ctorSig in itf.ConstructorSignatures)
+        {
+            if (ctorSig.IsGeneric)
+            {
+                // Generic constructor signature - try to instantiate
+                var result = TryMatchGenericConstructorSignature(ctorSig, typeArgs, argTypes, qualifiedName);
+                if (result != null)
+                    return result;
+            }
+            else
+            {
+                // Non-generic - direct matching
+                if (TryMatchConstructorArgs(argTypes, ctorSig.ParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
+                {
+                    // Validate each argument
+                    for (int i = 0; i < arguments.Count && i < ctorSig.ParamTypes.Count; i++)
+                    {
+                        if (!IsCompatible(ctorSig.ParamTypes[i], argTypes[i]))
+                        {
+                            // Continue to next signature
+                            goto NextSignature;
+                        }
+                    }
+                    return ctorSig.ReturnType;
+                }
+            }
+            NextSignature:;
+        }
+
+        throw new TypeCheckException($" No constructor signature matches the call for interface '{qualifiedName}'.");
+    }
+
+    /// <summary>
+    /// Checks a constructor call on a generic interface with constructor signatures.
+    /// </summary>
+    private TypeInfo CheckGenericInterfaceConstructorCall(
+        TypeInfo.GenericInterface gi,
+        List<string>? typeArgs,
+        List<Expr> arguments,
+        string qualifiedName)
+    {
+        if (gi.ConstructorSignatures == null || gi.ConstructorSignatures.Count == 0)
+        {
+            throw new TypeCheckException($" Generic interface '{qualifiedName}' is not constructable.");
+        }
+
+        // If type args provided, instantiate the interface first
+        if (typeArgs != null && typeArgs.Count > 0)
+        {
+            var instantiatedTypeArgs = typeArgs.Select(ToTypeInfo).ToList();
+            // Build substitution map
+            Dictionary<string, TypeInfo> subs = [];
+            for (int i = 0; i < gi.TypeParams.Count && i < instantiatedTypeArgs.Count; i++)
+            {
+                subs[gi.TypeParams[i].Name] = instantiatedTypeArgs[i];
+            }
+
+            // Substitute in constructor signatures and check
+            List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+            foreach (var ctorSig in gi.ConstructorSignatures)
+            {
+                var substitutedParamTypes = ctorSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+                if (TryMatchConstructorArgs(argTypes, substitutedParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
+                {
+                    for (int i = 0; i < arguments.Count && i < substitutedParamTypes.Count; i++)
+                    {
+                        if (!IsCompatible(substitutedParamTypes[i], argTypes[i]))
+                            goto NextSignature;
+                    }
+                    return Substitute(ctorSig.ReturnType, subs);
+                }
+                NextSignature:;
+            }
+        }
+
+        throw new TypeCheckException($" No constructor signature matches the call for generic interface '{qualifiedName}'.");
+    }
+
+    /// <summary>
+    /// Tries to match a generic constructor signature by inferring type arguments.
+    /// </summary>
+    private TypeInfo? TryMatchGenericConstructorSignature(
+        TypeInfo.ConstructorSignature ctorSig,
+        List<string>? explicitTypeArgs,
+        List<TypeInfo> argTypes,
+        string qualifiedName)
+    {
+        if (ctorSig.TypeParams == null || ctorSig.TypeParams.Count == 0)
+            return null;
+
+        Dictionary<string, TypeInfo> inferred = [];
+
+        if (explicitTypeArgs != null && explicitTypeArgs.Count > 0)
+        {
+            // Use explicit type arguments
+            for (int i = 0; i < ctorSig.TypeParams.Count && i < explicitTypeArgs.Count; i++)
+            {
+                inferred[ctorSig.TypeParams[i].Name] = ToTypeInfo(explicitTypeArgs[i]);
+            }
+        }
+        else
+        {
+            // Try to infer from argument types
+            for (int i = 0; i < ctorSig.ParamTypes.Count && i < argTypes.Count; i++)
+            {
+                InferFromTypeForConstructor(ctorSig.ParamTypes[i], argTypes[i], inferred);
+            }
+        }
+
+        // Check if all type parameters were inferred
+        foreach (var tp in ctorSig.TypeParams)
+        {
+            if (!inferred.ContainsKey(tp.Name))
+            {
+                if (tp.Default != null)
+                    inferred[tp.Name] = tp.Default;
+                else
+                    return null; // Cannot infer
+            }
+        }
+
+        // Substitute and check argument compatibility
+        var substitutedParamTypes = ctorSig.ParamTypes.Select(p => Substitute(p, inferred)).ToList();
+        if (!TryMatchConstructorArgs(argTypes, substitutedParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
+            return null;
+
+        for (int i = 0; i < argTypes.Count && i < substitutedParamTypes.Count; i++)
+        {
+            if (!IsCompatible(substitutedParamTypes[i], argTypes[i]))
+                return null;
+        }
+
+        return Substitute(ctorSig.ReturnType, inferred);
     }
 }

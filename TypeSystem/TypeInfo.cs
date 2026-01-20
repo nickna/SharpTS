@@ -274,6 +274,50 @@ public abstract record TypeInfo
         public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
+    /// <summary>
+    /// Represents a call signature in an interface: (params): ReturnType or &lt;T&gt;(params): ReturnType
+    /// Indicates the interface represents a callable type (function-like).
+    /// </summary>
+    public record CallSignature(
+        List<TypeParameter>? TypeParams,
+        List<TypeInfo> ParamTypes,
+        TypeInfo ReturnType,
+        int RequiredParams = -1,
+        bool HasRestParam = false,
+        List<string>? ParamNames = null
+    ) : TypeInfo
+    {
+        public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
+        public bool IsGeneric => TypeParams is { Count: > 0 };
+        public override string ToString()
+        {
+            var genericPart = IsGeneric ? $"<{string.Join(", ", TypeParams!)}>" : "";
+            return $"{genericPart}({string.Join(", ", ParamTypes)}): {ReturnType}";
+        }
+    }
+
+    /// <summary>
+    /// Represents a constructor signature in an interface: new (params): ReturnType or new &lt;T&gt;(params): ReturnType
+    /// Indicates the interface represents a constructable type (class-like).
+    /// </summary>
+    public record ConstructorSignature(
+        List<TypeParameter>? TypeParams,
+        List<TypeInfo> ParamTypes,
+        TypeInfo ReturnType,
+        int RequiredParams = -1,
+        bool HasRestParam = false,
+        List<string>? ParamNames = null
+    ) : TypeInfo
+    {
+        public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
+        public bool IsGeneric => TypeParams is { Count: > 0 };
+        public override string ToString()
+        {
+            var genericPart = IsGeneric ? $"<{string.Join(", ", TypeParams!)}>" : "";
+            return $"new {genericPart}({string.Join(", ", ParamTypes)}): {ReturnType}";
+        }
+    }
+
     public record Interface(
         string Name,
         FrozenDictionary<string, TypeInfo> Members,
@@ -281,10 +325,16 @@ public abstract record TypeInfo
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
         TypeInfo? SymbolIndexType = null,
-        FrozenSet<TypeInfo.Interface>? Extends = null
+        FrozenSet<TypeInfo.Interface>? Extends = null,
+        List<CallSignature>? CallSignatures = null,
+        List<ConstructorSignature>? ConstructorSignatures = null
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
+        public bool HasCallSignature => CallSignatures is { Count: > 0 };
+        public bool HasConstructorSignature => ConstructorSignatures is { Count: > 0 };
+        public bool IsCallable => HasCallSignature;
+        public bool IsConstructable => HasConstructorSignature;
 
         /// <summary>
         /// Gets all members including inherited members from extended interfaces.
@@ -867,9 +917,20 @@ public abstract record TypeInfo
         string Name,
         List<TypeParameter> TypeParams,
         FrozenDictionary<string, TypeInfo> Members,
-        FrozenSet<string> OptionalMembers
+        FrozenSet<string> OptionalMembers,
+        TypeInfo? StringIndexType = null,
+        TypeInfo? NumberIndexType = null,
+        TypeInfo? SymbolIndexType = null,
+        FrozenSet<TypeInfo.Interface>? Extends = null,
+        List<CallSignature>? CallSignatures = null,
+        List<ConstructorSignature>? ConstructorSignatures = null
     ) : TypeInfo
     {
+        public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
+        public bool HasCallSignature => CallSignatures is { Count: > 0 };
+        public bool HasConstructorSignature => ConstructorSignatures is { Count: > 0 };
+        public bool IsCallable => HasCallSignature;
+        public bool IsConstructable => HasConstructorSignature;
         public override string ToString() => $"interface {Name}<{string.Join(", ", TypeParams)}>";
     }
 

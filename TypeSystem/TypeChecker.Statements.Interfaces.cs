@@ -137,6 +137,10 @@ public partial class TypeChecker
             }
         }
 
+        // Parse call signatures (skip during pre-registration - just add empty lists for now)
+        List<TypeInfo.CallSignature>? callSignatures = null;
+        List<TypeInfo.ConstructorSignature>? constructorSignatures = null;
+
         // Register the interface (skip index signatures during pre-registration - they'll be added during full check)
         if (interfaceTypeParams != null && interfaceTypeParams.Count > 0)
         {
@@ -144,7 +148,9 @@ public partial class TypeChecker
                 interfaceStmt.Name.Lexeme,
                 interfaceTypeParams,
                 members.ToFrozenDictionary(),
-                optionalMembers.ToFrozenSet()
+                optionalMembers.ToFrozenSet(),
+                CallSignatures: callSignatures,
+                ConstructorSignatures: constructorSignatures
             );
             _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
         }
@@ -154,7 +160,9 @@ public partial class TypeChecker
                 interfaceStmt.Name.Lexeme,
                 members.ToFrozenDictionary(),
                 optionalMembers.ToFrozenSet(),
-                Extends: extends
+                Extends: extends,
+                CallSignatures: callSignatures,
+                ConstructorSignatures: constructorSignatures
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }
@@ -311,6 +319,46 @@ public partial class TypeChecker
             extends = extendsList.ToFrozenSet();
         }
 
+        // Process call signatures
+        List<TypeInfo.CallSignature>? callSignatures = null;
+        if (interfaceStmt.CallSignatures != null && interfaceStmt.CallSignatures.Count > 0)
+        {
+            callSignatures = [];
+            using (new EnvironmentScope(this, interfaceTypeEnv))
+            {
+                foreach (var sig in interfaceStmt.CallSignatures)
+                {
+                    var sigTypeParams = ParseSignatureTypeParams(sig.TypeParams);
+                    var paramTypes = sig.Parameters.Select(p => p.Type != null ? ToTypeInfo(p.Type) : new TypeInfo.Any()).ToList();
+                    var returnType = ToTypeInfo(sig.ReturnType);
+                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
+                    bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
+                    var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
+                    callSignatures.Add(new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames));
+                }
+            }
+        }
+
+        // Process constructor signatures
+        List<TypeInfo.ConstructorSignature>? constructorSignatures = null;
+        if (interfaceStmt.ConstructorSignatures != null && interfaceStmt.ConstructorSignatures.Count > 0)
+        {
+            constructorSignatures = [];
+            using (new EnvironmentScope(this, interfaceTypeEnv))
+            {
+                foreach (var sig in interfaceStmt.ConstructorSignatures)
+                {
+                    var sigTypeParams = ParseSignatureTypeParams(sig.TypeParams);
+                    var paramTypes = sig.Parameters.Select(p => p.Type != null ? ToTypeInfo(p.Type) : new TypeInfo.Any()).ToList();
+                    var returnType = ToTypeInfo(sig.ReturnType);
+                    int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
+                    bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
+                    var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
+                    constructorSignatures.Add(new TypeInfo.ConstructorSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames));
+                }
+            }
+        }
+
         // Create GenericInterface or regular Interface
         if (interfaceTypeParams != null && interfaceTypeParams.Count > 0)
         {
@@ -318,7 +366,13 @@ public partial class TypeChecker
                 interfaceStmt.Name.Lexeme,
                 interfaceTypeParams,
                 members.ToFrozenDictionary(),
-                optionalMembers.ToFrozenSet()
+                optionalMembers.ToFrozenSet(),
+                stringIndexType,
+                numberIndexType,
+                symbolIndexType,
+                extends,
+                callSignatures,
+                constructorSignatures
             );
             _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
         }
@@ -331,9 +385,29 @@ public partial class TypeChecker
                 stringIndexType,
                 numberIndexType,
                 symbolIndexType,
-                extends
+                extends,
+                callSignatures,
+                constructorSignatures
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }
+    }
+
+    /// <summary>
+    /// Parses type parameters from a signature into TypeInfo.TypeParameter list.
+    /// </summary>
+    private List<TypeInfo.TypeParameter>? ParseSignatureTypeParams(List<TypeParam>? typeParams)
+    {
+        if (typeParams == null || typeParams.Count == 0)
+            return null;
+
+        List<TypeInfo.TypeParameter> result = [];
+        foreach (var tp in typeParams)
+        {
+            TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
+            TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+            result.Add(new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType));
+        }
+        return result;
     }
 }

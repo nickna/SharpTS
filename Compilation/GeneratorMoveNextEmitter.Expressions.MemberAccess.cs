@@ -139,17 +139,20 @@ public partial class GeneratorMoveNextEmitter
 
     protected override void EmitNew(Expr.New n)
     {
+        // Extract qualified name from callee expression
+        var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
+
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
-        if (n.NamespacePath != null && n.NamespacePath.Count > 0)
+        if (namespaceParts.Count > 0)
         {
             // Build qualified name for namespace classes: Namespace_SubNs_ClassName
-            string nsPath = string.Join("_", n.NamespacePath.Select(t => t.Lexeme));
-            resolvedClassName = $"{nsPath}_{n.ClassName.Lexeme}";
+            string nsPath = string.Join("_", namespaceParts);
+            resolvedClassName = $"{nsPath}_{className}";
         }
         else
         {
-            resolvedClassName = _ctx!.ResolveClassName(n.ClassName.Lexeme);
+            resolvedClassName = _ctx!.ResolveClassName(className);
         }
 
         if (_ctx!.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
@@ -176,6 +179,36 @@ public partial class GeneratorMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldnull);
             SetStackType(StackType.Null);
+        }
+    }
+
+    /// <summary>
+    /// Extracts a qualified class name from a callee expression.
+    /// </summary>
+    private static (List<string> namespaceParts, string className) ExtractQualifiedNameFromCallee(Expr callee)
+    {
+        List<string> parts = [];
+        CollectGetChainParts(callee, parts);
+
+        if (parts.Count == 0)
+            return ([], "");
+
+        var namespaceParts = parts.Count > 1 ? parts.Take(parts.Count - 1).ToList() : [];
+        var className = parts[^1];
+        return (namespaceParts, className);
+    }
+
+    private static void CollectGetChainParts(Expr expr, List<string> parts)
+    {
+        switch (expr)
+        {
+            case Expr.Variable v:
+                parts.Add(v.Name.Lexeme);
+                break;
+            case Expr.Get g:
+                CollectGetChainParts(g.Object, parts);
+                parts.Add(g.Name.Lexeme);
+                break;
         }
     }
 

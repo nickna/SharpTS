@@ -506,7 +506,143 @@ public partial class TypeChecker
              return new TypeInfo.Any();
         }
 
+        // Handle interfaces with call signatures (callable interfaces)
+        if (calleeType is TypeInfo.Interface itf && itf.IsCallable)
+        {
+            return CheckCallableInterfaceCall(itf, call.TypeArgs, call.Arguments);
+        }
+        if (calleeType is TypeInfo.GenericInterface gi && gi.IsCallable)
+        {
+            return CheckGenericCallableInterfaceCall(gi, call.TypeArgs, call.Arguments);
+        }
+
         throw new TypeCheckException($" Can only call functions.");
+    }
+
+    /// <summary>
+    /// Checks a call on an interface with call signatures.
+    /// Returns the return type of the matching call signature.
+    /// </summary>
+    private TypeInfo CheckCallableInterfaceCall(
+        TypeInfo.Interface itf,
+        List<string>? typeArgs,
+        List<Expr> arguments)
+    {
+        if (itf.CallSignatures == null || itf.CallSignatures.Count == 0)
+        {
+            throw new TypeCheckException($" Interface '{itf.Name}' is not callable.");
+        }
+
+        List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+
+        // Try each call signature
+        foreach (var callSig in itf.CallSignatures)
+        {
+            if (callSig.IsGeneric)
+            {
+                // Generic call signature - try to instantiate
+                var result = TryMatchGenericCallSignature(callSig, typeArgs, argTypes);
+                if (result != null)
+                    return result;
+            }
+            else
+            {
+                // Non-generic - direct matching
+                if (TryMatchSignature(new TypeInfo.Function(callSig.ParamTypes, callSig.ReturnType, callSig.MinArity, callSig.HasRestParam), argTypes))
+                {
+                    return callSig.ReturnType;
+                }
+            }
+        }
+
+        throw new TypeCheckException($" No call signature matches the call for interface '{itf.Name}'.");
+    }
+
+    /// <summary>
+    /// Checks a call on a generic interface with call signatures.
+    /// </summary>
+    private TypeInfo CheckGenericCallableInterfaceCall(
+        TypeInfo.GenericInterface gi,
+        List<string>? typeArgs,
+        List<Expr> arguments)
+    {
+        if (gi.CallSignatures == null || gi.CallSignatures.Count == 0)
+        {
+            throw new TypeCheckException($" Generic interface '{gi.Name}' is not callable.");
+        }
+
+        // If type args provided, substitute and check
+        if (typeArgs != null && typeArgs.Count > 0)
+        {
+            var instantiatedTypeArgs = typeArgs.Select(ToTypeInfo).ToList();
+            Dictionary<string, TypeInfo> subs = [];
+            for (int i = 0; i < gi.TypeParams.Count && i < instantiatedTypeArgs.Count; i++)
+            {
+                subs[gi.TypeParams[i].Name] = instantiatedTypeArgs[i];
+            }
+
+            List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+            foreach (var callSig in gi.CallSignatures)
+            {
+                var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
+                if (TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, subs), callSig.MinArity, callSig.HasRestParam), argTypes))
+                {
+                    return Substitute(callSig.ReturnType, subs);
+                }
+            }
+        }
+
+        throw new TypeCheckException($" No call signature matches the call for generic interface '{gi.Name}'.");
+    }
+
+    /// <summary>
+    /// Tries to match a generic call signature by inferring type arguments.
+    /// </summary>
+    private TypeInfo? TryMatchGenericCallSignature(
+        TypeInfo.CallSignature callSig,
+        List<string>? explicitTypeArgs,
+        List<TypeInfo> argTypes)
+    {
+        if (callSig.TypeParams == null || callSig.TypeParams.Count == 0)
+            return null;
+
+        Dictionary<string, TypeInfo> inferred = [];
+
+        if (explicitTypeArgs != null && explicitTypeArgs.Count > 0)
+        {
+            // Use explicit type arguments
+            for (int i = 0; i < callSig.TypeParams.Count && i < explicitTypeArgs.Count; i++)
+            {
+                inferred[callSig.TypeParams[i].Name] = ToTypeInfo(explicitTypeArgs[i]);
+            }
+        }
+        else
+        {
+            // Try to infer from argument types
+            for (int i = 0; i < callSig.ParamTypes.Count && i < argTypes.Count; i++)
+            {
+                InferFromType(callSig.ParamTypes[i], argTypes[i], inferred);
+            }
+        }
+
+        // Check if all type parameters were inferred
+        foreach (var tp in callSig.TypeParams)
+        {
+            if (!inferred.ContainsKey(tp.Name))
+            {
+                if (tp.Default != null)
+                    inferred[tp.Name] = tp.Default;
+                else
+                    return null; // Cannot infer
+            }
+        }
+
+        // Substitute and check argument compatibility
+        var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, inferred)).ToList();
+        if (!TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, inferred), callSig.MinArity, callSig.HasRestParam), argTypes))
+            return null;
+
+        return Substitute(callSig.ReturnType, inferred);
     }
 
     /// <summary>

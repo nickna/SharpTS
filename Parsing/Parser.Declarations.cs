@@ -147,6 +147,8 @@ public partial class Parser
 
         List<Stmt.InterfaceMember> members = [];
         List<Stmt.IndexSignature> indexSignatures = [];
+        List<Stmt.CallSignature> callSignatures = [];
+        List<Stmt.ConstructorSignature> constructorSignatures = [];
 
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
@@ -161,13 +163,36 @@ public partial class Parser
                 }
             }
 
+            // Check for constructor signature: new (params): ReturnType or new <T>(params): ReturnType
+            if (Check(TokenType.NEW))
+            {
+                var ctorSig = TryParseConstructorSignature();
+                if (ctorSig != null)
+                {
+                    constructorSignatures.Add(ctorSig);
+                    continue;
+                }
+            }
+
+            // Check for call signature: (params): ReturnType or <T>(params): ReturnType
+            // Starts with '(' or '<' followed eventually by '('
+            if (Check(TokenType.LEFT_PAREN) || (Check(TokenType.LESS) && IsCallSignatureStart()))
+            {
+                var callSig = TryParseCallSignature();
+                if (callSig != null)
+                {
+                    callSignatures.Add(callSig);
+                    continue;
+                }
+            }
+
             Token memberName = Consume(TokenType.IDENTIFIER, "Expect member name.");
             bool isOptional = Match(TokenType.QUESTION);
 
             string type;
-            if (Check(TokenType.LEFT_PAREN))
+            if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
             {
-                // Method signature: methodName(params): returnType
+                // Method signature: methodName(params): returnType or methodName<T>(params): returnType
                 type = ParseMethodSignature();
             }
             else
@@ -182,7 +207,153 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");
-        return new Stmt.Interface(name, typeParams, members, indexSignatures.Count > 0 ? indexSignatures : null, extends);
+        return new Stmt.Interface(
+            name,
+            typeParams,
+            members,
+            indexSignatures.Count > 0 ? indexSignatures : null,
+            extends,
+            callSignatures.Count > 0 ? callSignatures : null,
+            constructorSignatures.Count > 0 ? constructorSignatures : null
+        );
+    }
+
+    /// <summary>
+    /// Determines if the current position is the start of a call signature (generic type params followed by params).
+    /// Used to disambiguate '<' as start of generic type params vs. comparison operator.
+    /// </summary>
+    private bool IsCallSignatureStart()
+    {
+        // We're at '<', look ahead to see if this is <T>(params): ReturnType pattern
+        int saved = _current;
+        try
+        {
+            Advance(); // consume '<'
+
+            // Skip over type parameters
+            int depth = 1;
+            while (!IsAtEnd() && depth > 0)
+            {
+                if (Check(TokenType.LESS)) depth++;
+                else if (Check(TokenType.GREATER)) depth--;
+                Advance();
+            }
+
+            // After closing '>', should see '('
+            return Check(TokenType.LEFT_PAREN);
+        }
+        finally
+        {
+            _current = saved;
+        }
+    }
+
+    /// <summary>
+    /// Tries to parse a call signature: (params): ReturnType or &lt;T&gt;(params): ReturnType
+    /// </summary>
+    private Stmt.CallSignature? TryParseCallSignature()
+    {
+        int saved = _current;
+
+        try
+        {
+            // Parse optional generic type parameters
+            List<TypeParam>? sigTypeParams = ParseTypeParameters();
+
+            // Must have '('
+            if (!Match(TokenType.LEFT_PAREN))
+            {
+                _current = saved;
+                return null;
+            }
+
+            // Parse parameters
+            List<Stmt.Parameter> parameters = ParseSignatureParameters();
+
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after call signature parameters.");
+            Consume(TokenType.COLON, "Expect ':' before return type in call signature.");
+            string returnType = ParseTypeAnnotation();
+            Consume(TokenType.SEMICOLON, "Expect ';' after call signature.");
+
+            return new Stmt.CallSignature(sigTypeParams, parameters, returnType);
+        }
+        catch
+        {
+            _current = saved;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Tries to parse a constructor signature: new (params): ReturnType or new &lt;T&gt;(params): ReturnType
+    /// </summary>
+    private Stmt.ConstructorSignature? TryParseConstructorSignature()
+    {
+        int saved = _current;
+
+        try
+        {
+            Consume(TokenType.NEW, "Expect 'new' keyword.");
+
+            // Parse optional generic type parameters
+            List<TypeParam>? sigTypeParams = ParseTypeParameters();
+
+            // Must have '('
+            if (!Match(TokenType.LEFT_PAREN))
+            {
+                _current = saved;
+                return null;
+            }
+
+            // Parse parameters
+            List<Stmt.Parameter> parameters = ParseSignatureParameters();
+
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after constructor signature parameters.");
+            Consume(TokenType.COLON, "Expect ':' before return type in constructor signature.");
+            string returnType = ParseTypeAnnotation();
+            Consume(TokenType.SEMICOLON, "Expect ';' after constructor signature.");
+
+            return new Stmt.ConstructorSignature(sigTypeParams, parameters, returnType);
+        }
+        catch
+        {
+            _current = saved;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses parameters for call/constructor signatures (name: type, ...).
+    /// </summary>
+    private List<Stmt.Parameter> ParseSignatureParameters()
+    {
+        List<Stmt.Parameter> parameters = [];
+
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            do
+            {
+                // Check for rest parameter
+                bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+
+                // Check for optional marker
+                bool isOptional = Match(TokenType.QUESTION);
+
+                // Parse type annotation
+                string? paramType = null;
+                if (Match(TokenType.COLON))
+                {
+                    paramType = ParseTypeAnnotation();
+                }
+
+                parameters.Add(new Stmt.Parameter(paramName, paramType, null, isRest, IsOptional: isOptional));
+
+            } while (Match(TokenType.COMMA));
+        }
+
+        return parameters;
     }
 
     /// <summary>
@@ -254,9 +425,28 @@ public partial class Parser
     /// <summary>
     /// Parses a method signature like "(a: number, b: string): returnType" and returns it as a function type string.
     /// Supports 'this' parameter: "(this: Type, a: number): returnType".
+    /// Supports generic type parameters: "&lt;T&gt;(a: T): T".
     /// </summary>
     private string ParseMethodSignature()
     {
+        // Parse optional generic type parameters: <T, U extends Base>
+        string genericPrefix = "";
+        if (Check(TokenType.LESS))
+        {
+            List<TypeParam>? typeParams = ParseTypeParameters();
+            if (typeParams != null && typeParams.Count > 0)
+            {
+                var parts = typeParams.Select(tp =>
+                {
+                    string part = tp.Name.Lexeme;
+                    if (tp.Constraint != null) part += $" extends {tp.Constraint}";
+                    if (tp.Default != null) part += $" = {tp.Default}";
+                    return part;
+                });
+                genericPrefix = $"<{string.Join(", ", parts)}>";
+            }
+        }
+
         Consume(TokenType.LEFT_PAREN, "Expect '(' for method parameters.");
         string? thisType = null;
         List<string> paramTypes = [];
@@ -297,11 +487,11 @@ public partial class Parser
             // Only add comma between this and params if there are params
             if (paramTypes.Count > 0)
             {
-                return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+                return $"{genericPrefix}(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
             }
-            return $"(this: {thisType}) => {returnType}";
+            return $"{genericPrefix}(this: {thisType}) => {returnType}";
         }
-        return $"({string.Join(", ", paramTypes)}) => {returnType}";
+        return $"{genericPrefix}({string.Join(", ", paramTypes)}) => {returnType}";
     }
 
     private Stmt EnumDeclaration(bool isConst = false)

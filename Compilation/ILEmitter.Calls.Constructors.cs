@@ -11,75 +11,126 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    /// <summary>
+    /// Extracts the simple class name from a new expression callee for IL emission.
+    /// </summary>
+    private static string? GetSimpleClassName(Expr callee)
+    {
+        return callee is Expr.Variable v ? v.Name.Lexeme : null;
+    }
+
+    /// <summary>
+    /// Checks if the callee is a simple identifier (not a member access or complex expression).
+    /// </summary>
+    private static bool IsSimpleIdentifier(Expr callee) => callee is Expr.Variable;
+
+    /// <summary>
+    /// Extracts a qualified class name from a callee expression for namespace paths.
+    /// Returns (namespaceParts, className) tuple where namespaceParts may be empty for simple names.
+    /// </summary>
+    private static (List<string> namespaceParts, string className) ExtractQualifiedName(Expr callee)
+    {
+        List<string> parts = [];
+        CollectGetChain(callee, parts);
+
+        if (parts.Count == 0)
+            return ([], "");
+
+        var namespaceParts = parts.Count > 1 ? parts.Take(parts.Count - 1).ToList() : [];
+        var className = parts[^1];
+        return (namespaceParts, className);
+    }
+
+    /// <summary>
+    /// Collects identifiers from a Get chain (e.g., Namespace.SubNs.Class) into a list.
+    /// </summary>
+    private static void CollectGetChain(Expr expr, List<string> parts)
+    {
+        switch (expr)
+        {
+            case Expr.Variable v:
+                parts.Add(v.Name.Lexeme);
+                break;
+            case Expr.Get g:
+                CollectGetChain(g.Object, parts);
+                parts.Add(g.Name.Lexeme);
+                break;
+        }
+    }
+
     protected override void EmitNew(Expr.New n)
     {
-        // Built-in types only apply when there's no namespace path
-        bool isSimpleName = n.NamespacePath == null || n.NamespacePath.Count == 0;
+        // Built-in types only apply when callee is a simple identifier
+        bool isSimpleName = IsSimpleIdentifier(n.Callee);
+        string? simpleClassName = GetSimpleClassName(n.Callee);
 
         // Special case: new Date(...) constructor
-        if (isSimpleName && n.ClassName.Lexeme == "Date")
+        if (isSimpleName && simpleClassName == "Date")
         {
             EmitNewDate(n.Arguments);
             return;
         }
 
         // Special case: new Map(...) constructor
-        if (isSimpleName && n.ClassName.Lexeme == "Map")
+        if (isSimpleName && simpleClassName == "Map")
         {
             EmitNewMap(n.Arguments);
             return;
         }
 
         // Special case: new Set(...) constructor
-        if (isSimpleName && n.ClassName.Lexeme == "Set")
+        if (isSimpleName && simpleClassName == "Set")
         {
             EmitNewSet(n.Arguments);
             return;
         }
 
         // Special case: new WeakMap() constructor
-        if (isSimpleName && n.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && simpleClassName == "WeakMap")
         {
             EmitNewWeakMap();
             return;
         }
 
         // Special case: new WeakSet() constructor
-        if (isSimpleName && n.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && simpleClassName == "WeakSet")
         {
             EmitNewWeakSet();
             return;
         }
 
         // Special case: new RegExp(...) constructor
-        if (isSimpleName && n.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && simpleClassName == "RegExp")
         {
             EmitNewRegExp(n.Arguments);
             return;
         }
 
         // Special case: new Error(...) and error subtype constructors
-        if (isSimpleName && IsErrorTypeName(n.ClassName.Lexeme))
+        if (isSimpleName && simpleClassName != null && IsErrorTypeName(simpleClassName))
         {
-            EmitNewError(n.ClassName.Lexeme, n.Arguments);
+            EmitNewError(simpleClassName, n.Arguments);
             return;
         }
 
+        // Extract qualified name from callee expression
+        var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
+
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
-        if (n.NamespacePath != null && n.NamespacePath.Count > 0)
+        if (namespaceParts.Count > 0)
         {
             // Build qualified name for namespace classes: Namespace_SubNs_ClassName
-            string nsPath = string.Join("_", n.NamespacePath.Select(t => t.Lexeme));
-            resolvedClassName = $"{nsPath}_{n.ClassName.Lexeme}";
+            string nsPath = string.Join("_", namespaceParts);
+            resolvedClassName = $"{nsPath}_{className}";
         }
         else
         {
-            resolvedClassName = _ctx.ResolveClassName(n.ClassName.Lexeme);
+            resolvedClassName = _ctx.ResolveClassName(className);
         }
 
         // Check for external .NET type (@DotNetType)
-        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(n.ClassName.Lexeme, out var externalType) ||
+        if (_ctx.TypeMapper.ExternalTypes.TryGetValue(className, out var externalType) ||
             _ctx.TypeMapper.ExternalTypes.TryGetValue(resolvedClassName, out externalType))
         {
             EmitExternalTypeConstruction(externalType, n.Arguments);
@@ -136,7 +187,7 @@ public partial class ILEmitter
             SetStackUnknown();  // newobj returns object reference
         }
         else if (_ctx.VarToClassExpr != null &&
-                 _ctx.VarToClassExpr.TryGetValue(n.ClassName.Lexeme, out var classExpr) &&
+                 _ctx.VarToClassExpr.TryGetValue(className, out var classExpr) &&
                  _ctx.ClassExprConstructors != null &&
                  _ctx.ClassExprConstructors.TryGetValue(classExpr, out var classExprCtor))
         {
@@ -171,7 +222,7 @@ public partial class ILEmitter
         else
         {
             // Fallback: try to instantiate via local variable (imported class as Type)
-            var local = _ctx.Locals.GetLocal(n.ClassName.Lexeme);
+            var local = _ctx.Locals.GetLocal(className);
             if (local != null)
             {
                 // The local contains a Type object - use Activator.CreateInstance

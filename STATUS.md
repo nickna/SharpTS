@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added `setInterval`/`clearInterval`)
+**Last Updated:** 2026-01-19 (Added constructor & call signatures)
 
 ## Legend
 - ✅ Implemented
@@ -95,7 +95,8 @@ This document tracks TypeScript language features and their implementation statu
 | `this` parameter typing | ✅ | Explicit `this` type in function declarations |
 | Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
 | Named function expressions | ❌ | `const f = function myFunc() {}` |
-| Constructor signatures | ❌ | `new (...args): T` in interfaces |
+| Constructor signatures | ✅ | `new (params): T` in interfaces, `new` on expressions |
+| Call signatures | ✅ | `(params): T` in interfaces, callable interface types |
 
 ---
 
@@ -771,3 +772,15 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Chaining support: `x satisfies A satisfies B`
 - ✅ Works with `as const`: `[1,2] as const satisfies number[]`
 - ✅ Full interpreter and IL compiler support with 41 test cases
+
+### Phase 43 Features (Constructor & Call Signatures)
+- ✅ Constructor signatures in interfaces: `interface Ctor { new (x: number): Point; }`
+- ✅ Call signatures in interfaces: `interface Callable { (input: string): string; }`
+- ✅ Generic signatures with type parameters: `new <T>(value: T): Box<T>`
+- ✅ Multiple/overloaded signatures per interface
+- ✅ Expression-based `new`: `new someVariable(args)`, `new getConstructor()(args)`
+- ✅ `new` on member access expressions: `new Namespace.Class(args)`
+- ✅ Type compatibility: functions assignable to callable interfaces
+- ✅ Type compatibility: classes assignable to constructable interfaces
+- ✅ Factory pattern support: pass class as parameter, call `new ctor(args)`
+- ✅ Full parser, type checker, interpreter, and IL compiler support with 25 test cases

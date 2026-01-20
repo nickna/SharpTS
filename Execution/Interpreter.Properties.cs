@@ -9,41 +9,17 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     /// <summary>
-    /// Resolves a qualified class name (Namespace.SubNs.ClassName) to a runtime class.
+    /// Extracts the simple class name from a new expression callee for runtime use.
     /// </summary>
-    private object? ResolveQualifiedClass(List<Token>? namespacePath, Token className)
+    private static string? GetSimpleClassName(Expr callee)
     {
-        if (namespacePath == null || namespacePath.Count == 0)
-        {
-            // Simple class name - use existing lookup
-            return _environment.Get(className);
-        }
-
-        // Start from first namespace
-        object? current = _environment.Get(namespacePath[0]);
-
-        // Traverse namespace chain
-        for (int i = 1; i < namespacePath.Count; i++)
-        {
-            if (current is not SharpTSNamespace ns)
-            {
-                throw new Exception($"Runtime Error: '{namespacePath[i - 1].Lexeme}' is not a namespace.");
-            }
-            current = ns.Get(namespacePath[i].Lexeme);
-            if (current == null)
-            {
-                throw new Exception($"Runtime Error: '{namespacePath[i].Lexeme}' does not exist in namespace '{ns.Name}'.");
-            }
-        }
-
-        // Now get the class from the final namespace
-        if (current is not SharpTSNamespace finalNs)
-        {
-            throw new Exception($"Runtime Error: '{namespacePath[^1].Lexeme}' is not a namespace.");
-        }
-
-        return finalNs.Get(className.Lexeme);
+        return callee is Expr.Variable v ? v.Name.Lexeme : null;
     }
+
+    /// <summary>
+    /// Checks if the callee is a simple identifier (not a member access or complex expression).
+    /// </summary>
+    private static bool IsSimpleIdentifier(Expr callee) => callee is Expr.Variable;
 
     /// <summary>
     /// Evaluates a <c>new</c> expression, instantiating a class.
@@ -51,24 +27,26 @@ public partial class Interpreter
     /// <param name="newExpr">The new expression AST node.</param>
     /// <returns>A new <see cref="SharpTSInstance"/> of the class.</returns>
     /// <remarks>
-    /// Looks up the class by name, evaluates constructor arguments,
+    /// Looks up the class by evaluating the callee expression,
     /// and invokes the class's <see cref="SharpTSClass.Call"/> method.
+    /// Supports new on expressions: new ctor(), new Namespace.Class(), new (expr)()
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
     private object? EvaluateNew(Expr.New newExpr)
     {
-        // Built-in types only apply when there's no namespace path
-        bool isSimpleName = newExpr.NamespacePath == null || newExpr.NamespacePath.Count == 0;
+        // Built-in types only apply when callee is a simple identifier
+        bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
+        string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle new Date(...) constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Date")
+        if (isSimpleName && simpleClassName == "Date")
         {
             List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
             return CreateDate(args);
         }
 
         // Handle new RegExp(...) constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "RegExp")
+        if (isSimpleName && simpleClassName == "RegExp")
         {
             List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
             var pattern = args.Count > 0 ? args[0]?.ToString() ?? "" : "";
@@ -77,7 +55,7 @@ public partial class Interpreter
         }
 
         // Handle new Map(...) constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Map")
+        if (isSimpleName && simpleClassName == "Map")
         {
             if (newExpr.Arguments.Count == 0)
             {
@@ -93,7 +71,7 @@ public partial class Interpreter
         }
 
         // Handle new Set(...) constructor
-        if (isSimpleName && newExpr.ClassName.Lexeme == "Set")
+        if (isSimpleName && simpleClassName == "Set")
         {
             if (newExpr.Arguments.Count == 0)
             {
@@ -109,25 +87,26 @@ public partial class Interpreter
         }
 
         // Handle new WeakMap() constructor (empty only)
-        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakMap")
+        if (isSimpleName && simpleClassName == "WeakMap")
         {
             return new SharpTSWeakMap();
         }
 
         // Handle new WeakSet() constructor (empty only)
-        if (isSimpleName && newExpr.ClassName.Lexeme == "WeakSet")
+        if (isSimpleName && simpleClassName == "WeakSet")
         {
             return new SharpTSWeakSet();
         }
 
         // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && IsErrorType(newExpr.ClassName.Lexeme))
+        if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
         {
             List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
-            return ErrorBuiltIns.CreateError(newExpr.ClassName.Lexeme, args);
+            return ErrorBuiltIns.CreateError(simpleClassName, args);
         }
 
-        object? klass = ResolveQualifiedClass(newExpr.NamespacePath, newExpr.ClassName);
+        // Evaluate the callee expression to get the class/constructor
+        object? klass = Evaluate(newExpr.Callee);
         if (klass is not SharpTSClass sharpClass)
         {
              throw new Exception("Type Error: Can only instantiate classes.");

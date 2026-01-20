@@ -348,24 +348,15 @@ public partial class Parser
 
         if (Match(TokenType.NEW))
         {
-            Token firstIdent = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
-            List<Token> nameParts = [firstIdent];
+            // Parse the callee expression: can be identifier, member access, or parenthesized expression
+            // Examples: new ClassName(), new Namespace.Class(), new (condition ? A : B)()
+            Expr callee = ParseNewCallee();
 
-            // Collect dot-separated identifiers (e.g., Namespace.SubNamespace.ClassName)
-            while (Match(TokenType.DOT))
-            {
-                Token nextIdent = Consume(TokenType.IDENTIFIER, "Expect identifier after '.'.");
-                nameParts.Add(nextIdent);
-            }
-
-            // Last part is the class name, previous parts are the namespace path
-            List<Token>? namespacePath = nameParts.Count > 1
-                ? nameParts.GetRange(0, nameParts.Count - 1)
-                : null;
-            Token className = nameParts[^1];
-
+            // Parse optional type arguments: new Class<T>()
             List<string>? typeArgs = TryParseTypeArguments();
-            Consume(TokenType.LEFT_PAREN, "Expect '(' after class name.");
+
+            // Parse arguments
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after new expression callee.");
             List<Expr> arguments = [];
             if (!Check(TokenType.RIGHT_PAREN))
             {
@@ -375,7 +366,7 @@ public partial class Parser
                 } while (Match(TokenType.COMMA));
             }
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-            return new Expr.New(namespacePath, className, typeArgs, arguments);
+            return new Expr.New(callee, typeArgs, arguments);
         }
 
         return Call();
@@ -523,6 +514,37 @@ public partial class Parser
 
         Token paren = Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
         return new Expr.Call(callee, paren, typeArgs, arguments);
+    }
+
+    /// <summary>
+    /// Parses the callee expression for a 'new' expression.
+    /// Handles: identifiers, member access chains, and parenthesized expressions.
+    /// Does NOT handle type arguments or call arguments (those are parsed by caller).
+    /// </summary>
+    private Expr ParseNewCallee()
+    {
+        Expr callee;
+
+        // Check for parenthesized expression: new (condition ? A : B)()
+        if (Match(TokenType.LEFT_PAREN))
+        {
+            callee = Expression();
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after expression in new callee.");
+            return callee;
+        }
+
+        // Otherwise expect an identifier (class name or start of namespace path)
+        Token firstIdent = Consume(TokenType.IDENTIFIER, "Expect class name after 'new'.");
+        callee = new Expr.Variable(firstIdent);
+
+        // Handle member access chain: Namespace.SubNamespace.ClassName
+        while (Match(TokenType.DOT))
+        {
+            Token name = Consume(TokenType.IDENTIFIER, "Expect identifier after '.' in new expression.");
+            callee = new Expr.Get(callee, name);
+        }
+
+        return callee;
     }
 
     private Expr Primary()

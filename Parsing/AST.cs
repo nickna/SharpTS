@@ -45,7 +45,11 @@ public abstract record Expr
     /// <summary>Private method call: obj.#method(args)</summary>
     public record CallPrivate(Expr Object, Token Name, List<Expr> Arguments) : Expr;
     public record This(Token Keyword) : Expr;
-    public record New(List<Token>? NamespacePath, Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
+    /// <summary>
+    /// New expression: new Callee(args) or new Callee&lt;T&gt;(args).
+    /// Callee can be a Variable (class name), Get (namespace path), or any expression.
+    /// </summary>
+    public record New(Expr Callee, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record ArrayLiteral(List<Expr> Elements) : Expr;
     public record ObjectLiteral(List<Property> Properties) : Expr
     {
@@ -161,12 +165,39 @@ public abstract record Stmt
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.
     /// </summary>
     public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false) : Stmt;
-    public record Interface(Token Name, List<TypeParam>? TypeParams, List<InterfaceMember> Members, List<IndexSignature>? IndexSignatures = null, List<string>? Extends = null) : Stmt;
+    /// <summary>
+    /// Interface declaration with optional call and constructor signatures.
+    /// </summary>
+    public record Interface(
+        Token Name,
+        List<TypeParam>? TypeParams,
+        List<InterfaceMember> Members,
+        List<IndexSignature>? IndexSignatures = null,
+        List<string>? Extends = null,
+        List<CallSignature>? CallSignatures = null,
+        List<ConstructorSignature>? ConstructorSignatures = null
+    ) : Stmt;
     public record InterfaceMember(Token Name, string Type, bool IsOptional = false);
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>
     public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType);
+    /// <summary>
+    /// Call signature in interfaces: (params): ReturnType or &lt;T&gt;(params): ReturnType
+    /// Indicates the interface represents a callable type (e.g., function).
+    /// </summary>
+    /// <param name="TypeParams">Optional generic type parameters for this signature.</param>
+    /// <param name="Parameters">The parameter list as raw parameter string.</param>
+    /// <param name="ReturnType">The return type annotation.</param>
+    public record CallSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType);
+    /// <summary>
+    /// Constructor signature in interfaces: new (params): ReturnType or new &lt;T&gt;(params): ReturnType
+    /// Indicates the interface represents a constructable type.
+    /// </summary>
+    /// <param name="TypeParams">Optional generic type parameters for this signature.</param>
+    /// <param name="Parameters">The parameter list as raw parameter string.</param>
+    /// <param name="ReturnType">The return type annotation.</param>
+    public record ConstructorSignature(List<TypeParam>? TypeParams, List<Parameter> Parameters, string ReturnType);
     public record Block(List<Stmt> Statements) : Stmt;
     public record Sequence(List<Stmt> Statements) : Stmt;  // Like Block but without creating a new scope
     public record Return(Token Keyword, Expr? Value) : Stmt;
