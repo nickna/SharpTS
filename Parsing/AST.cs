@@ -132,7 +132,7 @@ public record Decorator(Token AtToken, Expr Expression);
 public abstract record Stmt
 {
     public record Expression(Expr Expr) : Stmt;
-    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer) : Stmt;
+    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false) : Stmt;
     /// <summary>
     /// Function or method declaration. Body is null for overload signatures (declaration only).
     /// ThisType is the explicit this parameter type annotation (e.g., this: MyClass).
@@ -142,7 +142,7 @@ public abstract record Stmt
     /// </summary>
     public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null);
-    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null) : Stmt;
     /// <summary>
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.

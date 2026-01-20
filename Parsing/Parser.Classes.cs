@@ -134,11 +134,19 @@ public partial class Parser
 
                 accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators));
             }
-            else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
+            else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
             {
                 // Field declaration
                 Token fieldName = Consume(TokenType.IDENTIFIER, "Expect field name.");
                 bool isOptional = Match(TokenType.QUESTION);
+                bool hasDefiniteAssignment = Match(TokenType.BANG);
+
+                // Validate: ! and ? are mutually exclusive
+                if (isOptional && hasDefiniteAssignment)
+                {
+                    throw new Exception($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
+                }
+
                 Consume(TokenType.COLON, "Expect ':' after field name.");
                 string typeAnnotation = ParseTypeAnnotation();
                 Expr? initializer = null;
@@ -146,8 +154,15 @@ public partial class Parser
                 {
                     initializer = Expression();
                 }
+
+                // Validate: ! cannot coexist with initializer
+                if (hasDefiniteAssignment && initializer != null)
+                {
+                    throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+                }
+
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, memberDecorators));
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators));
             }
             else
             {
@@ -383,11 +398,19 @@ public partial class Parser
 
                 accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access));
             }
-            else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
+            else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
             {
                 // Field declaration
                 Token fieldName = Consume(TokenType.IDENTIFIER, "Expect field name.");
                 bool isOptional = Match(TokenType.QUESTION);
+                bool hasDefiniteAssignment = Match(TokenType.BANG);
+
+                // Validate: ! and ? are mutually exclusive
+                if (isOptional && hasDefiniteAssignment)
+                {
+                    throw new Exception($"Parse Error at line {fieldName.Line}: A property cannot be both optional and have a definite assignment assertion.");
+                }
+
                 Consume(TokenType.COLON, "Expect ':' after field name.");
                 string typeAnnotation = ParseTypeAnnotation();
                 Expr? initializer = null;
@@ -395,8 +418,15 @@ public partial class Parser
                 {
                     initializer = Expression();
                 }
+
+                // Validate: ! cannot coexist with initializer
+                if (hasDefiniteAssignment && initializer != null)
+                {
+                    throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+                }
+
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional));
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment));
             }
             else
             {

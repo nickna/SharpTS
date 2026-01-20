@@ -116,6 +116,16 @@ public partial class TypeChecker
                     declaredType = ToTypeInfo(varStmt.TypeAnnotation);
                 }
 
+                // Definite assignment assertion: let x!: number;
+                // The parser ensures ! always has a type annotation and no initializer.
+                // Use the declared type - the assertion means "trust me, it will be assigned".
+                if (varStmt.HasDefiniteAssignmentAssertion)
+                {
+                    // declaredType is already set from the type annotation (parser guarantees this)
+                    _environment.Define(varStmt.Name.Lexeme, declaredType!);
+                    break;
+                }
+
                 if (varStmt.Initializer != null)
                 {
                     // Special case: array literal assigned to tuple type (contextual typing)

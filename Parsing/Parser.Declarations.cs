@@ -335,16 +335,37 @@ public partial class Parser
         // Standard single-variable declaration
         Token name = Consume(TokenType.IDENTIFIER, "Expect variable name.");
 
+        // Check for definite assignment assertion: let x!: number;
+        bool hasDefiniteAssignment = Match(TokenType.BANG);
+
         string? typeAnnotation = null;
         if (Match(TokenType.COLON))
         {
             typeAnnotation = ParseTypeAnnotation();
         }
 
+        // Validate: ! requires type annotation
+        if (hasDefiniteAssignment && typeAnnotation == null)
+        {
+            throw new Exception($"Parse Error at line {name.Line}: Definite assignment assertion '!' requires a type annotation.");
+        }
+
+        // Validate: ! cannot be used with const
+        if (hasDefiniteAssignment && isConst)
+        {
+            throw new Exception($"Parse Error at line {name.Line}: 'const' declarations cannot use definite assignment assertion '!' (const must be initialized).");
+        }
+
         Expr? initializer = null;
         if (Match(TokenType.EQUAL))
         {
             initializer = Expression();
+        }
+
+        // Validate: ! cannot coexist with initializer
+        if (hasDefiniteAssignment && initializer != null)
+        {
+            throw new Exception($"Parse Error at line {name.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
         }
 
         // const declarations require an initializer
@@ -354,7 +375,7 @@ public partial class Parser
         }
 
         Consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
-        return new Stmt.Var(name, typeAnnotation, initializer);
+        return new Stmt.Var(name, typeAnnotation, initializer, hasDefiniteAssignment);
     }
 
     /// <summary>
