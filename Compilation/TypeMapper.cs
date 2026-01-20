@@ -101,6 +101,9 @@ public class TypeMapper
         // If they reach IL emission, fall back to object
         TypeInfo.ConditionalType => _types.Object,
         TypeInfo.InferredTypeParameter => _types.Object,
+        // Type predicates: "x is T" returns bool, "asserts x is T" returns void
+        TypeInfo.TypePredicate pred => pred.IsAssertion ? _types.Void : _types.Boolean,
+        TypeInfo.AssertsNonNull => _types.Void, // "asserts x" returns void
         _ => _types.Object
     };
 
@@ -177,6 +180,9 @@ public class TypeMapper
         // Conditional types should be evaluated during type checking
         TypeInfo.ConditionalType => _types.Object,
         TypeInfo.InferredTypeParameter => _types.Object,
+        // Type predicates: "x is T" returns bool, "asserts x is T" returns void
+        TypeInfo.TypePredicate pred => pred.IsAssertion ? _types.Void : _types.Boolean,
+        TypeInfo.AssertsNonNull => _types.Void, // "asserts x" returns void
         _ => _types.Object
     };
 

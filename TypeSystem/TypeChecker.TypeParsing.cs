@@ -31,6 +31,44 @@ public partial class TypeChecker
             return ToTypeInfo(aliasExpansion);
         }
 
+        // Handle type predicate return types: "asserts x is T", "asserts x", "x is T"
+        if (typeName.StartsWith("asserts "))
+        {
+            string rest = typeName[8..]; // Remove "asserts "
+            int isIndex = rest.IndexOf(" is ");
+            if (isIndex > 0)
+            {
+                // "asserts x is T" form
+                string paramName = rest[..isIndex];
+                string predicateTypeStr = rest[(isIndex + 4)..];
+                TypeInfo predicateType = ToTypeInfo(predicateTypeStr);
+                return new TypeInfo.TypePredicate(paramName, predicateType, IsAssertion: true);
+            }
+            else
+            {
+                // "asserts x" form (non-null assertion)
+                return new TypeInfo.AssertsNonNull(rest);
+            }
+        }
+
+        // Check for "x is T" pattern (regular type predicate)
+        // Must match: identifier followed by " is " and then a type
+        // Avoid matching things like "unknown is not a type"
+        {
+            int isIndex = typeName.IndexOf(" is ");
+            if (isIndex > 0)
+            {
+                string potentialParamName = typeName[..isIndex];
+                // Validate it looks like an identifier (no spaces, etc.)
+                if (IsValidIdentifier(potentialParamName))
+                {
+                    string predicateTypeStr = typeName[(isIndex + 4)..];
+                    TypeInfo predicateType = ToTypeInfo(predicateTypeStr);
+                    return new TypeInfo.TypePredicate(potentialParamName, predicateType, IsAssertion: false);
+                }
+            }
+        }
+
         // Handle keyof type operator: "keyof T"
         if (typeName.StartsWith("keyof "))
         {
@@ -1373,4 +1411,16 @@ public partial class TypeChecker
         TypeInfo.Tuple tup when index >= 0 && index < tup.ElementTypes.Count => tup.ElementTypes[index],
         _ => null
     };
+
+    /// <summary>
+    /// Checks if a string is a valid identifier (for type predicate parameter name validation).
+    /// </summary>
+    private static bool IsValidIdentifier(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        // Must start with letter or underscore
+        if (!char.IsLetter(s[0]) && s[0] != '_') return false;
+        // Rest must be alphanumeric or underscore (no spaces)
+        return s.All(c => char.IsLetterOrDigit(c) || c == '_');
+    }
 }

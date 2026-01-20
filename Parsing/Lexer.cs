@@ -32,6 +32,7 @@ public class Lexer(string source)
     {
         { "abstract", TokenType.ABSTRACT },
         { "as", TokenType.AS },
+        { "asserts", TokenType.ASSERTS },
         { "async", TokenType.ASYNC },
         { "await", TokenType.AWAIT },
         { "break", TokenType.BREAK },
@@ -59,6 +60,7 @@ public class Lexer(string source)
         { "infer", TokenType.INFER },
         { "instanceof", TokenType.INSTANCEOF },
         { "interface", TokenType.INTERFACE },
+        { "is", TokenType.IS },
         { "keyof", TokenType.KEYOF },
         { "let", TokenType.LET },
         { "namespace", TokenType.NAMESPACE },

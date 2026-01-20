@@ -6,6 +6,43 @@ public partial class Parser
 {
     private string ParseTypeAnnotation()
     {
+        // Handle type predicate return types: "asserts x is T", "asserts x", "x is T"
+        // These only appear as function return types but are parsed as type annotations
+
+        // Check for "asserts" keyword
+        if (Match(TokenType.ASSERTS))
+        {
+            if (Check(TokenType.IDENTIFIER))
+            {
+                string paramName = Advance().Lexeme;
+                if (Match(TokenType.IS))
+                {
+                    // asserts x is T
+                    string predicateType = ParseConditionalType();
+                    return $"asserts {paramName} is {predicateType}";
+                }
+                else
+                {
+                    // asserts x (shorthand for asserting non-null/truthy)
+                    return $"asserts {paramName}";
+                }
+            }
+            else
+            {
+                throw new Exception($"Parse Error at line {Previous().Line}: Expected identifier after 'asserts'.");
+            }
+        }
+
+        // Check for "x is T" pattern (regular type predicate)
+        // Must be: identifier followed by 'is' keyword
+        if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.IS)
+        {
+            string paramName = Advance().Lexeme;
+            Consume(TokenType.IS, "Expected 'is' after parameter name.");
+            string predicateType = ParseConditionalType();
+            return $"{paramName} is {predicateType}";
+        }
+
         return ParseConditionalType();
     }
 

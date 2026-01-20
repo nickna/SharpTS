@@ -276,6 +276,11 @@ public partial class TypeChecker
 
             case Stmt.Expression exprStmt:
                 CheckExpr(exprStmt.Expr);
+                // Apply assertion narrowing for calls to assertion functions
+                if (exprStmt.Expr is Expr.Call assertCall)
+                {
+                    ApplyAssertionNarrowing(assertCall);
+                }
                 break;
 
             case Stmt.If ifStmt:
@@ -645,5 +650,85 @@ public partial class TypeChecker
                trimmed == "readonly unknown[]" ||
                trimmed.StartsWith("readonly ", StringComparison.Ordinal) && trimmed.EndsWith("[]", StringComparison.Ordinal) ||
                trimmed.StartsWith("Array<", StringComparison.Ordinal); // T extends Array<unknown>
+    }
+
+    /// <summary>
+    /// Applies type narrowing from assertion function calls.
+    /// When a function with "asserts x is T" or "asserts x" return type is called,
+    /// the variable x is narrowed in all subsequent code.
+    /// </summary>
+    private void ApplyAssertionNarrowing(Expr.Call call)
+    {
+        // Get the callee's type
+        TypeInfo? calleeType = null;
+
+        if (call.Callee is Expr.Variable funcVar)
+        {
+            calleeType = _environment.Get(funcVar.Name.Lexeme);
+        }
+        else if (call.Callee is Expr.Get getExpr)
+        {
+            var objType = CheckExpr(getExpr.Object);
+            calleeType = GetMemberType(objType, getExpr.Name.Lexeme);
+        }
+
+        if (calleeType == null) return;
+
+        // Get the return type
+        TypeInfo? returnType = calleeType switch
+        {
+            TypeInfo.Function func => func.ReturnType,
+            TypeInfo.GenericFunction gf => gf.ReturnType,
+            _ => null
+        };
+
+        // Handle "asserts x is T" - narrow to the predicate type
+        if (returnType is TypeInfo.TypePredicate pred && pred.IsAssertion)
+        {
+            // For simplicity, assume first argument corresponds to the predicate parameter
+            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            {
+                // Narrow the type in the current environment
+                _environment.Define(argVar.Name.Lexeme, pred.PredicateType);
+            }
+        }
+        // Handle "asserts x" - narrow to exclude null/undefined
+        else if (returnType is TypeInfo.AssertsNonNull assertsNonNull)
+        {
+            // For simplicity, assume first argument corresponds to the asserted parameter
+            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            {
+                var currentType = _environment.Get(argVar.Name.Lexeme);
+                if (currentType != null)
+                {
+                    // Remove null and undefined from the type
+                    TypeInfo narrowedType = ExcludeNullUndefined(currentType);
+                    _environment.Define(argVar.Name.Lexeme, narrowedType);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes null and undefined from a type.
+    /// </summary>
+    private static TypeInfo ExcludeNullUndefined(TypeInfo type)
+    {
+        if (type is TypeInfo.Union union)
+        {
+            var remaining = union.FlattenedTypes
+                .Where(t => t is not TypeInfo.Null and not TypeInfo.Undefined)
+                .ToList();
+
+            if (remaining.Count == 0) return new TypeInfo.Never();
+            if (remaining.Count == 1) return remaining[0];
+            return new TypeInfo.Union(remaining);
+        }
+
+        // If the type itself is null or undefined, return never
+        if (type is TypeInfo.Null or TypeInfo.Undefined)
+            return new TypeInfo.Never();
+
+        return type;
     }
 }

@@ -117,6 +117,34 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a type predicate return type: "x is T" or "asserts x is T"
+    /// Type predicates enable user-defined type guards and assertion functions.
+    /// </summary>
+    /// <param name="ParameterName">The function parameter being narrowed (e.g., "x" in "x is string")</param>
+    /// <param name="PredicateType">The type that the parameter is narrowed to (e.g., "string")</param>
+    /// <param name="IsAssertion">True for "asserts x is T" (throws on false), false for "x is T" (returns boolean)</param>
+    public record TypePredicate(
+        string ParameterName,
+        TypeInfo PredicateType,
+        bool IsAssertion = false
+    ) : TypeInfo
+    {
+        public override string ToString() => IsAssertion
+            ? $"asserts {ParameterName} is {PredicateType}"
+            : $"{ParameterName} is {PredicateType}";
+    }
+
+    /// <summary>
+    /// Represents "asserts x" return type where x is narrowed to non-null/truthy.
+    /// Used for assertion functions that validate a value exists.
+    /// </summary>
+    /// <param name="ParameterName">The function parameter being asserted (e.g., "x" in "asserts x")</param>
+    public record AssertsNonNull(string ParameterName) : TypeInfo
+    {
+        public override string ToString() => $"asserts {ParameterName}";
+    }
+
+    /// <summary>
     /// Represents an overloaded function with multiple callable signatures and a single implementation.
     /// TypeScript-style overloading: multiple signatures (compile-time) with one implementation (runtime).
     /// </summary>

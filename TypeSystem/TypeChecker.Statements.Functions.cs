@@ -191,6 +191,9 @@ public partial class TypeChecker
             ? ToTypeInfo(funcStmt.ReturnType)
             : new TypeInfo.Void();
 
+        // Validate type predicate return types
+        ValidateTypePredicateReturnType(returnType, funcStmt.Parameters, funcStmt.Name.Lexeme);
+
         // Parse explicit 'this' type if present
         TypeInfo? thisType = funcStmt.ThisType != null ? ToTypeInfo(funcStmt.ThisType) : null;
 
@@ -334,10 +337,13 @@ public partial class TypeChecker
             }
 
             // Validate that non-void functions return a value on all code paths
-            // Skip for void, generators (which use yield), and async functions (which return Promise)
+            // Skip for void, generators (which use yield), async functions (which return Promise),
+            // and assertion predicates (which either throw or complete normally)
             if (returnType is not TypeInfo.Void &&
                 returnType is not TypeInfo.Generator &&
                 returnType is not TypeInfo.AsyncGenerator &&
+                returnType is not TypeInfo.TypePredicate { IsAssertion: true } &&
+                returnType is not TypeInfo.AssertsNonNull &&
                 !funcStmt.IsGenerator &&
                 !funcStmt.IsAsync)
             {
@@ -359,6 +365,36 @@ public partial class TypeChecker
             _activeLabels.Clear();
             foreach (var kvp in previousActiveLabels)
                 _activeLabels[kvp.Key] = kvp.Value;
+        }
+    }
+
+    /// <summary>
+    /// Validates that type predicate return types reference valid parameter names.
+    /// </summary>
+    private void ValidateTypePredicateReturnType(TypeInfo returnType, List<Stmt.Parameter> parameters, string funcName)
+    {
+        string? paramToCheck = null;
+
+        if (returnType is TypeInfo.TypePredicate pred)
+        {
+            paramToCheck = pred.ParameterName;
+        }
+        else if (returnType is TypeInfo.AssertsNonNull assertsNonNull)
+        {
+            paramToCheck = assertsNonNull.ParameterName;
+        }
+
+        if (paramToCheck != null)
+        {
+            // Check if the parameter exists in the function signature
+            bool paramExists = parameters.Any(p => p.Name.Lexeme == paramToCheck);
+
+            // Also allow 'this' as a valid target for type predicates
+            if (!paramExists && paramToCheck != "this")
+            {
+                throw new TypeCheckException(
+                    $" Type predicate in function '{funcName}' references parameter '{paramToCheck}' which is not in the function signature.");
+            }
         }
     }
 }

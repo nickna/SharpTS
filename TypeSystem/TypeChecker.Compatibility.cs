@@ -40,6 +40,30 @@ public partial class TypeChecker
     {
         if (expected is TypeInfo.Any || actual is TypeInfo.Any) return true;
 
+        // Type predicate compatibility:
+        // - Regular type predicate (x is T): expects boolean return
+        // - Assertion type predicate (asserts x is T): expects void return (function throws if assertion fails)
+        // - AssertsNonNull (asserts x): expects void return
+        if (expected is TypeInfo.TypePredicate pred)
+        {
+            if (pred.IsAssertion)
+            {
+                // Assertion predicates return void (or throw)
+                return actual is TypeInfo.Void or TypeInfo.Never;
+            }
+            else
+            {
+                // Regular type predicates return boolean
+                return actual is TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN }
+                    or TypeInfo.BooleanLiteral;
+            }
+        }
+        if (expected is TypeInfo.AssertsNonNull)
+        {
+            // AssertsNonNull returns void (or throws)
+            return actual is TypeInfo.Void or TypeInfo.Never;
+        }
+
         // Type parameter compatibility: same name = compatible
         if (expected is TypeInfo.TypeParameter expectedTp && actual is TypeInfo.TypeParameter actualTp)
         {
@@ -856,7 +880,90 @@ public partial class TypeChecker
             return AnalyzeArrayIsArrayGuard(v10.Name.Lexeme);
         }
 
+        // Pattern 11: User-defined type predicate function call: isString(x)
+        if (condition is Expr.Call predicateCall)
+        {
+            return AnalyzeTypePredicateCall(predicateCall);
+        }
+
         return (null, null, null);
+    }
+
+    /// <summary>
+    /// Analyzes a call to a user-defined type predicate function like isString(x).
+    /// Returns narrowing info if the callee has a type predicate return type.
+    /// </summary>
+    private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzeTypePredicateCall(Expr.Call call)
+    {
+        // Get the callee's type
+        TypeInfo? calleeType = null;
+
+        // Handle direct function calls: isString(x)
+        if (call.Callee is Expr.Variable funcVar)
+        {
+            calleeType = _environment.Get(funcVar.Name.Lexeme);
+        }
+        // Handle method calls: obj.isString(x)
+        else if (call.Callee is Expr.Get getExpr)
+        {
+            var objType = CheckExpr(getExpr.Object);
+            calleeType = GetMemberType(objType, getExpr.Name.Lexeme);
+        }
+
+        if (calleeType == null) return (null, null, null);
+
+        // Handle GenericFunction by checking if it has a predicate return type
+        TypeInfo? returnType = calleeType switch
+        {
+            TypeInfo.Function func => func.ReturnType,
+            TypeInfo.GenericFunction gf => gf.ReturnType,
+            _ => null
+        };
+
+        // Check for type predicate return type (not assertion - those are handled differently)
+        if (returnType is TypeInfo.TypePredicate pred && !pred.IsAssertion)
+        {
+            // For simplicity, assume the first argument corresponds to the predicate parameter
+            // A more complete implementation would track parameter names in the function type
+            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            {
+                string varName = argVar.Name.Lexeme;
+                TypeInfo? currentType = _environment.Get(varName);
+
+                TypeInfo narrowedType = pred.PredicateType;
+                TypeInfo? excludedType = currentType != null
+                    ? ExcludeTypeFromUnion(currentType, narrowedType)
+                    : null;
+
+                return (varName, narrowedType, excludedType);
+            }
+        }
+
+        return (null, null, null);
+    }
+
+    /// <summary>
+    /// Excludes a type from a union, returning the remaining types.
+    /// </summary>
+    private static TypeInfo? ExcludeTypeFromUnion(TypeInfo source, TypeInfo toExclude)
+    {
+        if (source is TypeInfo.Union union)
+        {
+            var remaining = union.FlattenedTypes
+                .Where(t => t.ToString() != toExclude.ToString())
+                .ToList();
+
+            if (remaining.Count == 0) return new TypeInfo.Never();
+            if (remaining.Count == 1) return remaining[0];
+            return new TypeInfo.Union(remaining);
+        }
+
+        // If source equals toExclude, nothing remains
+        if (source.ToString() == toExclude.ToString())
+            return new TypeInfo.Never();
+
+        // Otherwise, the type doesn't change in else branch
+        return source;
     }
 
     /// <summary>

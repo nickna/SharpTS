@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added Unique Symbol Type)
+**Last Updated:** 2026-01-19 (Added Type Predicates)
 
 ## Legend
 - ✅ Implemented
@@ -32,13 +32,13 @@ This document tracks TypeScript language features and their implementation statu
 | `never` type | ✅ | For exhaustive checking |
 | Type Assertions (`as`, `<Type>`) | ✅ | Both `as` and angle-bracket syntax |
 | `as const` assertions | ✅ | Deep readonly inference for literals |
-| Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing in if-statements |
+| Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing, user-defined type guards (`x is T`), assertion functions |
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
 | Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
 | `object` type | ✅ | Non-primitive type (excludes string, number, boolean, bigint, symbol, null, undefined) |
 | `unique symbol` type | ✅ | Nominally-typed symbols for const declarations |
-| `asserts` type predicates | ❌ | Assertion functions (`asserts x is T`) |
+| Type predicates (`is`, `asserts`) | ✅ | User-defined type guards (`x is T`), assertion functions (`asserts x is T`, `asserts x`) |
 | `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |
 | Variadic tuple types | ✅ | `[...T]` spread in tuples, Prepend/Append/Concat patterns |
 | Definite assignment assertion | ✅ | `let x!: number` syntax for variables and class fields |
@@ -727,4 +727,17 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Well-known symbol types: `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables`
 - ✅ Well-known symbols return their unique symbol type (e.g., `typeof Symbol.iterator`)
 - ✅ Unique symbols accepted as computed property keys in object literals
+- ✅ Full interpreter and IL compiler support with 14 test cases
+
+### Phase 40 Features (Type Predicates)
+- ✅ Regular type predicate syntax: `function isString(x: unknown): x is string`
+- ✅ Assertion predicate syntax: `function assertIsString(x: unknown): asserts x is string`
+- ✅ Non-null assertion syntax: `function assertExists(x: unknown): asserts x`
+- ✅ Arrow function type predicates: `const isNumber = (x: unknown): x is number => ...`
+- ✅ Type narrowing in if-statements for regular type predicates
+- ✅ Type narrowing in subsequent code for assertion predicates
+- ✅ Null/undefined removal for `asserts x` syntax
+- ✅ Validation: predicate parameter name must exist in function signature
+- ✅ `TypePredicate` and `AssertsNonNull` TypeInfo records
+- ✅ IL compiler maps predicates to `bool` (for `is`) or `void` (for `asserts`)
 - ✅ Full interpreter and IL compiler support with 14 test cases
