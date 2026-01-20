@@ -92,6 +92,21 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
+    protected override void EmitGetPrivate(Expr.GetPrivate gp)
+    {
+        throw new NotImplementedException($"Private field '{gp.Name.Lexeme}' access not supported in compiled async methods.");
+    }
+
+    protected override void EmitSetPrivate(Expr.SetPrivate sp)
+    {
+        throw new NotImplementedException($"Private field '{sp.Name.Lexeme}' assignment not supported in compiled async methods.");
+    }
+
+    protected override void EmitCallPrivate(Expr.CallPrivate cp)
+    {
+        throw new NotImplementedException($"Private method '{cp.Name.Lexeme}' call not supported in compiled async methods.");
+    }
+
     protected override void EmitCompoundSet(Expr.CompoundSet cs)
     {
         // Compound assignment on object property: obj.prop += x

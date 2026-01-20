@@ -761,6 +761,21 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
+    protected override void EmitGetPrivate(Expr.GetPrivate gp)
+    {
+        throw new NotImplementedException($"Private field '{gp.Name.Lexeme}' access not supported in compiled async generators.");
+    }
+
+    protected override void EmitSetPrivate(Expr.SetPrivate sp)
+    {
+        throw new NotImplementedException($"Private field '{sp.Name.Lexeme}' assignment not supported in compiled async generators.");
+    }
+
+    protected override void EmitCallPrivate(Expr.CallPrivate cp)
+    {
+        throw new NotImplementedException($"Private method '{cp.Name.Lexeme}' call not supported in compiled async generators.");
+    }
+
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
         EmitExpression(gi.Object);

@@ -134,6 +134,56 @@ public partial class Parser
 
                 accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators));
             }
+            // Check for private field: #name...
+            else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)
+            {
+                // Validate: ES2022 private fields cannot have access modifiers
+                if (access != AccessModifier.Public || memberDecorators != null)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers or decorators.");
+                }
+
+                Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
+
+                // Check if it's a method: #name(
+                if (Check(TokenType.LEFT_PAREN))
+                {
+                    // Private method: #name() { }
+                    List<TypeParam>? typeParams2 = ParseTypeParameters();
+                    Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                    List<Stmt.Parameter> parameters = ParseMethodParameters();
+                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+                    string? returnType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        returnType = ParseTypeAnnotation();
+                    }
+
+                    Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
+                    List<Stmt> body = Block();
+
+                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: false, Decorators: null, IsPrivate: true);
+                    methods.Add(func);
+                }
+                else
+                {
+                    // Private field: #name: type or #name = value
+                    string? typeAnnotation = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        typeAnnotation = ParseTypeAnnotation();
+                    }
+                    Expr? initializer = null;
+                    if (Match(TokenType.EQUAL))
+                    {
+                        initializer = Expression();
+                    }
+
+                    Consume(TokenType.SEMICOLON, "Expect ';' after private field declaration.");
+                    fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true));
+                }
+            }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
             {
                 // Field declaration
@@ -287,6 +337,7 @@ public partial class Parser
                 case TokenType.CONSTRUCTOR:
                     return;
                 case TokenType.IDENTIFIER:
+                case TokenType.PRIVATE_IDENTIFIER:
                     // Could be the start of a field or method
                     return;
             }
@@ -397,6 +448,56 @@ public partial class Parser
                 List<Stmt> body = Block();
 
                 accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access));
+            }
+            // Check for private field/method: #name...
+            else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)
+            {
+                // Validate: ES2022 private fields cannot have access modifiers
+                if (access != AccessModifier.Public)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers.");
+                }
+
+                Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
+
+                // Check if it's a method: #name(
+                if (Check(TokenType.LEFT_PAREN))
+                {
+                    // Private method: #name() { }
+                    List<TypeParam>? typeParams2 = ParseTypeParameters();
+                    Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                    List<Stmt.Parameter> parameters = ParseMethodParameters();
+                    Consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+                    string? returnType = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        returnType = ParseTypeAnnotation();
+                    }
+
+                    Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
+                    List<Stmt> body = Block();
+
+                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: false, Decorators: null, IsPrivate: true);
+                    methods.Add(func);
+                }
+                else
+                {
+                    // Private field: #name: type or #name = value
+                    string? typeAnnotation = null;
+                    if (Match(TokenType.COLON))
+                    {
+                        typeAnnotation = ParseTypeAnnotation();
+                    }
+                    Expr? initializer = null;
+                    if (Match(TokenType.EQUAL))
+                    {
+                        initializer = Expression();
+                    }
+
+                    Consume(TokenType.SEMICOLON, "Expect ';' after private field declaration.");
+                    fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true));
+                }
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
             {

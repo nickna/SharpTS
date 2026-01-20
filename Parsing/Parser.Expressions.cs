@@ -47,6 +47,10 @@ public partial class Parser
             {
                 return new Expr.Set(get.Object, get.Name, value);
             }
+            else if (expr is Expr.GetPrivate getPrivate)
+            {
+                return new Expr.SetPrivate(getPrivate.Object, getPrivate.Name, value);
+            }
             else if (expr is Expr.GetIndex getIndex)
             {
                 return new Expr.SetIndex(getIndex.Object, getIndex.Index, value);
@@ -396,14 +400,49 @@ public partial class Parser
             }
             else if (Match(TokenType.DOT))
             {
-                Token name = ConsumePropertyName("Expect property name after '.'.");
-                if (expr is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log")
+                // Check for private identifier access: obj.#field
+                if (Match(TokenType.PRIVATE_IDENTIFIER))
                 {
-                    expr = new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line));
+                    Token name = Previous();
+                    // Check for method call: obj.#method(args)
+                    if (Check(TokenType.LEFT_PAREN))
+                    {
+                        Consume(TokenType.LEFT_PAREN, "Expect '(' after private method name.");
+                        List<Expr> args = [];
+                        if (!Check(TokenType.RIGHT_PAREN))
+                        {
+                            do
+                            {
+                                if (Match(TokenType.DOT_DOT_DOT))
+                                {
+                                    args.Add(new Expr.Spread(Expression()));
+                                }
+                                else
+                                {
+                                    args.Add(Expression());
+                                }
+                            } while (Match(TokenType.COMMA));
+                        }
+                        Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+                        expr = new Expr.CallPrivate(expr, name, args);
+                    }
+                    else
+                    {
+                        // Field access: obj.#field
+                        expr = new Expr.GetPrivate(expr, name);
+                    }
                 }
                 else
                 {
-                    expr = new Expr.Get(expr, name);
+                    Token name = ConsumePropertyName("Expect property name after '.'.");
+                    if (expr is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log")
+                    {
+                        expr = new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line));
+                    }
+                    else
+                    {
+                        expr = new Expr.Get(expr, name);
+                    }
                 }
             }
             else if (Match(TokenType.QUESTION_DOT))

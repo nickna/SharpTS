@@ -426,4 +426,125 @@ public partial class Interpreter
     /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
     private static bool IsErrorType(string name) => ErrorBuiltIns.IsErrorTypeName(name);
+
+    #region ES2022 Private Class Elements
+
+    /// <summary>
+    /// Evaluates a private field access expression (obj.#field).
+    /// </summary>
+    private object? EvaluateGetPrivate(Expr.GetPrivate expr)
+    {
+        object? obj = Evaluate(expr.Object);
+        string fieldName = expr.Name.Lexeme;
+
+        // Handle static private field access on class
+        if (obj is SharpTSClass klass)
+        {
+            // For static private fields, the class being accessed IS the declaring class
+            // The type checker already verified we're inside this class
+            if (klass.HasStaticPrivateField(fieldName))
+            {
+                return klass.GetStaticPrivateField(fieldName);
+            }
+
+            throw new Exception($"Runtime Error: Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
+        }
+
+        // Instance private field access
+        if (obj is SharpTSInstance instance)
+        {
+            // For instance private fields, use the instance's class as the declaring class
+            // The type checker already verified brand checking
+            var declaringClass = instance.RuntimeClass;
+            return declaringClass.GetPrivateField(instance, fieldName);
+        }
+
+        throw new Exception($"Runtime Error: Cannot read private field '{fieldName}' from non-class value.");
+    }
+
+    /// <summary>
+    /// Evaluates a private field assignment expression (obj.#field = value).
+    /// </summary>
+    private object? EvaluateSetPrivate(Expr.SetPrivate expr)
+    {
+        object? obj = Evaluate(expr.Object);
+        object? value = Evaluate(expr.Value);
+        string fieldName = expr.Name.Lexeme;
+
+        // Handle static private field assignment on class
+        if (obj is SharpTSClass klass)
+        {
+            // For static private fields, the class being accessed IS the declaring class
+            // The type checker already verified we're inside this class
+            if (klass.HasStaticPrivateField(fieldName))
+            {
+                klass.SetStaticPrivateField(fieldName, value);
+                return value;
+            }
+
+            throw new Exception($"Runtime Error: Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
+        }
+
+        // Instance private field assignment
+        if (obj is SharpTSInstance instance)
+        {
+            // For instance private fields, use the instance's class as the declaring class
+            // The type checker already verified brand checking
+            var declaringClass = instance.RuntimeClass;
+            declaringClass.SetPrivateField(instance, fieldName, value);
+            return value;
+        }
+
+        throw new Exception($"Runtime Error: Cannot write private field '{fieldName}' to non-class value.");
+    }
+
+    /// <summary>
+    /// Evaluates a private method call expression (obj.#method(...)).
+    /// </summary>
+    private object? EvaluateCallPrivate(Expr.CallPrivate expr)
+    {
+        object? obj = Evaluate(expr.Object);
+        string methodName = expr.Name.Lexeme;
+
+        // Evaluate arguments
+        List<object?> arguments = [];
+        foreach (var arg in expr.Arguments)
+        {
+            arguments.Add(Evaluate(arg));
+        }
+
+        // Handle static private method call on class
+        if (obj is SharpTSClass klass)
+        {
+            // For static private methods, the class being accessed IS the declaring class
+            // The type checker already verified we're inside this class
+            var method = klass.GetStaticPrivateMethod(methodName);
+            if (method == null)
+            {
+                throw new Exception($"Runtime Error: Static private method '{methodName}' does not exist on class '{klass.Name}'.");
+            }
+
+            return method.Call(this, arguments);
+        }
+
+        // Instance private method call
+        if (obj is SharpTSInstance instance)
+        {
+            // For instance private methods, use the instance's class as the declaring class
+            // The type checker already verified brand checking
+            var declaringClass = instance.RuntimeClass;
+            var method = declaringClass.GetPrivateMethod(methodName);
+            if (method == null)
+            {
+                throw new Exception($"Runtime Error: Private method '{methodName}' does not exist on class '{declaringClass.Name}'.");
+            }
+
+            // Bind method to instance
+            return method.Bind(instance).Call(this, arguments);
+        }
+
+        throw new Exception($"Runtime Error: Cannot call private method '{methodName}' on non-class value.");
+    }
+
+    #endregion
 }

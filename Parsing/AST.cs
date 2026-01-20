@@ -38,6 +38,12 @@ public abstract record Expr
     public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record Get(Expr Object, Token Name, bool Optional = false) : Expr;
     public record Set(Expr Object, Token Name, Expr Value) : Expr;
+    /// <summary>Private field access: obj.#field</summary>
+    public record GetPrivate(Expr Object, Token Name) : Expr;
+    /// <summary>Private field assignment: obj.#field = value</summary>
+    public record SetPrivate(Expr Object, Token Name, Expr Value) : Expr;
+    /// <summary>Private method call: obj.#method(args)</summary>
+    public record CallPrivate(Expr Object, Token Name, List<Expr> Arguments) : Expr;
     public record This(Token Keyword) : Expr;
     public record New(List<Token>? NamespacePath, Token ClassName, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
     public record ArrayLiteral(List<Expr> Elements) : Expr;
@@ -145,9 +151,9 @@ public abstract record Stmt
     /// IsGenerator indicates this is a generator function (function*) that can yield values.
     /// Decorators contains any @decorator annotations applied to this function/method.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null);
-    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null) : Stmt;
+    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null, bool IsPrivate = false) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null) : Stmt;
     /// <summary>
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.

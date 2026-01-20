@@ -719,11 +719,32 @@ public partial class Interpreter
                 Dictionary<string, SharpTSFunction> staticMethods = [];
                 Dictionary<string, object?> staticProperties = [];
                 List<Stmt.Field> instanceFields = [];
+                // ES2022 private class elements
+                List<Stmt.Field> instancePrivateFields = [];
+                Dictionary<string, SharpTSFunction> privateMethods = [];
+                Dictionary<string, object?> staticPrivateFields = [];
+                Dictionary<string, SharpTSFunction> staticPrivateMethods = [];
 
                 // Process fields: evaluate static initializers now, collect instance fields for later
                 foreach (Stmt.Field field in classStmt.Fields)
                 {
-                    if (field.IsStatic)
+                    if (field.IsPrivate)
+                    {
+                        // ES2022 private fields
+                        if (field.IsStatic)
+                        {
+                            object? fieldValue = field.Initializer != null
+                                ? Evaluate(field.Initializer)
+                                : null;
+                            staticPrivateFields[field.Name.Lexeme] = fieldValue;
+                        }
+                        else
+                        {
+                            // Collect instance private fields - they'll be initialized when instances are created
+                            instancePrivateFields.Add(field);
+                        }
+                    }
+                    else if (field.IsStatic)
                     {
                         object? fieldValue = field.Initializer != null
                             ? Evaluate(field.Initializer)
@@ -741,7 +762,19 @@ public partial class Interpreter
                 foreach (Stmt.Function method in classStmt.Methods.Where(m => m.Body != null))
                 {
                     SharpTSFunction func = new(method, _environment);
-                    if (method.IsStatic)
+                    if (method.IsPrivate)
+                    {
+                        // ES2022 private methods
+                        if (method.IsStatic)
+                        {
+                            staticPrivateMethods[method.Name.Lexeme] = func;
+                        }
+                        else
+                        {
+                            privateMethods[method.Name.Lexeme] = func;
+                        }
+                    }
+                    else if (method.IsStatic)
                     {
                         staticMethods[method.Name.Lexeme] = func;
                     }
@@ -790,7 +823,11 @@ public partial class Interpreter
                     getters,
                     setters,
                     classStmt.IsAbstract,
-                    instanceFields);
+                    instanceFields,
+                    instancePrivateFields,
+                    privateMethods,
+                    staticPrivateFields,
+                    staticPrivateMethods);
 
                 // Apply decorators in the correct order
                 klass = ApplyAllDecorators(classStmt, klass, methods, staticMethods, getters, setters);

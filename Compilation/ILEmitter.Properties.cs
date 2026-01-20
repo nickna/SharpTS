@@ -947,4 +947,47 @@ public partial class ILEmitter
                 return false;
         }
     }
+
+    #region ES2022 Private Class Elements
+
+    /// <summary>
+    /// Emits IL for ES2022 private field access (obj.#field).
+    /// Currently emits a runtime exception as private fields in compiled code
+    /// require additional infrastructure for brand checking.
+    /// </summary>
+    protected override void EmitGetPrivate(Expr.GetPrivate gp)
+    {
+        // ES2022 private fields are not yet supported in compiled mode.
+        // The interpreter supports them, but IL emission requires:
+        // 1. Tracking which class is currently executing
+        // 2. Emitting ConditionalWeakTable lookups with proper brand checking
+        // For now, emit code that throws at runtime
+        IL.Emit(OpCodes.Ldstr, $"Private field '{gp.Name.Lexeme}' access not yet supported in compiled mode. Use interpreter mode.");
+        IL.Emit(OpCodes.Newobj, typeof(NotImplementedException).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Emits IL for ES2022 private field assignment (obj.#field = value).
+    /// Currently emits a runtime exception.
+    /// </summary>
+    protected override void EmitSetPrivate(Expr.SetPrivate sp)
+    {
+        IL.Emit(OpCodes.Ldstr, $"Private field '{sp.Name.Lexeme}' assignment not yet supported in compiled mode. Use interpreter mode.");
+        IL.Emit(OpCodes.Newobj, typeof(NotImplementedException).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Emits IL for ES2022 private method call (obj.#method()).
+    /// Currently emits a runtime exception.
+    /// </summary>
+    protected override void EmitCallPrivate(Expr.CallPrivate cp)
+    {
+        IL.Emit(OpCodes.Ldstr, $"Private method '{cp.Name.Lexeme}' call not yet supported in compiled mode. Use interpreter mode.");
+        IL.Emit(OpCodes.Newobj, typeof(NotImplementedException).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Throw);
+    }
+
+    #endregion
 }

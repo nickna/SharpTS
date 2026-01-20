@@ -36,6 +36,9 @@ public partial class Interpreter
             Expr.Call call => EvaluateCall(call),
             Expr.Get get => EvaluateGet(get),
             Expr.Set set => EvaluateSet(set),
+            Expr.GetPrivate gp => EvaluateGetPrivate(gp),
+            Expr.SetPrivate sp => EvaluateSetPrivate(sp),
+            Expr.CallPrivate cp => EvaluateCallPrivate(cp),
             Expr.This thisExpr => EvaluateThis(thisExpr),
             Expr.New newExpr => EvaluateNew(newExpr),
             Expr.ArrayLiteral array => EvaluateArray(array),
@@ -100,6 +103,9 @@ public partial class Interpreter
             case Expr.Call call: return await EvaluateCallAsync(call);
             case Expr.Get get: return await EvaluateGetAsync(get);
             case Expr.Set set: return await EvaluateSetAsync(set);
+            case Expr.GetPrivate gp: return EvaluateGetPrivate(gp);
+            case Expr.SetPrivate sp: return EvaluateSetPrivate(sp);
+            case Expr.CallPrivate cp: return EvaluateCallPrivate(cp);
             case Expr.This thisExpr: return EvaluateThis(thisExpr);
             case Expr.New newExpr: return await EvaluateNewAsync(newExpr);
             case Expr.ArrayLiteral array: return await EvaluateArrayAsync(array);

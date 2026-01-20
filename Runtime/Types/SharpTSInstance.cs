@@ -17,6 +17,12 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
 {
     private readonly SharpTSClass _klass = klass;
+
+    /// <summary>
+    /// Gets the class that this instance was created from.
+    /// Used for ES2022 private field brand checking.
+    /// </summary>
+    public SharpTSClass RuntimeClass => _klass;
     private readonly Dictionary<string, object?> _fields = [];
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Interpreter? _interpreter;

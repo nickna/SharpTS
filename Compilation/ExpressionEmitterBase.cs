@@ -91,6 +91,15 @@ public abstract class ExpressionEmitterBase
             case Expr.Set s:
                 EmitSet(s);
                 break;
+            case Expr.GetPrivate gp:
+                EmitGetPrivate(gp);
+                break;
+            case Expr.SetPrivate sp:
+                EmitSetPrivate(sp);
+                break;
+            case Expr.CallPrivate cp:
+                EmitCallPrivate(cp);
+                break;
             case Expr.GetIndex gi:
                 EmitGetIndex(gi);
                 break;
@@ -193,6 +202,9 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitCall(Expr.Call c);
     protected abstract void EmitGet(Expr.Get g);
     protected abstract void EmitSet(Expr.Set s);
+    protected abstract void EmitGetPrivate(Expr.GetPrivate gp);
+    protected abstract void EmitSetPrivate(Expr.SetPrivate sp);
+    protected abstract void EmitCallPrivate(Expr.CallPrivate cp);
     protected abstract void EmitGetIndex(Expr.GetIndex gi);
     protected abstract void EmitSetIndex(Expr.SetIndex si);
     protected abstract void EmitTemplateLiteral(Expr.TemplateLiteral tl);

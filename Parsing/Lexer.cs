@@ -200,6 +200,16 @@ public class Lexer(string source)
             case '@':
                 AddToken(TokenType.AT);
                 break;
+            case '#':
+                if (char.IsLetter(Peek()) || Peek() == '_')
+                {
+                    PrivateIdentifier();
+                }
+                else
+                {
+                    throw new Exception($"Unexpected character '#' at line {_line}");
+                }
+                break;
             case '!':
                 if (Match('='))
                 {
@@ -297,6 +307,16 @@ public class Lexer(string source)
             type = TokenType.IDENTIFIER;
         }
         AddToken(type);
+    }
+
+    /// <summary>
+    /// Scans a private identifier starting with # (e.g., #fieldName, #method).
+    /// </summary>
+    private void PrivateIdentifier()
+    {
+        // _start already points to '#', consume identifier chars
+        while (char.IsLetterOrDigit(Peek()) || Peek() == '_') Advance();
+        AddToken(TokenType.PRIVATE_IDENTIFIER);
     }
 
     private void NumberLiteral()
@@ -576,6 +596,7 @@ public class Lexer(string source)
         {
             // Literals and identifiers - can be followed by operators
             TokenType.IDENTIFIER or
+            TokenType.PRIVATE_IDENTIFIER or
             TokenType.NUMBER or
             TokenType.STRING or
             TokenType.TRUE or

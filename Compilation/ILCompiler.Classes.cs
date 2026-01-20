@@ -197,9 +197,10 @@ public partial class ILCompiler
 
         // Define real .NET properties with typed backing fields for instance fields
         // Skip fields with generic type parameters - they'll use _extras dictionary instead
+        // Skip ES2022 private fields (#field) - they're not exposed as .NET properties
         foreach (var field in classStmt.Fields)
         {
-            if (!field.IsStatic)
+            if (!field.IsStatic && !field.IsPrivate)
             {
                 // Check if field type is a generic parameter
                 bool isGenericField = classGenericParams != null &&
@@ -214,10 +215,11 @@ public partial class ILCompiler
         }
 
         // Add static fields for static properties (use object type for backward compatibility)
+        // Skip ES2022 private static fields (#field) - they're not exposed as .NET fields
         Dictionary<string, FieldBuilder> staticFieldBuilders = [];
         foreach (var field in classStmt.Fields)
         {
-            if (field.IsStatic)
+            if (field.IsStatic && !field.IsPrivate)
             {
                 // Keep as object type for now to maintain compatibility with existing emission code
                 var fieldBuilder = typeBuilder.DefineField(

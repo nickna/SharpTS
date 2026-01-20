@@ -186,12 +186,21 @@ public abstract record TypeInfo
         bool IsAbstract = false,
         FrozenSet<string>? AbstractMethods = null,
         FrozenSet<string>? AbstractGetters = null,
-        FrozenSet<string>? AbstractSetters = null) : TypeInfo
+        FrozenSet<string>? AbstractSetters = null,
+        FrozenDictionary<string, TypeInfo>? PrivateFields = null,
+        FrozenDictionary<string, TypeInfo>? PrivateMethods = null,
+        FrozenDictionary<string, TypeInfo>? StaticPrivateFields = null,
+        FrozenDictionary<string, TypeInfo>? StaticPrivateMethods = null) : TypeInfo
     {
         // Keep nullable with defaults for backward compatibility during migration
         public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
         public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
         public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
+        // Private element accessors with empty dict fallback
+        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => PrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => PrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => StaticPrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => StaticPrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
         public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
@@ -221,6 +230,11 @@ public abstract record TypeInfo
         public HashSet<string> AbstractMethods { get; } = [];
         public HashSet<string> AbstractGetters { get; } = [];
         public HashSet<string> AbstractSetters { get; } = [];
+        // ES2022 private class elements
+        public Dictionary<string, TypeInfo> PrivateFields { get; } = [];
+        public Dictionary<string, TypeInfo> PrivateMethods { get; } = [];
+        public Dictionary<string, TypeInfo> StaticPrivateFields { get; } = [];
+        public Dictionary<string, TypeInfo> StaticPrivateMethods { get; } = [];
 
         private TypeInfo.Class? _frozen;
 
@@ -245,7 +259,11 @@ public abstract record TypeInfo
                 IsAbstract,
                 AbstractMethods.Count > 0 ? AbstractMethods.ToFrozenSet() : null,
                 AbstractGetters.Count > 0 ? AbstractGetters.ToFrozenSet() : null,
-                AbstractSetters.Count > 0 ? AbstractSetters.ToFrozenSet() : null);
+                AbstractSetters.Count > 0 ? AbstractSetters.ToFrozenSet() : null,
+                PrivateFields.Count > 0 ? PrivateFields.ToFrozenDictionary() : null,
+                PrivateMethods.Count > 0 ? PrivateMethods.ToFrozenDictionary() : null,
+                StaticPrivateFields.Count > 0 ? StaticPrivateFields.ToFrozenDictionary() : null,
+                StaticPrivateMethods.Count > 0 ? StaticPrivateMethods.ToFrozenDictionary() : null);
             return _frozen;
         }
 
@@ -811,13 +829,22 @@ public abstract record TypeInfo
         bool IsAbstract = false,
         FrozenSet<string>? AbstractMethods = null,
         FrozenSet<string>? AbstractGetters = null,
-        FrozenSet<string>? AbstractSetters = null
+        FrozenSet<string>? AbstractSetters = null,
+        FrozenDictionary<string, TypeInfo>? PrivateFields = null,
+        FrozenDictionary<string, TypeInfo>? PrivateMethods = null,
+        FrozenDictionary<string, TypeInfo>? StaticPrivateFields = null,
+        FrozenDictionary<string, TypeInfo>? StaticPrivateMethods = null
     ) : TypeInfo
     {
         // Keep nullable with defaults for backward compatibility during migration
         public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
         public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
         public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
+        // Private element accessors with empty dict fallback
+        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => PrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => PrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => StaticPrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => StaticPrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
         public override string ToString() => IsAbstract
             ? $"abstract class {Name}<{string.Join(", ", TypeParams)}>"
             : $"class {Name}<{string.Join(", ", TypeParams)}>";

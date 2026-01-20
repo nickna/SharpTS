@@ -174,12 +174,23 @@ public partial class TypeChecker
                 var method = implementations[0];
                 var funcType = BuildMethodFuncType(method);
 
-                if (method.IsStatic)
-                    mutableClass.StaticMethods[methodName] = funcType;
+                // Handle ES2022 private methods (#method)
+                if (method.IsPrivate)
+                {
+                    if (method.IsStatic)
+                        mutableClass.StaticPrivateMethods[methodName] = funcType;
+                    else
+                        mutableClass.PrivateMethods[methodName] = funcType;
+                }
                 else
-                    mutableClass.Methods[methodName] = funcType;
+                {
+                    if (method.IsStatic)
+                        mutableClass.StaticMethods[methodName] = funcType;
+                    else
+                        mutableClass.Methods[methodName] = funcType;
 
-                mutableClass.MethodAccess[methodName] = method.Access;
+                    mutableClass.MethodAccess[methodName] = method.Access;
+                }
             }
             else if (implementations.Count > 1)
             {
@@ -199,7 +210,19 @@ public partial class TypeChecker
                 ? ToTypeInfo(field.TypeAnnotation)
                 : new TypeInfo.Any();
 
-            if (field.IsStatic)
+            // Handle ES2022 private fields (#field)
+            if (field.IsPrivate)
+            {
+                if (field.IsStatic)
+                {
+                    mutableClass.StaticPrivateFields[fieldName] = fieldType;
+                }
+                else
+                {
+                    mutableClass.PrivateFields[fieldName] = fieldType;
+                }
+            }
+            else if (field.IsStatic)
             {
                 mutableClass.StaticProperties[fieldName] = fieldType;
             }
@@ -207,7 +230,10 @@ public partial class TypeChecker
             {
                 mutableClass.FieldTypes[fieldName] = fieldType;
             }
-            mutableClass.FieldAccess[fieldName] = field.Access;
+            if (!field.IsPrivate)
+            {
+                mutableClass.FieldAccess[fieldName] = field.Access;
+            }
             if (field.IsReadonly)
             {
                 mutableClass.ReadonlyFields.Add(fieldName);
@@ -288,7 +314,11 @@ public partial class TypeChecker
                 classStmt.IsAbstract,
                 mutableClass.AbstractMethods.Count > 0 ? mutableClass.AbstractMethods.ToFrozenSet() : null,
                 mutableClass.AbstractGetters.Count > 0 ? mutableClass.AbstractGetters.ToFrozenSet() : null,
-                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null
+                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null,
+                mutableClass.PrivateFields.Count > 0 ? mutableClass.PrivateFields.ToFrozenDictionary() : null,
+                mutableClass.PrivateMethods.Count > 0 ? mutableClass.PrivateMethods.ToFrozenDictionary() : null,
+                mutableClass.StaticPrivateFields.Count > 0 ? mutableClass.StaticPrivateFields.ToFrozenDictionary() : null,
+                mutableClass.StaticPrivateMethods.Count > 0 ? mutableClass.StaticPrivateMethods.ToFrozenDictionary() : null
             );
             _environment.Define(classStmt.Name.Lexeme, genericClassType);
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
@@ -382,7 +412,10 @@ public partial class TypeChecker
             if (field.IsStatic && field.Initializer != null)
             {
                 TypeInfo initType = CheckExpr(field.Initializer);
-                TypeInfo staticFieldDeclaredType = classTypeForBody.StaticProperties[field.Name.Lexeme];
+                // For ES2022 private static fields, look in StaticPrivateFieldTypes
+                TypeInfo staticFieldDeclaredType = field.IsPrivate
+                    ? classTypeForBody.StaticPrivateFieldTypes[field.Name.Lexeme]
+                    : classTypeForBody.StaticProperties[field.Name.Lexeme];
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
@@ -437,9 +470,20 @@ public partial class TypeChecker
                 }
 
                 // Get the method type (could be Function or OverloadedFunction)
-                var declaredMethodType = method.IsStatic
-                    ? classTypeForBody.StaticMethods[method.Name.Lexeme]
-                    : classTypeForBody.Methods[method.Name.Lexeme];
+                // For ES2022 private methods, look in PrivateMethodTypes/StaticPrivateMethodTypes
+                TypeInfo declaredMethodType;
+                if (method.IsPrivate)
+                {
+                    declaredMethodType = method.IsStatic
+                        ? classTypeForBody.StaticPrivateMethodTypes[method.Name.Lexeme]
+                        : classTypeForBody.PrivateMethodTypes[method.Name.Lexeme];
+                }
+                else
+                {
+                    declaredMethodType = method.IsStatic
+                        ? classTypeForBody.StaticMethods[method.Name.Lexeme]
+                        : classTypeForBody.Methods[method.Name.Lexeme];
+                }
 
                 // Get the actual function type (implementation for overloads)
                 TypeInfo.Function methodType = declaredMethodType switch

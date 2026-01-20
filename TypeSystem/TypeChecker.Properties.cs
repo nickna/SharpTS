@@ -818,4 +818,140 @@ public partial class TypeChecker
 
         return new TypeInfo.Any();
     }
+
+    /// <summary>
+    /// Type checks ES2022 private field access: obj.#field
+    /// Private fields are only accessible within the declaring class body.
+    /// </summary>
+    private TypeInfo CheckGetPrivate(Expr.GetPrivate get)
+    {
+        // Verify we're inside a class body
+        if (_currentClass == null)
+        {
+            throw new TypeCheckException($" Cannot access private field '{get.Name.Lexeme}' outside of a class body.");
+        }
+
+        // Check the object expression
+        TypeInfo objType = CheckExpr(get.Object);
+
+        // For 'this' access, verify we have the private field
+        string fieldName = get.Name.Lexeme;
+
+        // Look up in current class's private fields (NOT inherited - private fields are not inherited)
+        if (_currentClass.PrivateFieldTypes.TryGetValue(fieldName, out var fieldType))
+        {
+            return fieldType;
+        }
+
+        // Check static private fields if accessing on the class itself
+        if (objType is TypeInfo.Class && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
+        {
+            return staticFieldType;
+        }
+
+        throw new TypeCheckException($" Private field '{fieldName}' does not exist on class '{_currentClass.Name}'.");
+    }
+
+    /// <summary>
+    /// Type checks ES2022 private field assignment: obj.#field = value
+    /// </summary>
+    private TypeInfo CheckSetPrivate(Expr.SetPrivate set)
+    {
+        // Verify we're inside a class body
+        if (_currentClass == null)
+        {
+            throw new TypeCheckException($" Cannot access private field '{set.Name.Lexeme}' outside of a class body.");
+        }
+
+        TypeInfo objType = CheckExpr(set.Object);
+        TypeInfo valueType = CheckExpr(set.Value);
+        string fieldName = set.Name.Lexeme;
+
+        // Look up in current class's private fields (NOT inherited)
+        TypeInfo? fieldType = null;
+        if (_currentClass.PrivateFieldTypes.TryGetValue(fieldName, out var pf))
+        {
+            fieldType = pf;
+        }
+        else if (objType is TypeInfo.Class && _currentClass.StaticPrivateFieldTypes.TryGetValue(fieldName, out var spf))
+        {
+            fieldType = spf;
+        }
+
+        if (fieldType == null)
+        {
+            throw new TypeCheckException($" Private field '{fieldName}' does not exist on class '{_currentClass.Name}'.");
+        }
+
+        if (!IsCompatible(fieldType, valueType))
+        {
+            throw new TypeCheckException($" Cannot assign type '{valueType}' to private field '{fieldName}' of type '{fieldType}'.");
+        }
+
+        return valueType;
+    }
+
+    /// <summary>
+    /// Type checks ES2022 private method call: obj.#method(args)
+    /// </summary>
+    private TypeInfo CheckCallPrivate(Expr.CallPrivate call)
+    {
+        // Verify we're inside a class body
+        if (_currentClass == null)
+        {
+            throw new TypeCheckException($" Cannot call private method '{call.Name.Lexeme}' outside of a class body.");
+        }
+
+        TypeInfo objType = CheckExpr(call.Object);
+        string methodName = call.Name.Lexeme;
+
+        // Look up in current class's private methods (NOT inherited)
+        TypeInfo? methodType = null;
+        if (_currentClass.PrivateMethodTypes.TryGetValue(methodName, out var pm))
+        {
+            methodType = pm;
+        }
+        else if (objType is TypeInfo.Class && _currentClass.StaticPrivateMethodTypes.TryGetValue(methodName, out var spm))
+        {
+            methodType = spm;
+        }
+
+        if (methodType == null)
+        {
+            throw new TypeCheckException($" Private method '{methodName}' does not exist on class '{_currentClass.Name}'.");
+        }
+
+        // Check argument types against method signature
+        if (methodType is not TypeInfo.Function funcType)
+        {
+            throw new TypeCheckException($" Private member '{methodName}' is not a method.");
+        }
+
+        // Check argument count
+        if (call.Arguments.Count < funcType.RequiredParams)
+        {
+            throw new TypeCheckException($" Private method '{methodName}' requires at least {funcType.RequiredParams} arguments, got {call.Arguments.Count}.");
+        }
+
+        if (!funcType.HasRestParam && call.Arguments.Count > funcType.ParamTypes.Count)
+        {
+            throw new TypeCheckException($" Private method '{methodName}' accepts at most {funcType.ParamTypes.Count} arguments, got {call.Arguments.Count}.");
+        }
+
+        // Check each argument type
+        for (int i = 0; i < call.Arguments.Count; i++)
+        {
+            TypeInfo argType = CheckExpr(call.Arguments[i]);
+            TypeInfo paramType = i < funcType.ParamTypes.Count
+                ? funcType.ParamTypes[i]
+                : funcType.ParamTypes[^1]; // Rest parameter type
+
+            if (!IsCompatible(paramType, argType))
+            {
+                throw new TypeCheckException($" Argument {i + 1} to private method '{methodName}' has type '{argType}' but expected '{paramType}'.");
+            }
+        }
+
+        return funcType.ReturnType;
+    }
 }

@@ -73,7 +73,7 @@ This document tracks TypeScript language features and their implementation statu
 | `implements` keyword | ✅ | Class implementing interface |
 | Method overloading | ✅ | Multiple signatures with implementation function |
 | `override` keyword | ✅ | Explicit override marker for methods/accessors |
-| Private fields (`#field`) | ❌ | ES2022 hard private fields |
+| Private fields (`#field`) | ✅ | ES2022 hard private fields with ConditionalWeakTable isolation |
 | Static blocks | ❌ | `static { }` for static initialization |
 | `accessor` keyword | ❌ | Auto-accessor class fields (TS 4.9+) |
 | `declare` field modifier | ❌ | Ambient field declarations |
