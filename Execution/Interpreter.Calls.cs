@@ -219,6 +219,49 @@ public partial class Interpreter
             return null;
         }
 
+        // Handle setInterval(callback, delay?, ...args)
+        if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval")
+        {
+            if (call.Arguments.Count < 1)
+                throw new Exception("Runtime Error: setInterval() requires at least one argument (callback).");
+
+            var callbackValue = Evaluate(call.Arguments[0]);
+            if (callbackValue is not ISharpTSCallable callback)
+                throw new Exception("Runtime Error: setInterval() callback must be a function.");
+
+            // Get delay (defaults to 0)
+            double delayMs = 0;
+            if (call.Arguments.Count >= 2)
+            {
+                var delayValue = Evaluate(call.Arguments[1]);
+                if (delayValue is double dv)
+                    delayMs = dv;
+                else if (delayValue != null && delayValue is not SharpTSUndefined)
+                    throw new Exception($"Runtime Error: setInterval() delay must be a number, got {delayValue.GetType().Name}.");
+            }
+
+            // Get additional args for the callback
+            List<object?> callbackArgs = [];
+            for (int i = 2; i < call.Arguments.Count; i++)
+            {
+                callbackArgs.Add(Evaluate(call.Arguments[i]));
+            }
+
+            return TimerBuiltIns.SetInterval(this, callback, delayMs, callbackArgs);
+        }
+
+        // Handle clearInterval(handle?)
+        if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval")
+        {
+            object? handle = null;
+            if (call.Arguments.Count > 0)
+            {
+                handle = Evaluate(call.Arguments[0]);
+            }
+            TimerBuiltIns.ClearInterval(handle);
+            return null;
+        }
+
         object? callee = Evaluate(call.Callee);
 
         List<object?> argumentsList = [];

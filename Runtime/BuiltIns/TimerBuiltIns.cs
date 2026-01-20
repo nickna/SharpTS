@@ -62,6 +62,59 @@ public static class TimerBuiltIns
     }
 
     /// <summary>
+    /// Executes setInterval: schedules callback to run repeatedly after each delay.
+    /// Uses async loop with no overlap - waits for callback completion before next interval.
+    /// </summary>
+    /// <param name="interpreter">The interpreter instance for callback execution.</param>
+    /// <param name="callback">The callback function to execute.</param>
+    /// <param name="delayMs">The delay in milliseconds between executions.</param>
+    /// <param name="args">Additional arguments to pass to the callback.</param>
+    /// <returns>A SharpTSTimeout handle that can be used with clearInterval.</returns>
+    public static SharpTSTimeout SetInterval(Interpreter interpreter, ISharpTSCallable callback, double delayMs, List<object?> args)
+    {
+        var cts = new CancellationTokenSource();
+        var interval = new SharpTSTimeout(cts);
+        int delay = Math.Max(0, (int)delayMs);
+
+        var task = Task.Run(async () =>
+        {
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    await Task.Delay(delay, cts.Token);
+                    if (!cts.IsCancellationRequested)
+                    {
+                        // Synchronous execution - no overlap between iterations
+                        callback.Call(interpreter, args);
+                    }
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Interval was cancelled - this is expected behavior
+            }
+        }, cts.Token);
+
+        interval.Task = task;
+        return interval;
+    }
+
+    /// <summary>
+    /// Cancels a pending interval.
+    /// Safe to call with null/undefined - follows Node.js behavior.
+    /// </summary>
+    /// <param name="handle">The interval handle to cancel (can be null).</param>
+    public static void ClearInterval(object? handle)
+    {
+        if (handle is SharpTSTimeout interval)
+        {
+            interval.Cancel();
+        }
+        // If handle is null/undefined/wrong type, silently ignore (Node.js behavior)
+    }
+
+    /// <summary>
     /// Gets a member (method or property) from a SharpTSTimeout instance.
     /// </summary>
     /// <param name="timeout">The timeout instance.</param>

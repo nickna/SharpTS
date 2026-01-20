@@ -247,6 +247,19 @@ public class EmittedRuntime
     public FieldBuilder TimeoutClosureCts { get; set; } = null!;
     public MethodBuilder TimeoutClosureExecute { get; set; } = null!;
 
+    // Interval closure for callback execution (includes delay for rescheduling)
+    public TypeBuilder IntervalClosureType { get; set; } = null!;
+    public ConstructorBuilder IntervalClosureCtor { get; set; } = null!;
+    public FieldBuilder IntervalClosureCallback { get; set; } = null!;
+    public FieldBuilder IntervalClosureArgs { get; set; } = null!;
+    public FieldBuilder IntervalClosureCts { get; set; } = null!;
+    public FieldBuilder IntervalClosureDelayMs { get; set; } = null!;
+    public MethodBuilder IntervalClosureExecuteIteration { get; set; } = null!;
+
+    // Interval methods
+    public MethodBuilder SetInterval { get; set; } = null!;
+    public MethodBuilder ClearInterval { get; set; } = null!;
+
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;
     public MethodBuilder NumberParseFloat { get; set; } = null!;

@@ -240,4 +240,195 @@ public class TimerTests
         var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunCompiled(source));
         Assert.Contains("number", ex.Message.ToLower());
     }
+
+    // ========== setInterval Basic Tests ==========
+
+    [Fact]
+    public void SetInterval_ReturnsTimeout()
+    {
+        // setInterval should return a Timeout object (same as setTimeout)
+        var source = @"
+            let t = setInterval(() => {}, 100);
+            console.log(typeof t);
+            console.log(t.toString().startsWith('Timeout'));
+            clearInterval(t);
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("object\ntrue\n", output);
+    }
+
+    [Fact]
+    public void SetInterval_ExecutesCallback()
+    {
+        // setInterval should execute callback
+        var source = @"
+            setInterval(() => { console.log('tick'); }, 20);
+            let start = Date.now();
+            while (Date.now() - start < 100) { }
+            console.log('done');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Contains("tick", output);
+        Assert.Contains("done", output);
+    }
+
+    [Fact]
+    public void ClearInterval_StopsExecution()
+    {
+        // clearInterval should stop the interval from executing
+        var source = @"
+            let t = setInterval(() => { console.log('should not appear after clear'); }, 100);
+            clearInterval(t);
+            let start = Date.now();
+            while (Date.now() - start < 200) { }
+            console.log('done');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.DoesNotContain("should not appear after clear", output);
+        Assert.Contains("done", output);
+    }
+
+    [Fact]
+    public void SetInterval_PassesArgsToCallback()
+    {
+        // Additional args should be passed to callback
+        var source = @"
+            setInterval((a: any, b: any) => { console.log(a + b); }, 10, 'hello', 'world');
+            let start = Date.now();
+            while (Date.now() - start < 50) { }
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Contains("helloworld", output);
+    }
+
+    [Fact]
+    public void SetInterval_DefaultDelay()
+    {
+        // setInterval without delay should default to 0 and execute
+        var source = @"
+            setInterval(() => { console.log('executed'); });
+            let start = Date.now();
+            while (Date.now() - start < 50) { }
+            console.log('done');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Contains("executed", output);
+        Assert.Contains("done", output);
+    }
+
+    // ========== clearInterval Tests ==========
+
+    [Fact]
+    public void ClearInterval_Null_DoesNotThrow()
+    {
+        // clearInterval(null) should not throw
+        var source = @"
+            clearInterval(null);
+            console.log('ok');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("ok\n", output);
+    }
+
+    [Fact]
+    public void ClearInterval_Undefined_DoesNotThrow()
+    {
+        // clearInterval(undefined) should not throw
+        var source = @"
+            clearInterval(undefined);
+            console.log('ok');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("ok\n", output);
+    }
+
+    [Fact]
+    public void ClearInterval_NoArgs_DoesNotThrow()
+    {
+        // clearInterval() with no args should not throw
+        var source = @"
+            clearInterval();
+            console.log('ok');
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("ok\n", output);
+    }
+
+    // ========== setInterval ref/unref Tests ==========
+
+    [Fact]
+    public void Interval_Ref_ReturnsSameObject()
+    {
+        // ref() should return the same object for chaining
+        var source = @"
+            let t = setInterval(() => {}, 100);
+            let t2 = t.ref();
+            console.log(t === t2);
+            clearInterval(t);
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Interval_Unref_ReturnsSameObject()
+    {
+        // unref() should return the same object for chaining
+        var source = @"
+            let t = setInterval(() => {}, 100);
+            let t2 = t.unref();
+            console.log(t === t2);
+            clearInterval(t);
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Interval_HasRef_DefaultsToTrue()
+    {
+        // hasRef should default to true
+        var source = @"
+            let t = setInterval(() => {}, 100);
+            console.log(t.hasRef);
+            clearInterval(t);
+        ";
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    // ========== setInterval Type Checking Tests ==========
+
+    [Fact]
+    public void SetInterval_RequiresCallback()
+    {
+        // setInterval without callback should fail type checking
+        var source = @"
+            setInterval();
+        ";
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("setInterval", ex.Message);
+    }
+
+    [Fact]
+    public void SetInterval_CallbackMustBeFunction()
+    {
+        // setInterval with non-function callback should fail type checking
+        var source = @"
+            setInterval('not a function', 100);
+        ";
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("function", ex.Message.ToLower());
+    }
+
+    [Fact]
+    public void SetInterval_DelayMustBeNumber()
+    {
+        // setInterval with non-number delay should fail type checking
+        var source = @"
+            setInterval(() => {}, 'not a number');
+        ";
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("number", ex.Message.ToLower());
+    }
 }

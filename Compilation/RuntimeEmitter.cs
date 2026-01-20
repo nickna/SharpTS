@@ -91,6 +91,10 @@ public partial class RuntimeEmitter
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvoke)
         EmitTimeoutClosureClass(moduleBuilder, runtime);
 
+        // Emit $IntervalClosure class for setInterval callback execution
+        // Must come after TSFunction (uses TSFunctionType, TSFunctionInvoke)
+        EmitIntervalClosureClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -1457,9 +1461,11 @@ public partial class RuntimeEmitter
         EmitReadlineMethods(typeBuilder, runtime);
         // Child process module methods
         EmitChildProcessMethods(typeBuilder, runtime);
-        // Timer methods (setTimeout, clearTimeout)
+        // Timer methods (setTimeout, clearTimeout, setInterval, clearInterval)
         EmitSetTimeoutMethod(typeBuilder, runtime);
         EmitClearTimeoutMethod(typeBuilder, runtime);
+        EmitSetIntervalMethod(typeBuilder, runtime);
+        EmitClearIntervalMethod(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

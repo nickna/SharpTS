@@ -394,4 +394,231 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop); // Remove null from stack
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits the $IntervalClosure class for capturing callback, args, delay, and cancellation token.
+    /// This class is used to invoke the callback repeatedly in setInterval.
+    /// Uses ContinueWith for non-overlapping execution.
+    /// </summary>
+    private void EmitIntervalClosureClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        // Define class: public sealed class $IntervalClosure
+        var typeBuilder = moduleBuilder.DefineType(
+            "$IntervalClosure",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+            _types.Object
+        );
+        runtime.IntervalClosureType = typeBuilder;
+
+        // Fields: Callback ($TSFunction), Args (object[]), Cts (CancellationTokenSource), DelayMs (int)
+        var callbackField = typeBuilder.DefineField("Callback", runtime.TSFunctionType, FieldAttributes.Public);
+        var argsField = typeBuilder.DefineField("Args", _types.ObjectArray, FieldAttributes.Public);
+        var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
+        var delayMsField = typeBuilder.DefineField("DelayMs", _types.Int32, FieldAttributes.Public);
+
+        runtime.IntervalClosureCallback = callbackField;
+        runtime.IntervalClosureArgs = argsField;
+        runtime.IntervalClosureCts = ctsField;
+        runtime.IntervalClosureDelayMs = delayMsField;
+
+        // Default constructor
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            Type.EmptyTypes
+        );
+        runtime.IntervalClosureCtor = ctor;
+
+        var ctorIL = ctor.GetILGenerator();
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Call, _types.GetConstructor(_types.Object));
+        ctorIL.Emit(OpCodes.Ret);
+
+        // ExecuteIteration method: public void ExecuteIteration(Task t)
+        // This is called by ContinueWith after each delay completes
+        var executeMethod = typeBuilder.DefineMethod(
+            "ExecuteIteration",
+            MethodAttributes.Public,
+            _types.Void,
+            [_types.Task]
+        );
+        runtime.IntervalClosureExecuteIteration = executeMethod;
+
+        var il = executeMethod.GetILGenerator();
+        var skipLabel = il.DefineLabel();
+        var doneLabel = il.DefineLabel();
+
+        // if (t.IsCanceled || Cts.IsCancellationRequested) return;
+        // Check t.IsCanceled
+        il.Emit(OpCodes.Ldarg_1); // t
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCanceled").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+
+        // Check Cts.IsCancellationRequested
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, ctsField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.CancellationTokenSource, "IsCancellationRequested").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+
+        // Callback.Invoke(Args)
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, callbackField);
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, argsField);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Pop); // Discard return value
+
+        // Check cancellation again after callback
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, ctsField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.CancellationTokenSource, "IsCancellationRequested").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+
+        // Schedule next iteration: Task.Delay(DelayMs, Cts.Token).ContinueWith(this.ExecuteIteration)
+        // Create Action<Task> delegate: new Action<Task>(this.ExecuteIteration)
+        var actionLocal = il.DeclareLocal(_types.ActionOfTask);
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldftn, executeMethod);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ActionOfTask, _types.Object, _types.IntPtr));
+        il.Emit(OpCodes.Stloc, actionLocal);
+
+        // Task.Delay(DelayMs, Cts.Token)
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, delayMsField);
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Ldfld, ctsField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.CancellationTokenSource, "Token").GetGetMethod()!);
+        var taskDelayMethod = _types.GetMethod(_types.Task, "Delay", _types.Int32, _types.CancellationToken);
+        il.Emit(OpCodes.Call, taskDelayMethod);
+
+        // .ContinueWith(action)
+        il.Emit(OpCodes.Ldloc, actionLocal);
+        var continueWithMethod = _types.GetMethod(_types.Task, "ContinueWith", _types.ActionOfTask);
+        il.Emit(OpCodes.Callvirt, continueWithMethod);
+        il.Emit(OpCodes.Pop); // Discard the continuation task
+
+        il.MarkLabel(skipLabel);
+        il.Emit(OpCodes.Ret);
+
+        // Finalize the type
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Emits: public static $TSTimeout SetInterval($TSFunction callback, double delay, object[] args)
+    /// Creates a $TSTimeout and schedules the callback for repeated execution.
+    /// Uses Task.Delay with ContinueWith for async callback invocation with no overlap.
+    /// </summary>
+    private void EmitSetIntervalMethod(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "SetInterval",
+            MethodAttributes.Public | MethodAttributes.Static,
+            runtime.TSTimeoutType,
+            [runtime.TSFunctionType, _types.Double, _types.ObjectArray]
+        );
+        runtime.SetInterval = method;
+
+        var il = method.GetILGenerator();
+
+        // var cts = new CancellationTokenSource();
+        var ctsLocal = il.DeclareLocal(_types.CancellationTokenSource);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.CancellationTokenSource));
+        il.Emit(OpCodes.Stloc, ctsLocal);
+
+        // var interval = new $TSTimeout(cts);
+        var intervalLocal = il.DeclareLocal(runtime.TSTimeoutType);
+        il.Emit(OpCodes.Ldloc, ctsLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSTimeoutCtor);
+        il.Emit(OpCodes.Stloc, intervalLocal);
+
+        // int delayMs = Math.Max(0, (int)delay);
+        var delayMsLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1); // delay
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, delayMsLocal);
+
+        // Create closure: var closure = new $IntervalClosure();
+        var closureLocal = il.DeclareLocal(runtime.IntervalClosureType);
+        il.Emit(OpCodes.Newobj, runtime.IntervalClosureCtor);
+        il.Emit(OpCodes.Stloc, closureLocal);
+
+        // closure.Callback = callback (arg0)
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldarg_0); // callback
+        il.Emit(OpCodes.Stfld, runtime.IntervalClosureCallback);
+
+        // closure.Args = args (arg2)
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldarg_2); // args
+        il.Emit(OpCodes.Stfld, runtime.IntervalClosureArgs);
+
+        // closure.Cts = cts
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldloc, ctsLocal);
+        il.Emit(OpCodes.Stfld, runtime.IntervalClosureCts);
+
+        // closure.DelayMs = delayMs
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldloc, delayMsLocal);
+        il.Emit(OpCodes.Stfld, runtime.IntervalClosureDelayMs);
+
+        // Create Action<Task> delegate: new Action<Task>(closure.ExecuteIteration)
+        var actionLocal = il.DeclareLocal(_types.ActionOfTask);
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldftn, runtime.IntervalClosureExecuteIteration);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ActionOfTask, _types.Object, _types.IntPtr));
+        il.Emit(OpCodes.Stloc, actionLocal);
+
+        // Task.Delay(delayMs, cts.Token).ContinueWith(action)
+        il.Emit(OpCodes.Ldloc, delayMsLocal);
+        il.Emit(OpCodes.Ldloc, ctsLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.CancellationTokenSource, "Token").GetGetMethod()!);
+        var taskDelayMethod = _types.GetMethod(_types.Task, "Delay", _types.Int32, _types.CancellationToken);
+        il.Emit(OpCodes.Call, taskDelayMethod);
+
+        // .ContinueWith(action)
+        il.Emit(OpCodes.Ldloc, actionLocal);
+        var continueWithMethod = _types.GetMethod(_types.Task, "ContinueWith", _types.ActionOfTask);
+        il.Emit(OpCodes.Callvirt, continueWithMethod);
+        il.Emit(OpCodes.Pop); // Discard the continuation task
+
+        // return interval
+        il.Emit(OpCodes.Ldloc, intervalLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static void ClearInterval(object handle)
+    /// Cancels the interval if handle is a $TSTimeout.
+    /// </summary>
+    private void EmitClearIntervalMethod(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "ClearInterval",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object]
+        );
+        runtime.ClearInterval = method;
+
+        var il = method.GetILGenerator();
+        var doneLabel = il.DefineLabel();
+
+        // if (handle is $TSTimeout interval) interval.Cancel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSTimeoutType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, doneLabel);
+
+        // Call Cancel on the interval
+        il.Emit(OpCodes.Callvirt, runtime.TSTimeoutCancel);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(doneLabel);
+        il.Emit(OpCodes.Pop); // Remove null from stack
+        il.Emit(OpCodes.Ret);
+    }
 }

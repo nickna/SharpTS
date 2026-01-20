@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added `satisfies` operator)
+**Last Updated:** 2026-01-19 (Added `setInterval`/`clearInterval`)
 
 ## Legend
 - ✅ Implemented
@@ -224,7 +224,7 @@ This document tracks TypeScript language features and their implementation statu
 | `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
 | Strict mode (`"use strict"`) | ✅ | File-level and function-level strict mode; frozen/sealed object mutations throw TypeError in strict mode |
 | `setTimeout`/`clearTimeout` | ✅ | Timer functions with Timeout handle, ref/unref support |
-| `setInterval`/`clearInterval` | ❌ | Repeating timer functions |
+| `setInterval`/`clearInterval` | ✅ | Repeating timer functions with Timeout handle, no overlap between executions |
 | `globalThis` | ✅ | ES2020 global object reference with property access and method calls |
 
 ---
@@ -747,9 +747,12 @@ This document tracks TypeScript language features and their implementation statu
 ### Phase 41 Features (Timer Functions & globalThis)
 - ✅ `setTimeout(callback, delay?, ...args)` - schedules callback after delay milliseconds
 - ✅ `clearTimeout(handle)` - cancels a pending timeout (safe with null/undefined)
-- ✅ `Timeout` handle object with `ref()`, `unref()`, `hasRef` property
-- ✅ Method chaining: `setTimeout(...).unref().ref()`
-- ✅ Additional arguments passed to callback: `setTimeout((a, b) => ..., 0, arg1, arg2)`
+- ✅ `setInterval(callback, delay?, ...args)` - schedules callback to run repeatedly after each delay
+- ✅ `clearInterval(handle)` - cancels a pending interval (safe with null/undefined)
+- ✅ `Timeout` handle object with `ref()`, `unref()`, `hasRef` property (used by both setTimeout and setInterval)
+- ✅ Method chaining: `setTimeout(...).unref().ref()`, `setInterval(...).unref().ref()`
+- ✅ Additional arguments passed to callback: `setTimeout((a, b) => ..., 0, arg1, arg2)`, `setInterval((a, b) => ..., 0, arg1, arg2)`
+- ✅ No overlap between interval executions - waits for callback completion before starting next interval
 - ✅ `globalThis` ES2020 global object reference
 - ✅ `globalThis.Math`, `globalThis.console`, `globalThis.parseInt`, etc.
 - ✅ `globalThis.globalThis` self-reference

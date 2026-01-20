@@ -3,7 +3,7 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.CallHandlers;
 
 /// <summary>
-/// Handles timer functions: setTimeout, clearTimeout.
+/// Handles timer functions: setTimeout, clearTimeout, setInterval, clearInterval.
 /// </summary>
 public class TimerHandler : ICallHandler
 {
@@ -18,6 +18,8 @@ public class TimerHandler : ICallHandler
         {
             "setTimeout" => EmitSetTimeout(emitter, call),
             "clearTimeout" => EmitClearTimeout(emitter, call),
+            "setInterval" => EmitSetInterval(emitter, call),
+            "clearInterval" => EmitClearInterval(emitter, call),
             _ => false
         };
     }
@@ -31,6 +33,18 @@ public class TimerHandler : ICallHandler
     private static bool EmitClearTimeout(ILEmitter emitter, Expr.Call call)
     {
         emitter.EmitClearTimeout(call.Arguments);
+        return true;
+    }
+
+    private static bool EmitSetInterval(ILEmitter emitter, Expr.Call call)
+    {
+        emitter.EmitSetInterval(call.Arguments);
+        return true;
+    }
+
+    private static bool EmitClearInterval(ILEmitter emitter, Expr.Call call)
+    {
+        emitter.EmitClearInterval(call.Arguments);
         return true;
     }
 }
