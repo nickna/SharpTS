@@ -664,6 +664,11 @@ public partial class Interpreter
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
                 return ExecutionResult.Success();
+            case Stmt.Const constStmt:
+                // Const declarations always have an initializer (enforced by parser)
+                object? constValue = Evaluate(constStmt.Initializer);
+                _environment.Define(constStmt.Name.Lexeme, constValue);
+                return ExecutionResult.Success();
             case Stmt.Function functionStmt:
                 // Skip overload signatures (no body) - they're type-checking only
                 if (functionStmt.Body == null) return ExecutionResult.Success();

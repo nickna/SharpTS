@@ -176,6 +176,7 @@ public partial class ILCompiler
         Stmt.Function f => f.Name.Lexeme,
         Stmt.Class c => c.Name.Lexeme,
         Stmt.Var v => v.Name.Lexeme,
+        Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
         Stmt.Interface or Stmt.TypeAlias => null, // Type-only, no runtime export
         _ => null

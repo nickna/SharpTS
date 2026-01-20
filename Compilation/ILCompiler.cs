@@ -833,10 +833,15 @@ public partial class ILCompiler
     {
         foreach (var stmt in statements)
         {
-            if (stmt is Stmt.Var varStmt)
+            string? varName = stmt switch
             {
-                string varName = varStmt.Name.Lexeme;
+                Stmt.Var v => v.Name.Lexeme,
+                Stmt.Const c => c.Name.Lexeme,
+                _ => null
+            };
 
+            if (varName != null)
+            {
                 // Skip if already defined (e.g., from built-in module imports)
                 if (_topLevelStaticVars.ContainsKey(varName))
                     continue;

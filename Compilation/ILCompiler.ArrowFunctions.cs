@@ -136,6 +136,14 @@ public partial class ILCompiler
                     CollectArrowsFromExpr(v.Initializer);
                 }
                 break;
+            case Stmt.Const c:
+                // If initializing with a class expression, track variable name → class expr mapping
+                if (c.Initializer is Expr.ClassExpr classExprConst)
+                {
+                    _classExprs.VarToClassExpr[c.Name.Lexeme] = classExprConst;
+                }
+                CollectArrowsFromExpr(c.Initializer);
+                break;
             case Stmt.Function f:
                 // Skip overload signatures (no body)
                 if (f.Body != null)

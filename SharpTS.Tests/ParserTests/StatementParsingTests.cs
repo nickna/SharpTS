@@ -384,8 +384,8 @@ public class StatementParsingTests
     public void Var_Const()
     {
         var statements = Parse("const x = 5;");
-        var varStmt = Assert.IsType<Stmt.Var>(statements[0]);
-        Assert.NotNull(varStmt.Initializer);
+        var constStmt = Assert.IsType<Stmt.Const>(statements[0]);
+        Assert.NotNull(constStmt.Initializer);
     }
 
     [Fact]

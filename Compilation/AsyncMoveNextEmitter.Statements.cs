@@ -20,6 +20,10 @@ public partial class AsyncMoveNextEmitter
                 EmitVarDeclaration(v);
                 break;
 
+            case Stmt.Const c:
+                EmitVarDeclaration(new Stmt.Var(c.Name, c.TypeAnnotation, c.Initializer));
+                break;
+
             case Stmt.Return r:
                 EmitReturn(r);
                 break;

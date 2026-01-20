@@ -103,6 +103,12 @@ public class ClosureAnalyzer : AstVisitorBase
         base.VisitVar(stmt);
     }
 
+    protected override void VisitConst(Stmt.Const stmt)
+    {
+        DeclareVariable(stmt.Name.Lexeme);
+        base.VisitConst(stmt);
+    }
+
     protected override void VisitFunction(Stmt.Function stmt)
     {
         DeclareVariable(stmt.Name.Lexeme);

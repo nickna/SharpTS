@@ -113,6 +113,12 @@ internal class CaptureAnalysisVisitor : ControlledAstVisitor
         base.VisitVar(stmt);
     }
 
+    protected override void VisitConst(Stmt.Const stmt)
+    {
+        _locals.Add(stmt.Name.Lexeme);
+        base.VisitConst(stmt);
+    }
+
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         _locals.Add(stmt.Variable.Lexeme);

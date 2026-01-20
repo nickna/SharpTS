@@ -361,6 +361,8 @@ public partial class AsyncMoveNextEmitter
                 return ContainsAwaitInExpr(e.Expr);
             case Stmt.Var v:
                 return v.Initializer != null && ContainsAwaitInExpr(v.Initializer);
+            case Stmt.Const c:
+                return ContainsAwaitInExpr(c.Initializer);
             case Stmt.Return r:
                 return r.Value != null && ContainsAwaitInExpr(r.Value);
             case Stmt.If i:

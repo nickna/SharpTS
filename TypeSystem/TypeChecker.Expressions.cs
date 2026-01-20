@@ -361,7 +361,7 @@ public partial class TypeChecker
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Primitive n && n.Type == TokenType.TYPE_NUMBER)
                             numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
-                        else if (keyType is TypeInfo.Symbol)
+                        else if (keyType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
                             symbolIndexType = UnifyIndexTypes(symbolIndexType, valueType);
                         else if (keyType is TypeInfo.StringLiteral sl)
                             fields[sl.Value] = valueType;  // Known key at compile time

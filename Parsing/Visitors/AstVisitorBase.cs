@@ -77,6 +77,7 @@ public abstract class AstVisitorBase
         {
             case Stmt.Expression s: VisitExpressionStmt(s); break;
             case Stmt.Var s: VisitVar(s); break;
+            case Stmt.Const s: VisitConst(s); break;
             case Stmt.Function s: VisitFunction(s); break;
             case Stmt.Field s: VisitField(s); break;
             case Stmt.Accessor s: VisitAccessor(s); break;
@@ -360,6 +361,11 @@ public abstract class AstVisitorBase
     {
         if (stmt.Initializer != null)
             Visit(stmt.Initializer);
+    }
+
+    protected virtual void VisitConst(Stmt.Const stmt)
+    {
+        Visit(stmt.Initializer);
     }
 
     protected virtual void VisitFunction(Stmt.Function stmt)

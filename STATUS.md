@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added Definite Assignment Assertion)
+**Last Updated:** 2026-01-19 (Added Unique Symbol Type)
 
 ## Legend
 - ✅ Implemented
@@ -37,7 +37,7 @@ This document tracks TypeScript language features and their implementation statu
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
 | Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
 | `object` type | ✅ | Non-primitive type (excludes string, number, boolean, bigint, symbol, null, undefined) |
-| `unique symbol` type | ❌ | For const symbol declarations |
+| `unique symbol` type | ✅ | Nominally-typed symbols for const declarations |
 | `asserts` type predicates | ❌ | Assertion functions (`asserts x is T`) |
 | `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |
 | Variadic tuple types | ✅ | `[...T]` spread in tuples, Prepend/Append/Concat patterns |
@@ -714,3 +714,17 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Validation: `!` and `?` are mutually exclusive on fields (parse error)
 - ✅ Syntax-only implementation (no strict definite assignment checking)
 - ✅ Full interpreter and IL compiler support with 19 test cases
+
+### Phase 39 Features (Unique Symbol Type)
+- ✅ `unique symbol` type annotation syntax: `const KEY: unique symbol = Symbol();`
+- ✅ Separate `Stmt.Const` AST node for const declarations (cleaner const-specific handling)
+- ✅ Nominal typing: each unique symbol declaration creates a distinct type
+- ✅ Unique symbol as subtype of `symbol` (assignable to `symbol`, but not vice versa)
+- ✅ Validation: `unique symbol` requires `const` declaration (not `let` or `var`)
+- ✅ Validation: `unique symbol` must be initialized with `Symbol()` call
+- ✅ Validation: standalone `unique symbol` type annotation rejected
+- ✅ `typeof KEY` resolves to the specific unique symbol type
+- ✅ Well-known symbol types: `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables`
+- ✅ Well-known symbols return their unique symbol type (e.g., `typeof Symbol.iterator`)
+- ✅ Unique symbols accepted as computed property keys in object literals
+- ✅ Full interpreter and IL compiler support with 14 test cases

@@ -134,6 +134,11 @@ public abstract record Stmt
     public record Expression(Expr Expr) : Stmt;
     public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false) : Stmt;
     /// <summary>
+    /// Const variable declaration. Separate from Var for cleaner const-specific handling (e.g., unique symbol).
+    /// Initializer is non-nullable since const always requires initialization.
+    /// </summary>
+    public record Const(Token Name, string? TypeAnnotation, Expr Initializer) : Stmt;
+    /// <summary>
     /// Function or method declaration. Body is null for overload signatures (declaration only).
     /// ThisType is the explicit this parameter type annotation (e.g., this: MyClass).
     /// IsAsync indicates this is an async function that returns a Promise.

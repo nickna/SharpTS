@@ -517,6 +517,17 @@ public abstract record TypeInfo
         public override string ToString() => "symbol";
     }
 
+    /// <summary>
+    /// Represents a unique symbol type tied to a specific const declaration.
+    /// Each declaration creates a nominally distinct type.
+    /// </summary>
+    /// <param name="DeclarationId">Unique identifier (variable name or "Symbol.iterator" etc.)</param>
+    /// <param name="DisplayName">For error messages (e.g., "typeof KEY")</param>
+    public record UniqueSymbol(string DeclarationId, string? DisplayName = null) : TypeInfo
+    {
+        public override string ToString() => DisplayName ?? "unique symbol";
+    }
+
     public record BigInt() : TypeInfo
     {
         public override string ToString() => "bigint";

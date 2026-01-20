@@ -375,6 +375,10 @@ public partial class Parser
         }
 
         Consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+
+        // Return Stmt.Const for const declarations, Stmt.Var otherwise
+        if (isConst)
+            return new Stmt.Const(name, typeAnnotation, initializer!);
         return new Stmt.Var(name, typeAnnotation, initializer, hasDefiniteAssignment);
     }
 

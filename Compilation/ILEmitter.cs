@@ -135,6 +135,11 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitVarDeclaration(v);
                 break;
 
+            case Stmt.Const c:
+                // Const declarations are emitted the same way as var declarations
+                EmitVarDeclaration(new Stmt.Var(c.Name, c.TypeAnnotation, c.Initializer));
+                break;
+
             case Stmt.If i:
                 EmitIf(i);
                 break;

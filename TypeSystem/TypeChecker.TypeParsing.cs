@@ -161,6 +161,13 @@ public partial class TypeChecker
         if (typeName == "number") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if (typeName == "boolean") return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         if (typeName == "symbol") return new TypeInfo.Symbol();
+
+        // Reject standalone "unique symbol" - it's only valid on const declarations with Symbol() initializer
+        if (typeName == "unique symbol")
+        {
+            throw new TypeCheckException(
+                "'unique symbol' type is only valid on const declarations initialized with Symbol().");
+        }
         if (typeName == "bigint") return new TypeInfo.BigInt();
         if (typeName == "void") return new TypeInfo.Void();
         if (typeName == "null") return new TypeInfo.Null();

@@ -97,6 +97,17 @@ public partial class Parser
             return $"keyof {innerType}";
         }
 
+        // Handle "unique symbol" type annotation
+        if (Match(TokenType.UNIQUE))
+        {
+            if (Match(TokenType.TYPE_SYMBOL))
+            {
+                return "unique symbol";
+            }
+            // If "unique" is not followed by "symbol", it's an error in type context
+            throw new Exception($"Parse Error at line {Previous().Line}: 'unique' must be followed by 'symbol' in type annotation.");
+        }
+
         // Handle typeof in type position: typeof someVariable, typeof obj.prop, typeof arr[0]
         if (Match(TokenType.TYPEOF))
         {

@@ -14,6 +14,14 @@ public partial class AsyncGeneratorStateAnalyzer
         base.VisitVar(stmt);
     }
 
+    protected override void VisitConst(Stmt.Const stmt)
+    {
+        _declaredVariables.Add(stmt.Name.Lexeme);
+        if (!_seenSuspension)
+            _variablesDeclaredBeforeSuspension.Add(stmt.Name.Lexeme);
+        base.VisitConst(stmt);
+    }
+
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         _declaredVariables.Add(stmt.Variable.Lexeme);

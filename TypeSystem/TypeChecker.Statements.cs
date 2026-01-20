@@ -183,6 +183,51 @@ public partial class TypeChecker
                 _environment.Define(varStmt.Name.Lexeme, declaredType);
                 break;
 
+            case Stmt.Const constStmt:
+            {
+                TypeInfo constDeclaredType;
+
+                if (constStmt.TypeAnnotation == "unique symbol")
+                {
+                    // Validate initializer is Symbol() call
+                    if (constStmt.Initializer is not Expr.Call call ||
+                        call.Callee is not Expr.Variable v ||
+                        v.Name.Lexeme != "Symbol")
+                    {
+                        throw new TypeCheckException(
+                            $"'unique symbol' must be initialized with Symbol() at line {constStmt.Name.Line}.");
+                    }
+                    // Validate Symbol() argument if present
+                    if (call.Arguments.Count > 0)
+                    {
+                        var argType = CheckExpr(call.Arguments[0]);
+                        if (argType is not TypeInfo.String && argType is not TypeInfo.StringLiteral && argType is not TypeInfo.Any)
+                            throw new TypeCheckException($"Symbol() description must be a string.");
+                    }
+                    // Create unique symbol type for this declaration
+                    constDeclaredType = new TypeInfo.UniqueSymbol(
+                        constStmt.Name.Lexeme,
+                        $"typeof {constStmt.Name.Lexeme}");
+                }
+                else if (constStmt.TypeAnnotation != null)
+                {
+                    constDeclaredType = ToTypeInfo(constStmt.TypeAnnotation);
+                    var initType = CheckExpr(constStmt.Initializer);
+                    if (!IsCompatible(constDeclaredType, initType))
+                    {
+                        throw new TypeMismatchException(constDeclaredType, initType, constStmt.Name.Line);
+                    }
+                }
+                else
+                {
+                    // No type annotation - infer from initializer, but keep literal types for const
+                    constDeclaredType = CheckExpr(constStmt.Initializer);
+                }
+
+                _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
+                break;
+            }
+
             case Stmt.Function funcStmt:
                 CheckFunctionDeclaration(funcStmt);
                 break;

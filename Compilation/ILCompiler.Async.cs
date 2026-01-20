@@ -215,6 +215,12 @@ public partial class ILCompiler
                 if (v.Initializer != null)
                     AnalyzeArrowExprForAwaits(v.Initializer, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
+            case Stmt.Const c:
+                declaredVariables.Add(c.Name.Lexeme);
+                if (!seenAwait)
+                    declaredBeforeAwait.Add(c.Name.Lexeme);
+                AnalyzeArrowExprForAwaits(c.Initializer, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Stmt.Expression e:
                 AnalyzeArrowExprForAwaits(e.Expr, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;

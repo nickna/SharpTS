@@ -19,11 +19,17 @@ public class ArrowFunctionTests
         return parser.ParseOrThrow();
     }
 
-    private static Stmt.Var ParseVarWithArrow(string source)
+    private static Expr.ArrowFunction ParseArrowFromVarOrConst(string source)
     {
         var statements = Parse(source);
         Assert.Single(statements);
-        return Assert.IsType<Stmt.Var>(statements[0]);
+        var initializer = statements[0] switch
+        {
+            Stmt.Var v => v.Initializer,
+            Stmt.Const c => c.Initializer,
+            _ => throw new InvalidOperationException($"Expected Var or Const, got {statements[0].GetType()}")
+        };
+        return Assert.IsType<Expr.ArrowFunction>(initializer);
     }
 
     #endregion
@@ -33,8 +39,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_SingleParamNoParens()
     {
-        var varStmt = ParseVarWithArrow("const fn = x => x + 1;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = x => x + 1;");
         Assert.Single(arrow.Parameters);
         Assert.Equal("x", arrow.Parameters[0].Name.Lexeme);
         Assert.NotNull(arrow.ExpressionBody);
@@ -43,16 +48,14 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_SingleParamWithParens()
     {
-        var varStmt = ParseVarWithArrow("const fn = (x) => x + 1;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (x) => x + 1;");
         Assert.Single(arrow.Parameters);
     }
 
     [Fact]
     public void Arrow_SingleParamWithType()
     {
-        var varStmt = ParseVarWithArrow("const fn = (x: number) => x * 2;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (x: number) => x * 2;");
         Assert.Single(arrow.Parameters);
         Assert.Equal("number", arrow.Parameters[0].Type);
     }
@@ -64,24 +67,21 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_TwoParams()
     {
-        var varStmt = ParseVarWithArrow("const add = (a, b) => a + b;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const add = (a, b) => a + b;");
         Assert.Equal(2, arrow.Parameters.Count);
     }
 
     [Fact]
     public void Arrow_ThreeParams()
     {
-        var varStmt = ParseVarWithArrow("const sum = (a, b, c) => a + b + c;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const sum = (a, b, c) => a + b + c;");
         Assert.Equal(3, arrow.Parameters.Count);
     }
 
     [Fact]
     public void Arrow_ParamsWithTypes()
     {
-        var varStmt = ParseVarWithArrow("const add = (a: number, b: number) => a + b;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const add = (a: number, b: number) => a + b;");
         Assert.Equal(2, arrow.Parameters.Count);
         Assert.Equal("number", arrow.Parameters[0].Type);
         Assert.Equal("number", arrow.Parameters[1].Type);
@@ -94,16 +94,14 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_NoParams()
     {
-        var varStmt = ParseVarWithArrow("const fn = () => 42;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = () => 42;");
         Assert.Empty(arrow.Parameters);
     }
 
     [Fact]
     public void Arrow_NoParamsWithBlock()
     {
-        var varStmt = ParseVarWithArrow("const fn = () => { return 42; };");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = () => { return 42; };");
         Assert.Empty(arrow.Parameters);
         Assert.Null(arrow.ExpressionBody);
         Assert.NotNull(arrow.BlockBody);
@@ -116,8 +114,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_ExpressionBody()
     {
-        var varStmt = ParseVarWithArrow("const fn = x => x * 2;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = x => x * 2;");
         Assert.NotNull(arrow.ExpressionBody);
         Assert.Null(arrow.BlockBody);
     }
@@ -125,8 +122,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_BlockBody()
     {
-        var varStmt = ParseVarWithArrow("const fn = x => { return x * 2; };");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = x => { return x * 2; };");
         Assert.Null(arrow.ExpressionBody);
         Assert.NotNull(arrow.BlockBody);
     }
@@ -140,8 +136,7 @@ public class ArrowFunctionTests
                 return y + 1;
             };
             """;
-        var varStmt = ParseVarWithArrow(source);
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst(source);
         Assert.NotNull(arrow.BlockBody);
         Assert.Equal(2, arrow.BlockBody.Count);
     }
@@ -153,16 +148,14 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_WithReturnType()
     {
-        var varStmt = ParseVarWithArrow("const fn = (x: number): number => x * 2;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (x: number): number => x * 2;");
         Assert.Equal("number", arrow.ReturnType);
     }
 
     [Fact]
     public void Arrow_NoReturnType()
     {
-        var varStmt = ParseVarWithArrow("const fn = (x) => x * 2;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (x) => x * 2;");
         Assert.Null(arrow.ReturnType);
     }
 
@@ -173,8 +166,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_Async_ExpressionBody()
     {
-        var varStmt = ParseVarWithArrow("const fn = async (x) => await fetch(x);");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = async (x) => await fetch(x);");
         Assert.True(arrow.IsAsync);
     }
 
@@ -187,8 +179,7 @@ public class ArrowFunctionTests
                 return response.json();
             };
             """;
-        var varStmt = ParseVarWithArrow(source);
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst(source);
         Assert.True(arrow.IsAsync);
         Assert.NotNull(arrow.BlockBody);
     }
@@ -196,8 +187,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_Async_NoParams()
     {
-        var varStmt = ParseVarWithArrow("const fn = async () => await getData();");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = async () => await getData();");
         Assert.True(arrow.IsAsync);
         Assert.Empty(arrow.Parameters);
     }
@@ -209,8 +199,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_DefaultParam()
     {
-        var varStmt = ParseVarWithArrow("const fn = (x = 5) => x * 2;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (x = 5) => x * 2;");
         Assert.Single(arrow.Parameters);
         Assert.NotNull(arrow.Parameters[0].DefaultValue);
     }
@@ -218,8 +207,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_MultipleDefaultParams()
     {
-        var varStmt = ParseVarWithArrow("const fn = (a = 1, b = 2) => a + b;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (a = 1, b = 2) => a + b;");
         Assert.NotNull(arrow.Parameters[0].DefaultValue);
         Assert.NotNull(arrow.Parameters[1].DefaultValue);
     }
@@ -231,8 +219,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_RestParam()
     {
-        var varStmt = ParseVarWithArrow("const fn = (...args) => args.length;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (...args) => args.length;");
         Assert.Single(arrow.Parameters);
         Assert.True(arrow.Parameters[0].IsRest);
     }
@@ -240,8 +227,7 @@ public class ArrowFunctionTests
     [Fact]
     public void Arrow_RestParamWithRegular()
     {
-        var varStmt = ParseVarWithArrow("const fn = (first, ...rest) => rest;");
-        var arrow = Assert.IsType<Expr.ArrowFunction>(varStmt.Initializer);
+        var arrow = ParseArrowFromVarOrConst("const fn = (first, ...rest) => rest;");
         Assert.Equal(2, arrow.Parameters.Count);
         Assert.False(arrow.Parameters[0].IsRest);
         Assert.True(arrow.Parameters[1].IsRest);

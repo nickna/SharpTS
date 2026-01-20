@@ -313,10 +313,20 @@ public partial class TypeChecker
             return true;
         }
 
-        // Symbol type compatibility
-        if (expected is TypeInfo.Symbol && actual is TypeInfo.Symbol)
+        // UniqueSymbol type compatibility (nominal typing)
+        // unique symbol -> unique symbol: must be same declaration
+        if (expected is TypeInfo.UniqueSymbol expectedUnique)
         {
-            return true;
+            if (actual is TypeInfo.UniqueSymbol actualUnique)
+                return expectedUnique.DeclarationId == actualUnique.DeclarationId;
+            return false; // regular symbol NOT assignable to unique symbol
+        }
+
+        // Symbol type compatibility
+        // symbol accepts both symbol and unique symbol (unique symbol is subtype of symbol)
+        if (expected is TypeInfo.Symbol)
+        {
+            return actual is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
         }
 
         // BigInt type compatibility
@@ -1492,7 +1502,7 @@ public partial class TypeChecker
     /// <summary>
     /// Checks if a type is a primitive (not valid as WeakMap key or WeakSet value).
     /// </summary>
-    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol;
+    private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol or TypeInfo.UniqueSymbol;
 
     /// <summary>
     /// Checks if a name is a built-in Error type name.

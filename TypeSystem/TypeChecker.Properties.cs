@@ -69,6 +69,14 @@ public partial class TypeChecker
 
     private TypeInfo CheckGet(Expr.Get get)
     {
+        // Special case: Symbol.iterator, Symbol.asyncIterator, etc. return unique symbol types
+        if (get.Object is Expr.Variable v && v.Name.Lexeme == "Symbol")
+        {
+            var wellKnownType = WellKnownSymbolTypes.TryGet(get.Name.Lexeme);
+            if (wellKnownType != null)
+                return wellKnownType;
+        }
+
         TypeInfo objType = CheckExpr(get.Object);
 
         // Handle TypeParameter - delegate to constraint type for member access

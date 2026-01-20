@@ -114,6 +114,14 @@ public class GeneratorStateAnalyzer : AstVisitorBase
         base.VisitVar(stmt);
     }
 
+    protected override void VisitConst(Stmt.Const stmt)
+    {
+        _declaredVariables.Add(stmt.Name.Lexeme);
+        if (!_seenYield)
+            _variablesDeclaredBeforeYield.Add(stmt.Name.Lexeme);
+        base.VisitConst(stmt);
+    }
+
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         _declaredVariables.Add(stmt.Variable.Lexeme);

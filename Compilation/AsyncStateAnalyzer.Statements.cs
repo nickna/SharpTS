@@ -16,6 +16,16 @@ public partial class AsyncStateAnalyzer
         base.VisitVar(stmt);
     }
 
+    protected override void VisitConst(Stmt.Const stmt)
+    {
+        // Track const variable declaration
+        _declaredVariables.Add(stmt.Name.Lexeme);
+        if (!_seenAwait)
+            _variablesDeclaredBeforeAwait.Add(stmt.Name.Lexeme);
+
+        base.VisitConst(stmt);
+    }
+
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
         // Loop variable is declared and potentially survives await

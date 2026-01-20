@@ -128,6 +128,10 @@ public partial class Interpreter
                 }
                 _environment.Define(varStmt.Name.Lexeme, value);
                 return ExecutionResult.Success();
+            case Stmt.Const constStmt:
+                object? constValue = await EvaluateAsync(constStmt.Initializer);
+                _environment.Define(constStmt.Name.Lexeme, constValue);
+                return ExecutionResult.Success();
             case Stmt.Return returnStmt:
                 object? returnValue = null;
                 if (returnStmt.Value != null) returnValue = await EvaluateAsync(returnStmt.Value);

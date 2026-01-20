@@ -39,6 +39,16 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     protected abstract void EmitVarDeclaration(Stmt.Var v);
 
     /// <summary>
+    /// Declares and initializes a const variable.
+    /// Similar to var declaration but const always has an initializer.
+    /// </summary>
+    protected virtual void EmitConstDeclaration(Stmt.Const c)
+    {
+        // Default: treat as Var with guaranteed initializer
+        EmitVarDeclaration(new Stmt.Var(c.Name, c.TypeAnnotation, c.Initializer));
+    }
+
+    /// <summary>
     /// Emits return statement. Different semantics per emitter type:
     /// - ILEmitter: void with Ret, or store + Leave inside exception blocks
     /// - Async: store result + leave to SetResult label
@@ -144,6 +154,10 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
             case Stmt.Var v:
                 EmitVarDeclaration(v);
+                break;
+
+            case Stmt.Const c:
+                EmitConstDeclaration(c);
                 break;
 
             case Stmt.If i:

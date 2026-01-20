@@ -51,6 +51,7 @@ public partial class ILEmitter
             Stmt.Function f => f.Name.Lexeme,
             Stmt.Class c => c.Name.Lexeme,
             Stmt.Var v => v.Name.Lexeme,
+            Stmt.Const ct => ct.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
             Stmt.Namespace n => n.Name.Lexeme,
             Stmt.ImportAlias ia => ia.AliasName.Lexeme,
@@ -81,6 +82,12 @@ public partial class ILEmitter
             case Stmt.Var varStmt:
                 // Emit variable declaration
                 EmitStatement(varStmt);
+                StoreLocalInNamespaceField(nsField, memberName!);
+                break;
+
+            case Stmt.Const constStmt:
+                // Emit const declaration
+                EmitStatement(constStmt);
                 StoreLocalInNamespaceField(nsField, memberName!);
                 break;
 
