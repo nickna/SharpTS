@@ -456,6 +456,12 @@ public partial class Interpreter
             return symInstance.GetBySymbol(symKey);
         }
 
+        // globalThis with string key
+        if (obj is SharpTSGlobalThis globalThis && index is string globalKey)
+        {
+            return globalThis.GetProperty(globalKey);
+        }
+
         throw new Exception("Index access not supported on this type.");
     }
 
@@ -556,6 +562,13 @@ public partial class Interpreter
             {
                 symInstance.SetBySymbol(symKey, value);
             }
+            return value;
+        }
+
+        // globalThis with string key
+        if (obj is SharpTSGlobalThis globalThis && index is string globalKey)
+        {
+            globalThis.SetProperty(globalKey, value);
             return value;
         }
 

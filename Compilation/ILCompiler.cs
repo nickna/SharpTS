@@ -539,6 +539,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("globalThis", new GlobalThisStaticEmitter(_typeEmitterRegistry));
 
         // Built-in module emitters
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());

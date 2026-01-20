@@ -29,6 +29,12 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: globalThis.Math.PI, globalThis.JSON.parse, etc.
+        if (TryEmitGlobalThisChainedProperty(g))
+        {
+            return;
+        }
+
         // Built-in module property access (path.sep, path.delimiter, os.EOL, etc.)
         if (g.Object is Expr.Variable builtInVar &&
             _ctx.BuiltInModuleNamespaces != null &&
@@ -946,6 +952,48 @@ public partial class ILEmitter
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Tries to emit IL for globalThis chained property access like globalThis.Math.PI, globalThis.console.log, etc.
+    /// Returns true if the property was handled.
+    /// </summary>
+    private bool TryEmitGlobalThisChainedProperty(Expr.Get g)
+    {
+        // Pattern: globalThis.Math.PI, globalThis.console.log, etc.
+        // g.Object is Expr.Get { Object: Expr.Variable("globalThis"), Name: "Math/JSON/console/etc" }
+        // g.Name.Lexeme is "PI/parse/log/etc"
+
+        if (g.Object is not Expr.Get innerGet)
+            return false;
+
+        if (innerGet.Object is not Expr.Variable globalThisVar || globalThisVar.Name.Lexeme != "globalThis")
+            return false;
+
+        string namespaceName = innerGet.Name.Lexeme;
+        string propertyName = g.Name.Lexeme;
+
+        // Try to use the static emitter for the inner namespace
+        var staticStrategy = _ctx.TypeEmitterRegistry?.GetStaticStrategy(namespaceName);
+        if (staticStrategy != null && staticStrategy.TryEmitStaticPropertyGet(this, propertyName))
+        {
+            SetStackUnknown();
+            return true;
+        }
+
+        // Handle globalThis.globalThis.X case (self-reference)
+        if (namespaceName == "globalThis")
+        {
+            // Treat globalThis.globalThis as just globalThis
+            var selfStrategy = _ctx.TypeEmitterRegistry?.GetStaticStrategy("globalThis");
+            if (selfStrategy != null && selfStrategy.TryEmitStaticPropertyGet(this, propertyName))
+            {
+                SetStackUnknown();
+                return true;
+            }
+        }
+
+        return false;
     }
 
     #region ES2022 Private Class Elements

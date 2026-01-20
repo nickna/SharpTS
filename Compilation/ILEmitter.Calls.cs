@@ -140,6 +140,42 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: globalThis.Math.floor(), globalThis.console.log(), etc.
+        if (c.Callee is Expr.Get chainedGet &&
+            chainedGet.Object is Expr.Get innerGet &&
+            innerGet.Object is Expr.Variable globalThisVar &&
+            globalThisVar.Name.Lexeme == "globalThis" &&
+            _ctx.TypeEmitterRegistry != null)
+        {
+            string namespaceName = innerGet.Name.Lexeme;
+            string methodName = chainedGet.Name.Lexeme;
+
+            // Handle globalThis.console.log() specially
+            if (namespaceName == "console")
+            {
+                var fakeCall = new Expr.Call(
+                    new Expr.Get(new Expr.Variable(innerGet.Name), chainedGet.Name, false),
+                    chainedGet.Name,
+                    null, // TypeArgs
+                    c.Arguments
+                );
+                if (_helpers.TryEmitConsoleMethod(fakeCall,
+                    arg => { EmitExpression(arg); EmitBoxIfNeeded(arg); },
+                    _ctx.Runtime!))
+                {
+                    return;
+                }
+            }
+
+            // Use the static emitter for the inner namespace
+            var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(namespaceName);
+            if (staticStrategy != null && staticStrategy.TryEmitStaticCall(this, methodName, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
         // Special case: process.stdin.read(), process.stdout.write(), process.stderr.write()
         if (TryEmitProcessStreamCall(c))
         {

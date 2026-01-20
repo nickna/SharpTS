@@ -74,6 +74,11 @@ public partial class Interpreter
             return singleton;
         }
 
+        // Check for global constants (NaN, Infinity, undefined)
+        if (name.Lexeme == "NaN") return double.NaN;
+        if (name.Lexeme == "Infinity") return double.PositiveInfinity;
+        if (name.Lexeme == "undefined") return Runtime.Types.SharpTSUndefined.Instance;
+
         throw new Exception($"Undefined variable '{name.Lexeme}'.");
     }
 

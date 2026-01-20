@@ -75,6 +75,12 @@ public partial class ILEmitter
             return;
         }
 
+        if (name == "globalThis")
+        {
+            EmitNullConstant(); // globalThis is handled specially in property access
+            return;
+        }
+
         // Check if it's a class - load the Type object
         if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
         {

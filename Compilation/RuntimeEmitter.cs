@@ -1431,6 +1431,8 @@ public partial class RuntimeEmitter
         EmitPathModulePropertyWrappers(typeBuilder, runtime);
         // Process global methods (env, argv)
         EmitProcessMethods(typeBuilder, runtime);
+        // globalThis methods (ES2020)
+        EmitGlobalThisMethods(typeBuilder, runtime);
         // Querystring module methods
         EmitQuerystringMethods(typeBuilder, runtime);
         // Assert module methods

@@ -345,6 +345,13 @@ public partial class Interpreter
             return value;
         }
 
+        // Handle globalThis property assignment
+        if (obj is SharpTSGlobalThis globalThis)
+        {
+            globalThis.SetProperty(set.Name.Lexeme, value);
+            return value;
+        }
+
         if (obj is SharpTSInstance instance)
         {
             instance.SetInterpreter(this);

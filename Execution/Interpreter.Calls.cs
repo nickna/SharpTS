@@ -33,6 +33,35 @@ public partial class Interpreter
             return null;
         }
 
+        // Handle globalThis.console.* calls
+        if (call.Callee is Expr.Get chainedGet &&
+            chainedGet.Object is Expr.Get innerGet &&
+            innerGet.Object is Expr.Variable globalThisVar &&
+            globalThisVar.Name.Lexeme == "globalThis" &&
+            innerGet.Name.Lexeme == "console")
+        {
+            var method = BuiltInRegistry.Instance.GetStaticMethod("console", chainedGet.Name.Lexeme);
+            if (method != null)
+            {
+                List<object?> args = call.Arguments.Select(Evaluate).ToList();
+                return method.Call(this, args);
+            }
+        }
+
+        // Handle globalThis.<namespace>.<method>() calls (e.g., globalThis.Math.floor())
+        if (call.Callee is Expr.Get gtChainedGet &&
+            gtChainedGet.Object is Expr.Get gtInnerGet &&
+            gtInnerGet.Object is Expr.Variable gtVar &&
+            gtVar.Name.Lexeme == "globalThis")
+        {
+            var method = BuiltInRegistry.Instance.GetStaticMethod(gtInnerGet.Name.Lexeme, gtChainedGet.Name.Lexeme);
+            if (method != null)
+            {
+                List<object?> args = call.Arguments.Select(Evaluate).ToList();
+                return method.Call(this, args);
+            }
+        }
+
         // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
             get.Object is Expr.Variable nsVar)

@@ -120,6 +120,7 @@ public sealed class BuiltInRegistry
         RegisterReflectNamespace(registry);
         RegisterSymbolNamespace(registry);
         RegisterProcessNamespace(registry);
+        RegisterGlobalThisNamespace(registry);
 
         // Register instance types
         RegisterStringType(registry);
@@ -143,6 +144,7 @@ public sealed class BuiltInRegistry
         RegisterHashType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
+        RegisterGlobalThisType(registry);
 
         return registry;
     }
@@ -411,6 +413,23 @@ public sealed class BuiltInRegistry
         registry.RegisterInstanceType(typeof(SharpTSURIError), getMember);
         registry.RegisterInstanceType(typeof(SharpTSEvalError), getMember);
         registry.RegisterInstanceType(typeof(SharpTSAggregateError), getMember);
+    }
+
+    private static void RegisterGlobalThisNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "globalThis",
+            IsSingleton: true,
+            SingletonFactory: () => SharpTSGlobalThis.Instance,
+            GetMethod: name => null // Methods are accessed through GetProperty delegation
+        ));
+    }
+
+    private static void RegisterGlobalThisType(BuiltInRegistry registry)
+    {
+        // globalThis members accessed via property access
+        registry.RegisterInstanceType(typeof(SharpTSGlobalThis), (instance, name) =>
+            ((SharpTSGlobalThis)instance).GetProperty(name));
     }
 
     private static string Stringify(object? obj)

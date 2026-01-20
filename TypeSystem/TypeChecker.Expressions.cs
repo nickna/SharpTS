@@ -827,6 +827,10 @@ public partial class TypeChecker
         if (name.Lexeme == "parseFloat") return new TypeInfo.Any(); // Global parseFloat function
         if (name.Lexeme == "isNaN") return new TypeInfo.Any(); // Global isNaN function
         if (name.Lexeme == "isFinite") return new TypeInfo.Any(); // Global isFinite function
+        if (name.Lexeme == "globalThis") return new TypeInfo.Any(); // globalThis ES2020
+        if (name.Lexeme == "undefined") return new TypeInfo.Undefined(); // Global undefined
+        if (name.Lexeme == "NaN") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global NaN
+        if (name.Lexeme == "Infinity") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global Infinity
 
         var type = _environment.Get(name.Lexeme);
         if (type == null)

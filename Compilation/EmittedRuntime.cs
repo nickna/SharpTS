@@ -558,6 +558,10 @@ public class EmittedRuntime
     public MethodBuilder StderrWrite { get; set; } = null!;
     public MethodBuilder StderrIsTTY { get; set; } = null!;
 
+    // globalThis methods (ES2020)
+    public MethodBuilder GlobalThisGetProperty { get; set; } = null!;
+    public MethodBuilder GlobalThisSetProperty { get; set; } = null!;
+
     // Crypto module methods
     public MethodBuilder CryptoCreateHash { get; set; } = null!;
     public MethodBuilder CryptoRandomBytes { get; set; } = null!;
