@@ -9,6 +9,10 @@ namespace SharpTS.Tests.CompilerTests;
 /// NOTE: Tests that modify captured variables may not work due to a pre-existing
 /// compiler closure limitation (captured variable mutations don't propagate to outer scope).
 /// </summary>
+/// <remarks>
+/// Timer tests run in a dedicated collection to avoid race conditions with other tests.
+/// </remarks>
+[Collection("TimerTests")]
 public class TimerTests
 {
     // ========== setTimeout Basic Tests ==========

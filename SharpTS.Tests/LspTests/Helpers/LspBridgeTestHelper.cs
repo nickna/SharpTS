@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SharpTS.Compilation;
 using SharpTS.LspBridge.Protocol;
+using SharpTS.Tests.Infrastructure;
 
 namespace SharpTS.Tests.LspTests.Helpers;
 
@@ -11,8 +12,9 @@ public static class LspBridgeTestHelper
 {
     /// <summary>
     /// Lock object for console redirection tests.
+    /// Shares the same lock as TestHarness to prevent cross-contamination between parallel tests.
     /// </summary>
-    public static readonly object ConsoleLock = new();
+    public static object ConsoleLock => Infrastructure.TestHarness.ConsoleLock;
 
     /// <summary>
     /// Creates an AssemblyReferenceLoader with runtime assemblies for testing.

@@ -45,6 +45,9 @@ public partial class Interpreter
     private ParsedModule? _currentModule;
     private ModuleInstance? _currentModuleInstance;
 
+    // Lock for synchronizing timer callback access with main interpretation thread
+    internal readonly object InterpreterLock = new();
+
     internal RuntimeEnvironment Environment => _environment;
     internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;

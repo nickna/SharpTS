@@ -5,12 +5,14 @@ namespace SharpTS.Runtime.BuiltIns;
 
 /// <summary>
 /// Provides runtime implementation for timer functions (setTimeout, clearTimeout).
-/// Uses Task.Delay for async delay implementation.
+/// Uses System.Threading.Timer for reliable timer scheduling that doesn't compete
+/// with the general thread pool.
 /// </summary>
 public static class TimerBuiltIns
 {
     /// <summary>
     /// Executes setTimeout: schedules a callback to run after a delay.
+    /// Uses System.Threading.Timer for reliable scheduling under load.
     /// </summary>
     /// <param name="interpreter">The interpreter instance for callback execution.</param>
     /// <param name="callback">The callback function to execute.</param>
@@ -25,25 +27,19 @@ public static class TimerBuiltIns
         // Ensure delay is non-negative
         int delay = Math.Max(0, (int)delayMs);
 
-        // Start the async task
-        var task = Task.Run(async () =>
+        // Use System.Threading.Timer for reliable timer scheduling
+        Timer? timer = null;
+        timer = new Timer(_ =>
         {
-            try
+            if (!cts.IsCancellationRequested)
             {
-                await Task.Delay(delay, cts.Token);
-                if (!cts.IsCancellationRequested)
-                {
-                    // Execute callback on completion
-                    callback.Call(interpreter, args);
-                }
+                // Execute callback - exceptions propagate to help debug issues
+                callback.Call(interpreter, args);
             }
-            catch (TaskCanceledException)
-            {
-                // Timeout was cancelled - this is expected behavior
-            }
-        }, cts.Token);
+            timer?.Dispose();
+        }, null, delay, Timeout.Infinite);
 
-        timeout.Task = task;
+        timeout.Timer = timer;
         return timeout;
     }
 
@@ -63,7 +59,7 @@ public static class TimerBuiltIns
 
     /// <summary>
     /// Executes setInterval: schedules callback to run repeatedly after each delay.
-    /// Uses async loop with no overlap - waits for callback completion before next interval.
+    /// Uses System.Threading.Timer for reliable scheduling under load.
     /// </summary>
     /// <param name="interpreter">The interpreter instance for callback execution.</param>
     /// <param name="callback">The callback function to execute.</param>
@@ -76,27 +72,18 @@ public static class TimerBuiltIns
         var interval = new SharpTSTimeout(cts);
         int delay = Math.Max(0, (int)delayMs);
 
-        var task = Task.Run(async () =>
+        // Use System.Threading.Timer with periodic callback
+        Timer? timer = null;
+        timer = new Timer(_ =>
         {
-            try
+            if (!cts.IsCancellationRequested)
             {
-                while (!cts.IsCancellationRequested)
-                {
-                    await Task.Delay(delay, cts.Token);
-                    if (!cts.IsCancellationRequested)
-                    {
-                        // Synchronous execution - no overlap between iterations
-                        callback.Call(interpreter, args);
-                    }
-                }
+                // Execute callback - exceptions propagate to help debug issues
+                callback.Call(interpreter, args);
             }
-            catch (TaskCanceledException)
-            {
-                // Interval was cancelled - this is expected behavior
-            }
-        }, cts.Token);
+        }, null, delay, delay);
 
-        interval.Task = task;
+        interval.Timer = timer;
         return interval;
     }
 

@@ -3,6 +3,11 @@ using Xunit;
 
 namespace SharpTS.Tests.InterpreterTests;
 
+/// <summary>
+/// Timer tests run in a dedicated collection to avoid race conditions with other tests.
+/// The timer implementation uses async callbacks that can conflict with concurrent test execution.
+/// </summary>
+[Collection("TimerTests")]
 public class TimerTests
 {
     // ========== setTimeout Basic Tests ==========

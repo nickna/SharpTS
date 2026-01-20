@@ -8,7 +8,7 @@ namespace SharpTS.Runtime.Types;
 /// Follows Node.js-style Timeout object behavior with:
 /// - Unique ID for each timeout (thread-safe generation)
 /// - CancellationTokenSource for cancellation support
-/// - Task reference for completion tracking
+/// - Timer reference for System.Threading.Timer-based implementation
 /// - ref()/unref() methods for controlling program exit behavior
 /// </remarks>
 public class SharpTSTimeout
@@ -17,6 +17,7 @@ public class SharpTSTimeout
     private readonly int _id;
     private readonly CancellationTokenSource _cts;
     private Task? _task;
+    private Timer? _timer;
     private bool _hasRef = true;
 
     /// <summary>
@@ -52,12 +53,21 @@ public class SharpTSTimeout
     public CancellationTokenSource CancellationTokenSource => _cts;
 
     /// <summary>
-    /// Gets or sets the task representing the delayed execution.
+    /// Gets or sets the task representing the delayed execution (for Task-based implementation).
     /// </summary>
     public Task? Task
     {
         get => _task;
         set => _task = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the timer for System.Threading.Timer-based implementation.
+    /// </summary>
+    public Timer? Timer
+    {
+        get => _timer;
+        set => _timer = value;
     }
 
     /// <summary>
@@ -81,6 +91,9 @@ public class SharpTSTimeout
         {
             _cts.Cancel();
         }
+        // Dispose the timer to stop it from firing
+        _timer?.Dispose();
+        _timer = null;
     }
 
     /// <summary>
