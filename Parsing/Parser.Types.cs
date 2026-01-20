@@ -336,14 +336,40 @@ public partial class Parser
 
         while (!Check(TokenType.RIGHT_BRACKET) && !IsAtEnd())
         {
-            // Check for rest element: ...Type[]
+            // Check for spread or rest element: ...T or ...Type[]
             if (Match(TokenType.DOT_DOT_DOT))
             {
-                string restType = ParsePrimaryType();
-                if (!restType.EndsWith("[]"))
-                    throw new Exception("Parse Error: Rest element in tuple must be an array type.");
-                elements.Add("..." + restType);
-                break; // Rest must be last
+                string spreadType = ParsePrimaryType();
+
+                if (spreadType.EndsWith("[]"))
+                {
+                    // Trailing rest element (...T[]) - must be last
+                    if (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.COMMA))
+                    {
+                        // More content after - this is a variadic spread, allow it
+                        elements.Add("..." + spreadType);
+                    }
+                    else if (!Check(TokenType.RIGHT_BRACKET))
+                    {
+                        // Followed by comma - check what comes next
+                        elements.Add("..." + spreadType);
+                    }
+                    else
+                    {
+                        // At end - trailing rest element
+                        elements.Add("..." + spreadType);
+                        break;
+                    }
+                }
+                else
+                {
+                    // Variadic spread (...T) - can appear anywhere
+                    elements.Add("..." + spreadType);
+                }
+
+                if (!Check(TokenType.RIGHT_BRACKET))
+                    Consume(TokenType.COMMA, "Expect ',' between tuple elements.");
+                continue;
             }
 
             string elementType;

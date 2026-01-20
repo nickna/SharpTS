@@ -43,6 +43,16 @@ public enum MappedTypeModifiers
 public enum StringManipulation { Uppercase, Lowercase, Capitalize, Uncapitalize }
 
 /// <summary>
+/// Kind of element in a variadic tuple.
+/// </summary>
+public enum TupleElementKind
+{
+    Required,   // Regular required element
+    Optional,   // Optional element (?)
+    Spread      // Spread element (...T)
+}
+
+/// <summary>
 /// Base record for compile-time type representations.
 /// </summary>
 /// <remarks>
@@ -56,6 +66,37 @@ public enum StringManipulation { Uppercase, Lowercase, Capitalize, Uncapitalize 
 /// <seealso cref="TypeEnvironment"/>
 public abstract record TypeInfo
 {
+    /// <summary>
+    /// Represents a spread of a tuple/array type within a tuple: [...T]
+    /// The inner type must be constrained to extend unknown[] or be a concrete tuple/array.
+    /// </summary>
+    public record SpreadType(TypeInfo Inner) : TypeInfo
+    {
+        public override string ToString() => $"...{Inner}";
+    }
+
+    /// <summary>
+    /// Represents a single element in a tuple type.
+    /// </summary>
+    public record TupleElement(
+        TypeInfo Type,
+        TupleElementKind Kind,
+        string? Name = null
+    )
+    {
+        public bool IsOptional => Kind == TupleElementKind.Optional;
+        public bool IsSpread => Kind == TupleElementKind.Spread;
+        public bool IsRequired => Kind == TupleElementKind.Required;
+
+        public override string ToString()
+        {
+            string typeStr = IsSpread ? $"...{Type}" : Type.ToString()!;
+            string namePrefix = Name != null ? $"{Name}: " : "";
+            string optSuffix = IsOptional ? "?" : "";
+            return $"{namePrefix}{typeStr}{optSuffix}";
+        }
+    }
+
     public record Primitive(TokenType Type) : TypeInfo
     {
         public override string ToString() => Type.ToString().Replace("TYPE_", "").ToLower();
@@ -377,36 +418,49 @@ public abstract record TypeInfo
     }
 
     public record Tuple(
-        List<TypeInfo> ElementTypes,
+        List<TupleElement> Elements,
         int RequiredCount,
-        TypeInfo? RestElementType = null,
-        List<string?>? ElementNames = null
+        TypeInfo? RestElementType = null  // Keep for trailing ...T[] syntax
     ) : TypeInfo
     {
         public int MinLength => RequiredCount;
-        public int? MaxLength => RestElementType != null ? null : ElementTypes.Count;
+        public int? MaxLength => HasSpread || RestElementType != null ? null : Elements.Count;
         public bool HasRest => RestElementType != null;
-        public bool HasNames => ElementNames != null && ElementNames.Any(n => n != null);
+        public bool HasSpread => Elements.Any(e => e.Kind == TupleElementKind.Spread);
+        public bool HasNames => Elements.Any(e => e.Name != null);
+
+        // Helper to get concrete element types (excludes spreads)
+        public IEnumerable<TypeInfo> ConcreteElementTypes =>
+            Elements.Where(e => !e.IsSpread).Select(e => e.Type);
+
+        // Legacy accessor for backwards compatibility during migration
+        public List<TypeInfo> ElementTypes =>
+            Elements.Select(e => e.Type).ToList();
+
+        // Legacy accessor for names
+        public List<string?> ElementNames =>
+            Elements.Select(e => e.Name).ToList();
 
         public override string ToString()
         {
-            List<string> parts = [];
-            for (int i = 0; i < ElementTypes.Count; i++)
-            {
-                bool isOptional = i >= RequiredCount;
-                string elemStr = ElementTypes[i].ToString();
-
-                // Include name if present
-                if (ElementNames != null && i < ElementNames.Count && ElementNames[i] != null)
-                {
-                    elemStr = $"{ElementNames[i]}: {elemStr}";
-                }
-
-                parts.Add(isOptional ? $"{elemStr}?" : elemStr);
-            }
+            var parts = Elements.Select(e => e.ToString()).ToList();
             if (RestElementType != null)
                 parts.Add($"...{RestElementType}[]");
             return $"[{string.Join(", ", parts)}]";
+        }
+
+        /// <summary>
+        /// Creates a tuple from a list of element types (all required, no names).
+        /// Used for backwards compatibility during migration.
+        /// </summary>
+        public static Tuple FromTypes(List<TypeInfo> types, int requiredCount, TypeInfo? restType = null, List<string?>? names = null)
+        {
+            var elements = types.Select((t, i) => new TupleElement(
+                t,
+                i < requiredCount ? TupleElementKind.Required : TupleElementKind.Optional,
+                names != null && i < names.Count ? names[i] : null
+            )).ToList();
+            return new Tuple(elements, requiredCount, restType);
         }
     }
 

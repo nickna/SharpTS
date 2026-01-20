@@ -80,6 +80,10 @@ public partial class TypeChecker
                 {
                     // Generic type alias: type Foo<T, U> = ...
                     var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+
+                    // Validate spread constraints: any ...T in the definition must have T constrained to array type
+                    ValidateTypeAliasSpreadConstraints(typeAlias);
+
                     _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
                 }
                 else
@@ -325,7 +329,7 @@ public partial class TypeChecker
                 // Map iteration yields [key, value] tuples
                 else if (iterableType is TypeInfo.Map mapType)
                 {
-                    elementType = new TypeInfo.Tuple([mapType.KeyType, mapType.ValueType], 2);
+                    elementType = TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2);
                 }
                 // Set iteration yields values
                 else if (iterableType is TypeInfo.Set setType)
@@ -515,4 +519,76 @@ public partial class TypeChecker
                          ifStmt.ElseBranch != null && AlwaysTerminates(ifStmt.ElseBranch),
         _ => false
     };
+
+    /// <summary>
+    /// Validates that any spread elements in a type alias definition reference type parameters
+    /// that are constrained to array-like types (e.g., T extends unknown[]).
+    /// </summary>
+    private void ValidateTypeAliasSpreadConstraints(Stmt.TypeAlias typeAlias)
+    {
+        if (typeAlias.TypeParameters == null || typeAlias.TypeParameters.Count == 0)
+            return;
+
+        // Build a dictionary of type parameter constraints
+        var constraints = new Dictionary<string, string?>();
+        foreach (var tp in typeAlias.TypeParameters)
+        {
+            constraints[tp.Name.Lexeme] = tp.Constraint;
+        }
+
+        // Find spread patterns like ...T in the definition
+        string definition = typeAlias.TypeDefinition;
+        int idx = 0;
+        while ((idx = definition.IndexOf("...", idx, StringComparison.Ordinal)) >= 0)
+        {
+            idx += 3; // Skip past "..."
+            if (idx >= definition.Length)
+                break;
+
+            // Skip whitespace
+            while (idx < definition.Length && char.IsWhiteSpace(definition[idx]))
+                idx++;
+
+            if (idx >= definition.Length)
+                break;
+
+            // Extract the type name after ...
+            int start = idx;
+            while (idx < definition.Length && (char.IsLetterOrDigit(definition[idx]) || definition[idx] == '_'))
+                idx++;
+
+            if (start == idx)
+                continue;
+
+            string typeName = definition[start..idx];
+
+            // Check if this is a type parameter with an array-like constraint
+            if (constraints.TryGetValue(typeName, out var constraint))
+            {
+                // Type parameter found - check constraint
+                if (string.IsNullOrEmpty(constraint) || !IsArrayLikeConstraint(constraint))
+                {
+                    throw new TypeCheckException(
+                        $" A rest element type must be an array type. " +
+                        $"Type parameter '{typeName}' is not constrained to an array type.");
+                }
+            }
+            // If not a type parameter (e.g., a concrete type like ...number[]), that's fine
+        }
+    }
+
+    /// <summary>
+    /// Checks if a constraint string represents an array-like type.
+    /// </summary>
+    private static bool IsArrayLikeConstraint(string constraint)
+    {
+        string trimmed = constraint.Trim();
+        // Check for common array-like constraints
+        return trimmed.EndsWith("[]", StringComparison.Ordinal) ||  // T extends number[], string[], unknown[], etc.
+               trimmed == "unknown[]" ||
+               trimmed.StartsWith("[", StringComparison.Ordinal) || // T extends [string, number], etc. (tuples)
+               trimmed == "readonly unknown[]" ||
+               trimmed.StartsWith("readonly ", StringComparison.Ordinal) && trimmed.EndsWith("[]", StringComparison.Ordinal) ||
+               trimmed.StartsWith("Array<", StringComparison.Ordinal); // T extends Array<unknown>
+    }
 }

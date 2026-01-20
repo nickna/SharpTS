@@ -492,30 +492,48 @@ public partial class TypeChecker
     {
         string inner = tupleStr[1..^1].Trim(); // Remove [ and ]
         if (string.IsNullOrEmpty(inner))
-            return new TypeInfo.Tuple([], 0, null, null);
+            return new TypeInfo.Tuple([], 0, null);
 
-        var elements = SplitTupleElements(inner.AsSpan());
-        List<TypeInfo> elementTypes = [];
-        List<string?> elementNames = [];
+        var elemStrings = SplitTupleElements(inner.AsSpan());
+        List<TypeInfo.TupleElement> tupleElements = [];
         int requiredCount = 0;
         bool seenOptional = false;
+        bool seenSpread = false;
         TypeInfo? restType = null;
 
-        for (int i = 0; i < elements.Count; i++)
+        for (int i = 0; i < elemStrings.Count; i++)
         {
-            string elem = elements[i].Trim();
+            string elem = elemStrings[i].Trim();
             string? name = null;
 
-            // Rest element: ...type[]
+            // Spread element: ...T (variadic) or ...T[] (rest)
             if (elem.StartsWith("..."))
             {
-                if (i != elements.Count - 1)
-                    throw new TypeCheckException(" Rest element must be last in tuple type.");
-                string arrayType = elem[3..];
-                if (!arrayType.EndsWith("[]"))
-                    throw new TypeCheckException(" Rest element must be an array type.");
-                restType = ToTypeInfo(arrayType[..^2]);
-                break;
+                string spreadTypeStr = elem[3..];
+
+                // Trailing rest element: ...T[] (must be last)
+                if (spreadTypeStr.EndsWith("[]"))
+                {
+                    if (i != elemStrings.Count - 1)
+                    {
+                        // Not last - treat as variadic spread of array type
+                        var spreadInner = ToTypeInfo(spreadTypeStr);
+                        tupleElements.Add(new TypeInfo.TupleElement(spreadInner, TupleElementKind.Spread, null));
+                        seenSpread = true;
+                        continue;
+                    }
+                    // Trailing rest element
+                    restType = ToTypeInfo(spreadTypeStr[..^2]);
+                    break;
+                }
+                else
+                {
+                    // Variadic spread: ...T (not ending with [])
+                    TypeInfo spreadInner = ToTypeInfo(spreadTypeStr);
+                    tupleElements.Add(new TypeInfo.TupleElement(spreadInner, TupleElementKind.Spread, null));
+                    seenSpread = true;
+                    continue;
+                }
             }
 
             // Check for named element: name: type or name?: type
@@ -549,23 +567,22 @@ public partial class TypeChecker
                 elem = elem[..^1];
             }
 
+            // Validation: required elements cannot follow optional/spread elements
             if (isOptional)
             {
                 seenOptional = true;
             }
-            else if (seenOptional)
+            else if (seenOptional && !seenSpread)
             {
                 throw new TypeCheckException(" Required element cannot follow optional element in tuple.");
             }
 
-            elementTypes.Add(ToTypeInfo(elem));
-            elementNames.Add(name);
+            TupleElementKind kind = isOptional ? TupleElementKind.Optional : TupleElementKind.Required;
+            tupleElements.Add(new TypeInfo.TupleElement(ToTypeInfo(elem), kind, name));
             if (!isOptional) requiredCount++;
         }
 
-        // Only include names if any were specified
-        var namesParam = elementNames.Any(n => n != null) ? elementNames : null;
-        return new TypeInfo.Tuple(elementTypes, requiredCount, restType, namesParam);
+        return new TypeInfo.Tuple(tupleElements, requiredCount, restType);
     }
 
     /// <summary>

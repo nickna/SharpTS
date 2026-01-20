@@ -326,7 +326,7 @@ public static class BuiltInTypes
             "values" => new TypeInfo.Function([],
                 new TypeInfo.Iterator(valueType)),
             "entries" => new TypeInfo.Function([],
-                new TypeInfo.Iterator(new TypeInfo.Tuple([keyType, valueType], 2))),
+                new TypeInfo.Iterator(TypeInfo.Tuple.FromTypes([keyType, valueType], 2))),
             "forEach" => new TypeInfo.Function(
                 [new TypeInfo.Function([valueType, keyType], VoidType)],
                 VoidType),
@@ -353,7 +353,7 @@ public static class BuiltInTypes
             "values" => new TypeInfo.Function([],
                 new TypeInfo.Iterator(elementType)),
             "entries" => new TypeInfo.Function([],
-                new TypeInfo.Iterator(new TypeInfo.Tuple([elementType, elementType], 2))),
+                new TypeInfo.Iterator(TypeInfo.Tuple.FromTypes([elementType, elementType], 2))),
             "forEach" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType, elementType], VoidType)],
                 VoidType),

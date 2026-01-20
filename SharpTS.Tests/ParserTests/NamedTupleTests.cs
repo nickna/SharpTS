@@ -83,7 +83,7 @@ public class NamedTupleTests
         // Create a tuple type with names
         var elementTypes = new List<TypeInfo> { NumberType, StringType };
         var elementNames = new List<string?> { "x", "y" };
-        var tuple = new TypeInfo.Tuple(elementTypes, 2, null, elementNames);
+        var tuple = TypeInfo.Tuple.FromTypes(elementTypes, 2, null, elementNames);
 
         var str = tuple.ToString();
         Assert.Contains("x:", str);
@@ -95,7 +95,7 @@ public class NamedTupleTests
     {
         var elementTypes = new List<TypeInfo> { NumberType, NumberType };
         var elementNames = new List<string?> { "x", "y" };
-        var tuple = new TypeInfo.Tuple(elementTypes, 2, null, elementNames);
+        var tuple = TypeInfo.Tuple.FromTypes(elementTypes, 2, null, elementNames);
 
         Assert.True(tuple.HasNames);
     }
@@ -104,7 +104,7 @@ public class NamedTupleTests
     public void NamedTuple_HasNames_ReturnsFalseWhenNoNames()
     {
         var elementTypes = new List<TypeInfo> { NumberType, NumberType };
-        var tuple = new TypeInfo.Tuple(elementTypes, 2, null, null);
+        var tuple = TypeInfo.Tuple.FromTypes(elementTypes, 2);
 
         Assert.False(tuple.HasNames);
     }

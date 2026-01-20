@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added TypeScript `object` type)
+**Last Updated:** 2026-01-19 (Added Variadic Tuple Types)
 
 ## Legend
 - ✅ Implemented
@@ -40,7 +40,7 @@ This document tracks TypeScript language features and their implementation statu
 | `unique symbol` type | ❌ | For const symbol declarations |
 | `asserts` type predicates | ❌ | Assertion functions (`asserts x is T`) |
 | `satisfies` operator | ❌ | Validates expression matches type without widening (TS 4.9+) |
-| Variadic tuple types | ❌ | `[...T]` where T is a tuple type |
+| Variadic tuple types | ✅ | `[...T]` spread in tuples, Prepend/Append/Concat patterns |
 | Definite assignment assertion | ❌ | `let x!: number` syntax |
 
 ---
@@ -690,3 +690,14 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Works with `Object.freeze()`, `Object.seal()` for objects, arrays, and class instances
 - ✅ Strict-aware property setters: `SetPropertyStrict`, `SetIndexStrict`, `SetFieldsPropertyStrict`
 - ✅ Full interpreter and IL compiler support with 28 test cases (14 each)
+
+### Phase 37 Features (Variadic Tuple Types)
+- ✅ Spread element syntax in tuples: `[E, ...T]`, `[...T, E]`, `[A, ...T, B]`
+- ✅ Type alias instantiation with spread flattening: `Prepend<string, [number, boolean]>` → `[string, number, boolean]`
+- ✅ Constraint validation: spread elements require `extends unknown[]` constraint on type parameters
+- ✅ Positional spread matching for array literal type checking (leading, spread, trailing elements)
+- ✅ `TupleElement` record with `TupleElementKind` enum (Required, Optional, Spread)
+- ✅ `SpreadType` record for representing `...T` in type position
+- ✅ `FlattenTupleSpreads` for post-substitution tuple normalization
+- ✅ `SplitTypeArguments` tracks all bracket types for correct parsing of `Prepend<string, [number]>`
+- ✅ Full interpreter and IL compiler support with 22 test cases

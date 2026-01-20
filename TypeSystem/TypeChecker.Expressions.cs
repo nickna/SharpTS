@@ -172,7 +172,7 @@ public partial class TypeChecker
         TypeInfo.AsyncGenerator asyncGen => asyncGen.YieldType,
         TypeInfo.Iterator iter => iter.ElementType,
         TypeInfo.Set set => set.ElementType,
-        TypeInfo.Map map => new TypeInfo.Tuple([map.KeyType, map.ValueType], 2),  // [K, V] tuples
+        TypeInfo.Map map => TypeInfo.Tuple.FromTypes([map.KeyType, map.ValueType], 2),  // [K, V] tuples
         TypeInfo.String => new TypeInfo.String(),  // String yields characters (as strings)
         TypeInfo.StringLiteral => new TypeInfo.String(),  // String literal also yields characters
         TypeInfo.Any => new TypeInfo.Any(),
@@ -239,7 +239,7 @@ public partial class TypeChecker
         var elementTypes = arr.Elements
             .Select(e => InferConstType(e, CheckExpr(e)))
             .ToList();
-        return new TypeInfo.Tuple(elementTypes, elementTypes.Count, null, null);
+        return TypeInfo.Tuple.FromTypes(elementTypes, elementTypes.Count);
     }
 
     /// <summary>
@@ -466,17 +466,36 @@ public partial class TypeChecker
     {
         int elemCount = arrayLit.Elements.Count;
         int requiredCount = tupleType.RequiredCount;
-        int maxCount = tupleType.MaxLength ?? int.MaxValue;
 
-        // Check element count
+        // Check minimum element count
         if (elemCount < requiredCount)
         {
             throw new TypeCheckException($" Tuple requires at least {requiredCount} elements, but got {elemCount} for variable '{varName}'.");
         }
-        if (tupleType.RestElementType == null && elemCount > tupleType.ElementTypes.Count)
+
+        // Check maximum element count (only for fixed tuples without spread or rest)
+        if (tupleType.RestElementType == null && !tupleType.HasSpread && elemCount > tupleType.Elements.Count)
         {
-            throw new TypeCheckException($" Tuple expects at most {tupleType.ElementTypes.Count} elements, but got {elemCount} for variable '{varName}'.");
+            throw new TypeCheckException($" Tuple expects at most {tupleType.Elements.Count} elements, but got {elemCount} for variable '{varName}'.");
         }
+
+        // Use variadic tuple logic if the tuple has a spread element
+        if (tupleType.HasSpread)
+        {
+            CheckArrayLiteralAgainstVariadicTuple(arrayLit, tupleType, varName);
+        }
+        else
+        {
+            CheckArrayLiteralAgainstFixedTuple(arrayLit, tupleType, varName);
+        }
+    }
+
+    /// <summary>
+    /// Checks an array literal against a fixed (non-variadic) tuple type.
+    /// </summary>
+    private void CheckArrayLiteralAgainstFixedTuple(Expr.ArrayLiteral arrayLit, TypeInfo.Tuple tupleType, string varName)
+    {
+        int elemCount = arrayLit.Elements.Count;
 
         // Check each element type
         for (int i = 0; i < elemCount; i++)
@@ -508,6 +527,96 @@ public partial class TypeChecker
                 if (!IsCompatible(expectedType, elemType))
                 {
                     throw new TypeCheckException($" Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks an array literal against a variadic tuple type with positional spread matching.
+    /// Handles patterns like [E, ...T] or [...T, E] or [A, ...T, B].
+    /// </summary>
+    private void CheckArrayLiteralAgainstVariadicTuple(Expr.ArrayLiteral arrayLit, TypeInfo.Tuple tupleType, string varName)
+    {
+        // Find the spread position
+        int spreadIdx = tupleType.Elements.FindIndex(e => e.Kind == TupleElementKind.Spread);
+        if (spreadIdx < 0)
+        {
+            // No spread found - shouldn't happen since HasSpread was true, but fallback to fixed tuple logic
+            CheckArrayLiteralAgainstFixedTuple(arrayLit, tupleType, varName);
+            return;
+        }
+
+        var spreadElem = tupleType.Elements[spreadIdx];
+        int leadingCount = spreadIdx;
+        int trailingCount = tupleType.Elements.Count - spreadIdx - 1;
+        int spreadCount = arrayLit.Elements.Count - leadingCount - trailingCount;
+
+        if (spreadCount < 0)
+        {
+            throw new TypeCheckException($" Not enough elements for variadic tuple: expected at least {leadingCount + trailingCount} elements, got {arrayLit.Elements.Count} for variable '{varName}'.");
+        }
+
+        // Check leading elements (before spread)
+        for (int i = 0; i < leadingCount; i++)
+        {
+            var element = arrayLit.Elements[i];
+            var expectedType = tupleType.Elements[i].Type;
+
+            if (expectedType is TypeInfo.Tuple nestedTuple && element is Expr.ArrayLiteral nestedArrayLit)
+            {
+                CheckArrayLiteralAgainstTuple(nestedArrayLit, nestedTuple, $"{varName}[{i}]");
+            }
+            else
+            {
+                TypeInfo elemType = CheckExpr(element);
+                if (!IsCompatible(expectedType, elemType))
+                {
+                    throw new TypeCheckException($" Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
+                }
+            }
+        }
+
+        // Check spread elements (middle)
+        // Get the inner type of the spread element (if it's an array, use element type; otherwise use the type directly)
+        TypeInfo spreadInnerType = spreadElem.Type is TypeInfo.Array arr ? arr.ElementType : spreadElem.Type;
+        for (int i = 0; i < spreadCount; i++)
+        {
+            int arrIdx = leadingCount + i;
+            var element = arrayLit.Elements[arrIdx];
+
+            if (spreadInnerType is TypeInfo.Tuple nestedTuple && element is Expr.ArrayLiteral nestedArrayLit)
+            {
+                CheckArrayLiteralAgainstTuple(nestedArrayLit, nestedTuple, $"{varName}[{arrIdx}]");
+            }
+            else
+            {
+                TypeInfo elemType = CheckExpr(element);
+                if (!IsCompatible(spreadInnerType, elemType))
+                {
+                    throw new TypeCheckException($" Element at index {arrIdx} has type '{elemType}' but expected '{spreadInnerType}' for variable '{varName}'.");
+                }
+            }
+        }
+
+        // Check trailing elements (after spread)
+        for (int i = 0; i < trailingCount; i++)
+        {
+            int arrIdx = arrayLit.Elements.Count - trailingCount + i;
+            int tupleIdx = tupleType.Elements.Count - trailingCount + i;
+            var element = arrayLit.Elements[arrIdx];
+            var expectedType = tupleType.Elements[tupleIdx].Type;
+
+            if (expectedType is TypeInfo.Tuple nestedTuple && element is Expr.ArrayLiteral nestedArrayLit)
+            {
+                CheckArrayLiteralAgainstTuple(nestedArrayLit, nestedTuple, $"{varName}[{arrIdx}]");
+            }
+            else
+            {
+                TypeInfo elemType = CheckExpr(element);
+                if (!IsCompatible(expectedType, elemType))
+                {
+                    throw new TypeCheckException($" Element at index {arrIdx} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.");
                 }
             }
         }
