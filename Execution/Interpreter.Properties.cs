@@ -213,7 +213,13 @@ public partial class Interpreter
         // Handle static member access on class
         if (obj is SharpTSClass klass)
         {
-            // Try static method first
+            // Try static auto-accessor first (TypeScript 4.9+)
+            if (klass.HasStaticAutoAccessor(get.Name.Lexeme))
+            {
+                return klass.GetStaticAutoAccessorValue(get.Name.Lexeme);
+            }
+
+            // Try static method
             SharpTSFunction? staticMethod = klass.FindStaticMethod(get.Name.Lexeme);
             if (staticMethod != null) return staticMethod;
 
@@ -327,6 +333,12 @@ public partial class Interpreter
         // Handle static property assignment
         if (obj is SharpTSClass klass)
         {
+            // Check for static auto-accessor (TypeScript 4.9+)
+            if (klass.HasStaticAutoAccessor(set.Name.Lexeme))
+            {
+                klass.SetStaticAutoAccessorValue(set.Name.Lexeme, value);
+                return value;
+            }
             klass.SetStaticProperty(set.Name.Lexeme, value);
             return value;
         }

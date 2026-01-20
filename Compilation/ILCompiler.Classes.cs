@@ -243,6 +243,15 @@ public partial class ILCompiler
         // ES2022 Private Class Elements: Define storage for private fields and methods
         DefinePrivateClassElements(typeBuilder, className, classStmt, classGenericParams);
 
+        // Define auto-accessor properties (TypeScript 4.9+)
+        if (classStmt.AutoAccessors != null)
+        {
+            foreach (var autoAccessor in classStmt.AutoAccessors)
+            {
+                DefineAutoAccessorProperty(typeBuilder, className, autoAccessor, classGenericParams);
+            }
+        }
+
         // Apply class-level decorators as .NET attributes
         if (_decoratorMode != DecoratorMode.None)
         {
@@ -841,6 +850,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             CurrentModulePath = _modules.CurrentPath,
             ClassToModule = _modules.ClassToModule,

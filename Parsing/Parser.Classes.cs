@@ -36,6 +36,7 @@ public partial class Parser
         List<Stmt.Function> methods = [];
         List<Stmt.Field> fields = [];
         List<Stmt.Accessor> accessors = [];
+        List<Stmt.AutoAccessor> autoAccessors = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             try
@@ -89,6 +90,52 @@ public partial class Parser
             if (isOverride && superclass == null)
             {
                 throw new Exception($"Parse Error: Cannot use 'override' modifier in a class that does not extend another class.");
+            }
+
+            // Check for auto-accessor: accessor name: type = value
+            if (Check(TokenType.ACCESSOR))
+            {
+                // Validate: abstract accessor is not valid
+                if (isMemberAbstract)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: An auto-accessor cannot be abstract.");
+                }
+
+                Advance(); // consume 'accessor'
+
+                // Validate: accessor #name (private identifier) is not valid
+                if (Check(TokenType.PRIVATE_IDENTIFIER))
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
+                }
+
+                Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
+
+                string? typeAnnotation = null;
+                if (Match(TokenType.COLON))
+                {
+                    typeAnnotation = ParseTypeAnnotation();
+                }
+
+                Expr? initializer = null;
+                if (Match(TokenType.EQUAL))
+                {
+                    initializer = Expression();
+                }
+
+                Consume(TokenType.SEMICOLON, "Expect ';' after auto-accessor declaration.");
+
+                autoAccessors.Add(new Stmt.AutoAccessor(
+                    accessorName,
+                    typeAnnotation,
+                    initializer,
+                    isStatic,
+                    access,
+                    isReadonly,
+                    isOverride,
+                    memberDecorators
+                ));
+                continue;
             }
 
             // Check for getter/setter
@@ -308,7 +355,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
+        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
     }
 
     /// <summary>
@@ -393,6 +440,7 @@ public partial class Parser
         List<Stmt.Function> methods = [];
         List<Stmt.Field> fields = [];
         List<Stmt.Accessor> accessors = [];
+        List<Stmt.AutoAccessor> autoAccessors = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             try
@@ -415,6 +463,46 @@ public partial class Parser
                     case TokenType.READONLY: isReadonly = true; break;
                     case TokenType.ASYNC: isMemberAsync = true; break;
                 }
+            }
+
+            // Check for auto-accessor: accessor name: type = value
+            if (Check(TokenType.ACCESSOR))
+            {
+                Advance(); // consume 'accessor'
+
+                // Validate: accessor #name (private identifier) is not valid
+                if (Check(TokenType.PRIVATE_IDENTIFIER))
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot use private identifiers (#name).");
+                }
+
+                Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'accessor'.");
+
+                string? typeAnnotation = null;
+                if (Match(TokenType.COLON))
+                {
+                    typeAnnotation = ParseTypeAnnotation();
+                }
+
+                Expr? initializer = null;
+                if (Match(TokenType.EQUAL))
+                {
+                    initializer = Expression();
+                }
+
+                Consume(TokenType.SEMICOLON, "Expect ';' after auto-accessor declaration.");
+
+                autoAccessors.Add(new Stmt.AutoAccessor(
+                    accessorName,
+                    typeAnnotation,
+                    initializer,
+                    isStatic,
+                    access,
+                    isReadonly,
+                    IsOverride: false,  // Class expressions don't support override
+                    Decorators: null    // Class expressions don't support decorators on members
+                ));
+                continue;
             }
 
             // Check for getter/setter
@@ -580,6 +668,7 @@ public partial class Parser
             methods,
             fields,
             accessors.Count > 0 ? accessors : null,
+            autoAccessors.Count > 0 ? autoAccessors : null,
             interfaces,
             interfaceTypeArgs,
             IsAbstract: false  // Class expressions cannot be abstract

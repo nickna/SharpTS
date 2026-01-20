@@ -894,6 +894,30 @@ public partial class Interpreter
                     }
                 }
 
+                // Process auto-accessors (TypeScript 4.9+)
+                List<Stmt.AutoAccessor> instanceAutoAccessors = [];
+                Dictionary<string, object?> staticAutoAccessors = [];
+
+                if (classStmt.AutoAccessors != null)
+                {
+                    foreach (var autoAccessor in classStmt.AutoAccessors)
+                    {
+                        if (autoAccessor.IsStatic)
+                        {
+                            // Evaluate static auto-accessor initializer now
+                            object? initValue = autoAccessor.Initializer != null
+                                ? Evaluate(autoAccessor.Initializer)
+                                : null;
+                            staticAutoAccessors[autoAccessor.Name.Lexeme] = initValue;
+                        }
+                        else
+                        {
+                            // Collect instance auto-accessors for later initialization
+                            instanceAutoAccessors.Add(autoAccessor);
+                        }
+                    }
+                }
+
                 SharpTSClass klass = new(
                     classStmt.Name.Lexeme,
                     (SharpTSClass?)superclass,
@@ -907,7 +931,9 @@ public partial class Interpreter
                     instancePrivateFields,
                     privateMethods,
                     staticPrivateFields,
-                    staticPrivateMethods);
+                    staticPrivateMethods,
+                    instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
+                    staticAutoAccessors.Count > 0 ? staticAutoAccessors : null);
 
                 // Apply decorators in the correct order
                 klass = ApplyAllDecorators(classStmt, klass, methods, staticMethods, getters, setters);

@@ -71,6 +71,48 @@ public partial class ILEmitter
         if (g.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+
+            // Try static getter first (for auto-accessors and explicit static accessors)
+            if (_ctx.StaticGetters != null &&
+                _ctx.StaticGetters.TryGetValue(resolvedClassName, out var staticGetters) &&
+                staticGetters.TryGetValue(g.Name.Lexeme, out var staticGetter))
+            {
+                IL.Emit(OpCodes.Call, staticGetter);
+
+                // The getter returns the typed value (e.g., double for number).
+                // Track the stack type so EmitBoxIfNeeded can box only when necessary.
+                // This avoids unnecessary boxing in numeric contexts like `Counter.count + 1`.
+                string pascalPropName = NamingConventions.ToPascalCase(g.Name.Lexeme);
+                if (_ctx.PropertyTypes != null &&
+                    _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
+                    propTypes.TryGetValue(pascalPropName, out var propType))
+                {
+                    if (propType == _ctx.Types.Double)
+                    {
+                        SetStackType(StackType.Double);
+                    }
+                    else if (propType == _ctx.Types.Boolean)
+                    {
+                        SetStackType(StackType.Boolean);
+                    }
+                    else if (propType == _ctx.Types.String)
+                    {
+                        SetStackType(StackType.String);
+                    }
+                    else
+                    {
+                        // Other reference types
+                        SetStackUnknown();
+                    }
+                }
+                else
+                {
+                    // Fallback: assume object return (legacy behavior)
+                    SetStackUnknown();
+                }
+                return;
+            }
+
             // Try to find static field using stored FieldBuilders
             if (_ctx.StaticFields != null &&
                 _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
@@ -256,6 +298,62 @@ public partial class ILEmitter
         if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
+
+            // Try static setter first (for auto-accessors and explicit static accessors)
+            if (_ctx.StaticSetters != null &&
+                _ctx.StaticSetters.TryGetValue(resolvedClassName, out var staticSetters) &&
+                staticSetters.TryGetValue(s.Name.Lexeme, out var staticSetter))
+            {
+                // Get the property type from PropertyTypes dictionary
+                Type propertyType = _ctx.Types.Object;
+                string pascalPropName = NamingConventions.ToPascalCase(s.Name.Lexeme);
+
+                // Try to get the type from PropertyTypes dictionary
+                if (_ctx.PropertyTypes != null &&
+                    _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
+                    propTypes.TryGetValue(pascalPropName, out var propType))
+                {
+                    propertyType = propType;
+                }
+                else
+                {
+                    // Fallback: infer from value expression type via TypeMap
+                    TypeInfo? valueType = _ctx.TypeMap?.Get(s.Value);
+                    if (valueType is TypeInfo.Primitive prim)
+                    {
+                        propertyType = prim.Type switch
+                        {
+                            TokenType.TYPE_NUMBER => _ctx.Types.Double,
+                            TokenType.TYPE_BOOLEAN => _ctx.Types.Boolean,
+                            TokenType.TYPE_STRING => _ctx.Types.String,
+                            _ => _ctx.Types.Object
+                        };
+                    }
+                }
+
+                EmitExpression(s.Value);
+                EmitBoxIfNeeded(s.Value);
+                IL.Emit(OpCodes.Dup); // Keep value for expression result
+                var staticSetterResultTemp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, staticSetterResultTemp);
+
+                // If setter expects a value type, unbox the value
+                if (propertyType.IsValueType)
+                {
+                    IL.Emit(OpCodes.Unbox_Any, propertyType);
+                }
+                else if (!_ctx.Types.IsObject(propertyType))
+                {
+                    IL.Emit(OpCodes.Castclass, propertyType);
+                }
+
+                IL.Emit(OpCodes.Call, staticSetter);
+
+                // Restore result for expression value
+                IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
+                return;
+            }
+
             if (_ctx.StaticFields != null &&
                 _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
                 classFields.TryGetValue(s.Name.Lexeme, out var staticField))

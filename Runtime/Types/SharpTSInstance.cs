@@ -63,6 +63,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
         Getter,      // Resolved to a getter (invoke on each access)
         Field,       // Resolved to an instance field (read from _fields)
         Method,      // Resolved to a method (bind on access)
+        AutoAccessor,// Resolved to an auto-accessor (TypeScript 4.9+)
         NotFound     // Property doesn't exist (cache negative lookups)
     }
 
@@ -76,7 +77,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
 
     private PropertyResolution ResolveProperty(string name)
     {
-        // Check for getter first
+        // Check for auto-accessor first (TypeScript 4.9+)
+        // Auto-accessors take precedence since they're a specific declaration
+        if (_klass.HasInstanceAutoAccessor(name))
+        {
+            return new PropertyResolution { Type = ResolutionType.AutoAccessor };
+        }
+
+        // Check for getter
         SharpTSFunction? getter = _klass.FindGetter(name);
         if (getter != null)
         {
@@ -123,6 +131,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
         // Use cached resolution
         return resolution.Type switch
         {
+            ResolutionType.AutoAccessor => _klass.GetAutoAccessorValue(this, propName),
             ResolutionType.Getter => resolution.Function!.Bind(this).Call(_interpreter!, []),
             ResolutionType.Field => _fields[propName],
             ResolutionType.Method => resolution.Function!.Bind(this),
@@ -147,6 +156,19 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
         if (IsSealed && !exists)
         {
             // Sealed objects silently ignore new property additions
+            return;
+        }
+
+        // Check for auto-accessor first (TypeScript 4.9+)
+        if (_klass.HasInstanceAutoAccessor(propName))
+        {
+            // Check if readonly - readonly auto-accessors have no setter
+            var accessor = _klass.GetAutoAccessorDeclaration(propName);
+            if (accessor != null && accessor.IsReadonly)
+            {
+                throw new Exception($"Cannot assign to '{propName}' because it is a readonly auto-accessor.");
+            }
+            _klass.SetAutoAccessorValue(this, propName, value);
             return;
         }
 
@@ -197,6 +219,19 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
             {
                 throw new Exception($"TypeError: Cannot add property '{propName}' to a sealed object");
             }
+            return;
+        }
+
+        // Check for auto-accessor first (TypeScript 4.9+)
+        if (_klass.HasInstanceAutoAccessor(propName))
+        {
+            // Check if readonly - readonly auto-accessors have no setter
+            var accessor = _klass.GetAutoAccessorDeclaration(propName);
+            if (accessor != null && accessor.IsReadonly)
+            {
+                throw new Exception($"Cannot assign to '{propName}' because it is a readonly auto-accessor.");
+            }
+            _klass.SetAutoAccessorValue(this, propName, value);
             return;
         }
 

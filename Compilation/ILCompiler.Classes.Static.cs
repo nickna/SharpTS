@@ -43,12 +43,13 @@ public partial class ILCompiler
         // Check if we need a static constructor
         var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && f.Initializer != null).ToList();
         var staticPrivateFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null).ToList();
+        var staticAutoAccessorsWithInit = classStmt.AutoAccessors?.Where(a => a.IsStatic && a.Initializer != null).ToList() ?? [];
         bool hasStaticLockFields = _locks.StaticSyncLockFields.ContainsKey(qualifiedClassName);
         bool hasPrivateFieldStorage = _classes.PrivateFieldStorage.ContainsKey(qualifiedClassName);
         bool hasStaticPrivateFields = _classes.StaticPrivateFields.TryGetValue(qualifiedClassName, out var staticPrivateFields) && staticPrivateFields.Count > 0;
 
-        // Only emit if there are static fields with initializers, static lock fields, or private field storage
-        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields && !hasPrivateFieldStorage && !hasStaticPrivateFields) return;
+        // Only emit if there are static fields with initializers, static lock fields, private field storage, or static auto-accessors
+        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields && !hasPrivateFieldStorage && !hasStaticPrivateFields && staticAutoAccessorsWithInit.Count == 0) return;
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -80,6 +81,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
@@ -150,16 +153,24 @@ public partial class ILCompiler
         }
 
         // Initialize static field initializers
-        var classStaticFields = _classes.StaticFields[qualifiedClassName];
-        foreach (var field in staticFieldsWithInit)
+        if (staticFieldsWithInit.Count > 0 && _classes.StaticFields.TryGetValue(qualifiedClassName, out var classStaticFields))
         {
-            // Emit the initializer expression
-            emitter.EmitExpression(field.Initializer!);
-            emitter.EmitBoxIfNeeded(field.Initializer!);
+            foreach (var field in staticFieldsWithInit)
+            {
+                // Emit the initializer expression
+                emitter.EmitExpression(field.Initializer!);
+                emitter.EmitBoxIfNeeded(field.Initializer!);
 
-            // Store in static field using the stored FieldBuilder
-            var staticField = classStaticFields[field.Name.Lexeme];
-            il.Emit(OpCodes.Stsfld, staticField);
+                // Store in static field using the stored FieldBuilder
+                var staticField = classStaticFields[field.Name.Lexeme];
+                il.Emit(OpCodes.Stsfld, staticField);
+            }
+        }
+
+        // Initialize static auto-accessor backing fields (TypeScript 4.9+)
+        foreach (var autoAccessor in staticAutoAccessorsWithInit)
+        {
+            EmitAutoAccessorInitializer(emitter, autoAccessor, qualifiedClassName, isStatic: true);
         }
 
         il.Emit(OpCodes.Ret);
@@ -206,6 +217,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation
@@ -432,6 +445,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             AsyncArrowBuilders = _async.ArrowBuilders,

@@ -290,6 +290,78 @@ public partial class TypeChecker
                 }
             }
         }
+
+        // Collect auto-accessor types (TypeScript 4.9+)
+        if (classStmt.AutoAccessors != null)
+        {
+            foreach (var autoAccessor in classStmt.AutoAccessors)
+            {
+                // Check auto-accessor decorators (Stage 3: kind = "accessor")
+                DecoratorTarget accessorTarget = DecoratorTarget.Getter; // Use Getter target for auto-accessors
+                CheckDecorators(autoAccessor.Decorators, accessorTarget);
+
+                string propName = autoAccessor.Name.Lexeme;
+
+                // Determine the type from annotation or initializer
+                TypeInfo accessorType;
+                if (autoAccessor.TypeAnnotation != null)
+                {
+                    accessorType = ToTypeInfo(autoAccessor.TypeAnnotation);
+                }
+                else if (autoAccessor.Initializer != null)
+                {
+                    accessorType = CheckExpr(autoAccessor.Initializer);
+                }
+                else
+                {
+                    accessorType = new TypeInfo.Any();
+                }
+
+                // Register as getter (always available)
+                mutableClass.Getters[propName] = accessorType;
+
+                // Register as setter (unless readonly)
+                if (!autoAccessor.IsReadonly)
+                {
+                    mutableClass.Setters[propName] = accessorType;
+                }
+
+                // Track as auto-accessor for decorator context
+                mutableClass.AutoAccessors.Add(propName);
+
+                // Validate override if specified
+                if (autoAccessor.IsOverride)
+                {
+                    if (superclass == null)
+                    {
+                        throw new TypeCheckException($" Cannot use 'override' for auto-accessor '{propName}' in a class that does not extend another class.");
+                    }
+
+                    // Check if parent has a matching getter
+                    bool parentHasGetter = false;
+                    TypeInfo? currentSuperclass = superclass;
+                    while (currentSuperclass != null)
+                    {
+                        if (currentSuperclass is TypeInfo.Class sc && sc.Getters.ContainsKey(propName))
+                        {
+                            parentHasGetter = true;
+                            break;
+                        }
+                        currentSuperclass = currentSuperclass switch
+                        {
+                            TypeInfo.Class c => c.Superclass,
+                            TypeInfo.InstantiatedGeneric ig when ig.GenericDefinition is TypeInfo.GenericClass gc => gc.Superclass,
+                            _ => null
+                        };
+                    }
+
+                    if (!parentHasGetter)
+                    {
+                        throw new TypeCheckException($" Auto-accessor '{propName}' uses 'override' but parent class has no accessor with this name.");
+                    }
+                }
+            }
+        }
         }
 
         // Freeze the mutable class and create GenericClass or regular Class based on type parameters.
@@ -419,6 +491,23 @@ public partial class TypeChecker
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.");
+                }
+            }
+        }
+
+        // Check auto-accessor initializers
+        if (classStmt.AutoAccessors != null)
+        {
+            foreach (var autoAccessor in classStmt.AutoAccessors)
+            {
+                if (autoAccessor.Initializer != null)
+                {
+                    TypeInfo initType = CheckExpr(autoAccessor.Initializer);
+                    TypeInfo declaredType = classTypeForBody.Getters[autoAccessor.Name.Lexeme];
+                    if (!IsCompatible(declaredType, initType))
+                    {
+                        throw new TypeCheckException($" Cannot assign type '{initType}' to auto-accessor '{autoAccessor.Name.Lexeme}' of type '{declaredType}'.");
+                    }
                 }
             }
         }

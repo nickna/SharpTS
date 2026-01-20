@@ -42,6 +42,12 @@ public partial class CompilationContext
     // Instance setters for direct dispatch (class name -> property name -> MethodBuilder)
     public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceSetters { get; set; }
 
+    // Static getters for direct dispatch (class name -> property name -> MethodBuilder)
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticGetters { get; set; }
+
+    // Static setters for direct dispatch (class name -> property name -> MethodBuilder)
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticSetters { get; set; }
+
     // Class superclass mapping (class name -> superclass name or null)
     public Dictionary<string, string?>? ClassSuperclass { get; set; }
 

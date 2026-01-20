@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added triple-slash path references for script-style file concatenation)
+**Last Updated:** 2026-01-20 (Added auto-accessor class fields with `accessor` keyword)
 
 ## Legend
 - ✅ Implemented
@@ -75,7 +75,7 @@ This document tracks TypeScript language features and their implementation statu
 | `override` keyword | ✅ | Explicit override marker for methods/accessors |
 | Private fields (`#field`) | ✅ | ES2022 hard private fields with ConditionalWeakTable isolation; full interpreter and IL compiler support |
 | Static blocks | ❌ | `static { }` for static initialization |
-| `accessor` keyword | ❌ | Auto-accessor class fields (TS 4.9+) |
+| `accessor` keyword | ✅ | Auto-accessor class fields (TS 4.9+); full interpreter and IL compiler support with deferred boxing optimization |
 | `declare` field modifier | ❌ | Ambient field declarations |
 
 ---
@@ -832,3 +832,19 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Directive parsing in lexer with `TripleSlashDirective` record type
 - ✅ `ScriptDetector` helper for script vs module classification
 - ✅ Full interpreter and IL compiler support with 43 test cases (17 lexer + 16 interpreter + 10 compiler)
+
+### Phase 47 Features (Auto-Accessor Class Fields)
+- ✅ `accessor` keyword for auto-accessor class fields (TypeScript 4.9+)
+- ✅ Automatic generation of private backing field with implicit getter/setter
+- ✅ Instance auto-accessors: `accessor x: number = 0;`
+- ✅ Static auto-accessors: `static accessor count: number = 0;`
+- ✅ Readonly auto-accessors: `readonly accessor id: string = "abc";` (getter only)
+- ✅ Override auto-accessors: `override accessor value: number;`
+- ✅ Type annotations and initializers supported
+- ✅ Multiple auto-accessors per class
+- ✅ Mixed regular fields, methods, and auto-accessors in same class
+- ✅ Inheritance: child classes can override parent auto-accessors
+- ✅ Multiple instances have isolated backing storage
+- ✅ IL compiler emits true .NET properties with private backing fields
+- ✅ Deferred boxing optimization: static getter stack type tracking avoids unnecessary boxing in numeric contexts
+- ✅ Full interpreter and IL compiler support with 30 test cases

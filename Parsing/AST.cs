@@ -129,6 +129,7 @@ public abstract record Expr
         List<Stmt.Function> Methods,
         List<Stmt.Field> Fields,
         List<Stmt.Accessor>? Accessors = null,
+        List<Stmt.AutoAccessor>? AutoAccessors = null,
         List<Token>? Interfaces = null,
         List<List<string>>? InterfaceTypeArgs = null,
         bool IsAbstract = false
@@ -173,9 +174,31 @@ public abstract record Stmt
     public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null, bool IsPrivate = false) : Stmt;
     public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null) : Stmt;
     /// <summary>
+    /// Auto-accessor field declaration (TypeScript 4.9+): accessor name: Type = initializer
+    /// Automatically generates a private backing field with implicit getter/setter.
+    /// </summary>
+    /// <param name="Name">The property name token.</param>
+    /// <param name="TypeAnnotation">Optional type annotation.</param>
+    /// <param name="Initializer">Optional initializer expression.</param>
+    /// <param name="IsStatic">Whether this is a static auto-accessor.</param>
+    /// <param name="Access">Access modifier (public, private, protected).</param>
+    /// <param name="IsReadonly">Whether this is readonly (no setter).</param>
+    /// <param name="IsOverride">Whether this overrides a parent accessor.</param>
+    /// <param name="Decorators">Optional list of decorators applied to this accessor.</param>
+    public record AutoAccessor(
+        Token Name,
+        string? TypeAnnotation,
+        Expr? Initializer,
+        bool IsStatic = false,
+        AccessModifier Access = AccessModifier.Public,
+        bool IsReadonly = false,
+        bool IsOverride = false,
+        List<Decorator>? Decorators = null
+    ) : Stmt;
+    /// <summary>
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.
     /// </summary>
-    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false) : Stmt;
+    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Stmt.AutoAccessor>? AutoAccessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false) : Stmt;
     /// <summary>
     /// Interface declaration with optional call and constructor signatures.
     /// </summary>

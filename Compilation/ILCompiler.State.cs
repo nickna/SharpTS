@@ -28,6 +28,8 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceMethods { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceGetters { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceSetters { get; } = [];
+        public Dictionary<string, Dictionary<string, MethodBuilder>> StaticGetters { get; } = [];
+        public Dictionary<string, Dictionary<string, MethodBuilder>> StaticSetters { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedMethods { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedAccessors { get; } = [];
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];

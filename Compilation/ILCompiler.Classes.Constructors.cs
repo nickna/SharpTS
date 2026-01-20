@@ -63,6 +63,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Typed interop support
@@ -198,6 +200,23 @@ public partial class ILCompiler
         // ES2022: Initialize instance private fields
         // Private fields use a ConditionalWeakTable for GC-friendly per-instance storage
         EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+
+        // TypeScript 4.9+: Initialize instance auto-accessor backing fields
+        if (classStmt.AutoAccessors != null)
+        {
+            var instanceAutoAccessors = classStmt.AutoAccessors.Where(a => !a.IsStatic && a.Initializer != null).ToList();
+            if (instanceAutoAccessors.Count > 0)
+            {
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var autoAccessorEmitter = new ILEmitter(ctx);
+
+                foreach (var autoAccessor in instanceAutoAccessors)
+                {
+                    EmitAutoAccessorInitializer(autoAccessorEmitter, autoAccessor, className, isStatic: false);
+                }
+            }
+        }
 
         // Emit constructor body
         if (constructor != null)

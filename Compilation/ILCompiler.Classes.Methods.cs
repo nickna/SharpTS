@@ -619,6 +619,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             CurrentModulePath = _modules.CurrentPath,
@@ -760,6 +762,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Module support for multi-module compilation

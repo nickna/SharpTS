@@ -29,7 +29,9 @@ public class SharpTSClass(
     List<Stmt.Field>? instancePrivateFields = null,
     Dictionary<string, SharpTSFunction>? privateMethods = null,
     Dictionary<string, object?>? staticPrivateFields = null,
-    Dictionary<string, SharpTSFunction>? staticPrivateMethods = null) : ISharpTSCallable
+    Dictionary<string, SharpTSFunction>? staticPrivateMethods = null,
+    List<Stmt.AutoAccessor>? instanceAutoAccessors = null,
+    Dictionary<string, object?>? staticAutoAccessors = null) : ISharpTSCallable
 {
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
@@ -49,6 +51,13 @@ public class SharpTSClass(
     private readonly Dictionary<string, object?> _staticPrivateFields = staticPrivateFields ?? [];
     private readonly FrozenDictionary<string, SharpTSFunction> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
 
+    // Auto-accessor backing storage (TypeScript 4.9+)
+    // Instance auto-accessor storage - ConditionalWeakTable for per-instance backing values
+    private readonly ConditionalWeakTable<object, Dictionary<string, object?>> _autoAccessorStorage = new();
+    private readonly List<Stmt.AutoAccessor> _instanceAutoAccessors = instanceAutoAccessors ?? [];
+    // Static auto-accessor backing storage
+    private readonly Dictionary<string, object?> _staticAutoAccessorStorage = staticAutoAccessors ?? [];
+
     public int Arity()
     {
         SharpTSFunction? constructor = FindMethod("constructor");
@@ -66,6 +75,9 @@ public class SharpTSClass(
 
         // Initialize ES2022 private fields (not inherited, each class has its own storage)
         InitializePrivateFields(interpreter, instance);
+
+        // Initialize auto-accessor backing storage (before constructor runs)
+        InitializeAutoAccessors(interpreter, instance);
 
         SharpTSFunction? constructor = FindMethod("constructor");
         if (constructor != null)
@@ -293,6 +305,120 @@ public class SharpTSClass(
     public bool HasStaticPrivateMethod(string name)
     {
         return _staticPrivateMethods.ContainsKey(name);
+    }
+
+    #endregion
+
+    #region Auto-Accessor Support (TypeScript 4.9+)
+
+    /// <summary>
+    /// Initializes auto-accessor backing storage for an instance.
+    /// Auto-accessors are inherited through the superclass chain.
+    /// </summary>
+    private void InitializeAutoAccessors(Interpreter interpreter, SharpTSInstance instance)
+    {
+        // First initialize superclass auto-accessors
+        Superclass?.InitializeAutoAccessors(interpreter, instance);
+
+        // Then initialize this class's auto-accessors
+        if (_instanceAutoAccessors.Count == 0)
+            return;
+
+        var storage = new Dictionary<string, object?>();
+        foreach (var autoAccessor in _instanceAutoAccessors)
+        {
+            object? value = autoAccessor.Initializer != null
+                ? interpreter.Evaluate(autoAccessor.Initializer)
+                : null;
+            storage[autoAccessor.Name.Lexeme] = value;
+        }
+
+        // Add to ConditionalWeakTable - GC-friendly storage
+        _autoAccessorStorage.Add(instance, storage);
+    }
+
+    /// <summary>
+    /// Gets an auto-accessor backing value for an instance.
+    /// </summary>
+    public object? GetAutoAccessorValue(object instance, string name)
+    {
+        if (_autoAccessorStorage.TryGetValue(instance, out var storage) &&
+            storage.TryGetValue(name, out var value))
+        {
+            return value;
+        }
+
+        // Check superclass
+        return Superclass?.GetAutoAccessorValue(instance, name);
+    }
+
+    /// <summary>
+    /// Sets an auto-accessor backing value for an instance.
+    /// </summary>
+    public void SetAutoAccessorValue(object instance, string name, object? value)
+    {
+        if (_autoAccessorStorage.TryGetValue(instance, out var storage) &&
+            storage.ContainsKey(name))
+        {
+            storage[name] = value;
+            return;
+        }
+
+        // Check superclass
+        Superclass?.SetAutoAccessorValue(instance, name, value);
+    }
+
+    /// <summary>
+    /// Checks if this class has an instance auto-accessor with the given name.
+    /// </summary>
+    public bool HasInstanceAutoAccessor(string name)
+    {
+        return _instanceAutoAccessors.Any(a => a.Name.Lexeme == name) ||
+               (Superclass?.HasInstanceAutoAccessor(name) ?? false);
+    }
+
+    /// <summary>
+    /// Gets the auto-accessor declaration for readonly checking.
+    /// </summary>
+    public Stmt.AutoAccessor? GetAutoAccessorDeclaration(string name)
+    {
+        var accessor = _instanceAutoAccessors.FirstOrDefault(a => a.Name.Lexeme == name);
+        if (accessor != null) return accessor;
+        return Superclass?.GetAutoAccessorDeclaration(name);
+    }
+
+    /// <summary>
+    /// Gets a static auto-accessor backing value.
+    /// </summary>
+    public object? GetStaticAutoAccessorValue(string name)
+    {
+        if (_staticAutoAccessorStorage.TryGetValue(name, out var value))
+        {
+            return value;
+        }
+        return Superclass?.GetStaticAutoAccessorValue(name);
+    }
+
+    /// <summary>
+    /// Sets a static auto-accessor backing value.
+    /// </summary>
+    public void SetStaticAutoAccessorValue(string name, object? value)
+    {
+        if (_staticAutoAccessorStorage.ContainsKey(name))
+        {
+            _staticAutoAccessorStorage[name] = value;
+            return;
+        }
+        Superclass?.SetStaticAutoAccessorValue(name, value);
+    }
+
+    /// <summary>
+    /// Checks if this class has a static auto-accessor with the given name.
+    /// </summary>
+    public bool HasStaticAutoAccessor(string name)
+    {
+        return _staticAutoAccessorStorage.ContainsKey(name) ||
+               (Superclass?.HasStaticAutoAccessor(name) ?? false);
     }
 
     #endregion

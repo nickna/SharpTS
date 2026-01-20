@@ -231,6 +231,8 @@ public abstract record TypeInfo
         public HashSet<string> AbstractMethods { get; } = [];
         public HashSet<string> AbstractGetters { get; } = [];
         public HashSet<string> AbstractSetters { get; } = [];
+        // Auto-accessor tracking (TypeScript 4.9+)
+        public HashSet<string> AutoAccessors { get; } = [];
         // ES2022 private class elements
         public Dictionary<string, TypeInfo> PrivateFields { get; } = [];
         public Dictionary<string, TypeInfo> PrivateMethods { get; } = [];

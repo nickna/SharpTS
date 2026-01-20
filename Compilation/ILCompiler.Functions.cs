@@ -154,6 +154,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             TopLevelStaticVars = _topLevelStaticVars,
@@ -323,6 +325,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
@@ -336,6 +340,7 @@ public partial class ILCompiler
             ClassExprConstructors = _classExprs.Constructors,
             ClassExprSuperclass = _classExprs.Superclass,
             UnionGenerator = _unionGenerator,
+            PropertyTypes = _typedInterop.PropertyTypes,
             IsStrictMode = _isStrictMode
         };
 
@@ -438,6 +443,8 @@ public partial class ILCompiler
             InstanceMethods = _classes.InstanceMethods,
             InstanceGetters = _classes.InstanceGetters,
             InstanceSetters = _classes.InstanceSetters,
+            StaticGetters = _classes.StaticGetters,
+            StaticSetters = _classes.StaticSetters,
             ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
