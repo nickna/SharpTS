@@ -806,6 +806,8 @@ public partial class Interpreter
                 Dictionary<string, SharpTSFunction> staticPrivateMethods = [];
 
                 // Process fields: evaluate static initializers now, collect instance fields for later
+                // Note: Declare fields are processed normally - they can't have initializers (enforced by parser),
+                // so they'll be added with null/undefined values and can be set externally later.
                 foreach (Stmt.Field field in classStmt.Fields)
                 {
                     if (field.IsPrivate)

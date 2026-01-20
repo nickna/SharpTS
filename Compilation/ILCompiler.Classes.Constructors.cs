@@ -156,7 +156,8 @@ public partial class ILCompiler
         }
 
         // Emit instance field initializers to backing fields (before constructor body)
-        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && !f.IsPrivate && f.Initializer != null).ToList();
+        // Note: Declare fields are excluded - they have no initialization
+        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.Initializer != null).ToList();
         if (instanceFieldsWithInit.Count > 0)
         {
             ctx.FieldsField = fieldsField;

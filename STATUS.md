@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added auto-accessor class fields with `accessor` keyword)
+**Last Updated:** 2026-01-20 (Added `declare` field modifier for class fields)
 
 ## Legend
 - ✅ Implemented
@@ -76,7 +76,7 @@ This document tracks TypeScript language features and their implementation statu
 | Private fields (`#field`) | ✅ | ES2022 hard private fields with ConditionalWeakTable isolation; full interpreter and IL compiler support |
 | Static blocks | ❌ | `static { }` for static initialization |
 | `accessor` keyword | ✅ | Auto-accessor class fields (TS 4.9+); full interpreter and IL compiler support with deferred boxing optimization |
-| `declare` field modifier | ❌ | Ambient field declarations |
+| `declare` field modifier | ✅ | Ambient field declarations for external initialization (decorators, DI); full interpreter and IL compiler support |
 
 ---
 
@@ -848,3 +848,18 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ IL compiler emits true .NET properties with private backing fields
 - ✅ Deferred boxing optimization: static getter stack type tracking avoids unnecessary boxing in numeric contexts
 - ✅ Full interpreter and IL compiler support with 30 test cases
+
+### Phase 48 Features (Declare Field Modifier)
+- ✅ `declare` field modifier for class fields (TypeScript ambient declarations)
+- ✅ Instance declare fields: `declare id: number;`
+- ✅ Static declare fields: `declare static version: string;`
+- ✅ Combined with access modifiers: `declare private _internal: number;`
+- ✅ Combined with readonly: `declare readonly name: string;`
+- ✅ Modifier order flexibility: `static declare count: number;` works same as `declare static`
+- ✅ Fields exist at runtime but have no initialization code emitted
+- ✅ Validation: declare fields require type annotation (no initializer allowed)
+- ✅ Validation: declare cannot combine with `#private` (ES2022 private fields)
+- ✅ Validation: declare cannot combine with `abstract` or `override`
+- ✅ Validation: declare only valid on fields, not methods
+- ✅ Class expressions support declare fields
+- ✅ Full interpreter and IL compiler support with 38 test cases

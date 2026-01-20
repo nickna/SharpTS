@@ -51,8 +51,9 @@ public partial class Parser
             bool isMemberAbstract = false;
             bool isOverride = false;
             bool isMemberAsync = false;
+            bool isMemberDeclare = false;
 
-            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT, TokenType.OVERRIDE, TokenType.ASYNC))
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ABSTRACT, TokenType.OVERRIDE, TokenType.ASYNC, TokenType.DECLARE))
             {
                 var modifier = Previous().Type;
                 switch (modifier)
@@ -65,6 +66,7 @@ public partial class Parser
                     case TokenType.ABSTRACT: isMemberAbstract = true; break;
                     case TokenType.OVERRIDE: isOverride = true; break;
                     case TokenType.ASYNC: isMemberAsync = true; break;
+                    case TokenType.DECLARE: isMemberDeclare = true; break;
                 }
             }
 
@@ -90,6 +92,18 @@ public partial class Parser
             if (isOverride && superclass == null)
             {
                 throw new Exception($"Parse Error: Cannot use 'override' modifier in a class that does not extend another class.");
+            }
+
+            // Validate: declare cannot be combined with abstract
+            if (isMemberDeclare && isMemberAbstract)
+            {
+                throw new Exception($"Parse Error: 'declare' modifier cannot be used with 'abstract'.");
+            }
+
+            // Validate: declare cannot be combined with override
+            if (isMemberDeclare && isOverride)
+            {
+                throw new Exception($"Parse Error: 'declare' modifier cannot be used with 'override'.");
             }
 
             // Check for auto-accessor: accessor name: type = value
@@ -190,6 +204,12 @@ public partial class Parser
                     throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers or decorators.");
                 }
 
+                // Validate: declare cannot be used with ES2022 private fields
+                if (isMemberDeclare)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
+                }
+
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
 
                 // Check if it's a method: #name(
@@ -249,6 +269,11 @@ public partial class Parser
                 Expr? initializer = null;
                 if (Match(TokenType.EQUAL))
                 {
+                    // Validate: declare fields cannot have initializers
+                    if (isMemberDeclare)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
+                    }
                     initializer = Expression();
                 }
 
@@ -259,10 +284,16 @@ public partial class Parser
                 }
 
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators));
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare));
             }
             else
             {
+                // Validate: declare modifier is only valid on fields, not methods
+                if (isMemberDeclare)
+                {
+                    throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
+                }
+
                 // Abstract methods cannot be constructors
                 if (isMemberAbstract && Check(TokenType.CONSTRUCTOR))
                 {
@@ -450,8 +481,9 @@ public partial class Parser
             bool isStatic = false;
             bool isReadonly = false;
             bool isMemberAsync = false;
+            bool isMemberDeclare = false;
 
-            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ASYNC))
+            while (Match(TokenType.PUBLIC, TokenType.PRIVATE, TokenType.PROTECTED, TokenType.STATIC, TokenType.READONLY, TokenType.ASYNC, TokenType.DECLARE))
             {
                 var modifier = Previous().Type;
                 switch (modifier)
@@ -462,6 +494,7 @@ public partial class Parser
                     case TokenType.STATIC: isStatic = true; break;
                     case TokenType.READONLY: isReadonly = true; break;
                     case TokenType.ASYNC: isMemberAsync = true; break;
+                    case TokenType.DECLARE: isMemberDeclare = true; break;
                 }
             }
 
@@ -546,6 +579,12 @@ public partial class Parser
                     throw new Exception($"Parse Error at line {Peek().Line}: ES2022 private fields (#name) cannot have access modifiers.");
                 }
 
+                // Validate: declare cannot be used with ES2022 private fields
+                if (isMemberDeclare)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with private fields (#name).");
+                }
+
                 Token fieldName = Consume(TokenType.PRIVATE_IDENTIFIER, "Expect private field name.");
 
                 // Check if it's a method: #name(
@@ -605,6 +644,11 @@ public partial class Parser
                 Expr? initializer = null;
                 if (Match(TokenType.EQUAL))
                 {
+                    // Validate: declare fields cannot have initializers
+                    if (isMemberDeclare)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: 'declare' fields cannot have an initializer.");
+                    }
                     initializer = Expression();
                 }
 
@@ -615,10 +659,16 @@ public partial class Parser
                 }
 
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment));
+                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, Decorators: null, IsPrivate: false, IsDeclare: isMemberDeclare));
             }
             else
             {
+                // Validate: declare modifier is only valid on fields, not methods
+                if (isMemberDeclare)
+                {
+                    throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
+                }
+
                 string kind = "method";
                 if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
                 var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
