@@ -805,9 +805,11 @@ public partial class Interpreter
                 Dictionary<string, object?> staticPrivateFields = [];
                 Dictionary<string, SharpTSFunction> staticPrivateMethods = [];
 
-                // Process fields: evaluate static initializers now, collect instance fields for later
+                // Process fields: collect instance fields, defer static field initialization if using StaticInitializers
                 // Note: Declare fields are processed normally - they can't have initializers (enforced by parser),
                 // so they'll be added with null/undefined values and can be set externally later.
+                bool hasStaticInitializers = classStmt.StaticInitializers != null && classStmt.StaticInitializers.Count > 0;
+
                 foreach (Stmt.Field field in classStmt.Fields)
                 {
                     if (field.IsPrivate)
@@ -815,10 +817,15 @@ public partial class Interpreter
                         // ES2022 private fields
                         if (field.IsStatic)
                         {
-                            object? fieldValue = field.Initializer != null
-                                ? Evaluate(field.Initializer)
-                                : null;
-                            staticPrivateFields[field.Name.Lexeme] = fieldValue;
+                            if (!hasStaticInitializers)
+                            {
+                                // Old behavior: evaluate immediately
+                                object? fieldValue = field.Initializer != null
+                                    ? Evaluate(field.Initializer)
+                                    : null;
+                                staticPrivateFields[field.Name.Lexeme] = fieldValue;
+                            }
+                            // else: will be evaluated via StaticInitializers with proper 'this' binding
                         }
                         else
                         {
@@ -828,10 +835,15 @@ public partial class Interpreter
                     }
                     else if (field.IsStatic)
                     {
-                        object? fieldValue = field.Initializer != null
-                            ? Evaluate(field.Initializer)
-                            : null;
-                        staticProperties[field.Name.Lexeme] = fieldValue;
+                        if (!hasStaticInitializers)
+                        {
+                            // Old behavior: evaluate immediately
+                            object? fieldValue = field.Initializer != null
+                                ? Evaluate(field.Initializer)
+                                : null;
+                            staticProperties[field.Name.Lexeme] = fieldValue;
+                        }
+                        // else: will be evaluated via StaticInitializers with proper 'this' binding
                     }
                     else
                     {
@@ -936,6 +948,58 @@ public partial class Interpreter
                     staticPrivateMethods,
                     instanceAutoAccessors.Count > 0 ? instanceAutoAccessors : null,
                     staticAutoAccessors.Count > 0 ? staticAutoAccessors : null);
+
+                // Execute static initializers in declaration order (if present)
+                if (hasStaticInitializers)
+                {
+                    // Create temporary environment with 'this' bound to the class
+                    // Also make the class name available so code like Foo.x works
+                    var staticEnv = new RuntimeEnvironment(_environment);
+                    staticEnv.Define("this", klass);
+                    staticEnv.Define(classStmt.Name.Lexeme, klass);
+
+                    var prevEnv = _environment;
+                    _environment = staticEnv;
+
+                    try
+                    {
+                        foreach (var initializer in classStmt.StaticInitializers!)
+                        {
+                            switch (initializer)
+                            {
+                                case Stmt.Field field when field.IsStatic:
+                                    object? fieldValue = field.Initializer != null
+                                        ? Evaluate(field.Initializer)
+                                        : null;
+                                    if (field.IsPrivate)
+                                        klass.SetStaticPrivateField(field.Name.Lexeme, fieldValue);
+                                    else
+                                        klass.SetStaticProperty(field.Name.Lexeme, fieldValue);
+                                    break;
+
+                                case Stmt.StaticBlock block:
+                                    foreach (var blockStmt in block.Body)
+                                    {
+                                        var result = Execute(blockStmt);
+                                        if (result.IsAbrupt)
+                                        {
+                                            // Handle throw from static block
+                                            if (result.Type == ExecutionResult.ResultType.Throw)
+                                            {
+                                                throw new Exception($"Error in static block: {Stringify(result.Value)}");
+                                            }
+                                            // Return, break, continue are not allowed (validated by type checker)
+                                        }
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _environment = prevEnv;
+                    }
+                }
 
                 // Apply decorators in the correct order
                 klass = ApplyAllDecorators(classStmt, klass, methods, staticMethods, getters, setters);

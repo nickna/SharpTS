@@ -233,6 +233,11 @@ public partial class TypeChecker
                 break;
 
             case Stmt.Return returnStmt:
+                // Validate: return statements are not allowed in static blocks
+                if (_inStaticBlock)
+                {
+                    throw new TypeCheckException("Return statements are not allowed in static blocks.");
+                }
                 if (_currentFunctionReturnType != null)
                 {
                     // Special case: array literal returned to tuple return type (contextual typing)
@@ -534,6 +539,11 @@ public partial class TypeChecker
             case Stmt.Directive:
                 // Directives like "use strict" are processed at the start of type checking.
                 // They have no type checking side effects beyond setting strict mode.
+                break;
+
+            case Stmt.StaticBlock:
+                // Static blocks are type-checked in CheckClassDeclaration context.
+                // If encountered here, it's a no-op (block body already checked).
                 break;
         }
     }

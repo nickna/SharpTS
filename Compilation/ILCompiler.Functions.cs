@@ -347,6 +347,27 @@ public partial class ILCompiler
         // Initialize namespace static fields before any code that might reference them
         InitializeNamespaceFields(il);
 
+        // Trigger static constructors for classes with static blocks
+        // In JavaScript/TypeScript, static blocks run when the class is defined.
+        // In .NET, static constructors are lazy, so we force them to run here.
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Class classStmt && classStmt.StaticInitializers?.Count > 0)
+            {
+                string className = _modules.CurrentDotNetNamespace != null
+                    ? $"{_modules.CurrentDotNetNamespace}.{classStmt.Name.Lexeme}"
+                    : classStmt.Name.Lexeme;
+                if (_classes.Builders.TryGetValue(className, out var classBuilder))
+                {
+                    // Emit: RuntimeHelpers.RunClassConstructor(typeof(ClassName).TypeHandle)
+                    il.Emit(OpCodes.Ldtoken, classBuilder);
+                    il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
+                    il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+                }
+            }
+        }
+
         var emitter = new ILEmitter(ctx);
 
         foreach (var stmt in statements)
@@ -462,6 +483,26 @@ public partial class ILCompiler
 
         // Initialize namespace static fields before any code
         InitializeNamespaceFields(il);
+
+        // Trigger static constructors for classes with static blocks
+        // In JavaScript/TypeScript, static blocks run when the class is defined.
+        // In .NET, static constructors are lazy, so we force them to run here.
+        foreach (var stmt in statements)
+        {
+            if (stmt is Stmt.Class classStmt && classStmt.StaticInitializers?.Count > 0)
+            {
+                string className = _modules.CurrentDotNetNamespace != null
+                    ? $"{_modules.CurrentDotNetNamespace}.{classStmt.Name.Lexeme}"
+                    : classStmt.Name.Lexeme;
+                if (_classes.Builders.TryGetValue(className, out var classBuilder))
+                {
+                    il.Emit(OpCodes.Ldtoken, classBuilder);
+                    il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
+                    il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+                }
+            }
+        }
 
         var emitter = new ILEmitter(ctx);
 

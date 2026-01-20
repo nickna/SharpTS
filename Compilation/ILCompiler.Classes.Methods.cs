@@ -508,13 +508,11 @@ public partial class ILCompiler
             }
         }
 
-        // Emit static constructor for static property initializers
-        EmitStaticConstructor(typeBuilder, classStmt, qualifiedClassName);
-
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
 
         // Emit method bodies (skip overload signatures with no body)
+        // This must happen BEFORE static constructor so static blocks can call static methods
         foreach (var method in classStmt.Methods.Where(m => m.Body != null))
         {
             if (method.Name.Lexeme != "constructor")
@@ -529,6 +527,10 @@ public partial class ILCompiler
                 }
             }
         }
+
+        // Emit static constructor for static property initializers and static blocks
+        // This is done AFTER method bodies so static blocks can call static methods
+        EmitStaticConstructor(typeBuilder, classStmt, qualifiedClassName);
 
         // Emit accessor methods
         if (classStmt.Accessors != null)

@@ -67,6 +67,31 @@ public partial class ILEmitter
             return;
         }
 
+        // Handle static member access via 'this' in static context (static blocks, static methods)
+        // In static blocks, 'this' refers to the class constructor, so this.property accesses static members
+        if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        {
+            // Find the class name for the current class builder
+            string? currentClassName = null;
+            foreach (var (name, builder) in _ctx.Classes)
+            {
+                if (builder == _ctx.CurrentClassBuilder)
+                {
+                    currentClassName = name;
+                    break;
+                }
+            }
+
+            if (currentClassName != null)
+            {
+                // Emit as static field access on the current class
+                if (EmitStaticMemberAccess(currentClassName, _ctx.CurrentClassBuilder, g.Name.Lexeme))
+                {
+                    return;
+                }
+            }
+        }
+
         // Handle static member access via class name
         if (g.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
@@ -292,6 +317,30 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Conv_R8); // Convert back to double for JS number
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             return;
+        }
+
+        // Handle static property assignment via 'this' in static context (static blocks, static methods)
+        if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
+        {
+            // Find the class name for the current class builder
+            string? currentClassName = null;
+            foreach (var (name, builder) in _ctx.Classes)
+            {
+                if (builder == _ctx.CurrentClassBuilder)
+                {
+                    currentClassName = name;
+                    break;
+                }
+            }
+
+            if (currentClassName != null)
+            {
+                // Emit as static field assignment on the current class
+                if (EmitStaticMemberSet(currentClassName, _ctx.CurrentClassBuilder, s.Name.Lexeme, s.Value))
+                {
+                    return;
+                }
+            }
         }
 
         // Handle static property assignment via class name
@@ -891,6 +940,163 @@ public partial class ILEmitter
             }
             SetStackUnknown();
             return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Emits static member access on a class (used for both ClassName.property and this.property in static context).
+    /// Returns true if successful, false if property not found.
+    /// </summary>
+    private bool EmitStaticMemberAccess(string className, System.Reflection.Emit.TypeBuilder classBuilder, string propertyName)
+    {
+        // Try static getter first (for auto-accessors and explicit static accessors)
+        if (_ctx.StaticGetters != null &&
+            _ctx.StaticGetters.TryGetValue(className, out var staticGetters) &&
+            staticGetters.TryGetValue(propertyName, out var staticGetter))
+        {
+            IL.Emit(OpCodes.Call, staticGetter);
+
+            // Track the stack type for proper boxing behavior
+            string pascalPropName = NamingConventions.ToPascalCase(propertyName);
+            if (_ctx.PropertyTypes != null &&
+                _ctx.PropertyTypes.TryGetValue(className, out var propTypes) &&
+                propTypes.TryGetValue(pascalPropName, out var propType))
+            {
+                if (propType == _ctx.Types.Double)
+                {
+                    SetStackType(StackType.Double);
+                }
+                else if (propType == _ctx.Types.Boolean)
+                {
+                    SetStackType(StackType.Boolean);
+                }
+                else if (propType == _ctx.Types.String)
+                {
+                    SetStackType(StackType.String);
+                }
+                else
+                {
+                    SetStackUnknown();
+                }
+            }
+            else
+            {
+                SetStackUnknown();
+            }
+            return true;
+        }
+
+        // Try to find static field using stored FieldBuilders
+        if (_ctx.StaticFields != null &&
+            _ctx.StaticFields.TryGetValue(className, out var classFields) &&
+            classFields.TryGetValue(propertyName, out var staticField))
+        {
+            IL.Emit(OpCodes.Ldsfld, staticField);
+            SetStackUnknown();
+            return true;
+        }
+
+        // Try static private fields
+        if (_ctx.StaticPrivateFields != null &&
+            _ctx.StaticPrivateFields.TryGetValue(className, out var privateFields))
+        {
+            // Strip leading # if present
+            string fieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
+            if (privateFields.TryGetValue(fieldName, out var staticPrivateField))
+            {
+                IL.Emit(OpCodes.Ldsfld, staticPrivateField);
+                SetStackUnknown();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Emits static member set on a class (used for both ClassName.property = value and this.property = value in static context).
+    /// Returns true if successful, false if property not found.
+    /// </summary>
+    private bool EmitStaticMemberSet(string className, System.Reflection.Emit.TypeBuilder classBuilder, string propertyName, Expr value)
+    {
+        // Try static setter first (for auto-accessors and explicit static accessors)
+        if (_ctx.StaticSetters != null &&
+            _ctx.StaticSetters.TryGetValue(className, out var staticSetters) &&
+            staticSetters.TryGetValue(propertyName, out var staticSetter))
+        {
+            // Get the property type from PropertyTypes dictionary
+            Type propertyType = _ctx.Types.Object;
+            string pascalPropName = NamingConventions.ToPascalCase(propertyName);
+
+            if (_ctx.PropertyTypes != null &&
+                _ctx.PropertyTypes.TryGetValue(className, out var propTypes) &&
+                propTypes.TryGetValue(pascalPropName, out var propType))
+            {
+                propertyType = propType;
+            }
+            else
+            {
+                TypeInfo? valueType = _ctx.TypeMap?.Get(value);
+                if (valueType is TypeInfo.Primitive prim)
+                {
+                    propertyType = prim.Type switch
+                    {
+                        TokenType.TYPE_NUMBER => _ctx.Types.Double,
+                        TokenType.TYPE_BOOLEAN => _ctx.Types.Boolean,
+                        TokenType.TYPE_STRING => _ctx.Types.String,
+                        _ => _ctx.Types.Object
+                    };
+                }
+            }
+
+            EmitExpression(value);
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Dup); // Keep value for expression result
+            var staticSetterResultTemp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, staticSetterResultTemp);
+
+            if (propertyType.IsValueType)
+            {
+                IL.Emit(OpCodes.Unbox_Any, propertyType);
+            }
+            else if (!_ctx.Types.IsObject(propertyType))
+            {
+                IL.Emit(OpCodes.Castclass, propertyType);
+            }
+
+            IL.Emit(OpCodes.Call, staticSetter);
+
+            IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
+            return true;
+        }
+
+        // Try static fields
+        if (_ctx.StaticFields != null &&
+            _ctx.StaticFields.TryGetValue(className, out var classFields) &&
+            classFields.TryGetValue(propertyName, out var staticField))
+        {
+            EmitExpression(value);
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Dup); // Keep value for expression result
+            IL.Emit(OpCodes.Stsfld, staticField);
+            return true;
+        }
+
+        // Try static private fields
+        if (_ctx.StaticPrivateFields != null &&
+            _ctx.StaticPrivateFields.TryGetValue(className, out var privateFields))
+        {
+            string fieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
+            if (privateFields.TryGetValue(fieldName, out var staticPrivateField))
+            {
+                EmitExpression(value);
+                EmitBoxIfNeeded(value);
+                IL.Emit(OpCodes.Dup); // Keep value for expression result
+                IL.Emit(OpCodes.Stsfld, staticPrivateField);
+                return true;
+            }
         }
 
         return false;

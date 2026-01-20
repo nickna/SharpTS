@@ -229,6 +229,11 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
             case Stmt.Export export:
                 EmitExport(export);
                 break;
+
+            case Stmt.StaticBlock:
+                // Static blocks are handled specially in EmitStaticConstructor.
+                // If encountered here, it's a no-op (block body already emitted inline).
+                break;
         }
     }
 

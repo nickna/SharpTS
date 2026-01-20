@@ -755,15 +755,23 @@ public partial class Interpreter
             Dictionary<string, object?> staticProperties = [];
             List<Stmt.Field> instanceFields = [];
 
+            // Check if we have static initializers for proper ordering
+            bool hasStaticInitializers = classExpr.StaticInitializers != null && classExpr.StaticInitializers.Count > 0;
+
             // Process fields
             foreach (Stmt.Field field in classExpr.Fields)
             {
                 if (field.IsStatic)
                 {
-                    object? fieldValue = field.Initializer != null
-                        ? Evaluate(field.Initializer)
-                        : null;
-                    staticProperties[field.Name.Lexeme] = fieldValue;
+                    if (!hasStaticInitializers)
+                    {
+                        // Old behavior: evaluate immediately
+                        object? fieldValue = field.Initializer != null
+                            ? Evaluate(field.Initializer)
+                            : null;
+                        staticProperties[field.Name.Lexeme] = fieldValue;
+                    }
+                    // else: will be evaluated via StaticInitializers with proper 'this' binding
                 }
                 else
                 {
@@ -824,6 +832,58 @@ public partial class Interpreter
                 setters,
                 classExpr.IsAbstract,
                 instanceFields);
+
+            // Execute static initializers in declaration order (if present)
+            if (hasStaticInitializers)
+            {
+                // Create temporary environment with 'this' bound to the class
+                // Also make the class name available so code like Foo.x works
+                var staticEnv = new RuntimeEnvironment(_environment);
+                staticEnv.Define("this", klass);
+                if (classExpr.Name != null)
+                {
+                    staticEnv.Define(classExpr.Name.Lexeme, klass);
+                }
+
+                var prevEnv = _environment;
+                _environment = staticEnv;
+
+                try
+                {
+                    foreach (var initializer in classExpr.StaticInitializers!)
+                    {
+                        switch (initializer)
+                        {
+                            case Stmt.Field field when field.IsStatic:
+                                object? fieldValue = field.Initializer != null
+                                    ? Evaluate(field.Initializer)
+                                    : null;
+                                klass.SetStaticProperty(field.Name.Lexeme, fieldValue);
+                                break;
+
+                            case Stmt.StaticBlock block:
+                                foreach (var blockStmt in block.Body)
+                                {
+                                    var result = Execute(blockStmt);
+                                    if (result.IsAbrupt)
+                                    {
+                                        // Handle throw from static block
+                                        if (result.Type == ExecutionResult.ResultType.Throw)
+                                        {
+                                            throw new Exception($"Error in static block: {Stringify(result.Value)}");
+                                        }
+                                        // Return, break, continue are not allowed (validated by type checker)
+                                    }
+                                }
+                                break;
+                        }
+                    }
+                }
+                finally
+                {
+                    _environment = prevEnv;
+                }
+            }
 
             // Update self-reference if named
             if (classExpr.Name != null)

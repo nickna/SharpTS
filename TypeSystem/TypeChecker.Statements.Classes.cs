@@ -512,6 +512,42 @@ public partial class TypeChecker
             }
         }
 
+        // Type-check static blocks
+        if (classStmt.StaticInitializers != null)
+        {
+            // Create environment with static class context ('this' refers to the class constructor)
+            var staticBlockEnv = new TypeEnvironment(_environment);
+            staticBlockEnv.Define("this", classTypeForBody);
+
+            foreach (var initializer in classStmt.StaticInitializers)
+            {
+                if (initializer is Stmt.StaticBlock block)
+                {
+                    using var _ = new EnvironmentScope(this, staticBlockEnv);
+                    bool previousInStaticBlock = _inStaticBlock;
+                    bool previousInStaticMethod = _inStaticMethod;
+                    var previousClass = _currentClass;
+                    _inStaticBlock = true;
+                    _inStaticMethod = true;
+                    _currentClass = classTypeForBody;
+
+                    try
+                    {
+                        foreach (var stmt in block.Body)
+                        {
+                            CheckStmt(stmt);
+                        }
+                    }
+                    finally
+                    {
+                        _inStaticBlock = previousInStaticBlock;
+                        _inStaticMethod = previousInStaticMethod;
+                        _currentClass = previousClass;
+                    }
+                }
+            }
+        }
+
         // Third pass: body check
         TypeEnvironment classEnv = new(_environment);
         // For generic classes, add type parameters to class scope

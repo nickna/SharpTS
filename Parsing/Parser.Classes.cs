@@ -37,6 +37,7 @@ public partial class Parser
         List<Stmt.Field> fields = [];
         List<Stmt.Accessor> accessors = [];
         List<Stmt.AutoAccessor> autoAccessors = [];
+        List<Stmt> staticInitializers = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             try
@@ -46,6 +47,7 @@ public partial class Parser
 
             // Parse modifiers
             AccessModifier access = AccessModifier.Public;
+            bool hasExplicitAccessModifier = false;
             bool isStatic = false;
             bool isReadonly = false;
             bool isMemberAbstract = false;
@@ -58,9 +60,9 @@ public partial class Parser
                 var modifier = Previous().Type;
                 switch (modifier)
                 {
-                    case TokenType.PUBLIC: access = AccessModifier.Public; break;
-                    case TokenType.PRIVATE: access = AccessModifier.Private; break;
-                    case TokenType.PROTECTED: access = AccessModifier.Protected; break;
+                    case TokenType.PUBLIC: access = AccessModifier.Public; hasExplicitAccessModifier = true; break;
+                    case TokenType.PRIVATE: access = AccessModifier.Private; hasExplicitAccessModifier = true; break;
+                    case TokenType.PROTECTED: access = AccessModifier.Protected; hasExplicitAccessModifier = true; break;
                     case TokenType.STATIC: isStatic = true; break;
                     case TokenType.READONLY: isReadonly = true; break;
                     case TokenType.ABSTRACT: isMemberAbstract = true; break;
@@ -104,6 +106,26 @@ public partial class Parser
             if (isMemberDeclare && isOverride)
             {
                 throw new Exception($"Parse Error: 'declare' modifier cannot be used with 'override'.");
+            }
+
+            // Check for static block: static { ... }
+            if (isStatic && Check(TokenType.LEFT_BRACE))
+            {
+                // Validate: no other modifiers allowed with static blocks
+                if (hasExplicitAccessModifier || isReadonly || isMemberAbstract || isOverride || isMemberAsync || isMemberDeclare)
+                {
+                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
+                }
+                if (memberDecorators != null && memberDecorators.Count > 0)
+                {
+                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have decorators.");
+                }
+
+                Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
+                List<Stmt> blockBody = Block();
+                var staticBlock = new Stmt.StaticBlock(blockBody);
+                staticInitializers.Add(staticBlock);
+                continue;
             }
 
             // Check for auto-accessor: accessor name: type = value
@@ -248,7 +270,12 @@ public partial class Parser
                     }
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after private field declaration.");
-                    fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true));
+                    var privateField = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true);
+                    fields.Add(privateField);
+                    if (isStatic)
+                    {
+                        staticInitializers.Add(privateField);
+                    }
                 }
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
@@ -284,7 +311,12 @@ public partial class Parser
                 }
 
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare));
+                var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare);
+                fields.Add(field);
+                if (isStatic)
+                {
+                    staticInitializers.Add(field);
+                }
             }
             else
             {
@@ -386,7 +418,7 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
-        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare);
+        return new Stmt.Class(name, typeParams, superclass, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null);
     }
 
     /// <summary>
@@ -472,6 +504,7 @@ public partial class Parser
         List<Stmt.Field> fields = [];
         List<Stmt.Accessor> accessors = [];
         List<Stmt.AutoAccessor> autoAccessors = [];
+        List<Stmt> staticInitializers = [];
         while (!Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             try
@@ -496,6 +529,22 @@ public partial class Parser
                     case TokenType.ASYNC: isMemberAsync = true; break;
                     case TokenType.DECLARE: isMemberDeclare = true; break;
                 }
+            }
+
+            // Check for static block: static { ... }
+            if (isStatic && Check(TokenType.LEFT_BRACE))
+            {
+                // Validate: no other modifiers allowed with static blocks
+                if (access != AccessModifier.Public || isReadonly || isMemberAsync || isMemberDeclare)
+                {
+                    throw new Exception($"Parse Error at line {Previous().Line}: Static blocks cannot have access modifiers or other keywords.");
+                }
+
+                Consume(TokenType.LEFT_BRACE, "Expect '{' after 'static'.");
+                List<Stmt> blockBody = Block();
+                var staticBlock = new Stmt.StaticBlock(blockBody);
+                staticInitializers.Add(staticBlock);
+                continue;
             }
 
             // Check for auto-accessor: accessor name: type = value
@@ -623,7 +672,12 @@ public partial class Parser
                     }
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after private field declaration.");
-                    fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true));
+                    var privateField = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, AccessModifier.Public, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, Decorators: null, IsPrivate: true);
+                    fields.Add(privateField);
+                    if (isStatic)
+                    {
+                        staticInitializers.Add(privateField);
+                    }
                 }
             }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
@@ -659,7 +713,12 @@ public partial class Parser
                 }
 
                 Consume(TokenType.SEMICOLON, "Expect ';' after field declaration.");
-                fields.Add(new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, Decorators: null, IsPrivate: false, IsDeclare: isMemberDeclare));
+                var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, Decorators: null, IsPrivate: false, IsDeclare: isMemberDeclare);
+                fields.Add(field);
+                if (isStatic)
+                {
+                    staticInitializers.Add(field);
+                }
             }
             else
             {
@@ -721,7 +780,8 @@ public partial class Parser
             autoAccessors.Count > 0 ? autoAccessors : null,
             interfaces,
             interfaceTypeArgs,
-            IsAbstract: false  // Class expressions cannot be abstract
+            IsAbstract: false,  // Class expressions cannot be abstract
+            staticInitializers.Count > 0 ? staticInitializers : null
         );
     }
 }

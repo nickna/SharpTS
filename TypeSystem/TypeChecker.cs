@@ -47,6 +47,7 @@ public partial class TypeChecker
     private TypeInfo? _currentFunctionReturnType = null;
     private TypeInfo.Class? _currentClass = null;
     private bool _inStaticMethod = false;
+    private bool _inStaticBlock = false;
     // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
     private TypeInfo? _currentFunctionThisType = null;
 

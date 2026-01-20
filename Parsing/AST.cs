@@ -132,7 +132,8 @@ public abstract record Expr
         List<Stmt.AutoAccessor>? AutoAccessors = null,
         List<Token>? Interfaces = null,
         List<List<string>>? InterfaceTypeArgs = null,
-        bool IsAbstract = false
+        bool IsAbstract = false,
+        List<Stmt>? StaticInitializers = null
     ) : Expr;
 }
 
@@ -197,8 +198,14 @@ public abstract record Stmt
     ) : Stmt;
     /// <summary>
     /// Class declaration. IsDeclare indicates an ambient declaration (declare class) which has no implementation.
+    /// StaticInitializers contains static fields and static blocks in declaration order for proper initialization sequencing.
     /// </summary>
-    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Stmt.AutoAccessor>? AutoAccessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false) : Stmt;
+    public record Class(Token Name, List<TypeParam>? TypeParams, Token? Superclass, List<string>? SuperclassTypeArgs, List<Stmt.Function> Methods, List<Stmt.Field> Fields, List<Stmt.Accessor>? Accessors = null, List<Stmt.AutoAccessor>? AutoAccessors = null, List<Token>? Interfaces = null, List<List<string>>? InterfaceTypeArgs = null, bool IsAbstract = false, List<Decorator>? Decorators = null, bool IsDeclare = false, List<Stmt>? StaticInitializers = null) : Stmt;
+    /// <summary>
+    /// Static block: static { statements }
+    /// Executes once when the class is initialized, in declaration order with static fields.
+    /// </summary>
+    public record StaticBlock(List<Stmt> Body) : Stmt;
     /// <summary>
     /// Interface declaration with optional call and constructor signatures.
     /// </summary>

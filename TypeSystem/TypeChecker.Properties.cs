@@ -60,6 +60,11 @@ public partial class TypeChecker
         {
             throw new TypeCheckException(" Cannot use 'this' outside of a class.");
         }
+        // In static blocks, 'this' refers to the class constructor (the class type itself)
+        if (_inStaticBlock)
+        {
+            return _currentClass;
+        }
         if (_inStaticMethod)
         {
             throw new TypeCheckException(" Cannot use 'this' in a static method.");
