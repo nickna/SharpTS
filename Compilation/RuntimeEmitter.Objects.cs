@@ -217,6 +217,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitInvokeTaggedTemplate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // InvokeTaggedTemplate(tag: object, cooked: object[], raw: string[], expressions: object[]) -> object?
+        var method = typeBuilder.DefineMethod(
+            "InvokeTaggedTemplate",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray, _types.StringArray, _types.ObjectArray]
+        );
+        runtime.InvokeTaggedTemplate = method;
+
+        var il = method.GetILGenerator();
+
+        // Call the static helper method in RuntimeTypes
+        // RuntimeTypes.InvokeTaggedTemplate(tag, cookedStrings, rawStrings, expressions)
+        il.Emit(OpCodes.Ldarg_0); // tag
+        il.Emit(OpCodes.Ldarg_1); // cooked
+        il.Emit(OpCodes.Ldarg_2); // raw
+        il.Emit(OpCodes.Ldarg_3); // expressions
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            "InvokeTaggedTemplate",
+            [typeof(object), typeof(object[]), typeof(string[]), typeof(object[])])!);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitObjectRest(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Accept object instead of Dictionary to support both object literals and class instances

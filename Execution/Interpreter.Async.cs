@@ -976,6 +976,23 @@ public partial class Interpreter
         return result.ToString();
     }
 
+    private async Task<object?> EvaluateTaggedTemplateLiteralAsync(Expr.TaggedTemplateLiteral tagged)
+    {
+        object? tag = await EvaluateAsync(tagged.Tag);
+
+        if (tag is not Runtime.Types.ISharpTSCallable callable)
+            throw new Exception("Runtime Error: Tagged template tag must be a function.");
+
+        var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
+        var stringsArray = new Runtime.Types.SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);
+
+        List<object?> args = [stringsArray];
+        foreach (var expr in tagged.Expressions)
+            args.Add(await EvaluateAsync(expr));
+
+        return callable.Call(this, args);
+    }
+
     // Helper methods for index operations
     private object? EvaluateIndexGet(object? obj, object? index)
     {

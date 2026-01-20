@@ -92,6 +92,13 @@ public abstract record Expr
     public record ArrowFunction(Token? Name, List<TypeParam>? TypeParams, string? ThisType, List<Stmt.Parameter> Parameters, Expr? ExpressionBody, List<Stmt>? BlockBody, string? ReturnType, bool HasOwnThis = false, bool IsAsync = false, bool IsGenerator = false) : Expr;
     // Template literal
     public record TemplateLiteral(List<string> Strings, List<Expr> Expressions) : Expr;
+    // Tagged template literal: tag`template ${expr}`
+    public record TaggedTemplateLiteral(
+        Expr Tag,                     // The tag function expression
+        List<string?> CookedStrings,  // Processed escapes (null for invalid)
+        List<string> RawStrings,      // Literal text (unprocessed)
+        List<Expr> Expressions        // Interpolated expressions
+    ) : Expr;
     // Spread expression for calls and array literals
     public record Spread(Expr Expression) : Expr;
     // Type assertion: value as Type

@@ -1450,6 +1450,7 @@ public partial class RuntimeEmitter
         EmitGetArrayMethod(typeBuilder, runtime);
         EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitGetFieldsProperty(typeBuilder, runtime);
+        EmitGetListProperty(typeBuilder, runtime);
         EmitSetFieldsProperty(typeBuilder, runtime);
         EmitSetFieldsPropertyStrict(typeBuilder, runtime);
         EmitGetProperty(typeBuilder, runtime);
@@ -1535,6 +1536,7 @@ public partial class RuntimeEmitter
         EmitRandom(typeBuilder, runtime, randomField);
         EmitGetEnumMemberName(typeBuilder, runtime);
         EmitConcatTemplate(typeBuilder, runtime);
+        EmitInvokeTaggedTemplate(typeBuilder, runtime);
         EmitObjectRest(typeBuilder, runtime);
         // JSON methods
         EmitJsonParse(typeBuilder, runtime);

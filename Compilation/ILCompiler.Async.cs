@@ -380,6 +380,11 @@ public partial class ILCompiler
                 foreach (var e in tl.Expressions)
                     AnalyzeArrowExprForAwaits(e, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
+            case Expr.TaggedTemplateLiteral ttl:
+                AnalyzeArrowExprForAwaits(ttl.Tag, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                foreach (var e in ttl.Expressions)
+                    AnalyzeArrowExprForAwaits(e, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.CompoundAssign ca:
                 if (seenAwait && declaredVariables.Contains(ca.Name.Lexeme))
                     usedAfterAwait.Add(ca.Name.Lexeme);

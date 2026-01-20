@@ -330,6 +330,49 @@ public partial class GeneratorMoveNextEmitter
         SetStackType(StackType.String);
     }
 
+    protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
+    {
+        EmitExpression(ttl.Tag);
+        EnsureBoxed();
+
+        _il.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < ttl.CookedStrings.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            if (ttl.CookedStrings[i] != null)
+                _il.Emit(OpCodes.Ldstr, ttl.CookedStrings[i]!);
+            else
+                _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        _il.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
+        _il.Emit(OpCodes.Newarr, typeof(string));
+        for (int i = 0; i < ttl.RawStrings.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            _il.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        _il.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(ttl.Expressions[i]);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeTaggedTemplate);
+        SetStackUnknown();
+    }
+
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;

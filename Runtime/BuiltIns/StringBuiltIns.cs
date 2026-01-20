@@ -1,3 +1,4 @@
+using System.Text;
 using SharpTS.Execution;
 using SharpTS.Runtime.Types;
 
@@ -336,5 +337,73 @@ public static class StringBuiltIns
         if (index < 0) index = str.Length + index;
         if (index < 0 || index >= str.Length) return null;
         return str[index].ToString();
+    }
+
+    /// <summary>
+    /// Gets a static member (method) from the String namespace.
+    /// Currently only supports String.raw for tagged templates.
+    /// </summary>
+    public static object? GetStaticMember(string name)
+    {
+        return name switch
+        {
+            "raw" => new BuiltInMethod("raw", 1, int.MaxValue, StringRaw),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// String.raw tag function implementation.
+    /// Returns raw strings from template literals with substitutions.
+    /// </summary>
+    private static object? StringRaw(Interpreter _, object? _recv, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("TypeError: String.raw requires at least 1 argument.");
+
+        // First argument should have a 'raw' property
+        object? stringsArg = args[0];
+        List<object?>? rawStrings = null;
+
+        if (stringsArg is SharpTSTemplateStringsArray tsa)
+        {
+            rawStrings = tsa.Raw.Elements;
+        }
+        else if (stringsArg is SharpTSObject obj)
+        {
+            var rawProp = obj.GetProperty("raw");
+            if (rawProp is SharpTSArray rawArr)
+                rawStrings = rawArr.Elements;
+        }
+        else if (stringsArg is SharpTSArray arr)
+        {
+            // Check if array has a 'raw' property (via SharpTSTemplateStringsArray)
+            if (stringsArg is ISharpTSPropertyAccessor accessor)
+            {
+                var rawProp = accessor.GetProperty("raw");
+                if (rawProp is SharpTSArray rawArr)
+                    rawStrings = rawArr.Elements;
+            }
+            if (rawStrings == null)
+            {
+                // Use the array elements directly as raw strings
+                rawStrings = arr.Elements;
+            }
+        }
+
+        if (rawStrings == null || rawStrings.Count == 0)
+            return "";
+
+        var result = new StringBuilder();
+        for (int i = 0; i < rawStrings.Count; i++)
+        {
+            result.Append(rawStrings[i]?.ToString() ?? "");
+            if (i < args.Count - 1 && i < rawStrings.Count - 1)
+            {
+                result.Append(args[i + 1]?.ToString() ?? "");
+            }
+        }
+
+        return result.ToString();
     }
 }

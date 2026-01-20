@@ -115,6 +115,9 @@ public abstract class ExpressionEmitterBase
             case Expr.TemplateLiteral tl:
                 EmitTemplateLiteral(tl);
                 break;
+            case Expr.TaggedTemplateLiteral ttl:
+                EmitTaggedTemplateLiteral(ttl);
+                break;
             case Expr.ArrayLiteral al:
                 EmitArrayLiteral(al);
                 break;
@@ -211,6 +214,7 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitGetIndex(Expr.GetIndex gi);
     protected abstract void EmitSetIndex(Expr.SetIndex si);
     protected abstract void EmitTemplateLiteral(Expr.TemplateLiteral tl);
+    protected abstract void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl);
     protected abstract void EmitArrayLiteral(Expr.ArrayLiteral al);
     protected abstract void EmitObjectLiteral(Expr.ObjectLiteral ol);
     protected abstract void EmitNew(Expr.New n);

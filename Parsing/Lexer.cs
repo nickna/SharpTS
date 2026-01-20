@@ -497,67 +497,111 @@ public class Lexer(string source)
 
     private void TemplateLiteral()
     {
-        int stringStart = _current;
+        var (cooked, raw) = ProcessTemplateSegment();
 
-        while (!IsAtEnd())
+        if (Peek() == '`')
         {
-            if (Peek() == '`')
-            {
-                // End of template
-                string value = _source[stringStart.._current];
-                Advance(); // consume closing `
-                AddToken(TokenType.TEMPLATE_FULL, value);
-                return;
-            }
-            else if (Peek() == '$' && PeekNext() == '{')
-            {
-                // Start of interpolation
-                string value = _source[stringStart.._current];
-                Advance(); // consume $
-                Advance(); // consume {
-                _templateBraceDepth.Push(0);
-                AddToken(TokenType.TEMPLATE_HEAD, value);
-                return;
-            }
-            else
-            {
-                if (Peek() == '\n') _line++;
-                Advance();
-            }
+            Advance(); // consume closing `
+            AddToken(TokenType.TEMPLATE_FULL, new TemplateStringValue(cooked, raw));
+        }
+        else if (Peek() == '$' && PeekNext() == '{')
+        {
+            Advance(); // consume $
+            Advance(); // consume {
+            _templateBraceDepth.Push(0);
+            AddToken(TokenType.TEMPLATE_HEAD, new TemplateStringValue(cooked, raw));
         }
     }
 
     private void ContinueTemplateLiteral()
     {
         _start = _current;
-        int stringStart = _current;
+        var (cooked, raw) = ProcessTemplateSegment();
 
-        while (!IsAtEnd())
+        if (Peek() == '`')
         {
-            if (Peek() == '`')
+            Advance(); // consume closing `
+            AddToken(TokenType.TEMPLATE_TAIL, new TemplateStringValue(cooked, raw));
+        }
+        else if (Peek() == '$' && PeekNext() == '{')
+        {
+            Advance(); // consume $
+            Advance(); // consume {
+            _templateBraceDepth.Push(0);
+            AddToken(TokenType.TEMPLATE_MIDDLE, new TemplateStringValue(cooked, raw));
+        }
+    }
+
+    /// <summary>
+    /// Process a template string segment, returning (cooked, raw) strings.
+    /// Cooked is null if any invalid escape sequence was encountered (ES2018).
+    /// </summary>
+    private (string? Cooked, string Raw) ProcessTemplateSegment()
+    {
+        var raw = new System.Text.StringBuilder();
+        var cooked = new System.Text.StringBuilder();
+        bool hasInvalidEscape = false;
+
+        while (!IsAtEnd() && Peek() != '`' && !(Peek() == '$' && PeekNext() == '{'))
+        {
+            if (Peek() == '\n') _line++;
+
+            if (Peek() == '\\' && !IsAtEnd())
             {
-                // End of template
-                string value = _source[stringStart.._current];
-                Advance(); // consume closing `
-                AddToken(TokenType.TEMPLATE_TAIL, value);
-                return;
-            }
-            else if (Peek() == '$' && PeekNext() == '{')
-            {
-                // Another interpolation
-                string value = _source[stringStart.._current];
-                Advance(); // consume $
-                Advance(); // consume {
-                _templateBraceDepth.Push(0);
-                AddToken(TokenType.TEMPLATE_MIDDLE, value);
-                return;
+                raw.Append(Advance()); // consume backslash, add to raw
+
+                if (!IsAtEnd())
+                {
+                    char next = Peek();
+                    raw.Append(Advance()); // add escaped char to raw
+
+                    // Process escape for cooked string
+                    var processed = ProcessTemplateEscape(next);
+                    if (processed == null)
+                    {
+                        hasInvalidEscape = true;
+                    }
+                    else
+                    {
+                        cooked.Append(processed);
+                    }
+                }
             }
             else
             {
-                if (Peek() == '\n') _line++;
-                Advance();
+                char c = Advance();
+                raw.Append(c);
+                cooked.Append(c);
             }
         }
+
+        return (hasInvalidEscape ? null : cooked.ToString(), raw.ToString());
+    }
+
+    /// <summary>
+    /// Process a single escape sequence character for template literals.
+    /// Returns null for invalid escapes (ES2018 tagged template revision).
+    /// </summary>
+    private static string? ProcessTemplateEscape(char escaped)
+    {
+        return escaped switch
+        {
+            'n' => "\n",
+            't' => "\t",
+            'r' => "\r",
+            '\\' => "\\",
+            '`' => "`",
+            '$' => "$",
+            '0' => "\0",
+            'b' => "\b",
+            'f' => "\f",
+            'v' => "\v",
+            '\n' => "", // line continuation
+            '\r' => "", // line continuation
+            // For now, treat hex/unicode and unknown escapes as invalid
+            _ when char.IsDigit(escaped) && escaped != '0' => null, // \1-\9 invalid
+            _ => null // unknown escape = invalid
+        };
     }
 
     private bool Match(char expected)

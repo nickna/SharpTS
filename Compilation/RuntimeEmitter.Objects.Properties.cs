@@ -512,6 +512,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitGetListProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // GetListProperty(list: List<object>, name: string) -> object?
+        // Forwards to RuntimeTypes.GetListProperty which handles array methods
+        var method = typeBuilder.DefineMethod(
+            "GetListProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.ListOfObject, _types.String]
+        );
+        runtime.GetListProperty = method;
+
+        var il = method.GetILGenerator();
+
+        // Call RuntimeTypes.GetListProperty(list, name)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            "GetListProperty",
+            [typeof(List<object>), typeof(string)])!);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitGetProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -634,10 +657,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notLengthLabel);
-        // For other properties on List (like methods push, pop, etc.), use GetFieldsProperty
+        // For other properties on List (like methods push, pop, etc.), use GetListProperty
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Call, runtime.GetListProperty);
         il.Emit(OpCodes.Ret);
 
         // $Array handler - access Elements.Count for "length"

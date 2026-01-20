@@ -56,6 +56,7 @@ public partial class Interpreter
             Expr.PostfixIncrement postfix => EvaluatePostfixIncrement(postfix),
             Expr.ArrowFunction arrow => EvaluateArrowFunction(arrow),
             Expr.TemplateLiteral template => EvaluateTemplateLiteral(template),
+            Expr.TaggedTemplateLiteral tagged => EvaluateTaggedTemplateLiteral(tagged),
             Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.Satisfies sat => Evaluate(sat.Expression), // Satisfies is pass-through at runtime
@@ -124,6 +125,7 @@ public partial class Interpreter
             case Expr.PostfixIncrement postfix: return await EvaluatePostfixIncrementAsync(postfix);
             case Expr.ArrowFunction arrow: return EvaluateArrowFunction(arrow);
             case Expr.TemplateLiteral template: return await EvaluateTemplateLiteralAsync(template);
+            case Expr.TaggedTemplateLiteral tagged: return await EvaluateTaggedTemplateLiteralAsync(tagged);
             case Expr.Spread spread: return await EvaluateAsync(spread.Expression);
             case Expr.TypeAssertion ta: return await EvaluateAsync(ta.Expression);
             case Expr.Satisfies sat: return await EvaluateAsync(sat.Expression);
@@ -225,6 +227,31 @@ public partial class Interpreter
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// Evaluates a tagged template literal, invoking the tag function with strings and values.
+    /// </summary>
+    /// <param name="tagged">The tagged template literal AST node.</param>
+    /// <returns>The result of calling the tag function.</returns>
+    private object? EvaluateTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged)
+    {
+        object? tag = Evaluate(tagged.Tag);
+
+        if (tag is not ISharpTSCallable callable)
+            throw new Exception("Runtime Error: Tagged template tag must be a function.");
+
+        // Create template strings array with raw property
+        // Cooked values: null becomes undefined (or just null in our runtime)
+        var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
+        var stringsArray = new SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);
+
+        // Evaluate all expression arguments
+        List<object?> args = [stringsArray];
+        foreach (var expr in tagged.Expressions)
+            args.Add(Evaluate(expr));
+
+        return callable.Call(this, args);
     }
 
     /// <summary>

@@ -264,6 +264,13 @@ public partial class Interpreter
             return value;
         }
 
+        // Handle objects that implement ISharpTSPropertyAccessor (e.g., SharpTSTemplateStringsArray)
+        // Only return if the accessor has this property, otherwise fall through to built-ins
+        if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(get.Name.Lexeme))
+        {
+            return accessor.GetProperty(get.Name.Lexeme);
+        }
+
         // Handle built-in instance members: strings, arrays, Math, Promise
         if (obj != null)
         {

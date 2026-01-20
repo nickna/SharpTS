@@ -54,6 +54,7 @@ public abstract class AstVisitorBase
             case Expr.PostfixIncrement e: VisitPostfixIncrement(e); break;
             case Expr.ArrowFunction e: VisitArrowFunction(e); break;
             case Expr.TemplateLiteral e: VisitTemplateLiteral(e); break;
+            case Expr.TaggedTemplateLiteral e: VisitTaggedTemplateLiteral(e); break;
             case Expr.Spread e: VisitSpread(e); break;
             case Expr.TypeAssertion e: VisitTypeAssertion(e); break;
             case Expr.NonNullAssertion e: VisitNonNullAssertion(e); break;
@@ -286,6 +287,13 @@ public abstract class AstVisitorBase
 
     protected virtual void VisitTemplateLiteral(Expr.TemplateLiteral expr)
     {
+        foreach (var e in expr.Expressions)
+            Visit(e);
+    }
+
+    protected virtual void VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral expr)
+    {
+        Visit(expr.Tag);
         foreach (var e in expr.Expressions)
             Visit(e);
     }

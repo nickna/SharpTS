@@ -64,6 +64,12 @@ public enum TokenType
 public record RegexLiteralValue(string Pattern, string Flags);
 
 /// <summary>
+/// Holds both cooked and raw versions of a template string segment.
+/// Cooked is null for invalid escape sequences (ES2018 tagged template revision).
+/// </summary>
+public record TemplateStringValue(string? Cooked, string Raw);
+
+/// <summary>
 /// Represents a single token from the source code.
 /// </summary>
 /// <remarks>

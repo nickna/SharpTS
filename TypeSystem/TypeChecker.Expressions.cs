@@ -50,6 +50,7 @@ public partial class TypeChecker
             Expr.PostfixIncrement postfix => CheckPostfixIncrement(postfix),
             Expr.ArrowFunction arrow => CheckArrowFunction(arrow),
             Expr.TemplateLiteral template => CheckTemplateLiteral(template),
+            Expr.TaggedTemplateLiteral tagged => CheckTaggedTemplateLiteral(tagged),
             Expr.Spread spread => CheckSpread(spread),
             Expr.TypeAssertion ta => CheckTypeAssertion(ta),
             Expr.Satisfies sat => CheckSatisfies(sat),
@@ -327,6 +328,27 @@ public partial class TypeChecker
         }
         // Template literals always result in string
         return new TypeInfo.String();
+    }
+
+    private TypeInfo CheckTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged)
+    {
+        TypeInfo tagType = CheckExpr(tagged.Tag);
+
+        // Check all interpolated expressions
+        foreach (var expr in tagged.Expressions)
+            CheckExpr(expr);
+
+        // Tag must be callable - return its return type, or any if uncertain
+        return tagType switch
+        {
+            TypeInfo.Function f => f.ReturnType,
+            TypeInfo.OverloadedFunction of => of.Implementation.ReturnType,
+            TypeInfo.GenericFunction gf => gf.ReturnType,
+            TypeInfo.Any => new TypeInfo.Any(),
+            TypeInfo.Class => new TypeInfo.Any(), // constructors are callable but shouldn't be used as tag
+            _ => throw new TypeCheckException(
+                $"Type Error: Tagged template tag must be callable, got '{tagType}'.")
+        };
     }
 
     private TypeInfo CheckObject(Expr.ObjectLiteral obj)
@@ -862,6 +884,7 @@ public partial class TypeChecker
         if (name.Lexeme == "JSON") return new TypeInfo.Any(); // JSON is a special global object
         if (name.Lexeme == "Promise") return new TypeInfo.Any(); // Promise is a special global object
         if (name.Lexeme == "Number") return new TypeInfo.Any(); // Number is a special global object
+        if (name.Lexeme == "String") return new TypeInfo.Any(); // String is a special global object
         if (name.Lexeme == "Symbol") return new TypeInfo.Any(); // Symbol is a special global object
         if (name.Lexeme == "parseInt") return new TypeInfo.Any(); // Global parseInt function
         if (name.Lexeme == "parseFloat") return new TypeInfo.Any(); // Global parseFloat function

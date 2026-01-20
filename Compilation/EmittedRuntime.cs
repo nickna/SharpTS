@@ -134,6 +134,7 @@ public class EmittedRuntime
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;
+    public MethodBuilder GetListProperty { get; set; } = null!;
     public MethodBuilder MergeIntoObject { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
@@ -162,6 +163,7 @@ public class EmittedRuntime
     public MethodBuilder Random { get; set; } = null!;
     public MethodBuilder GetEnumMemberName { get; set; } = null!;
     public MethodBuilder ConcatTemplate { get; set; } = null!;
+    public MethodBuilder InvokeTaggedTemplate { get; set; } = null!;
     public MethodBuilder ObjectRest { get; set; } = null!;
 
     // JSON methods

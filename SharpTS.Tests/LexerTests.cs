@@ -618,7 +618,8 @@ public class LexerTests
         var tokens = Tokenize("`hello world`");
         Assert.Equal(2, tokens.Count);
         Assert.Equal(TokenType.TEMPLATE_FULL, tokens[0].Type);
-        Assert.Equal("hello world", tokens[0].Literal);
+        var templateValue = Assert.IsType<TemplateStringValue>(tokens[0].Literal);
+        Assert.Equal("hello world", templateValue.Cooked);
     }
 
     [Fact]
@@ -626,7 +627,8 @@ public class LexerTests
     {
         var tokens = Tokenize("``");
         Assert.Equal(TokenType.TEMPLATE_FULL, tokens[0].Type);
-        Assert.Equal("", tokens[0].Literal);
+        var templateValue = Assert.IsType<TemplateStringValue>(tokens[0].Literal);
+        Assert.Equal("", templateValue.Cooked);
     }
 
     [Fact]
@@ -637,11 +639,13 @@ public class LexerTests
         // It's consumed as part of the template parsing
         Assert.Equal(4, tokens.Count); // HEAD, IDENTIFIER, TAIL, EOF
         Assert.Equal(TokenType.TEMPLATE_HEAD, tokens[0].Type);
-        Assert.Equal("hello ", tokens[0].Literal);
+        var headValue = Assert.IsType<TemplateStringValue>(tokens[0].Literal);
+        Assert.Equal("hello ", headValue.Cooked);
         Assert.Equal(TokenType.IDENTIFIER, tokens[1].Type);
         Assert.Equal("name", tokens[1].Lexeme);
         Assert.Equal(TokenType.TEMPLATE_TAIL, tokens[2].Type);
-        Assert.Equal("", tokens[2].Literal);
+        var tailValue = Assert.IsType<TemplateStringValue>(tokens[2].Literal);
+        Assert.Equal("", tailValue.Cooked);
     }
 
     [Fact]
@@ -668,15 +672,18 @@ public class LexerTests
         var tokens = Tokenize("`Hello ${name}, you are ${age} years old`");
         // HEAD, name, MIDDLE, age, TAIL, EOF (no } tokens)
         Assert.Equal(TokenType.TEMPLATE_HEAD, tokens[0].Type);
-        Assert.Equal("Hello ", tokens[0].Literal);
+        var headValue = Assert.IsType<TemplateStringValue>(tokens[0].Literal);
+        Assert.Equal("Hello ", headValue.Cooked);
         Assert.Equal(TokenType.IDENTIFIER, tokens[1].Type);
         Assert.Equal("name", tokens[1].Lexeme);
         Assert.Equal(TokenType.TEMPLATE_MIDDLE, tokens[2].Type);
-        Assert.Equal(", you are ", tokens[2].Literal);
+        var middleValue = Assert.IsType<TemplateStringValue>(tokens[2].Literal);
+        Assert.Equal(", you are ", middleValue.Cooked);
         Assert.Equal(TokenType.IDENTIFIER, tokens[3].Type);
         Assert.Equal("age", tokens[3].Lexeme);
         Assert.Equal(TokenType.TEMPLATE_TAIL, tokens[4].Type);
-        Assert.Equal(" years old", tokens[4].Literal);
+        var tailValue = Assert.IsType<TemplateStringValue>(tokens[4].Literal);
+        Assert.Equal(" years old", tailValue.Cooked);
     }
 
     [Fact]
@@ -712,7 +719,8 @@ public class LexerTests
         var source = "`line1\nline2\nline3`";
         var tokens = Tokenize(source);
         Assert.Equal(TokenType.TEMPLATE_FULL, tokens[0].Type);
-        Assert.Equal("line1\nline2\nline3", tokens[0].Literal);
+        var templateValue = Assert.IsType<TemplateStringValue>(tokens[0].Literal);
+        Assert.Equal("line1\nline2\nline3", templateValue.Cooked);
     }
 
     [Fact]

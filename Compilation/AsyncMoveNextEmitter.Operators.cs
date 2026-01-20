@@ -46,6 +46,58 @@ public partial class AsyncMoveNextEmitter
         _stackType = StackType.String;
     }
 
+    protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
+    {
+        // 1. Emit the tag function reference
+        EmitExpression(ttl.Tag);
+        EnsureBoxed();
+
+        // 2. Create cooked strings array (object?[] to allow null for invalid escapes)
+        _il.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < ttl.CookedStrings.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            if (ttl.CookedStrings[i] != null)
+            {
+                _il.Emit(OpCodes.Ldstr, ttl.CookedStrings[i]!);
+            }
+            else
+            {
+                _il.Emit(OpCodes.Ldnull);
+            }
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 3. Create raw strings array
+        _il.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
+        _il.Emit(OpCodes.Newarr, typeof(string));
+        for (int i = 0; i < ttl.RawStrings.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            _il.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 4. Create expressions array
+        _il.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(ttl.Expressions[i]);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 5. Call runtime helper: InvokeTaggedTemplate(tag, cooked, raw, exprs)
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeTaggedTemplate);
+        SetStackUnknown();
+    }
+
     protected override void EmitSet(Expr.Set s)
     {
         // Handle static field assignment: Class.field = value

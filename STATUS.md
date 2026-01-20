@@ -245,7 +245,7 @@ This document tracks TypeScript language features and their implementation statu
 | Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
 | Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
-| Tagged template literals | ❌ | `` tag`template` `` syntax |
+| Tagged template literals | ✅ | `` tag`template` `` syntax with TemplateStringsArray and raw property |
 | Numeric separators | ✅ | `1_000_000` for readability |
 
 ---

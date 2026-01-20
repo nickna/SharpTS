@@ -307,6 +307,11 @@ public partial class ILCompiler
                 foreach (var e in tl.Expressions)
                     CollectArrowsFromExpr(e);
                 break;
+            case Expr.TaggedTemplateLiteral ttl:
+                CollectArrowsFromExpr(ttl.Tag);
+                foreach (var e in ttl.Expressions)
+                    CollectArrowsFromExpr(e);
+                break;
             case Expr.CompoundAssign ca:
                 CollectArrowsFromExpr(ca.Value);
                 break;

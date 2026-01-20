@@ -116,6 +116,7 @@ public sealed class BuiltInRegistry
         RegisterConsoleNamespace(registry);
         RegisterPromiseNamespace(registry);
         RegisterNumberNamespace(registry);
+        RegisterStringNamespace(registry);
         RegisterDateNamespace(registry);
         RegisterReflectNamespace(registry);
         RegisterSymbolNamespace(registry);
@@ -221,6 +222,9 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterInstanceType(typeof(SharpTSArray), (instance, name) =>
             ArrayBuiltIns.GetMember((SharpTSArray)instance, name));
+        // SharpTSTemplateStringsArray extends SharpTSArray so needs same methods
+        registry.RegisterInstanceType(typeof(SharpTSTemplateStringsArray), (instance, name) =>
+            ArrayBuiltIns.GetMember((SharpTSArray)instance, name));
     }
 
     private static void RegisterMathType(BuiltInRegistry registry)
@@ -253,6 +257,16 @@ public sealed class BuiltInRegistry
             IsSingleton: false,
             SingletonFactory: null,
             GetMethod: name => NumberBuiltIns.GetStaticMember(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterStringNamespace(BuiltInRegistry registry)
+    {
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "String",
+            IsSingleton: false,
+            SingletonFactory: null,
+            GetMethod: name => StringBuiltIns.GetStaticMember(name) as BuiltInMethod
         ));
     }
 

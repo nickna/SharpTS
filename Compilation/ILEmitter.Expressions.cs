@@ -289,6 +289,58 @@ public partial class ILEmitter
         EmitCallString(_ctx.Runtime!.ConcatTemplate);
     }
 
+    protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
+    {
+        // 1. Emit the tag function reference
+        EmitExpression(ttl.Tag);
+        EmitBoxIfNeeded(ttl.Tag);
+
+        // 2. Create cooked strings array (object?[] to allow null for invalid escapes)
+        IL.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < ttl.CookedStrings.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            if (ttl.CookedStrings[i] != null)
+            {
+                IL.Emit(OpCodes.Ldstr, ttl.CookedStrings[i]!);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull); // null for invalid escape sequences
+            }
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 3. Create raw strings array
+        IL.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.String);
+        for (int i = 0; i < ttl.RawStrings.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 4. Create expressions array
+        IL.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(ttl.Expressions[i]);
+            EmitBoxIfNeeded(ttl.Expressions[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 5. Call runtime helper: InvokeTaggedTemplate(tag, cooked, raw, exprs)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeTaggedTemplate);
+        SetStackUnknown();
+    }
+
     protected override void EmitRegexLiteral(Expr.RegexLiteral re)
     {
         IL.Emit(OpCodes.Ldstr, re.Pattern);

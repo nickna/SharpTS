@@ -485,6 +485,11 @@ public partial class Parser
                 // Asserts the value is not null/undefined at compile time
                 expr = new Expr.NonNullAssertion(expr);
             }
+            // Tagged template literal: expr`template ${x} literal`
+            else if (Check(TokenType.TEMPLATE_FULL) || Check(TokenType.TEMPLATE_HEAD))
+            {
+                expr = ParseTaggedTemplateLiteral(expr);
+            }
             else
             {
                 break;
@@ -836,7 +841,13 @@ public partial class Parser
         // Template literals
         if (Match(TokenType.TEMPLATE_FULL))
         {
-            return new Expr.TemplateLiteral([(string)Previous().Literal!], []);
+            var value = (TemplateStringValue)Previous().Literal!;
+            // For untagged templates, cooked must not be null (invalid escapes are errors)
+            if (value.Cooked == null)
+            {
+                throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+            }
+            return new Expr.TemplateLiteral([value.Cooked], []);
         }
         if (Match(TokenType.TEMPLATE_HEAD))
         {
@@ -848,7 +859,13 @@ public partial class Parser
 
     private Expr ParseTemplateLiteral()
     {
-        List<string> strings = [(string)Previous().Literal!];
+        var headValue = (TemplateStringValue)Previous().Literal!;
+        // For untagged templates, cooked must not be null
+        if (headValue.Cooked == null)
+        {
+            throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+        }
+        List<string> strings = [headValue.Cooked];
         List<Expr> expressions = [];
 
         // Parse first expression
@@ -857,15 +874,66 @@ public partial class Parser
         // Parse middle parts
         while (Match(TokenType.TEMPLATE_MIDDLE))
         {
-            strings.Add((string)Previous().Literal!);
+            var midValue = (TemplateStringValue)Previous().Literal!;
+            if (midValue.Cooked == null)
+            {
+                throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+            }
+            strings.Add(midValue.Cooked);
             expressions.Add(Expression());
         }
 
         // Expect tail
         Consume(TokenType.TEMPLATE_TAIL, "Expect end of template literal.");
-        strings.Add((string)Previous().Literal!);
+        var tailValue = (TemplateStringValue)Previous().Literal!;
+        if (tailValue.Cooked == null)
+        {
+            throw new Exception("Parse Error: Invalid escape sequence in template literal.");
+        }
+        strings.Add(tailValue.Cooked);
 
         return new Expr.TemplateLiteral(strings, expressions);
+    }
+
+    private Expr ParseTaggedTemplateLiteral(Expr tag)
+    {
+        if (Match(TokenType.TEMPLATE_FULL))
+        {
+            var value = (TemplateStringValue)Previous().Literal!;
+            return new Expr.TaggedTemplateLiteral(
+                tag,
+                CookedStrings: [value.Cooked],
+                RawStrings: [value.Raw],
+                Expressions: []
+            );
+        }
+
+        // Must be TEMPLATE_HEAD
+        Advance(); // consume TEMPLATE_HEAD
+        var firstValue = (TemplateStringValue)Previous().Literal!;
+        List<string?> cooked = [firstValue.Cooked];
+        List<string> raw = [firstValue.Raw];
+        List<Expr> expressions = [];
+
+        // Parse first expression
+        expressions.Add(Expression());
+
+        // Parse middle parts
+        while (Match(TokenType.TEMPLATE_MIDDLE))
+        {
+            var midValue = (TemplateStringValue)Previous().Literal!;
+            cooked.Add(midValue.Cooked);
+            raw.Add(midValue.Raw);
+            expressions.Add(Expression());
+        }
+
+        // Expect tail
+        Consume(TokenType.TEMPLATE_TAIL, "Expect end of template literal.");
+        var tailValue = (TemplateStringValue)Previous().Literal!;
+        cooked.Add(tailValue.Cooked);
+        raw.Add(tailValue.Raw);
+
+        return new Expr.TaggedTemplateLiteral(tag, cooked, raw, expressions);
     }
 
     // Try to parse arrow function after seeing '('
