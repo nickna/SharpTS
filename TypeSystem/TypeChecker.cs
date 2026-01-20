@@ -87,13 +87,14 @@ public partial class TypeChecker
     /// <param name="parameters">Function/method parameters to parse</param>
     /// <param name="validateDefaults">Whether to type-check default parameter values</param>
     /// <param name="contextName">Context name for error messages (e.g., "method 'foo'" or "function 'bar'")</param>
-    /// <returns>Tuple of (parameter types, required parameter count, has rest parameter)</returns>
-    private (List<TypeInfo> paramTypes, int requiredParams, bool hasRest) BuildFunctionSignature(
+    /// <returns>Tuple of (parameter types, required parameter count, has rest parameter, parameter names)</returns>
+    private (List<TypeInfo> paramTypes, int requiredParams, bool hasRest, List<string> paramNames) BuildFunctionSignature(
         List<Stmt.Parameter> parameters,
         bool validateDefaults,
         string contextName)
     {
         List<TypeInfo> paramTypes = [];
+        List<string> paramNames = [];
         int requiredParams = 0;
         bool seenDefault = false;
 
@@ -101,6 +102,7 @@ public partial class TypeChecker
         {
             TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
             paramTypes.Add(paramType);
+            paramNames.Add(param.Name.Lexeme);
 
             if (param.IsRest) continue;
 
@@ -133,7 +135,7 @@ public partial class TypeChecker
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
-        return (paramTypes, requiredParams, hasRest);
+        return (paramTypes, requiredParams, hasRest, paramNames);
     }
 
     /// <summary>

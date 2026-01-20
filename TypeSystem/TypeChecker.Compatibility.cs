@@ -890,6 +890,24 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Finds the parameter index for a given parameter name in a function type.
+    /// Returns -1 if parameter names are not available or the name is not found.
+    /// </summary>
+    private static int FindParameterIndex(TypeInfo funcType, string paramName)
+    {
+        List<string>? paramNames = funcType switch
+        {
+            TypeInfo.Function f => f.ParamNames,
+            TypeInfo.GenericFunction gf => gf.ParamNames,
+            _ => null
+        };
+
+        if (paramNames == null) return 0; // Fallback to first param for backwards compatibility
+        int index = paramNames.IndexOf(paramName);
+        return index >= 0 ? index : 0; // Fallback to first param if not found
+    }
+
+    /// <summary>
     /// Analyzes a call to a user-defined type predicate function like isString(x).
     /// Returns narrowing info if the callee has a type predicate return type.
     /// </summary>
@@ -923,9 +941,10 @@ public partial class TypeChecker
         // Check for type predicate return type (not assertion - those are handled differently)
         if (returnType is TypeInfo.TypePredicate pred && !pred.IsAssertion)
         {
-            // For simplicity, assume the first argument corresponds to the predicate parameter
-            // A more complete implementation would track parameter names in the function type
-            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            // Look up the parameter index by name from the function type
+            int paramIndex = FindParameterIndex(calleeType, pred.ParameterName);
+            if (paramIndex >= 0 && paramIndex < call.Arguments.Count &&
+                call.Arguments[paramIndex] is Expr.Variable argVar)
             {
                 string varName = argVar.Name.Lexeme;
                 TypeInfo? currentType = _environment.Get(varName);

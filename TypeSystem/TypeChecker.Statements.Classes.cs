@@ -87,7 +87,7 @@ public partial class TypeChecker
         // Helper to build a TypeInfo.Function from a method declaration
         TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
         {
-            var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+            var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                 method.Parameters,
                 validateDefaults: true,
                 contextName: $"method '{method.Name.Lexeme}'"
@@ -97,7 +97,7 @@ public partial class TypeChecker
                 ? ToTypeInfo(method.ReturnType)
                 : new TypeInfo.Void();
 
-            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
         }
 
         // First pass: collect signatures, grouping overloads
@@ -645,7 +645,7 @@ public partial class TypeChecker
         // Helper to build a TypeInfo.Function from a method declaration
         TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
         {
-            var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+            var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                 method.Parameters,
                 validateDefaults: true,
                 contextName: $"method '{method.Name.Lexeme}'"
@@ -655,7 +655,7 @@ public partial class TypeChecker
                 ? ToTypeInfo(method.ReturnType)
                 : new TypeInfo.Void();
 
-            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
         }
 
         // Collect method signatures (all methods in declare class are treated as signatures)

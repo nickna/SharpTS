@@ -105,8 +105,9 @@ public abstract record TypeInfo
     /// <summary>
     /// Function type with optional explicit this type annotation.
     /// ThisType specifies the expected type of 'this' within the function body.
+    /// ParamNames stores parameter names for type predicate resolution.
     /// </summary>
-    public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false, TypeInfo? ThisType = null) : TypeInfo
+    public record Function(List<TypeInfo> ParamTypes, TypeInfo ReturnType, int RequiredParams = -1, bool HasRestParam = false, TypeInfo? ThisType = null, List<string>? ParamNames = null) : TypeInfo
     {
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
@@ -804,6 +805,7 @@ public abstract record TypeInfo
 
     /// <summary>
     /// Generic function type with optional explicit this type annotation.
+    /// ParamNames stores parameter names for type predicate resolution.
     /// </summary>
     public record GenericFunction(
         List<TypeParameter> TypeParams,
@@ -811,7 +813,8 @@ public abstract record TypeInfo
         TypeInfo ReturnType,
         int RequiredParams = -1,
         bool HasRestParam = false,
-        TypeInfo? ThisType = null
+        TypeInfo? ThisType = null,
+        List<string>? ParamNames = null
     ) : TypeInfo
     {
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;

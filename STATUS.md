@@ -738,9 +738,11 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ Type narrowing in subsequent code for assertion predicates
 - ✅ Null/undefined removal for `asserts x` syntax
 - ✅ Validation: predicate parameter name must exist in function signature
+- ✅ Multi-parameter predicate support: `function check(flag: boolean, x: unknown): x is string` correctly narrows `x`, not `flag`
 - ✅ `TypePredicate` and `AssertsNonNull` TypeInfo records
+- ✅ `ParamNames` stored in `TypeInfo.Function` and `TypeInfo.GenericFunction` for parameter index lookup
 - ✅ IL compiler maps predicates to `bool` (for `is`) or `void` (for `asserts`)
-- ✅ Full interpreter and IL compiler support with 14 test cases
+- ✅ Full interpreter and IL compiler support with 21 test cases
 
 ### Phase 41 Features (Timer Functions & globalThis)
 - ✅ `setTimeout(callback, delay?, ...args)` - schedules callback after delay milliseconds

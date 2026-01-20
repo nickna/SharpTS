@@ -798,7 +798,8 @@ public partial class TypeChecker
         }
 
         bool hasRest = arrow.Parameters.Any(p => p.IsRest);
-        return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType);
+        List<string> paramNames = arrow.Parameters.Select(p => p.Name.Lexeme).ToList();
+        return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
     }
 
     private TypeInfo CheckAssign(Expr.Assign assign)
@@ -911,7 +912,7 @@ public partial class TypeChecker
             // Helper to build a TypeInfo.Function from a method declaration
             TypeInfo.Function BuildMethodFuncType(Stmt.Function method)
             {
-                var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+                var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                     method.Parameters,
                     validateDefaults: true,
                     contextName: $"method '{method.Name.Lexeme}'"
@@ -921,7 +922,7 @@ public partial class TypeChecker
                     ? ToTypeInfo(method.ReturnType)
                     : new TypeInfo.Void();
 
-                return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest);
+                return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
             }
 
             // Collect method signatures

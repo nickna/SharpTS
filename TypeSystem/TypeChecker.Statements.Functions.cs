@@ -84,7 +84,7 @@ public partial class TypeChecker
 
             try
             {
-                var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+                var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
                     funcStmt.Parameters,
                     validateDefaults: false, // Don't validate defaults during hoisting
                     contextName: $"function '{funcStmt.Name.Lexeme}'"
@@ -117,11 +117,11 @@ public partial class TypeChecker
                 TypeInfo funcType;
                 if (typeParams != null && typeParams.Count > 0)
                 {
-                    funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType);
+                    funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
                 }
                 else
                 {
-                    funcType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType);
+                    funcType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType, paramNames);
                 }
 
                 // Register the function type (hoisting)
@@ -181,7 +181,7 @@ public partial class TypeChecker
 
         // Parse parameter types and return type (environment already set above)
 
-        var (paramTypes, requiredParams, hasRest) = BuildFunctionSignature(
+        var (paramTypes, requiredParams, hasRest, paramNames) = BuildFunctionSignature(
             funcStmt.Parameters,
             validateDefaults: true,
             contextName: $"function '{funcStmt.Name.Lexeme}'"
@@ -213,7 +213,7 @@ public partial class TypeChecker
             }
         }
 
-        var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType);
+        var thisFuncType = new TypeInfo.Function(paramTypes, funcReturnType, requiredParams, hasRest, thisType, paramNames);
 
         // Check if this is an overload signature (no body)
         if (funcStmt.Body == null)
@@ -268,7 +268,7 @@ public partial class TypeChecker
         else if (typeParams != null && typeParams.Count > 0)
         {
             // Generic function (no overloads)
-            funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType);
+            funcType = new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
         }
         else
         {

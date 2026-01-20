@@ -685,8 +685,10 @@ public partial class TypeChecker
         // Handle "asserts x is T" - narrow to the predicate type
         if (returnType is TypeInfo.TypePredicate pred && pred.IsAssertion)
         {
-            // For simplicity, assume first argument corresponds to the predicate parameter
-            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            // Look up the parameter index by name from the function type
+            int paramIndex = FindParameterIndex(calleeType, pred.ParameterName);
+            if (paramIndex >= 0 && paramIndex < call.Arguments.Count &&
+                call.Arguments[paramIndex] is Expr.Variable argVar)
             {
                 // Narrow the type in the current environment
                 _environment.Define(argVar.Name.Lexeme, pred.PredicateType);
@@ -695,8 +697,10 @@ public partial class TypeChecker
         // Handle "asserts x" - narrow to exclude null/undefined
         else if (returnType is TypeInfo.AssertsNonNull assertsNonNull)
         {
-            // For simplicity, assume first argument corresponds to the asserted parameter
-            if (call.Arguments.Count > 0 && call.Arguments[0] is Expr.Variable argVar)
+            // Look up the parameter index by name from the function type
+            int paramIndex = FindParameterIndex(calleeType, assertsNonNull.ParameterName);
+            if (paramIndex >= 0 && paramIndex < call.Arguments.Count &&
+                call.Arguments[paramIndex] is Expr.Variable argVar)
             {
                 var currentType = _environment.Get(argVar.Name.Lexeme);
                 if (currentType != null)
