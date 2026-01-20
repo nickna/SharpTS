@@ -41,11 +41,14 @@ public partial class ILCompiler
     private void EmitStaticConstructor(TypeBuilder typeBuilder, Stmt.Class classStmt, string qualifiedClassName)
     {
         // Check if we need a static constructor
-        var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.Initializer != null).ToList();
+        var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && f.Initializer != null).ToList();
+        var staticPrivateFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null).ToList();
         bool hasStaticLockFields = _locks.StaticSyncLockFields.ContainsKey(qualifiedClassName);
+        bool hasPrivateFieldStorage = _classes.PrivateFieldStorage.ContainsKey(qualifiedClassName);
+        bool hasStaticPrivateFields = _classes.StaticPrivateFields.TryGetValue(qualifiedClassName, out var staticPrivateFields) && staticPrivateFields.Count > 0;
 
-        // Only emit if there are static fields with initializers OR static lock fields
-        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields) return;
+        // Only emit if there are static fields with initializers, static lock fields, or private field storage
+        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields && !hasPrivateFieldStorage && !hasStaticPrivateFields) return;
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -116,6 +119,34 @@ public partial class ILCompiler
             // _staticLockReentrancy = new AsyncLocal<int>();
             il.Emit(OpCodes.Newobj, typeof(AsyncLocal<int>).GetConstructor([])!);
             il.Emit(OpCodes.Stsfld, staticReentrancyField);
+        }
+
+        // Initialize ES2022 private field storage (ConditionalWeakTable)
+        if (_classes.PrivateFieldStorage.TryGetValue(qualifiedClassName, out var privateFieldStorage))
+        {
+            // __privateFields = new ConditionalWeakTable<object, Dictionary<string, object?>>()
+            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
+                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+            il.Emit(OpCodes.Newobj, cwtType.GetConstructor([])!);
+            il.Emit(OpCodes.Stsfld, privateFieldStorage);
+        }
+
+        // Initialize static private fields with their initializers
+        if (_classes.StaticPrivateFields.TryGetValue(qualifiedClassName, out var staticPrivateFieldBuilders))
+        {
+            foreach (var field in classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null))
+            {
+                string fieldName = field.Name.Lexeme;
+                if (fieldName.StartsWith('#'))
+                    fieldName = fieldName[1..];
+
+                if (staticPrivateFieldBuilders.TryGetValue(fieldName, out var staticPrivateField))
+                {
+                    emitter.EmitExpression(field.Initializer!);
+                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    il.Emit(OpCodes.Stsfld, staticPrivateField);
+                }
+            }
         }
 
         // Initialize static field initializers
@@ -194,7 +225,14 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // ES2022 Private Class Elements support
+            CurrentClassName = className,
+            PrivateFieldStorage = _classes.PrivateFieldStorage,
+            PrivateFieldNames = _classes.PrivateFieldNames,
+            StaticPrivateFields = _classes.StaticPrivateFields,
+            PrivateMethods = _classes.PrivateMethods,
+            StaticPrivateMethods = _classes.StaticPrivateMethods
         };
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')

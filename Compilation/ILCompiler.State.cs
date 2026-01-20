@@ -32,6 +32,18 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedAccessors { get; } = [];
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
+
+        // ES2022 Private Class Elements Support
+        // Static field holding ConditionalWeakTable<object, Dictionary<string, object?>> for instance private fields
+        public Dictionary<string, FieldBuilder> PrivateFieldStorage { get; } = [];
+        // List of private field names per class for initialization order
+        public Dictionary<string, List<string>> PrivateFieldNames { get; } = [];
+        // Static private fields: class name -> field name (without #) -> FieldBuilder
+        public Dictionary<string, Dictionary<string, FieldBuilder>> StaticPrivateFields { get; } = [];
+        // Private instance methods: class name -> method name (without #) -> MethodBuilder
+        public Dictionary<string, Dictionary<string, MethodBuilder>> PrivateMethods { get; } = [];
+        // Static private methods: class name -> method name (without #) -> MethodBuilder
+        public Dictionary<string, Dictionary<string, MethodBuilder>> StaticPrivateMethods { get; } = [];
     }
 
     /// <summary>

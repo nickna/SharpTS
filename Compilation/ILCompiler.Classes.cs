@@ -240,10 +240,120 @@ public partial class ILCompiler
         _classes.Builders[className] = typeBuilder;
         _classes.StaticFields[className] = staticFieldBuilders;
 
+        // ES2022 Private Class Elements: Define storage for private fields and methods
+        DefinePrivateClassElements(typeBuilder, className, classStmt, classGenericParams);
+
         // Apply class-level decorators as .NET attributes
         if (_decoratorMode != DecoratorMode.None)
         {
             ApplyClassDecorators(classStmt, typeBuilder);
+        }
+    }
+
+    /// <summary>
+    /// Defines infrastructure for ES2022 private class elements (#field, #method).
+    /// This includes:
+    /// - ConditionalWeakTable for instance private field storage
+    /// - Static fields for static private fields
+    /// - Methods for private instance and static methods
+    /// </summary>
+    private void DefinePrivateClassElements(
+        TypeBuilder typeBuilder,
+        string className,
+        Stmt.Class classStmt,
+        GenericTypeParameterBuilder[]? classGenericParams)
+    {
+        // Collect private fields (IsPrivate flag indicates #field syntax)
+        var instancePrivateFields = classStmt.Fields.Where(f => f.IsPrivate && !f.IsStatic).ToList();
+        var staticPrivateFields = classStmt.Fields.Where(f => f.IsPrivate && f.IsStatic).ToList();
+
+        // Collect private methods (IsPrivate flag indicates #method syntax)
+        var instancePrivateMethods = classStmt.Methods.Where(m => m.IsPrivate && !m.IsStatic && m.Name.Lexeme != "constructor").ToList();
+        var staticPrivateMethods = classStmt.Methods.Where(m => m.IsPrivate && m.IsStatic).ToList();
+
+        // Initialize tracking dictionaries
+        _classes.PrivateFieldNames[className] = [];
+        _classes.StaticPrivateFields[className] = [];
+        _classes.PrivateMethods[className] = [];
+        _classes.StaticPrivateMethods[className] = [];
+
+        // Define ConditionalWeakTable storage for instance private fields
+        if (instancePrivateFields.Count > 0)
+        {
+            // Define: private static readonly ConditionalWeakTable<object, Dictionary<string, object?>> __privateFields
+            var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
+                .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+
+            var storageField = typeBuilder.DefineField(
+                "__privateFields",
+                cwtType,
+                FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            );
+            _classes.PrivateFieldStorage[className] = storageField;
+
+            // Track private field names for initialization (preserve declaration order)
+            foreach (var field in instancePrivateFields)
+            {
+                // Store the field name without the # prefix (the lexer includes it in the token)
+                string fieldName = field.Name.Lexeme;
+                if (fieldName.StartsWith('#'))
+                    fieldName = fieldName[1..];
+                _classes.PrivateFieldNames[className].Add(fieldName);
+            }
+        }
+
+        // Define static private fields as actual static fields with mangled names
+        foreach (var field in staticPrivateFields)
+        {
+            string fieldName = field.Name.Lexeme;
+            if (fieldName.StartsWith('#'))
+                fieldName = fieldName[1..];
+
+            // Mangle the name to avoid collisions with public fields
+            var staticField = typeBuilder.DefineField(
+                $"__private_{fieldName}",
+                typeof(object),
+                FieldAttributes.Private | FieldAttributes.Static
+            );
+            _classes.StaticPrivateFields[className][fieldName] = staticField;
+        }
+
+        // Define private instance methods
+        foreach (var method in instancePrivateMethods)
+        {
+            string methodName = method.Name.Lexeme;
+            if (methodName.StartsWith('#'))
+                methodName = methodName[1..];
+
+            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            Type returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
+
+            var methodBuilder = typeBuilder.DefineMethod(
+                $"__private_{methodName}",
+                MethodAttributes.Private | MethodAttributes.HideBySig,
+                returnType,
+                paramTypes
+            );
+            _classes.PrivateMethods[className][methodName] = methodBuilder;
+        }
+
+        // Define static private methods
+        foreach (var method in staticPrivateMethods)
+        {
+            string methodName = method.Name.Lexeme;
+            if (methodName.StartsWith('#'))
+                methodName = methodName[1..];
+
+            var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
+            Type returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
+
+            var methodBuilder = typeBuilder.DefineMethod(
+                $"__private_{methodName}",
+                MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                returnType,
+                paramTypes
+            );
+            _classes.StaticPrivateMethods[className][methodName] = methodBuilder;
         }
     }
 

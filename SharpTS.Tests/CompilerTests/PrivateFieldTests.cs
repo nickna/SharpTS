@@ -12,7 +12,7 @@ public class PrivateFieldTests
 {
     #region Instance Private Fields (Skipped - IL not implemented)
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateField_GetAndSet()
     {
         var source = """
@@ -40,7 +40,7 @@ public class PrivateFieldTests
         Assert.Equal("0\n1\n2\n", output);
     }
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateField_WithInitializer()
     {
         var source = """
@@ -60,7 +60,7 @@ public class PrivateFieldTests
         Assert.Equal("42\n", output);
     }
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateField_MultipleInstances()
     {
         var source = """
@@ -91,7 +91,7 @@ public class PrivateFieldTests
         Assert.Equal("2\n1\n", output);
     }
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateField_CoexistsWithPublicField()
     {
         var source = """
@@ -125,7 +125,7 @@ public class PrivateFieldTests
 
     #region Static Private Fields (Skipped - IL not implemented)
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void StaticPrivateField_GetAndSet()
     {
         var source = """
@@ -154,7 +154,7 @@ public class PrivateFieldTests
         Assert.Equal("0\n1\n2\n3\n", output);
     }
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void StaticPrivateField_WithInitializer()
     {
         var source = """
@@ -177,7 +177,7 @@ public class PrivateFieldTests
 
     #region Private Methods (Skipped - IL not implemented)
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateMethod_CalledFromPublicMethod()
     {
         var source = """
@@ -199,7 +199,7 @@ public class PrivateFieldTests
         Assert.Equal("7\n", output);
     }
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void PrivateMethod_AccessesPrivateField()
     {
         var source = """
@@ -230,7 +230,7 @@ public class PrivateFieldTests
 
     #region Static Private Methods (Skipped - IL not implemented)
 
-    [Fact(Skip = "IL compiler for private fields not yet implemented")]
+    [Fact]
     public void StaticPrivateMethod_CalledFromStaticPublicMethod()
     {
         var source = """
@@ -256,8 +256,9 @@ public class PrivateFieldTests
     #region Compiler Behavior Verification
 
     [Fact]
-    public void PrivateField_CompilerThrowsNotImplemented()
+    public void PrivateField_CompilerSupportsBasicGetAndSet()
     {
+        // This test verifies that private fields are now supported in compiled mode
         var source = """
             class Foo {
                 #value: number = 0;
@@ -265,17 +266,20 @@ public class PrivateFieldTests
                 getValue(): number {
                     return this.#value;
                 }
+
+                setValue(v: number): void {
+                    this.#value = v;
+                }
             }
 
             const f = new Foo();
             console.log(f.getValue());
+            f.setValue(42);
+            console.log(f.getValue());
             """;
 
-        // The compiler emits stubs that throw NotImplementedException at runtime
-        // RunCompiled wraps runtime errors in Exception, so check the message
-        var ex = Assert.Throws<Exception>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("NotImplementedException", ex.Message);
-        Assert.Contains("Private field '#value' access not yet supported", ex.Message);
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n42\n", output);
     }
 
     #endregion

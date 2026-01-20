@@ -84,7 +84,15 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // ES2022 Private Class Elements support
+            CurrentClassName = className,
+            CurrentClassBuilder = typeBuilder,
+            PrivateFieldStorage = _classes.PrivateFieldStorage,
+            PrivateFieldNames = _classes.PrivateFieldNames,
+            StaticPrivateFields = _classes.StaticPrivateFields,
+            PrivateMethods = _classes.PrivateMethods,
+            StaticPrivateMethods = _classes.StaticPrivateMethods
         };
 
         // Add class generic type parameters to context
@@ -146,7 +154,7 @@ public partial class ILCompiler
         }
 
         // Emit instance field initializers to backing fields (before constructor body)
-        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && f.Initializer != null).ToList();
+        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && !f.IsPrivate && f.Initializer != null).ToList();
         if (instanceFieldsWithInit.Count > 0)
         {
             ctx.FieldsField = fieldsField;
@@ -187,6 +195,10 @@ public partial class ILCompiler
             }
         }
 
+        // ES2022: Initialize instance private fields
+        // Private fields use a ConditionalWeakTable for GC-friendly per-instance storage
+        EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+
         // Emit constructor body
         if (constructor != null)
         {
@@ -215,5 +227,75 @@ public partial class ILCompiler
         }
 
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits IL to initialize ES2022 private fields for a new instance.
+    /// Creates a Dictionary with initial values and adds it to the ConditionalWeakTable.
+    /// </summary>
+    private void EmitPrivateFieldInitialization(
+        ILGenerator il,
+        string className,
+        Stmt.Class classStmt,
+        CompilationContext ctx)
+    {
+        // Check if this class has instance private fields
+        if (!_classes.PrivateFieldStorage.TryGetValue(className, out var storageField))
+            return;
+
+        // Get the list of private field names
+        if (!_classes.PrivateFieldNames.TryGetValue(className, out var fieldNames) || fieldNames.Count == 0)
+            return;
+
+        var instancePrivateFields = classStmt.Fields
+            .Where(f => f.IsPrivate && !f.IsStatic)
+            .ToList();
+
+        ctx.FieldsField = null; // Not using _fields for private field init
+        ctx.IsInstanceMethod = true;
+        var initEmitter = new ILEmitter(ctx);
+
+        // Create local for the fields dictionary
+        var dictType = typeof(Dictionary<string, object?>);
+        var dictLocal = il.DeclareLocal(dictType);
+
+        // Dictionary<string, object?> __fields = new Dictionary<string, object?>(capacity)
+        il.Emit(OpCodes.Ldc_I4, fieldNames.Count);
+        il.Emit(OpCodes.Newobj, dictType.GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // Add each private field with its initializer value (or null)
+        foreach (var field in instancePrivateFields)
+        {
+            string fieldName = field.Name.Lexeme;
+            if (fieldName.StartsWith('#'))
+                fieldName = fieldName[1..];
+
+            // __fields[fieldName] = initializer ?? null
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, fieldName);
+
+            if (field.Initializer != null)
+            {
+                initEmitter.EmitExpression(field.Initializer);
+                initEmitter.EmitBoxIfNeeded(field.Initializer);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
+
+            il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item", [typeof(string), typeof(object)])!);
+        }
+
+        // __privateFields.Add(this, __fields)
+        var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
+            .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
+        var addMethod = cwtType.GetMethod("Add", [typeof(object), typeof(Dictionary<string, object?>)])!;
+
+        il.Emit(OpCodes.Ldsfld, storageField);       // __privateFields
+        il.Emit(OpCodes.Ldarg_0);                    // this
+        il.Emit(OpCodes.Ldloc, dictLocal);           // __fields
+        il.Emit(OpCodes.Callvirt, addMethod);
     }
 }

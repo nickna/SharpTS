@@ -538,6 +538,136 @@ public partial class ILCompiler
                 EmitAccessor(typeBuilder, accessor, fieldsField);
             }
         }
+
+        // Emit ES2022 private method bodies
+        EmitPrivateMethodBodies(typeBuilder, classStmt, fieldsField, qualifiedClassName);
+    }
+
+    /// <summary>
+    /// Emits bodies for ES2022 private methods (both instance and static).
+    /// </summary>
+    private void EmitPrivateMethodBodies(TypeBuilder typeBuilder, Stmt.Class classStmt, FieldInfo fieldsField, string qualifiedClassName)
+    {
+        // Emit instance private method bodies
+        if (_classes.PrivateMethods.TryGetValue(qualifiedClassName, out var instancePrivateMethods))
+        {
+            foreach (var method in classStmt.Methods.Where(m => m.IsPrivate && !m.IsStatic && m.Body != null))
+            {
+                string methodName = method.Name.Lexeme;
+                if (methodName.StartsWith('#'))
+                    methodName = methodName[1..];
+
+                if (instancePrivateMethods.TryGetValue(methodName, out var methodBuilder))
+                {
+                    EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, isStatic: false);
+                }
+            }
+        }
+
+        // Emit static private method bodies
+        if (_classes.StaticPrivateMethods.TryGetValue(qualifiedClassName, out var staticPrivateMethods))
+        {
+            foreach (var method in classStmt.Methods.Where(m => m.IsPrivate && m.IsStatic && m.Body != null))
+            {
+                string methodName = method.Name.Lexeme;
+                if (methodName.StartsWith('#'))
+                    methodName = methodName[1..];
+
+                if (staticPrivateMethods.TryGetValue(methodName, out var methodBuilder))
+                {
+                    EmitPrivateMethodBody(typeBuilder, methodBuilder, method, fieldsField, qualifiedClassName, isStatic: true);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Emits the body of a private method.
+    /// </summary>
+    private void EmitPrivateMethodBody(
+        TypeBuilder typeBuilder,
+        MethodBuilder methodBuilder,
+        Stmt.Function method,
+        FieldInfo fieldsField,
+        string qualifiedClassName,
+        bool isStatic)
+    {
+        var il = methodBuilder.GetILGenerator();
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
+        {
+            FieldsField = isStatic ? null : fieldsField,
+            IsInstanceMethod = !isStatic,
+            ClosureAnalyzer = _closures.Analyzer,
+            ArrowMethods = _closures.ArrowMethods,
+            DisplayClasses = _closures.DisplayClasses,
+            DisplayClassFields = _closures.DisplayClassFields,
+            DisplayClassConstructors = _closures.DisplayClassConstructors,
+            CurrentClassBuilder = typeBuilder,
+            StaticFields = _classes.StaticFields,
+            StaticMethods = _classes.StaticMethods,
+            ClassConstructors = _classes.Constructors,
+            FunctionRestParams = _functions.RestParams,
+            EnumMembers = _enums.Members,
+            EnumReverse = _enums.Reverse,
+            EnumKinds = _enums.Kinds,
+            Runtime = _runtime,
+            ClassGenericParams = _classes.GenericParams,
+            FunctionGenericParams = _functions.GenericParams,
+            IsGenericFunction = _functions.IsGeneric,
+            TypeMap = _typeMap,
+            DeadCode = _deadCodeInfo,
+            InstanceMethods = _classes.InstanceMethods,
+            InstanceGetters = _classes.InstanceGetters,
+            InstanceSetters = _classes.InstanceSetters,
+            ClassSuperclass = _classes.Superclass,
+            AsyncMethods = null,
+            CurrentModulePath = _modules.CurrentPath,
+            ClassToModule = _modules.ClassToModule,
+            FunctionToModule = _modules.FunctionToModule,
+            EnumToModule = _modules.EnumToModule,
+            DotNetNamespace = _modules.CurrentDotNetNamespace,
+            TypeEmitterRegistry = _typeEmitterRegistry,
+            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+            BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            ClassExprBuilders = _classExprs.Builders,
+            IsStrictMode = _isStrictMode,
+            // ES2022 Private Class Elements support
+            CurrentClassName = qualifiedClassName,
+            PrivateFieldStorage = _classes.PrivateFieldStorage,
+            PrivateFieldNames = _classes.PrivateFieldNames,
+            StaticPrivateFields = _classes.StaticPrivateFields,
+            PrivateMethods = _classes.PrivateMethods,
+            StaticPrivateMethods = _classes.StaticPrivateMethods
+        };
+
+        // Define parameters
+        int paramOffset = isStatic ? 0 : 1;  // Instance methods have 'this' at index 0
+        for (int i = 0; i < method.Parameters.Count; i++)
+        {
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + paramOffset);
+        }
+
+        var emitter = new ILEmitter(ctx);
+
+        // Emit method body
+        if (method.Body != null)
+        {
+            foreach (var stmt in method.Body)
+            {
+                emitter.EmitStatement(stmt);
+            }
+        }
+
+        // Finalize returns or emit default return
+        if (emitter.HasDeferredReturns)
+        {
+            emitter.FinalizeReturns();
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     private void EmitMethod(TypeBuilder typeBuilder, Stmt.Function method, FieldInfo fieldsField)
@@ -650,7 +780,15 @@ public partial class ILCompiler
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
             // Check for method-level "use strict" directive
-            IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body)
+            IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body),
+            // ES2022 Private Class Elements support
+            CurrentClassName = typeBuilder.Name,
+            CurrentClassBuilder = typeBuilder,
+            PrivateFieldStorage = _classes.PrivateFieldStorage,
+            PrivateFieldNames = _classes.PrivateFieldNames,
+            StaticPrivateFields = _classes.StaticPrivateFields,
+            PrivateMethods = _classes.PrivateMethods,
+            StaticPrivateMethods = _classes.StaticPrivateMethods
         };
 
         // Add class generic type parameters to context

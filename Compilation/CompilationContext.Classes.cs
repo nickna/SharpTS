@@ -49,6 +49,28 @@ public partial class CompilationContext
     public Dictionary<string, GenericTypeParameterBuilder[]>? ClassGenericParams { get; set; }
 
     // ============================================
+    // ES2022 Private Class Elements Support
+    // ============================================
+
+    // Private field storage: class name -> FieldBuilder for __privateFields (ConditionalWeakTable)
+    public Dictionary<string, FieldBuilder>? PrivateFieldStorage { get; set; }
+
+    // Private field names: class name -> list of field names (without #)
+    public Dictionary<string, List<string>>? PrivateFieldNames { get; set; }
+
+    // Static private fields: class name -> field name (without #) -> FieldBuilder
+    public Dictionary<string, Dictionary<string, FieldBuilder>>? StaticPrivateFields { get; set; }
+
+    // Private instance methods: class name -> method name (without #) -> MethodBuilder
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? PrivateMethods { get; set; }
+
+    // Static private methods: class name -> method name (without #) -> MethodBuilder
+    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticPrivateMethods { get; set; }
+
+    // Current class name being compiled (needed for private member access)
+    public string? CurrentClassName { get; set; }
+
+    // ============================================
     // @lock Decorator Support: Thread-safe Method Execution
     // ============================================
 
