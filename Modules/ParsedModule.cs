@@ -73,6 +73,25 @@ public class ParsedModule
     /// </summary>
     public bool IsBuiltIn { get; set; }
 
+    /// <summary>
+    /// True if file has no import/export statements (is a "script" file).
+    /// Scripts share global scope; modules have isolated scope.
+    /// </summary>
+    public bool IsScript { get; set; }
+
+    /// <summary>
+    /// Triple-slash path references from this file.
+    /// Only applicable for script files.
+    /// </summary>
+    public List<TripleSlashDirective> PathReferences { get; set; } = [];
+
+    /// <summary>
+    /// Files referenced via /// &lt;reference path="..." /&gt;.
+    /// These are processed differently from module Dependencies.
+    /// Referenced scripts merge into the global scope rather than having isolated scope.
+    /// </summary>
+    public List<ParsedModule> ReferencedScripts { get; set; } = [];
+
     public ParsedModule(string path, List<Stmt> statements)
     {
         Path = path;

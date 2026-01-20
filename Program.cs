@@ -130,8 +130,13 @@ static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecorator
     // Set script arguments for process.argv
     SharpTS.Runtime.BuiltIns.ProcessBuiltIns.SetScriptArguments(absolutePath, scriptArgs ?? []);
 
-    // Check if the file contains imports - if so, use module mode
-    if (source.Contains("import ") || source.Contains("export "))
+    // Lex to check for triple-slash path references
+    var lexer = new Lexer(source);
+    lexer.ScanTokens();
+    bool hasPathReferences = lexer.TripleSlashDirectives.Any(d => d.Type == TripleSlashReferenceType.Path);
+
+    // Check if the file contains imports/exports or path references - if so, use module mode
+    if (hasPathReferences || source.Contains("import ") || source.Contains("export "))
     {
         RunModuleFile(absolutePath, decoratorMode, emitDecoratorMetadata, scriptArgs);
     }
@@ -282,7 +287,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
             }
         }
 
-        // Parse first to check for module statements
+        // Parse first to check for module statements and path references
         Lexer lexer = new(source);
         List<Token> tokens = lexer.ScanTokens();
         Parser parser = new(tokens, decoratorMode);
@@ -304,8 +309,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         var statements = parseResult.Statements;
 
-        // Check AST for import/export statements
-        bool hasModules = statements.Any(s => s is Stmt.Import or Stmt.Export);
+        // Check for path references (script files with references need module resolution)
+        bool hasPathReferences = lexer.TripleSlashDirectives.Any(d => d.Type == TripleSlashReferenceType.Path);
+
+        // Check AST for import/export statements or path references
+        bool hasModules = hasPathReferences || statements.Any(s => s is Stmt.Import or Stmt.Export);
 
         if (hasModules)
         {

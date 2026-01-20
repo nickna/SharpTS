@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added named function expressions with self-reference support)
+**Last Updated:** 2026-01-20 (Added triple-slash path references for script-style file concatenation)
 
 ## Legend
 - ✅ Implemented
@@ -133,7 +133,7 @@ This document tracks TypeScript language features and their implementation statu
 | `export =` / `import =` | ❌ | CommonJS interop syntax |
 | Ambient module declarations | ❌ | `declare module 'x' { }` |
 | Module augmentation | ❌ | Extending existing module types |
-| Triple-slash references | ❌ | `/// <reference>` directives |
+| Triple-slash references | ✅ | `/// <reference path="...">` for script-style file merging |
 
 ---
 
@@ -813,3 +813,22 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ IL compiler: self-reference stored in display class for capturing functions
 - ✅ Rest parameters use `List<object>` type for runtime detection in `TSFunction.Invoke`
 - ✅ Full interpreter and IL compiler parity with 28 test cases (14 each)
+
+### Phase 46 Features (Triple-Slash Path References)
+- ✅ `/// <reference path="..." />` directive syntax for script-style file concatenation
+- ✅ Script vs module detection: files without `import`/`export` are scripts, others are modules
+- ✅ Script global scope merging: referenced script declarations available without import
+- ✅ Directive must appear before any code (TypeScript-exact placement rules)
+- ✅ Hard errors for malformed directives (missing `/>', unknown attributes, unterminated strings)
+- ✅ Path resolution: relative paths (`./`, `../`), `.ts` extension inference
+- ✅ Circular reference detection with descriptive error messages
+- ✅ Nested references: A references B, B references C - all merge correctly
+- ✅ Diamond references: shared files execute/compile only once
+- ✅ Execution order: referenced files execute depth-first before referencing file
+- ✅ Type checking: shared environment for script files, merged declarations
+- ✅ Validation: path references only valid in script files (error in module files)
+- ✅ Validation: path references cannot reference module files
+- ✅ Side-effect imports (`import './polyfill'`) correctly mark files as modules
+- ✅ Directive parsing in lexer with `TripleSlashDirective` record type
+- ✅ `ScriptDetector` helper for script vs module classification
+- ✅ Full interpreter and IL compiler support with 43 test cases (17 lexer + 16 interpreter + 10 compiler)

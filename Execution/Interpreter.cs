@@ -163,9 +163,19 @@ public partial class Interpreter
 
         try
         {
+            // Create a shared script environment for script files (they share global scope)
+            var scriptEnv = new RuntimeEnvironment(_environment);
+
             foreach (var module in modules)
             {
-                ExecuteModule(module);
+                if (module.IsScript)
+                {
+                    ExecuteScriptFile(module, scriptEnv);
+                }
+                else
+                {
+                    ExecuteModule(module);
+                }
             }
 
             // After executing all modules, check for main() in the entry module (last one)
@@ -178,6 +188,68 @@ public partial class Interpreter
         {
             Console.WriteLine($"Runtime Error: {error.Message}");
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Executes a script file in the shared script environment.
+    /// Scripts share global scope, so all declarations are visible to other scripts.
+    /// </summary>
+    private void ExecuteScriptFile(ParsedModule script, RuntimeEnvironment scriptEnv)
+    {
+        // Skip if already executed
+        if (script.IsExecuted)
+        {
+            return;
+        }
+
+        // Save context
+        var savedEnv = _environment;
+        var savedModule = _currentModule;
+
+        _environment = scriptEnv;
+        _currentModule = script;
+
+        try
+        {
+            // Check for "use strict" directive
+            bool isStrict = CheckForUseStrict(script.Statements);
+            if (isStrict && !_environment.IsStrictMode)
+            {
+                _environment = new RuntimeEnvironment(_environment, strictMode: true);
+            }
+
+            // Hoist function declarations first
+            HoistFunctionDeclarations(script.Statements);
+
+            // Execute all statements in the shared environment
+            foreach (var stmt in script.Statements)
+            {
+                if (stmt is Stmt.Expression exprStmt)
+                {
+                    object? result = Evaluate(exprStmt.Expr);
+                    if (result is SharpTSPromise promise)
+                    {
+                        promise.Task.GetAwaiter().GetResult();
+                    }
+                }
+                else
+                {
+                    var result = Execute(stmt);
+                    if (result.Type == ExecutionResult.ResultType.Throw)
+                    {
+                        throw new Exception(Stringify(result.Value));
+                    }
+                    if (result.IsAbrupt) break;
+                }
+            }
+
+            script.IsExecuted = true;
+        }
+        finally
+        {
+            _environment = savedEnv;
+            _currentModule = savedModule;
         }
     }
 

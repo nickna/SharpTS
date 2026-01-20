@@ -486,11 +486,22 @@ public partial class TypeChecker
         _environment.Define("Reflect", new TypeInfo.Any());
         _environment.Define("process", new TypeInfo.Any());
 
+        // Create a shared script environment for script files (they share global scope)
+        var scriptEnv = new TypeEnvironment(_environment);
+
         // First pass: collect all exports from each module
         foreach (var module in modules)
         {
             _currentModule = module;
-            CollectModuleExports(module);
+            if (module.IsScript)
+            {
+                // Scripts use shared environment and don't export
+                CollectScriptDeclarations(module, scriptEnv);
+            }
+            else
+            {
+                CollectModuleExports(module);
+            }
         }
 
         // Second pass: type-check each module with imports resolved
@@ -502,24 +513,48 @@ public partial class TypeChecker
             }
 
             _currentModule = module;
-            var moduleEnv = new TypeEnvironment(_environment);
 
-            // Bind imports from dependencies
-            BindModuleImports(module, moduleEnv);
-
-            // Type-check module body
-            using (new EnvironmentScope(this, moduleEnv))
+            if (module.IsScript)
             {
-                // First pass: pre-register type declarations
-                PreRegisterTypeDeclarations(module.Statements);
-
-                // Second pass: hoist function declarations (now types are available)
-                HoistFunctionDeclarations(module.Statements);
-
-                // Third pass: check all statements
-                foreach (var stmt in module.Statements)
+                // Script files share the global script environment
+                // Type-check in the shared script environment
+                using (new EnvironmentScope(this, scriptEnv))
                 {
-                    CheckStmt(stmt);
+                    // Pre-register type declarations (may have been done in first pass, but safe to repeat)
+                    PreRegisterTypeDeclarations(module.Statements);
+
+                    // Hoist function declarations
+                    HoistFunctionDeclarations(module.Statements);
+
+                    // Check all statements
+                    foreach (var stmt in module.Statements)
+                    {
+                        CheckStmt(stmt);
+                    }
+                }
+            }
+            else
+            {
+                // Module files get isolated scope
+                var moduleEnv = new TypeEnvironment(_environment);
+
+                // Bind imports from dependencies
+                BindModuleImports(module, moduleEnv);
+
+                // Type-check module body
+                using (new EnvironmentScope(this, moduleEnv))
+                {
+                    // First pass: pre-register type declarations
+                    PreRegisterTypeDeclarations(module.Statements);
+
+                    // Second pass: hoist function declarations (now types are available)
+                    HoistFunctionDeclarations(module.Statements);
+
+                    // Third pass: check all statements
+                    foreach (var stmt in module.Statements)
+                    {
+                        CheckStmt(stmt);
+                    }
                 }
             }
 
@@ -528,6 +563,45 @@ public partial class TypeChecker
 
         _currentModule = null;
         return _typeMap;
+    }
+
+    /// <summary>
+    /// Collects declarations from a script file into the shared script environment.
+    /// Scripts share global scope, so all declarations are visible to other scripts.
+    /// </summary>
+    private void CollectScriptDeclarations(ParsedModule script, TypeEnvironment scriptEnv)
+    {
+        using (new EnvironmentScope(this, scriptEnv))
+        {
+            // Pre-register type declarations (interfaces, enums, type aliases)
+            PreRegisterTypeDeclarations(script.Statements);
+
+            // Hoist function declarations
+            HoistFunctionDeclarations(script.Statements);
+
+            // Process all declarations to populate the environment
+            foreach (var stmt in script.Statements)
+            {
+                // For scripts, just check the statements to register types
+                // Skip actual runtime statements during collection phase
+                switch (stmt)
+                {
+                    case Stmt.Function func when func.Body != null:
+                    case Stmt.Class:
+                    case Stmt.Interface:
+                    case Stmt.TypeAlias:
+                    case Stmt.Enum:
+                    case Stmt.Namespace:
+                        CheckStmt(stmt);
+                        break;
+                    case Stmt.Var:
+                    case Stmt.Const:
+                        // Register variable types
+                        CheckStmt(stmt);
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>

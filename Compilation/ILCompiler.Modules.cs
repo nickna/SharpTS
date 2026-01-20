@@ -15,9 +15,16 @@ public partial class ILCompiler
 
     /// <summary>
     /// Defines a module type with export fields.
+    /// Script files (no import/export) are skipped - they share global scope.
     /// </summary>
     private void DefineModuleType(ParsedModule module)
     {
+        // Skip script files - they share global scope and don't have module types
+        if (module.IsScript)
+        {
+            return;
+        }
+
         // Create module class: $Module_<name>
         string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
         var moduleType = _moduleBuilder.DefineType(
@@ -185,9 +192,17 @@ public partial class ILCompiler
     /// <summary>
     /// Emits the initialization method for a module.
     /// Includes an initialization guard to ensure module is only initialized once.
+    /// Script files are initialized in the main program type, not a module type.
     /// </summary>
     private void EmitModuleInit(ParsedModule module)
     {
+        // Script files are initialized in the main $Program type
+        if (module.IsScript)
+        {
+            EmitScriptInit(module);
+            return;
+        }
+
         var moduleType = _modules.Types[module.Path];
         var exportFields = _modules.ExportFields[module.Path];
 
@@ -243,8 +258,67 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Emits the initialization method for a script file.
+    /// Script files share global scope in $Program.
+    /// </summary>
+    private void EmitScriptInit(ParsedModule script)
+    {
+        // Create initialization method in $Program
+        string methodName = $"$InitScript_{CompilationContext.SanitizeModuleName(script.ModuleName)}";
+        var initMethod = _programType.DefineMethod(
+            methodName,
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            Type.EmptyTypes
+        );
+        _modules.InitMethods[script.Path] = initMethod;
+
+        // Create an initialized guard field in $Program
+        var initializedField = _programType.DefineField(
+            $"$script_initialized_{CompilationContext.SanitizeModuleName(script.ModuleName)}",
+            typeof(bool),
+            FieldAttributes.Private | FieldAttributes.Static
+        );
+
+        var il = initMethod.GetILGenerator();
+
+        // Guard: if (_initialized) return;
+        var skipLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, initializedField);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+
+        // _initialized = true;
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stsfld, initializedField);
+
+        var ctx = CreateCompilationContext(il);
+        ctx.CurrentModulePath = script.Path;
+        ctx.ModuleExportFields = _modules.ExportFields;
+        ctx.ModuleTypes = _modules.Types;
+        ctx.ModuleResolver = _modules.Resolver;
+
+        var emitter = new ILEmitter(ctx);
+
+        foreach (var stmt in script.Statements)
+        {
+            // Skip class, function, interface, type alias, and enum declarations
+            // (they are compiled separately in earlier phases)
+            if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+            {
+                continue;
+            }
+
+            emitter.EmitStatement(stmt);
+        }
+
+        il.MarkLabel(skipLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits the entry point that initializes all modules in dependency order.
     /// Also initializes the module registry and registers all modules for dynamic import support.
+    /// Script files are initialized but not registered (they don't have exports).
     /// </summary>
     private void EmitModulesEntryPoint(List<ParsedModule> modules)
     {
@@ -262,8 +336,14 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
 
         // Register each module in the registry for dynamic import support
+        // Skip script files - they don't have exports and can't be dynamically imported
         foreach (var module in modules)
         {
+            if (module.IsScript)
+            {
+                continue;  // Scripts don't have GetNamespace methods
+            }
+
             if (_moduleGetNamespaceMethods.TryGetValue(module.Path, out var getNamespaceMethod))
             {
                 // Register under relative path (e.g., "./utils.ts")
@@ -282,11 +362,13 @@ public partial class ILCompiler
             }
         }
 
-        // Call each module's $Initialize method in dependency order
+        // Call each module/script's $Initialize method in dependency order
         foreach (var module in modules)
         {
-            var initMethod = _modules.InitMethods[module.Path];
-            il.Emit(OpCodes.Call, initMethod);
+            if (_modules.InitMethods.TryGetValue(module.Path, out var initMethod))
+            {
+                il.Emit(OpCodes.Call, initMethod);
+            }
         }
 
         il.Emit(OpCodes.Ret);

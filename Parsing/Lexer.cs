@@ -28,6 +28,17 @@ public class Lexer(string source)
     // Used to disambiguate regex literals from division operator
     private bool _expectExpr = true;
 
+    // Triple-slash directive support
+    private readonly List<TripleSlashDirective> _tripleSlashDirectives = [];
+    // Track when we've emitted a code token (directives only valid before code)
+    private bool _hasEmittedCodeToken = false;
+
+    /// <summary>
+    /// Triple-slash directives parsed from the source file.
+    /// Only populated for directives that appear before any code.
+    /// </summary>
+    public IReadOnlyList<TripleSlashDirective> TripleSlashDirectives => _tripleSlashDirectives;
+
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
         { "abstract", TokenType.ABSTRACT },
@@ -249,7 +260,17 @@ public class Lexer(string source)
             case '/':
                 if (Match('/'))
                 {
-                    // Line comment
+                    // Check for triple-slash directive (/// <reference ...)
+                    if (Peek() == '/' && !_hasEmittedCodeToken)
+                    {
+                        Advance(); // consume third slash
+                        if (TryParseTripleSlashDirective())
+                        {
+                            break; // Successfully parsed directive
+                        }
+                        // Not a valid directive syntax, continue as regular comment
+                    }
+                    // Line comment - skip to end of line
                     while (Peek() != '\n' && !IsAtEnd()) Advance();
                 }
                 else if (Match('*'))
@@ -432,6 +453,150 @@ public class Lexer(string source)
             Advance();
         }
         // Unterminated block comment - we'll just ignore for now
+    }
+
+    /// <summary>
+    /// Attempts to parse a triple-slash directive after consuming "///".
+    /// Returns true if a valid directive was parsed, false otherwise.
+    /// On failure, the comment should be consumed as a regular line comment.
+    /// </summary>
+    private bool TryParseTripleSlashDirective()
+    {
+        int startLine = _line;
+        int startColumn = _start + 1; // 1-based column
+
+        // Skip whitespace after ///
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Check for '<reference'
+        if (Peek() != '<') return false;
+        Advance(); // consume '<'
+
+        // Skip whitespace after '<'
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Check for 'reference'
+        if (!MatchKeyword("reference")) return false;
+
+        // Skip whitespace after 'reference'
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Parse attribute: path="value" or types="value" or lib="value" or no-default-lib="true"
+        TripleSlashReferenceType? refType = null;
+        string? refValue = null;
+
+        if (MatchKeyword("path"))
+        {
+            refType = TripleSlashReferenceType.Path;
+        }
+        else if (MatchKeyword("types"))
+        {
+            refType = TripleSlashReferenceType.Types;
+        }
+        else if (MatchKeyword("lib"))
+        {
+            refType = TripleSlashReferenceType.Lib;
+        }
+        else if (MatchKeyword("no-default-lib"))
+        {
+            refType = TripleSlashReferenceType.NoDefaultLib;
+        }
+        else
+        {
+            // Unknown attribute - error
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected 'path', 'types', 'lib', or 'no-default-lib' attribute.");
+        }
+
+        // Skip whitespace after attribute name
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Expect '='
+        if (Peek() != '=')
+        {
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '=' after attribute name.");
+        }
+        Advance(); // consume '='
+
+        // Skip whitespace after '='
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Parse quoted value
+        char quote = Peek();
+        if (quote != '"' && quote != '\'')
+        {
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected quoted value after '='.");
+        }
+        Advance(); // consume opening quote
+
+        var valueBuilder = new System.Text.StringBuilder();
+        while (!IsAtEnd() && Peek() != quote && Peek() != '\n')
+        {
+            valueBuilder.Append(Advance());
+        }
+
+        if (Peek() != quote)
+        {
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Unterminated string value.");
+        }
+        Advance(); // consume closing quote
+
+        refValue = valueBuilder.ToString();
+
+        // Skip whitespace before '/>'
+        while (Peek() == ' ' || Peek() == '\t') Advance();
+
+        // Expect '/>' to close the directive
+        if (Peek() != '/')
+        {
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '/>' to close directive.");
+        }
+        Advance(); // consume '/'
+
+        if (Peek() != '>')
+        {
+            throw new Exception($"Type Error at line {_line}: Invalid triple-slash directive. Expected '>' after '/'.");
+        }
+        Advance(); // consume '>'
+
+        // Skip any remaining content on the line (trailing whitespace/comments)
+        while (Peek() != '\n' && !IsAtEnd()) Advance();
+
+        // Successfully parsed - add to directives list
+        _tripleSlashDirectives.Add(new TripleSlashDirective(refType.Value, refValue, startLine, startColumn));
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to match a specific keyword at the current position.
+    /// Returns true and advances past the keyword if matched, false otherwise.
+    /// </summary>
+    private bool MatchKeyword(string keyword)
+    {
+        for (int i = 0; i < keyword.Length; i++)
+        {
+            if (_current + i >= _source.Length || _source[_current + i] != keyword[i])
+            {
+                return false;
+            }
+        }
+
+        // Make sure the keyword isn't part of a larger identifier
+        int afterKeyword = _current + keyword.Length;
+        if (afterKeyword < _source.Length)
+        {
+            char next = _source[afterKeyword];
+            if (char.IsLetterOrDigit(next) || next == '_' || next == '-')
+            {
+                // For "no-default-lib", the '-' is part of the keyword, so check carefully
+                if (keyword != "no-default-lib")
+                {
+                    return false;
+                }
+            }
+        }
+
+        _current += keyword.Length;
+        return true;
     }
 
     /// <summary>
@@ -629,6 +794,8 @@ public class Lexer(string source)
         _tokens.Add(new Token(type, text, literal, _line));
         // Update expression state for regex literal disambiguation
         _expectExpr = !IsExpressionEnd(type);
+        // Mark that we've emitted a code token (triple-slash directives no longer valid)
+        _hasEmittedCodeToken = true;
     }
 
     /// <summary>

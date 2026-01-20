@@ -12,12 +12,14 @@ namespace SharpTS.Modules;
 /// Handles relative paths (./foo, ../bar), bare specifiers (lodash), and .ts extension
 /// inference. Detects circular dependencies during loading and provides modules in
 /// dependency order for type checking and execution.
+/// Also handles triple-slash path references for script files.
 /// </remarks>
 public class ModuleResolver
 {
     private readonly string _basePath;
     private readonly Dictionary<string, ParsedModule> _moduleCache = [];
     private readonly HashSet<string> _loadingModules = [];  // For circular detection
+    private readonly HashSet<string> _loadingScriptRefs = [];  // For circular script reference detection
 
     /// <summary>
     /// Creates a new module resolver rooted at the given path.
@@ -135,6 +137,69 @@ public class ModuleResolver
     }
 
     /// <summary>
+    /// Resolves a triple-slash reference path to an absolute file path.
+    /// </summary>
+    /// <param name="refPath">The path specified in the reference directive.</param>
+    /// <param name="containingFilePath">The absolute path of the file containing the directive.</param>
+    /// <returns>Absolute path to the referenced file.</returns>
+    private static string ResolveReferencePath(string refPath, string containingFilePath)
+    {
+        string directory = Path.GetDirectoryName(containingFilePath)!;
+        string resolved = Path.GetFullPath(Path.Combine(directory, refPath));
+
+        // Add .ts extension if needed
+        if (!File.Exists(resolved) && !resolved.EndsWith(".ts", StringComparison.OrdinalIgnoreCase))
+        {
+            resolved += ".ts";
+        }
+
+        if (!File.Exists(resolved))
+        {
+            throw new Exception($"Type Error: Referenced file not found: '{refPath}' (resolved to '{resolved}')");
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// Loads a script file referenced via triple-slash directive.
+    /// Uses separate circular detection from module imports.
+    /// </summary>
+    /// <param name="absolutePath">Absolute path to the script file.</param>
+    /// <param name="decoratorMode">Decorator mode for parsing.</param>
+    /// <param name="referencingFile">The file that contains the reference (for error messages).</param>
+    /// <returns>The parsed script module.</returns>
+    private ParsedModule LoadScriptReference(string absolutePath, DecoratorMode decoratorMode, string referencingFile)
+    {
+        absolutePath = Path.GetFullPath(absolutePath);
+
+        // Return cached module if already loaded
+        if (_moduleCache.TryGetValue(absolutePath, out var cached))
+        {
+            return cached;
+        }
+
+        // Check for circular reference
+        if (_loadingScriptRefs.Contains(absolutePath))
+        {
+            throw new Exception($"Type Error: Circular triple-slash reference detected: '{absolutePath}' is referenced while still being processed.");
+        }
+
+        _loadingScriptRefs.Add(absolutePath);
+
+        try
+        {
+            // Load the script using the normal LoadModule path
+            // This will also process any nested path references
+            return LoadModule(absolutePath, decoratorMode);
+        }
+        finally
+        {
+            _loadingScriptRefs.Remove(absolutePath);
+        }
+    }
+
+    /// <summary>
     /// Loads a module and all its dependencies, detecting circular dependencies.
     /// </summary>
     /// <param name="absolutePath">Absolute path to the module file</param>
@@ -203,6 +268,39 @@ public class ModuleResolver
 
             var statements = parseResult.Statements;
             var module = new ParsedModule(absolutePath, statements);
+
+            // Determine if this is a script or module file
+            module.IsScript = ScriptDetector.IsScriptFile(statements);
+
+            // Process triple-slash path references (only valid for scripts)
+            // NOTE: Process BEFORE caching to properly detect circular references
+            var directives = lexer.TripleSlashDirectives;
+            var pathRefs = directives.Where(d => d.Type == TripleSlashReferenceType.Path).ToList();
+
+            if (pathRefs.Count > 0)
+            {
+                if (!module.IsScript)
+                {
+                    throw new Exception($"Type Error: /// <reference path=\"...\"> is only valid in script files (files without import/export). File '{absolutePath}' is a module.");
+                }
+
+                // Load referenced scripts
+                foreach (var pathRef in pathRefs)
+                {
+                    string refPath = ResolveReferencePath(pathRef.Value, absolutePath);
+                    var refModule = LoadScriptReference(refPath, decoratorMode, absolutePath);
+
+                    if (!refModule.IsScript)
+                    {
+                        throw new Exception($"Type Error: /// <reference path=\"{pathRef.Value}\"> cannot reference a module file. Referenced file '{refPath}' contains import/export statements.");
+                    }
+
+                    module.PathReferences.Add(pathRef);
+                    module.ReferencedScripts.Add(refModule);
+                }
+            }
+
+            // Cache AFTER processing path references to properly detect circular references
             _moduleCache[absolutePath] = module;
 
             // Recursively load imported modules
@@ -212,6 +310,9 @@ public class ModuleResolver
                 {
                     string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
                     var importedModule = LoadModule(importedPath, decoratorMode);
+                    // Files loaded via import are always modules, even if they have no exports
+                    // (e.g., side-effect imports like `import './polyfill'`)
+                    importedModule.IsScript = false;
                     if (!module.Dependencies.Contains(importedModule))
                     {
                         module.Dependencies.Add(importedModule);
@@ -222,6 +323,8 @@ public class ModuleResolver
                     // Re-export: export { x } from './foo' or export * from './foo'
                     string reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
                     var reexportedModule = LoadModule(reexportPath, decoratorMode);
+                    // Re-exported files are always modules
+                    reexportedModule.IsScript = false;
                     if (!module.Dependencies.Contains(reexportedModule))
                     {
                         module.Dependencies.Add(reexportedModule);
@@ -239,7 +342,7 @@ public class ModuleResolver
 
     /// <summary>
     /// Returns all loaded modules in dependency order (topological sort).
-    /// Dependencies come before the modules that depend on them.
+    /// Dependencies and script references come before the modules that depend on them.
     /// </summary>
     /// <param name="entryPoint">The entry point module</param>
     /// <returns>List of modules in dependency order</returns>
@@ -256,7 +359,13 @@ public class ModuleResolver
             }
             visited.Add(module.Path);
 
-            // Visit dependencies first
+            // Visit script references first (they merge into global scope)
+            foreach (var refScript in module.ReferencedScripts)
+            {
+                Visit(refScript);
+            }
+
+            // Visit module dependencies
             foreach (var dep in module.Dependencies)
             {
                 Visit(dep);
