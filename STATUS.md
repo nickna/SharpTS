@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-19 (Added Type Predicates)
+**Last Updated:** 2026-01-19 (Added setTimeout/clearTimeout, globalThis)
 
 ## Legend
 - ✅ Implemented
@@ -223,9 +223,9 @@ This document tracks TypeScript language features and their implementation statu
 | `Object.freeze()`/`seal()`/`isFrozen()`/`isSealed()` | ✅ | Object immutability - freeze prevents all changes, seal allows modification but prevents adding/removing properties; shallow freeze/seal (nested objects unaffected); works on objects, arrays, class instances |
 | `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack properties |
 | Strict mode (`"use strict"`) | ✅ | File-level and function-level strict mode; frozen/sealed object mutations throw TypeError in strict mode |
-| `setTimeout`/`setInterval` | ❌ | Timer functions |
-| `clearTimeout`/`clearInterval` | ❌ | Cancel timer functions |
-| `globalThis` | ❌ | Global object reference |
+| `setTimeout`/`clearTimeout` | ✅ | Timer functions with Timeout handle, ref/unref support |
+| `setInterval`/`clearInterval` | ❌ | Repeating timer functions |
+| `globalThis` | ✅ | ES2020 global object reference with property access and method calls |
 
 ---
 
@@ -741,3 +741,16 @@ This document tracks TypeScript language features and their implementation statu
 - ✅ `TypePredicate` and `AssertsNonNull` TypeInfo records
 - ✅ IL compiler maps predicates to `bool` (for `is`) or `void` (for `asserts`)
 - ✅ Full interpreter and IL compiler support with 14 test cases
+
+### Phase 41 Features (Timer Functions & globalThis)
+- ✅ `setTimeout(callback, delay?, ...args)` - schedules callback after delay milliseconds
+- ✅ `clearTimeout(handle)` - cancels a pending timeout (safe with null/undefined)
+- ✅ `Timeout` handle object with `ref()`, `unref()`, `hasRef` property
+- ✅ Method chaining: `setTimeout(...).unref().ref()`
+- ✅ Additional arguments passed to callback: `setTimeout((a, b) => ..., 0, arg1, arg2)`
+- ✅ `globalThis` ES2020 global object reference
+- ✅ `globalThis.Math`, `globalThis.console`, `globalThis.parseInt`, etc.
+- ✅ `globalThis.globalThis` self-reference
+- ✅ `globalThis` property assignment and index access
+- ✅ Built-in constants: `globalThis.undefined`, `globalThis.NaN`, `globalThis.Infinity`
+- ✅ Full interpreter and IL compiler support
