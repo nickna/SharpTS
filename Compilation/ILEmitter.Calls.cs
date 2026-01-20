@@ -702,6 +702,17 @@ public partial class ILEmitter
         if (TryEmitDirectMethodCall(methodGet.Object, objType, methodName, arguments))
             return;
 
+        // Timeout instance methods: ref(), unref()
+        if (objType is TypeSystem.TypeInfo.Timeout && methodName is "ref" or "unref")
+        {
+            EmitExpression(methodGet.Object);
+            EmitBoxIfNeeded(methodGet.Object);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
+            IL.Emit(OpCodes.Callvirt, methodName == "ref" ? _ctx.Runtime!.TSTimeoutRef : _ctx.Runtime!.TSTimeoutUnref);
+            SetStackUnknown();
+            return;
+        }
+
         // Type-first dispatch: Use TypeEmitterRegistry if we have type information
         if (objType != null && _ctx.TypeEmitterRegistry != null)
         {

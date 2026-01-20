@@ -229,6 +229,24 @@ public class EmittedRuntime
     // PromiseAllSettled helper
     public MethodBuilder ProcessElementSettled { get; set; } = null!;
 
+    // Timer support ($TSTimeout type and global functions)
+    public TypeBuilder TSTimeoutType { get; set; } = null!;
+    public ConstructorBuilder TSTimeoutCtor { get; set; } = null!;
+    public MethodBuilder TSTimeoutCancel { get; set; } = null!;
+    public MethodBuilder TSTimeoutRef { get; set; } = null!;
+    public MethodBuilder TSTimeoutUnref { get; set; } = null!;
+    public MethodBuilder TSTimeoutHasRefGetter { get; set; } = null!;
+    public MethodBuilder SetTimeout { get; set; } = null!;
+    public MethodBuilder ClearTimeout { get; set; } = null!;
+
+    // Timer closure for callback execution
+    public TypeBuilder TimeoutClosureType { get; set; } = null!;
+    public ConstructorBuilder TimeoutClosureCtor { get; set; } = null!;
+    public FieldBuilder TimeoutClosureCallback { get; set; } = null!;
+    public FieldBuilder TimeoutClosureArgs { get; set; } = null!;
+    public FieldBuilder TimeoutClosureCts { get; set; } = null!;
+    public MethodBuilder TimeoutClosureExecute { get; set; } = null!;
+
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;
     public MethodBuilder NumberParseFloat { get; set; } = null!;

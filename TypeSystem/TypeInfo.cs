@@ -625,6 +625,15 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a Timeout handle returned by setTimeout().
+    /// Used for clearTimeout() cancellation and ref()/unref() chaining.
+    /// </summary>
+    public record Timeout() : TypeInfo
+    {
+        public override string ToString() => "Timeout";
+    }
+
+    /// <summary>
     /// Represents a module namespace type returned by dynamic import.
     /// Contains the exported members and optional default export.
     /// Used for typeof import('./path') type inference.

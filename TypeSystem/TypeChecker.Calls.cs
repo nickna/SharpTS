@@ -201,6 +201,77 @@ public partial class TypeChecker
             return new TypeInfo.Primitive(Parsing.TokenType.TYPE_BOOLEAN);
         }
 
+        // Handle setTimeout(callback, delay?, ...args)
+        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout")
+        {
+            if (call.Arguments.Count < 1)
+            {
+                throw new TypeCheckException(" setTimeout() requires at least one argument (callback).");
+            }
+
+            // First argument must be a function
+            var callbackType = CheckExpr(call.Arguments[0]);
+            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($" setTimeout() callback must be a function, got '{callbackType}'.");
+            }
+
+            // Second argument (delay) must be a number if provided
+            if (call.Arguments.Count >= 2)
+            {
+                var delayType = CheckExpr(call.Arguments[1]);
+                if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
+                {
+                    throw new TypeCheckException($" setTimeout() delay must be a number, got '{delayType}'.");
+                }
+            }
+
+            // Additional arguments are passed to the callback (any type allowed)
+            for (int i = 2; i < call.Arguments.Count; i++)
+            {
+                CheckExpr(call.Arguments[i]);
+            }
+
+            return new TypeInfo.Timeout();
+        }
+
+        // Handle clearTimeout(handle?)
+        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout")
+        {
+            // clearTimeout accepts 0 or 1 argument
+            if (call.Arguments.Count > 1)
+            {
+                throw new TypeCheckException(" clearTimeout() accepts at most one argument.");
+            }
+
+            // If argument provided, it should be Timeout, null, undefined, or any
+            if (call.Arguments.Count == 1)
+            {
+                var handleType = CheckExpr(call.Arguments[0]);
+                if (handleType is not TypeInfo.Timeout &&
+                    handleType is not TypeInfo.Null &&
+                    handleType is not TypeInfo.Undefined &&
+                    handleType is not TypeInfo.Any)
+                {
+                    // Also allow union types containing Timeout
+                    if (handleType is TypeInfo.Union union)
+                    {
+                        bool hasTimeout = union.FlattenedTypes.Any(t => t is TypeInfo.Timeout);
+                        if (!hasTimeout)
+                        {
+                            throw new TypeCheckException($" clearTimeout() argument must be a Timeout, got '{handleType}'.");
+                        }
+                    }
+                    else
+                    {
+                        throw new TypeCheckException($" clearTimeout() argument must be a Timeout, got '{handleType}'.");
+                    }
+                }
+            }
+
+            return new TypeInfo.Void();
+        }
+
         // Handle __objectRest (internal helper for object rest patterns)
         if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
         {

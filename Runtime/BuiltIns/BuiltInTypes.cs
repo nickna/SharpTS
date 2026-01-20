@@ -432,4 +432,56 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for global timer functions (setTimeout, clearTimeout).
+    /// </summary>
+    public static TypeInfo? GetGlobalTimerFunctionType(string name)
+    {
+        var timeoutType = new TypeInfo.Timeout();
+
+        return name switch
+        {
+            // setTimeout(callback: () => void, ms?: number, ...args: any[]): Timeout
+            "setTimeout" => new TypeInfo.Function(
+                [new TypeInfo.Function([], VoidType), NumberType],
+                timeoutType,
+                RequiredParams: 1  // callback is required, delay is optional (defaults to 0)
+            ),
+
+            // clearTimeout(handle?: Timeout): void
+            "clearTimeout" => new TypeInfo.Function(
+                [new TypeInfo.Union([timeoutType, new TypeInfo.Null(), new TypeInfo.Undefined()])],
+                VoidType,
+                RequiredParams: 0  // handle is optional (safe to call with null/undefined)
+            ),
+
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for instance members on Timeout objects.
+    /// </summary>
+    public static TypeInfo? GetTimeoutMemberType(string name)
+    {
+        var timeoutType = new TypeInfo.Timeout();
+
+        return name switch
+        {
+            // ref(): Timeout - marks timeout as keeping program alive, returns this
+            "ref" => new TypeInfo.Function([], timeoutType),
+
+            // unref(): Timeout - marks timeout as NOT keeping program alive, returns this
+            "unref" => new TypeInfo.Function([], timeoutType),
+
+            // hasRef: boolean (property)
+            "hasRef" => BooleanType,
+
+            // toString(): string - inherited from Object
+            "toString" => new TypeInfo.Function([], StringType),
+
+            _ => null
+        };
+    }
 }

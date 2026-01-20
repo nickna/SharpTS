@@ -83,6 +83,14 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
         EmitTSHashClass(moduleBuilder, runtime);
 
+        // Emit $TSTimeout class for timer support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTimeout
+        EmitTSTimeoutClass(moduleBuilder, runtime);
+
+        // Emit $TimeoutClosure class for setTimeout callback execution
+        // Must come after TSFunction (uses TSFunctionType, TSFunctionInvoke)
+        EmitTimeoutClosureClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -1449,6 +1457,9 @@ public partial class RuntimeEmitter
         EmitReadlineMethods(typeBuilder, runtime);
         // Child process module methods
         EmitChildProcessMethods(typeBuilder, runtime);
+        // Timer methods (setTimeout, clearTimeout)
+        EmitSetTimeoutMethod(typeBuilder, runtime);
+        EmitClearTimeoutMethod(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

@@ -196,6 +196,18 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: Timeout.hasRef property
+        if (objType is TypeInfo.Timeout && g.Name.Lexeme == "hasRef")
+        {
+            EmitExpression(g.Object);
+            EmitBoxIfNeeded(g.Object);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSTimeoutHasRefGetter);
+            IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+            SetStackUnknown();
+            return;
+        }
+
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 

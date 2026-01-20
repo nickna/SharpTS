@@ -384,6 +384,13 @@ public partial class TypeChecker
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'WeakSet'.");
         }
+        // Handle Timeout instance methods (ref, unref) and properties (hasRef)
+        if (objType is TypeInfo.Timeout)
+        {
+            var memberType = BuiltInTypes.GetTimeoutMemberType(get.Name.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Timeout'.");
+        }
         return new TypeInfo.Any();
     }
 
@@ -808,6 +815,13 @@ public partial class TypeChecker
             var memberType = BuiltInTypes.GetWeakSetMemberType(memberName.Lexeme, weakSetType.ElementType);
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'WeakSet'.");
+        }
+        // Handle Timeout instance methods (ref, unref) and properties (hasRef)
+        if (objType is TypeInfo.Timeout)
+        {
+            var memberType = BuiltInTypes.GetTimeoutMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Timeout'.");
         }
 
         // Handle Any type

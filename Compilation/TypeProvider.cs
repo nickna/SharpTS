@@ -350,6 +350,7 @@ public class TypeProvider
 
     // Specialized Action types for async continuations
     public Type ActionTaskOfObjectAndObject => MakeGenericType(ActionOpen2, TaskOfObject, Object);
+    public Type ActionOfTask => MakeGenericType(ActionOpen1, Task);
 
     #endregion
 

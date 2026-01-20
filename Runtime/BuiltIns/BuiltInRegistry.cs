@@ -145,6 +145,7 @@ public sealed class BuiltInRegistry
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
+        RegisterTimeoutType(registry);
 
         return registry;
     }
@@ -430,6 +431,13 @@ public sealed class BuiltInRegistry
         // globalThis members accessed via property access
         registry.RegisterInstanceType(typeof(SharpTSGlobalThis), (instance, name) =>
             ((SharpTSGlobalThis)instance).GetProperty(name));
+    }
+
+    private static void RegisterTimeoutType(BuiltInRegistry registry)
+    {
+        // Timeout members accessed via property access (ref, unref, hasRef)
+        registry.RegisterInstanceType(typeof(SharpTSTimeout), (instance, name) =>
+            TimerBuiltIns.GetMember((SharpTSTimeout)instance, name));
     }
 
     private static string Stringify(object? obj)

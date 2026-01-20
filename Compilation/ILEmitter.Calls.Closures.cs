@@ -17,6 +17,7 @@ public partial class ILEmitter
         {
             // Fallback if not found (shouldn't happen with proper collection)
             IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
             return;
         }
 
@@ -31,6 +32,9 @@ public partial class ILEmitter
             // Non-capturing arrow: create TSFunction wrapping static method
             EmitNonCapturingArrowFunction(af, method);
         }
+
+        // $TSFunction is a reference type, mark stack as unknown (not a value type)
+        SetStackUnknown();
     }
 
     private void EmitNonCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method)

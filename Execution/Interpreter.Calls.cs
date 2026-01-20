@@ -176,6 +176,49 @@ public partial class Interpreter
             return false;
         }
 
+        // Handle setTimeout(callback, delay?, ...args)
+        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout")
+        {
+            if (call.Arguments.Count < 1)
+                throw new Exception("Runtime Error: setTimeout() requires at least one argument (callback).");
+
+            var callbackValue = Evaluate(call.Arguments[0]);
+            if (callbackValue is not ISharpTSCallable callback)
+                throw new Exception("Runtime Error: setTimeout() callback must be a function.");
+
+            // Get delay (defaults to 0)
+            double delayMs = 0;
+            if (call.Arguments.Count >= 2)
+            {
+                var delayValue = Evaluate(call.Arguments[1]);
+                if (delayValue is double dv)
+                    delayMs = dv;
+                else if (delayValue != null && delayValue is not SharpTSUndefined)
+                    throw new Exception($"Runtime Error: setTimeout() delay must be a number, got {delayValue.GetType().Name}.");
+            }
+
+            // Get additional args for the callback
+            List<object?> callbackArgs = [];
+            for (int i = 2; i < call.Arguments.Count; i++)
+            {
+                callbackArgs.Add(Evaluate(call.Arguments[i]));
+            }
+
+            return TimerBuiltIns.SetTimeout(this, callback, delayMs, callbackArgs);
+        }
+
+        // Handle clearTimeout(handle?)
+        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout")
+        {
+            object? handle = null;
+            if (call.Arguments.Count > 0)
+            {
+                handle = Evaluate(call.Arguments[0]);
+            }
+            TimerBuiltIns.ClearTimeout(handle);
+            return null;
+        }
+
         object? callee = Evaluate(call.Callee);
 
         List<object?> argumentsList = [];
