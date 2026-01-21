@@ -1,6 +1,7 @@
 using System.Reflection.Emit;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
+using SharpTS.Compilation.Registries;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -70,6 +71,17 @@ public partial class CompilationContext
     // Built-in module namespace variables (variable name -> module name)
     // Tracks which local variables are built-in module namespaces for direct dispatch
     public Dictionary<string, string>? BuiltInModuleNamespaces { get; set; }
+
+    // ============================================
+    // Registry Services
+    // ============================================
+
+    /// <summary>
+    /// Registry for class-related compilation state lookups.
+    /// Provides centralized methods for resolving class names, constructors,
+    /// instance/static members, and inheritance chains.
+    /// </summary>
+    public ClassRegistry? ClassRegistry { get; set; }
 
     // ============================================
     // Enum Support

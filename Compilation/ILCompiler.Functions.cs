@@ -137,26 +137,16 @@ public partial class ILCompiler
             DisplayClasses = _closures.DisplayClasses,
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             FunctionOverloads = _functions.Overloads,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
             EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation
@@ -171,7 +161,9 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprs.Builders,
             UnionGenerator = _unionGenerator,
             // Check for function-level "use strict" directive
-            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body)
+            IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body),
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -306,9 +298,6 @@ public partial class ILCompiler
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             ClassExprBuilders = _classExprs.Builders,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             FunctionOverloads = _functions.Overloads,
             EnumMembers = _enums.Members,
@@ -317,17 +306,10 @@ public partial class ILCompiler
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
@@ -341,7 +323,9 @@ public partial class ILCompiler
             ClassExprSuperclass = _classExprs.Superclass,
             UnionGenerator = _unionGenerator,
             PropertyTypes = _typedInterop.PropertyTypes,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         // Initialize namespace static fields before any code that might reference them
@@ -445,9 +429,6 @@ public partial class ILCompiler
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             ClassExprBuilders = _classExprs.Builders,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             FunctionOverloads = _functions.Overloads,
             EnumMembers = _enums.Members,
@@ -456,17 +437,10 @@ public partial class ILCompiler
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
@@ -478,7 +452,9 @@ public partial class ILCompiler
             ClassExprConstructors = _classExprs.Constructors,
             ClassExprSuperclass = _classExprs.Superclass,
             UnionGenerator = _unionGenerator,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         // Initialize namespace static fields before any code
@@ -639,6 +615,7 @@ public partial class ILCompiler
             // Create a minimal context just for emitting default value expressions
             var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
             {
+                ClassRegistry = GetClassRegistry(),
                 Runtime = _runtime,
                 TypeMap = _typeMap,
                 // Check for function-level "use strict" directive

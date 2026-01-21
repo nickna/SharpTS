@@ -105,9 +105,7 @@ public partial class AsyncMoveNextEmitter
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(s.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, s.Name.Lexeme, out var staticField))
             {
                 // Emit value
                 EmitExpression(s.Value);
@@ -117,7 +115,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Dup);
 
                 // Store to static field
-                _il.Emit(OpCodes.Stsfld, staticField);
+                _il.Emit(OpCodes.Stsfld, staticField!);
                 SetStackUnknown();
                 return;
             }
@@ -171,9 +169,7 @@ public partial class AsyncMoveNextEmitter
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(cs.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, cs.Name.Lexeme, out var staticField))
             {
                 // IMPORTANT: Emit value first (may contain await which clears stack)
                 EmitExpression(cs.Value);
@@ -182,7 +178,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, valueTemp);
 
                 // Get current value from static field
-                _il.Emit(OpCodes.Ldsfld, staticField);
+                _il.Emit(OpCodes.Ldsfld, staticField!);
 
                 // Load value and apply operation
                 _il.Emit(OpCodes.Ldloc, valueTemp);
@@ -192,7 +188,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Dup);
 
                 // Store to static field
-                _il.Emit(OpCodes.Stsfld, staticField);
+                _il.Emit(OpCodes.Stsfld, staticField!);
                 SetStackUnknown();
                 return;
             }

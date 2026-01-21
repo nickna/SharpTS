@@ -137,16 +137,15 @@ public partial class ILEmitter
             return;
         }
 
-        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
-            _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
+        var ctorBuilder = _ctx.ClassRegistry?.GetConstructorByQualifiedName(resolvedClassName);
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) && ctorBuilder != null)
         {
             Type targetType = typeBuilder;
             ConstructorInfo targetCtor = ctorBuilder;
 
             // Handle generic class instantiation (e.g., new Box<number>(42))
             if (n.TypeArgs != null && n.TypeArgs.Count > 0 &&
-                _ctx.ClassGenericParams?.TryGetValue(resolvedClassName, out var _) == true)
+                _ctx.ClassRegistry!.GetGenericParams(resolvedClassName) != null)
             {
                 // Resolve type arguments
                 Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();

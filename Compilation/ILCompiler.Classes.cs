@@ -834,25 +834,15 @@ public partial class ILCompiler
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
             EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             CurrentModulePath = _modules.CurrentPath,
             ClassToModule = _modules.ClassToModule,
             FunctionToModule = _modules.FunctionToModule,
@@ -884,7 +874,9 @@ public partial class ILCompiler
             ClassExprSuperclass = _classExprs.Superclass,
             CurrentClassExpr = classExpr,
             VarToClassExpr = _classExprs.VarToClassExpr,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
     }
 

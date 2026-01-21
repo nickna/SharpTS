@@ -5,6 +5,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
+using SharpTS.Compilation.Registries;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
@@ -49,6 +50,9 @@ public partial class ILCompiler
     private readonly ClassExpressionCompilationState _classExprs = new();
     private readonly TypedInteropState _typedInterop = new();
     private readonly LockDecoratorState _locks = new();
+
+    // Registry services
+    private ClassRegistry? _classRegistry;
 
     // Configuration options
     private readonly bool _preserveConstEnums;
@@ -213,11 +217,43 @@ public partial class ILCompiler
             FunctionToModule = _modules.FunctionToModule,
             EnumToModule = _modules.EnumToModule,
             IsStrictMode = _isStrictMode
+            // Note: ClassRegistry intentionally not set here - definition context uses raw dictionaries
         };
         _definitionContext.CurrentModulePath = _modules.CurrentPath;
         _definitionContext.DotNetNamespace = _modules.CurrentDotNetNamespace;
         _definitionContext.IsStrictMode = _isStrictMode;
         return _definitionContext;
+    }
+
+    /// <summary>
+    /// Gets the shared ClassRegistry instance, creating it if necessary.
+    /// The registry wraps all class-related state containers for centralized lookups.
+    /// </summary>
+    private ClassRegistry GetClassRegistry()
+    {
+        return _classRegistry ??= new ClassRegistry(
+            builders: _classes.Builders,
+            externalTypes: _classes.ExternalTypes,
+            superclass: _classes.Superclass,
+            constructors: _classes.Constructors,
+            constructorOverloads: _classes.ConstructorOverloads,
+            instanceMethods: _classes.InstanceMethods,
+            instanceGetters: _classes.InstanceGetters,
+            instanceSetters: _classes.InstanceSetters,
+            staticFields: _classes.StaticFields,
+            staticMethods: _classes.StaticMethods,
+            staticGetters: _classes.StaticGetters,
+            staticSetters: _classes.StaticSetters,
+            genericParams: _classes.GenericParams,
+            privateFieldStorage: _classes.PrivateFieldStorage,
+            privateFieldNames: _classes.PrivateFieldNames,
+            staticPrivateFields: _classes.StaticPrivateFields,
+            privateMethods: _classes.PrivateMethods,
+            staticPrivateMethods: _classes.StaticPrivateMethods,
+            classToModule: _modules.ClassToModule,
+            getCurrentModulePath: () => _modules.CurrentPath,
+            getDotNetNamespace: () => _modules.CurrentDotNetNamespace
+        );
     }
 
     /// <summary>

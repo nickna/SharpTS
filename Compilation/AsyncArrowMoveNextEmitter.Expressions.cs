@@ -628,16 +628,15 @@ public partial class AsyncArrowMoveNextEmitter
             resolvedClassName = _ctx!.ResolveClassName(className);
         }
 
-        if (_ctx!.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
-            _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
+        var ctorBuilder = _ctx!.ClassRegistry?.GetConstructorByQualifiedName(resolvedClassName);
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) && ctorBuilder != null)
         {
             Type targetType = typeBuilder;
             ConstructorInfo targetCtor = ctorBuilder;
 
             // Handle generic class instantiation
             if (n.TypeArgs != null && n.TypeArgs.Count > 0 &&
-                _ctx.ClassGenericParams?.TryGetValue(resolvedClassName, out var _) == true)
+                _ctx.ClassRegistry!.GetGenericParams(resolvedClassName) != null)
             {
                 Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
                 targetType = typeBuilder.MakeGenericType(typeArgs);
@@ -765,14 +764,12 @@ public partial class AsyncArrowMoveNextEmitter
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(s.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, s.Name.Lexeme, out var staticField))
             {
                 EmitExpression(s.Value);
                 EnsureBoxed();
                 _il.Emit(OpCodes.Dup);
-                _il.Emit(OpCodes.Stsfld, staticField);
+                _il.Emit(OpCodes.Stsfld, staticField!);
                 SetStackUnknown();
                 return;
             }
@@ -816,21 +813,19 @@ public partial class AsyncArrowMoveNextEmitter
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(cs.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, cs.Name.Lexeme, out var staticField))
             {
                 EmitExpression(cs.Value);
                 EnsureBoxed();
                 var valueTemp = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, valueTemp);
 
-                _il.Emit(OpCodes.Ldsfld, staticField);
+                _il.Emit(OpCodes.Ldsfld, staticField!);
                 _il.Emit(OpCodes.Ldloc, valueTemp);
                 EmitCompoundOperation(cs.Operator.Type);
 
                 _il.Emit(OpCodes.Dup);
-                _il.Emit(OpCodes.Stsfld, staticField);
+                _il.Emit(OpCodes.Stsfld, staticField!);
                 SetStackUnknown();
                 return;
             }

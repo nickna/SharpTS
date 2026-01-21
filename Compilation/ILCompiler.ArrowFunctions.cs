@@ -420,23 +420,15 @@ public partial class ILCompiler
             DisplayClasses = _closures.DisplayClasses,
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
             EnumKinds = _enums.Kinds,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Top-level variables for module-level access
             TopLevelStaticVars = _topLevelStaticVars,
@@ -450,7 +442,9 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         if (displayClass != null)

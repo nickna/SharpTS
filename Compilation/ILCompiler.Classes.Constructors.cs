@@ -46,26 +46,16 @@ public partial class ILCompiler
             DisplayClasses = _closures.DisplayClasses,
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
             EnumKinds = _enums.Kinds,
             Runtime = _runtime,
             CurrentSuperclassName = classStmt.Superclass?.Lexeme,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            StaticGetters = _classes.StaticGetters,
-            StaticSetters = _classes.StaticSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             // Typed interop support
             PropertyBackingFields = _typedInterop.PropertyBackingFields,
@@ -90,11 +80,8 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support
             CurrentClassName = className,
             CurrentClassBuilder = typeBuilder,
-            PrivateFieldStorage = _classes.PrivateFieldStorage,
-            PrivateFieldNames = _classes.PrivateFieldNames,
-            StaticPrivateFields = _classes.StaticPrivateFields,
-            PrivateMethods = _classes.PrivateMethods,
-            StaticPrivateMethods = _classes.StaticPrivateMethods
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         // Add class generic type parameters to context

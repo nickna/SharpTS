@@ -46,7 +46,7 @@ public partial class CompilationContext
             if (PropertyBackingFields?.TryGetValue(current, out var fields) == true &&
                 fields.TryGetValue(propertyName, out var field))
                 return field;
-            current = ClassSuperclass?.GetValueOrDefault(current);
+            current = ClassRegistry?.GetSuperclass(current);
         }
         return null;
     }
@@ -62,7 +62,7 @@ public partial class CompilationContext
             if (PropertyTypes?.TryGetValue(current, out var types) == true &&
                 types.TryGetValue(propertyName, out var type))
                 return type;
-            current = ClassSuperclass?.GetValueOrDefault(current);
+            current = ClassRegistry?.GetSuperclass(current);
         }
         return null;
     }
@@ -78,7 +78,7 @@ public partial class CompilationContext
             if (DeclaredPropertyNames?.TryGetValue(current, out var names) == true &&
                 names.Contains(propertyName))
                 return true;
-            current = ClassSuperclass?.GetValueOrDefault(current);
+            current = ClassRegistry?.GetSuperclass(current);
         }
         return false;
     }
@@ -94,7 +94,7 @@ public partial class CompilationContext
             if (ReadonlyPropertyNames?.TryGetValue(current, out var names) == true &&
                 names.Contains(propertyName))
                 return true;
-            current = ClassSuperclass?.GetValueOrDefault(current);
+            current = ClassRegistry?.GetSuperclass(current);
         }
         return false;
     }
@@ -109,7 +109,7 @@ public partial class CompilationContext
         {
             if (ExtrasFields?.TryGetValue(current, out var field) == true)
                 return field;
-            current = ClassSuperclass?.GetValueOrDefault(current);
+            current = ClassRegistry?.GetSuperclass(current);
         }
         return null;
     }

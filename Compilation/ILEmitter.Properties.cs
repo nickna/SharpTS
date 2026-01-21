@@ -98,11 +98,9 @@ public partial class ILEmitter
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
 
             // Try static getter first (for auto-accessors and explicit static accessors)
-            if (_ctx.StaticGetters != null &&
-                _ctx.StaticGetters.TryGetValue(resolvedClassName, out var staticGetters) &&
-                staticGetters.TryGetValue(g.Name.Lexeme, out var staticGetter))
+            if (_ctx.ClassRegistry!.TryGetStaticGetter(resolvedClassName, g.Name.Lexeme, out var staticGetter))
             {
-                IL.Emit(OpCodes.Call, staticGetter);
+                IL.Emit(OpCodes.Call, staticGetter!);
 
                 // The getter returns the typed value (e.g., double for number).
                 // Track the stack type so EmitBoxIfNeeded can box only when necessary.
@@ -139,11 +137,9 @@ public partial class ILEmitter
             }
 
             // Try to find static field using stored FieldBuilders
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(g.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, g.Name.Lexeme, out var staticField))
             {
-                IL.Emit(OpCodes.Ldsfld, staticField);
+                IL.Emit(OpCodes.Ldsfld, staticField!);
                 SetStackUnknown();
                 return;
             }
@@ -255,9 +251,7 @@ public partial class ILEmitter
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
 
             // Try static setter first (for auto-accessors and explicit static accessors)
-            if (_ctx.StaticSetters != null &&
-                _ctx.StaticSetters.TryGetValue(resolvedClassName, out var staticSetters) &&
-                staticSetters.TryGetValue(s.Name.Lexeme, out var staticSetter))
+            if (_ctx.ClassRegistry!.TryGetStaticSetter(resolvedClassName, s.Name.Lexeme, out var staticSetter))
             {
                 // Get the property type from PropertyTypes dictionary
                 Type propertyType = _ctx.Types.Object;
@@ -302,21 +296,19 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Castclass, propertyType);
                 }
 
-                IL.Emit(OpCodes.Call, staticSetter);
+                IL.Emit(OpCodes.Call, staticSetter!);
 
                 // Restore result for expression value
                 IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
                 return;
             }
 
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(s.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, s.Name.Lexeme, out var staticField))
             {
                 EmitExpression(s.Value);
                 EmitBoxIfNeeded(s.Value);
                 IL.Emit(OpCodes.Dup); // Keep value for expression result
-                IL.Emit(OpCodes.Stsfld, staticField);
+                IL.Emit(OpCodes.Stsfld, staticField!);
                 return;
             }
         }
@@ -858,11 +850,9 @@ public partial class ILEmitter
     private bool EmitStaticMemberAccess(string className, System.Reflection.Emit.TypeBuilder classBuilder, string propertyName)
     {
         // Try static getter first (for auto-accessors and explicit static accessors)
-        if (_ctx.StaticGetters != null &&
-            _ctx.StaticGetters.TryGetValue(className, out var staticGetters) &&
-            staticGetters.TryGetValue(propertyName, out var staticGetter))
+        if (_ctx.ClassRegistry!.TryGetStaticGetter(className, propertyName, out var staticGetter))
         {
-            IL.Emit(OpCodes.Call, staticGetter);
+            IL.Emit(OpCodes.Call, staticGetter!);
 
             // Track the stack type for proper boxing behavior
             string pascalPropName = NamingConventions.ToPascalCase(propertyName);
@@ -895,27 +885,20 @@ public partial class ILEmitter
         }
 
         // Try to find static field using stored FieldBuilders
-        if (_ctx.StaticFields != null &&
-            _ctx.StaticFields.TryGetValue(className, out var classFields) &&
-            classFields.TryGetValue(propertyName, out var staticField))
+        if (_ctx.ClassRegistry!.TryGetStaticField(className, propertyName, out var staticField))
         {
-            IL.Emit(OpCodes.Ldsfld, staticField);
+            IL.Emit(OpCodes.Ldsfld, staticField!);
             SetStackUnknown();
             return true;
         }
 
-        // Try static private fields
-        if (_ctx.StaticPrivateFields != null &&
-            _ctx.StaticPrivateFields.TryGetValue(className, out var privateFields))
+        // Try static private fields - strip leading # if present
+        string privateName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
+        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, privateName, out var staticPrivateField))
         {
-            // Strip leading # if present
-            string fieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
-            if (privateFields.TryGetValue(fieldName, out var staticPrivateField))
-            {
-                IL.Emit(OpCodes.Ldsfld, staticPrivateField);
-                SetStackUnknown();
-                return true;
-            }
+            IL.Emit(OpCodes.Ldsfld, staticPrivateField!);
+            SetStackUnknown();
+            return true;
         }
 
         return false;
@@ -928,9 +911,7 @@ public partial class ILEmitter
     private bool EmitStaticMemberSet(string className, System.Reflection.Emit.TypeBuilder classBuilder, string propertyName, Expr value)
     {
         // Try static setter first (for auto-accessors and explicit static accessors)
-        if (_ctx.StaticSetters != null &&
-            _ctx.StaticSetters.TryGetValue(className, out var staticSetters) &&
-            staticSetters.TryGetValue(propertyName, out var staticSetter))
+        if (_ctx.ClassRegistry!.TryGetStaticSetter(className, propertyName, out var staticSetter))
         {
             // Get the property type from PropertyTypes dictionary
             Type propertyType = _ctx.Types.Object;
@@ -972,37 +953,31 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Castclass, propertyType);
             }
 
-            IL.Emit(OpCodes.Call, staticSetter);
+            IL.Emit(OpCodes.Call, staticSetter!);
 
             IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
             return true;
         }
 
         // Try static fields
-        if (_ctx.StaticFields != null &&
-            _ctx.StaticFields.TryGetValue(className, out var classFields) &&
-            classFields.TryGetValue(propertyName, out var staticField))
+        if (_ctx.ClassRegistry!.TryGetStaticField(className, propertyName, out var staticField))
         {
             EmitExpression(value);
             EmitBoxIfNeeded(value);
             IL.Emit(OpCodes.Dup); // Keep value for expression result
-            IL.Emit(OpCodes.Stsfld, staticField);
+            IL.Emit(OpCodes.Stsfld, staticField!);
             return true;
         }
 
         // Try static private fields
-        if (_ctx.StaticPrivateFields != null &&
-            _ctx.StaticPrivateFields.TryGetValue(className, out var privateFields))
+        string privateFieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
+        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, privateFieldName, out var staticPrivateField))
         {
-            string fieldName = propertyName.StartsWith('#') ? propertyName[1..] : propertyName;
-            if (privateFields.TryGetValue(fieldName, out var staticPrivateField))
-            {
-                EmitExpression(value);
-                EmitBoxIfNeeded(value);
-                IL.Emit(OpCodes.Dup); // Keep value for expression result
-                IL.Emit(OpCodes.Stsfld, staticPrivateField);
-                return true;
-            }
+            EmitExpression(value);
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Dup); // Keep value for expression result
+            IL.Emit(OpCodes.Stsfld, staticPrivateField!);
+            return true;
         }
 
         return false;
@@ -1246,17 +1221,17 @@ public partial class ILEmitter
         if (gp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassName?.Split('.').Last()?.Split('_').Last())
         {
             // Try static private field
-            if (_ctx.StaticPrivateFields?.TryGetValue(className, out var staticFields) == true &&
-                staticFields.TryGetValue(fieldName, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
             {
-                IL.Emit(OpCodes.Ldsfld, staticField);
+                IL.Emit(OpCodes.Ldsfld, staticField!);
                 SetStackUnknown();
                 return;
             }
         }
 
         // Instance private field access (this.#field or other.#field)
-        if (_ctx.PrivateFieldStorage?.TryGetValue(className, out var storageField) == true)
+        var storageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
+        if (storageField != null)
         {
             var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
                 .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
@@ -1300,10 +1275,9 @@ public partial class ILEmitter
         }
 
         // Fallback: check for static private field (covers ClassName.#staticField case)
-        if (_ctx.StaticPrivateFields?.TryGetValue(className, out var fallbackStaticFields) == true &&
-            fallbackStaticFields.TryGetValue(fieldName, out var fallbackStaticField))
+        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var fallbackStaticField))
         {
-            IL.Emit(OpCodes.Ldsfld, fallbackStaticField);
+            IL.Emit(OpCodes.Ldsfld, fallbackStaticField!);
             SetStackUnknown();
             return;
         }
@@ -1336,21 +1310,21 @@ public partial class ILEmitter
         // Check if it's a static private field
         if (sp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassName?.Split('.').Last()?.Split('_').Last())
         {
-            if (_ctx.StaticPrivateFields?.TryGetValue(className, out var staticFields) == true &&
-                staticFields.TryGetValue(fieldName, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
             {
                 // Emit value, box, store, but also leave value on stack for expression result
                 EmitExpression(sp.Value);
                 EmitBoxIfNeeded(sp.Value);
                 IL.Emit(OpCodes.Dup);  // Keep copy on stack for expression result
-                IL.Emit(OpCodes.Stsfld, staticField);
+                IL.Emit(OpCodes.Stsfld, staticField!);
                 SetStackUnknown();
                 return;
             }
         }
 
         // Instance private field assignment
-        if (_ctx.PrivateFieldStorage?.TryGetValue(className, out var storageField) == true)
+        var setStorageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
+        if (setStorageField != null)
         {
             var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
                 .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
@@ -1361,7 +1335,7 @@ public partial class ILEmitter
             var valueLocal = IL.DeclareLocal(typeof(object));
 
             // Load __privateFields static field
-            IL.Emit(OpCodes.Ldsfld, storageField);
+            IL.Emit(OpCodes.Ldsfld, setStorageField);
 
             // Emit the object expression
             EmitExpression(sp.Object);
@@ -1403,13 +1377,12 @@ public partial class ILEmitter
         }
 
         // Fallback for static private field
-        if (_ctx.StaticPrivateFields?.TryGetValue(className, out var fallbackStaticFields) == true &&
-            fallbackStaticFields.TryGetValue(fieldName, out var fallbackStaticField))
+        if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var setFallbackStaticField))
         {
             EmitExpression(sp.Value);
             EmitBoxIfNeeded(sp.Value);
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stsfld, fallbackStaticField);
+            IL.Emit(OpCodes.Stsfld, setFallbackStaticField!);
             SetStackUnknown();
             return;
         }
@@ -1442,8 +1415,7 @@ public partial class ILEmitter
         // Check for static private method (ClassName.#method())
         if (cp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassName?.Split('.').Last()?.Split('_').Last())
         {
-            if (_ctx.StaticPrivateMethods?.TryGetValue(className, out var staticMethods) == true &&
-                staticMethods.TryGetValue(methodName, out var staticMethod))
+            if (_ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
             {
                 // Emit arguments
                 foreach (var arg in cp.Arguments)
@@ -1453,19 +1425,19 @@ public partial class ILEmitter
                 }
 
                 // Call static method
-                IL.Emit(OpCodes.Call, staticMethod);
+                IL.Emit(OpCodes.Call, staticMethod!);
                 SetStackUnknown();
                 return;
             }
         }
 
         // Instance private method call (this.#method() or other.#method())
-        if (_ctx.PrivateMethods?.TryGetValue(className, out var instanceMethods) == true &&
-            instanceMethods.TryGetValue(methodName, out var instanceMethod))
+        if (_ctx.ClassRegistry!.TryGetPrivateMethod(className, methodName, out var instanceMethod))
         {
             // For instance methods, we need to verify the brand (that the object has this class's private slots)
             // We can check via the ConditionalWeakTable
-            if (_ctx.PrivateFieldStorage?.TryGetValue(className, out var storageField) == true)
+            var callStorageField = _ctx.ClassRegistry!.GetPrivateFieldStorage(className);
+            if (callStorageField != null)
             {
                 var cwtType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
                     .MakeGenericType(typeof(object), typeof(Dictionary<string, object?>));
@@ -1481,7 +1453,7 @@ public partial class ILEmitter
 
                 // Brand check: verify object is in the ConditionalWeakTable
                 var dictLocal = IL.DeclareLocal(dictType);
-                IL.Emit(OpCodes.Ldsfld, storageField);
+                IL.Emit(OpCodes.Ldsfld, callStorageField);
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Ldloca, dictLocal);
                 var tryGetValueMethod = cwtType.GetMethod("TryGetValue", [typeof(object), dictType.MakeByRefType()])!;
@@ -1512,7 +1484,7 @@ public partial class ILEmitter
                 }
 
                 // Call instance method
-                IL.Emit(OpCodes.Callvirt, instanceMethod);
+                IL.Emit(OpCodes.Callvirt, instanceMethod!);
                 SetStackUnknown();
                 return;
             }
@@ -1532,15 +1504,14 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(arg);
                 }
 
-                IL.Emit(OpCodes.Callvirt, instanceMethod);
+                IL.Emit(OpCodes.Callvirt, instanceMethod!);
                 SetStackUnknown();
                 return;
             }
         }
 
         // Fallback: check for static private method
-        if (_ctx.StaticPrivateMethods?.TryGetValue(className, out var fallbackStaticMethods) == true &&
-            fallbackStaticMethods.TryGetValue(methodName, out var fallbackStaticMethod))
+        if (_ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var fallbackStaticMethod))
         {
             foreach (var arg in cp.Arguments)
             {
@@ -1548,7 +1519,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(arg);
             }
 
-            IL.Emit(OpCodes.Call, fallbackStaticMethod);
+            IL.Emit(OpCodes.Call, fallbackStaticMethod!);
             SetStackUnknown();
             return;
         }

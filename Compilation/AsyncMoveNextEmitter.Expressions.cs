@@ -271,11 +271,9 @@ public partial class AsyncMoveNextEmitter
             _ctx!.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticMethods != null &&
-                _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
-                classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
+            if (_ctx.ClassRegistry!.TryGetStaticMethod(resolvedClassName, classStaticGet.Name.Lexeme, out var staticMethod))
             {
-                var staticMethodParams = staticMethod.GetParameters();
+                var staticMethodParams = staticMethod!.GetParameters();
                 var paramCount = staticMethodParams.Length;
 
                 // Emit all arguments and save to temps (await may occur in arguments)
@@ -518,11 +516,9 @@ public partial class AsyncMoveNextEmitter
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
             // Try to find static field using stored FieldBuilders
-            if (_ctx.StaticFields != null &&
-                _ctx.StaticFields.TryGetValue(resolvedClassName, out var classFields) &&
-                classFields.TryGetValue(g.Name.Lexeme, out var staticField))
+            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, g.Name.Lexeme, out var staticField))
             {
-                _il.Emit(OpCodes.Ldsfld, staticField);
+                _il.Emit(OpCodes.Ldsfld, staticField!);
                 SetStackUnknown();
                 return;
             }

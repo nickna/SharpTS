@@ -9,6 +9,12 @@ public partial class CompilationContext
     // Class Compilation State
     // ============================================
 
+    /// <summary>
+    /// Gets the class builders dictionary.
+    /// </summary>
+    /// <remarks>
+    /// Consider using <see cref="ClassRegistry"/> methods like TryGetClass() for lookups.
+    /// </remarks>
     public Dictionary<string, TypeBuilder> Classes { get; }
 
     // For instance methods
@@ -20,58 +26,6 @@ public partial class CompilationContext
 
     // For inheritance: current class's superclass name (if any)
     public string? CurrentSuperclassName { get; set; }
-
-    // Static fields by class name -> field name -> FieldBuilder
-    public Dictionary<string, Dictionary<string, FieldBuilder>>? StaticFields { get; set; }
-
-    // Static methods by class name -> method name -> MethodBuilder
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticMethods { get; set; }
-
-    // Constructor overloads for default parameters: class name -> list of overload constructors
-    public Dictionary<string, List<ConstructorBuilder>>? ConstructorOverloads { get; set; }
-
-    // Class constructors by class name -> ConstructorBuilder
-    public Dictionary<string, ConstructorBuilder>? ClassConstructors { get; set; }
-
-    // Instance methods for direct dispatch (class name -> method name -> MethodBuilder)
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceMethods { get; set; }
-
-    // Instance getters for direct dispatch (class name -> property name -> MethodBuilder)
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceGetters { get; set; }
-
-    // Instance setters for direct dispatch (class name -> property name -> MethodBuilder)
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? InstanceSetters { get; set; }
-
-    // Static getters for direct dispatch (class name -> property name -> MethodBuilder)
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticGetters { get; set; }
-
-    // Static setters for direct dispatch (class name -> property name -> MethodBuilder)
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticSetters { get; set; }
-
-    // Class superclass mapping (class name -> superclass name or null)
-    public Dictionary<string, string?>? ClassSuperclass { get; set; }
-
-    // Track generic params per class for instantiation
-    public Dictionary<string, GenericTypeParameterBuilder[]>? ClassGenericParams { get; set; }
-
-    // ============================================
-    // ES2022 Private Class Elements Support
-    // ============================================
-
-    // Private field storage: class name -> FieldBuilder for __privateFields (ConditionalWeakTable)
-    public Dictionary<string, FieldBuilder>? PrivateFieldStorage { get; set; }
-
-    // Private field names: class name -> list of field names (without #)
-    public Dictionary<string, List<string>>? PrivateFieldNames { get; set; }
-
-    // Static private fields: class name -> field name (without #) -> FieldBuilder
-    public Dictionary<string, Dictionary<string, FieldBuilder>>? StaticPrivateFields { get; set; }
-
-    // Private instance methods: class name -> method name (without #) -> MethodBuilder
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? PrivateMethods { get; set; }
-
-    // Static private methods: class name -> method name (without #) -> MethodBuilder
-    public Dictionary<string, Dictionary<string, MethodBuilder>>? StaticPrivateMethods { get; set; }
 
     // Current class name being compiled (needed for private member access)
     public string? CurrentClassName { get; set; }
@@ -103,8 +57,17 @@ public partial class CompilationContext
     /// In multi-module compilation, class names are qualified with their module to avoid collisions.
     /// Also applies .NET namespace prefix if set via @Namespace directive.
     /// </summary>
+    /// <remarks>
+    /// This method delegates to <see cref="ClassRegistry"/>.ResolveClassName() when available.
+    /// </remarks>
     public string ResolveClassName(string simpleClassName)
     {
+        // Delegate to ClassRegistry if available
+        if (ClassRegistry != null)
+        {
+            return ClassRegistry.ResolveClassName(simpleClassName);
+        }
+
         string baseName;
 
         // If we have a module mapping, use it to create the qualified name
@@ -131,8 +94,17 @@ public partial class CompilationContext
     /// Gets the qualified class name for the current module context.
     /// Also applies .NET namespace if set via @Namespace directive.
     /// </summary>
+    /// <remarks>
+    /// NOTE: This method does NOT delegate to ClassRegistry because it depends on
+    /// context-specific state (CurrentModulePath) that varies per CompilationContext instance.
+    /// The ClassRegistry's closure reads from _modules.CurrentPath which may not be in sync.
+    /// </remarks>
     public string GetQualifiedClassName(string simpleClassName)
     {
+        // Do NOT delegate to ClassRegistry - this method depends on context-specific CurrentModulePath
+        // which varies per CompilationContext instance. ClassRegistry's closure reads from
+        // _modules.CurrentPath which is not always in sync with ctx.CurrentModulePath.
+
         string baseName;
         if (CurrentModulePath == null)
         {
@@ -158,15 +130,7 @@ public partial class CompilationContext
     /// </summary>
     public MethodBuilder? ResolveInstanceMethod(string className, string methodName)
     {
-        string? current = className;
-        while (current != null)
-        {
-            if (InstanceMethods?.TryGetValue(current, out var methods) == true &&
-                methods.TryGetValue(methodName, out var method))
-                return method;
-            current = ClassSuperclass?.GetValueOrDefault(current);
-        }
-        return null;
+        return ClassRegistry?.ResolveInstanceMethod(className, methodName);
     }
 
     /// <summary>
@@ -174,15 +138,7 @@ public partial class CompilationContext
     /// </summary>
     public MethodBuilder? ResolveInstanceGetter(string className, string propertyName)
     {
-        string? current = className;
-        while (current != null)
-        {
-            if (InstanceGetters?.TryGetValue(current, out var getters) == true &&
-                getters.TryGetValue(propertyName, out var getter))
-                return getter;
-            current = ClassSuperclass?.GetValueOrDefault(current);
-        }
-        return null;
+        return ClassRegistry?.ResolveInstanceGetter(className, propertyName);
     }
 
     /// <summary>
@@ -190,14 +146,6 @@ public partial class CompilationContext
     /// </summary>
     public MethodBuilder? ResolveInstanceSetter(string className, string propertyName)
     {
-        string? current = className;
-        while (current != null)
-        {
-            if (InstanceSetters?.TryGetValue(current, out var setters) == true &&
-                setters.TryGetValue(propertyName, out var setter))
-                return setter;
-            current = ClassSuperclass?.GetValueOrDefault(current);
-        }
-        return null;
+        return ClassRegistry?.ResolveInstanceSetter(className, propertyName);
     }
 }

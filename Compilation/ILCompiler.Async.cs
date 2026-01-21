@@ -439,31 +439,21 @@ public partial class ILCompiler
             var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
             {
                 Runtime = _runtime,
-                ClassConstructors = _classes.Constructors,
                 ClosureAnalyzer = _closures.Analyzer,
                 ArrowMethods = _closures.ArrowMethods,
                 DisplayClasses = _closures.DisplayClasses,
                 DisplayClassFields = _closures.DisplayClassFields,
                 DisplayClassConstructors = _closures.DisplayClassConstructors,
-                StaticFields = _classes.StaticFields,
-                StaticMethods = _classes.StaticMethods,
                 EnumMembers = _enums.Members,
                 EnumReverse = _enums.Reverse,
                 EnumKinds = _enums.Kinds,
                 NamespaceFields = _namespaceFields,
                 TopLevelStaticVars = _topLevelStaticVars,
                 FunctionRestParams = _functions.RestParams,
-                ClassGenericParams = _classes.GenericParams,
                 FunctionGenericParams = _functions.GenericParams,
                 IsGenericFunction = _functions.IsGeneric,
                 TypeMap = _typeMap,
                 DeadCode = _deadCodeInfo,
-                InstanceMethods = _classes.InstanceMethods,
-                InstanceGetters = _classes.InstanceGetters,
-                InstanceSetters = _classes.InstanceSetters,
-                StaticGetters = _classes.StaticGetters,
-                StaticSetters = _classes.StaticSetters,
-                ClassSuperclass = _classes.Superclass,
                 AsyncMethods = null,
                 AsyncArrowBuilders = _async.ArrowBuilders,
                 AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
@@ -475,11 +465,13 @@ public partial class ILCompiler
                 EnumToModule = _modules.EnumToModule,
                 DotNetNamespace = _modules.CurrentDotNetNamespace,
                 TypeEmitterRegistry = _typeEmitterRegistry,
-            BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
-            BuiltInModuleNamespaces = _builtInModuleNamespaces,
+                BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+                BuiltInModuleNamespaces = _builtInModuleNamespaces,
                 ClassExprBuilders = _classExprs.Builders,
                 // Check for function-level "use strict" directive
-                IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body)
+                IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body),
+                // Registry services
+                ClassRegistry = GetClassRegistry()
             };
 
             // Emit MoveNext body
@@ -527,31 +519,21 @@ public partial class ILCompiler
         var ctx = new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.Types)
         {
             Runtime = parentCtx.Runtime,
-            ClassConstructors = parentCtx.ClassConstructors,
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
             ArrowMethods = parentCtx.ArrowMethods,
             DisplayClasses = parentCtx.DisplayClasses,
             DisplayClassFields = parentCtx.DisplayClassFields,
             DisplayClassConstructors = parentCtx.DisplayClassConstructors,
-            StaticFields = parentCtx.StaticFields,
-            StaticMethods = parentCtx.StaticMethods,
             EnumMembers = parentCtx.EnumMembers,
             EnumReverse = parentCtx.EnumReverse,
             EnumKinds = parentCtx.EnumKinds,
             NamespaceFields = parentCtx.NamespaceFields,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             FunctionRestParams = parentCtx.FunctionRestParams,
-            ClassGenericParams = parentCtx.ClassGenericParams,
             FunctionGenericParams = parentCtx.FunctionGenericParams,
             IsGenericFunction = parentCtx.IsGenericFunction,
             TypeMap = parentCtx.TypeMap,
             DeadCode = parentCtx.DeadCode,
-            InstanceMethods = parentCtx.InstanceMethods,
-            InstanceGetters = parentCtx.InstanceGetters,
-            InstanceSetters = parentCtx.InstanceSetters,
-            StaticGetters = parentCtx.StaticGetters,
-            StaticSetters = parentCtx.StaticSetters,
-            ClassSuperclass = parentCtx.ClassSuperclass,
             AsyncMethods = null,
             AsyncArrowBuilders = _async.ArrowBuilders,
             AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
@@ -563,7 +545,9 @@ public partial class ILCompiler
             EnumToModule = parentCtx.EnumToModule,
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
-            IsStrictMode = parentCtx.IsStrictMode
+            IsStrictMode = parentCtx.IsStrictMode,
+            // Registry services
+            ClassRegistry = parentCtx.ClassRegistry
         };
 
         // Create arrow-specific emitter
@@ -778,9 +762,6 @@ public partial class ILCompiler
             DisplayClasses = _closures.DisplayClasses,
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
-            StaticFields = _classes.StaticFields,
-            StaticMethods = _classes.StaticMethods,
-            ClassConstructors = _classes.Constructors,
             FunctionRestParams = _functions.RestParams,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,
@@ -788,15 +769,10 @@ public partial class ILCompiler
             NamespaceFields = _namespaceFields,
             TopLevelStaticVars = _topLevelStaticVars,
             Runtime = _runtime,
-            ClassGenericParams = _classes.GenericParams,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
-            InstanceMethods = _classes.InstanceMethods,
-            InstanceGetters = _classes.InstanceGetters,
-            InstanceSetters = _classes.InstanceSetters,
-            ClassSuperclass = _classes.Superclass,
             AsyncMethods = null,
             AsyncArrowBuilders = _async.ArrowBuilders,
             AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
@@ -818,7 +794,9 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
-            IsStrictMode = _isStrictMode
+            IsStrictMode = _isStrictMode,
+            // Registry services
+            ClassRegistry = GetClassRegistry()
         };
 
         // Emit MoveNext body

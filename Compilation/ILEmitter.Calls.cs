@@ -26,9 +26,10 @@ public partial class ILEmitter
         if (c.Callee is Expr.Super superExpr && (superExpr.Method == null || superExpr.Method.Lexeme == "constructor"))
         {
             // Try class declaration constructors first
-            if (_ctx.CurrentSuperclassName != null &&
-                _ctx.ClassConstructors != null &&
-                _ctx.ClassConstructors.TryGetValue(_ctx.CurrentSuperclassName, out var parentCtor))
+            var parentCtor = _ctx.CurrentSuperclassName != null
+                ? _ctx.ClassRegistry?.GetConstructorByQualifiedName(_ctx.CurrentSuperclassName)
+                : null;
+            if (parentCtor != null)
             {
                 // Load this
                 IL.Emit(OpCodes.Ldarg_0);
@@ -79,9 +80,9 @@ public partial class ILEmitter
                 }
 
                 // If not found in class expressions, try class declarations
-                if (parentExprCtor == null && _ctx.ClassConstructors?.TryGetValue(superclassName, out var declCtor) == true)
+                if (parentExprCtor == null)
                 {
-                    parentExprCtor = declCtor;
+                    parentExprCtor = _ctx.ClassRegistry?.GetConstructorByQualifiedName(superclassName);
                 }
 
                 if (parentExprCtor != null)
@@ -311,11 +312,9 @@ public partial class ILEmitter
             _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.StaticMethods != null &&
-                _ctx.StaticMethods.TryGetValue(resolvedClassName, out var classMethods) &&
-                classMethods.TryGetValue(classStaticGet.Name.Lexeme, out var staticMethod))
+            if (_ctx.ClassRegistry!.TryGetStaticMethod(resolvedClassName, classStaticGet.Name.Lexeme, out var staticMethod))
             {
-                var staticMethodParams = staticMethod.GetParameters();
+                var staticMethodParams = staticMethod!.GetParameters();
                 var paramCount = staticMethodParams.Length;
 
                 // Emit provided arguments with proper type conversions

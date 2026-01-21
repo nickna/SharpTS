@@ -155,9 +155,8 @@ public partial class GeneratorMoveNextEmitter
             resolvedClassName = _ctx!.ResolveClassName(className);
         }
 
-        if (_ctx!.Classes.TryGetValue(resolvedClassName, out var typeBuilder) &&
-            _ctx.ClassConstructors != null &&
-            _ctx.ClassConstructors.TryGetValue(resolvedClassName, out var ctorBuilder))
+        var ctorBuilder = _ctx!.ClassRegistry?.GetConstructorByQualifiedName(resolvedClassName);
+        if (_ctx.Classes.TryGetValue(resolvedClassName, out var typeBuilder) && ctorBuilder != null)
         {
             int expectedParamCount = ctorBuilder.GetParameters().Length;
 
