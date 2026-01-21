@@ -266,9 +266,10 @@ public class TimerTests
     {
         // setInterval should execute callback
         var source = @"
-            setInterval(() => { console.log('tick'); }, 20);
+            let t = setInterval(() => { console.log('tick'); }, 20);
             let start = Date.now();
             while (Date.now() - start < 100) { }
+            clearInterval(t);
             console.log('done');
         ";
         var output = TestHarness.RunCompiled(source);
@@ -297,9 +298,10 @@ public class TimerTests
     {
         // Additional args should be passed to callback
         var source = @"
-            setInterval((a: any, b: any) => { console.log(a + b); }, 10, 'hello', 'world');
+            let t = setInterval((a: any, b: any) => { console.log(a + b); }, 10, 'hello', 'world');
             let start = Date.now();
             while (Date.now() - start < 50) { }
+            clearInterval(t);
         ";
         var output = TestHarness.RunCompiled(source);
         Assert.Contains("helloworld", output);
@@ -310,9 +312,10 @@ public class TimerTests
     {
         // setInterval without delay should default to 0 and execute
         var source = @"
-            setInterval(() => { console.log('executed'); });
+            let t = setInterval(() => { console.log('executed'); });
             let start = Date.now();
             while (Date.now() - start < 50) { }
+            clearInterval(t);
             console.log('done');
         ";
         var output = TestHarness.RunCompiled(source);
