@@ -225,6 +225,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitPrint(p);
                 break;
 
+            case Stmt.DeclareModule:
+            case Stmt.DeclareGlobal:
+                // Module/global augmentations are type-only - no IL emission needed
+                break;
+
             default:
                 EmitUnknownStatement(stmt);
                 break;

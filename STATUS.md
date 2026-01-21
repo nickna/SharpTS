@@ -131,8 +131,8 @@ This document tracks TypeScript language features and their implementation statu
 | `import type` | ✅ | Statement-level (`import type { T }`) and inline (`import { type T }`) type-only imports |
 | `import.meta` | ✅ | `import.meta.url` for module metadata |
 | `export =` / `import =` | ✅ | CommonJS interop: `export = value`, `import x = require('path')`, `export import x = require()` (class exports have known limitation) |
-| Ambient module declarations | ❌ | `declare module 'x' { }` |
-| Module augmentation | ❌ | Extending existing module types |
+| Ambient module declarations | ✅ | `declare module 'x' { }` - type-only declarations for external packages |
+| Module augmentation | ✅ | `declare module './path' { }` extends existing modules, `declare global { }` extends global types |
 | Triple-slash references | ✅ | `/// <reference path="...">` for script-style file merging |
 
 ---

@@ -112,6 +112,224 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Type-checks a declare module statement (module augmentation or ambient declaration).
+    /// The actual merging logic is applied during CheckModules phase.
+    /// </summary>
+    private void CheckDeclareModuleStatement(Stmt.DeclareModule declareModule)
+    {
+        // Store in the current module for processing during module type checking
+        if (_currentModule != null)
+        {
+            // Check if this is augmenting an existing module or declaring an ambient module
+            bool isAugmentation = false;
+
+            // Try to resolve the module path to determine if it's augmentation vs ambient
+            if (_moduleResolver != null)
+            {
+                try
+                {
+                    string resolvedPath = _moduleResolver.ResolveModulePath(declareModule.ModulePath, _currentModule.Path);
+                    var targetModule = _moduleResolver.GetCachedModule(resolvedPath);
+                    isAugmentation = targetModule != null;
+                }
+                catch
+                {
+                    // Path couldn't be resolved - treat as ambient declaration
+                    isAugmentation = false;
+                }
+            }
+
+            if (isAugmentation)
+            {
+                // Store as module augmentation
+                if (!_currentModule.ModuleAugmentations.TryGetValue(declareModule.ModulePath, out var members))
+                {
+                    members = [];
+                    _currentModule.ModuleAugmentations[declareModule.ModulePath] = members;
+                }
+                members.AddRange(declareModule.Members);
+            }
+            else
+            {
+                // Store as ambient module declaration
+                if (!_currentModule.AmbientModules.TryGetValue(declareModule.ModulePath, out var members))
+                {
+                    members = [];
+                    _currentModule.AmbientModules[declareModule.ModulePath] = members;
+                }
+                members.AddRange(declareModule.Members);
+            }
+        }
+
+        // Type-check the member declarations to validate their types
+        foreach (var member in declareModule.Members)
+        {
+            CheckDeclareBlockMember(member);
+        }
+    }
+
+    /// <summary>
+    /// Type-checks a declare global statement (global augmentation).
+    /// Merges declarations into the global scope.
+    /// </summary>
+    private void CheckDeclareGlobalStatement(Stmt.DeclareGlobal declareGlobal)
+    {
+        // Store in the current module for processing during module type checking
+        if (_currentModule != null)
+        {
+            _currentModule.GlobalAugmentations.AddRange(declareGlobal.Members);
+        }
+
+        // Type-check and merge each declaration into the global environment
+        foreach (var member in declareGlobal.Members)
+        {
+            CheckAndMergeGlobalMember(member);
+        }
+    }
+
+    /// <summary>
+    /// Type-checks a member inside a declare module or declare global block.
+    /// These are type-only declarations.
+    /// </summary>
+    private void CheckDeclareBlockMember(Stmt member)
+    {
+        switch (member)
+        {
+            case Stmt.Export export when export.Declaration != null:
+                CheckDeclareBlockMember(export.Declaration);
+                break;
+
+            case Stmt.Interface interfaceStmt:
+                CheckInterfaceDeclaration(interfaceStmt);
+                break;
+
+            case Stmt.Function funcStmt:
+                // Ambient functions have no body - just register the signature
+                CheckFunctionDeclaration(funcStmt);
+                break;
+
+            case Stmt.Var varStmt:
+                // Ambient variable - register with declared type
+                TypeInfo varType = varStmt.TypeAnnotation != null
+                    ? ToTypeInfo(varStmt.TypeAnnotation)
+                    : new TypeInfo.Any();
+                _environment.Define(varStmt.Name.Lexeme, varType);
+                break;
+
+            case Stmt.Class classStmt:
+                CheckClassDeclaration(classStmt);
+                break;
+
+            case Stmt.TypeAlias typeAlias:
+                if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
+                {
+                    var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
+                }
+                else
+                {
+                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+                }
+                break;
+
+            case Stmt.Namespace ns:
+                CheckNamespace(ns);
+                break;
+
+            default:
+                // Other statements are not valid in declare blocks
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Type-checks and merges a member from declare global into the global environment.
+    /// Supports interface merging for built-in types like Array, String, etc.
+    /// </summary>
+    private void CheckAndMergeGlobalMember(Stmt member)
+    {
+        switch (member)
+        {
+            case Stmt.Export export when export.Declaration != null:
+                CheckAndMergeGlobalMember(export.Declaration);
+                break;
+
+            case Stmt.Interface interfaceStmt:
+                // Check if this interface merges with an existing global type
+                MergeGlobalInterface(interfaceStmt);
+                break;
+
+            case Stmt.Function funcStmt:
+                CheckFunctionDeclaration(funcStmt);
+                break;
+
+            case Stmt.Var varStmt:
+                TypeInfo varType = varStmt.TypeAnnotation != null
+                    ? ToTypeInfo(varStmt.TypeAnnotation)
+                    : new TypeInfo.Any();
+                _environment.Define(varStmt.Name.Lexeme, varType);
+                break;
+
+            default:
+                CheckDeclareBlockMember(member);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Merges an interface declaration from declare global into the global scope.
+    /// If the interface already exists (e.g., Array, String), merges the members.
+    /// </summary>
+    private void MergeGlobalInterface(Stmt.Interface interfaceStmt)
+    {
+        string name = interfaceStmt.Name.Lexeme;
+
+        // Check if there's an existing type with this name
+        TypeInfo? existingType = _environment.Get(name);
+        if (existingType != null)
+        {
+            if (existingType is TypeInfo.Interface existingInterface)
+            {
+                // Merge the new members into the existing interface
+                var mergedMembers = new Dictionary<string, TypeInfo>(existingInterface.Members);
+                var mergedOptional = new HashSet<string>(existingInterface.OptionalMembers);
+
+                foreach (var member in interfaceStmt.Members)
+                {
+                    var memberType = ToTypeInfo(member.Type);
+                    mergedMembers[member.Name.Lexeme] = memberType;
+                    if (member.IsOptional)
+                    {
+                        mergedOptional.Add(member.Name.Lexeme);
+                    }
+                }
+
+                // Create the merged interface
+                var mergedInterface = existingInterface with
+                {
+                    Members = mergedMembers.ToFrozenDictionary(),
+                    OptionalMembers = mergedOptional.ToFrozenSet()
+                };
+
+                // Re-define the merged interface (replaces existing definition)
+                _environment.Define(name, mergedInterface);
+            }
+            else
+            {
+                // Can't merge interface with non-interface type
+                throw new TypeCheckException(
+                    $"Cannot augment '{name}': existing type is not an interface",
+                    interfaceStmt.Name.Line);
+            }
+        }
+        else
+        {
+            // No existing type - just define the new interface
+            CheckInterfaceDeclaration(interfaceStmt);
+        }
+    }
+
+    /// <summary>
     /// Type-checks a CommonJS-style require import: import x = require('path')
     /// </summary>
     private void CheckImportRequire(Stmt.ImportRequire importReq)

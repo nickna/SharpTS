@@ -30,6 +30,20 @@ public partial class Parser
 
         if (Match(TokenType.DECLARE))
         {
+            Token declareKeyword = Previous();
+
+            // declare module 'path' { ... } - module augmentation or ambient declaration
+            if (Match(TokenType.MODULE))
+            {
+                return DeclareModuleDeclaration(declareKeyword);
+            }
+
+            // declare global { ... } - global augmentation
+            if (Match(TokenType.GLOBAL))
+            {
+                return DeclareGlobalDeclaration(declareKeyword);
+            }
+
             // declare class is for ambient declarations (external types)
             if (Match(TokenType.ABSTRACT))
             {
@@ -580,5 +594,180 @@ public partial class Parser
         return decorator.Expression is Expr.Call call &&
                call.Callee is Expr.Variable v &&
                v.Name.Lexeme == "Namespace";
+    }
+
+    /// <summary>
+    /// Parses a declare module declaration: declare module 'path' { ... }
+    /// Used for module augmentation (extending existing modules) or ambient declarations (typing external packages).
+    /// </summary>
+    /// <param name="declareKeyword">The 'declare' token for error reporting</param>
+    private Stmt DeclareModuleDeclaration(Token declareKeyword)
+    {
+        // Module path must be a string literal
+        string modulePath = (string)Consume(TokenType.STRING, "Expect module path string after 'declare module'.").Literal!;
+
+        Consume(TokenType.LEFT_BRACE, "Expect '{' before declare module body.");
+
+        List<Stmt> members = [];
+
+        while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+        {
+            // Parse declaration members (interface, function, var, const, class, type, etc.)
+            // These can be exported or not
+            members.Add(ParseDeclareModuleMember());
+        }
+
+        Consume(TokenType.RIGHT_BRACE, "Expect '}' after declare module body.");
+
+        return new Stmt.DeclareModule(declareKeyword, modulePath, members);
+    }
+
+    /// <summary>
+    /// Parses a declare global declaration: declare global { ... }
+    /// Used for global augmentation - extending global types like Array, String, etc.
+    /// </summary>
+    /// <param name="declareKeyword">The 'declare' token for error reporting</param>
+    private Stmt DeclareGlobalDeclaration(Token declareKeyword)
+    {
+        Consume(TokenType.LEFT_BRACE, "Expect '{' before declare global body.");
+
+        List<Stmt> members = [];
+
+        while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
+        {
+            // Parse declaration members (interface, function, var, const, etc.)
+            members.Add(ParseDeclareModuleMember());
+        }
+
+        Consume(TokenType.RIGHT_BRACE, "Expect '}' after declare global body.");
+
+        return new Stmt.DeclareGlobal(declareKeyword, members);
+    }
+
+    /// <summary>
+    /// Parses a single member inside a declare module or declare global block.
+    /// Supports: export, interface, function, var, const, let, class, type, namespace
+    /// </summary>
+    private Stmt ParseDeclareModuleMember()
+    {
+        // Members can be exported
+        if (Match(TokenType.EXPORT))
+        {
+            Token exportKeyword = Previous();
+
+            // export interface Foo { }
+            if (Match(TokenType.INTERFACE))
+            {
+                var iface = InterfaceDeclaration();
+                return new Stmt.Export(exportKeyword, iface, null, null, null, false);
+            }
+
+            // export function foo(): void;
+            if (Match(TokenType.FUNCTION))
+            {
+                var func = FunctionDeclaration("function", isAsync: false, isGenerator: false);
+                return new Stmt.Export(exportKeyword, func, null, null, null, false);
+            }
+
+            // export const x: number;
+            if (Match(TokenType.CONST))
+            {
+                var varDecl = AmbientVarDeclaration(isConst: true);
+                return new Stmt.Export(exportKeyword, varDecl, null, null, null, false);
+            }
+
+            // export let x: number;
+            if (Match(TokenType.LET))
+            {
+                var varDecl = AmbientVarDeclaration(isConst: false);
+                return new Stmt.Export(exportKeyword, varDecl, null, null, null, false);
+            }
+
+            // export class Foo { }
+            if (Match(TokenType.CLASS))
+            {
+                var cls = ClassDeclaration(isAbstract: false, isDeclare: true);
+                return new Stmt.Export(exportKeyword, cls, null, null, null, false);
+            }
+
+            // export type Foo = ...;
+            if (Match(TokenType.TYPE))
+            {
+                var typeAlias = TypeAliasDeclaration();
+                return new Stmt.Export(exportKeyword, typeAlias, null, null, null, false);
+            }
+
+            // export namespace Foo { }
+            if (Match(TokenType.NAMESPACE))
+            {
+                var ns = NamespaceDeclaration(isExported: true);
+                return new Stmt.Export(exportKeyword, ns, null, null, null, false);
+            }
+
+            throw new Exception($"Parse Error at line {Peek().Line}: Expected declaration after 'export' in declare block.");
+        }
+
+        // Non-exported members
+        if (Match(TokenType.INTERFACE))
+        {
+            return InterfaceDeclaration();
+        }
+
+        if (Match(TokenType.FUNCTION))
+        {
+            return FunctionDeclaration("function", isAsync: false, isGenerator: false);
+        }
+
+        if (Match(TokenType.CONST))
+        {
+            return AmbientVarDeclaration(isConst: true);
+        }
+
+        if (Match(TokenType.LET))
+        {
+            return AmbientVarDeclaration(isConst: false);
+        }
+
+        if (Match(TokenType.CLASS))
+        {
+            return ClassDeclaration(isAbstract: false, isDeclare: true);
+        }
+
+        if (Match(TokenType.TYPE))
+        {
+            return TypeAliasDeclaration();
+        }
+
+        if (Match(TokenType.NAMESPACE))
+        {
+            return NamespaceDeclaration();
+        }
+
+        throw new Exception($"Parse Error at line {Peek().Line}: Expected declaration in declare block.");
+    }
+
+    /// <summary>
+    /// Parses an ambient variable declaration (no initializer allowed).
+    /// Used in declare module/global blocks.
+    /// </summary>
+    private Stmt AmbientVarDeclaration(bool isConst)
+    {
+        Token name = Consume(TokenType.IDENTIFIER, "Expect variable name.");
+
+        string? typeAnnotation = null;
+        if (Match(TokenType.COLON))
+        {
+            typeAnnotation = ParseTypeAnnotation();
+        }
+
+        Consume(TokenType.SEMICOLON, "Expect ';' after ambient variable declaration.");
+
+        // Ambient declarations have no initializer
+        if (isConst)
+        {
+            // For ambient const, we use Var with no initializer (special case)
+            return new Stmt.Var(name, typeAnnotation, null);
+        }
+        return new Stmt.Var(name, typeAnnotation, null);
     }
 }

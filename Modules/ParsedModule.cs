@@ -110,6 +110,32 @@ public class ParsedModule
     /// </summary>
     public List<ParsedModule> ReferencedScripts { get; set; } = [];
 
+    /// <summary>
+    /// Module augmentations declared in this file (declare module 'path' { ... }).
+    /// Key: the module path string (as specified in the declare module statement).
+    /// Value: list of member statements from the augmentation block.
+    /// </summary>
+    public Dictionary<string, List<Stmt>> ModuleAugmentations { get; } = [];
+
+    /// <summary>
+    /// Global augmentation declarations in this file (declare global { ... }).
+    /// Contains statements to merge into the global scope.
+    /// </summary>
+    public List<Stmt> GlobalAugmentations { get; } = [];
+
+    /// <summary>
+    /// Ambient module declarations (for packages without source).
+    /// Key: module specifier (e.g., 'lodash'), Value: member statements.
+    /// These provide type information for external packages.
+    /// </summary>
+    public Dictionary<string, List<Stmt>> AmbientModules { get; } = [];
+
+    /// <summary>
+    /// Reverse reference - which modules augment this one.
+    /// Populated during type checking when augmentations are applied.
+    /// </summary>
+    public List<ParsedModule> AugmentedBy { get; } = [];
+
     public ParsedModule(string path, List<Stmt> statements)
     {
         Path = path;

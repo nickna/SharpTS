@@ -549,6 +549,16 @@ public partial class TypeChecker
                 // Static blocks are type-checked in CheckClassDeclaration context.
                 // If encountered here, it's a no-op (block body already checked).
                 break;
+
+            case Stmt.DeclareModule declareModule:
+                // Module augmentation or ambient declaration - handled during module type checking
+                CheckDeclareModuleStatement(declareModule);
+                break;
+
+            case Stmt.DeclareGlobal declareGlobal:
+                // Global augmentation - handled during module type checking
+                CheckDeclareGlobalStatement(declareGlobal);
+                break;
         }
     }
 

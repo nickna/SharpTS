@@ -370,4 +370,29 @@ public abstract record Stmt
     /// <param name="Value">The directive value without quotes (e.g., "use strict")</param>
     /// <param name="StringToken">The original string token for error reporting</param>
     public record Directive(string Value, Token StringToken) : Stmt;
+
+    /// <summary>
+    /// Module augmentation or ambient module declaration: declare module 'path' { ... }
+    /// </summary>
+    /// <param name="Keyword">The 'declare' token for error reporting</param>
+    /// <param name="ModulePath">Target module path string</param>
+    /// <param name="Members">Declarations inside the block (interfaces, functions, vars, etc.)</param>
+    /// <param name="IsAugmentation">True if augmenting existing module, false if ambient declaration</param>
+    public record DeclareModule(
+        Token Keyword,
+        string ModulePath,
+        List<Stmt> Members,
+        bool IsAugmentation = false
+    ) : Stmt;
+
+    /// <summary>
+    /// Global augmentation: declare global { ... }
+    /// Allows adding declarations to the global scope from within a module.
+    /// </summary>
+    /// <param name="Keyword">The 'declare' token for error reporting</param>
+    /// <param name="Members">Declarations to merge into global scope</param>
+    public record DeclareGlobal(
+        Token Keyword,
+        List<Stmt> Members
+    ) : Stmt;
 }

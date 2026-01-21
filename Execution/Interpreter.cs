@@ -1117,6 +1117,11 @@ public partial class Interpreter
                 // Directives are processed at the start of interpretation for their side effects (strict mode)
                 // When encountered during execution, they are a no-op
                 return ExecutionResult.Success();
+            case Stmt.DeclareModule:
+            case Stmt.DeclareGlobal:
+                // Module/global augmentations and ambient declarations are type-only
+                // No runtime effect - types were merged during type checking
+                return ExecutionResult.Success();
             default:
                 return ExecutionResult.Success();
         }
