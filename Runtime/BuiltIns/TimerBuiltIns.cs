@@ -33,8 +33,13 @@ public static class TimerBuiltIns
         {
             if (!cts.IsCancellationRequested)
             {
-                // Execute callback - exceptions propagate to help debug issues
-                callback.Call(interpreter, args);
+                // Synchronize callback execution with the interpreter's main thread
+                // to prevent race conditions with environment swapping
+                lock (interpreter.InterpreterLock)
+                {
+                    // Execute callback - exceptions propagate to help debug issues
+                    callback.Call(interpreter, args);
+                }
             }
             timer?.Dispose();
         }, null, delay, Timeout.Infinite);
@@ -78,8 +83,13 @@ public static class TimerBuiltIns
         {
             if (!cts.IsCancellationRequested)
             {
-                // Execute callback - exceptions propagate to help debug issues
-                callback.Call(interpreter, args);
+                // Synchronize callback execution with the interpreter's main thread
+                // to prevent race conditions with environment swapping
+                lock (interpreter.InterpreterLock)
+                {
+                    // Execute callback - exceptions propagate to help debug issues
+                    callback.Call(interpreter, args);
+                }
             }
         }, null, delay, delay);
 
