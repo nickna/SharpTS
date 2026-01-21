@@ -121,8 +121,8 @@ public partial class Interpreter
             case Expr.LogicalAssign logical: return await EvaluateLogicalAssignAsync(logical);
             case Expr.LogicalSet logicalSet: return await EvaluateLogicalSetAsync(logicalSet);
             case Expr.LogicalSetIndex logicalSetIndex: return await EvaluateLogicalSetIndexAsync(logicalSetIndex);
-            case Expr.PrefixIncrement prefix: return await EvaluatePrefixIncrementAsync(prefix);
-            case Expr.PostfixIncrement postfix: return await EvaluatePostfixIncrementAsync(postfix);
+            case Expr.PrefixIncrement prefix: return EvaluatePrefixIncrement(prefix);
+            case Expr.PostfixIncrement postfix: return EvaluatePostfixIncrement(postfix);
             case Expr.ArrowFunction arrow: return EvaluateArrowFunction(arrow);
             case Expr.TemplateLiteral template: return await EvaluateTemplateLiteralAsync(template);
             case Expr.TaggedTemplateLiteral tagged: return await EvaluateTaggedTemplateLiteralAsync(tagged);
@@ -215,18 +215,8 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals">MDN Template Literals</seealso>
     private object? EvaluateTemplateLiteral(Expr.TemplateLiteral template)
     {
-        var result = new System.Text.StringBuilder();
-
-        for (int i = 0; i < template.Strings.Count; i++)
-        {
-            result.Append(template.Strings[i]);
-            if (i < template.Expressions.Count)
-            {
-                result.Append(Stringify(Evaluate(template.Expressions[i])));
-            }
-        }
-
-        return result.ToString();
+        var evaluatedExprs = template.Expressions.Select(Evaluate).ToList();
+        return BuildTemplateLiteralString(template.Strings, evaluatedExprs);
     }
 
     /// <summary>
@@ -369,61 +359,77 @@ public partial class Interpreter
             if (prop.IsSpread)
             {
                 object? spreadValue = Evaluate(prop.Value);
-                if (spreadValue is SharpTSObject spreadObj)
-                {
-                    foreach (var kv in spreadObj.Fields)
-                    {
-                        stringFields[kv.Key] = kv.Value;
-                    }
-                }
-                else if (spreadValue is SharpTSInstance inst)
-                {
-                    foreach (var key in inst.GetFieldNames())
-                    {
-                        stringFields[key] = inst.GetRawField(key);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Runtime Error: Spread in object literal requires an object.");
-                }
+                ApplySpreadToFields(spreadValue, stringFields);
             }
             else
             {
                 object? value = Evaluate(prop.Value);
-
-                switch (prop.Key)
-                {
-                    case Expr.IdentifierKey ik:
-                        stringFields[ik.Name.Lexeme] = value;
-                        break;
-                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
-                        stringFields[(string)lk.Literal.Literal!] = value;
-                        break;
-                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
-                        // Number keys are converted to strings in JS/TS
-                        stringFields[lk.Literal.Literal!.ToString()!] = value;
-                        break;
-                    case Expr.ComputedKey ck:
-                        object? keyValue = Evaluate(ck.Expression);
-                        if (keyValue is SharpTSSymbol sym)
-                            symbolFields[sym] = value;
-                        else if (keyValue is double numKey)
-                            stringFields[numKey.ToString()] = value;
-                        else
-                            stringFields[keyValue?.ToString() ?? "undefined"] = value;
-                        break;
-                }
+                ApplyPropertyToFields(prop.Key!, value, stringFields, symbolFields, Evaluate);
             }
         }
 
-        var result = new SharpTSObject(stringFields);
-        // Apply symbol fields
-        foreach (var (sym, val) in symbolFields)
+        return BuildObjectFromFields(stringFields, symbolFields);
+    }
+
+    /// <summary>
+    /// Applies a spread value's properties to the target fields dictionary.
+    /// Shared between sync and async object evaluation paths.
+    /// </summary>
+    private static void ApplySpreadToFields(object? spreadValue, Dictionary<string, object?> stringFields)
+    {
+        if (spreadValue is SharpTSObject spreadObj)
         {
-            result.SetBySymbol(sym, val);
+            foreach (var kv in spreadObj.Fields)
+            {
+                stringFields[kv.Key] = kv.Value;
+            }
         }
-        return result;
+        else if (spreadValue is SharpTSInstance inst)
+        {
+            foreach (var key in inst.GetFieldNames())
+            {
+                stringFields[key] = inst.GetRawField(key);
+            }
+        }
+        else
+        {
+            throw new Exception("Runtime Error: Spread in object literal requires an object.");
+        }
+    }
+
+    /// <summary>
+    /// Applies a property key-value pair to the target fields dictionaries.
+    /// Shared between sync and async object evaluation paths.
+    /// </summary>
+    private static void ApplyPropertyToFields(
+        Expr.PropertyKey key,
+        object? value,
+        Dictionary<string, object?> stringFields,
+        Dictionary<SharpTSSymbol, object?> symbolFields,
+        Func<Expr, object?> evaluateKey)
+    {
+        switch (key)
+        {
+            case Expr.IdentifierKey ik:
+                stringFields[ik.Name.Lexeme] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                stringFields[(string)lk.Literal.Literal!] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                // Number keys are converted to strings in JS/TS
+                stringFields[lk.Literal.Literal!.ToString()!] = value;
+                break;
+            case Expr.ComputedKey ck:
+                object? keyValue = evaluateKey(ck.Expression);
+                if (keyValue is SharpTSSymbol sym)
+                    symbolFields[sym] = value;
+                else if (keyValue is double numKey)
+                    stringFields[numKey.ToString()] = value;
+                else
+                    stringFields[keyValue?.ToString() ?? "undefined"] = value;
+                break;
+        }
     }
 
     /// <summary>
@@ -437,21 +443,9 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#arrays">TypeScript Arrays</seealso>
     private object? EvaluateArray(Expr.ArrayLiteral array)
     {
-        List<object?> elements = [];
-        foreach (Expr element in array.Elements)
-        {
-            if (element is Expr.Spread spread)
-            {
-                object? spreadValue = Evaluate(spread.Expression);
-                // Use GetIterableElements to support custom iterables with Symbol.iterator
-                elements.AddRange(GetIterableElements(spreadValue));
-            }
-            else
-            {
-                elements.Add(Evaluate(element));
-            }
-        }
-        return new SharpTSArray(elements);
+        var evaluated = array.Elements.Select(e =>
+            (e is Expr.Spread, Evaluate(e is Expr.Spread s ? s.Expression : e)));
+        return BuildArrayFromElements(evaluated);
     }
 
     /// <summary>

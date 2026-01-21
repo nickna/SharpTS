@@ -520,27 +520,22 @@ public partial class Interpreter
         return EvaluateBinaryOperation(binary.Operator, left, right);
     }
 
-    private async Task<object?> EvaluateLogicalAsync(Expr.Logical logical)
-    {
-        var left = await EvaluateAsync(logical.Left);
-        if (logical.Operator.Type == TokenType.OR_OR)
-            return IsTruthy(left) ? left : await EvaluateAsync(logical.Right);
-        return !IsTruthy(left) ? left : await EvaluateAsync(logical.Right);
-    }
+    private Task<object?> EvaluateLogicalAsync(Expr.Logical logical) =>
+        EvaluateLogicalCoreAsync(
+            logical.Operator.Type,
+            EvaluateAsync(logical.Left),
+            () => EvaluateAsync(logical.Right));
 
-    private async Task<object?> EvaluateNullishCoalescingAsync(Expr.NullishCoalescing nc)
-    {
-        var left = await EvaluateAsync(nc.Left);
-        return left ?? await EvaluateAsync(nc.Right);
-    }
+    private Task<object?> EvaluateNullishCoalescingAsync(Expr.NullishCoalescing nc) =>
+        EvaluateNullishCoalescingCoreAsync(
+            EvaluateAsync(nc.Left),
+            () => EvaluateAsync(nc.Right));
 
-    private async Task<object?> EvaluateTernaryAsync(Expr.Ternary ternary)
-    {
-        var condition = await EvaluateAsync(ternary.Condition);
-        return IsTruthy(condition)
-            ? await EvaluateAsync(ternary.ThenBranch)
-            : await EvaluateAsync(ternary.ElseBranch);
-    }
+    private Task<object?> EvaluateTernaryAsync(Expr.Ternary ternary) =>
+        EvaluateTernaryCoreAsync(
+            EvaluateAsync(ternary.Condition),
+            () => EvaluateAsync(ternary.ThenBranch),
+            () => EvaluateAsync(ternary.ElseBranch));
 
     private async Task<object?> EvaluateUnaryAsync(Expr.Unary unary)
     {
@@ -740,27 +735,14 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateArrayAsync(Expr.ArrayLiteral array)
     {
-        List<object?> elements = [];
-        foreach (Expr element in array.Elements)
+        var evaluated = new List<(bool isSpread, object? value)>();
+        foreach (var e in array.Elements)
         {
-            if (element is Expr.Spread spread)
-            {
-                object? spreadValue = await EvaluateAsync(spread.Expression);
-                if (spreadValue is SharpTSArray arr)
-                {
-                    elements.AddRange(arr.Elements);
-                }
-                else
-                {
-                    throw new Exception("Runtime Error: Spread expression must be an array.");
-                }
-            }
-            else
-            {
-                elements.Add(await EvaluateAsync(element));
-            }
+            var isSpread = e is Expr.Spread;
+            var value = await EvaluateAsync(isSpread ? ((Expr.Spread)e).Expression : e);
+            evaluated.Add((isSpread, value));
         }
-        return new SharpTSArray(elements);
+        return BuildArrayFromElements(evaluated);
     }
 
     private async Task<object?> EvaluateObjectAsync(Expr.ObjectLiteral obj)
@@ -773,61 +755,48 @@ public partial class Interpreter
             if (prop.IsSpread)
             {
                 object? spreadValue = await EvaluateAsync(prop.Value);
-                if (spreadValue is SharpTSObject spreadObj)
-                {
-                    foreach (var kv in spreadObj.Fields)
-                    {
-                        stringFields[kv.Key] = kv.Value;
-                    }
-                }
-                else if (spreadValue is SharpTSInstance inst)
-                {
-                    foreach (var key in inst.GetFieldNames())
-                    {
-                        stringFields[key] = inst.GetRawField(key);
-                    }
-                }
-                else
-                {
-                    throw new Exception("Runtime Error: Spread in object literal requires an object.");
-                }
+                ApplySpreadToFields(spreadValue, stringFields);
             }
             else
             {
                 object? value = await EvaluateAsync(prop.Value);
-
-                switch (prop.Key)
-                {
-                    case Expr.IdentifierKey ik:
-                        stringFields[ik.Name.Lexeme] = value;
-                        break;
-                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
-                        stringFields[(string)lk.Literal.Literal!] = value;
-                        break;
-                    case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
-                        // Number keys are converted to strings in JS/TS
-                        stringFields[lk.Literal.Literal!.ToString()!] = value;
-                        break;
-                    case Expr.ComputedKey ck:
-                        object? keyValue = await EvaluateAsync(ck.Expression);
-                        if (keyValue is SharpTSSymbol sym)
-                            symbolFields[sym] = value;
-                        else if (keyValue is double numKey)
-                            stringFields[numKey.ToString()] = value;
-                        else
-                            stringFields[keyValue?.ToString() ?? "undefined"] = value;
-                        break;
-                }
+                await ApplyPropertyToFieldsAsync(prop.Key!, value, stringFields, symbolFields);
             }
         }
 
-        var result = new SharpTSObject(stringFields);
-        // Apply symbol fields
-        foreach (var (sym, val) in symbolFields)
+        return BuildObjectFromFields(stringFields, symbolFields);
+    }
+
+    /// <summary>
+    /// Async version of ApplyPropertyToFields for computed keys that need async evaluation.
+    /// </summary>
+    private async Task ApplyPropertyToFieldsAsync(
+        Expr.PropertyKey key,
+        object? value,
+        Dictionary<string, object?> stringFields,
+        Dictionary<SharpTSSymbol, object?> symbolFields)
+    {
+        switch (key)
         {
-            result.SetBySymbol(sym, val);
+            case Expr.IdentifierKey ik:
+                stringFields[ik.Name.Lexeme] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                stringFields[(string)lk.Literal.Literal!] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                stringFields[lk.Literal.Literal!.ToString()!] = value;
+                break;
+            case Expr.ComputedKey ck:
+                object? keyValue = await EvaluateAsync(ck.Expression);
+                if (keyValue is SharpTSSymbol sym)
+                    symbolFields[sym] = value;
+                else if (keyValue is double numKey)
+                    stringFields[numKey.ToString()] = value;
+                else
+                    stringFields[keyValue?.ToString() ?? "undefined"] = value;
+                break;
         }
-        return result;
     }
 
     private async Task<object?> EvaluateGetIndexAsync(Expr.GetIndex getIndex)
@@ -948,32 +917,14 @@ public partial class Interpreter
         return EvaluateIndexSet(obj, index, newValue);
     }
 
-    private async Task<object?> EvaluatePrefixIncrementAsync(Expr.PrefixIncrement prefix)
-    {
-        // Delegate to sync version since prefix increment evaluates operand once
-        return EvaluatePrefixIncrement(prefix);
-    }
-
-    private async Task<object?> EvaluatePostfixIncrementAsync(Expr.PostfixIncrement postfix)
-    {
-        // Delegate to sync version since postfix increment evaluates operand once
-        return EvaluatePostfixIncrement(postfix);
-    }
-
     private async Task<object?> EvaluateTemplateLiteralAsync(Expr.TemplateLiteral template)
     {
-        var result = new System.Text.StringBuilder();
-
-        for (int i = 0; i < template.Strings.Count; i++)
+        var evaluatedExprs = new List<object?>();
+        foreach (var expr in template.Expressions)
         {
-            result.Append(template.Strings[i]);
-            if (i < template.Expressions.Count)
-            {
-                result.Append(Stringify(await EvaluateAsync(template.Expressions[i])));
-            }
+            evaluatedExprs.Add(await EvaluateAsync(expr));
         }
-
-        return result.ToString();
+        return BuildTemplateLiteralString(template.Strings, evaluatedExprs);
     }
 
     private async Task<object?> EvaluateTaggedTemplateLiteralAsync(Expr.TaggedTemplateLiteral tagged)

@@ -491,6 +491,52 @@ public partial class Interpreter
     private object? EvaluateTernary(Expr.Ternary ternary) =>
         EvaluateTernaryCore(Evaluate(ternary.Condition), () => Evaluate(ternary.ThenBranch), () => Evaluate(ternary.ElseBranch));
 
+    // ===================== Async Core Methods =====================
+
+    /// <summary>
+    /// Async version of logical operation core logic.
+    /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
+    /// </summary>
+    private async Task<object?> EvaluateLogicalCoreAsync(
+        TokenType op,
+        Task<object?> leftTask,
+        Func<Task<object?>> evaluateRightAsync)
+    {
+        var left = await leftTask;
+        if (op == TokenType.OR_OR)
+            return IsTruthy(left) ? left : await evaluateRightAsync();
+        return !IsTruthy(left) ? left : await evaluateRightAsync();
+    }
+
+    /// <summary>
+    /// Async version of nullish coalescing core logic.
+    /// Uses lazy evaluation via Func delegate to preserve short-circuit semantics.
+    /// </summary>
+    private async Task<object?> EvaluateNullishCoalescingCoreAsync(
+        Task<object?> leftTask,
+        Func<Task<object?>> evaluateRightAsync)
+    {
+        var left = await leftTask;
+        return (left == null || left is Runtime.Types.SharpTSUndefined)
+            ? await evaluateRightAsync()
+            : left;
+    }
+
+    /// <summary>
+    /// Async version of ternary operation core logic.
+    /// Uses lazy evaluation via Func delegates to ensure only one branch is evaluated.
+    /// </summary>
+    private async Task<object?> EvaluateTernaryCoreAsync(
+        Task<object?> conditionTask,
+        Func<Task<object?>> evalThenAsync,
+        Func<Task<object?>> evalElseAsync)
+    {
+        var condition = await conditionTask;
+        return IsTruthy(condition)
+            ? await evalThenAsync()
+            : await evalElseAsync();
+    }
+
     /// <summary>
     /// Applies a compound assignment operator to two values.
     /// </summary>
@@ -521,5 +567,71 @@ public partial class Interpreter
             TokenType.GREATER_GREATER_GREATER_EQUAL => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
             _ => throw new Exception($"Unknown compound operator: {op}")
         };
+    }
+
+    // ===================== Shared Builder Helpers =====================
+
+    /// <summary>
+    /// Builds a SharpTSArray from evaluated elements, handling spread elements.
+    /// Shared between sync and async array evaluation paths.
+    /// </summary>
+    /// <param name="evaluatedElements">Tuples of (isSpread, evaluatedValue).</param>
+    /// <returns>A new SharpTSArray containing all elements.</returns>
+    private SharpTSArray BuildArrayFromElements(IEnumerable<(bool isSpread, object? value)> evaluatedElements)
+    {
+        List<object?> elements = [];
+        foreach (var (isSpread, value) in evaluatedElements)
+        {
+            if (isSpread)
+            {
+                // Use GetIterableElements to support custom iterables with Symbol.iterator
+                elements.AddRange(GetIterableElements(value));
+            }
+            else
+            {
+                elements.Add(value);
+            }
+        }
+        return new SharpTSArray(elements);
+    }
+
+    /// <summary>
+    /// Builds a SharpTSObject from evaluated properties.
+    /// Shared between sync and async object evaluation paths.
+    /// </summary>
+    /// <param name="stringFields">String-keyed properties.</param>
+    /// <param name="symbolFields">Symbol-keyed properties.</param>
+    /// <returns>A new SharpTSObject with all properties set.</returns>
+    private static SharpTSObject BuildObjectFromFields(
+        Dictionary<string, object?> stringFields,
+        Dictionary<SharpTSSymbol, object?> symbolFields)
+    {
+        var result = new SharpTSObject(stringFields);
+        foreach (var (sym, val) in symbolFields)
+        {
+            result.SetBySymbol(sym, val);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a template literal string from strings and evaluated expressions.
+    /// Shared between sync and async template literal evaluation paths.
+    /// </summary>
+    /// <param name="strings">The static string parts of the template.</param>
+    /// <param name="evaluatedExprs">The evaluated expression values.</param>
+    /// <returns>The interpolated string result.</returns>
+    private string BuildTemplateLiteralString(IReadOnlyList<string> strings, IReadOnlyList<object?> evaluatedExprs)
+    {
+        var result = new System.Text.StringBuilder();
+        for (int i = 0; i < strings.Count; i++)
+        {
+            result.Append(strings[i]);
+            if (i < evaluatedExprs.Count)
+            {
+                result.Append(Stringify(evaluatedExprs[i]));
+            }
+        }
+        return result.ToString();
     }
 }

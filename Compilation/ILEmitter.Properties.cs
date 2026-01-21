@@ -177,103 +177,9 @@ public partial class ILEmitter
         if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))
             return;
 
-        // Special case: Map.size property
-        if (objType is TypeInfo.Map && g.Name.Lexeme == "size")
-        {
-            EmitExpression(g.Object);
-            EmitBoxIfNeeded(g.Object);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            SetStackUnknown();
+        // Category-based built-in type property dispatch
+        if (objType != null && TryEmitBuiltInTypePropertyGet(g, objType))
             return;
-        }
-
-        // Special case: Set.size property
-        if (objType is TypeInfo.Set && g.Name.Lexeme == "size")
-        {
-            EmitExpression(g.Object);
-            EmitBoxIfNeeded(g.Object);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            SetStackUnknown();
-            return;
-        }
-
-        // Special case: RegExp properties
-        if (objType is TypeInfo.RegExp)
-        {
-            EmitExpression(g.Object);
-            EmitBoxIfNeeded(g.Object);
-            switch (g.Name.Lexeme)
-            {
-                case "source":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetSource);
-                    SetStackType(StackType.String);
-                    return;
-                case "flags":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetFlags);
-                    SetStackType(StackType.String);
-                    return;
-                case "global":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return;
-                case "ignoreCase":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return;
-                case "multiline":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return;
-                case "lastIndex":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                    SetStackUnknown();
-                    return;
-            }
-        }
-
-        // Special case: Error properties (name, message, stack, errors for AggregateError)
-        if (objType is TypeInfo.Error)
-        {
-            EmitExpression(g.Object);
-            EmitBoxIfNeeded(g.Object);
-            switch (g.Name.Lexeme)
-            {
-                case "name":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetName);
-                    SetStackType(StackType.String);
-                    return;
-                case "message":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetMessage);
-                    SetStackType(StackType.String);
-                    return;
-                case "stack":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetStack);
-                    SetStackType(StackType.String);
-                    return;
-                case "errors":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.AggregateErrorGetErrors);
-                    SetStackUnknown();
-                    return;
-            }
-        }
-
-        // Special case: Timeout.hasRef property
-        if (objType is TypeInfo.Timeout && g.Name.Lexeme == "hasRef")
-        {
-            EmitExpression(g.Object);
-            EmitBoxIfNeeded(g.Object);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
-            IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSTimeoutHasRefGetter);
-            IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-            SetStackUnknown();
-            return;
-        }
 
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
@@ -1651,6 +1557,149 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, $"Private method '#{methodName}' not found in class '{className}'");
         IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
         IL.Emit(OpCodes.Throw);
+    }
+
+    #endregion
+
+    #region Category-Based Built-in Type Property Access
+
+    /// <summary>
+    /// Attempts to emit IL for built-in type property access using TypeCategoryResolver.
+    /// Returns true if the property was handled, false to fall back to runtime dispatch.
+    /// </summary>
+    private bool TryEmitBuiltInTypePropertyGet(Expr.Get g, TypeInfo objType)
+    {
+        var category = TypeCategoryResolver.Classify(objType);
+        string propName = g.Name.Lexeme;
+
+        return category switch
+        {
+            TypeCategory.Map => TryEmitMapPropertyGet(g, propName),
+            TypeCategory.Set => TryEmitSetPropertyGet(g, propName),
+            TypeCategory.RegExp => TryEmitRegExpPropertyGet(g, propName),
+            TypeCategory.Error => TryEmitErrorPropertyGet(g, propName),
+            TypeCategory.Timeout => TryEmitTimeoutPropertyGet(g, propName),
+            _ => false
+        };
+    }
+
+    private bool TryEmitMapPropertyGet(Expr.Get g, string propName)
+    {
+        if (propName != "size") return false;
+
+        EmitExpression(g.Object);
+        EmitBoxIfNeeded(g.Object);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.MapSize);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitSetPropertyGet(Expr.Get g, string propName)
+    {
+        if (propName != "size") return false;
+
+        EmitExpression(g.Object);
+        EmitBoxIfNeeded(g.Object);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SetSize);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitRegExpPropertyGet(Expr.Get g, string propName)
+    {
+        switch (propName)
+        {
+            case "source":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetSource);
+                SetStackType(StackType.String);
+                return true;
+            case "flags":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetFlags);
+                SetStackType(StackType.String);
+                return true;
+            case "global":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetGlobal);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                SetStackUnknown();
+                return true;
+            case "ignoreCase":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetIgnoreCase);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                SetStackUnknown();
+                return true;
+            case "multiline":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetMultiline);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                SetStackUnknown();
+                return true;
+            case "lastIndex":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.RegExpGetLastIndex);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                SetStackUnknown();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool TryEmitErrorPropertyGet(Expr.Get g, string propName)
+    {
+        switch (propName)
+        {
+            case "name":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetName);
+                SetStackType(StackType.String);
+                return true;
+            case "message":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetMessage);
+                SetStackType(StackType.String);
+                return true;
+            case "stack":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ErrorGetStack);
+                SetStackType(StackType.String);
+                return true;
+            case "errors":
+                EmitExpression(g.Object);
+                EmitBoxIfNeeded(g.Object);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.AggregateErrorGetErrors);
+                SetStackUnknown();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool TryEmitTimeoutPropertyGet(Expr.Get g, string propName)
+    {
+        if (propName != "hasRef") return false;
+
+        EmitExpression(g.Object);
+        EmitBoxIfNeeded(g.Object);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSTimeoutType);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSTimeoutHasRefGetter);
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+        SetStackUnknown();
+        return true;
     }
 
     #endregion

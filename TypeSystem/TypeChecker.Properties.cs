@@ -5,6 +5,8 @@ using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.TypeSystem;
 
+// Type category helper methods are defined in TypeChecker.Properties.Helpers.cs
+
 /// <summary>
 /// Property and member access type checking.
 /// </summary>
@@ -83,321 +85,58 @@ public partial class TypeChecker
         }
 
         TypeInfo objType = CheckExpr(get.Object);
+        var category = TypeCategoryResolver.Classify(objType);
+        string memberName = get.Name.Lexeme;
 
-        // Handle TypeParameter - delegate to constraint type for member access
-        if (objType is TypeInfo.TypeParameter tp)
+        // Fast path for built-in types with explicit member validation
+        if (TypeCategoryResolver.HasBuiltInMemberValidation(category))
         {
-            if (tp.Constraint != null)
-            {
-                // Create a synthetic Get expression to check the property on the constraint type
-                // and recursively call CheckGet with the constraint as the object type
-                return CheckGetOnType(tp.Constraint, get.Name);
-            }
-            // Unconstrained type parameter - can't access any properties safely
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{tp.Name}'. Consider adding a constraint to the type parameter.");
-        }
-
-        // Handle static member access on class type
-        if (objType is TypeInfo.Class classType)
-        {
-            // Check static methods up the hierarchy
-            TypeInfo? current = classType;
-            while (current != null)
-            {
-                var staticMethods = GetStaticMethods(current);
-                var staticProps = GetStaticProperties(current);
-                if (staticMethods != null && staticMethods.TryGetValue(get.Name.Lexeme, out var staticMethodType))
-                {
-                    return staticMethodType;
-                }
-                if (staticProps != null && staticProps.TryGetValue(get.Name.Lexeme, out var staticPropType))
-                {
-                    return staticPropType;
-                }
-                current = GetSuperclass(current);
-            }
-            return new TypeInfo.Any();
-        }
-
-        // Handle namespace member access (e.g., Foo.Bar or Foo.someFunction)
-        if (objType is TypeInfo.Namespace nsType)
-        {
-            var memberType = nsType.GetMember(get.Name.Lexeme);
-            if (memberType != null)
-            {
-                return memberType;
-            }
-            throw new TypeCheckException($" '{get.Name.Lexeme}' does not exist on namespace '{nsType.Name}'.");
-        }
-
-        // Handle enum member access (e.g., Direction.Up or Status.Success)
-        if (objType is TypeInfo.Enum enumTypeInfo)
-        {
-            if (enumTypeInfo.Members.TryGetValue(get.Name.Lexeme, out var memberValue))
-            {
-                // Return type based on the actual member value type
-                return memberValue switch
-                {
-                    double => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
-                    string => new TypeInfo.String(),
-                    _ => throw new TypeCheckException($" Unexpected enum member type for '{get.Name.Lexeme}'.")
-                };
-            }
-            throw new TypeCheckException($" '{get.Name.Lexeme}' does not exist on enum '{enumTypeInfo.Name}'.");
-        }
-
-        if (objType is TypeInfo.Instance instance)
-        {
-            string memberName = get.Name.Lexeme;
-
-            // Handle instantiated generic class (e.g., Box<number>)
-            if (instance.ClassType is TypeInfo.InstantiatedGeneric ig &&
-                ig.GenericDefinition is TypeInfo.GenericClass gc)
-            {
-                // Build substitution map from type parameters to type arguments
-                Dictionary<string, TypeInfo> subs = [];
-                for (int i = 0; i < gc.TypeParams.Count; i++)
-                    subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
-
-                // Check for getter first
-                if (gc.Getters?.TryGetValue(memberName, out var getterType) == true)
-                {
-                    return Substitute(getterType, subs);
-                }
-
-                // Check for field
-                if (gc.FieldTypes?.TryGetValue(memberName, out var fieldType) == true)
-                {
-                    return Substitute(fieldType, subs);
-                }
-
-                // Check for method
-                if (gc.Methods.TryGetValue(memberName, out var methodType))
-                {
-                    // Substitute type parameters in method signature
-                    if (methodType is TypeInfo.Function funcType)
-                    {
-                        var substitutedParams = funcType.ParamTypes.Select(p => Substitute(p, subs)).ToList();
-                        var substitutedReturn = Substitute(funcType.ReturnType, subs);
-                        return new TypeInfo.Function(substitutedParams, substitutedReturn, funcType.RequiredParams, funcType.HasRestParam);
-                    }
-                    else if (methodType is TypeInfo.OverloadedFunction overloadedFunc)
-                    {
-                        // Substitute type parameters in all overload signatures
-                        var substitutedSignatures = overloadedFunc.Signatures.Select(sig =>
-                        {
-                            var substitutedParams = sig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
-                            var substitutedReturn = Substitute(sig.ReturnType, subs);
-                            return new TypeInfo.Function(substitutedParams, substitutedReturn, sig.RequiredParams, sig.HasRestParam);
-                        }).ToList();
-                        var substitutedImpl = new TypeInfo.Function(
-                            overloadedFunc.Implementation.ParamTypes.Select(p => Substitute(p, subs)).ToList(),
-                            Substitute(overloadedFunc.Implementation.ReturnType, subs),
-                            overloadedFunc.Implementation.RequiredParams,
-                            overloadedFunc.Implementation.HasRestParam);
-                        return new TypeInfo.OverloadedFunction(substitutedSignatures, substitutedImpl);
-                    }
-                    return methodType; // Fallback - shouldn't happen
-                }
-
-                // Check superclass if any (could be Class or InstantiatedGeneric)
-                if (gc.Superclass != null)
-                {
-                    TypeInfo? currentSuper = gc.Superclass;
-                    while (currentSuper != null)
-                    {
-                        var superMethods = GetMethods(currentSuper);
-                        var superFields = GetFieldTypes(currentSuper);
-                        if (superMethods != null && superMethods.TryGetValue(memberName, out var superMethod))
-                            return superMethod;
-                        if (superFields != null && superFields.TryGetValue(memberName, out var superField))
-                            return superField;
-                        currentSuper = GetSuperclass(currentSuper);
-                    }
-                }
-
-                return new TypeInfo.Any();
-            }
-
-            // Handle regular class instance
-            if (instance.ClassType is TypeInfo.Class instanceClassType)
-            {
-                TypeInfo? current = instanceClassType;
-                // Track type substitutions as we walk up the inheritance chain
-                Dictionary<string, TypeInfo> substitutions = [];
-
-                while (current != null)
-                {
-                    // If current is an InstantiatedGeneric, build/extend the substitution map
-                    if (current is TypeInfo.InstantiatedGeneric igCurrent &&
-                        igCurrent.GenericDefinition is TypeInfo.GenericClass gcCurrent)
-                    {
-                        for (int i = 0; i < gcCurrent.TypeParams.Count && i < igCurrent.TypeArguments.Count; i++)
-                        {
-                            substitutions[gcCurrent.TypeParams[i].Name] = igCurrent.TypeArguments[i];
-                        }
-                    }
-
-                    // Check for getter first
-                    var getters = GetGetters(current);
-                    if (getters != null && getters.TryGetValue(memberName, out var getterType))
-                    {
-                        return substitutions.Count > 0 ? Substitute(getterType, substitutions) : getterType;
-                    }
-
-                    // Check access modifier
-                    AccessModifier access = AccessModifier.Public;
-                    var methodAccess = GetMethodAccess(current);
-                    var fieldAccess = GetFieldAccess(current);
-                    if (methodAccess != null && methodAccess.TryGetValue(memberName, out var ma))
-                        access = ma;
-                    else if (fieldAccess != null && fieldAccess.TryGetValue(memberName, out var fa))
-                        access = fa;
-
-                    var currentName = GetClassName(current);
-                    if (access == AccessModifier.Private && _currentClass?.Name != currentName)
-                    {
-                        throw new TypeCheckException($" Property '{memberName}' is private and only accessible within class '{currentName}'.");
-                    }
-                    var currentClassForAccess = AsClass(current);
-                    if (access == AccessModifier.Protected && currentClassForAccess != null && !IsSubclassOf(_currentClass, currentClassForAccess))
-                    {
-                        throw new TypeCheckException($" Property '{memberName}' is protected and only accessible within class '{currentName}' and its subclasses.");
-                    }
-
-                    var methods = GetMethods(current);
-                    if (methods != null && methods.TryGetValue(memberName, out var methodType))
-                    {
-                        return substitutions.Count > 0 ? Substitute(methodType, substitutions) : methodType;
-                    }
-
-                    // Check for field
-                    var fieldTypes = GetFieldTypes(current);
-                    if (fieldTypes != null && fieldTypes.TryGetValue(memberName, out var fieldType))
-                    {
-                        return substitutions.Count > 0 ? Substitute(fieldType, substitutions) : fieldType;
-                    }
-
-                    current = GetSuperclass(current);
-                }
-                return new TypeInfo.Any();
-            }
-
-            return new TypeInfo.Any();
-        }
-        // Handle interface member access (including inherited members)
-        if (objType is TypeInfo.Interface itf)
-        {
-            // First check own members, then inherited
-            foreach (var member in itf.GetAllMembers())
-            {
-                if (member.Key == get.Name.Lexeme)
-                {
-                    return member.Value;
-                }
-            }
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on interface '{itf.Name}'.");
-        }
-        if (objType is TypeInfo.Record record)
-        {
-            if (record.Fields.TryGetValue(get.Name.Lexeme, out var fieldType))
-            {
-                return fieldType;
-            }
-            // Check for string index signature (e.g., Record<string, number>)
-            if (record.StringIndexType != null)
-            {
-                return record.StringIndexType;
-            }
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{record}'.");
-        }
-        // Handle string methods (both String and StringLiteral types)
-        if (objType is TypeInfo.String or TypeInfo.StringLiteral)
-        {
-            var memberType = BuiltInTypes.GetStringMemberType(get.Name.Lexeme);
+            var memberType = ResolveBuiltInMemberType(category, objType, memberName);
             if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'string'.");
+            throw new TypeCheckException($" Property '{memberName}' does not exist on type '{GetTypeDisplayName(category, objType)}'.");
         }
-        // Handle array methods
-        if (objType is TypeInfo.Array arrayType)
+
+        // Category-based dispatch for user-defined and special types
+        return category switch
         {
-            var memberType = BuiltInTypes.GetArrayMemberType(get.Name.Lexeme, arrayType.ElementType);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'array'.");
-        }
-        // Handle tuple methods (tuples support array methods)
-        if (objType is TypeInfo.Tuple tupleType)
-        {
-            // Create union of all element types for method type resolution
-            var allTypes = tupleType.ElementTypes.ToList();
-            if (tupleType.RestElementType != null)
-                allTypes.Add(tupleType.RestElementType);
-            var unique = allTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
-            TypeInfo unionElem = unique.Count == 0
-                ? new TypeInfo.Any()
-                : (unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique));
-            var memberType = BuiltInTypes.GetArrayMemberType(get.Name.Lexeme, unionElem);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on tuple type.");
-        }
-        // Handle Date instance methods
-        if (objType is TypeInfo.Date)
-        {
-            var memberType = BuiltInTypes.GetDateInstanceMemberType(get.Name.Lexeme);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Date'.");
-        }
-        // Handle RegExp instance members
-        if (objType is TypeInfo.RegExp)
-        {
-            var memberType = BuiltInTypes.GetRegExpMemberType(get.Name.Lexeme);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'RegExp'.");
-        }
-        // Handle Error instance members
-        if (objType is TypeInfo.Error errorType)
-        {
-            var memberType = BuiltInTypes.GetErrorMemberType(get.Name.Lexeme, errorType.Name);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type '{errorType.Name}'.");
-        }
-        // Handle Map instance methods
-        if (objType is TypeInfo.Map mapType)
-        {
-            var memberType = BuiltInTypes.GetMapMemberType(get.Name.Lexeme, mapType.KeyType, mapType.ValueType);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Map'.");
-        }
-        // Handle Set instance methods
-        if (objType is TypeInfo.Set setType)
-        {
-            var memberType = BuiltInTypes.GetSetMemberType(get.Name.Lexeme, setType.ElementType);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Set'.");
-        }
-        // Handle WeakMap instance methods
-        if (objType is TypeInfo.WeakMap weakMapType)
-        {
-            var memberType = BuiltInTypes.GetWeakMapMemberType(get.Name.Lexeme, weakMapType.KeyType, weakMapType.ValueType);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'WeakMap'.");
-        }
-        // Handle WeakSet instance methods
-        if (objType is TypeInfo.WeakSet weakSetType)
-        {
-            var memberType = BuiltInTypes.GetWeakSetMemberType(get.Name.Lexeme, weakSetType.ElementType);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'WeakSet'.");
-        }
-        // Handle Timeout instance methods (ref, unref) and properties (hasRef)
-        if (objType is TypeInfo.Timeout)
-        {
-            var memberType = BuiltInTypes.GetTimeoutMemberType(get.Name.Lexeme);
-            if (memberType != null) return memberType;
-            throw new TypeCheckException($" Property '{get.Name.Lexeme}' does not exist on type 'Timeout'.");
-        }
-        return new TypeInfo.Any();
+            TypeCategory.TypeParameter when objType is TypeInfo.TypeParameter tp =>
+                CheckGetOnTypeParameter(tp, get.Name),
+            TypeCategory.Class when objType is TypeInfo.Class classType =>
+                CheckGetOnClass(classType, get.Name),
+            TypeCategory.Instance when objType is TypeInfo.Instance instance =>
+                CheckGetOnInstance(instance, get.Name),
+            TypeCategory.Interface when objType is TypeInfo.Interface itf =>
+                CheckGetOnInterface(itf, get.Name),
+            TypeCategory.Record when objType is TypeInfo.Record record =>
+                CheckGetOnRecord(record, get.Name),
+            TypeCategory.Enum when objType is TypeInfo.Enum enumType =>
+                CheckGetOnEnum(enumType, get.Name),
+            TypeCategory.Namespace when objType is TypeInfo.Namespace nsType =>
+                CheckGetOnNamespace(nsType, get.Name),
+            _ => new TypeInfo.Any()
+        };
     }
+
+    /// <summary>
+    /// Gets a display name for error messages based on the type category.
+    /// </summary>
+    private static string GetTypeDisplayName(TypeCategory category, TypeInfo objType) => category switch
+    {
+        TypeCategory.String => "string",
+        TypeCategory.Number => "number",
+        TypeCategory.Boolean => "boolean",
+        TypeCategory.Array => "array",
+        TypeCategory.Tuple => "tuple",
+        TypeCategory.Map => "Map",
+        TypeCategory.Set => "Set",
+        TypeCategory.WeakMap => "WeakMap",
+        TypeCategory.WeakSet => "WeakSet",
+        TypeCategory.Date => "Date",
+        TypeCategory.RegExp => "RegExp",
+        TypeCategory.Error when objType is TypeInfo.Error err => err.Name,
+        TypeCategory.Timeout => "Timeout",
+        _ => objType.ToString() ?? "unknown"
+    };
 
     private TypeInfo CheckSet(Expr.Set set)
     {

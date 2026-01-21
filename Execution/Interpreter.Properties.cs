@@ -3,6 +3,7 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
@@ -201,6 +202,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Core property access logic, shared between sync and async evaluation.
+    /// Uses TypeCategoryResolver for unified type dispatch.
     /// </summary>
     private object? EvaluateGetOnObject(Expr.Get get, object? obj)
     {
@@ -210,77 +212,103 @@ public partial class Interpreter
             return Runtime.Types.SharpTSUndefined.Instance;
         }
 
-        // Handle static member access on class
-        if (obj is SharpTSClass klass)
+        var category = TypeCategoryResolver.ClassifyRuntime(obj);
+        string memberName = get.Name.Lexeme;
+
+        // Category-based dispatch for user-defined types
+        return category switch
         {
-            // Try static auto-accessor first (TypeScript 4.9+)
-            if (klass.HasStaticAutoAccessor(get.Name.Lexeme))
-            {
-                return klass.GetStaticAutoAccessorValue(get.Name.Lexeme);
-            }
+            TypeCategory.Class when obj is SharpTSClass klass =>
+                EvaluateGetOnClass(klass, memberName),
+            TypeCategory.Namespace when obj is SharpTSNamespace nsObj =>
+                EvaluateGetOnNamespace(nsObj, memberName),
+            TypeCategory.Enum when obj is SharpTSEnum enumObj =>
+                enumObj.GetMember(memberName),
+            TypeCategory.Enum when obj is ConstEnumValues constEnumObj =>
+                constEnumObj.GetMember(memberName),
+            TypeCategory.Instance when obj is SharpTSInstance instance =>
+                EvaluateGetOnInstance(instance, get.Name),
+            TypeCategory.Record when obj is SharpTSObject simpleObj =>
+                EvaluateGetOnRecord(simpleObj, memberName),
+            _ => EvaluateGetOnFallback(obj, memberName)
+        };
+    }
 
-            // Try static method
-            SharpTSFunction? staticMethod = klass.FindStaticMethod(get.Name.Lexeme);
-            if (staticMethod != null) return staticMethod;
-
-            // Try static property
-            if (klass.HasStaticProperty(get.Name.Lexeme))
-            {
-                return klass.GetStaticProperty(get.Name.Lexeme);
-            }
-
-            throw new Exception($"Runtime Error: Static member '{get.Name.Lexeme}' does not exist on class '{klass.Name}'.");
+    /// <summary>
+    /// Evaluates property access on a class (static members).
+    /// </summary>
+    private static object? EvaluateGetOnClass(SharpTSClass klass, string memberName)
+    {
+        // Try static auto-accessor first (TypeScript 4.9+)
+        if (klass.HasStaticAutoAccessor(memberName))
+        {
+            return klass.GetStaticAutoAccessorValue(memberName);
         }
 
-        // Handle namespace member access
-        if (obj is SharpTSNamespace nsObj)
+        // Try static method
+        SharpTSFunction? staticMethod = klass.FindStaticMethod(memberName);
+        if (staticMethod != null) return staticMethod;
+
+        // Try static property
+        if (klass.HasStaticProperty(memberName))
         {
-            if (nsObj.HasMember(get.Name.Lexeme))
-            {
-                return nsObj.Get(get.Name.Lexeme);
-            }
-            throw new Exception($"Runtime Error: '{get.Name.Lexeme}' does not exist on namespace '{nsObj.Name}'.");
+            return klass.GetStaticProperty(memberName);
         }
 
-        // Handle enum member access
-        if (obj is SharpTSEnum enumObj)
-        {
-            return enumObj.GetMember(get.Name.Lexeme);
-        }
+        throw new Exception($"Runtime Error: Static member '{memberName}' does not exist on class '{klass.Name}'.");
+    }
 
-        // Handle const enum member access
-        if (obj is ConstEnumValues constEnumObj)
+    /// <summary>
+    /// Evaluates property access on a namespace.
+    /// </summary>
+    private static object? EvaluateGetOnNamespace(SharpTSNamespace nsObj, string memberName)
+    {
+        if (nsObj.HasMember(memberName))
         {
-            return constEnumObj.GetMember(get.Name.Lexeme);
+            return nsObj.Get(memberName);
         }
+        throw new Exception($"Runtime Error: '{memberName}' does not exist on namespace '{nsObj.Name}'.");
+    }
 
-        if (obj is SharpTSInstance instance)
-        {
-            instance.SetInterpreter(this);
-            return instance.Get(get.Name);
-        }
-        if (obj is SharpTSObject simpleObj)
-        {
-            var value = simpleObj.GetProperty(get.Name.Lexeme);
-            // Bind 'this' for function expressions and object method shorthand (HasOwnThis=true)
-            if (value is SharpTSArrowFunction arrowFunc && arrowFunc.HasOwnThis)
-            {
-                return arrowFunc.Bind(simpleObj);
-            }
-            return value;
-        }
+    /// <summary>
+    /// Evaluates property access on a class instance.
+    /// </summary>
+    private object? EvaluateGetOnInstance(SharpTSInstance instance, Token memberName)
+    {
+        instance.SetInterpreter(this);
+        return instance.Get(memberName);
+    }
 
+    /// <summary>
+    /// Evaluates property access on a record/object literal.
+    /// </summary>
+    private static object? EvaluateGetOnRecord(SharpTSObject simpleObj, string memberName)
+    {
+        var value = simpleObj.GetProperty(memberName);
+        // Bind 'this' for function expressions and object method shorthand (HasOwnThis=true)
+        if (value is SharpTSArrowFunction arrowFunc && arrowFunc.HasOwnThis)
+        {
+            return arrowFunc.Bind(simpleObj);
+        }
+        return value;
+    }
+
+    /// <summary>
+    /// Fallback for property access on built-in types and ISharpTSPropertyAccessor.
+    /// </summary>
+    private object? EvaluateGetOnFallback(object? obj, string memberName)
+    {
         // Handle objects that implement ISharpTSPropertyAccessor (e.g., SharpTSTemplateStringsArray)
         // Only return if the accessor has this property, otherwise fall through to built-ins
-        if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(get.Name.Lexeme))
+        if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(memberName))
         {
-            return accessor.GetProperty(get.Name.Lexeme);
+            return accessor.GetProperty(memberName);
         }
 
         // Handle built-in instance members: strings, arrays, Math, Promise
         if (obj != null)
         {
-            var member = BuiltInRegistry.Instance.GetInstanceMember(obj, get.Name.Lexeme);
+            var member = BuiltInRegistry.Instance.GetInstanceMember(obj, memberName);
             if (member != null)
             {
                 // Bind methods to their receiver, return properties directly
@@ -292,19 +320,30 @@ public partial class Interpreter
             // If we have a built-in type but didn't find the member, throw a specific error
             if (BuiltInRegistry.Instance.HasInstanceMembers(obj))
             {
-                string typeName = obj switch
-                {
-                    string => "string",
-                    SharpTSArray => "array",
-                    SharpTSMath => "Math",
-                    _ => obj.GetType().Name
-                };
-                throw new Exception($"Runtime Error: Property '{get.Name.Lexeme}' does not exist on {typeName}.");
+                string typeName = GetRuntimeTypeName(obj);
+                throw new Exception($"Runtime Error: Property '{memberName}' does not exist on {typeName}.");
             }
         }
 
         throw new Exception("Only instances and objects have properties.");
     }
+
+    /// <summary>
+    /// Gets a display name for a runtime object type.
+    /// </summary>
+    private static string GetRuntimeTypeName(object obj) => obj switch
+    {
+        string => "string",
+        SharpTSArray => "array",
+        SharpTSMath => "Math",
+        SharpTSMap => "Map",
+        SharpTSSet => "Set",
+        SharpTSDate => "Date",
+        SharpTSRegExp => "RegExp",
+        SharpTSError => "Error",
+        SharpTSPromise => "Promise",
+        _ => obj.GetType().Name
+    };
 
     /// <summary>
     /// Evaluates a property assignment expression (dot notation with assignment).
