@@ -665,9 +665,9 @@ public partial class Interpreter
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
 
-            // Yield to allow timer callbacks and other threads to execute.
-            // This ensures timers fire reliably during busy loops across all platforms.
-            Thread.Yield();
+            // Process any pending timer callbacks. Timer threads enqueue callbacks
+            // and we execute them here, avoiding thread scheduling issues on macOS.
+            ProcessPendingCallbacks();
         }
         return ExecutionResult.Success();
     }

@@ -31,22 +31,20 @@ public static class TimerBuiltIns
         Timer? timer = null;
         timer = new Timer(_ =>
         {
-            // Check both cancellation and interpreter disposal before executing
+            // Check both cancellation and interpreter disposal before queueing
             // This prevents race conditions where callbacks fire after test cleanup
             if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
-                // Synchronize callback execution with the interpreter's main thread
-                // to prevent race conditions with environment swapping
-                lock (interpreter.InterpreterLock)
+                // Queue the callback for execution on the main thread during loop iterations.
+                // This avoids thread scheduling issues on macOS where background threads
+                // may not get CPU time during tight loops.
+                interpreter.EnqueueCallback(() =>
                 {
-                    // Double-check disposal after acquiring lock (interpreter could be
-                    // disposed while we were waiting for the lock)
-                    if (!interpreter.IsDisposed)
+                    if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
                     {
-                        // Execute callback - exceptions propagate to help debug issues
                         callback.Call(interpreter, args);
                     }
-                }
+                });
             }
             timer?.Dispose();
         }, null, delay, Timeout.Infinite);
@@ -92,22 +90,20 @@ public static class TimerBuiltIns
         Timer? timer = null;
         timer = new Timer(_ =>
         {
-            // Check both cancellation and interpreter disposal before executing
+            // Check both cancellation and interpreter disposal before queueing
             // This prevents race conditions where callbacks fire after test cleanup
             if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
-                // Synchronize callback execution with the interpreter's main thread
-                // to prevent race conditions with environment swapping
-                lock (interpreter.InterpreterLock)
+                // Queue the callback for execution on the main thread during loop iterations.
+                // This avoids thread scheduling issues on macOS where background threads
+                // may not get CPU time during tight loops.
+                interpreter.EnqueueCallback(() =>
                 {
-                    // Double-check disposal after acquiring lock (interpreter could be
-                    // disposed while we were waiting for the lock)
-                    if (!interpreter.IsDisposed)
+                    if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
                     {
-                        // Execute callback - exceptions propagate to help debug issues
                         callback.Call(interpreter, args);
                     }
-                }
+                });
             }
         }, null, delay, delay);
 

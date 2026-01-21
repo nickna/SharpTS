@@ -72,8 +72,8 @@ public partial class Interpreter
                     if (shouldBreak) return ExecutionResult.Success();
                     if (shouldContinue) continue;
                     if (abruptResult.HasValue) return abruptResult.Value;
-                    // Yield to allow timer callbacks and other threads to execute
-                    await Task.Yield();
+                    // Process any pending timer callbacks
+                    ProcessPendingCallbacks();
                 }
                 return ExecutionResult.Success();
             case Stmt.DoWhile doWhileStmt:
@@ -84,8 +84,8 @@ public partial class Interpreter
                     if (shouldBreak) return ExecutionResult.Success();
                     if (shouldContinue) continue;
                     if (abruptResult.HasValue) return abruptResult.Value;
-                    // Yield to allow timer callbacks and other threads to execute
-                    await Task.Yield();
+                    // Process any pending timer callbacks
+                    ProcessPendingCallbacks();
                 } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:
@@ -110,8 +110,8 @@ public partial class Interpreter
                     // Normal completion: execute increment
                     if (forStmt.Increment != null)
                         await EvaluateAsync(forStmt.Increment);
-                    // Yield to allow timer callbacks and other threads to execute
-                    await Task.Yield();
+                    // Process any pending timer callbacks
+                    ProcessPendingCallbacks();
                 }
                 return ExecutionResult.Success();
             case Stmt.ForOf forOf:

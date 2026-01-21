@@ -45,14 +45,14 @@ public partial class Interpreter : IDisposable
     private ParsedModule? _currentModule;
     private ModuleInstance? _currentModuleInstance;
 
-    // Lock for synchronizing timer callback access with main interpretation thread
-    internal readonly object InterpreterLock = new();
-
     // Flag to indicate interpreter has been disposed - timer callbacks should not execute
     private volatile bool _isDisposed;
 
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
+
+    // Queue for pending timer callbacks - timer threads enqueue, main thread dequeues and executes
+    private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _pendingCallbacks = new();
 
     /// <summary>
     /// Gets whether this interpreter has been disposed.
@@ -72,6 +72,31 @@ public partial class Interpreter : IDisposable
     internal void RegisterTimer(Runtime.Types.SharpTSTimeout timer)
     {
         _pendingTimers.Add(timer);
+    }
+
+    /// <summary>
+    /// Enqueues a callback to be executed on the main interpreter thread.
+    /// Called by timer threads to schedule callbacks for execution during loop iterations.
+    /// </summary>
+    /// <param name="callback">The callback action to execute.</param>
+    internal void EnqueueCallback(Action callback)
+    {
+        _pendingCallbacks.Enqueue(callback);
+    }
+
+    /// <summary>
+    /// Processes all pending timer callbacks. Called during loop iterations to give
+    /// timers a chance to execute without relying on background thread scheduling.
+    /// </summary>
+    internal void ProcessPendingCallbacks()
+    {
+        while (_pendingCallbacks.TryDequeue(out var callback))
+        {
+            if (!_isDisposed)
+            {
+                callback();
+            }
+        }
     }
 
     /// <summary>
@@ -814,8 +839,8 @@ public partial class Interpreter : IDisposable
                     if (shouldBreak) return ExecutionResult.Success();
                     if (shouldContinue) continue;
                     if (abruptResult.HasValue) return abruptResult.Value;
-                    // Yield to allow timer callbacks and other threads to execute
-                    Thread.Yield();
+                    // Process any pending timer callbacks
+                    ProcessPendingCallbacks();
                 } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:
@@ -833,15 +858,15 @@ public partial class Interpreter : IDisposable
                         if (forStmt.Increment != null)
                             Evaluate(forStmt.Increment);
                         // Yield to allow timer callbacks and other threads to execute
-                        Thread.Yield();
+                        Thread.Sleep(0);
                         continue;
                     }
                     if (result.IsAbrupt) return result;
                     // Normal completion: execute increment
                     if (forStmt.Increment != null)
                         Evaluate(forStmt.Increment);
-                    // Yield to allow timer callbacks and other threads to execute
-                    Thread.Yield();
+                    // Process any pending timer callbacks
+                    ProcessPendingCallbacks();
                 }
                 return ExecutionResult.Success();
             case Stmt.ForOf forOf:
