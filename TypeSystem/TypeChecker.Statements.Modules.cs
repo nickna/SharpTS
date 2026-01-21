@@ -20,6 +20,12 @@ public partial class TypeChecker
         {
             if (_currentModule != null)
             {
+                // Already handled in CollectModuleExports - skip if type is already set
+                if (_currentModule.ExportAssignmentType != null)
+                {
+                    return;
+                }
+
                 // Validate mutual exclusion: cannot use export = with other exports
                 if (_currentModule.ExportedTypes.Count > 0 || _currentModule.DefaultExportType != null)
                 {

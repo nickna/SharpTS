@@ -635,7 +635,14 @@ public partial class TypeChecker
             // For exports, process the underlying declaration
             if (stmt is Stmt.Export export)
             {
-                if (export.Declaration != null)
+                if (export.ExportAssignment != null)
+                {
+                    // CommonJS-style export = value
+                    var type = CheckExpr(export.ExportAssignment);
+                    module.HasExportAssignment = true;
+                    module.ExportAssignmentType = type;
+                }
+                else if (export.Declaration != null)
                 {
                     CheckStmt(export.Declaration);
                 }

@@ -330,6 +330,24 @@ public class ModuleResolver
                         module.Dependencies.Add(reexportedModule);
                     }
                 }
+                else if (stmt is Stmt.ImportRequire importReq)
+                {
+                    // CommonJS-style import: import x = require('./foo')
+                    // Skip built-in modules (fs, path, etc.)
+                    if (BuiltInModuleRegistry.GetModuleName(importReq.ModulePath) != null)
+                    {
+                        continue;
+                    }
+
+                    string importedPath = ResolveModulePath(importReq.ModulePath, absolutePath);
+                    var importedModule = LoadModule(importedPath, decoratorMode);
+                    // Files loaded via require are always modules
+                    importedModule.IsScript = false;
+                    if (!module.Dependencies.Contains(importedModule))
+                    {
+                        module.Dependencies.Add(importedModule);
+                    }
+                }
             }
 
             return module;

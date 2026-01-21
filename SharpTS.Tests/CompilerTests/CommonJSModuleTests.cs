@@ -70,12 +70,12 @@ public class CommonJSModuleTests
 
     #endregion
 
-    #region Compiled Module Tests (Skipped - In Progress)
+    #region Compiled Module Tests
 
     /// <summary>
     /// Tests basic export = with a string literal.
     /// </summary>
-    [Fact(Skip = "CommonJS compiled module support in progress - parsing works, IL emission needs debugging")]
+    [Fact]
     public void ExportAssignment_StringLiteral()
     {
         var files = new Dictionary<string, string>
@@ -96,7 +96,7 @@ public class CommonJSModuleTests
     /// <summary>
     /// Tests basic export = with an object.
     /// </summary>
-    [Fact(Skip = "CommonJS compiled module support in progress - parsing works, IL emission needs debugging")]
+    [Fact]
     public void ExportAssignment_Object()
     {
         var files = new Dictionary<string, string>
@@ -119,8 +119,11 @@ public class CommonJSModuleTests
 
     /// <summary>
     /// Tests export = with a class.
+    /// Note: Cross-module class static field access is a known limitation affecting both
+    /// default export and export =. The class Type is exported correctly, but static
+    /// field access on imported class Types doesn't work properly.
     /// </summary>
-    [Fact(Skip = "CommonJS compiled module support in progress - parsing works, IL emission needs debugging")]
+    [Fact(Skip = "Cross-module class static field access is a known limitation")]
     public void ExportAssignment_Class()
     {
         var files = new Dictionary<string, string>
@@ -148,7 +151,7 @@ public class CommonJSModuleTests
     /// <summary>
     /// Tests export = with a function.
     /// </summary>
-    [Fact(Skip = "CommonJS compiled module support in progress - parsing works, IL emission needs debugging")]
+    [Fact]
     public void ExportAssignment_Function()
     {
         var files = new Dictionary<string, string>
@@ -172,7 +175,7 @@ public class CommonJSModuleTests
     /// <summary>
     /// Tests import = require() with a module using ES6 named exports.
     /// </summary>
-    [Fact(Skip = "CommonJS compiled module support in progress - parsing works, IL emission needs debugging")]
+    [Fact]
     public void ImportRequire_ES6Module()
     {
         var files = new Dictionary<string, string>
