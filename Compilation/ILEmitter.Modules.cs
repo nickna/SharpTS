@@ -159,6 +159,13 @@ public partial class ILEmitter
         {
             // Module uses export = - load the assignment value directly
             IL.Emit(OpCodes.Ldsfld, exportAssignField);
+
+            // Track if this import is an exported class (for cross-module static member access)
+            if (_ctx.ExportAssignmentClasses?.TryGetValue(importedPath, out var qualifiedClassName) == true)
+            {
+                _ctx.ImportedClassAliases ??= new Dictionary<string, string>();
+                _ctx.ImportedClassAliases[importReq.AliasName.Lexeme] = qualifiedClassName;
+            }
         }
         else
         {

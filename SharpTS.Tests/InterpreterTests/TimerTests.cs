@@ -262,11 +262,13 @@ public class TimerTests
     public void SetInterval_ExecutesMultipleTimes()
     {
         // setInterval should execute multiple times
+        // Note: Uses generous timing margins to account for thread scheduling differences
+        // across platforms (especially macOS ARM64 where thread pool may be slower)
         var source = @"
             let count = 0;
             let t = setInterval(() => { count++; }, 20);
             let start = Date.now();
-            while (Date.now() - start < 100) { }
+            while (Date.now() - start < 200) { }
             clearInterval(t);
             console.log(count >= 3);
         ";

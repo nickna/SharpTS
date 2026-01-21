@@ -312,9 +312,10 @@ public partial class ILEmitter
             _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-            if (_ctx.ClassRegistry!.TryGetStaticMethod(resolvedClassName, classStaticGet.Name.Lexeme, out var staticMethod))
+            // Use TryGetCallableStaticMethod to handle generic classes properly
+            if (_ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, classStaticGet.Name.Lexeme, classBuilder, out var callableMethod))
             {
-                var staticMethodParams = staticMethod!.GetParameters();
+                var staticMethodParams = callableMethod!.GetParameters();
                 var paramCount = staticMethodParams.Length;
 
                 // Emit provided arguments with proper type conversions
@@ -337,7 +338,44 @@ public partial class ILEmitter
                     EmitDefaultForType(staticMethodParams[i].ParameterType);
                 }
 
-                IL.Emit(OpCodes.Call, staticMethod);
+                IL.Emit(OpCodes.Call, callableMethod);
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Special case: Static method call on imported class (import X = require('./module') where module exports a class)
+        if (c.Callee is Expr.Get importedClassStaticGet &&
+            importedClassStaticGet.Object is Expr.Variable importedClassVar &&
+            _ctx.ImportedClassAliases?.TryGetValue(importedClassVar.Name.Lexeme, out var importedQualifiedClassName) == true &&
+            _ctx.Classes.TryGetValue(importedQualifiedClassName, out var importedClassBuilder))
+        {
+            if (_ctx.ClassRegistry!.TryGetCallableStaticMethod(importedQualifiedClassName, importedClassStaticGet.Name.Lexeme, importedClassBuilder, out var importedCallableMethod))
+            {
+                var importedMethodParams = importedCallableMethod!.GetParameters();
+                var paramCount = importedMethodParams.Length;
+
+                // Emit provided arguments with proper type conversions
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    EmitExpression(c.Arguments[i]);
+                    if (i < importedMethodParams.Length)
+                    {
+                        EmitConversionForParameter(c.Arguments[i], importedMethodParams[i].ParameterType);
+                    }
+                    else
+                    {
+                        EmitBoxIfNeeded(c.Arguments[i]);
+                    }
+                }
+
+                // Pad missing optional arguments
+                for (int i = c.Arguments.Count; i < paramCount; i++)
+                {
+                    EmitDefaultForType(importedMethodParams[i].ParameterType);
+                }
+
+                IL.Emit(OpCodes.Call, importedCallableMethod);
                 SetStackUnknown();
                 return;
             }

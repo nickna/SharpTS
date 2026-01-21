@@ -474,6 +474,87 @@ public sealed class ClassRegistry
         return false;
     }
 
+    /// <summary>
+    /// Checks if a class has generic type parameters.
+    /// </summary>
+    public bool IsGenericClass(string qualifiedClassName)
+    {
+        return _genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0;
+    }
+
+    /// <summary>
+    /// Gets the generic type parameters for a class.
+    /// </summary>
+    public bool TryGetGenericParams(string qualifiedClassName, out GenericTypeParameterBuilder[]? genericParams)
+    {
+        if (_genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0)
+        {
+            genericParams = gps;
+            return true;
+        }
+        genericParams = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Gets a static method that can be called, handling generic types by creating a closed generic type.
+    /// For non-generic classes, returns the MethodBuilder directly.
+    /// For generic classes, returns a MethodInfo from a closed generic type (e.g., Box&lt;object&gt;).
+    /// </summary>
+    public bool TryGetCallableStaticMethod(string qualifiedClassName, string methodName, TypeBuilder classBuilder, out System.Reflection.MethodInfo? method)
+    {
+        if (!TryGetStaticMethod(qualifiedClassName, methodName, out var methodBuilder))
+        {
+            method = null;
+            return false;
+        }
+
+        // For generic classes, we need to call the method on a closed generic type
+        if (_genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0)
+        {
+            // Create a closed generic type using object for all type parameters
+            var typeArgs = new Type[gps.Length];
+            for (int i = 0; i < gps.Length; i++)
+                typeArgs[i] = typeof(object);
+
+            var closedType = classBuilder.MakeGenericType(typeArgs);
+            method = TypeBuilder.GetMethod(closedType, methodBuilder!);
+            return true;
+        }
+
+        method = methodBuilder;
+        return true;
+    }
+
+    /// <summary>
+    /// Gets a static field that can be accessed, handling generic types by creating a closed generic type.
+    /// For non-generic classes, returns the FieldBuilder directly.
+    /// For generic classes, returns a FieldInfo from a closed generic type.
+    /// </summary>
+    public bool TryGetCallableStaticField(string qualifiedClassName, string fieldName, TypeBuilder classBuilder, out System.Reflection.FieldInfo? field)
+    {
+        if (!TryGetStaticField(qualifiedClassName, fieldName, out var fieldBuilder))
+        {
+            field = null;
+            return false;
+        }
+
+        // For generic classes, we need to access the field on a closed generic type
+        if (_genericParams.TryGetValue(qualifiedClassName, out var gps) && gps.Length > 0)
+        {
+            var typeArgs = new Type[gps.Length];
+            for (int i = 0; i < gps.Length; i++)
+                typeArgs[i] = typeof(object);
+
+            var closedType = classBuilder.MakeGenericType(typeArgs);
+            field = TypeBuilder.GetField(closedType, fieldBuilder!);
+            return true;
+        }
+
+        field = fieldBuilder;
+        return true;
+    }
+
     #endregion
 
     #region Raw Dictionary Access (for backward compatibility during migration)

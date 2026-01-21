@@ -49,6 +49,23 @@ public partial class ILCompiler
                 );
                 exportFields["$exportAssignment"] = field;
                 hasExportAssignment = true;
+
+                // Track if this export = exports a class (for cross-module static member access)
+                // We scan the module's statements directly since ClassToModule isn't populated yet
+                if (export.ExportAssignment is Expr.Variable classVar)
+                {
+                    string className = classVar.Name.Lexeme;
+                    // Check if this module contains a class with this name
+                    bool hasMatchingClass = module.Statements.Any(s =>
+                        s is Stmt.Class c && c.Name.Lexeme == className);
+
+                    if (hasMatchingClass)
+                    {
+                        string qualifiedClassName = GetQualifiedClassName(className, module.Path);
+                        _modules.ExportAssignmentClasses[module.Path] = qualifiedClassName;
+                    }
+                }
+
                 break; // No other exports allowed with export =
             }
         }
@@ -468,6 +485,7 @@ public partial class ILCompiler
             ClassToModule = _modules.ClassToModule,
             FunctionToModule = _modules.FunctionToModule,
             EnumToModule = _modules.EnumToModule,
+            ExportAssignmentClasses = _modules.ExportAssignmentClasses,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
@@ -477,5 +495,24 @@ public partial class ILCompiler
             // Registry services
             ClassRegistry = GetClassRegistry()
         };
+    }
+
+    /// <summary>
+    /// Gets the qualified class name for a class in a specific module.
+    /// Used during early module definition before ClassToModule is populated.
+    /// </summary>
+    private string GetQualifiedClassName(string simpleClassName, string modulePath)
+    {
+        string sanitizedModule = CompilationContext.SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+        string baseName = $"$M_{sanitizedModule}_{simpleClassName}";
+
+        // Apply .NET namespace if set
+        string? dotNetNamespace = _modules.Namespaces.GetValueOrDefault(modulePath);
+        if (!string.IsNullOrEmpty(dotNetNamespace))
+        {
+            return $"{dotNetNamespace}.{baseName}";
+        }
+
+        return baseName;
     }
 }

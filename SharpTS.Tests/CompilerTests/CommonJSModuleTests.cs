@@ -123,7 +123,7 @@ public class CommonJSModuleTests
     /// default export and export =. The class Type is exported correctly, but static
     /// field access on imported class Types doesn't work properly.
     /// </summary>
-    [Fact(Skip = "Cross-module class static field access is a known limitation")]
+    [Fact]
     public void ExportAssignment_Class()
     {
         var files = new Dictionary<string, string>

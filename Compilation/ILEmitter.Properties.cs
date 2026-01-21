@@ -137,15 +137,38 @@ public partial class ILEmitter
             }
 
             // Try to find static field using stored FieldBuilders
-            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, g.Name.Lexeme, out var staticField))
+            // Use TryGetCallableStaticField to handle generic classes properly
+            if (_ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, g.Name.Lexeme, classBuilder, out var callableStaticField))
             {
-                IL.Emit(OpCodes.Ldsfld, staticField!);
+                IL.Emit(OpCodes.Ldsfld, callableStaticField!);
                 SetStackUnknown();
                 return;
             }
 
             // Static methods are handled in EmitCall, so just fall through for now
             // If we get here for a method reference (not call), we'll use the generic path
+        }
+
+        // Handle static member access via imported class alias (import X = require('./module') where module exports a class)
+        if (g.Object is Expr.Variable importedClassVar &&
+            _ctx.ImportedClassAliases?.TryGetValue(importedClassVar.Name.Lexeme, out var importedQualifiedClassName) == true &&
+            _ctx.Classes.TryGetValue(importedQualifiedClassName, out var importedClassBuilder))
+        {
+            // Try static getter first
+            if (_ctx.ClassRegistry!.TryGetStaticGetter(importedQualifiedClassName, g.Name.Lexeme, out var importedStaticGetter))
+            {
+                IL.Emit(OpCodes.Call, importedStaticGetter!);
+                SetStackUnknown();
+                return;
+            }
+
+            // Try static field
+            if (_ctx.ClassRegistry!.TryGetCallableStaticField(importedQualifiedClassName, g.Name.Lexeme, importedClassBuilder, out var importedStaticField))
+            {
+                IL.Emit(OpCodes.Ldsfld, importedStaticField!);
+                SetStackUnknown();
+                return;
+            }
         }
 
         // Handle static member access via class expression variable
@@ -959,13 +982,13 @@ public partial class ILEmitter
             return true;
         }
 
-        // Try static fields
-        if (_ctx.ClassRegistry!.TryGetStaticField(className, propertyName, out var staticField))
+        // Try static fields - use TryGetCallableStaticField to handle generic classes properly
+        if (_ctx.ClassRegistry!.TryGetCallableStaticField(className, propertyName, classBuilder, out var callableStaticField))
         {
             EmitExpression(value);
             EmitBoxIfNeeded(value);
             IL.Emit(OpCodes.Dup); // Keep value for expression result
-            IL.Emit(OpCodes.Stsfld, staticField!);
+            IL.Emit(OpCodes.Stsfld, callableStaticField!);
             return true;
         }
 

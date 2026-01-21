@@ -134,6 +134,11 @@ public partial class ILCompiler
         public ModuleResolver? Resolver { get; set; }
         public string? CurrentPath { get; set; }
         public string? CurrentDotNetNamespace { get; set; }
+        /// <summary>
+        /// Maps module path to the qualified class name when the module uses `export = ClassName`.
+        /// Used to enable compile-time static member resolution for imported classes.
+        /// </summary>
+        public Dictionary<string, string> ExportAssignmentClasses { get; } = [];
     }
 
     /// <summary>

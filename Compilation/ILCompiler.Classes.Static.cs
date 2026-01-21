@@ -93,6 +93,13 @@ public partial class ILCompiler
             ClassRegistry = GetClassRegistry()
         };
 
+        // Add class generic type parameters to context (required for static blocks in generic classes)
+        if (_classes.GenericParams.TryGetValue(qualifiedClassName, out var classGenericParams))
+        {
+            foreach (var gp in classGenericParams)
+                ctx.GenericTypeParameters[gp.Name] = gp;
+        }
+
         var emitter = new ILEmitter(ctx);
 
         // Initialize static @lock decorator fields

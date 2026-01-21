@@ -297,10 +297,12 @@ public class TimerTests
     public void SetInterval_PassesArgsToCallback()
     {
         // Additional args should be passed to callback
+        // Note: Uses generous timing margins to account for thread scheduling differences
+        // across platforms (especially macOS ARM64 where Task.Delay continuations may be slower)
         var source = @"
             let t = setInterval((a: any, b: any) => { console.log(a + b); }, 10, 'hello', 'world');
             let start = Date.now();
-            while (Date.now() - start < 50) { }
+            while (Date.now() - start < 150) { }
             clearInterval(t);
         ";
         var output = TestHarness.RunCompiled(source);

@@ -313,7 +313,8 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         bool hasPathReferences = lexer.TripleSlashDirectives.Any(d => d.Type == TripleSlashReferenceType.Path);
 
         // Check AST for import/export statements or path references
-        bool hasModules = hasPathReferences || statements.Any(s => s is Stmt.Import or Stmt.Export);
+        // Include ImportRequire for CommonJS-style: import X = require('./module')
+        bool hasModules = hasPathReferences || statements.Any(s => s is Stmt.Import or Stmt.Export or Stmt.ImportRequire);
 
         if (hasModules)
         {

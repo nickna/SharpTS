@@ -229,7 +229,7 @@ public class StaticBlockTests
         Assert.Equal("ok\n", output);
     }
 
-    [Fact(Skip = "Generic classes with static blocks have IL generation issues")]
+    [Fact]
     public void StaticBlock_InGenericClass()
     {
         var source = """

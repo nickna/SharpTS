@@ -34,6 +34,13 @@ public partial class CompilationContext
     // Enum to module mapping (simple enum name -> module path)
     public Dictionary<string, string>? EnumToModule { get; set; }
 
+    // Maps module path to qualified class name when module uses `export = ClassName`
+    public Dictionary<string, string>? ExportAssignmentClasses { get; set; }
+
+    // Maps local variable name to qualified class name for imported classes
+    // Populated during import processing when an import alias refers to an exported class
+    public Dictionary<string, string>? ImportedClassAliases { get; set; }
+
     /// <summary>
     /// Resolves a simple enum name to its qualified name for lookup in the EnumMembers dictionary.
     /// </summary>
