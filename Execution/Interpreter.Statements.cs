@@ -664,6 +664,10 @@ public partial class Interpreter
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
+
+            // Yield to allow timer callbacks and other threads to execute.
+            // This ensures timers fire reliably during busy loops across all platforms.
+            Thread.Yield();
         }
         return ExecutionResult.Success();
     }

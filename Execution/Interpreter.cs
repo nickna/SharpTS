@@ -814,6 +814,8 @@ public partial class Interpreter : IDisposable
                     if (shouldBreak) return ExecutionResult.Success();
                     if (shouldContinue) continue;
                     if (abruptResult.HasValue) return abruptResult.Value;
+                    // Yield to allow timer callbacks and other threads to execute
+                    Thread.Yield();
                 } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:
@@ -830,12 +832,16 @@ public partial class Interpreter : IDisposable
                     {
                         if (forStmt.Increment != null)
                             Evaluate(forStmt.Increment);
+                        // Yield to allow timer callbacks and other threads to execute
+                        Thread.Yield();
                         continue;
                     }
                     if (result.IsAbrupt) return result;
                     // Normal completion: execute increment
                     if (forStmt.Increment != null)
                         Evaluate(forStmt.Increment);
+                    // Yield to allow timer callbacks and other threads to execute
+                    Thread.Yield();
                 }
                 return ExecutionResult.Success();
             case Stmt.ForOf forOf:
