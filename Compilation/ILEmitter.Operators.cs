@@ -1,6 +1,7 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+using static SharpTS.TypeSystem.OperatorDescriptor;
 
 namespace SharpTS.Compilation;
 
@@ -11,112 +12,115 @@ public partial class ILEmitter
 {
     protected override void EmitBinary(Expr.Binary b)
     {
-        // Check for bigint operations
+        // Check for bigint operations first
         if (IsBigIntOperation(b))
         {
             EmitBigIntBinary(b);
             return;
         }
 
-        // Addition: use runtime Add() which handles both string concat and numeric add
-        if (b.Operator.Type == TokenType.PLUS)
+        var desc = SemanticOperatorResolver.Resolve(b.Operator.Type);
+
+        switch (desc)
         {
-            EmitExpression(b.Left);
-            EmitBoxIfNeeded(b.Left);
-            EmitExpression(b.Right);
-            EmitBoxIfNeeded(b.Right);
-            EmitCallUnknown(_ctx.Runtime!.Add);
-            return;
+            case Plus:
+                // Use runtime Add() which handles both string concat and numeric add
+                EmitExpression(b.Left);
+                EmitBoxIfNeeded(b.Left);
+                EmitExpression(b.Right);
+                EmitBoxIfNeeded(b.Right);
+                EmitCallUnknown(_ctx.Runtime!.Add);
+                break;
+
+            case Arithmetic arith:
+                // Numeric arithmetic with direct IL opcodes
+                EmitExpressionAsDouble(b.Left);
+                EmitExpressionAsDouble(b.Right);
+                IL.Emit(arith.Opcode);
+                EmitBoxDouble();
+                break;
+
+            case Power:
+                EmitPowerBinary(b);
+                break;
+
+            case Comparison cmp:
+                EmitExpressionAsDouble(b.Left);
+                EmitExpressionAsDouble(b.Right);
+                IL.Emit(cmp.Opcode);
+                if (cmp.Negated)
+                {
+                    // For <= and >=, we use the inverse opcode and negate
+                    IL.Emit(OpCodes.Ldc_I4_0);
+                    IL.Emit(OpCodes.Ceq);
+                }
+                EmitBoxBool();
+                break;
+
+            case Equality eq:
+                EmitEqualityBinary(b, eq.IsStrict, eq.IsNegated);
+                break;
+
+            case Bitwise or BitwiseShift or UnsignedRightShift:
+                EmitBitwiseBinary(b);
+                break;
+
+            case In:
+                // 'in' operator falls through to runtime call (not yet implemented in IL)
+                // This will cause a compile-time error for now
+                throw new NotSupportedException("The 'in' operator is not yet supported in compiled mode.");
+
+            case InstanceOf:
+                EmitExpression(b.Left);
+                EmitBoxIfNeeded(b.Left);
+                EmitExpression(b.Right);
+                EmitBoxIfNeeded(b.Right);
+                EmitCallAndBoxBool(_ctx.Runtime!.InstanceOf);
+                break;
         }
+    }
 
-        // Comparison operators (== and ===, != and !==)
-        if (b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL
-            or TokenType.EQUAL_EQUAL_EQUAL or TokenType.BANG_EQUAL_EQUAL)
-        {
-            EmitExpression(b.Left);
-            EmitBoxIfNeeded(b.Left);
-            EmitExpression(b.Right);
-            EmitBoxIfNeeded(b.Right);
-
-            // Loose equality (== and !=) uses runtime.Equals which treats null==undefined
-            // Strict equality (=== and !==) uses Object.Equals which keeps them distinct
-            bool isLooseEquality = b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL;
-            bool isNegated = b.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL;
-
-            if (isLooseEquality)
-            {
-                // Use our runtime Equals which treats null == undefined
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.Equals);
-            }
-            else
-            {
-                // Use Object.Equals for strict equality (null !== undefined)
-                EmitObjectEqualsBoxed_NoBox();
-            }
-
-            if (isNegated)
-            {
-                // Negate the result
-                IL.Emit(OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Ceq);
-            }
-
-            IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-            SetStackUnknown();
-            return;
-        }
-
-        // Bitwise operators - require int32 conversion
-        // Note: GREATER_GREATER_GREATER (>>>) has a known issue with unsigned conversion
-        if (b.Operator.Type is TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET
-            or TokenType.LESS_LESS or TokenType.GREATER_GREATER or TokenType.GREATER_GREATER_GREATER)
-        {
-            EmitBitwiseBinary(b);
-            return;
-        }
-
-        // instanceof operator
-        if (b.Operator.Type == TokenType.INSTANCEOF)
-        {
-            EmitExpression(b.Left);
-            EmitBoxIfNeeded(b.Left);
-            EmitExpression(b.Right);
-            EmitBoxIfNeeded(b.Right);
-            EmitCallAndBoxBool(_ctx.Runtime!.InstanceOf);
-            return;
-        }
-
-        // Numeric operations - defer boxing until needed
+    /// <summary>
+    /// Emits power operator (**) using Math.Pow.
+    /// </summary>
+    private void EmitPowerBinary(Expr.Binary b)
+    {
         EmitExpressionAsDouble(b.Left);
         EmitExpressionAsDouble(b.Right);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Math, "Pow", _ctx.Types.Double, _ctx.Types.Double));
+        EmitBoxDouble();
+    }
 
-        switch (b.Operator.Type)
+    /// <summary>
+    /// Emits equality operators (==, ===, !=, !==).
+    /// </summary>
+    private void EmitEqualityBinary(Expr.Binary b, bool isStrict, bool isNegated)
+    {
+        EmitExpression(b.Left);
+        EmitBoxIfNeeded(b.Left);
+        EmitExpression(b.Right);
+        EmitBoxIfNeeded(b.Right);
+
+        if (!isStrict)
         {
-            case TokenType.MINUS:
-                EmitSub_Double();
-                break;
-            case TokenType.STAR:
-                EmitMul_Double();
-                break;
-            case TokenType.SLASH:
-                EmitDiv_Double();
-                break;
-            case TokenType.PERCENT:
-                EmitRem_Double();
-                break;
-            case TokenType.LESS:
-                EmitClt_Boolean();
-                break;
-            case TokenType.GREATER:
-                EmitCgt_Boolean();
-                break;
-            case TokenType.LESS_EQUAL:
-                EmitLessOrEqual_Boolean();
-                break;
-            case TokenType.GREATER_EQUAL:
-                EmitGreaterOrEqual_Boolean();
-                break;
+            // Loose equality: use runtime.Equals which treats null == undefined
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Equals);
         }
+        else
+        {
+            // Strict equality: use Object.Equals which keeps null !== undefined
+            EmitObjectEqualsBoxed_NoBox();
+        }
+
+        if (isNegated)
+        {
+            // Negate the result
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Ceq);
+        }
+
+        IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+        SetStackUnknown();
     }
 
     private void EmitBitwiseBinary(Expr.Binary b)

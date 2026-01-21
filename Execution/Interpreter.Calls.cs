@@ -4,6 +4,7 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
@@ -311,10 +312,11 @@ public partial class Interpreter
 
     /// <summary>
     /// Core binary operation logic, shared between sync and async evaluation.
+    /// Uses SemanticOperatorResolver for centralized operator dispatch.
     /// </summary>
     private object? EvaluateBinaryOperation(Token op, object? left, object? right)
     {
-        // Check for bigint operations
+        // Check for bigint operations first
         var leftBigInt = GetBigIntValue(left);
         var rightBigInt = GetBigIntValue(right);
 
@@ -323,34 +325,69 @@ public partial class Interpreter
             return EvaluateBigIntBinary(op.Type, left, right, leftBigInt, rightBigInt);
         }
 
-        return op.Type switch
+        var desc = SemanticOperatorResolver.Resolve(op.Type);
+
+        return desc switch
         {
-            TokenType.GREATER => (double)left! > (double)right!,
-            TokenType.GREATER_EQUAL => (double)left! >= (double)right!,
-            TokenType.LESS => (double)left! < (double)right!,
-            TokenType.LESS_EQUAL => (double)left! <= (double)right!,
-            TokenType.BANG_EQUAL => !IsEqual(left, right),
-            TokenType.BANG_EQUAL_EQUAL => !IsStrictEqual(left, right),
-            TokenType.EQUAL_EQUAL => IsEqual(left, right),
-            TokenType.EQUAL_EQUAL_EQUAL => IsStrictEqual(left, right),
-            TokenType.MINUS => (double)left! - (double)right!,
-            TokenType.PLUS => EvaluatePlus(left, right),
-            TokenType.SLASH => (double)left! / (double)right!,
-            TokenType.STAR => (double)left! * (double)right!,
-            TokenType.STAR_STAR => Math.Pow((double)left!, (double)right!),
-            TokenType.PERCENT => (double)left! % (double)right!,
-            TokenType.IN => EvaluateIn(left, right),
-            TokenType.INSTANCEOF => EvaluateInstanceof(left, right),
-            // Bitwise operators
-            TokenType.AMPERSAND => (double)(ToInt32(left) & ToInt32(right)),
-            TokenType.PIPE => (double)(ToInt32(left) | ToInt32(right)),
-            TokenType.CARET => (double)(ToInt32(left) ^ ToInt32(right)),
-            TokenType.LESS_LESS => (double)(ToInt32(left) << (ToInt32(right) & 0x1F)),
-            TokenType.GREATER_GREATER => (double)(ToInt32(left) >> (ToInt32(right) & 0x1F)),
-            TokenType.GREATER_GREATER_GREATER => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
+            OperatorDescriptor.Plus => EvaluatePlus(left, right),
+            OperatorDescriptor.Arithmetic => EvaluateArithmetic(op.Type, (double)left!, (double)right!),
+            OperatorDescriptor.Power => Math.Pow((double)left!, (double)right!),
+            OperatorDescriptor.Comparison => EvaluateComparison(op.Type, (double)left!, (double)right!),
+            OperatorDescriptor.Equality eq => EvaluateEquality(left, right, eq.IsStrict, eq.IsNegated),
+            OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift =>
+                EvaluateBitwise(op.Type, ToInt32(left), ToInt32(right)),
+            OperatorDescriptor.UnsignedRightShift => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
+            OperatorDescriptor.In => EvaluateIn(left, right),
+            OperatorDescriptor.InstanceOf => EvaluateInstanceof(left, right),
             _ => null
         };
     }
+
+    /// <summary>
+    /// Evaluates arithmetic operators (-, *, /, %).
+    /// </summary>
+    private static double EvaluateArithmetic(TokenType op, double left, double right) => op switch
+    {
+        TokenType.MINUS => left - right,
+        TokenType.STAR => left * right,
+        TokenType.SLASH => left / right,
+        TokenType.PERCENT => left % right,
+        _ => throw new Exception($"Unknown arithmetic operator: {op}")
+    };
+
+    /// <summary>
+    /// Evaluates comparison operators (&lt;, &gt;, &lt;=, &gt;=).
+    /// </summary>
+    private static bool EvaluateComparison(TokenType op, double left, double right) => op switch
+    {
+        TokenType.LESS => left < right,
+        TokenType.GREATER => left > right,
+        TokenType.LESS_EQUAL => left <= right,
+        TokenType.GREATER_EQUAL => left >= right,
+        _ => throw new Exception($"Unknown comparison operator: {op}")
+    };
+
+    /// <summary>
+    /// Evaluates equality operators (==, ===, !=, !==).
+    /// </summary>
+    private bool EvaluateEquality(object? left, object? right, bool isStrict, bool isNegated)
+    {
+        bool result = isStrict ? IsStrictEqual(left, right) : IsEqual(left, right);
+        return isNegated ? !result : result;
+    }
+
+    /// <summary>
+    /// Evaluates bitwise operators (&amp;, |, ^, &lt;&lt;, &gt;&gt;).
+    /// </summary>
+    private static double EvaluateBitwise(TokenType op, int left, int right) => op switch
+    {
+        TokenType.AMPERSAND => left & right,
+        TokenType.PIPE => left | right,
+        TokenType.CARET => left ^ right,
+        TokenType.LESS_LESS => left << (right & 0x1F),
+        TokenType.GREATER_GREATER => left >> (right & 0x1F),
+        _ => throw new Exception($"Unknown bitwise operator: {op}")
+    };
 
     private System.Numerics.BigInteger? GetBigIntValue(object? value) => value switch
     {

@@ -18,80 +18,73 @@ public partial class TypeChecker
     {
         TypeInfo left = CheckExpr(binary.Left);
         TypeInfo right = CheckExpr(binary.Right);
+        var desc = SemanticOperatorResolver.Resolve(binary.Operator.Type);
 
-        switch (binary.Operator.Type)
+        return desc switch
         {
-            case TokenType.MINUS:
-            case TokenType.SLASH:
-            case TokenType.STAR:
-            case TokenType.STAR_STAR:
-            case TokenType.PERCENT:
-                // Allow number+number OR bigint+bigint, NOT mixed
-                if (IsBigInt(left) && IsBigInt(right))
-                    return new TypeInfo.BigInt();
-                if (IsNumber(left) && IsNumber(right))
-                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
-                    throw new TypeCheckException(" Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
-                throw new TypeCheckException(" Operands must be numbers or bigints of the same type.");
+            OperatorDescriptor.Plus => CheckPlusOperator(left, right),
+            OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right),
+            OperatorDescriptor.Comparison => CheckComparisonBinary(left, right),
+            OperatorDescriptor.Equality => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right),
+            OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right),
+            OperatorDescriptor.In or OperatorDescriptor.InstanceOf => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            _ => new TypeInfo.Any()
+        };
+    }
 
-            case TokenType.GREATER:
-            case TokenType.GREATER_EQUAL:
-            case TokenType.LESS:
-            case TokenType.LESS_EQUAL:
-                // Allow number vs number OR bigint vs bigint
-                if ((IsBigInt(left) && IsBigInt(right)) || (IsNumber(left) && IsNumber(right)))
-                    return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
-                    throw new TypeCheckException(" Cannot compare bigint and number directly. Use explicit conversion.");
-                throw new TypeCheckException(" Comparison operands must be numbers or bigints of the same type.");
+    private TypeInfo CheckPlusOperator(TypeInfo left, TypeInfo right)
+    {
+        if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
+        if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        if (IsString(left) || IsString(right)) return new TypeInfo.String();
+        if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+            throw new TypeCheckException(" Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
+        throw new TypeCheckException(" Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.");
+    }
 
-            case TokenType.PLUS:
-                if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
-                if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-                if (IsString(left) || IsString(right)) return new TypeInfo.String();
-                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
-                    throw new TypeCheckException(" Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
-                throw new TypeCheckException(" Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.");
+    private TypeInfo CheckArithmeticBinary(TypeInfo left, TypeInfo right)
+    {
+        // Allow number+number OR bigint+bigint, NOT mixed
+        if (IsBigInt(left) && IsBigInt(right))
+            return new TypeInfo.BigInt();
+        if (IsNumber(left) && IsNumber(right))
+            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+            throw new TypeCheckException(" Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.");
+        throw new TypeCheckException(" Operands must be numbers or bigints of the same type.");
+    }
 
-            case TokenType.EQUAL_EQUAL:
-            case TokenType.EQUAL_EQUAL_EQUAL:
-            case TokenType.BANG_EQUAL:
-            case TokenType.BANG_EQUAL_EQUAL:
-                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    private TypeInfo CheckComparisonBinary(TypeInfo left, TypeInfo right)
+    {
+        // Allow number vs number OR bigint vs bigint
+        if ((IsBigInt(left) && IsBigInt(right)) || (IsNumber(left) && IsNumber(right)))
+            return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+            throw new TypeCheckException(" Cannot compare bigint and number directly. Use explicit conversion.");
+        throw new TypeCheckException(" Comparison operands must be numbers or bigints of the same type.");
+    }
 
-            case TokenType.IN:
-                // 'in' operator: left should be string/number, right should be object/array
-                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    private TypeInfo CheckBitwiseBinary(TypeInfo left, TypeInfo right)
+    {
+        // Allow both number and bigint (separately)
+        if (IsBigInt(left) && IsBigInt(right))
+            return new TypeInfo.BigInt();
+        if (IsNumber(left) && IsNumber(right))
+            return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+            throw new TypeCheckException(" Cannot mix bigint and number in bitwise operations.");
+        throw new TypeCheckException(" Bitwise operators require numeric operands.");
+    }
 
-            case TokenType.INSTANCEOF:
-                // 'instanceof' operator: returns boolean
-                return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
-
-            case TokenType.AMPERSAND:
-            case TokenType.PIPE:
-            case TokenType.CARET:
-            case TokenType.LESS_LESS:
-            case TokenType.GREATER_GREATER:
-                // Allow both number and bigint (separately)
-                if (IsBigInt(left) && IsBigInt(right))
-                    return new TypeInfo.BigInt();
-                if (IsNumber(left) && IsNumber(right))
-                    return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-                if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
-                    throw new TypeCheckException(" Cannot mix bigint and number in bitwise operations.");
-                throw new TypeCheckException(" Bitwise operators require numeric operands.");
-
-            case TokenType.GREATER_GREATER_GREATER:
-                // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
-                if (IsBigInt(left) || IsBigInt(right))
-                    throw new TypeCheckException(" Unsigned right shift (>>>) is not supported for bigint.");
-                if (!IsNumber(left) || !IsNumber(right))
-                    throw new TypeCheckException(" Bitwise operators require numeric operands.");
-                return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
-        }
-
-        return new TypeInfo.Any();
+    private TypeInfo CheckUnsignedShiftBinary(TypeInfo left, TypeInfo right)
+    {
+        // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
+        if (IsBigInt(left) || IsBigInt(right))
+            throw new TypeCheckException(" Unsigned right shift (>>>) is not supported for bigint.");
+        if (!IsNumber(left) || !IsNumber(right))
+            throw new TypeCheckException(" Bitwise operators require numeric operands.");
+        return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
     }
 
     private TypeInfo CheckLogical(Expr.Logical logical)

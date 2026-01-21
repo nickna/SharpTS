@@ -449,6 +449,26 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Resolves an (object, index) pair to a typed IndexTarget for dispatch.
+    /// </summary>
+    /// <param name="obj">The object being indexed.</param>
+    /// <param name="index">The index value.</param>
+    /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
+    private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
+    {
+        (SharpTSArray array, double idx) => new IndexTarget.Array(array, (int)idx),
+        (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
+        (ConstEnumValues constEnum, _) => new IndexTarget.ConstEnumError(constEnum),
+        (SharpTSObject sharpObj, string strKey) => new IndexTarget.ObjectString(sharpObj, strKey),
+        (SharpTSObject numObj, double numKey) => new IndexTarget.ObjectString(numObj, numKey.ToString()),
+        (SharpTSObject symbolObj, SharpTSSymbol symbol) => new IndexTarget.ObjectSymbol(symbolObj, symbol),
+        (SharpTSInstance instance, string instanceKey) => new IndexTarget.InstanceString(instance, instanceKey),
+        (SharpTSInstance symInstance, SharpTSSymbol symKey) => new IndexTarget.InstanceSymbol(symInstance, symKey),
+        (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
+        _ => new IndexTarget.Unsupported(obj, index)
+    };
+
+    /// <summary>
     /// Evaluates an index access expression (bracket notation).
     /// </summary>
     /// <param name="getIndex">The index access expression AST node.</param>
@@ -462,61 +482,20 @@ public partial class Interpreter
         object? obj = Evaluate(getIndex.Object);
         object? index = Evaluate(getIndex.Index);
 
-        // Array with numeric index
-        if (obj is SharpTSArray array && index is double idx)
+        return ResolveIndexTarget(obj, index) switch
         {
-            return array.Get((int)idx);
-        }
-
-        // Handle enum reverse mapping: Direction[0] -> "Up"
-        if (obj is SharpTSEnum enumObj && index is double enumIdx)
-        {
-            return enumObj.GetReverse(enumIdx);
-        }
-
-        // Const enums do not support reverse mapping
-        if (obj is ConstEnumValues constEnum)
-        {
-            throw new Exception($"Runtime Error: Cannot use index access on const enum '{constEnum.Name}'. Const enum members can only be accessed by name.");
-        }
-
-        // Object with string key
-        if (obj is SharpTSObject sharpObj && index is string strKey)
-        {
-            return sharpObj.GetProperty(strKey);
-        }
-
-        // Object with number key (convert to string)
-        if (obj is SharpTSObject numObj && index is double numKey)
-        {
-            return numObj.GetProperty(numKey.ToString());
-        }
-
-        // Object with symbol key
-        if (obj is SharpTSObject symbolObj && index is SharpTSSymbol symbol)
-        {
-            return symbolObj.GetBySymbol(symbol);
-        }
-
-        // Class instance with string key
-        if (obj is SharpTSInstance instance && index is string instanceKey)
-        {
-            return instance.Get(new Token(TokenType.IDENTIFIER, instanceKey, null, 0));
-        }
-
-        // Class instance with symbol key (store in internal dictionary)
-        if (obj is SharpTSInstance symInstance && index is SharpTSSymbol symKey)
-        {
-            return symInstance.GetBySymbol(symKey);
-        }
-
-        // globalThis with string key
-        if (obj is SharpTSGlobalThis globalThis && index is string globalKey)
-        {
-            return globalThis.GetProperty(globalKey);
-        }
-
-        throw new Exception("Index access not supported on this type.");
+            IndexTarget.Array t => t.Target.Get(t.Index),
+            IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
+            IndexTarget.ConstEnumError t => throw new Exception(
+                $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
+            IndexTarget.ObjectString t => t.Target.GetProperty(t.Key),
+            IndexTarget.ObjectSymbol t => t.Target.GetBySymbol(t.Key),
+            IndexTarget.InstanceString t => t.Target.Get(new Token(TokenType.IDENTIFIER, t.Key, null, 0)),
+            IndexTarget.InstanceSymbol t => t.Target.GetBySymbol(t.Key),
+            IndexTarget.GlobalThis t => t.Target.GetProperty(t.Key),
+            IndexTarget.Unsupported => throw new Exception("Index access not supported on this type."),
+            _ => throw new Exception("Index access not supported on this type.")
+        };
     }
 
     /// <summary>
@@ -535,98 +514,45 @@ public partial class Interpreter
         object? value = Evaluate(setIndex.Value);
         bool strictMode = _environment.IsStrictMode;
 
-        // Array with numeric index
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            if (strictMode)
-            {
-                array.SetStrict((int)idx, value, strictMode);
-            }
-            else
-            {
-                array.Set((int)idx, value);
-            }
-            return value;
-        }
+        var target = ResolveIndexTarget(obj, index);
 
-        // Object with string key
-        if (obj is SharpTSObject sharpObj && index is string strKey)
-        {
-            if (strictMode)
-            {
-                sharpObj.SetPropertyStrict(strKey, value, strictMode);
-            }
-            else
-            {
-                sharpObj.SetProperty(strKey, value);
-            }
-            return value;
-        }
+        if (target is IndexTarget.EnumReverse or IndexTarget.ConstEnumError)
+            throw new Exception("Index assignment not supported on enum types.");
 
-        // Object with number key (convert to string)
-        if (obj is SharpTSObject numObj && index is double numKey)
+        switch (target)
         {
-            if (strictMode)
-            {
-                numObj.SetPropertyStrict(numKey.ToString(), value, strictMode);
-            }
-            else
-            {
-                numObj.SetProperty(numKey.ToString(), value);
-            }
-            return value;
-        }
+            case IndexTarget.Array t:
+                if (strictMode) t.Target.SetStrict(t.Index, value, strictMode);
+                else t.Target.Set(t.Index, value);
+                return value;
 
-        // Object with symbol key
-        if (obj is SharpTSObject symbolObj && index is SharpTSSymbol symbol)
-        {
-            if (strictMode)
-            {
-                symbolObj.SetBySymbolStrict(symbol, value, strictMode);
-            }
-            else
-            {
-                symbolObj.SetBySymbol(symbol, value);
-            }
-            return value;
-        }
+            case IndexTarget.ObjectString t:
+                if (strictMode) t.Target.SetPropertyStrict(t.Key, value, strictMode);
+                else t.Target.SetProperty(t.Key, value);
+                return value;
 
-        // Class instance with string key
-        if (obj is SharpTSInstance instance && index is string instanceKey)
-        {
-            if (strictMode)
-            {
-                instance.SetRawFieldStrict(instanceKey, value, strictMode);
-            }
-            else
-            {
-                instance.SetRawField(instanceKey, value);
-            }
-            return value;
-        }
+            case IndexTarget.ObjectSymbol t:
+                if (strictMode) t.Target.SetBySymbolStrict(t.Key, value, strictMode);
+                else t.Target.SetBySymbol(t.Key, value);
+                return value;
 
-        // Class instance with symbol key
-        if (obj is SharpTSInstance symInstance && index is SharpTSSymbol symKey)
-        {
-            if (strictMode)
-            {
-                symInstance.SetBySymbolStrict(symKey, value, strictMode);
-            }
-            else
-            {
-                symInstance.SetBySymbol(symKey, value);
-            }
-            return value;
-        }
+            case IndexTarget.InstanceString t:
+                if (strictMode) t.Target.SetRawFieldStrict(t.Key, value, strictMode);
+                else t.Target.SetRawField(t.Key, value);
+                return value;
 
-        // globalThis with string key
-        if (obj is SharpTSGlobalThis globalThis && index is string globalKey)
-        {
-            globalThis.SetProperty(globalKey, value);
-            return value;
-        }
+            case IndexTarget.InstanceSymbol t:
+                if (strictMode) t.Target.SetBySymbolStrict(t.Key, value, strictMode);
+                else t.Target.SetBySymbol(t.Key, value);
+                return value;
 
-        throw new Exception("Index assignment not supported on this type.");
+            case IndexTarget.GlobalThis t:
+                t.Target.SetProperty(t.Key, value);
+                return value;
+
+            default:
+                throw new Exception("Index assignment not supported on this type.");
+        }
     }
 
     /// <summary>
