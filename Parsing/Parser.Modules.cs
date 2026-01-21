@@ -112,10 +112,11 @@ public partial class Parser
     }
 
     /// <summary>
-    /// Parses import alias declaration: import X = A.B.C.member;
+    /// Parses after seeing 'import IDENTIFIER ='.
+    /// Distinguishes: import X = require('path') vs import X = Namespace.Member
     /// </summary>
     /// <param name="isExported">True if prefixed with 'export'</param>
-    private Stmt ImportAliasDeclaration(bool isExported)
+    private Stmt ParseImportWithEquals(bool isExported)
     {
         Token keyword = Previous(); // 'import' token
 
@@ -125,6 +126,29 @@ public partial class Parser
         // Consume '='
         Consume(TokenType.EQUAL, "Expect '=' after alias name in import alias.");
 
+        // Check for require('path')
+        if (Check(TokenType.IDENTIFIER) && Peek().Lexeme == "require")
+        {
+            Advance(); // consume 'require'
+            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'require'.");
+            string modulePath = (string)Consume(TokenType.STRING, "Expect module path string in require().").Literal!;
+            Consume(TokenType.RIGHT_PAREN, "Expect ')' after module path.");
+            Consume(TokenType.SEMICOLON, "Expect ';' after import require.");
+            return new Stmt.ImportRequire(keyword, aliasName, modulePath, isExported);
+        }
+
+        // Otherwise namespace alias: import X = Namespace.Member
+        return ImportAliasDeclarationAfterEquals(keyword, aliasName, isExported);
+    }
+
+    /// <summary>
+    /// Parses import alias declaration after the '=' has been consumed: A.B.C.member;
+    /// </summary>
+    /// <param name="keyword">The 'import' token for error reporting</param>
+    /// <param name="aliasName">The alias name token</param>
+    /// <param name="isExported">True if prefixed with 'export'</param>
+    private Stmt ImportAliasDeclarationAfterEquals(Token keyword, Token aliasName, bool isExported)
+    {
         // Parse qualified path: A.B.C.member
         List<Token> path = [Consume(TokenType.IDENTIFIER, "Expect namespace path after '='.")];
 
@@ -145,6 +169,16 @@ public partial class Parser
     }
 
     /// <summary>
+    /// Legacy entry point for import alias declaration (for backward compatibility).
+    /// Redirects to ParseImportWithEquals which handles both require() and namespace alias.
+    /// </summary>
+    /// <param name="isExported">True if prefixed with 'export'</param>
+    private Stmt ImportAliasDeclaration(bool isExported)
+    {
+        return ParseImportWithEquals(isExported);
+    }
+
+    /// <summary>
     /// Parses export declarations:
     /// - export const x = 5;                        (declaration export)
     /// - export function foo() {}                   (function export)
@@ -155,10 +189,19 @@ public partial class Parser
     /// - export * from './module';                  (re-export all)
     /// - export default expression;                 (default export)
     /// - export default class {}                    (default class export)
+    /// - export = expression;                       (CommonJS export assignment)
     /// </summary>
     private Stmt ExportDeclaration()
     {
         Token keyword = Previous();
+
+        // export = <expression> (CommonJS export assignment)
+        if (Match(TokenType.EQUAL))
+        {
+            Expr exportValue = Expression();
+            Consume(TokenType.SEMICOLON, "Expect ';' after export assignment.");
+            return new Stmt.Export(keyword, null, null, null, null, false, exportValue);
+        }
 
         // export default ...
         if (Match(TokenType.DEFAULT))
@@ -213,13 +256,14 @@ public partial class Parser
         }
 
         // export import X = Namespace.Member (re-export alias)
+        // export import X = require('path') (re-export require)
         if (Match(TokenType.IMPORT))
         {
             if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
             {
-                return ImportAliasDeclaration(isExported: true);
+                return ParseImportWithEquals(isExported: true);
             }
-            throw new Exception($"Parse Error at line {Peek().Line}: Expected import alias after 'export import' (e.g., 'export import X = Namespace.Member').");
+            throw new Exception($"Parse Error at line {Peek().Line}: Expected import alias after 'export import' (e.g., 'export import X = Namespace.Member' or 'export import X = require(\"...\")')).");
         }
 
         // export function/class/const/let/interface/type/enum

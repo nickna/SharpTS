@@ -456,6 +456,18 @@ public partial class Interpreter
     /// </summary>
     private ExecutionResult ExecuteExport(Stmt.Export export)
     {
+        // Handle export = assignment (CommonJS-style)
+        if (export.ExportAssignment != null)
+        {
+            var value = Evaluate(export.ExportAssignment);
+            if (_currentModule != null)
+            {
+                _currentModule.HasExportAssignment = true;
+                _currentModule.ExportAssignmentValue = value;
+            }
+            return ExecutionResult.Success();
+        }
+
         if (export.IsDefaultExport)
         {
             if (export.Declaration != null)
@@ -541,6 +553,71 @@ public partial class Interpreter
     /// </summary>
     private bool IsTypeOnlyDeclaration(Stmt decl) =>
         decl is Stmt.Interface or Stmt.TypeAlias;
+
+    /// <summary>
+    /// Executes a CommonJS-style require import: import x = require('path')
+    /// </summary>
+    private ExecutionResult ExecuteImportRequire(Stmt.ImportRequire importReq)
+    {
+        // Check if it's a built-in module (fs, path, os, etc.)
+        string? builtInModuleName = BuiltInModuleRegistry.GetModuleName(importReq.ModulePath);
+        if (builtInModuleName != null && BuiltInModuleValues.HasInterpreterSupport(builtInModuleName))
+        {
+            // Get the built-in module exports and create a namespace object
+            var exports = BuiltInModuleValues.GetModuleExports(builtInModuleName);
+            var builtInModule = new SharpTSObject(exports);
+            _environment.Define(importReq.AliasName.Lexeme, builtInModule);
+
+            // If this is a re-export, register the export
+            if (importReq.IsExported && _currentModuleInstance != null)
+            {
+                _currentModuleInstance.SetExport(importReq.AliasName.Lexeme, builtInModule);
+            }
+            return ExecutionResult.Success();
+        }
+
+        // Not in module context - define as null
+        if (_currentModule == null || _moduleResolver == null)
+        {
+            _environment.Define(importReq.AliasName.Lexeme, null);
+            return ExecutionResult.Success();
+        }
+
+        // Resolve the module path
+        string resolvedPath = _moduleResolver.ResolveModulePath(importReq.ModulePath, _currentModule.Path);
+
+        // Find the loaded module instance
+        var moduleInstance = _loadedModules.GetValueOrDefault(resolvedPath);
+        var importedModule = _moduleResolver.GetCachedModule(resolvedPath);
+
+        object? importedValue;
+        if (importedModule?.HasExportAssignment == true)
+        {
+            // Module uses export = value - import the assignment value directly
+            importedValue = importedModule.ExportAssignmentValue;
+        }
+        else if (moduleInstance != null)
+        {
+            // ES6-style module - create a namespace object with all exports
+            var exports = new Dictionary<string, object?>(moduleInstance.Exports);
+            importedValue = new SharpTSObject(exports);
+        }
+        else
+        {
+            // Module not found - define as null
+            importedValue = null;
+        }
+
+        _environment.Define(importReq.AliasName.Lexeme, importedValue);
+
+        // If this is a re-export, register the export
+        if (importReq.IsExported && _currentModuleInstance != null)
+        {
+            _currentModuleInstance.SetExport(importReq.AliasName.Lexeme, importedValue);
+        }
+
+        return ExecutionResult.Success();
+    }
 
     /// <summary>
     /// Checks if the statements begin with a "use strict" directive.
@@ -1032,6 +1109,8 @@ public partial class Interpreter
                 // Imports are handled in BindModuleImports before execution
                 // In single-file mode, imports are a no-op (type checker would have errored)
                 return ExecutionResult.Success();
+            case Stmt.ImportRequire importReq:
+                return ExecuteImportRequire(importReq);
             case Stmt.Export exportStmt:
                 return ExecuteExport(exportStmt);
             case Stmt.Directive:

@@ -111,6 +111,142 @@ public partial class ILEmitter
     }
 
     /// <summary>
+    /// Emits code for a CommonJS-style require import: import x = require('path')
+    /// </summary>
+    private void EmitImportRequire(Stmt.ImportRequire importReq)
+    {
+        // Check for built-in module imports (fs, path, os, etc.)
+        string? builtInModuleName = BuiltInModuleRegistry.GetModuleName(importReq.ModulePath);
+        if (builtInModuleName == null && _ctx.ModuleResolver != null && _ctx.CurrentModulePath != null)
+        {
+            string resolvedPath = _ctx.ModuleResolver.ResolveModulePath(importReq.ModulePath, _ctx.CurrentModulePath);
+            builtInModuleName = BuiltInModuleRegistry.GetModuleName(resolvedPath);
+        }
+
+        if (builtInModuleName != null)
+        {
+            // Built-in module - create namespace object
+            EmitBuiltInModuleNamespace(builtInModuleName, importReq.AliasName.Lexeme);
+            return;
+        }
+
+        if (_ctx.CurrentModulePath == null || _ctx.ModuleResolver == null ||
+            _ctx.ModuleExportFields == null || _ctx.ModuleTypes == null)
+        {
+            // Not in module context - define as null
+            var local = _ctx.Locals.GetLocal(importReq.AliasName.Lexeme) ?? _ctx.Locals.DeclareLocal(importReq.AliasName.Lexeme, _ctx.Types.Object);
+            IL.Emit(OpCodes.Ldnull);
+            IL.Emit(OpCodes.Stloc, local);
+            return;
+        }
+
+        string importedPath = _ctx.ModuleResolver.ResolveModulePath(importReq.ModulePath, _ctx.CurrentModulePath);
+
+        if (!_ctx.ModuleExportFields.TryGetValue(importedPath, out var exportFields) ||
+            !_ctx.ModuleTypes.TryGetValue(importedPath, out var moduleType))
+        {
+            // Module not found - define as null
+            var local = _ctx.Locals.GetLocal(importReq.AliasName.Lexeme) ?? _ctx.Locals.DeclareLocal(importReq.AliasName.Lexeme, _ctx.Types.Object);
+            IL.Emit(OpCodes.Ldnull);
+            IL.Emit(OpCodes.Stloc, local);
+            return;
+        }
+
+        var aliasLocal = _ctx.Locals.GetLocal(importReq.AliasName.Lexeme) ?? _ctx.Locals.DeclareLocal(importReq.AliasName.Lexeme, _ctx.Types.Object);
+
+        // Check if module uses export = syntax
+        if (exportFields.TryGetValue("$exportAssignment", out var exportAssignField))
+        {
+            // Module uses export = - load the assignment value directly
+            IL.Emit(OpCodes.Ldsfld, exportAssignField);
+        }
+        else
+        {
+            // ES6-style module - create namespace object from all exports
+            var dictType = _ctx.Types.DictionaryStringObject;
+            var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+            var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
+
+            IL.Emit(OpCodes.Newobj, dictCtor);
+
+            // Add each export to the dictionary
+            foreach (var (exportName, field) in exportFields)
+            {
+                if (exportName == "$default") continue; // Skip default in namespace import
+
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldstr, exportName);
+                IL.Emit(OpCodes.Ldsfld, field);
+                IL.Emit(OpCodes.Callvirt, addMethod);
+            }
+
+            // Wrap in SharpTSObject
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+        }
+
+        IL.Emit(OpCodes.Stloc, aliasLocal);
+
+        // If this is a re-export (export import x = require('...')), store in export field
+        if (importReq.IsExported && _ctx.ModuleExportFields.TryGetValue(_ctx.CurrentModulePath, out var currentExportFields))
+        {
+            if (currentExportFields.TryGetValue(importReq.AliasName.Lexeme, out var exportField))
+            {
+                IL.Emit(OpCodes.Ldloc, aliasLocal);
+                IL.Emit(OpCodes.Stsfld, exportField);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Emits a namespace object for a built-in module.
+    /// </summary>
+    private void EmitBuiltInModuleNamespace(string moduleName, string localName)
+    {
+        var emitter = _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(moduleName);
+        var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+
+        if (emitter == null)
+        {
+            // Module emitter not registered - store null
+            IL.Emit(OpCodes.Ldnull);
+            IL.Emit(OpCodes.Stloc, local);
+            return;
+        }
+
+        // Track this variable as a built-in module namespace for direct method dispatch
+        _ctx.BuiltInModuleNamespaces ??= new Dictionary<string, string>();
+        _ctx.BuiltInModuleNamespaces[localName] = moduleName;
+
+        // Create a dictionary to hold all module exports
+        var dictType = _ctx.Types.DictionaryStringObject;
+        var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+        var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
+
+        IL.Emit(OpCodes.Newobj, dictCtor);
+
+        // Add each exported member to the dictionary
+        foreach (var memberName in emitter.GetExportedMembers())
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldstr, memberName);
+
+            // Try to emit the property value, or create a function wrapper
+            if (!emitter.TryEmitPropertyGet(this, memberName))
+            {
+                // For methods, create a TSFunction wrapper
+                EmitBuiltInModuleMethodWrapper(moduleName, memberName);
+            }
+
+            EnsureBoxed();
+            IL.Emit(OpCodes.Callvirt, addMethod);
+        }
+
+        // Wrap dictionary in SharpTSObject
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateObject);
+        IL.Emit(OpCodes.Stloc, local);
+    }
+
+    /// <summary>
     /// Emits code for an export statement.
     /// Exports store values into module export fields.
     /// </summary>
@@ -124,6 +260,18 @@ public partial class ILEmitter
 
         if (!_ctx.ModuleExportFields.TryGetValue(_ctx.CurrentModulePath, out var exportFields))
         {
+            return;
+        }
+
+        // Handle export = assignment (CommonJS-style)
+        if (export.ExportAssignment != null)
+        {
+            if (exportFields.TryGetValue("$exportAssignment", out var exportAssignField))
+            {
+                EmitExpression(export.ExportAssignment);
+                EnsureBoxed();
+                IL.Emit(OpCodes.Stsfld, exportAssignField);
+            }
             return;
         }
 

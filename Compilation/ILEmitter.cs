@@ -226,6 +226,10 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 EmitImport(import);
                 break;
 
+            case Stmt.ImportRequire importReq:
+                EmitImportRequire(importReq);
+                break;
+
             case Stmt.Export export:
                 EmitExport(export);
                 break;

@@ -26,6 +26,21 @@ public static class TestHarness
     internal static readonly object ConsoleLock = new();
 
     /// <summary>
+    /// Parses TypeScript source code and returns the list of statements.
+    /// Useful for testing AST structure without execution.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <returns>List of parsed statements</returns>
+    public static List<Stmt> Parse(string source)
+    {
+        var lexer = new Lexer(source);
+        var tokens = lexer.ScanTokens();
+        var parser = new Parser(tokens);
+        var result = parser.Parse();
+        return result.Statements;
+    }
+
+    /// <summary>
     /// Runs TypeScript source through the interpreter and captures console output.
     /// Uses default timeout to prevent infinite loops from hanging tests.
     /// </summary>

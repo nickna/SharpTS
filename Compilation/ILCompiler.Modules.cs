@@ -34,8 +34,27 @@ public partial class ILCompiler
 
         _modules.Types[module.Path] = moduleType;
         Dictionary<string, FieldBuilder> exportFields = [];
+        bool hasExportAssignment = false;
 
-        // Create export fields
+        // First pass: check for export = syntax
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is Stmt.Export export && export.ExportAssignment != null)
+            {
+                // Create $exportAssignment field for CommonJS export = syntax
+                var field = moduleType.DefineField(
+                    "$exportAssignment",
+                    typeof(object),
+                    FieldAttributes.Public | FieldAttributes.Static
+                );
+                exportFields["$exportAssignment"] = field;
+                hasExportAssignment = true;
+                break; // No other exports allowed with export =
+            }
+        }
+
+        // Second pass: create standard export fields (only if no export assignment)
+        if (!hasExportAssignment)
         foreach (var stmt in module.Statements)
         {
             if (stmt is Stmt.Export export)
@@ -137,6 +156,7 @@ public partial class ILCompiler
     /// <summary>
     /// Emits the $GetNamespace method that returns all module exports as a SharpTSObject.
     /// Used for dynamic import - returns the module namespace object.
+    /// For modules using export =, returns { default: value } for ESM interop.
     /// </summary>
     private void EmitModuleGetNamespace(
         ParsedModule module,
@@ -159,14 +179,26 @@ public partial class ILCompiler
         il.Emit(OpCodes.Newobj, dictType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // Add each export to the dictionary
-        foreach (var (exportName, field) in exportFields)
+        // Check if this module uses export = syntax
+        if (exportFields.TryGetValue("$exportAssignment", out var exportAssignField))
         {
-            // dict[exportName] = exportField;
+            // For export = modules, return { default: value } for ESM interop
             il.Emit(OpCodes.Ldloc, dictLocal);
-            il.Emit(OpCodes.Ldstr, exportName == "$default" ? "default" : exportName);
-            il.Emit(OpCodes.Ldsfld, field);
+            il.Emit(OpCodes.Ldstr, "default");
+            il.Emit(OpCodes.Ldsfld, exportAssignField);
             il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
+        }
+        else
+        {
+            // Standard ES6 module - add each export to the dictionary
+            foreach (var (exportName, field) in exportFields)
+            {
+                // dict[exportName] = exportField;
+                il.Emit(OpCodes.Ldloc, dictLocal);
+                il.Emit(OpCodes.Ldstr, exportName == "$default" ? "default" : exportName);
+                il.Emit(OpCodes.Ldsfld, field);
+                il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
+            }
         }
 
         // return $Runtime.CreateObject(dict);

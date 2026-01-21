@@ -288,6 +288,21 @@ public abstract record Stmt
         bool IsExported = false
     ) : Stmt;
 
+    /// <summary>
+    /// CommonJS-style import: import x = require('modulePath')
+    /// Used for CommonJS interop and importing modules with export = syntax.
+    /// </summary>
+    /// <param name="Keyword">The 'import' token for error reporting</param>
+    /// <param name="AliasName">The local alias name (x)</param>
+    /// <param name="ModulePath">The module path string</param>
+    /// <param name="IsExported">True if prefixed with 'export' (re-export)</param>
+    public record ImportRequire(
+        Token Keyword,
+        Token AliasName,
+        string ModulePath,
+        bool IsExported = false
+    ) : Stmt;
+
     // Module statements
     /// <summary>
     /// Import declaration: import { x, y } from './file', import Default from './file', etc.
@@ -324,13 +339,15 @@ public abstract record Stmt
     /// <param name="DefaultExpr">Default export expression: export default expr</param>
     /// <param name="FromModulePath">Re-export source: export { x } from './file'</param>
     /// <param name="IsDefaultExport">True for 'export default'</param>
+    /// <param name="ExportAssignment">CommonJS export assignment: export = expr</param>
     public record Export(
         Token Keyword,
         Stmt? Declaration,
         List<ExportSpecifier>? NamedExports,
         Expr? DefaultExpr,
         string? FromModulePath,
-        bool IsDefaultExport
+        bool IsDefaultExport,
+        Expr? ExportAssignment = null
     ) : Stmt;
 
     /// <summary>

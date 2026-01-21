@@ -58,6 +58,24 @@ public class ParsedModule
     public object? DefaultExportValue { get; set; }
 
     /// <summary>
+    /// True if module uses 'export = value' syntax (CommonJS-style).
+    /// When true, the module has a single export assignment instead of named exports.
+    /// </summary>
+    public bool HasExportAssignment { get; set; }
+
+    /// <summary>
+    /// Type of the export assignment value (for type checker).
+    /// Only set when HasExportAssignment is true.
+    /// </summary>
+    public TypeInfo? ExportAssignmentType { get; set; }
+
+    /// <summary>
+    /// Runtime value of export assignment (for interpreter).
+    /// Only set when HasExportAssignment is true.
+    /// </summary>
+    public object? ExportAssignmentValue { get; set; }
+
+    /// <summary>
     /// Whether the module has been executed (for interpreter).
     /// </summary>
     public bool IsExecuted { get; set; }

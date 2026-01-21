@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added static blocks for class initialization)
+**Last Updated:** 2026-01-20 (Added CommonJS export=/import= interop - parsing complete, IL in progress)
 
 ## Legend
 - ✅ Implemented
@@ -130,7 +130,7 @@ This document tracks TypeScript language features and their implementation statu
 | Dynamic imports | ✅ | `await import('./file')` with module registry for compiled mode, `typeof import()` typing for literal paths |
 | `import type` | ✅ | Statement-level (`import type { T }`) and inline (`import { type T }`) type-only imports |
 | `import.meta` | ✅ | `import.meta.url` for module metadata |
-| `export =` / `import =` | ❌ | CommonJS interop syntax |
+| `export =` / `import =` | ⚠️ | CommonJS interop: `export = value`, `import x = require('path')`, `export import x = require()` - parsing works, IL emission in progress |
 | Ambient module declarations | ❌ | `declare module 'x' { }` |
 | Module augmentation | ❌ | Extending existing module types |
 | Triple-slash references | ✅ | `/// <reference path="...">` for script-style file merging |

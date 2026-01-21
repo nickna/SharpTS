@@ -39,6 +39,10 @@ public static class ScriptDetector
             // ImportAlias with IsExported = true makes this a module (export import X = ...)
             if (stmt is Stmt.ImportAlias { IsExported: true })
                 return false;
+
+            // ImportRequire makes this a module (import x = require(...))
+            if (stmt is Stmt.ImportRequire)
+                return false;
         }
 
         return true;

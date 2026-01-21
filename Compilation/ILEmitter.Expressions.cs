@@ -109,6 +109,14 @@ public partial class ILEmitter
             return;
         }
 
+        // Check if it's a top-level variable - load from static field
+        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            IL.Emit(OpCodes.Ldsfld, topLevelField);
+            SetStackUnknown();
+            return;
+        }
+
         // Unknown variable - push null
         EmitNullConstant();
     }

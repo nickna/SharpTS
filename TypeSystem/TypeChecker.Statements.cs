@@ -526,6 +526,10 @@ public partial class TypeChecker
                 // When in module mode, imports are resolved and bound in BindModuleImports()
                 break;
 
+            case Stmt.ImportRequire importReq:
+                CheckImportRequire(importReq);
+                break;
+
             case Stmt.Export exportStmt:
                 // Check the declaration or expression being exported
                 CheckExportStatement(exportStmt);
