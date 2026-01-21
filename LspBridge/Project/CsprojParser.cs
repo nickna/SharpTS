@@ -25,6 +25,9 @@ public static class CsprojParser
             var hintPath = refElement.Element("HintPath")?.Value;
             if (!string.IsNullOrEmpty(hintPath))
             {
+                // Normalize path separators for cross-platform compatibility
+                // (csproj files often use backslashes even when targeting Unix)
+                hintPath = hintPath.Replace('\\', Path.DirectorySeparatorChar);
                 var fullPath = Path.GetFullPath(Path.Combine(projectDir, hintPath));
                 if (File.Exists(fullPath))
                     references.Add(fullPath);
