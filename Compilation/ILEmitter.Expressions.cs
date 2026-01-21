@@ -299,6 +299,13 @@ public partial class ILEmitter
 
     protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
     {
+        // Check for String.raw special case
+        if (IsStringRawTag(ttl.Tag))
+        {
+            EmitStringRawTaggedTemplate(ttl);
+            return;
+        }
+
         // 1. Emit the tag function reference
         EmitExpression(ttl.Tag);
         EmitBoxIfNeeded(ttl.Tag);
@@ -347,6 +354,52 @@ public partial class ILEmitter
         // 5. Call runtime helper: InvokeTaggedTemplate(tag, cooked, raw, exprs)
         IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeTaggedTemplate);
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Checks if the tag expression is String.raw.
+    /// </summary>
+    private static bool IsStringRawTag(Expr tag)
+    {
+        return tag is Expr.Get get
+            && get.Name.Lexeme == "raw"
+            && get.Object is Expr.Variable v
+            && v.Name.Lexeme == "String";
+    }
+
+    /// <summary>
+    /// Emits optimized code for String.raw tagged template literals.
+    /// Directly calls RuntimeTypes.StringRaw instead of going through InvokeTaggedTemplate.
+    /// </summary>
+    private void EmitStringRawTaggedTemplate(Expr.TaggedTemplateLiteral ttl)
+    {
+        // 1. Create raw strings array
+        IL.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.String);
+        for (int i = 0; i < ttl.RawStrings.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 2. Create expressions array
+        IL.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(ttl.Expressions[i]);
+            EmitBoxIfNeeded(ttl.Expressions[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // 3. Call RuntimeTypes.StringRaw(rawStrings, expressions)
+        var stringRawMethod = typeof(RuntimeTypes).GetMethod("StringRaw", [typeof(string[]), typeof(object?[])])!;
+        IL.Emit(OpCodes.Call, stringRawMethod);
+        SetStackType(StackType.String);
     }
 
     protected override void EmitRegexLiteral(Expr.RegexLiteral re)

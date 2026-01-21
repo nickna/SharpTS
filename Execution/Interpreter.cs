@@ -33,7 +33,7 @@ namespace SharpTS.Execution;
 /// </remarks>
 /// <seealso cref="RuntimeEnvironment"/>
 /// <seealso cref="ILCompiler"/>
-public partial class Interpreter
+public partial class Interpreter : IDisposable
 {
     private RuntimeEnvironment _environment = new();
     private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
@@ -48,9 +48,28 @@ public partial class Interpreter
     // Lock for synchronizing timer callback access with main interpretation thread
     internal readonly object InterpreterLock = new();
 
+    // Flag to indicate interpreter has been disposed - timer callbacks should not execute
+    private volatile bool _isDisposed;
+
+    /// <summary>
+    /// Gets whether this interpreter has been disposed.
+    /// Timer callbacks check this before executing to prevent race conditions.
+    /// </summary>
+    internal bool IsDisposed => _isDisposed;
+
     internal RuntimeEnvironment Environment => _environment;
     internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
+
+    /// <summary>
+    /// Disposes the interpreter, marking it as disposed so timer callbacks won't execute.
+    /// This prevents race conditions where timer callbacks fire after the test/execution context has ended.
+    /// </summary>
+    public void Dispose()
+    {
+        _isDisposed = true;
+        GC.SuppressFinalize(this);
+    }
 
     public void Resolve(Expr expr, int depth)
     {

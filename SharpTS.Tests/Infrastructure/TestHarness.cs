@@ -102,7 +102,7 @@ public static class TestHarness
                     checker.SetDecoratorMode(decoratorMode);
                     var typeMap = checker.Check(statements);
 
-                    var interpreter = new Interpreter();
+                    using var interpreter = new Interpreter();
                     interpreter.SetDecoratorMode(decoratorMode);
                     interpreter.Interpret(statements, typeMap);
 

@@ -678,11 +678,27 @@ public partial class Parser
                         {
                             List<Stmt.Parameter> parameters = [];
 
+                            // Check for 'this' parameter in computed method
+                            string? thisType = null;
+                            if (Check(TokenType.THIS))
+                            {
+                                Advance(); // consume 'this'
+                                Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
+                                thisType = ParseTypeAnnotation();
+                                if (Check(TokenType.COMMA))
+                                {
+                                    Advance(); // consume ','
+                                }
+                            }
+
                             if (!Check(TokenType.RIGHT_PAREN))
                             {
                                 do
                                 {
+                                    // Check for rest parameter
+                                    bool isRest = Match(TokenType.DOT_DOT_DOT);
                                     Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+                                    bool isOptional = Match(TokenType.QUESTION);
                                     string? paramType = null;
                                     if (Match(TokenType.COLON))
                                     {
@@ -693,7 +709,13 @@ public partial class Parser
                                     {
                                         defaultValue = Expression();
                                     }
-                                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue));
+                                    parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+
+                                    // Rest parameter must be last
+                                    if (isRest && Check(TokenType.COMMA))
+                                    {
+                                        throw new Exception("Parse Error: Rest parameter must be last.");
+                                    }
                                 } while (Match(TokenType.COMMA));
                             }
                             Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");
@@ -710,7 +732,7 @@ public partial class Parser
                             var methodExpr = new Expr.ArrowFunction(
                                 Name: null,
                                 TypeParams: null,
-                                ThisType: null,
+                                ThisType: thisType,
                                 Parameters: parameters,
                                 ExpressionBody: null,
                                 BlockBody: body,
@@ -773,7 +795,10 @@ public partial class Parser
                         {
                             do
                             {
+                                // Check for rest parameter
+                                bool isRest = Match(TokenType.DOT_DOT_DOT);
                                 Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name.");
+                                bool isOptional = Match(TokenType.QUESTION);
                                 string? paramType = null;
                                 if (Match(TokenType.COLON))
                                 {
@@ -784,7 +809,13 @@ public partial class Parser
                                 {
                                     defaultValue = Expression();
                                 }
-                                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue));
+                                parameters.Add(new Stmt.Parameter(paramName, paramType, defaultValue, isRest, IsOptional: isOptional));
+
+                                // Rest parameter must be last
+                                if (isRest && Check(TokenType.COMMA))
+                                {
+                                    throw new Exception("Parse Error: Rest parameter must be last.");
+                                }
                             } while (Match(TokenType.COMMA));
                         }
                         Consume(TokenType.RIGHT_PAREN, "Expect ')' after method parameters.");

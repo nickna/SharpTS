@@ -523,29 +523,13 @@ public class NegativeTests
 
     #region Comment Edge Cases
 
-    [Fact(Skip = "Known limitation: Lexer silently ignores unterminated block comments instead of reporting an error - see Lexer.cs:410")]
+    [Fact]
     public void Comment_UnterminatedBlock_ShouldReportError()
     {
-        // BUG: The lexer currently treats unterminated block comments as consuming the
-        // remaining source silently without reporting an error. This should be fixed
-        // to report "Unterminated block comment" similar to how regex literals are handled.
         var source = "let x = 5; /* unterminated";
         AssertHandlesGracefully(source);
         Assert.True(FailsGracefully(source),
             "Expected error for unterminated block comment, but none was reported");
-    }
-
-    [Fact]
-    public void Comment_UnterminatedBlock_ActualBehavior()
-    {
-        // Documents current (arguably incorrect) behavior: unterminated block comment
-        // silently consumes remaining source without error.
-        var source = "let x = 5; /* unterminated";
-        AssertHandlesGracefully(source);
-        var result = TryParse(source);
-        // Current behavior: parses "let x = 5;" and treats rest as comment (no error)
-        Assert.True(result.IsSuccess);
-        Assert.Single(result.Statements);
     }
 
     [Fact]

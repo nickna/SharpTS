@@ -118,6 +118,27 @@ public static partial class RuntimeTypes
         public List<object> raw => _rawStrings;
     }
 
+    /// <summary>
+    /// Implements String.raw for compiled tagged template literals.
+    /// Returns the raw string with substitution values interleaved.
+    /// </summary>
+    public static string StringRaw(string[] rawStrings, object?[] expressions)
+    {
+        if (rawStrings.Length == 0)
+            return "";
+
+        var result = new System.Text.StringBuilder();
+        for (int i = 0; i < rawStrings.Length; i++)
+        {
+            result.Append(rawStrings[i]);
+            if (i < expressions.Length)
+            {
+                result.Append(expressions[i]?.ToString() ?? "");
+            }
+        }
+        return result.ToString();
+    }
+
     #endregion
 
     #region Array Method Binding

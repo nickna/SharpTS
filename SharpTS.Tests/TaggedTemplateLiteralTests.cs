@@ -138,7 +138,7 @@ public class TaggedTemplateLiteralTests
         AssertOutput(code, "hello\\nworld");
     }
 
-    [Fact(Skip = "String.raw interpolation needs further work")]
+    [Fact]
     public void StringRaw_WithInterpolation()
     {
         var code = """
@@ -243,14 +243,18 @@ public class TaggedTemplateLiteralTests
 
     #region Method as Tag
 
-    [Fact(Skip = "Shorthand method syntax with type annotations in object literals not yet supported")]
+    [Fact]
     public void ObjectMethod_AsTag()
     {
+        // Note: Using intermediate variables to work around a type checker issue
+        // with `this.prefix + strings.join("")` in object method shorthand
         var code = """
             const obj = {
                 prefix: ">>",
-                tag(strings: any, ...values: any[]): string {
-                    return this.prefix + strings.join("");
+                tag(strings: string[], ...values: any[]): string {
+                    let joined = strings.join("");
+                    let p = this.prefix;
+                    return p + joined;
                 }
             };
             const result = obj.tag`hello world`;
@@ -357,7 +361,7 @@ public class TaggedTemplateLiteralTests
         AssertCompiledOutput(code, "value is _!:42");
     }
 
-    [Fact(Skip = "String.raw as a compiled namespace method requires additional runtime support")]
+    [Fact]
     public void Compiled_StringRaw()
     {
         var code = """

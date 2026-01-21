@@ -31,14 +31,21 @@ public static class TimerBuiltIns
         Timer? timer = null;
         timer = new Timer(_ =>
         {
-            if (!cts.IsCancellationRequested)
+            // Check both cancellation and interpreter disposal before executing
+            // This prevents race conditions where callbacks fire after test cleanup
+            if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
                 // Synchronize callback execution with the interpreter's main thread
                 // to prevent race conditions with environment swapping
                 lock (interpreter.InterpreterLock)
                 {
-                    // Execute callback - exceptions propagate to help debug issues
-                    callback.Call(interpreter, args);
+                    // Double-check disposal after acquiring lock (interpreter could be
+                    // disposed while we were waiting for the lock)
+                    if (!interpreter.IsDisposed)
+                    {
+                        // Execute callback - exceptions propagate to help debug issues
+                        callback.Call(interpreter, args);
+                    }
                 }
             }
             timer?.Dispose();
@@ -81,14 +88,21 @@ public static class TimerBuiltIns
         Timer? timer = null;
         timer = new Timer(_ =>
         {
-            if (!cts.IsCancellationRequested)
+            // Check both cancellation and interpreter disposal before executing
+            // This prevents race conditions where callbacks fire after test cleanup
+            if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
                 // Synchronize callback execution with the interpreter's main thread
                 // to prevent race conditions with environment swapping
                 lock (interpreter.InterpreterLock)
                 {
-                    // Execute callback - exceptions propagate to help debug issues
-                    callback.Call(interpreter, args);
+                    // Double-check disposal after acquiring lock (interpreter could be
+                    // disposed while we were waiting for the lock)
+                    if (!interpreter.IsDisposed)
+                    {
+                        // Execute callback - exceptions propagate to help debug issues
+                        callback.Call(interpreter, args);
+                    }
                 }
             }
         }, null, delay, delay);

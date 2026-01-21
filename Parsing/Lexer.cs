@@ -455,7 +455,7 @@ public class Lexer(string source)
             if (Peek() == '\n') _line++;
             Advance();
         }
-        // Unterminated block comment - we'll just ignore for now
+        throw new Exception($"Unterminated block comment at line {_line}");
     }
 
     /// <summary>
@@ -716,22 +716,34 @@ public class Lexer(string source)
 
             if (Peek() == '\\' && !IsAtEnd())
             {
-                raw.Append(Advance()); // consume backslash, add to raw
-
-                if (!IsAtEnd())
+                // Check if this is \${ - if so, don't consume the $ as an escape,
+                // let it be processed as interpolation. The backslash becomes a literal.
+                if (PeekNext() == '$' && _current + 2 < _source.Length && _source[_current + 2] == '{')
                 {
-                    char next = Peek();
-                    raw.Append(Advance()); // add escaped char to raw
+                    // Just add the backslash literally and let ${...} be interpolation
+                    char backslash = Advance();
+                    raw.Append(backslash);
+                    cooked.Append(backslash);
+                }
+                else
+                {
+                    raw.Append(Advance()); // consume backslash, add to raw
 
-                    // Process escape for cooked string
-                    var processed = ProcessTemplateEscape(next);
-                    if (processed == null)
+                    if (!IsAtEnd())
                     {
-                        hasInvalidEscape = true;
-                    }
-                    else
-                    {
-                        cooked.Append(processed);
+                        char next = Peek();
+                        raw.Append(Advance()); // add escaped char to raw
+
+                        // Process escape for cooked string
+                        var processed = ProcessTemplateEscape(next);
+                        if (processed == null)
+                        {
+                            hasInvalidEscape = true;
+                        }
+                        else
+                        {
+                            cooked.Append(processed);
+                        }
                     }
                 }
             }
