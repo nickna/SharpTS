@@ -6,12 +6,13 @@ namespace SharpTS.Parsing;
 public enum AccessModifier { Public, Private, Protected }
 
 /// <summary>
-/// Type parameter in generic declarations (e.g., T in &lt;T extends Base&gt; or &lt;T = string&gt;).
+/// Type parameter in generic declarations (e.g., T in &lt;T extends Base&gt;, &lt;T = string&gt;, or &lt;const T&gt;).
 /// </summary>
 /// <param name="Name">The type parameter identifier token.</param>
 /// <param name="Constraint">Optional constraint type (after extends keyword).</param>
 /// <param name="Default">Optional default type (after = sign).</param>
-public record TypeParam(Token Name, string? Constraint, string? Default = null);
+/// <param name="IsConst">Whether this is a const type parameter (TypeScript 5.0+ feature for preserving literal types).</param>
+public record TypeParam(Token Name, string? Constraint, string? Default = null, bool IsConst = false);
 
 /// <summary>
 /// Base record for all expression AST nodes.

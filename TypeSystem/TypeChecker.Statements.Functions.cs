@@ -174,7 +174,7 @@ public partial class TypeChecker
                 // First, define all type parameters without constraints
                 foreach (var tp in funcStmt.TypeParams)
                 {
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst);
                     funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
                 }
                 // Second, parse constraints (which may reference other type parameters)
@@ -182,7 +182,7 @@ public partial class TypeChecker
                 {
                     TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
                     TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
                     typeParams.Add(typeParam);
                     // Redefine with the actual constraint
                     funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
@@ -273,7 +273,7 @@ public partial class TypeChecker
             // First, define all type parameters without constraints
             foreach (var tp in funcStmt.TypeParams)
             {
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst);
                 funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
             // Second, parse constraints (which may reference other type parameters)
@@ -281,7 +281,7 @@ public partial class TypeChecker
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
                 TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
                 typeParams.Add(typeParam);
                 // Redefine with the actual constraint
                 funcEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);

@@ -467,11 +467,18 @@ public abstract record TypeInfo
         };
     }
 
-    public record Array(TypeInfo ElementType) : TypeInfo
+    /// <summary>
+    /// Array type. IsReadonly indicates a readonly array (from const type parameters or readonly modifier).
+    /// </summary>
+    public record Array(TypeInfo ElementType, bool IsReadonly = false) : TypeInfo
     {
-        public override string ToString() => ElementType is Union
-            ? $"({ElementType})[]"
-            : $"{ElementType}[]";
+        public override string ToString()
+        {
+            var prefix = IsReadonly ? "readonly " : "";
+            return ElementType is Union
+                ? $"{prefix}({ElementType})[]"
+                : $"{prefix}{ElementType}[]";
+        }
     }
 
     /// <summary>
@@ -516,10 +523,14 @@ public abstract record TypeInfo
         public override string ToString() => $"WeakSet<{ElementType}>";
     }
 
+    /// <summary>
+    /// Tuple type. IsReadonly indicates a readonly tuple (from const type parameters or readonly modifier).
+    /// </summary>
     public record Tuple(
         List<TupleElement> Elements,
         int RequiredCount,
-        TypeInfo? RestElementType = null  // Keep for trailing ...T[] syntax
+        TypeInfo? RestElementType = null,  // Keep for trailing ...T[] syntax
+        bool IsReadonly = false
     ) : TypeInfo
     {
         public int MinLength => RequiredCount;
@@ -545,30 +556,35 @@ public abstract record TypeInfo
             var parts = Elements.Select(e => e.ToString()).ToList();
             if (RestElementType != null)
                 parts.Add($"...{RestElementType}[]");
-            return $"[{string.Join(", ", parts)}]";
+            var prefix = IsReadonly ? "readonly " : "";
+            return $"{prefix}[{string.Join(", ", parts)}]";
         }
 
         /// <summary>
         /// Creates a tuple from a list of element types (all required, no names).
         /// Used for backwards compatibility during migration.
         /// </summary>
-        public static Tuple FromTypes(List<TypeInfo> types, int requiredCount, TypeInfo? restType = null, List<string?>? names = null)
+        public static Tuple FromTypes(List<TypeInfo> types, int requiredCount, TypeInfo? restType = null, List<string?>? names = null, bool isReadonly = false)
         {
             var elements = types.Select((t, i) => new TupleElement(
                 t,
                 i < requiredCount ? TupleElementKind.Required : TupleElementKind.Optional,
                 names != null && i < names.Count ? names[i] : null
             )).ToList();
-            return new Tuple(elements, requiredCount, restType);
+            return new Tuple(elements, requiredCount, restType, isReadonly);
         }
     }
 
+    /// <summary>
+    /// Record/object type. IsReadonly indicates a readonly record (from const type parameters or Readonly utility type).
+    /// </summary>
     public record Record(
         FrozenDictionary<string, TypeInfo> Fields,
         TypeInfo? StringIndexType = null,
         TypeInfo? NumberIndexType = null,
         TypeInfo? SymbolIndexType = null,
-        FrozenSet<string>? OptionalFields = null
+        FrozenSet<string>? OptionalFields = null,
+        bool IsReadonly = false
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
@@ -578,7 +594,11 @@ public abstract record TypeInfo
         /// </summary>
         public bool IsFieldOptional(string name) => OptionalFields?.Contains(name) ?? false;
 
-        public override string ToString() => $"{{ {string.Join(", ", Fields.Select(f => $"{f.Key}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}"))} }}";
+        public override string ToString()
+        {
+            var prefix = IsReadonly ? "readonly " : "";
+            return $"{prefix}{{ {string.Join(", ", Fields.Select(f => $"{f.Key}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}"))} }}";
+        }
     }
     
     public record Void() : TypeInfo
@@ -844,11 +864,15 @@ public abstract record TypeInfo
     /// <param name="Name">The name of the type parameter (e.g., "T").</param>
     /// <param name="Constraint">Optional constraint type (from extends clause).</param>
     /// <param name="Default">Optional default type (from = clause).</param>
-    public record TypeParameter(string Name, TypeInfo? Constraint = null, TypeInfo? Default = null) : TypeInfo
+    /// <summary>
+    /// Type parameter in generic declarations. IsConst indicates a const type parameter
+    /// (TypeScript 5.0+ feature) that preserves literal types during inference.
+    /// </summary>
+    public record TypeParameter(string Name, TypeInfo? Constraint = null, TypeInfo? Default = null, bool IsConst = false) : TypeInfo
     {
         public override string ToString()
         {
-            var result = Name;
+            var result = IsConst ? $"const {Name}" : Name;
             if (Constraint != null) result += $" extends {Constraint}";
             if (Default != null) result += $" = {Default}";
             return result;

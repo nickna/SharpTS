@@ -65,7 +65,7 @@ public partial class TypeChecker
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
                 TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
                 classTypeParams.Add(typeParam);
                 classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
@@ -750,7 +750,7 @@ public partial class TypeChecker
             {
                 TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
                 TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
                 classTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
         }

@@ -751,18 +751,68 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Infers literal types with readonly semantics for const type parameters.
+    /// Matches TypeScript 5.0+ behavior: preserves literal types AND marks objects/arrays readonly.
+    /// </summary>
+    private TypeInfo InferConstLiteralType(TypeInfo argType)
+    {
+        // Already literal? Keep it
+        if (argType is TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral)
+            return argType;
+
+        // Tuple: preserve element literal types + mark readonly
+        if (argType is TypeInfo.Tuple tuple)
+        {
+            var constElements = tuple.Elements.Select(e =>
+                new TypeInfo.TupleElement(InferConstLiteralType(e.Type), e.Kind, e.Name)).ToList();
+            return new TypeInfo.Tuple(constElements, tuple.RequiredCount, tuple.RestElementType, IsReadonly: true);
+        }
+
+        // Array: mark as readonly array with recursively processed element type
+        if (argType is TypeInfo.Array arr)
+        {
+            return new TypeInfo.Array(InferConstLiteralType(arr.ElementType), IsReadonly: true);
+        }
+
+        // Record: preserve field literal types + mark readonly
+        if (argType is TypeInfo.Record rec)
+        {
+            var constFields = rec.Fields.ToDictionary(
+                kvp => kvp.Key,
+                kvp => InferConstLiteralType(kvp.Value)
+            ).ToFrozenDictionary();
+            return new TypeInfo.Record(constFields, rec.StringIndexType, rec.NumberIndexType,
+                                       rec.SymbolIndexType, rec.OptionalFields, IsReadonly: true);
+        }
+
+        // For other types (primitives, functions, etc.), return as-is
+        return argType;
+    }
+
+    /// <summary>
     /// Recursively infers type parameter bindings from a parameter type and an argument type.
+    /// Supports const type parameters (TypeScript 5.0+) which preserve literal types during inference.
     /// </summary>
     private void InferFromType(TypeInfo paramType, TypeInfo argType, Dictionary<string, TypeInfo> inferred)
     {
         if (paramType is TypeInfo.TypeParameter tp)
         {
-            // Direct type parameter - infer from argument
-            if (!inferred.ContainsKey(tp.Name))
+            // Determine the type to infer - const type parameters preserve literals
+            TypeInfo inferredType = tp.IsConst ? InferConstLiteralType(argType) : argType;
+
+            if (inferred.TryGetValue(tp.Name, out var existing))
             {
-                inferred[tp.Name] = argType;
+                // Multiple arguments with same type param: create union (for const params)
+                if (tp.IsConst && !TypesEqual(existing, inferredType))
+                {
+                    inferred[tp.Name] = CreateUnion(existing, inferredType);
+                }
+                // Non-const: keep existing behavior (first inferred type wins)
             }
-            // If already inferred, we could unify types here for more sophisticated inference
+            else
+            {
+                inferred[tp.Name] = inferredType;
+            }
         }
         else if (paramType is TypeInfo.Array paramArr && argType is TypeInfo.Array argArr)
         {
@@ -786,6 +836,37 @@ public partial class TypeChecker
                 InferFromType(paramGen.TypeArguments[i], argGen.TypeArguments[i], inferred);
             }
         }
+    }
+
+    /// <summary>
+    /// Creates a union type from two types. If either is already a union, flattens them.
+    /// </summary>
+    private static TypeInfo CreateUnion(TypeInfo a, TypeInfo b)
+    {
+        List<TypeInfo> members = [];
+
+        if (a is TypeInfo.Union ua)
+            members.AddRange(ua.Types);
+        else
+            members.Add(a);
+
+        if (b is TypeInfo.Union ub)
+            members.AddRange(ub.Types);
+        else
+            members.Add(b);
+
+        // Deduplicate (simple reference equality for now)
+        var unique = members.Distinct().ToList();
+        return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+    }
+
+    /// <summary>
+    /// Checks if two types are structurally equal for union deduplication.
+    /// </summary>
+    private static bool TypesEqual(TypeInfo a, TypeInfo b)
+    {
+        // Simple equality check - can be enhanced for structural equality
+        return a.ToString() == b.ToString();
     }
 
     // ==================== KEYOF AND MAPPED TYPE SUPPORT ====================

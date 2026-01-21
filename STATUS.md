@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added CommonJS export=/import= interop support)
+**Last Updated:** 2026-01-20 (Added const type parameters `<const T>` support)
 
 ## Legend
 - ✅ Implemented
@@ -270,7 +270,7 @@ This document tracks TypeScript language features and their implementation statu
 | Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>`, `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>` |
 | Additional utility types | ✅ | `ReturnType<T>`, `Parameters<T>`, `ConstructorParameters<T>`, `InstanceType<T>`, `ThisType<T>`, `Awaited<T>`, `NonNullable<T>`, `Extract<T, U>`, `Exclude<T, U>` |
 | `using`/`await using` | ❌ | Explicit resource management (TS 5.2+) |
-| Const type parameters | ❌ | `<const T>` syntax (TS 5.0+) |
+| Const type parameters | ✅ | `<const T>` syntax (TS 5.0+) for preserving literal types during inference; readonly semantics for objects/arrays |
 | Variance annotations | ❌ | `in`/`out` modifiers on type parameters |
 | Recursive type aliases | ❌ | Self-referential type definitions |
 
