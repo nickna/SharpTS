@@ -51,8 +51,30 @@ public partial class Interpreter : IDisposable
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
 
-    // Queue for pending timer callbacks - timer threads enqueue, main thread dequeues and executes
-    private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _pendingCallbacks = new();
+    // Virtual timer system - timers are checked and executed on the main thread during loop iterations.
+    // This avoids thread scheduling issues on macOS where background threads may not get CPU time.
+    private readonly List<VirtualTimer> _virtualTimers = new();
+    private readonly object _virtualTimersLock = new();
+
+    /// <summary>
+    /// Represents a scheduled timer callback that will be executed by the main thread.
+    /// </summary>
+    internal class VirtualTimer
+    {
+        public long FireTimeMs { get; set; }
+        public int IntervalMs { get; }
+        public Action Callback { get; }
+        public bool IsCancelled { get; set; }
+        public bool IsInterval { get; }
+
+        public VirtualTimer(long fireTimeMs, int intervalMs, Action callback, bool isInterval)
+        {
+            FireTimeMs = fireTimeMs;
+            IntervalMs = intervalMs;
+            Callback = callback;
+            IsInterval = isInterval;
+        }
+    }
 
     /// <summary>
     /// Gets whether this interpreter has been disposed.
@@ -75,26 +97,68 @@ public partial class Interpreter : IDisposable
     }
 
     /// <summary>
-    /// Enqueues a callback to be executed on the main interpreter thread.
-    /// Called by timer threads to schedule callbacks for execution during loop iterations.
+    /// Schedules a virtual timer to be executed on the main thread.
+    /// Returns the VirtualTimer so it can be cancelled later.
     /// </summary>
-    /// <param name="callback">The callback action to execute.</param>
-    internal void EnqueueCallback(Action callback)
+    internal VirtualTimer ScheduleTimer(int delayMs, int intervalMs, Action callback, bool isInterval)
     {
-        _pendingCallbacks.Enqueue(callback);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var timer = new VirtualTimer(now + delayMs, intervalMs, callback, isInterval);
+        lock (_virtualTimersLock)
+        {
+            _virtualTimers.Add(timer);
+        }
+        return timer;
     }
 
     /// <summary>
-    /// Processes all pending timer callbacks. Called during loop iterations to give
-    /// timers a chance to execute without relying on background thread scheduling.
+    /// Processes all due virtual timers. Called during loop iterations to execute
+    /// timer callbacks without relying on background thread scheduling.
     /// </summary>
     internal void ProcessPendingCallbacks()
     {
-        while (_pendingCallbacks.TryDequeue(out var callback))
+        if (_isDisposed) return;
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        List<VirtualTimer>? toExecute = null;
+
+        lock (_virtualTimersLock)
         {
-            if (!_isDisposed)
+            for (int i = _virtualTimers.Count - 1; i >= 0; i--)
             {
-                callback();
+                var timer = _virtualTimers[i];
+                if (timer.IsCancelled)
+                {
+                    _virtualTimers.RemoveAt(i);
+                    continue;
+                }
+                if (timer.FireTimeMs <= now)
+                {
+                    toExecute ??= new List<VirtualTimer>();
+                    toExecute.Add(timer);
+                    if (timer.IsInterval)
+                    {
+                        // Reschedule interval timer
+                        timer.FireTimeMs = now + timer.IntervalMs;
+                    }
+                    else
+                    {
+                        // Remove one-shot timer
+                        _virtualTimers.RemoveAt(i);
+                    }
+                }
+            }
+        }
+
+        // Execute callbacks outside the lock to avoid deadlocks
+        if (toExecute != null)
+        {
+            foreach (var timer in toExecute)
+            {
+                if (!timer.IsCancelled && !_isDisposed)
+                {
+                    timer.Callback();
+                }
             }
         }
     }

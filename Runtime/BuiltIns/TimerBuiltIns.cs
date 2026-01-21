@@ -12,7 +12,8 @@ public static class TimerBuiltIns
 {
     /// <summary>
     /// Executes setTimeout: schedules a callback to run after a delay.
-    /// Uses System.Threading.Timer for reliable scheduling under load.
+    /// Uses virtual timers that are processed on the main thread during loop iterations,
+    /// avoiding thread scheduling issues on macOS.
     /// </summary>
     /// <param name="interpreter">The interpreter instance for callback execution.</param>
     /// <param name="callback">The callback function to execute.</param>
@@ -27,29 +28,17 @@ public static class TimerBuiltIns
         // Ensure delay is non-negative
         int delay = Math.Max(0, (int)delayMs);
 
-        // Use System.Threading.Timer for reliable timer scheduling
-        Timer? timer = null;
-        timer = new Timer(_ =>
+        // Schedule a virtual timer that will be checked and executed on the main thread
+        var virtualTimer = interpreter.ScheduleTimer(delay, 0, () =>
         {
-            // Check both cancellation and interpreter disposal before queueing
-            // This prevents race conditions where callbacks fire after test cleanup
             if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
-                // Queue the callback for execution on the main thread during loop iterations.
-                // This avoids thread scheduling issues on macOS where background threads
-                // may not get CPU time during tight loops.
-                interpreter.EnqueueCallback(() =>
-                {
-                    if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
-                    {
-                        callback.Call(interpreter, args);
-                    }
-                });
+                callback.Call(interpreter, args);
             }
-            timer?.Dispose();
-        }, null, delay, Timeout.Infinite);
+        }, isInterval: false);
 
-        timeout.Timer = timer;
+        // Link cancellation to virtual timer
+        cts.Token.Register(() => virtualTimer.IsCancelled = true);
 
         // Register timer with interpreter for cleanup on disposal
         interpreter.RegisterTimer(timeout);
@@ -73,7 +62,8 @@ public static class TimerBuiltIns
 
     /// <summary>
     /// Executes setInterval: schedules callback to run repeatedly after each delay.
-    /// Uses System.Threading.Timer for reliable scheduling under load.
+    /// Uses virtual timers that are processed on the main thread during loop iterations,
+    /// avoiding thread scheduling issues on macOS.
     /// </summary>
     /// <param name="interpreter">The interpreter instance for callback execution.</param>
     /// <param name="callback">The callback function to execute.</param>
@@ -86,28 +76,17 @@ public static class TimerBuiltIns
         var interval = new SharpTSTimeout(cts);
         int delay = Math.Max(0, (int)delayMs);
 
-        // Use System.Threading.Timer with periodic callback
-        Timer? timer = null;
-        timer = new Timer(_ =>
+        // Schedule a virtual interval timer that will be checked and executed on the main thread
+        var virtualTimer = interpreter.ScheduleTimer(delay, delay, () =>
         {
-            // Check both cancellation and interpreter disposal before queueing
-            // This prevents race conditions where callbacks fire after test cleanup
             if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
-                // Queue the callback for execution on the main thread during loop iterations.
-                // This avoids thread scheduling issues on macOS where background threads
-                // may not get CPU time during tight loops.
-                interpreter.EnqueueCallback(() =>
-                {
-                    if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
-                    {
-                        callback.Call(interpreter, args);
-                    }
-                });
+                callback.Call(interpreter, args);
             }
-        }, null, delay, delay);
+        }, isInterval: true);
 
-        interval.Timer = timer;
+        // Link cancellation to virtual timer
+        cts.Token.Register(() => virtualTimer.IsCancelled = true);
 
         // Register timer with interpreter for cleanup on disposal
         interpreter.RegisterTimer(interval);
