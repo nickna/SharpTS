@@ -52,6 +52,10 @@ public static class TimerBuiltIns
         }, null, delay, Timeout.Infinite);
 
         timeout.Timer = timer;
+
+        // Register timer with interpreter for cleanup on disposal
+        interpreter.RegisterTimer(timeout);
+
         return timeout;
     }
 
@@ -108,6 +112,10 @@ public static class TimerBuiltIns
         }, null, delay, delay);
 
         interval.Timer = timer;
+
+        // Register timer with interpreter for cleanup on disposal
+        interpreter.RegisterTimer(interval);
+
         return interval;
     }
 

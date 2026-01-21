@@ -51,6 +51,9 @@ public partial class Interpreter : IDisposable
     // Flag to indicate interpreter has been disposed - timer callbacks should not execute
     private volatile bool _isDisposed;
 
+    // Track all pending timers for cleanup on disposal
+    private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
+
     /// <summary>
     /// Gets whether this interpreter has been disposed.
     /// Timer callbacks check this before executing to prevent race conditions.
@@ -62,12 +65,29 @@ public partial class Interpreter : IDisposable
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
 
     /// <summary>
-    /// Disposes the interpreter, marking it as disposed so timer callbacks won't execute.
+    /// Registers a timer for tracking. Called by TimerBuiltIns when creating setTimeout/setInterval.
+    /// Enables proper cleanup of all pending timers when the interpreter is disposed.
+    /// </summary>
+    /// <param name="timer">The timer to track.</param>
+    internal void RegisterTimer(Runtime.Types.SharpTSTimeout timer)
+    {
+        _pendingTimers.Add(timer);
+    }
+
+    /// <summary>
+    /// Disposes the interpreter, cancelling all pending timers and marking as disposed.
     /// This prevents race conditions where timer callbacks fire after the test/execution context has ended.
     /// </summary>
     public void Dispose()
     {
         _isDisposed = true;
+
+        // Cancel all pending timers to release resources immediately
+        while (_pendingTimers.TryTake(out var timer))
+        {
+            timer.Cancel();
+        }
+
         GC.SuppressFinalize(this);
     }
 
