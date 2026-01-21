@@ -611,7 +611,9 @@ public class DeclarationGeneratorTests
     public void TypeInspector_ExtractsObsoleteClass()
     {
         var inspector = new TypeInspector();
+#pragma warning disable CS0618 // Deliberately testing obsolete class extraction
         var metadata = inspector.Inspect(typeof(ObsoleteClass));
+#pragma warning restore CS0618
 
         Assert.NotNull(metadata.Obsolete);
         Assert.Equal("Use NewClass instead", metadata.Obsolete.Message);

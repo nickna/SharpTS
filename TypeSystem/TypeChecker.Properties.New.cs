@@ -233,7 +233,7 @@ public partial class TypeChecker
         }
 
         // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && IsErrorTypeName(simpleClassName))
+        if (isSimpleName && simpleClassName != null && IsErrorTypeName(simpleClassName))
         {
             // Error constructors accept 0-1 argument (optional message)
             // AggregateError accepts 0-2 arguments (errors array, optional message)
