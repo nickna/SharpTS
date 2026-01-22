@@ -103,6 +103,16 @@ public static class BuiltInTypes
                 [new TypeInfo.Function([elementType, elementType], NumberType)],
                 new TypeInfo.Array(elementType),
                 RequiredParams: 0),
+            "splice" => new TypeInfo.Function(
+                [NumberType, NumberType, new TypeInfo.Array(elementType)],
+                new TypeInfo.Array(elementType),
+                RequiredParams: 0,
+                HasRestParam: true),
+            "toSpliced" => new TypeInfo.Function(
+                [NumberType, NumberType, new TypeInfo.Array(elementType)],
+                new TypeInfo.Array(elementType),
+                RequiredParams: 0,
+                HasRestParam: true),
             _ => null
         };
     }

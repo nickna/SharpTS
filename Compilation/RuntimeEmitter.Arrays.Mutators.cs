@@ -926,5 +926,464 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Helper method implementing JavaScript's ToIntegerOrInfinity algorithm.
+    /// Used by splice/toSpliced for argument coercion.
+    /// </summary>
+    private void EmitToIntegerOrInfinityHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ToIntegerOrInfinity(object? value, int defaultValue) -> int
+        var method = typeBuilder.DefineMethod(
+            "ToIntegerOrInfinity",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Int32,
+            [_types.Object, _types.Int32]
+        );
+        runtime.ToIntegerOrInfinity = method;
+
+        var il = method.GetILGenerator();
+
+        var valueIsNull = il.DefineLabel();
+        var returnDefault = il.DefineLabel();
+        var isDouble = il.DefineLabel();
+        var notNaN = il.DefineLabel();
+        var notPosInf = il.DefineLabel();
+        var notNegInf = il.DefineLabel();
+
+        // if (value == null) return defaultValue
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnDefault);
+
+        // if (value is double d)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, returnDefault);
+
+        // Get the double value
+        var doubleLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, doubleLocal);
+
+        // if (double.IsNaN(d)) return 0
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Brfalse, notNaN);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notNaN);
+        // if (double.IsPositiveInfinity(d)) return int.MaxValue
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsPositiveInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Brfalse, notPosInf);
+        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notPosInf);
+        // if (double.IsNegativeInfinity(d)) return int.MinValue
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNegativeInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Brfalse, notNegInf);
+        il.Emit(OpCodes.Ldc_I4, int.MinValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notNegInf);
+        // return (int)Math.Truncate(d)
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [typeof(double)])!);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnDefault);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArraySplice(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArraySplice(List<object> list, object[] args) -> List<object>
+        var method = typeBuilder.DefineMethod(
+            "ArraySplice",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, _types.ObjectArray]
+        );
+        runtime.ArraySplice = method;
+
+        var il = method.GetILGenerator();
+
+        // Local variables
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var actualStartLocal = il.DeclareLocal(_types.Int32);
+        var relStartLocal = il.DeclareLocal(_types.Int32);
+        var actualDeleteCountLocal = il.DeclareLocal(_types.Int32);
+        var deletedLocal = il.DeclareLocal(_types.ListOfObject);
+        var iLocal = il.DeclareLocal(_types.Int32);
+
+        // len = list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // if (args.Length == 0) return new List<object>()
+        var hasArgs = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, hasArgs);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasArgs);
+
+        // Parse start: relStart = ToIntegerOrInfinity(args[0], 0)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, relStartLocal);
+
+        // actualStart = relStart < 0 ? Max(len + relStart, 0) : Min(relStart, len)
+        var startNotNegative = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, startNotNegative);
+
+        // Negative: Max(len + relStart, 0)
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualStartLocal);
+        il.Emit(OpCodes.Br, startDone);
+
+        il.MarkLabel(startNotNegative);
+        // Non-negative: Min(relStart, len)
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualStartLocal);
+
+        il.MarkLabel(startDone);
+
+        // Parse deleteCount
+        var hasDeleteCount = il.DefineLabel();
+        var deleteCountDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bgt, hasDeleteCount);
+
+        // No deleteCount: delete to end
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, actualDeleteCountLocal);
+        il.Emit(OpCodes.Br, deleteCountDone);
+
+        il.MarkLabel(hasDeleteCount);
+        // Has deleteCount: dc = ToIntegerOrInfinity(args[1], 0)
+        // actualDeleteCount = Max(0, Min(dc, len - actualStart))
+        var dcLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, dcLocal);
+
+        // Min(dc, len - actualStart)
+        il.Emit(OpCodes.Ldloc, dcLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
+        // Max(0, ...)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualDeleteCountLocal);
+
+        il.MarkLabel(deleteCountDone);
+
+        // deleted = list.GetRange(actualStart, actualDeleteCount)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Ldloc, actualDeleteCountLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "GetRange", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, deletedLocal);
+
+        // list.RemoveRange(actualStart, actualDeleteCount)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Ldloc, actualDeleteCountLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "RemoveRange", _types.Int32, _types.Int32));
+
+        // if (args.Length > 2) insert items
+        var noInsert = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ble, noInsert);
+
+        // Insert items from args[2..] at actualStart
+        // for (i = args.Length - 1; i >= 2; i--) list.Insert(actualStart, args[i])
+        // (Insert in reverse order to maintain order)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var insertLoopStart = il.DefineLabel();
+        var insertLoopCondition = il.DefineLabel();
+        il.Emit(OpCodes.Br, insertLoopCondition);
+
+        il.MarkLabel(insertLoopStart);
+        // list.Insert(actualStart, args[i])
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Insert", _types.Int32, _types.Object));
+
+        // i--
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(insertLoopCondition);
+        // i >= 2
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bge, insertLoopStart);
+
+        il.MarkLabel(noInsert);
+
+        // return deleted
+        il.Emit(OpCodes.Ldloc, deletedLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayToSpliced(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArrayToSpliced(List<object> list, object[] args) -> List<object>
+        var method = typeBuilder.DefineMethod(
+            "ArrayToSpliced",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, _types.ObjectArray]
+        );
+        runtime.ArrayToSpliced = method;
+
+        var il = method.GetILGenerator();
+
+        // Local variables
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var actualStartLocal = il.DeclareLocal(_types.Int32);
+        var relStartLocal = il.DeclareLocal(_types.Int32);
+        var actualSkipCountLocal = il.DeclareLocal(_types.Int32);
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var iLocal = il.DeclareLocal(_types.Int32);
+
+        // len = list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // if (args.Length == 0) return new List<object>(list)
+        var hasArgs = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, hasArgs);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasArgs);
+
+        // Parse start: relStart = ToIntegerOrInfinity(args[0], 0)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, relStartLocal);
+
+        // actualStart = relStart < 0 ? Max(len + relStart, 0) : Min(relStart, len)
+        var startNotNegative = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, startNotNegative);
+
+        // Negative: Max(len + relStart, 0)
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualStartLocal);
+        il.Emit(OpCodes.Br, startDone);
+
+        il.MarkLabel(startNotNegative);
+        // Non-negative: Min(relStart, len)
+        il.Emit(OpCodes.Ldloc, relStartLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualStartLocal);
+
+        il.MarkLabel(startDone);
+
+        // Parse skipCount
+        var hasSkipCount = il.DefineLabel();
+        var skipCountDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bgt, hasSkipCount);
+
+        // No skipCount: skip to end
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, actualSkipCountLocal);
+        il.Emit(OpCodes.Br, skipCountDone);
+
+        il.MarkLabel(hasSkipCount);
+        // Has skipCount: sc = ToIntegerOrInfinity(args[1], 0)
+        // actualSkipCount = Max(0, Min(sc, len - actualStart))
+        var scLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, scLocal);
+
+        // Min(sc, len - actualStart)
+        il.Emit(OpCodes.Ldloc, scLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
+        // Max(0, ...)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, actualSkipCountLocal);
+
+        il.MarkLabel(skipCountDone);
+
+        // result = new List<object>()
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // Add elements before actualStart: for (i = 0; i < actualStart; i++) result.Add(list[i])
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var beforeLoopStart = il.DefineLabel();
+        var beforeLoopCondition = il.DefineLabel();
+        il.Emit(OpCodes.Br, beforeLoopCondition);
+
+        il.MarkLabel(beforeLoopStart);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(beforeLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Blt, beforeLoopStart);
+
+        // Add inserted items from args[2..]
+        var noInsert = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ble, noInsert);
+
+        // for (i = 2; i < args.Length; i++) result.Add(args[i])
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var insertLoopStart = il.DefineLabel();
+        var insertLoopCondition = il.DefineLabel();
+        il.Emit(OpCodes.Br, insertLoopCondition);
+
+        il.MarkLabel(insertLoopStart);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(insertLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, insertLoopStart);
+
+        il.MarkLabel(noInsert);
+
+        // Add elements after actualStart + actualSkipCount
+        // for (i = actualStart + actualSkipCount; i < len; i++) result.Add(list[i])
+        il.Emit(OpCodes.Ldloc, actualStartLocal);
+        il.Emit(OpCodes.Ldloc, actualSkipCountLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var afterLoopStart = il.DefineLabel();
+        var afterLoopCondition = il.DefineLabel();
+        il.Emit(OpCodes.Br, afterLoopCondition);
+
+        il.MarkLabel(afterLoopStart);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(afterLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Blt, afterLoopStart);
+
+        // return result
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

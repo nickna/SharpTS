@@ -28,6 +28,8 @@ public static class ArrayBuiltIns
     private static readonly BuiltInMethod _flatMap = new("flatMap", 1, FlatMap);
     private static readonly BuiltInMethod _sort = new("sort", 0, 1, Sort);
     private static readonly BuiltInMethod _toSorted = new("toSorted", 0, 1, ToSorted);
+    private static readonly BuiltInMethod _splice = new("splice", 0, int.MaxValue, Splice);
+    private static readonly BuiltInMethod _toSpliced = new("toSpliced", 0, int.MaxValue, ToSpliced);
 
     public static object? GetMember(SharpTSArray receiver, string name)
     {
@@ -57,6 +59,8 @@ public static class ArrayBuiltIns
             "flatMap" => _flatMap.Bind(receiver),
             "sort" => _sort.Bind(receiver),
             "toSorted" => _toSorted.Bind(receiver),
+            "splice" => _splice.Bind(receiver),
+            "toSpliced" => _toSpliced.Bind(receiver),
 
             _ => null
         };
@@ -496,6 +500,106 @@ public static class ArrayBuiltIns
             // Stability tie-breaker: preserve original order
             return x.Index.CompareTo(y.Index);
         }
+    }
+
+    /// <summary>
+    /// Implements JavaScript's ToIntegerOrInfinity algorithm (ECMA-262 7.1.5).
+    /// Converts a value to an integer, handling NaN, Infinity, and null.
+    /// </summary>
+    private static int ToIntegerOrInfinity(object? value, int defaultValue)
+    {
+        if (value == null) return defaultValue;
+        if (value is int i) return i;
+        if (value is double d)
+        {
+            if (double.IsNaN(d)) return 0;
+            if (double.IsPositiveInfinity(d)) return int.MaxValue;
+            if (double.IsNegativeInfinity(d)) return int.MinValue;
+            return (int)Math.Truncate(d);
+        }
+        return defaultValue;
+    }
+
+    private static object? Splice(Interpreter i, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        int len = arr.Elements.Count;
+
+        // Frozen/sealed arrays throw TypeError
+        if (arr.IsFrozen || arr.IsSealed)
+            throw new Exception("TypeError: Cannot modify a frozen or sealed array");
+
+        // If no arguments, return empty array (no elements deleted or inserted)
+        if (args.Count == 0)
+            return new SharpTSArray([]);
+
+        // Parse start with negative handling (RelativeIndex to ActualIndex)
+        int relStart = ToIntegerOrInfinity(args[0], 0);
+        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
+
+        // Parse deleteCount
+        int actualDeleteCount;
+        if (args.Count == 1)
+        {
+            // No deleteCount argument = delete to end
+            actualDeleteCount = len - actualStart;
+        }
+        else
+        {
+            int dc = ToIntegerOrInfinity(args[1], 0);
+            actualDeleteCount = Math.Max(0, Math.Min(dc, len - actualStart));
+        }
+
+        // Collect deleted elements
+        var deleted = arr.Elements.GetRange(actualStart, actualDeleteCount);
+
+        // Remove then insert
+        arr.Elements.RemoveRange(actualStart, actualDeleteCount);
+        if (args.Count > 2)
+        {
+            var itemsToInsert = args.Skip(2).ToList();
+            arr.Elements.InsertRange(actualStart, itemsToInsert);
+        }
+
+        return new SharpTSArray(new List<object?>(deleted));
+    }
+
+    private static object? ToSpliced(Interpreter i, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        int len = arr.Elements.Count;
+
+        // toSpliced works on frozen/sealed arrays (creates new array)
+
+        // If no arguments, return a copy of the array
+        if (args.Count == 0)
+            return new SharpTSArray(new List<object?>(arr.Elements));
+
+        // Parse start with negative handling
+        int relStart = ToIntegerOrInfinity(args[0], 0);
+        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
+
+        // Parse skipCount (deleteCount equivalent)
+        int actualSkipCount;
+        if (args.Count == 1)
+        {
+            // No skipCount argument = skip to end
+            actualSkipCount = len - actualStart;
+        }
+        else
+        {
+            int sc = ToIntegerOrInfinity(args[1], 0);
+            actualSkipCount = Math.Max(0, Math.Min(sc, len - actualStart));
+        }
+
+        // Build new array: before + items + after
+        var result = new List<object?>();
+        result.AddRange(arr.Elements.Take(actualStart));
+        if (args.Count > 2)
+            result.AddRange(args.Skip(2));
+        result.AddRange(arr.Elements.Skip(actualStart + actualSkipCount));
+
+        return new SharpTSArray(result);
     }
 
     private static bool IsUndefined(object? obj)

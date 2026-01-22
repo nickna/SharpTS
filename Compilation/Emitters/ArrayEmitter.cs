@@ -138,6 +138,16 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSorted);
                 return true;
 
+            case "splice":
+                EmitArgsArray(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySplice);
+                return true;
+
+            case "toSpliced":
+                EmitArgsArray(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSpliced);
+                return true;
+
             default:
                 return false;
         }

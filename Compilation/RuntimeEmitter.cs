@@ -1529,6 +1529,9 @@ public partial class RuntimeEmitter
         EmitArrayOf(typeBuilder, runtime);
         EmitArraySort(typeBuilder, runtime);
         EmitArrayToSorted(typeBuilder, runtime);
+        EmitToIntegerOrInfinityHelper(typeBuilder, runtime); // Must be before EmitArraySplice
+        EmitArraySplice(typeBuilder, runtime);
+        EmitArrayToSpliced(typeBuilder, runtime);
         // String methods
         EmitStringCharAt(typeBuilder, runtime);
         EmitStringSubstring(typeBuilder, runtime);

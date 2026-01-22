@@ -105,6 +105,9 @@ public class EmittedRuntime
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
     public MethodBuilder ArraySort { get; set; } = null!;
     public MethodBuilder ArrayToSorted { get; set; } = null!;
+    public MethodBuilder ArraySplice { get; set; } = null!;
+    public MethodBuilder ArrayToSpliced { get; set; } = null!;
+    public MethodBuilder ToIntegerOrInfinity { get; set; } = null!;
 
     // String methods
     public MethodBuilder StringCharAt { get; set; } = null!;
