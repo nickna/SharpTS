@@ -21,8 +21,8 @@ namespace SharpTS.Tests.CompilerTests;
 /// Tests that verify timer callback execution must be designed carefully to avoid race conditions:
 /// <list type="bullet">
 /// <item>Console output from thread pool threads may not flush before process exit</item>
-/// <item>Callbacks should perform their own cleanup (clearInterval/clearTimeout) when possible</item>
-/// <item>Critical assertions should be based on callback-produced output, not main thread output after the callback</item>
+/// <item>Have callbacks perform their own cleanup (clearInterval/clearTimeout) and final output</item>
+/// <item>Use busy-wait loops to keep the process alive long enough for callbacks to execute</item>
 /// </list>
 /// </para>
 /// <para>
@@ -285,9 +285,8 @@ public class TimerTests
     public void SetInterval_ExecutesCallback()
     {
         // setInterval should execute callback
-        // NOTE: The callback performs clearInterval and prints 'done' to avoid a race condition
-        // where console output from the thread pool thread may not flush before process exit.
-        // This is because timers don't keep the process alive (see TimerTests class docs).
+        // The callback clears itself and prints 'done' to avoid race conditions where
+        // console output from thread pool threads may not flush before process exit.
         var source = @"
             let t = setInterval(() => {
                 console.log('tick');

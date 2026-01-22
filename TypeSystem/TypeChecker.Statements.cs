@@ -128,6 +128,13 @@ public partial class TypeChecker
 
                 if (varStmt.Initializer != null)
                 {
+                    // Pre-define the variable with a provisional type BEFORE checking the initializer.
+                    // This allows self-referential patterns like: let t = setInterval(() => clearInterval(t), 100)
+                    // where the callback references the variable being declared.
+                    // If there's a type annotation, use it; otherwise use Any as a placeholder.
+                    var provisionalType = declaredType ?? new TypeInfo.Any();
+                    _environment.Define(varStmt.Name.Lexeme, provisionalType);
+
                     // Special case: array literal assigned to tuple type (contextual typing)
                     if (declaredType is TypeInfo.Tuple tupleType && varStmt.Initializer is Expr.ArrayLiteral arrayLit)
                     {
@@ -173,10 +180,14 @@ public partial class TypeChecker
                         {
                             // No type annotation - widen literal types for inference
                             initializerType = WidenLiteralType(initializerType);
+                            // Update the variable's type from provisional Any to the actual inferred type
+                            declaredType = initializerType;
+                            _environment.Define(varStmt.Name.Lexeme, declaredType);
                         }
 
                         declaredType ??= initializerType;
                     }
+                    break;
                 }
 
                 declaredType ??= new TypeInfo.Any();
@@ -212,6 +223,8 @@ public partial class TypeChecker
                 else if (constStmt.TypeAnnotation != null)
                 {
                     constDeclaredType = ToTypeInfo(constStmt.TypeAnnotation);
+                    // Pre-define with declared type to allow self-referential callbacks
+                    _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
                     var initType = CheckExpr(constStmt.Initializer);
                     if (!IsCompatible(constDeclaredType, initType))
                     {
@@ -220,8 +233,12 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    // No type annotation - infer from initializer, but keep literal types for const
+                    // No type annotation - pre-define with Any to allow self-referential callbacks,
+                    // then infer actual type from initializer
+                    _environment.Define(constStmt.Name.Lexeme, new TypeInfo.Any());
                     constDeclaredType = CheckExpr(constStmt.Initializer);
+                    // Update with the actual inferred type
+                    _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
                 }
 
                 _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
