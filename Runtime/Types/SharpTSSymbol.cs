@@ -53,6 +53,16 @@ public class SharpTSSymbol
     /// Symbol.unscopables - Used to exclude properties from with statement bindings.
     /// </summary>
     public static readonly SharpTSSymbol Unscopables = new("Symbol.unscopables");
+
+    /// <summary>
+    /// Symbol.dispose - Used for synchronous resource disposal (explicit resource management).
+    /// </summary>
+    public static readonly SharpTSSymbol Dispose = new("Symbol.dispose");
+
+    /// <summary>
+    /// Symbol.asyncDispose - Used for asynchronous resource disposal (explicit resource management).
+    /// </summary>
+    public static readonly SharpTSSymbol AsyncDispose = new("Symbol.asyncDispose");
     #endregion
 
     public SharpTSSymbol(string? description = null)

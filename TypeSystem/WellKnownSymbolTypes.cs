@@ -22,6 +22,10 @@ public static class WellKnownSymbolTypes
         new("Symbol.species", "typeof Symbol.species");
     public static readonly TypeInfo.UniqueSymbol Unscopables =
         new("Symbol.unscopables", "typeof Symbol.unscopables");
+    public static readonly TypeInfo.UniqueSymbol Dispose =
+        new("Symbol.dispose", "typeof Symbol.dispose");
+    public static readonly TypeInfo.UniqueSymbol AsyncDispose =
+        new("Symbol.asyncDispose", "typeof Symbol.asyncDispose");
 
     /// <summary>
     /// Tries to get a well-known symbol type by its property name.
@@ -38,6 +42,8 @@ public static class WellKnownSymbolTypes
         "toPrimitive" => ToPrimitive,
         "species" => Species,
         "unscopables" => Unscopables,
+        "dispose" => Dispose,
+        "asyncDispose" => AsyncDispose,
         _ => null
     };
 }

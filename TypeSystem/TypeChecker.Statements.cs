@@ -559,7 +559,68 @@ public partial class TypeChecker
                 // Global augmentation - handled during module type checking
                 CheckDeclareGlobalStatement(declareGlobal);
                 break;
+
+            case Stmt.Using usingStmt:
+                CheckUsingDeclaration(usingStmt);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Type checks a 'using' or 'await using' declaration.
+    /// Validates the basic structure and defines variables in scope.
+    /// Actual dispose method validation is done at runtime for flexibility.
+    /// </summary>
+    private void CheckUsingDeclaration(Stmt.Using usingStmt)
+    {
+        // 'await using' is only valid inside async functions
+        if (usingStmt.IsAsync && !_inAsyncFunction)
+        {
+            throw new TypeCheckException(
+                "'await using' is only allowed inside an async function.",
+                usingStmt.Keyword.Line);
+        }
+
+        foreach (var binding in usingStmt.Bindings)
+        {
+            TypeInfo initType = CheckExpr(binding.Initializer);
+
+            // Check for declared type annotation
+            TypeInfo? declaredType = null;
+            if (binding.TypeAnnotation != null)
+            {
+                declaredType = ToTypeInfo(binding.TypeAnnotation);
+                if (!IsCompatible(declaredType, initType))
+                {
+                    throw new TypeMismatchException(declaredType, initType, binding.Name!.Line);
+                }
+            }
+
+            TypeInfo resourceType = declaredType ?? initType;
+
+            // Validate that the type is object-like (can have Symbol.dispose method)
+            // Primitive types cannot have dispose methods
+            if (resourceType is TypeInfo.Primitive prim && !IsNullablePrimitive(prim))
+            {
+                throw new TypeCheckException(
+                    $"Type '{resourceType}' cannot be used with 'using' - it cannot have a disposal method.",
+                    usingStmt.Keyword.Line);
+            }
+
+            // Define variable (const-like - cannot reassign)
+            if (binding.Name != null)
+            {
+                _environment.Define(binding.Name.Lexeme, resourceType);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if a primitive type is nullable (null or undefined).
+    /// </summary>
+    private static bool IsNullablePrimitive(TypeInfo.Primitive prim)
+    {
+        return prim.Type == TokenType.NULL || prim.Type == TokenType.UNDEFINED;
     }
 
     /// <summary>

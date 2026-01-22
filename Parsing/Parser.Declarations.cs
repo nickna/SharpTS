@@ -90,6 +90,22 @@ public partial class Parser
             return FunctionDeclaration("function", isAsync: false, isGenerator: isGenerator);
         }
         if (Match(TokenType.LET)) return VarDeclaration();
+
+        // Handle 'using' declaration (contextual keyword for explicit resource management)
+        if (Check(TokenType.USING) && IsUsingDeclarationContext())
+        {
+            Token usingKeyword = Advance(); // consume USING
+            return UsingDeclaration(usingKeyword, isAwait: false);
+        }
+
+        // Handle 'await using' declaration
+        if (Check(TokenType.AWAIT) && PeekNext().Type == TokenType.USING)
+        {
+            Advance(); // consume AWAIT
+            Token usingKeyword = Advance(); // consume USING
+            return UsingDeclaration(usingKeyword, isAwait: true);
+        }
+
         return Statement();
     }
 
@@ -769,5 +785,56 @@ public partial class Parser
             return new Stmt.Var(name, typeAnnotation, null);
         }
         return new Stmt.Var(name, typeAnnotation, null);
+    }
+
+    /// <summary>
+    /// Determines if 'using' should be treated as a declaration keyword (contextual keyword).
+    /// Returns true if followed by identifier, '{' (object destructuring), or '[' (array destructuring).
+    /// </summary>
+    private bool IsUsingDeclarationContext()
+    {
+        var nextType = PeekNext().Type;
+        return nextType == TokenType.IDENTIFIER ||
+               nextType == TokenType.LEFT_BRACE ||   // object destructuring: using { x } = expr
+               nextType == TokenType.LEFT_BRACKET;   // array destructuring: using [a, b] = expr
+    }
+
+    /// <summary>
+    /// Parses a 'using' or 'await using' declaration for explicit resource management.
+    /// Syntax: using name = expr; or using name = expr, name2 = expr2;
+    /// </summary>
+    /// <param name="usingKeyword">The 'using' token for error reporting.</param>
+    /// <param name="isAwait">True for 'await using', false for 'using'.</param>
+    private Stmt UsingDeclaration(Token usingKeyword, bool isAwait)
+    {
+        var bindings = new List<Stmt.UsingBinding>();
+
+        do
+        {
+            bindings.Add(ParseUsingBinding());
+        } while (Match(TokenType.COMMA));
+
+        Consume(TokenType.SEMICOLON, "Expect ';' after 'using' declaration.");
+        return new Stmt.Using(usingKeyword, bindings, isAwait);
+    }
+
+    /// <summary>
+    /// Parses a single binding in a using declaration.
+    /// Currently only supports simple identifiers (destructuring may be added later).
+    /// </summary>
+    private Stmt.UsingBinding ParseUsingBinding()
+    {
+        Token name = Consume(TokenType.IDENTIFIER, "Expect variable name in 'using' declaration.");
+
+        string? typeAnnotation = null;
+        if (Match(TokenType.COLON))
+        {
+            typeAnnotation = ParseTypeAnnotation();
+        }
+
+        Consume(TokenType.EQUAL, "'using' declarations must be initialized.");
+        Expr initializer = Expression();
+
+        return new Stmt.UsingBinding(name, null, typeAnnotation, initializer);
     }
 }

@@ -33,6 +33,8 @@ public static class SymbolBuiltIns
             "toPrimitive" => new BuiltInMethod("toPrimitive", 0, 0, (_, _, _) => SharpTSSymbol.ToPrimitive),
             "species" => new BuiltInMethod("species", 0, 0, (_, _, _) => SharpTSSymbol.Species),
             "unscopables" => new BuiltInMethod("unscopables", 0, 0, (_, _, _) => SharpTSSymbol.Unscopables),
+            "dispose" => new BuiltInMethod("dispose", 0, 0, (_, _, _) => SharpTSSymbol.Dispose),
+            "asyncDispose" => new BuiltInMethod("asyncDispose", 0, 0, (_, _, _) => SharpTSSymbol.AsyncDispose),
 
             // Symbol.for() - returns a shared symbol from the global symbol registry
             "for" => new BuiltInMethod("for", 1, (_, _, args) =>

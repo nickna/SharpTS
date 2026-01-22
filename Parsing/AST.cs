@@ -405,4 +405,32 @@ public abstract record Stmt
         Token Keyword,
         List<Stmt> Members
     ) : Stmt;
+
+    /// <summary>
+    /// Single resource binding in a using declaration.
+    /// Supports simple identifiers and destructuring patterns.
+    /// </summary>
+    /// <param name="Name">Variable name token (null for destructuring).</param>
+    /// <param name="DestructuringPattern">ArrayDestructure or ObjectDestructure pattern (null for simple binding).</param>
+    /// <param name="TypeAnnotation">Optional type annotation.</param>
+    /// <param name="Initializer">Required initializer expression.</param>
+    public record UsingBinding(
+        Token? Name,
+        Expr? DestructuringPattern,
+        string? TypeAnnotation,
+        Expr Initializer
+    );
+
+    /// <summary>
+    /// 'using' or 'await using' declaration for explicit resource management (TypeScript 5.2+).
+    /// Resources are automatically disposed when the block scope exits.
+    /// </summary>
+    /// <param name="Keyword">The 'using' token for error reporting.</param>
+    /// <param name="Bindings">One or more resource bindings.</param>
+    /// <param name="IsAsync">True for 'await using', false for 'using'.</param>
+    public record Using(
+        Token Keyword,
+        List<UsingBinding> Bindings,
+        bool IsAsync
+    ) : Stmt;
 }

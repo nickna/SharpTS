@@ -10,6 +10,52 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
+    // Stack of using declaration trackers for nested scopes
+    private readonly Stack<UsingTracker> _usingTrackerStack = new();
+
+    /// <summary>
+    /// Tracks resources declared with 'using' for automatic disposal at scope exit.
+    /// </summary>
+    private class UsingTracker
+    {
+        private readonly Interpreter _interpreter;
+        private readonly List<(object? Resource, bool IsAsync)> _resources = new();
+
+        public UsingTracker(Interpreter interpreter) => _interpreter = interpreter;
+
+        public void Add(object? resource, bool isAsync) =>
+            _resources.Add((resource, isAsync));
+
+        public bool HasResources => _resources.Count > 0;
+
+        /// <summary>
+        /// Disposes all resources in reverse order, aggregating errors via SuppressedError.
+        /// </summary>
+        /// <param name="pendingError">Any error that occurred in the block before disposal.</param>
+        /// <returns>The final error to throw (original, SuppressedError, or null if no errors).</returns>
+        public object? DisposeAll(object? pendingError)
+        {
+            object? currentError = pendingError;
+
+            // Dispose in reverse order (LIFO)
+            for (int i = _resources.Count - 1; i >= 0; i--)
+            {
+                var (resource, isAsync) = _resources[i];
+                try
+                {
+                    _interpreter.DisposeResource(resource, isAsync);
+                }
+                catch (Exception disposalError)
+                {
+                    // Wrap in SuppressedError: original error becomes 'error', disposal becomes 'suppressed'
+                    currentError = new SharpTSSuppressedError(currentError, disposalError);
+                }
+            }
+
+            return currentError;
+        }
+    }
+
     /// <summary>
     /// Executes an enum declaration, creating a runtime enum object with its members.
     /// </summary>
@@ -160,25 +206,70 @@ public partial class Interpreter
 
     /// <summary>
     /// Executes a block of statements within a given environment scope.
+    /// Handles 'using' declarations with automatic disposal at scope exit.
     /// </summary>
     /// <param name="statements">The list of statements to execute.</param>
     /// <param name="environment">The runtime environment for this block's scope.</param>
     /// <remarks>
     /// Temporarily switches to the provided environment, executes all statements,
-    /// then restores the previous environment. Used for block scoping in control structures.
+    /// then restores the previous environment. Uses try/finally to ensure disposal
+    /// of 'using' resources even on abrupt completion. SuppressedError is used when
+    /// both the block and disposal throw errors.
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html#block-scoping">TypeScript Block Scoping</seealso>
     public ExecutionResult ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
     {
-        using (PushScope(environment))
+        // Create a tracker for using declarations in this scope
+        var tracker = new UsingTracker(this);
+        _usingTrackerStack.Push(tracker);
+
+        object? pendingError = null;
+        ExecutionResult blockResult = ExecutionResult.Success();
+
+        try
         {
-            foreach (Stmt statement in statements)
+            using (PushScope(environment))
             {
-                var result = Execute(statement);
-                if (result.IsAbrupt) return result;
+                foreach (Stmt statement in statements)
+                {
+                    var result = Execute(statement);
+                    if (result.IsAbrupt)
+                    {
+                        // Capture the result but continue to finally for disposal
+                        if (result.Type == ExecutionResult.ResultType.Throw)
+                        {
+                            pendingError = result.Value;
+                        }
+                        blockResult = result;
+                        break;
+                    }
+                }
             }
-            return ExecutionResult.Success();
         }
+        catch (Exception ex)
+        {
+            // Capture host exceptions as pending errors
+            pendingError = TranslateException(ex);
+            blockResult = ExecutionResult.Throw(pendingError);
+        }
+        finally
+        {
+            // Always dispose resources and pop the tracker
+            _usingTrackerStack.Pop();
+
+            if (tracker.HasResources)
+            {
+                var finalError = tracker.DisposeAll(pendingError);
+
+                // If disposal added errors (SuppressedError), update the result
+                if (finalError != null && finalError != pendingError)
+                {
+                    blockResult = ExecutionResult.Throw(finalError);
+                }
+            }
+        }
+
+        return blockResult;
     }
 
     /// <summary>
@@ -725,5 +816,151 @@ public partial class Interpreter
             });
 
         return ex.Message;
+    }
+
+    /// <summary>
+    /// Executes a 'using' or 'await using' declaration.
+    /// Evaluates the initializer, defines the variable, and registers the resource for disposal.
+    /// </summary>
+    private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt)
+    {
+        // Get or create the tracker for the current scope
+        UsingTracker tracker;
+        if (_usingTrackerStack.Count > 0)
+        {
+            tracker = _usingTrackerStack.Peek();
+        }
+        else
+        {
+            // If no tracker exists, create one for the current scope
+            // This handles using declarations at module/script level
+            tracker = new UsingTracker(this);
+            _usingTrackerStack.Push(tracker);
+        }
+
+        foreach (var binding in usingStmt.Bindings)
+        {
+            object? resource = Evaluate(binding.Initializer);
+
+            // Define variable in the current scope
+            if (binding.Name != null)
+            {
+                _environment.Define(binding.Name.Lexeme, resource);
+            }
+
+            // Register for disposal at scope exit
+            tracker.Add(resource, usingStmt.IsAsync);
+        }
+
+        return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Disposes a single resource using Symbol.dispose or Symbol.asyncDispose.
+    /// </summary>
+    /// <param name="resource">The resource to dispose.</param>
+    /// <param name="isAsync">True for Symbol.asyncDispose, false for Symbol.dispose.</param>
+    private void DisposeResource(object? resource, bool isAsync)
+    {
+        // Null/undefined resources are skipped
+        if (resource == null || resource is SharpTSUndefined)
+            return;
+
+        var symbol = isAsync ? SharpTSSymbol.AsyncDispose : SharpTSSymbol.Dispose;
+        object? disposeMethod = GetSymbolProperty(resource, symbol);
+
+        if (disposeMethod == null)
+        {
+            // No dispose method found - check for .NET IDisposable as fallback
+            if (resource is IDisposable disposable)
+            {
+                disposable.Dispose();
+                return;
+            }
+            if (isAsync && resource is IAsyncDisposable asyncDisposable)
+            {
+                asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                return;
+            }
+            // No disposal method - silently skip (TypeScript allows this)
+            return;
+        }
+
+        // Call the dispose method with the resource as 'this' context
+        object? result = null;
+
+        if (disposeMethod is SharpTSFunction func)
+        {
+            // Bind the function to the resource and call it
+            // For SharpTSInstance resources, use the instance bind
+            if (resource is SharpTSInstance instance)
+            {
+                var boundFunc = func.Bind(instance);
+                result = boundFunc.Call(this, []);
+            }
+            else
+            {
+                // For other objects (SharpTSObject), create a temporary scope with 'this'
+                var prevEnv = _environment;
+                _environment = new RuntimeEnvironment(_environment);
+                _environment.Define("this", resource);
+                try
+                {
+                    result = func.Call(this, []);
+                }
+                finally
+                {
+                    _environment = prevEnv;
+                }
+            }
+        }
+        else if (disposeMethod is SharpTSArrowFunction arrowFunc)
+        {
+            // Arrow functions with HasOwnThis need 'this' bound
+            if (arrowFunc.HasOwnThis)
+            {
+                var boundFunc = arrowFunc.Bind(resource!);
+                result = boundFunc.Call(this, []);
+            }
+            else
+            {
+                // Arrow functions without own 'this' use lexical scope
+                result = arrowFunc.Call(this, []);
+            }
+        }
+        else if (disposeMethod is ISharpTSCallable callable)
+        {
+            result = callable.Call(this, []);
+        }
+
+        // Wait for async disposal to complete
+        if (isAsync)
+        {
+            if (result is SharpTSPromise promise)
+            {
+                promise.Task.GetAwaiter().GetResult();
+            }
+            else if (result is Task task)
+            {
+                task.GetAwaiter().GetResult();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a property from an object using a symbol key.
+    /// </summary>
+    private object? GetSymbolProperty(object? obj, SharpTSSymbol symbol)
+    {
+        if (obj is SharpTSObject tsObject)
+        {
+            return tsObject.GetBySymbol(symbol);
+        }
+        if (obj is SharpTSInstance instance)
+        {
+            return instance.GetBySymbol(symbol);
+        }
+        // For other types, return null (no symbol property access)
+        return null;
     }
 }

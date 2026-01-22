@@ -1262,6 +1262,8 @@ public partial class Interpreter : IDisposable
                 // Module/global augmentations and ambient declarations are type-only
                 // No runtime effect - types were merged during type checking
                 return ExecutionResult.Success();
+            case Stmt.Using usingStmt:
+                return ExecuteUsingDeclaration(usingStmt);
             default:
                 return ExecutionResult.Success();
         }

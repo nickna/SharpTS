@@ -47,6 +47,7 @@ public enum TokenType
     NEW, NULL, OF, OVERRIDE, PRIVATE, PROTECTED, PUBLIC, READONLY, RETURN, SET, STATIC, SUPER, SWITCH, THIS, THROW, TRUE, TRY, CATCH, FINALLY, TYPE, TYPEOF, UNDEFINED, UNIQUE, UNKNOWN, VAR, WHILE,
     YIELD,  // yield expression for generators
     SATISFIES,  // satisfies operator (TS 4.9+)
+    USING,  // 'using' keyword for explicit resource management (TS 5.2+)
 
     // Variance modifiers (IN already exists for mapped types)
     OUT,  // out T (covariant)
