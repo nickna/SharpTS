@@ -34,11 +34,96 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Expands a recursive type alias placeholder to its full type.
+    /// Used for lazy expansion during compatibility checks.
+    /// </summary>
+    /// <param name="rta">The recursive type alias to expand.</param>
+    /// <returns>The expanded type.</returns>
+    private TypeInfo ExpandRecursiveTypeAlias(TypeInfo.RecursiveTypeAlias rta)
+    {
+        if (++_typeAliasExpansionDepth > MaxTypeAliasExpansionDepth)
+        {
+            _typeAliasExpansionDepth--;
+            throw new TypeCheckException(
+                $"Type alias '{rta.AliasName}' circularly references itself.");
+        }
+
+        try
+        {
+            if (rta.TypeArguments is { Count: > 0 })
+            {
+                // Generic recursive alias - reconstruct the type string
+                var typeArgStrings = rta.TypeArguments.Select(TypeInfoToString).ToList();
+                return ParseGenericTypeReference($"{rta.AliasName}<{string.Join(", ", typeArgStrings)}>");
+            }
+
+            // Non-generic recursive alias
+            var alias = _environment.GetTypeAlias(rta.AliasName);
+            if (alias != null)
+            {
+                return ToTypeInfo(alias);
+            }
+
+            throw new TypeCheckException($"Unknown type '{rta.AliasName}'.");
+        }
+        finally
+        {
+            _typeAliasExpansionDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Converts a TypeInfo back to a string representation for re-parsing.
+    /// Used when expanding recursive type aliases with type arguments.
+    /// </summary>
+    private static string TypeInfoToString(TypeInfo type) => type switch
+    {
+        TypeInfo.String => "string",
+        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => "number",
+        TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => "boolean",
+        TypeInfo.Void => "void",
+        TypeInfo.Null => "null",
+        TypeInfo.Undefined => "undefined",
+        TypeInfo.Unknown => "unknown",
+        TypeInfo.Never => "never",
+        TypeInfo.Any => "any",
+        TypeInfo.Symbol => "symbol",
+        TypeInfo.BigInt => "bigint",
+        TypeInfo.Object => "object",
+        TypeInfo.StringLiteral sl => $"\"{sl.Value}\"",
+        TypeInfo.NumberLiteral nl => nl.Value.ToString(),
+        TypeInfo.BooleanLiteral bl => bl.Value ? "true" : "false",
+        TypeInfo.Array arr => $"{TypeInfoToString(arr.ElementType)}[]",
+        TypeInfo.Union u => string.Join(" | ", u.FlattenedTypes.Select(TypeInfoToString)),
+        TypeInfo.Intersection i => string.Join(" & ", i.FlattenedTypes.Select(TypeInfoToString)),
+        TypeInfo.Tuple t => $"[{string.Join(", ", t.ElementTypes.Select(TypeInfoToString))}]",
+        TypeInfo.Record r => $"{{ {string.Join("; ", r.Fields.Select(f => $"{f.Key}: {TypeInfoToString(f.Value)}"))} }}",
+        TypeInfo.Class c => c.Name,
+        TypeInfo.Instance inst when inst.ClassType is TypeInfo.Class c => c.Name,
+        TypeInfo.Interface itf => itf.Name,
+        TypeInfo.TypeParameter tp => tp.Name,
+        TypeInfo.RecursiveTypeAlias rta => rta.TypeArguments is { Count: > 0 }
+            ? $"{rta.AliasName}<{string.Join(", ", rta.TypeArguments.Select(TypeInfoToString))}>"
+            : rta.AliasName,
+        _ => type.ToString() ?? "any"
+    };
+
+    /// <summary>
     /// Core type compatibility logic without caching.
     /// </summary>
     private bool IsCompatibleCore(TypeInfo expected, TypeInfo actual)
     {
         if (expected is TypeInfo.Any || actual is TypeInfo.Any) return true;
+
+        // Expand recursive type aliases lazily
+        if (expected is TypeInfo.RecursiveTypeAlias expectedRTA)
+        {
+            return IsCompatible(ExpandRecursiveTypeAlias(expectedRTA), actual);
+        }
+        if (actual is TypeInfo.RecursiveTypeAlias actualRTA)
+        {
+            return IsCompatible(expected, ExpandRecursiveTypeAlias(actualRTA));
+        }
 
         // Type predicate compatibility:
         // - Regular type predicate (x is T): expects boolean return
@@ -399,18 +484,16 @@ public partial class TypeChecker
                 // Check if actual is also the same InstantiatedGeneric
                 if (i2.ClassType is TypeInfo.InstantiatedGeneric actualIG)
                 {
-                    // Same generic definition and compatible type arguments
+                    // Same generic definition and compatible type arguments (variance-aware)
                     if (expectedIG.GenericDefinition is TypeInfo.GenericClass gc1 &&
                         actualIG.GenericDefinition is TypeInfo.GenericClass gc2 &&
                         gc1.Name == gc2.Name)
                     {
                         if (expectedIG.TypeArguments.Count != actualIG.TypeArguments.Count)
                             return false;
-                        for (int i = 0; i < expectedIG.TypeArguments.Count; i++)
-                        {
-                            if (!IsCompatible(expectedIG.TypeArguments[i], actualIG.TypeArguments[i]))
-                                return false;
-                        }
+                        // Check type arguments respecting variance annotations
+                        if (!AreTypeArgumentsCompatible(gc1.TypeParams, expectedIG.TypeArguments, actualIG.TypeArguments))
+                            return false;
                         return true;
                     }
                     // Check if actualIG's hierarchy includes expectedIG
@@ -497,7 +580,20 @@ public partial class TypeChecker
         if (expected is TypeInfo.InstantiatedGeneric expectedInterfaceIG &&
             expectedInterfaceIG.GenericDefinition is TypeInfo.GenericInterface gi)
         {
-            // Build substitution map
+            // Check if actual is also the same generic interface with different type arguments
+            if (actual is TypeInfo.InstantiatedGeneric actualInterfaceIG &&
+                actualInterfaceIG.GenericDefinition is TypeInfo.GenericInterface actualGI &&
+                gi.Name == actualGI.Name)
+            {
+                // Same generic interface - check type arguments with variance
+                if (expectedInterfaceIG.TypeArguments.Count != actualInterfaceIG.TypeArguments.Count)
+                    return false;
+                if (!AreTypeArgumentsCompatible(gi.TypeParams, expectedInterfaceIG.TypeArguments, actualInterfaceIG.TypeArguments))
+                    return false;
+                return true;
+            }
+
+            // Build substitution map for structural comparison
             Dictionary<string, TypeInfo> subs = [];
             for (int i = 0; i < gi.TypeParams.Count; i++)
                 subs[gi.TypeParams[i].Name] = expectedInterfaceIG.TypeArguments[i];
@@ -2158,6 +2254,48 @@ public partial class TypeChecker
 
         // Note: Constructor return type is handled by the class - we don't check it here
         // The sig.ReturnType specifies what the new expression produces, which is determined by the class itself
+        return true;
+    }
+
+    /// <summary>
+    /// Checks if type arguments are compatible according to variance annotations.
+    /// </summary>
+    /// <param name="typeParams">The type parameters with variance annotations.</param>
+    /// <param name="expectedArgs">Expected type arguments.</param>
+    /// <param name="actualArgs">Actual type arguments.</param>
+    /// <returns>True if all type arguments are compatible respecting variance.</returns>
+    private bool AreTypeArgumentsCompatible(
+        List<TypeInfo.TypeParameter> typeParams,
+        List<TypeInfo> expectedArgs,
+        List<TypeInfo> actualArgs)
+    {
+        for (int i = 0; i < expectedArgs.Count; i++)
+        {
+            var expectedArg = expectedArgs[i];
+            var actualArg = actualArgs[i];
+            var variance = i < typeParams.Count ? typeParams[i].Variance : TypeParameterVariance.Invariant;
+
+            bool compatible = variance switch
+            {
+                // Covariant (out T): actual can be subtype of expected (normal direction)
+                // Producer<Dog> assignable to Producer<Animal>
+                TypeParameterVariance.Out => IsCompatible(expectedArg, actualArg),
+
+                // Contravariant (in T): actual can be supertype of expected (reversed direction)
+                // Consumer<Animal> assignable to Consumer<Dog>
+                TypeParameterVariance.In => IsCompatible(actualArg, expectedArg),
+
+                // Bivariant (in out T): either direction works
+                TypeParameterVariance.InOut =>
+                    IsCompatible(expectedArg, actualArg) || IsCompatible(actualArg, expectedArg),
+
+                // Invariant (no modifier): must be exactly compatible both ways
+                _ => IsCompatible(expectedArg, actualArg) && IsCompatible(actualArg, expectedArg)
+            };
+
+            if (!compatible) return false;
+        }
+
         return true;
     }
 }

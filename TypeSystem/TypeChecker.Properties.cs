@@ -85,6 +85,13 @@ public partial class TypeChecker
         }
 
         TypeInfo objType = CheckExpr(get.Object);
+
+        // Expand recursive type aliases lazily before property access
+        if (objType is TypeInfo.RecursiveTypeAlias rta)
+        {
+            objType = ExpandRecursiveTypeAlias(rta);
+        }
+
         var category = TypeCategoryResolver.Classify(objType);
         string memberName = get.Name.Lexeme;
 
@@ -336,6 +343,12 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnType(TypeInfo objType, Token memberName)
     {
+        // Expand recursive type aliases lazily before property access
+        if (objType is TypeInfo.RecursiveTypeAlias rta)
+        {
+            objType = ExpandRecursiveTypeAlias(rta);
+        }
+
         // Handle TypeParameter recursively - delegate to constraint
         if (objType is TypeInfo.TypeParameter tp)
         {

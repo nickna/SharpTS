@@ -1,4 +1,5 @@
 using System.Text;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Parsing;
 
@@ -702,9 +703,10 @@ public partial class Parser
 
     /// <summary>
     /// Parses type parameters like &lt;T, U extends Base&gt;, &lt;T = string, U extends Base = number&gt;,
-    /// or &lt;const T&gt; (TypeScript 5.0+ const type parameters for preserving literal types).
+    /// &lt;const T&gt; (TypeScript 5.0+ const type parameters), or &lt;out T&gt;, &lt;in T&gt;, &lt;in out T&gt;
+    /// (TypeScript 4.7+ variance annotations).
     /// Returns null if no type parameters are present.
-    /// Supports optional const modifier, constraints (extends), and default types (=).
+    /// Supports variance modifiers (in, out, in out), const modifier, constraints (extends), and default types (=).
     /// </summary>
     private List<TypeParam>? ParseTypeParameters()
     {
@@ -715,6 +717,24 @@ public partial class Parser
 
         do
         {
+            // Check for variance modifiers: in, out, in out
+            var variance = TypeParameterVariance.Invariant;
+            if (Match(TokenType.IN))
+            {
+                if (Match(TokenType.OUT))
+                {
+                    variance = TypeParameterVariance.InOut;
+                }
+                else
+                {
+                    variance = TypeParameterVariance.In;
+                }
+            }
+            else if (Match(TokenType.OUT))
+            {
+                variance = TypeParameterVariance.Out;
+            }
+
             // Check for 'const' modifier (TypeScript 5.0+ feature)
             bool isConst = Match(TokenType.CONST);
 
@@ -740,7 +760,7 @@ public partial class Parser
                 throw new Exception($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
             }
 
-            typeParams.Add(new TypeParam(name, constraint, defaultType, isConst));
+            typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance));
         } while (Match(TokenType.COMMA));
 
         ConsumeGreaterInTypeContext("Expect '>' after type parameters.");

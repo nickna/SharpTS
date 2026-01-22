@@ -53,6 +53,24 @@ public enum TupleElementKind
 }
 
 /// <summary>
+/// Variance annotation for generic type parameters.
+/// </summary>
+public enum TypeParameterVariance
+{
+    /// <summary>No annotation - invariant by default.</summary>
+    Invariant,
+
+    /// <summary>'out T' - covariant, T only appears in output positions.</summary>
+    Out,
+
+    /// <summary>'in T' - contravariant, T only appears in input positions.</summary>
+    In,
+
+    /// <summary>'in out T' - explicitly bivariant, T can appear anywhere.</summary>
+    InOut
+}
+
+/// <summary>
 /// Base record for compile-time type representations.
 /// </summary>
 /// <remarks>
@@ -864,15 +882,32 @@ public abstract record TypeInfo
     /// <param name="Name">The name of the type parameter (e.g., "T").</param>
     /// <param name="Constraint">Optional constraint type (from extends clause).</param>
     /// <param name="Default">Optional default type (from = clause).</param>
+    /// <param name="IsConst">Whether this is a const type parameter (TypeScript 5.0+ feature).</param>
+    /// <param name="Variance">Variance annotation (in, out, in out) for TypeScript 4.7+ variance modifiers.</param>
     /// <summary>
     /// Type parameter in generic declarations. IsConst indicates a const type parameter
     /// (TypeScript 5.0+ feature) that preserves literal types during inference.
+    /// Variance indicates explicit variance annotation (TypeScript 4.7+ feature).
     /// </summary>
-    public record TypeParameter(string Name, TypeInfo? Constraint = null, TypeInfo? Default = null, bool IsConst = false) : TypeInfo
+    public record TypeParameter(
+        string Name,
+        TypeInfo? Constraint = null,
+        TypeInfo? Default = null,
+        bool IsConst = false,
+        TypeParameterVariance Variance = TypeParameterVariance.Invariant
+    ) : TypeInfo
     {
         public override string ToString()
         {
-            var result = IsConst ? $"const {Name}" : Name;
+            var variance = Variance switch
+            {
+                TypeParameterVariance.Out => "out ",
+                TypeParameterVariance.In => "in ",
+                TypeParameterVariance.InOut => "in out ",
+                _ => ""
+            };
+            var constMod = IsConst ? "const " : "";
+            var result = $"{variance}{constMod}{Name}";
             if (Constraint != null) result += $" extends {Constraint}";
             if (Default != null) result += $" = {Default}";
             return result;
@@ -1064,6 +1099,22 @@ public abstract record TypeInfo
     public record InferredTypeParameter(string Name) : TypeInfo
     {
         public override string ToString() => $"infer {Name}";
+    }
+
+    /// <summary>
+    /// Represents a deferred reference to a recursive type alias.
+    /// Expansion is deferred to avoid infinite recursion during parsing.
+    /// </summary>
+    /// <param name="AliasName">The name of the type alias being referenced.</param>
+    /// <param name="TypeArguments">Optional type arguments for generic recursive aliases.</param>
+    public record RecursiveTypeAlias(
+        string AliasName,
+        List<TypeInfo>? TypeArguments = null
+    ) : TypeInfo
+    {
+        public override string ToString() => TypeArguments is { Count: > 0 }
+            ? $"{AliasName}<{string.Join(", ", TypeArguments)}>"
+            : AliasName;
     }
 }
 

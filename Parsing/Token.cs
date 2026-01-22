@@ -48,6 +48,9 @@ public enum TokenType
     YIELD,  // yield expression for generators
     SATISFIES,  // satisfies operator (TS 4.9+)
 
+    // Variance modifiers (IN already exists for mapped types)
+    OUT,  // out T (covariant)
+
     // TypeScript Specific
     TYPE_STRING, TYPE_NUMBER, TYPE_BOOLEAN, TYPE_SYMBOL, TYPE_BIGINT,
     SYMBOL,  // Symbol() constructor

@@ -206,22 +206,47 @@ public partial class TypeChecker
                     throw new TypeCheckException($" Type alias '{baseName}' requires {typeParamNames.Count} type argument(s), got {typeArgs.Count}.");
                 }
 
-                // Substitute type parameters in the definition string
-                string expanded = definition;
-                for (int i = 0; i < typeParamNames.Count; i++)
+                // Create a unique key for this instantiation to detect recursive references
+                string aliasKey = $"{baseName}<{string.Join(",", typeArgStrings)}>";
+                _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
+
+                // Recursive reference detected - return deferred placeholder
+                if (_typeAliasExpansionStack.Contains(aliasKey))
                 {
-                    // Replace type parameter with actual type argument string
-                    expanded = SubstituteTypeParamInString(expanded, typeParamNames[i], typeArgStrings[i]);
+                    // Handle array suffix before returning
+                    TypeInfo recursiveResult = new TypeInfo.RecursiveTypeAlias(baseName, typeArgs);
+                    while (suffix.StartsWith("[]"))
+                    {
+                        recursiveResult = new TypeInfo.Array(recursiveResult);
+                        suffix = suffix[2..];
+                    }
+                    return recursiveResult;
                 }
 
-                // Parse the expanded definition
-                result = ToTypeInfo(expanded);
+                _typeAliasExpansionStack.Add(aliasKey);
+                try
+                {
+                    // Substitute type parameters in the definition string
+                    string expanded = definition;
+                    for (int i = 0; i < typeParamNames.Count; i++)
+                    {
+                        // Replace type parameter with actual type argument string
+                        expanded = SubstituteTypeParamInString(expanded, typeParamNames[i], typeArgStrings[i]);
+                    }
 
-                // Flatten any spread elements that contain concrete tuples
-                result = FlattenTupleSpreads(result);
+                    // Parse the expanded definition
+                    result = ToTypeInfo(expanded);
 
-                // Validate spread constraints after type alias instantiation
-                ValidateSpreadConstraints(result);
+                    // Flatten any spread elements that contain concrete tuples
+                    result = FlattenTupleSpreads(result);
+
+                    // Validate spread constraints after type alias instantiation
+                    ValidateSpreadConstraints(result);
+                }
+                finally
+                {
+                    _typeAliasExpansionStack.Remove(aliasKey);
+                }
             }
             else
             {
@@ -525,6 +550,13 @@ public partial class TypeChecker
             // Inferred type parameters: substitute if bound, else keep as-is
             TypeInfo.InferredTypeParameter infer =>
                 substitutions.TryGetValue(infer.Name, out var inferSub) ? inferSub : type,
+            // Recursive type alias: substitute type arguments if present
+            TypeInfo.RecursiveTypeAlias rta =>
+                rta.TypeArguments is { Count: > 0 }
+                    ? new TypeInfo.RecursiveTypeAlias(
+                        rta.AliasName,
+                        rta.TypeArguments.Select(a => Substitute(a, substitutions)).ToList())
+                    : rta,
             // Primitives, Any, Void, Never, Unknown, Null pass through unchanged
             _ => type
         };

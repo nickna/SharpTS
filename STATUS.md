@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-20 (Added const type parameters `<const T>` support)
+**Last Updated:** 2026-01-21 (Added variance annotations support - in, out, in out)
 
 ## Legend
 - ✅ Implemented
@@ -23,6 +23,7 @@ This document tracks TypeScript language features and their implementation statu
 | Interfaces | ✅ | Structural typing |
 | Classes | ✅ | Nominal typing |
 | Generics (`<T>`) | ✅ | Full support with true .NET generics and constraints |
+| Variance annotations (`in`, `out`, `in out`) | ✅ | Explicit variance control for generic type parameters (TS 4.7+) |
 | Union Types (`string \| number`) | ✅ | With type narrowing support |
 | Intersection Types (`A & B`) | ✅ | For combining types with full TypeScript semantics |
 | Literal Types (`"success" \| "error"`) | ✅ | String, number, and boolean literals |
@@ -272,7 +273,7 @@ This document tracks TypeScript language features and their implementation statu
 | `using`/`await using` | ❌ | Explicit resource management (TS 5.2+) |
 | Const type parameters | ✅ | `<const T>` syntax (TS 5.0+) for preserving literal types during inference; readonly semantics for objects/arrays |
 | Variance annotations | ❌ | `in`/`out` modifiers on type parameters |
-| Recursive type aliases | ❌ | Self-referential type definitions |
+| Recursive type aliases | ✅ | Self-referential type definitions like `type Node = { next: Node | null }` and generic `type Tree<T> = { children: Tree<T>[] }` |
 
 ---
 

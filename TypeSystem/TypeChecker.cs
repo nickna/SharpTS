@@ -54,9 +54,37 @@ public partial class TypeChecker
     // Memoization cache for IsCompatible checks - cleared per Check() call
     private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;
 
+    /// <summary>
+    /// Cache for variance position analysis results.
+    /// Key: "{TypeName}:{TypeParamName}", Value: positions where param appears
+    /// </summary>
+    private readonly Dictionary<string, VariancePositions> _variancePositionCache = new();
+
+    /// <summary>
+    /// Records where a type parameter appears (input vs output positions).
+    /// </summary>
+    private record VariancePositions(bool AppearsInOutput, bool AppearsInInput);
+
     // Error recovery support
     private readonly List<TypeCheckError> _errors = [];
     private const int MaxErrors = 10;
+
+    /// <summary>
+    /// Maximum depth for recursive type alias expansion.
+    /// </summary>
+    private const int MaxTypeAliasExpansionDepth = 100;
+
+    /// <summary>
+    /// Tracks type aliases currently being expanded to detect circular references.
+    /// </summary>
+    [ThreadStatic]
+    private static HashSet<string>? _typeAliasExpansionStack;
+
+    /// <summary>
+    /// Current recursion depth during type alias expansion.
+    /// </summary>
+    [ThreadStatic]
+    private static int _typeAliasExpansionDepth;
 
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.

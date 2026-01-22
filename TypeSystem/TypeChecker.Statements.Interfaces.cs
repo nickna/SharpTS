@@ -31,7 +31,7 @@ public partial class TypeChecker
             // First pass: define all type parameters without constraints
             foreach (var tp in interfaceStmt.TypeParams)
             {
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
 
@@ -53,7 +53,7 @@ public partial class TypeChecker
                     {
                         // Ignore constraint/default parsing errors during pre-registration
                     }
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                     interfaceTypeParams.Add(typeParam);
                     // Redefine with the actual constraint
                     interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
@@ -180,7 +180,7 @@ public partial class TypeChecker
             // First pass: define all type parameters without constraints so they can reference each other
             foreach (var tp in interfaceStmt.TypeParams)
             {
-                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst);
+                var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, null, null, tp.IsConst, tp.Variance);
                 interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
             }
 
@@ -191,7 +191,7 @@ public partial class TypeChecker
                 {
                     TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
                     TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst);
+                    var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                     interfaceTypeParams.Add(typeParam);
                     // Redefine with the actual constraint
                     interfaceTypeEnv.DefineTypeParameter(tp.Name.Lexeme, typeParam);
@@ -406,7 +406,7 @@ public partial class TypeChecker
         {
             TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
             TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
-            result.Add(new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst));
+            result.Add(new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance));
         }
         return result;
     }

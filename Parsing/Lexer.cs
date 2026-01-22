@@ -82,6 +82,7 @@ public class Lexer(string source)
         { "new", TokenType.NEW },
         { "null", TokenType.NULL },
         { "of", TokenType.OF },
+        { "out", TokenType.OUT },
         { "override", TokenType.OVERRIDE },
         { "private", TokenType.PRIVATE },
         { "protected", TokenType.PROTECTED },

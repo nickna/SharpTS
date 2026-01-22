@@ -28,7 +28,39 @@ public partial class TypeChecker
         var aliasExpansion = _environment.GetTypeAlias(typeName);
         if (aliasExpansion != null)
         {
-            return ToTypeInfo(aliasExpansion);
+            _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
+
+            // Recursive reference detected - return deferred placeholder
+            if (_typeAliasExpansionStack.Contains(typeName))
+            {
+                return new TypeInfo.RecursiveTypeAlias(typeName);
+            }
+
+            _typeAliasExpansionStack.Add(typeName);
+            try
+            {
+                if (++_typeAliasExpansionDepth > MaxTypeAliasExpansionDepth)
+                {
+                    throw new TypeCheckException(
+                        $"Type alias '{typeName}' circularly references itself.");
+                }
+
+                var expanded = ToTypeInfo(aliasExpansion);
+
+                // Validate: direct self-reference without indirection is illegal
+                if (IsDirectCircularReference(expanded, typeName))
+                {
+                    throw new TypeCheckException(
+                        $"Type alias '{typeName}' circularly references itself.");
+                }
+
+                return expanded;
+            }
+            finally
+            {
+                _typeAliasExpansionStack.Remove(typeName);
+                _typeAliasExpansionDepth--;
+            }
         }
 
         // Handle type predicate return types: "asserts x is T", "asserts x", "x is T"
@@ -100,7 +132,10 @@ public partial class TypeChecker
         }
 
         // Handle generic type syntax: Box<number>, Map<string, number>
-        if (typeName.Contains('<') && typeName.Contains('>'))
+        // Must NOT match inline object types that contain generic types like { x: Box<T> }
+        // or tuple types that contain generics like [Box<T>, string]
+        if (typeName.Contains('<') && typeName.Contains('>') &&
+            !typeName.StartsWith("{ ") && !typeName.StartsWith("["))
         {
             return ParseGenericTypeReference(typeName);
         }
@@ -1422,5 +1457,30 @@ public partial class TypeChecker
         if (!char.IsLetter(s[0]) && s[0] != '_') return false;
         // Rest must be alphanumeric or underscore (no spaces)
         return s.All(c => char.IsLetterOrDigit(c) || c == '_');
+    }
+
+    /// <summary>
+    /// Checks if a type is a direct circular reference to a type alias.
+    /// Direct circular references (without structural indirection) are illegal in TypeScript.
+    /// </summary>
+    /// <param name="type">The expanded type to check.</param>
+    /// <param name="aliasName">The name of the type alias being expanded.</param>
+    /// <returns>True if the type is a direct circular reference.</returns>
+    private static bool IsDirectCircularReference(TypeInfo type, string aliasName)
+    {
+        return type switch
+        {
+            // Direct reference to self
+            TypeInfo.RecursiveTypeAlias rta when rta.AliasName == aliasName => true,
+            // Union where ALL branches are circular references - this is illegal
+            TypeInfo.Union u => u.FlattenedTypes.All(t => IsDirectCircularReference(t, aliasName)),
+            // Intersection where ALL branches are circular references - this is illegal
+            TypeInfo.Intersection i => i.FlattenedTypes.All(t => IsDirectCircularReference(t, aliasName)),
+            // Structural types provide valid indirection - they break the cycle
+            TypeInfo.Record or TypeInfo.Array or TypeInfo.Tuple or TypeInfo.Function
+                or TypeInfo.Interface or TypeInfo.Instance or TypeInfo.Map
+                or TypeInfo.Set or TypeInfo.Promise => false,
+            _ => false
+        };
     }
 }
