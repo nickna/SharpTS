@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
@@ -80,6 +82,125 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitMergeIntoTSObject(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public static void MergeIntoTSObject($Object target, object? source)
+        // Merges properties from source (Dictionary or $Object) into target $Object
+        var method = typeBuilder.DefineMethod(
+            "MergeIntoTSObject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [runtime.TSObjectType, _types.Object]
+        );
+        runtime.MergeIntoTSObject = method;
+
+        var il = method.GetILGenerator();
+        var dictLabel = il.DefineLabel();
+        var tsObjectLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        // Check if source is Dictionary<string, object?>
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Check if source is $Object
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, tsObjectLabel);
+
+        // Not a dict or $Object - do nothing
+        il.Emit(OpCodes.Ret);
+
+        // Handle Dictionary source
+        il.MarkLabel(dictLabel);
+        {
+            var dictType = _types.DictionaryStringObject;
+            var enumeratorType = typeof(Dictionary<string, object>.Enumerator);
+            var keyValuePairType = _types.KeyValuePairStringObject;
+
+            var enumeratorLocal = il.DeclareLocal(enumeratorType);
+            var kvpLocal = il.DeclareLocal(keyValuePairType);
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, dictType);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(dictType, "GetEnumerator"));
+            il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+            il.MarkLabel(loopStart);
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumeratorType, "MoveNext"));
+            il.Emit(OpCodes.Brfalse, loopEnd);
+
+            // target.SetProperty(key, value)
+            il.Emit(OpCodes.Ldarg_0); // target
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, kvpLocal);
+            il.Emit(OpCodes.Ldloca, kvpLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Key")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldloca, kvpLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Value")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+
+            il.Emit(OpCodes.Br, loopStart);
+
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Br, endLabel);
+        }
+
+        // Handle $Object source - iterate using PropertyNames (IEnumerable<string>)
+        il.MarkLabel(tsObjectLabel);
+        {
+            // PropertyNames returns IEnumerable<string> (specifically Dictionary.KeyCollection)
+            // We iterate using the IEnumerator<string> interface
+            var sourceLocal = il.DeclareLocal(runtime.TSObjectType);
+            var enumeratorLocal = il.DeclareLocal(typeof(IEnumerator<string>));
+            var keyLocal = il.DeclareLocal(_types.String);
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+
+            // Store source as $Object
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+            il.Emit(OpCodes.Stloc, sourceLocal);
+
+            // Get PropertyNames and GetEnumerator
+            il.Emit(OpCodes.Ldloc, sourceLocal);
+            il.Emit(OpCodes.Callvirt, runtime.TSObjectGetKeys); // Returns IEnumerable<string>
+            il.Emit(OpCodes.Callvirt, typeof(IEnumerable<string>).GetMethod("GetEnumerator")!);
+            il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+            il.MarkLabel(loopStart);
+            // if (!enumerator.MoveNext()) break
+            il.Emit(OpCodes.Ldloc, enumeratorLocal);
+            il.Emit(OpCodes.Callvirt, typeof(IEnumerator).GetMethod("MoveNext")!);
+            il.Emit(OpCodes.Brfalse, loopEnd);
+
+            // key = enumerator.Current
+            il.Emit(OpCodes.Ldloc, enumeratorLocal);
+            il.Emit(OpCodes.Callvirt, typeof(IEnumerator<string>).GetProperty("Current")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, keyLocal);
+
+            // target.SetProperty(key, source.GetProperty(key))
+            il.Emit(OpCodes.Ldarg_0); // target
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldloc, sourceLocal);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+            il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
+
+            il.Emit(OpCodes.Br, loopStart);
+
+            il.MarkLabel(loopEnd);
+        }
+
+        il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 

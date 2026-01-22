@@ -50,6 +50,8 @@ public partial class TypeChecker
     private bool _inStaticBlock = false;
     // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
     private TypeInfo? _currentFunctionThisType = null;
+    // Contextual 'this' type for object literal accessor bodies (set during CheckObject two-pass)
+    private TypeInfo? _pendingObjectThisType = null;
 
     // Memoization cache for IsCompatible checks - cleared per Check() call
     private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;

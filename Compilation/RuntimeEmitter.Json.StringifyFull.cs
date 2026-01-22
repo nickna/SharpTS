@@ -547,32 +547,21 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits code to call the replacer function if it exists.
     /// For arrays: replacer(index, elem) -> elem
+    /// Handles both $TSFunction and $BoundTSFunction.
     /// </summary>
     private void EmitCallReplacerIfNeeded(ILGenerator il, LocalBuilder elemLocal, LocalBuilder indexLocal, EmittedRuntime runtime)
     {
         var skipLabel = il.DefineLabel();
+        var isTSFunctionLabel = il.DefineLabel();
+        var isBoundLabel = il.DefineLabel();
+        var callDoneLabel = il.DefineLabel();
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         // if (replacer == null) skip
         il.Emit(OpCodes.Ldarg_1);  // replacer
         il.Emit(OpCodes.Brfalse, skipLabel);
 
-        // elem = InvokeReplacerWithIndex(replacer, index, elem)
-        // We need a two-argument invoke. Use reflection or emit a helper.
-        // For simplicity, call InvokeCallback with a wrapper that passes both args.
-
-        // Actually, InvokeCallback only takes one arg. For replacer with index, we need special handling.
-        // The JS replacer is called as: replacer(key, value) where key is string/number
-
-        // Let's emit inline: if (replacer is $TSFunction func) elem = func.Invoke(new object[] { (double)index, elem })
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, skipLabel);
-
-        // Cast replacer to $TSFunction
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-
-        // Create object[] { (double)index, elem }
+        // Create object[] { (double)index, elem } and store in local
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -585,33 +574,62 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, elemLocal);
         il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, argsLocal);
 
-        // Call Invoke
+        // Check if replacer is $TSFunction
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
+
+        // Check if replacer is $BoundTSFunction
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, isBoundLabel);
+
+        // Unknown type - use InvokeValue fallback
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Stloc, elemLocal);
+        il.Emit(OpCodes.Br, callDoneLabel);
+
+        // isTSFunctionLabel: call $TSFunction.Invoke
+        il.MarkLabel(isTSFunctionLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
         il.Emit(OpCodes.Stloc, elemLocal);
+        il.Emit(OpCodes.Br, callDoneLabel);
 
+        // isBoundLabel: call $BoundTSFunction.Invoke
+        il.MarkLabel(isBoundLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Stloc, elemLocal);
+
+        il.MarkLabel(callDoneLabel);
         il.MarkLabel(skipLabel);
     }
 
     /// <summary>
     /// Emits code to call the replacer function with a string key.
+    /// Handles both $TSFunction and $BoundTSFunction.
     /// </summary>
     private void EmitCallReplacerWithKey(ILGenerator il, LocalBuilder valueLocal, LocalBuilder keyLocal, EmittedRuntime runtime)
     {
         var skipLabel = il.DefineLabel();
+        var isTSFunctionLabel = il.DefineLabel();
+        var isBoundLabel = il.DefineLabel();
+        var callDoneLabel = il.DefineLabel();
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
         il.Emit(OpCodes.Ldarg_1);  // replacer
         il.Emit(OpCodes.Brfalse, skipLabel);
 
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brfalse, skipLabel);
-
-        // Cast and call
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-
-        // Create object[] { key, value }
+        // Create object[] { key, value } and store in local
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
@@ -622,10 +640,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, argsLocal);
 
+        // Check if replacer is $TSFunction
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
+
+        // Check if replacer is $BoundTSFunction
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, isBoundLabel);
+
+        // Unknown type - use InvokeValue fallback
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, callDoneLabel);
+
+        // isTSFunctionLabel: call $TSFunction.Invoke
+        il.MarkLabel(isTSFunctionLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
         il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, callDoneLabel);
 
+        // isBoundLabel: call $BoundTSFunction.Invoke
+        il.MarkLabel(isBoundLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        il.MarkLabel(callDoneLabel);
         il.MarkLabel(skipLabel);
     }
 

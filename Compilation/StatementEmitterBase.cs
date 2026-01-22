@@ -690,4 +690,55 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     }
 
     #endregion
+
+    #region Delete Expression
+
+    /// <summary>
+    /// Default implementation for delete expressions.
+    /// </summary>
+    protected override void EmitDelete(Expr.Delete del)
+    {
+        // delete operator: returns boolean
+        // - delete obj.prop: removes property, returns true (or false if frozen/sealed)
+        // - delete obj[key]: removes computed property, returns true (or false if frozen/sealed)
+        // - delete variable: returns false (cannot delete variables)
+        switch (del.Operand)
+        {
+            case Expr.Get get:
+                // delete obj.prop - use static runtime helper
+                EmitExpression(get.Object);
+                EnsureBoxed();
+                IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                SetStackType(StackType.Boolean);
+                break;
+
+            case Expr.GetIndex getIndex:
+                // delete obj[key] - use static runtime helper
+                EmitExpression(getIndex.Object);
+                EnsureBoxed();
+                EmitExpression(getIndex.Index);
+                EnsureBoxed();
+                // Convert key to string
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                SetStackType(StackType.Boolean);
+                break;
+
+            case Expr.Variable:
+                // delete variable: returns false
+                EmitBoolConstant(false);
+                break;
+
+            default:
+                // delete on other expressions: returns true but does nothing
+                // Still need to evaluate for side effects
+                EmitExpression(del.Operand);
+                IL.Emit(OpCodes.Pop);
+                EmitBoolConstant(true);
+                break;
+        }
+    }
+
+    #endregion
 }

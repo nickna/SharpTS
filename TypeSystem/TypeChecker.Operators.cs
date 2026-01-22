@@ -35,6 +35,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckPlusOperator(TypeInfo left, TypeInfo right)
     {
+        // Any bypasses type checking - return any for any+anything
+        if (left is TypeInfo.Any || right is TypeInfo.Any) return new TypeInfo.Any();
         if (IsBigInt(left) && IsBigInt(right)) return new TypeInfo.BigInt();
         if (IsNumber(left) && IsNumber(right)) return new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         if (IsString(left) || IsString(right)) return new TypeInfo.String();
@@ -45,6 +47,9 @@ public partial class TypeChecker
 
     private TypeInfo CheckArithmeticBinary(TypeInfo left, TypeInfo right)
     {
+        // Any bypasses type checking - return any for any op anything
+        if (left is TypeInfo.Any || right is TypeInfo.Any)
+            return new TypeInfo.Any();
         // Allow number+number OR bigint+bigint, NOT mixed
         if (IsBigInt(left) && IsBigInt(right))
             return new TypeInfo.BigInt();
@@ -57,6 +62,9 @@ public partial class TypeChecker
 
     private TypeInfo CheckComparisonBinary(TypeInfo left, TypeInfo right)
     {
+        // Any bypasses type checking
+        if (left is TypeInfo.Any || right is TypeInfo.Any)
+            return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         // Allow number vs number OR bigint vs bigint
         if ((IsBigInt(left) && IsBigInt(right)) || (IsNumber(left) && IsNumber(right)))
             return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
@@ -67,6 +75,9 @@ public partial class TypeChecker
 
     private TypeInfo CheckBitwiseBinary(TypeInfo left, TypeInfo right)
     {
+        // Any bypasses type checking - return any for any op anything
+        if (left is TypeInfo.Any || right is TypeInfo.Any)
+            return new TypeInfo.Any();
         // Allow both number and bigint (separately)
         if (IsBigInt(left) && IsBigInt(right))
             return new TypeInfo.BigInt();
@@ -79,6 +90,9 @@ public partial class TypeChecker
 
     private TypeInfo CheckUnsignedShiftBinary(TypeInfo left, TypeInfo right)
     {
+        // Any bypasses type checking - return any
+        if (left is TypeInfo.Any || right is TypeInfo.Any)
+            return new TypeInfo.Any();
         // Unsigned right shift - NOT SUPPORTED for bigint in TypeScript!
         if (IsBigInt(left) || IsBigInt(right))
             throw new TypeCheckException(" Unsigned right shift (>>>) is not supported for bigint.");
@@ -262,11 +276,21 @@ public partial class TypeChecker
         return exprType;
     }
 
+    private TypeInfo CheckDelete(Expr.Delete delete)
+    {
+        // Type check the operand (for any side effects or errors)
+        CheckExpr(delete.Operand);
+        // delete always returns boolean
+        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+    }
+
     private TypeInfo CheckUnary(Expr.Unary unary)
     {
         TypeInfo right = CheckExpr(unary.Right);
         if (unary.Operator.Type == TokenType.TYPEOF)
             return new TypeInfo.String();
+        if (unary.Operator.Type == TokenType.VOID)
+            return new TypeInfo.Undefined();
         if (unary.Operator.Type == TokenType.MINUS)
         {
             if (IsBigInt(right)) return new TypeInfo.BigInt();

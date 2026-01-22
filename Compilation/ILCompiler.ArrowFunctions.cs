@@ -255,6 +255,9 @@ public partial class ILCompiler
             case Expr.Unary u:
                 CollectArrowsFromExpr(u.Right);
                 break;
+            case Expr.Delete d:
+                CollectArrowsFromExpr(d.Operand);
+                break;
             case Expr.Grouping g:
                 CollectArrowsFromExpr(g.Expression);
                 break;

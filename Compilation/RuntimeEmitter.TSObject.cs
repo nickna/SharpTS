@@ -13,6 +13,8 @@ public partial class RuntimeEmitter
     private FieldBuilder _tsObjectFieldsField = null!;
     private FieldBuilder _tsObjectIsFrozenField = null!;
     private FieldBuilder _tsObjectIsSealedField = null!;
+    private FieldBuilder _tsObjectGettersField = null!;
+    private FieldBuilder _tsObjectSettersField = null!;
 
     private void EmitTSObjectClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
@@ -28,6 +30,8 @@ public partial class RuntimeEmitter
         _tsObjectFieldsField = typeBuilder.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         _tsObjectIsFrozenField = typeBuilder.DefineField("_isFrozen", _types.Boolean, FieldAttributes.Private);
         _tsObjectIsSealedField = typeBuilder.DefineField("_isSealed", _types.Boolean, FieldAttributes.Private);
+        _tsObjectGettersField = typeBuilder.DefineField("_getters", _types.DictionaryStringObject, FieldAttributes.Private);
+        _tsObjectSettersField = typeBuilder.DefineField("_setters", _types.DictionaryStringObject, FieldAttributes.Private);
 
         // Constructor: public $Object(Dictionary<string, object?> fields)
         EmitTSObjectConstructor(typeBuilder, runtime);
@@ -49,6 +53,14 @@ public partial class RuntimeEmitter
         EmitTSObjectSetPropertyStrict(typeBuilder, runtime);
         EmitTSObjectHasProperty(typeBuilder, runtime);
         EmitTSObjectDeleteProperty(typeBuilder, runtime);
+
+        // Methods: DefineGetter, DefineSetter, HasGetter, HasSetter, GetGetter, GetSetter
+        EmitTSObjectDefineGetter(typeBuilder, runtime);
+        EmitTSObjectDefineSetter(typeBuilder, runtime);
+        EmitTSObjectHasGetter(typeBuilder, runtime);
+        EmitTSObjectHasSetter(typeBuilder, runtime);
+        EmitTSObjectGetGetter(typeBuilder, runtime);
+        EmitTSObjectGetSetter(typeBuilder, runtime);
 
         // Property: PropertyNames (for Object.keys/for-in)
         EmitTSObjectPropertyNames(typeBuilder, runtime);
@@ -215,8 +227,35 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
+        var getterLocal = il.DeclareLocal(_types.Object);
         var foundLabel = il.DefineLabel();
+        var noGetterLabel = il.DefineLabel();
 
+        // First, check for a getter
+        // if (_getters != null && _getters.TryGetValue(name, out getter))
+        //     return ((TSFunction)getter).InvokeWithThis(this, Array.Empty<object>())
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Brfalse, noGetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, getterLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, noGetterLabel);
+
+        // Found getter - invoke it: getter.InvokeWithThis(this, [])
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_0); // this
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Array), "Empty").MakeGenericMethod(_types.Object));
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noGetterLabel);
+
+        // No getter - fall back to _fields
         // if (_fields.TryGetValue(name, out value)) return value;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsObjectFieldsField);
@@ -245,9 +284,11 @@ public partial class RuntimeEmitter
         runtime.TSObjectSetProperty = method;
 
         var il = method.GetILGenerator();
+        var setterLocal = il.DeclareLocal(_types.Object);
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
         var notFrozenLabel = il.DefineLabel();
         var notSealedOrExistsLabel = il.DefineLabel();
-        var endLabel = il.DefineLabel();
+        var noSetterLabel = il.DefineLabel();
 
         // if (_isFrozen) return
         il.Emit(OpCodes.Ldarg_0);
@@ -256,6 +297,41 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notFrozenLabel);
+
+        // Check for setter first
+        // if (_setters != null && _setters.TryGetValue(name, out setter))
+        //     setter.InvokeWithThis(this, [value]); return;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Brfalse, noSetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, setterLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, noSetterLabel);
+
+        // Found setter - invoke it: setter.InvokeWithThis(this, [value])
+        il.Emit(OpCodes.Ldloc, setterLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_0); // this
+
+        // Create args array: new object[] { value }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2); // value
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Pop); // Discard result
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noSetterLabel);
 
         // if (_isSealed && !_fields.ContainsKey(name)) return
         il.Emit(OpCodes.Ldarg_0);
@@ -292,10 +368,48 @@ public partial class RuntimeEmitter
         runtime.TSObjectSetPropertyStrict = method;
 
         var il = method.GetILGenerator();
+        var setterLocal = il.DeclareLocal(_types.Object);
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+        var noSetterLabel = il.DefineLabel();
         var notFrozenLabel = il.DefineLabel();
         var frozenReturnLabel = il.DefineLabel();
         var notSealedOrExistsLabel = il.DefineLabel();
         var sealedReturnLabel = il.DefineLabel();
+
+        // Check for setter first - setters are always invoked even on frozen objects
+        // if (_setters != null && _setters.TryGetValue(name, out setter))
+        //     setter.InvokeWithThis(this, [value]); return;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Brfalse, noSetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, setterLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, noSetterLabel);
+
+        // Found setter - invoke it: setter.InvokeWithThis(this, [value])
+        il.Emit(OpCodes.Ldloc, setterLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_0); // this
+
+        // Create args array: new object[] { value }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2); // value
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Pop); // Discard result
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noSetterLabel);
 
         // if (_isFrozen)
         il.Emit(OpCodes.Ldarg_0);
@@ -447,6 +561,220 @@ public partial class RuntimeEmitter
 
         // Simple implementation: return "[object Object]"
         il.Emit(OpCodes.Ldstr, "[object Object]");
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectDefineGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public void DefineGetter(string name, object getter)
+        var method = typeBuilder.DefineMethod(
+            "DefineGetter",
+            MethodAttributes.Public,
+            _types.Void,
+            [_types.String, _types.Object]
+        );
+        runtime.TSObjectDefineGetter = method;
+
+        var il = method.GetILGenerator();
+        var initGettersLabel = il.DefineLabel();
+        var setGetterLabel = il.DefineLabel();
+
+        // if (_getters == null) _getters = new Dictionary<string, object?>()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Brtrue, setGetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stfld, _tsObjectGettersField);
+
+        il.MarkLabel(setGetterLabel);
+
+        // _getters[name] = getter
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectDefineSetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public void DefineSetter(string name, object setter)
+        var method = typeBuilder.DefineMethod(
+            "DefineSetter",
+            MethodAttributes.Public,
+            _types.Void,
+            [_types.String, _types.Object]
+        );
+        runtime.TSObjectDefineSetter = method;
+
+        var il = method.GetILGenerator();
+        var setSetterLabel = il.DefineLabel();
+
+        // if (_setters == null) _setters = new Dictionary<string, object?>()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Brtrue, setSetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stfld, _tsObjectSettersField);
+
+        il.MarkLabel(setSetterLabel);
+
+        // _setters[name] = setter
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectHasGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public bool HasGetter(string name)
+        var method = typeBuilder.DefineMethod(
+            "HasGetter",
+            MethodAttributes.Public,
+            _types.Boolean,
+            [_types.String]
+        );
+        runtime.TSObjectHasGetter = method;
+
+        var il = method.GetILGenerator();
+        var returnFalseLabel = il.DefineLabel();
+        var checkContainsLabel = il.DefineLabel();
+
+        // if (_getters == null) return false
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Brtrue, checkContainsLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(checkContainsLabel);
+        // return _getters.ContainsKey(name)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectHasSetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public bool HasSetter(string name)
+        var method = typeBuilder.DefineMethod(
+            "HasSetter",
+            MethodAttributes.Public,
+            _types.Boolean,
+            [_types.String]
+        );
+        runtime.TSObjectHasSetter = method;
+
+        var il = method.GetILGenerator();
+        var checkContainsLabel = il.DefineLabel();
+
+        // if (_setters == null) return false
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Brtrue, checkContainsLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(checkContainsLabel);
+        // return _setters.ContainsKey(name)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectGetGetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public object? GetGetter(string name)
+        var method = typeBuilder.DefineMethod(
+            "GetGetter",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.String]
+        );
+        runtime.TSObjectGetGetter = method;
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var hasGettersLabel = il.DefineLabel();
+        var foundLabel = il.DefineLabel();
+
+        // if (_getters == null) return null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Brtrue, hasGettersLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasGettersLabel);
+        // if (_getters.TryGetValue(name, out value)) return value
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brtrue, foundLabel);
+
+        // return null
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(foundLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectGetSetter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public object? GetSetter(string name)
+        var method = typeBuilder.DefineMethod(
+            "GetSetter",
+            MethodAttributes.Public,
+            _types.Object,
+            [_types.String]
+        );
+        runtime.TSObjectGetSetter = method;
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var hasSettersLabel = il.DefineLabel();
+        var foundLabel = il.DefineLabel();
+
+        // if (_setters == null) return null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Brtrue, hasSettersLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasSettersLabel);
+        // if (_setters.TryGetValue(name, out value)) return value
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brtrue, foundLabel);
+
+        // return null
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(foundLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
     }
 }

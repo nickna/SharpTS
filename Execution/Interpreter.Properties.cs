@@ -282,8 +282,17 @@ public partial class Interpreter
     /// <summary>
     /// Evaluates property access on a record/object literal.
     /// </summary>
-    private static object? EvaluateGetOnRecord(SharpTSObject simpleObj, string memberName)
+    private object? EvaluateGetOnRecord(SharpTSObject simpleObj, string memberName)
     {
+        // Check for getter first
+        var getter = simpleObj.GetGetter(memberName);
+        if (getter != null)
+        {
+            // Invoke the getter with 'this' bound to the object
+            var boundGetter = BindAccessorToObject(getter, simpleObj);
+            return boundGetter.Call(this, []);
+        }
+
         var value = simpleObj.GetProperty(memberName);
         // Bind 'this' for function expressions and object method shorthand (HasOwnThis=true)
         if (value is SharpTSArrowFunction arrowFunc && arrowFunc.HasOwnThis)
@@ -291,6 +300,19 @@ public partial class Interpreter
             return arrowFunc.Bind(simpleObj);
         }
         return value;
+    }
+
+    /// <summary>
+    /// Binds an accessor function to an object for 'this' binding.
+    /// </summary>
+    private static ISharpTSCallable BindAccessorToObject(ISharpTSCallable accessor, SharpTSObject obj)
+    {
+        if (accessor is SharpTSArrowFunction arrow && arrow.HasOwnThis)
+        {
+            return arrow.Bind(obj);
+        }
+        // For callables that don't support binding, return as-is
+        return accessor;
     }
 
     /// <summary>
@@ -404,6 +426,27 @@ public partial class Interpreter
         }
         if (obj is SharpTSObject simpleObj)
         {
+            // Check for setter first
+            var setter = simpleObj.GetSetter(set.Name.Lexeme);
+            if (setter != null)
+            {
+                // Invoke the setter with 'this' bound to the object
+                var boundSetter = BindAccessorToObject(setter, simpleObj);
+                boundSetter.Call(this, [value]);
+                return value;
+            }
+
+            // If there's a getter but no setter, the property is read-only
+            if (simpleObj.HasGetter(set.Name.Lexeme))
+            {
+                if (strictMode)
+                {
+                    throw new Exception($"TypeError: Cannot set property '{set.Name.Lexeme}' which has only a getter.");
+                }
+                // Non-strict mode silently fails
+                return value;
+            }
+
             if (strictMode)
             {
                 simpleObj.SetPropertyStrict(set.Name.Lexeme, value, strictMode);

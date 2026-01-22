@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
     private void EmitCallbackHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // InvokeCallback(object? func, object? arg) -> object?
-        // Equivalent to: if (func == null) return null; return (($TSFunction)func).Invoke(new object[] { arg });
+        // Handles both $TSFunction and $BoundTSFunction
         var invokeCallback = typeBuilder.DefineMethod(
             "InvokeCallback",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -364,25 +364,53 @@ public partial class RuntimeEmitter
             var il = invokeCallback.GetILGenerator();
             var nullLabel = il.DefineLabel();
             var endLabel = il.DefineLabel();
+            var isTSFunctionLabel = il.DefineLabel();
+            var isBoundLabel = il.DefineLabel();
+            var argsLocal = il.DeclareLocal(typeof(object[]));
 
             // if (func == null) goto nullLabel
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brfalse, nullLabel);
 
-            // Cast func to $TSFunction
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-
-            // Create object[] { arg }
+            // Create object[] { arg } and store in local
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Newarr, typeof(object));
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Stloc, argsLocal);
 
-            // Call Invoke(object[])
+            // Check if func is $TSFunction
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
+
+            // Check if func is $BoundTSFunction
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Brtrue, isBoundLabel);
+
+            // Unknown callable - use InvokeValue fallback
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Br, endLabel);
+
+            // isTSFunctionLabel: call $TSFunction.Invoke
+            il.MarkLabel(isTSFunctionLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Br, endLabel);
+
+            // isBoundLabel: call $BoundTSFunction.Invoke
+            il.MarkLabel(isBoundLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
             il.Emit(OpCodes.Br, endLabel);
 
             // nullLabel: return null
@@ -394,7 +422,7 @@ public partial class RuntimeEmitter
         }
 
         // InvokeCallbackNoArgs(object? func) -> object?
-        // Equivalent to: if (func == null) return null; return (($TSFunction)func).Invoke(Array.Empty<object>());
+        // Handles both $TSFunction and $BoundTSFunction
         var invokeCallbackNoArgs = typeBuilder.DefineMethod(
             "InvokeCallbackNoArgs",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -406,21 +434,49 @@ public partial class RuntimeEmitter
             var il = invokeCallbackNoArgs.GetILGenerator();
             var nullLabel = il.DefineLabel();
             var endLabel = il.DefineLabel();
+            var isTSFunctionLabel = il.DefineLabel();
+            var isBoundLabel = il.DefineLabel();
+            var argsLocal = il.DeclareLocal(typeof(object[]));
 
             // if (func == null) goto nullLabel
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Brfalse, nullLabel);
 
-            // Cast func to $TSFunction
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-
-            // Create empty object[]
+            // Create empty object[] and store in local
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, typeof(object));
+            il.Emit(OpCodes.Stloc, argsLocal);
 
-            // Call Invoke(object[])
+            // Check if func is $TSFunction
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
+
+            // Check if func is $BoundTSFunction
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Brtrue, isBoundLabel);
+
+            // Unknown callable - use InvokeValue fallback
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Br, endLabel);
+
+            // isTSFunctionLabel: call $TSFunction.Invoke
+            il.MarkLabel(isTSFunctionLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+            il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            il.Emit(OpCodes.Br, endLabel);
+
+            // isBoundLabel: call $BoundTSFunction.Invoke
+            il.MarkLabel(isBoundLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
             il.Emit(OpCodes.Br, endLabel);
 
             // nullLabel: return null

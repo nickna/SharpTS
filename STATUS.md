@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-21 (Added explicit resource management - using/await using)
+**Last Updated:** 2026-01-21 (Fixed object literal accessor `this` type inference, `any` operator handling, spread+accessor compilation)
 
 ## Legend
 - ✅ Implemented
@@ -243,6 +243,7 @@ This document tracks TypeScript language features and their implementation statu
 | Block comments (`/* */`) | ✅ | |
 | Single-quoted strings | ✅ | |
 | Object method shorthand | ✅ | `{ fn() {} }` |
+| Object literal accessors | ✅ | `{ get x() {}, set x(v) {} }` with proper `this` binding |
 | Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
 | Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
 | Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
@@ -286,6 +287,11 @@ This document tracks TypeScript language features and their implementation statu
 ### Type Checker Limitations
 
 - Type alias declarations are lazily validated - errors in type alias definitions (e.g., `type R = ReturnType<string, number>;` with wrong arg count) are only caught when the alias is used, not at declaration time. TypeScript catches these at declaration.
+
+### Recently Fixed Bugs (2026-01-21)
+- ~~Object literal accessor `this` type inference~~ - Fixed: `this` in getter/setter bodies now correctly infers the object's type instead of defaulting to `any`; uses two-pass type checking with literal type widening
+- ~~`any + any` returning `bigint`~~ - Fixed: Binary operators now return `any` when either operand is `any`, not `bigint`
+- ~~Spread properties ignored in compiled object literals with accessors~~ - Fixed: `MergeIntoTSObject` runtime method properly merges spread properties into `$Object` instances
 
 ### Recently Fixed Bugs (2026-01-13)
 - ~~`yield await expr` NullReferenceException~~ - Fixed: State analyzer now assigns yield state before visiting nested await, matching emitter execution order

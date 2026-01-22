@@ -82,6 +82,9 @@ public abstract class ExpressionEmitterBase
             case Expr.Unary u:
                 EmitUnary(u);
                 break;
+            case Expr.Delete del:
+                EmitDelete(del);
+                break;
             case Expr.Call c:
                 EmitCall(c);
                 break;
@@ -233,6 +236,7 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitImportMeta(Expr.ImportMeta im);
     protected abstract void EmitUnknownExpression(Expr expr);
     protected abstract void EmitClassExpression(Expr.ClassExpr ce);
+    protected abstract void EmitDelete(Expr.Delete del);
     #endregion
 
     #region Virtual Methods - Pass-through expressions

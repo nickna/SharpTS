@@ -314,11 +314,19 @@ public partial class Parser
             return new Expr.PrefixIncrement(op, operand);
         }
 
-        if (Match(TokenType.BANG, TokenType.MINUS, TokenType.TYPEOF, TokenType.TILDE))
+        if (Match(TokenType.BANG, TokenType.MINUS, TokenType.TYPEOF, TokenType.TILDE, TokenType.VOID))
         {
             Token op = Previous();
             Expr right = Unary();
             return new Expr.Unary(op, right);
+        }
+
+        // delete operator: delete expr
+        if (Match(TokenType.DELETE))
+        {
+            Token keyword = Previous();
+            Expr operand = Unary();
+            return new Expr.Delete(keyword, operand);
         }
 
         // await expression: await expr
@@ -770,7 +778,93 @@ public partial class Parser
                         continue;
                     }
 
-                    Token name = Consume(TokenType.IDENTIFIER, "Expect property name.");
+                    // Check for getter: { get prop() { ... } }
+                    // GET is a keyword so we need to check for it specifically
+                    // Use lookahead to avoid consuming GET token prematurely
+                    if (Check(TokenType.GET) && CheckNext(TokenType.IDENTIFIER))
+                    {
+                        Advance(); // Consume the GET token
+                        Token propName = Advance();
+                        Consume(TokenType.LEFT_PAREN, "Expect '(' after getter name.");
+                        Consume(TokenType.RIGHT_PAREN, "Expect ')' after getter parameters (getters take no parameters).");
+
+                        string? returnType = null;
+                        if (Match(TokenType.COLON))
+                        {
+                            returnType = ParseTypeAnnotation();
+                        }
+
+                        Consume(TokenType.LEFT_BRACE, "Expect '{' before getter body.");
+                        List<Stmt> body = Block();
+
+                        var getterExpr = new Expr.ArrowFunction(
+                            Name: null,
+                            TypeParams: null,
+                            ThisType: null,
+                            Parameters: [],
+                            ExpressionBody: null,
+                            BlockBody: body,
+                            ReturnType: returnType,
+                            HasOwnThis: true
+                        );
+                        properties.Add(new Expr.Property(
+                            new Expr.IdentifierKey(propName),
+                            getterExpr,
+                            IsSpread: false,
+                            Kind: Expr.ObjectPropertyKind.Getter));
+                        continue;
+                    }
+
+                    // Check for setter: { set prop(value) { ... } }
+                    // SET is a keyword so we need to check for it specifically
+                    // Use lookahead to avoid consuming SET token prematurely
+                    if (Check(TokenType.SET) && CheckNext(TokenType.IDENTIFIER))
+                    {
+                        Advance(); // Consume the SET token
+                        Token propName = Advance();
+                        Consume(TokenType.LEFT_PAREN, "Expect '(' after setter name.");
+
+                        // Parse the single setter parameter
+                        Token paramName = Consume(TokenType.IDENTIFIER, "Expect setter parameter name.");
+                        string? paramType = null;
+                        if (Match(TokenType.COLON))
+                        {
+                            paramType = ParseTypeAnnotation();
+                        }
+                        var setterParam = new Stmt.Parameter(paramName, paramType, null, false);
+
+                        Consume(TokenType.RIGHT_PAREN, "Expect ')' after setter parameter.");
+
+                        string? returnType = null;
+                        if (Match(TokenType.COLON))
+                        {
+                            returnType = ParseTypeAnnotation();
+                        }
+
+                        Consume(TokenType.LEFT_BRACE, "Expect '{' before setter body.");
+                        List<Stmt> body = Block();
+
+                        var setterExpr = new Expr.ArrowFunction(
+                            Name: null,
+                            TypeParams: null,
+                            ThisType: null,
+                            Parameters: [setterParam],
+                            ExpressionBody: null,
+                            BlockBody: body,
+                            ReturnType: returnType,
+                            HasOwnThis: true
+                        );
+                        properties.Add(new Expr.Property(
+                            new Expr.IdentifierKey(propName),
+                            setterExpr,
+                            IsSpread: false,
+                            Kind: Expr.ObjectPropertyKind.Setter,
+                            SetterParam: setterParam));
+                        continue;
+                    }
+
+                    // Parse regular identifier (including 'get' and 'set' when not followed by another identifier)
+                    Token name = ConsumePropertyName("Expect property name.");
                     Expr value;
 
                     if (Match(TokenType.LEFT_PAREN))

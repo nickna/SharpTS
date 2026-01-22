@@ -561,6 +561,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSNamespaceType);
         il.Emit(OpCodes.Brtrue, namespaceLabel);
 
+        // $Object (with getter/setter support) - call obj.GetProperty(name)
+        var tsObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, tsObjectLabel);
+
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -582,6 +588,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
+        // $TSFunction - check for bind/call/apply
+        var tsFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionLabel);
+
+        // $BoundTSFunction - also check for bind/call/apply
+        var boundFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, boundFunctionLabel);
+
         // Default - try to access _fields dictionary via reflection for class instances
         var classInstanceLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, classInstanceLabel);
@@ -602,8 +620,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSNamespaceGet);
         il.Emit(OpCodes.Ret);
 
+        // $Object handler - call obj.GetProperty(name) which handles getters
+        il.MarkLabel(tsObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Ret);
+
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        // $TSFunction handler - call GetFunctionMethod(func, name)
+        il.MarkLabel(tsFunctionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
+        il.Emit(OpCodes.Ret);
+
+        // $BoundTSFunction handler - call GetFunctionMethod(func, name)
+        il.MarkLabel(boundFunctionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
@@ -717,21 +757,36 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
+        var tsObjectLabel = il.DefineLabel();
 
         // null check
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+
+        // $Object (with setter support) - call obj.SetProperty(name, value)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
-        // Not a dict - try SetFieldsProperty for class instances
+        // Not a dict or $Object - try SetFieldsProperty for class instances
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetFieldsProperty);
+        il.Emit(OpCodes.Ret);
+
+        // $Object handler - call obj.SetProperty(name, value) which handles setters
+        il.MarkLabel(tsObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectSetProperty);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);
@@ -987,6 +1042,99 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits DeleteProperty(object obj, string name) -> bool
+    /// Removes a property from an object and returns true if successful.
+    /// Returns false for frozen/sealed objects or if the object doesn't support deletion.
+    /// </summary>
+    private void EmitDeleteProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DeleteProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.String]
+        );
+        runtime.DeleteProperty = method;
+
+        var il = method.GetILGenerator();
+        var nullLabel = il.DefineLabel();
+        var dictLabel = il.DefineLabel();
+        var trueLabel = il.DefineLabel();
+
+        // null check - return true (deleting from null is allowed in JS)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+
+        // Check if $TSObject
+        var sharpTSObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
+
+        // Dictionary
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Other types - cannot delete properties, return true (JS behavior for non-configurable)
+        il.Emit(OpCodes.Br, trueLabel);
+
+        // $TSObject - call DeleteProperty instance method
+        il.MarkLabel(sharpTSObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectDeleteProperty);
+        il.Emit(OpCodes.Ret);
+
+        // Dictionary - use Remove
+        il.MarkLabel(dictLabel);
+        var valueLocal = il.DeclareLocal(_types.Object);
+
+        // Check if frozen
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notFrozenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Frozen - return false
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Check if sealed
+        il.MarkLabel(notFrozenLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notSealedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notSealedLabel);
+
+        // Sealed - return false
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Not frozen/sealed - do the removal
+        il.MarkLabel(notSealedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Ret);
+
+        // Return true (default for null and other types)
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
 }

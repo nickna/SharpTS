@@ -28,6 +28,7 @@ public partial class TypeChecker
             Expr.Call call => CheckCall(call),
             Expr.Grouping grouping => CheckExpr(grouping.Expression),
             Expr.Unary unary => CheckUnary(unary),
+            Expr.Delete delete => CheckDelete(delete),
             Expr.Get get => CheckGet(get),
             Expr.Set set => CheckSet(set),
             Expr.GetPrivate gp => CheckGetPrivate(gp),
@@ -289,6 +290,24 @@ public partial class TypeChecker
                         fields[k] = v;
                 }
             }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Getter || prop.Kind == Expr.ObjectPropertyKind.Setter)
+            {
+                // For getters/setters, extract the property type from the function
+                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                TypeInfo fnType = CheckExpr(prop.Value);
+                if (prop.Kind == Expr.ObjectPropertyKind.Getter && fnType is TypeInfo.Function fn)
+                {
+                    fields[name] = fn.ReturnType;
+                }
+                else if (prop.Kind == Expr.ObjectPropertyKind.Setter && fnType is TypeInfo.Function setterFn && setterFn.ParamTypes.Count > 0)
+                {
+                    // Only set if not already defined by a getter
+                    if (!fields.ContainsKey(name))
+                    {
+                        fields[name] = setterFn.ParamTypes[0];
+                    }
+                }
+            }
             else if (prop.Key is Expr.IdentifierKey ik)
             {
                 fields[ik.Name.Lexeme] = InferConstType(prop.Value, CheckExpr(prop.Value));
@@ -358,6 +377,12 @@ public partial class TypeChecker
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
 
+        // Track accessor properties for two-pass type inference
+        List<Expr.Property> accessorProps = [];
+        bool hasAccessors = false;
+
+        // Pass 1: Collect property types without checking accessor bodies
+        // For accessors, use type annotations only (don't check bodies yet)
         foreach (var prop in obj.Properties)
         {
             if (prop.IsSpread)
@@ -382,6 +407,44 @@ public partial class TypeChecker
                 else
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.");
+                }
+            }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+            {
+                hasAccessors = true;
+                accessorProps.Add(prop);
+
+                // Getter - extract return type from annotation only (don't check body yet)
+                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                if (prop.Value is Expr.ArrowFunction arrow && arrow.ReturnType != null)
+                {
+                    fields[name] = ToTypeInfo(arrow.ReturnType);
+                }
+                else
+                {
+                    // No return type annotation - use Any for now (will be inferred on pass 2)
+                    fields[name] = new TypeInfo.Any();
+                }
+            }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+            {
+                hasAccessors = true;
+                accessorProps.Add(prop);
+
+                // Setter - extract parameter type from annotation only
+                string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                if (prop.Value is Expr.ArrowFunction arrow && arrow.Parameters.Count > 0 && arrow.Parameters[0].Type != null)
+                {
+                    // If getter already defined the type, verify compatibility
+                    if (!fields.ContainsKey(name))
+                    {
+                        fields[name] = ToTypeInfo(arrow.Parameters[0].Type!);
+                    }
+                }
+                else if (!fields.ContainsKey(name))
+                {
+                    // No type annotation - use Any for now
+                    fields[name] = new TypeInfo.Any();
                 }
             }
             else
@@ -428,7 +491,87 @@ public partial class TypeChecker
                 }
             }
         }
+
+        // Pass 2: If there are accessors, build the object type and re-check accessor bodies with proper 'this'
+        if (hasAccessors)
+        {
+            // Widen literal types for 'this' inference (e.g., 0 -> number, "test" -> string)
+            var widenedFields = fields.ToDictionary(
+                kv => kv.Key,
+                kv => WidenLiteralType(kv.Value)
+            );
+
+            // Build the object type for 'this' inference
+            var objectType = new TypeInfo.Record(
+                widenedFields.ToFrozenDictionary(),
+                stringIndexType != null ? WidenLiteralType(stringIndexType) : null,
+                numberIndexType != null ? WidenLiteralType(numberIndexType) : null,
+                symbolIndexType != null ? WidenLiteralType(symbolIndexType) : null
+            );
+
+            // Set contextual 'this' type for accessor bodies
+            var previousPendingThis = _pendingObjectThisType;
+            _pendingObjectThisType = objectType;
+
+            try
+            {
+                // Re-check accessor bodies with proper 'this' type
+                foreach (var prop in accessorProps)
+                {
+                    if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+                    {
+                        string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                        TypeInfo getterType = CheckExpr(prop.Value);
+
+                        // Update the field type with the actual inferred type
+                        if (getterType is TypeInfo.Function fn)
+                        {
+                            fields[name] = fn.ReturnType;
+                        }
+                        else
+                        {
+                            fields[name] = getterType;
+                        }
+                    }
+                    else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+                    {
+                        string name = GetPropertyKeyNameForTypeCheck(prop.Key!);
+                        TypeInfo setterType = CheckExpr(prop.Value);
+
+                        // Setter - extract the parameter type (or merge with existing getter type)
+                        if (setterType is TypeInfo.Function fn && fn.ParamTypes.Count > 0)
+                        {
+                            // If getter already defined the type, verify compatibility
+                            if (!fields.ContainsKey(name))
+                            {
+                                fields[name] = fn.ParamTypes[0];
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                _pendingObjectThisType = previousPendingThis;
+            }
+        }
+
         return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType);
+    }
+
+    /// <summary>
+    /// Gets the string name from a property key for type checking.
+    /// </summary>
+    private static string GetPropertyKeyNameForTypeCheck(Expr.PropertyKey key)
+    {
+        return key switch
+        {
+            Expr.IdentifierKey ik => ik.Name.Lexeme,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
+            Expr.ComputedKey => "[computed]", // Computed keys need special handling at runtime
+            _ => throw new TypeCheckException(" Invalid property key for accessor.")
+        };
     }
 
     /// <summary>
@@ -441,6 +584,29 @@ public partial class TypeChecker
         if (IsCompatible(newType, existing)) return newType;
         // Create union if incompatible
         return new TypeInfo.Union([existing, newType]);
+    }
+
+    /// <summary>
+    /// Widens literal types to their base types for 'this' type inference.
+    /// E.g., 0 -> number, "test" -> string, true -> boolean
+    /// </summary>
+    private static TypeInfo WidenLiteralType(TypeInfo type)
+    {
+        return type switch
+        {
+            TypeInfo.NumberLiteral => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
+            TypeInfo.StringLiteral => new TypeInfo.String(),
+            TypeInfo.BooleanLiteral => new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            TypeInfo.Union u => new TypeInfo.Union(u.FlattenedTypes.Select(WidenLiteralType).ToList()),
+            TypeInfo.Array arr => new TypeInfo.Array(WidenLiteralType(arr.ElementType)),
+            TypeInfo.Record rec => new TypeInfo.Record(
+                rec.Fields.ToDictionary(kv => kv.Key, kv => WidenLiteralType(kv.Value)).ToFrozenDictionary(),
+                rec.StringIndexType != null ? WidenLiteralType(rec.StringIndexType) : null,
+                rec.NumberIndexType != null ? WidenLiteralType(rec.NumberIndexType) : null,
+                rec.SymbolIndexType != null ? WidenLiteralType(rec.SymbolIndexType) : null
+            ),
+            _ => type
+        };
     }
 
     private TypeInfo CheckArray(Expr.ArrayLiteral array)
@@ -680,10 +846,10 @@ public partial class TypeChecker
         TypeInfo? thisType = arrow.ThisType != null ? ToTypeInfo(arrow.ThisType) : null;
 
         // For function expressions and object method shorthand (HasOwnThis=true), allow 'this' even without explicit type annotation
-        // TypeScript infers 'this' as the containing object type, but we use 'any' for simplicity
+        // TypeScript infers 'this' as the containing object type - use _pendingObjectThisType if available
         if (arrow.HasOwnThis && thisType == null)
         {
-            thisType = new TypeInfo.Any();
+            thisType = _pendingObjectThisType ?? new TypeInfo.Any();
         }
 
         // Extract expected function type for parameter inference

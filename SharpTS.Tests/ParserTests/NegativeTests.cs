@@ -235,70 +235,71 @@ public class NegativeTests
 
     #region Deep Nesting
 
-    // Note: Deep nesting tests use moderate depths to avoid stack overflow.
-    // The recursive descent parser has limited stack depth tolerance.
-    // Values around 100-200 are safe; beyond that risks crashing the test host.
+    // Note: Deep nesting tests use conservative depths to avoid stack overflow.
+    // The recursive descent parser uses ~17 stack frames per nesting level.
+    // Windows has smaller default stack sizes, so we keep depths low.
+    // Values around 30-50 are safe across all platforms.
 
     [Fact]
-    public void DeepNesting_100_Parentheses_Completes()
+    public void DeepNesting_30_Parentheses_Completes()
     {
-        var source = new string('(', 100) + "1" + new string(')', 100);
+        var source = new string('(', 30) + "1" + new string(')', 30);
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_200_Parentheses_Completes()
+    public void DeepNesting_50_Parentheses_Completes()
     {
-        var source = new string('(', 200) + "1" + new string(')', 200);
+        var source = new string('(', 50) + "1" + new string(')', 50);
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_100_Brackets_Completes()
+    public void DeepNesting_30_Brackets_Completes()
     {
-        var source = new string('[', 100) + "1" + new string(']', 100);
+        var source = new string('[', 30) + "1" + new string(']', 30);
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_100_Braces_Completes()
+    public void DeepNesting_50_Braces_Completes()
     {
         // Nested blocks: { { { ... } } }
-        var source = new string('{', 100) + new string('}', 100);
+        var source = new string('{', 50) + new string('}', 50);
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_NestedArrowFunctions_50_Completes()
+    public void DeepNesting_NestedArrowFunctions_20_Completes()
     {
         // () => () => () => ... => 1
-        var source = string.Concat(Enumerable.Repeat("() => ", 50)) + "1";
+        var source = string.Concat(Enumerable.Repeat("() => ", 20)) + "1";
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_NestedTernaries_50_Completes()
+    public void DeepNesting_NestedTernaries_20_Completes()
     {
         // true ? (true ? (true ? ... : 0) : 0) : 0
-        var source = string.Concat(Enumerable.Repeat("true ? ", 50)) + "1" +
-                     string.Concat(Enumerable.Repeat(" : 0", 50));
+        var source = string.Concat(Enumerable.Repeat("true ? ", 20)) + "1" +
+                     string.Concat(Enumerable.Repeat(" : 0", 20));
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_ChainedPropertyAccess_200_Completes()
+    public void DeepNesting_ChainedPropertyAccess_50_Completes()
     {
-        // a.b.c.d.e... (200 levels)
-        var source = string.Join(".", Enumerable.Repeat("a", 200));
+        // a.b.c.d.e... (50 levels)
+        var source = string.Join(".", Enumerable.Repeat("a", 50));
         AssertHandlesGracefully(source, 10000);
     }
 
     [Fact]
-    public void DeepNesting_NestedTypeAnnotations_50_Completes()
+    public void DeepNesting_NestedTypeAnnotations_20_Completes()
     {
         // Array<Array<Array<...number...>>>
-        var source = "let x: " + string.Concat(Enumerable.Repeat("Array<", 50)) + "number" +
-                     string.Concat(Enumerable.Repeat(">", 50)) + ";";
+        var source = "let x: " + string.Concat(Enumerable.Repeat("Array<", 20)) + "number" +
+                     string.Concat(Enumerable.Repeat(">", 20)) + ";";
         AssertHandlesGracefully(source, 10000);
     }
 

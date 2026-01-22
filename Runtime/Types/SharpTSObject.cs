@@ -15,6 +15,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
+    private Dictionary<string, ISharpTSCallable>? _getters;
+    private Dictionary<string, ISharpTSCallable>? _setters;
 
     /// <summary>
     /// Whether this object is frozen (no property additions, removals, or modifications).
@@ -146,7 +148,57 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
     public bool HasProperty(string name)
     {
-        return _fields.ContainsKey(name);
+        return _fields.ContainsKey(name) || (_getters?.ContainsKey(name) ?? false);
+    }
+
+    /// <summary>
+    /// Defines a getter for a property.
+    /// </summary>
+    public void DefineGetter(string name, ISharpTSCallable getter)
+    {
+        _getters ??= new Dictionary<string, ISharpTSCallable>();
+        _getters[name] = getter;
+    }
+
+    /// <summary>
+    /// Defines a setter for a property.
+    /// </summary>
+    public void DefineSetter(string name, ISharpTSCallable setter)
+    {
+        _setters ??= new Dictionary<string, ISharpTSCallable>();
+        _setters[name] = setter;
+    }
+
+    /// <summary>
+    /// Checks if a property has a getter.
+    /// </summary>
+    public bool HasGetter(string name)
+    {
+        return _getters?.ContainsKey(name) ?? false;
+    }
+
+    /// <summary>
+    /// Checks if a property has a setter.
+    /// </summary>
+    public bool HasSetter(string name)
+    {
+        return _setters?.ContainsKey(name) ?? false;
+    }
+
+    /// <summary>
+    /// Gets the getter function for a property, or null if none.
+    /// </summary>
+    public ISharpTSCallable? GetGetter(string name)
+    {
+        return _getters?.GetValueOrDefault(name);
+    }
+
+    /// <summary>
+    /// Gets the setter function for a property, or null if none.
+    /// </summary>
+    public ISharpTSCallable? GetSetter(string name)
+    {
+        return _setters?.GetValueOrDefault(name);
     }
 
     /// <summary>

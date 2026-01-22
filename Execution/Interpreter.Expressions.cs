@@ -31,6 +31,7 @@ public partial class Interpreter
             Expr.Grouping grouping => Evaluate(grouping.Expression),
             Expr.Literal literal => EvaluateLiteral(literal),
             Expr.Unary unary => EvaluateUnary(unary),
+            Expr.Delete delete => EvaluateDelete(delete),
             Expr.Variable variable => EvaluateVariable(variable),
             Expr.Assign assign => EvaluateAssign(assign),
             Expr.Call call => EvaluateCall(call),
@@ -100,6 +101,7 @@ public partial class Interpreter
             case Expr.Grouping grouping: return await EvaluateAsync(grouping.Expression);
             case Expr.Literal literal: return EvaluateLiteral(literal);
             case Expr.Unary unary: return await EvaluateUnaryAsync(unary);
+            case Expr.Delete delete: return await EvaluateDeleteAsync(delete);
             case Expr.Variable variable: return EvaluateVariable(variable);
             case Expr.Assign assign: return await EvaluateAssignAsync(assign);
             case Expr.Call call: return await EvaluateCallAsync(call);
@@ -353,6 +355,8 @@ public partial class Interpreter
     {
         Dictionary<string, object?> stringFields = [];
         Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        List<(string name, ISharpTSCallable getter)>? getters = null;
+        List<(string name, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -361,6 +365,20 @@ public partial class Interpreter
                 object? spreadValue = Evaluate(prop.Value);
                 ApplySpreadToFields(spreadValue, stringFields);
             }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+            {
+                string name = GetPropertyKeyName(prop.Key!, Evaluate);
+                var getter = CreateAccessorFunction(prop.Value);
+                getters ??= [];
+                getters.Add((name, getter));
+            }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+            {
+                string name = GetPropertyKeyName(prop.Key!, Evaluate);
+                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
+                setters ??= [];
+                setters.Add((name, setter));
+            }
             else
             {
                 object? value = Evaluate(prop.Value);
@@ -368,7 +386,68 @@ public partial class Interpreter
             }
         }
 
-        return BuildObjectFromFields(stringFields, symbolFields);
+        var result = BuildObjectFromFields(stringFields, symbolFields);
+
+        // Apply getters and setters
+        if (getters != null)
+        {
+            foreach (var (name, getter) in getters)
+            {
+                result.DefineGetter(name, getter);
+            }
+        }
+        if (setters != null)
+        {
+            foreach (var (name, setter) in setters)
+            {
+                result.DefineSetter(name, setter);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gets the string name from a property key.
+    /// </summary>
+    private static string GetPropertyKeyName(Expr.PropertyKey key, Func<Expr, object?> evaluateKey)
+    {
+        return key switch
+        {
+            Expr.IdentifierKey ik => ik.Name.Lexeme,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
+            Expr.ComputedKey ck => evaluateKey(ck.Expression)?.ToString() ?? "undefined",
+            _ => throw new Exception("Runtime Error: Invalid property key for accessor.")
+        };
+    }
+
+    /// <summary>
+    /// Creates an accessor function (getter) from the function expression.
+    /// </summary>
+    private SharpTSArrowFunction CreateAccessorFunction(Expr body)
+    {
+        // The body should be a function or arrow function expression
+        if (body is Expr.ArrowFunction arrow)
+        {
+            return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
+                   ?? throw new Exception("Runtime Error: Failed to create getter function.");
+        }
+        throw new Exception("Runtime Error: Getter must be a function expression.");
+    }
+
+    /// <summary>
+    /// Creates a setter function from the function expression and parameter.
+    /// </summary>
+    private SharpTSArrowFunction CreateSetterFunction(Expr body, Stmt.Parameter setterParam)
+    {
+        // The body should be a function expression
+        if (body is Expr.ArrowFunction arrow)
+        {
+            return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
+                   ?? throw new Exception("Runtime Error: Failed to create setter function.");
+        }
+        throw new Exception("Runtime Error: Setter must be a function expression.");
     }
 
     /// <summary>

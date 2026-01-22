@@ -407,6 +407,8 @@ public partial class AsyncMoveNextEmitter
                 return ContainsAwaitInExpr(l.Left) || ContainsAwaitInExpr(l.Right);
             case Expr.Unary u:
                 return ContainsAwaitInExpr(u.Right);
+            case Expr.Delete d:
+                return ContainsAwaitInExpr(d.Operand);
             case Expr.Grouping g:
                 return ContainsAwaitInExpr(g.Expression);
             case Expr.Call c:

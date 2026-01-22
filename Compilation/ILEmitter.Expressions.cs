@@ -434,4 +434,48 @@ public partial class ILEmitter
             SetStackUnknown();
         }
     }
+
+    protected override void EmitDelete(Expr.Delete del)
+    {
+        // delete operator: returns boolean
+        // - delete obj.prop: removes property, returns true (or false if frozen/sealed)
+        // - delete obj[key]: removes computed property, returns true (or false if frozen/sealed)
+        // - delete variable: returns false (cannot delete variables)
+        switch (del.Operand)
+        {
+            case Expr.Get get:
+                // delete obj.prop - use static runtime helper
+                EmitExpression(get.Object);
+                EmitBoxIfNeeded(get.Object);
+                IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+                EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                SetStackType(StackType.Boolean);
+                break;
+
+            case Expr.GetIndex getIndex:
+                // delete obj[key] - use static runtime helper
+                EmitExpression(getIndex.Object);
+                EmitBoxIfNeeded(getIndex.Object);
+                EmitExpression(getIndex.Index);
+                EmitBoxIfNeeded(getIndex.Index);
+                // Convert key to string
+                EmitCallUnknown(_ctx.Runtime!.Stringify);
+                EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                SetStackType(StackType.Boolean);
+                break;
+
+            case Expr.Variable:
+                // delete variable: returns false
+                EmitBoolConstant(false);
+                break;
+
+            default:
+                // delete on other expressions: returns true but does nothing
+                // Still need to evaluate for side effects
+                EmitExpression(del.Operand);
+                IL.Emit(OpCodes.Pop);
+                EmitBoolConstant(true);
+                break;
+        }
+    }
 }

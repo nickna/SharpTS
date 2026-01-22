@@ -107,6 +107,16 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReverse);
                 return true;
 
+            case "flat":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlat);
+                return true;
+
+            case "flatMap":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFlatMap);
+                return true;
+
             case "includes":
                 EmitSingleArgOrNull(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayIncludes);

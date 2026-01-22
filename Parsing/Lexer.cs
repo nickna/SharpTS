@@ -108,6 +108,8 @@ public class Lexer(string source)
         { "while", TokenType.WHILE },
         { "yield", TokenType.YIELD },
         { "using", TokenType.USING },
+        { "void", TokenType.VOID },
+        { "delete", TokenType.DELETE },
         { "string", TokenType.TYPE_STRING },
         { "number", TokenType.TYPE_NUMBER },
         { "boolean", TokenType.TYPE_BOOLEAN },

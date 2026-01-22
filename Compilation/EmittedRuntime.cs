@@ -100,6 +100,9 @@ public class EmittedRuntime
     public MethodBuilder ArrayJoin { get; set; } = null!;
     public MethodBuilder ArrayConcat { get; set; } = null!;
     public MethodBuilder ArrayReverse { get; set; } = null!;
+    public MethodBuilder ArrayFlat { get; set; } = null!;
+    public MethodBuilder ArrayFlatMap { get; set; } = null!;
+    public MethodBuilder ArrayFlatHelper { get; set; } = null!;
 
     // String methods
     public MethodBuilder StringCharAt { get; set; } = null!;
@@ -130,12 +133,14 @@ public class EmittedRuntime
     public MethodBuilder GetProperty { get; set; } = null!;
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
+    public MethodBuilder DeleteProperty { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
     public MethodBuilder GetArrayMethod { get; set; } = null!;
     public MethodBuilder GetListProperty { get; set; } = null!;
     public MethodBuilder MergeIntoObject { get; set; } = null!;
+    public MethodBuilder MergeIntoTSObject { get; set; } = null!;
     public MethodBuilder ToPascalCase { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
@@ -154,6 +159,19 @@ public class EmittedRuntime
     public MethodBuilder InvokeValue { get; set; } = null!;
     public MethodBuilder InvokeMethodValue { get; set; } = null!;
     public MethodBuilder GetSuperMethod { get; set; } = null!;
+
+    // Function methods (bind/call/apply)
+    public TypeBuilder BoundTSFunctionType { get; set; } = null!;
+    public ConstructorBuilder BoundTSFunctionCtor { get; set; } = null!;
+    public MethodBuilder BoundTSFunctionInvoke { get; set; } = null!;
+    public MethodBuilder BoundTSFunctionInvokeWithThis { get; set; } = null!;
+    public TypeBuilder FunctionBindWrapperType { get; set; } = null!;
+    public ConstructorBuilder FunctionBindWrapperCtor { get; set; } = null!;
+    public TypeBuilder FunctionCallWrapperType { get; set; } = null!;
+    public ConstructorBuilder FunctionCallWrapperCtor { get; set; } = null!;
+    public TypeBuilder FunctionApplyWrapperType { get; set; } = null!;
+    public ConstructorBuilder FunctionApplyWrapperCtor { get; set; } = null!;
+    public MethodBuilder GetFunctionMethod { get; set; } = null!;
 
     // Exception methods
     public MethodBuilder CreateException { get; set; } = null!;
@@ -516,6 +534,12 @@ public class EmittedRuntime
     public MethodBuilder TSObjectDeleteProperty { get; set; } = null!;
     public MethodBuilder TSObjectGetKeys { get; set; } = null!;
     public MethodBuilder TSObjectToString { get; set; } = null!;
+    public MethodBuilder TSObjectDefineGetter { get; set; } = null!;
+    public MethodBuilder TSObjectDefineSetter { get; set; } = null!;
+    public MethodBuilder TSObjectHasGetter { get; set; } = null!;
+    public MethodBuilder TSObjectHasSetter { get; set; } = null!;
+    public MethodBuilder TSObjectGetGetter { get; set; } = null!;
+    public MethodBuilder TSObjectGetSetter { get; set; } = null!;
 
     // Module registry for dynamic imports
     // Stores mapping from module path -> factory function that returns module namespace

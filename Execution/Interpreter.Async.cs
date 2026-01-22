@@ -769,6 +769,8 @@ public partial class Interpreter
     {
         Dictionary<string, object?> stringFields = [];
         Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        List<(string name, ISharpTSCallable getter)>? getters = null;
+        List<(string name, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -777,6 +779,20 @@ public partial class Interpreter
                 object? spreadValue = await EvaluateAsync(prop.Value);
                 ApplySpreadToFields(spreadValue, stringFields);
             }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+            {
+                string name = await GetPropertyKeyNameAsync(prop.Key!);
+                var getter = CreateAccessorFunction(prop.Value);
+                getters ??= [];
+                getters.Add((name, getter));
+            }
+            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+            {
+                string name = await GetPropertyKeyNameAsync(prop.Key!);
+                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
+                setters ??= [];
+                setters.Add((name, setter));
+            }
             else
             {
                 object? value = await EvaluateAsync(prop.Value);
@@ -784,7 +800,40 @@ public partial class Interpreter
             }
         }
 
-        return BuildObjectFromFields(stringFields, symbolFields);
+        var result = BuildObjectFromFields(stringFields, symbolFields);
+
+        // Apply getters and setters
+        if (getters != null)
+        {
+            foreach (var (name, getter) in getters)
+            {
+                result.DefineGetter(name, getter);
+            }
+        }
+        if (setters != null)
+        {
+            foreach (var (name, setter) in setters)
+            {
+                result.DefineSetter(name, setter);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Async version of GetPropertyKeyName for computed keys that need async evaluation.
+    /// </summary>
+    private async Task<string> GetPropertyKeyNameAsync(Expr.PropertyKey key)
+    {
+        return key switch
+        {
+            Expr.IdentifierKey ik => ik.Name.Lexeme,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
+            Expr.ComputedKey ck => (await EvaluateAsync(ck.Expression))?.ToString() ?? "undefined",
+            _ => throw new Exception("Runtime Error: Invalid property key for accessor.")
+        };
     }
 
     /// <summary>

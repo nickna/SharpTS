@@ -24,6 +24,8 @@ public static class ArrayBuiltIns
     private static readonly BuiltInMethod _join = new("join", 0, 1, Join);
     private static readonly BuiltInMethod _concat = new("concat", 1, Concat);
     private static readonly BuiltInMethod _reverse = new("reverse", 0, Reverse);
+    private static readonly BuiltInMethod _flat = new("flat", 0, 1, Flat);
+    private static readonly BuiltInMethod _flatMap = new("flatMap", 1, FlatMap);
 
     public static object? GetMember(SharpTSArray receiver, string name)
     {
@@ -49,6 +51,8 @@ public static class ArrayBuiltIns
             "join" => _join.Bind(receiver),
             "concat" => _concat.Bind(receiver),
             "reverse" => _reverse.Bind(receiver),
+            "flat" => _flat.Bind(receiver),
+            "flatMap" => _flatMap.Bind(receiver),
 
             _ => null
         };
@@ -337,6 +341,58 @@ public static class ArrayBuiltIns
         }
         arr.Elements.Reverse();
         return arr;
+    }
+
+    private static object? Flat(Interpreter i, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        // Default depth is 1, handle Infinity for complete flatten
+        var depth = args.Count > 0 && args[0] is double d
+            ? (double.IsPositiveInfinity(d) ? int.MaxValue : (int)d)
+            : 1;
+
+        var result = new List<object?>();
+        FlattenRecursive(arr.Elements, result, depth);
+        return new SharpTSArray(result);
+    }
+
+    private static void FlattenRecursive(List<object?> source, List<object?> result, int depth)
+    {
+        foreach (var item in source)
+        {
+            if (depth > 0 && item is SharpTSArray nestedArray)
+            {
+                FlattenRecursive(nestedArray.Elements, result, depth - 1);
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+    }
+
+    private static object? FlatMap(Interpreter interp, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        var callback = args[0] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: flatMap requires a function argument.");
+
+        var result = new List<object?>();
+        for (int i = 0; i < arr.Elements.Count; i++)
+        {
+            var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+
+            // flatMap flattens by 1 level only
+            if (callResult is SharpTSArray mappedArray)
+            {
+                result.AddRange(mappedArray.Elements);
+            }
+            else
+            {
+                result.Add(callResult);
+            }
+        }
+        return new SharpTSArray(result);
     }
 
     private static bool IsTruthy(object? obj)

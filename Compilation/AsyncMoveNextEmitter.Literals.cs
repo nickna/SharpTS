@@ -70,11 +70,17 @@ public partial class AsyncMoveNextEmitter
 
     protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
-        // Check if any property is a spread or computed key
+        // Check if any property is a spread, computed key, or accessor (getter/setter)
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
         bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
+        bool hasAccessors = o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter);
 
-        if (!hasSpreads && !hasComputedKeys)
+        if (hasAccessors)
+        {
+            // Object has getters/setters - use $Object type which supports accessors
+            EmitObjectLiteralWithAccessors(o);
+        }
+        else if (!hasSpreads && !hasComputedKeys)
         {
             // Simple case: no spreads, no computed keys
             _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
@@ -127,6 +133,87 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
         }
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits an object literal that has getter/setter accessors in async context.
+    /// Uses the $Object type which supports DefineGetter/DefineSetter.
+    /// </summary>
+    private void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
+    {
+        // Create $Object: new $Object(new Dictionary<string, object?>())
+        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
+        _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSObjectCtor);
+
+        // Store in local for repeated use
+        var objLocal = _il.DeclareLocal(_ctx!.Runtime!.TSObjectType);
+        _il.Emit(OpCodes.Stloc, objLocal);
+
+        foreach (var prop in o.Properties)
+        {
+            if (prop.IsSpread)
+            {
+                // Spread: merge the source object's properties into target $Object
+                _il.Emit(OpCodes.Ldloc, objLocal);
+                EmitExpression(prop.Value);
+                EnsureBoxed();
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.MergeIntoTSObject);
+                continue;
+            }
+
+            string propKey = GetPropertyKeyString(prop.Key!);
+
+            switch (prop.Kind)
+            {
+                case Expr.ObjectPropertyKind.Getter:
+                    // obj.DefineGetter(name, getterFunction)
+                    _il.Emit(OpCodes.Ldloc, objLocal);
+                    _il.Emit(OpCodes.Ldstr, propKey);
+                    EmitExpression(prop.Value); // Emits the getter function (arrow function)
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.TSObjectDefineGetter);
+                    break;
+
+                case Expr.ObjectPropertyKind.Setter:
+                    // obj.DefineSetter(name, setterFunction)
+                    _il.Emit(OpCodes.Ldloc, objLocal);
+                    _il.Emit(OpCodes.Ldstr, propKey);
+                    EmitExpression(prop.Value); // Emits the setter function (arrow function)
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.TSObjectDefineSetter);
+                    break;
+
+                case Expr.ObjectPropertyKind.Method:
+                case Expr.ObjectPropertyKind.Value:
+                default:
+                    // Regular property: obj.SetProperty(name, value)
+                    _il.Emit(OpCodes.Ldloc, objLocal);
+                    _il.Emit(OpCodes.Ldstr, propKey);
+                    EmitExpression(prop.Value);
+                    EnsureBoxed();
+                    _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.TSObjectSetProperty);
+                    break;
+            }
+        }
+
+        // Leave the $Object on the stack
+        _il.Emit(OpCodes.Ldloc, objLocal);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Extracts the string key from a property key expression.
+    /// </summary>
+    private static string GetPropertyKeyString(Expr.PropertyKey key)
+    {
+        return key switch
+        {
+            Expr.IdentifierKey ik => ik.Name.Lexeme,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
+            Expr.ComputedKey => throw new Exception("Internal Error: Computed keys not supported in accessor context"),
+            _ => throw new Exception($"Internal Error: Unexpected property key type: {key.GetType().Name}")
+        };
     }
 
     /// <summary>

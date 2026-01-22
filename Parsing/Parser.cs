@@ -232,7 +232,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             TokenType.ABSTRACT or TokenType.AS or TokenType.ASYNC or TokenType.AWAIT or
             TokenType.BREAK or TokenType.CASE or TokenType.CATCH or TokenType.CLASS or
             TokenType.CONST or TokenType.CONSTRUCTOR or TokenType.CONTINUE or
-            TokenType.DEFAULT or TokenType.DO or TokenType.ELSE or
+            TokenType.DEFAULT or TokenType.DELETE or TokenType.DO or TokenType.ELSE or
             TokenType.ENUM or TokenType.EXPORT or TokenType.EXTENDS or TokenType.FALSE or
             TokenType.FINALLY or TokenType.FOR or TokenType.FROM or TokenType.FUNCTION or
             TokenType.GET or TokenType.IF or TokenType.IMPLEMENTS or TokenType.IMPORT or
@@ -242,7 +242,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             TokenType.RETURN or TokenType.SET or TokenType.STATIC or TokenType.SUPER or
             TokenType.SWITCH or TokenType.THIS or TokenType.THROW or TokenType.TRUE or
             TokenType.TRY or TokenType.TYPE or TokenType.TYPEOF or TokenType.UNDEFINED or
-            TokenType.UNKNOWN or TokenType.VAR or TokenType.WHILE => true,
+            TokenType.UNKNOWN or TokenType.USING or TokenType.VAR or TokenType.VOID or
+            TokenType.WHILE or TokenType.YIELD => true,
             _ => false
         };
     }
@@ -296,6 +297,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         Check(TokenType.NEVER) ||
         Check(TokenType.NULL) ||
         Check(TokenType.UNDEFINED) ||
+        Check(TokenType.VOID) ||  // void type
         Check(TokenType.LEFT_PAREN) ||
         Check(TokenType.LEFT_BRACE) ||  // for inline object types: { x: number }
         Check(TokenType.LEFT_BRACKET) ||  // for tuple types: [string, number]

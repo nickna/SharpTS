@@ -267,6 +267,15 @@ public partial class ILEmitter
                     EmitConvR8AndBox();
                 }
                 break;
+
+            case TokenType.VOID:
+                // void operator: evaluate expression for side effects, return undefined
+                EmitExpression(u.Right);
+                EmitBoxIfNeeded(u.Right);
+                IL.Emit(OpCodes.Pop); // Discard the result
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance); // Load undefined
+                SetStackUnknown();
+                break;
         }
     }
 

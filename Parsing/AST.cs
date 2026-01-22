@@ -43,6 +43,7 @@ public abstract record Expr
     public record Grouping(Expr Expression) : Expr;
     public record Literal(object? Value) : Expr;
     public record Unary(Token Operator, Expr Right) : Expr;
+    public record Delete(Token Keyword, Expr Operand) : Expr;
     public record Variable(Token Name) : Expr;
     public record Assign(Token Name, Expr Value) : Expr;
     public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments) : Expr;
@@ -74,7 +75,26 @@ public abstract record Expr
     public record IdentifierKey(Token Name) : PropertyKey;
     public record LiteralKey(Token Literal) : PropertyKey;  // STRING or NUMBER token
     public record ComputedKey(Expr Expression) : PropertyKey;
-    public record Property(PropertyKey? Key, Expr Value, bool IsSpread = false);
+
+    /// <summary>
+    /// Object property kinds for distinguishing value properties from getters/setters.
+    /// </summary>
+    public enum ObjectPropertyKind { Value, Getter, Setter, Method }
+
+    /// <summary>
+    /// Object literal property definition.
+    /// </summary>
+    /// <param name="Key">The property key (null for spread)</param>
+    /// <param name="Value">The property value/getter body/setter body</param>
+    /// <param name="IsSpread">Whether this is a spread property (...obj)</param>
+    /// <param name="Kind">The kind of property (value, getter, setter, method)</param>
+    /// <param name="SetterParam">The setter parameter (for Kind=Setter only)</param>
+    public record Property(
+        PropertyKey? Key,
+        Expr Value,
+        bool IsSpread = false,
+        ObjectPropertyKind Kind = ObjectPropertyKind.Value,
+        Stmt.Parameter? SetterParam = null);
     public record GetIndex(Expr Object, Expr Index) : Expr;
     public record SetIndex(Expr Object, Expr Index, Expr Value) : Expr;
     public record Super(Token Keyword, Token? Method) : Expr;  // Method is null for super() constructor calls

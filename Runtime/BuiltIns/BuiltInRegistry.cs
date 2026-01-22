@@ -147,6 +147,7 @@ public sealed class BuiltInRegistry
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
         RegisterTimeoutType(registry);
+        RegisterFunctionTypes(registry);
 
         return registry;
     }
@@ -452,6 +453,19 @@ public sealed class BuiltInRegistry
         // Timeout members accessed via property access (ref, unref, hasRef)
         registry.RegisterInstanceType(typeof(SharpTSTimeout), (instance, name) =>
             TimerBuiltIns.GetMember((SharpTSTimeout)instance, name));
+    }
+
+    private static void RegisterFunctionTypes(BuiltInRegistry registry)
+    {
+        // Register function types for bind/call/apply
+        registry.RegisterInstanceType(typeof(SharpTSFunction), (instance, name) =>
+            FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
+        registry.RegisterInstanceType(typeof(SharpTSArrowFunction), (instance, name) =>
+            FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
+        registry.RegisterInstanceType(typeof(BoundFunction), (instance, name) =>
+            FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
+        registry.RegisterInstanceType(typeof(BuiltInMethod), (instance, name) =>
+            FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
     }
 
     private static string Stringify(object? obj)

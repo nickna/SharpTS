@@ -95,6 +95,16 @@ public partial class RuntimeEmitter
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvoke)
         EmitIntervalClosureClass(moduleBuilder, runtime);
 
+        // Emit $BoundTSFunction class for bound functions
+        // Must come after TSFunction (uses TSFunctionType, TSFunctionInvokeWithThis)
+        EmitBoundTSFunctionClass(moduleBuilder, runtime);
+
+        // Emit function method wrapper classes for bind/call/apply
+        // Must come after TSFunction and BoundTSFunction
+        EmitFunctionBindWrapperClass(moduleBuilder, runtime);
+        EmitFunctionCallWrapperClass(moduleBuilder, runtime);
+        EmitFunctionApplyWrapperClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -1448,6 +1458,7 @@ public partial class RuntimeEmitter
         // Object methods - must come BEFORE iterator methods since GetProperty, InvokeMethodValue are needed
         EmitCreateObject(typeBuilder, runtime);
         EmitGetArrayMethod(typeBuilder, runtime);
+        EmitGetFunctionMethod(typeBuilder, runtime);  // For bind/call/apply on functions
         EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitGetFieldsProperty(typeBuilder, runtime);
         EmitGetListProperty(typeBuilder, runtime);
@@ -1456,7 +1467,9 @@ public partial class RuntimeEmitter
         EmitGetProperty(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
+        EmitDeleteProperty(typeBuilder, runtime);
         EmitMergeIntoObject(typeBuilder, runtime);
+        EmitMergeIntoTSObject(typeBuilder, runtime);
         // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
         EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
         EmitIsSymbol(typeBuilder, runtime);
@@ -1509,6 +1522,9 @@ public partial class RuntimeEmitter
         EmitArrayJoin(typeBuilder, runtime);
         EmitArrayConcat(typeBuilder, runtime);
         EmitArrayReverse(typeBuilder, runtime);
+        EmitArrayFlatHelper(typeBuilder, runtime); // Must be before EmitArrayFlat
+        EmitArrayFlat(typeBuilder, runtime);
+        EmitArrayFlatMap(typeBuilder, runtime);
         EmitArrayFrom(typeBuilder, runtime);
         EmitArrayOf(typeBuilder, runtime);
         // String methods

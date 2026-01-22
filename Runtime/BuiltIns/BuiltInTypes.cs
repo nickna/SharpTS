@@ -91,6 +91,10 @@ public static class BuiltInTypes
                 [new TypeInfo.Array(elementType)],
                 new TypeInfo.Array(elementType)),
             "reverse" => new TypeInfo.Function([], new TypeInfo.Array(elementType)),
+            "flat" => new TypeInfo.Function([NumberType], new TypeInfo.Array(AnyType), RequiredParams: 0), // depth is optional, defaults to 1
+            "flatMap" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], AnyType)],
+                new TypeInfo.Array(AnyType)),
             _ => null
         };
     }

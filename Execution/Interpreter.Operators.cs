@@ -256,6 +256,112 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Evaluates the delete operator.
+    /// </summary>
+    /// <param name="delete">The delete expression AST node.</param>
+    /// <returns>true if deletion succeeded, false otherwise.</returns>
+    /// <remarks>
+    /// - delete obj.prop: removes property from object, returns true
+    /// - delete obj[key]: removes computed property from object, returns true
+    /// - delete variable: returns false (cannot delete variables)
+    /// - delete on non-existent property: returns true
+    /// </remarks>
+    private object EvaluateDelete(Expr.Delete delete)
+    {
+        return delete.Operand switch
+        {
+            Expr.Get get => DeleteProperty(get),
+            Expr.GetIndex getIndex => DeleteIndexedProperty(getIndex),
+            Expr.Variable => false, // Cannot delete variables
+            _ => true // Deleting other expressions returns true but does nothing
+        };
+    }
+
+    /// <summary>
+    /// Async version of EvaluateDelete.
+    /// </summary>
+    private async Task<object> EvaluateDeleteAsync(Expr.Delete delete)
+    {
+        return delete.Operand switch
+        {
+            Expr.Get get => await DeletePropertyAsync(get),
+            Expr.GetIndex getIndex => await DeleteIndexedPropertyAsync(getIndex),
+            Expr.Variable => false,
+            _ => true
+        };
+    }
+
+    /// <summary>
+    /// Deletes a property from an object (delete obj.prop).
+    /// </summary>
+    private bool DeleteProperty(Expr.Get get)
+    {
+        object? obj = Evaluate(get.Object);
+        string name = get.Name.Lexeme;
+
+        return obj switch
+        {
+            SharpTSObject tsObj => tsObj.DeleteProperty(name),
+            SharpTSInstance tsInst => tsInst.DeleteField(name),
+            Dictionary<string, object?> dict => dict.Remove(name),
+            _ => true // Deleting non-existent property on primitive returns true
+        };
+    }
+
+    /// <summary>
+    /// Async version of DeleteProperty.
+    /// </summary>
+    private async Task<bool> DeletePropertyAsync(Expr.Get get)
+    {
+        object? obj = await EvaluateAsync(get.Object);
+        string name = get.Name.Lexeme;
+
+        return obj switch
+        {
+            SharpTSObject tsObj => tsObj.DeleteProperty(name),
+            SharpTSInstance tsInst => tsInst.DeleteField(name),
+            Dictionary<string, object?> dict => dict.Remove(name),
+            _ => true
+        };
+    }
+
+    /// <summary>
+    /// Deletes a computed property from an object (delete obj[key]).
+    /// </summary>
+    private bool DeleteIndexedProperty(Expr.GetIndex getIndex)
+    {
+        object? obj = Evaluate(getIndex.Object);
+        object? key = Evaluate(getIndex.Index);
+        string keyStr = Stringify(key);
+
+        return obj switch
+        {
+            SharpTSObject tsObj => tsObj.DeleteProperty(keyStr),
+            SharpTSInstance tsInst => tsInst.DeleteField(keyStr),
+            Dictionary<string, object?> dict => dict.Remove(keyStr),
+            _ => true
+        };
+    }
+
+    /// <summary>
+    /// Async version of DeleteIndexedProperty.
+    /// </summary>
+    private async Task<bool> DeleteIndexedPropertyAsync(Expr.GetIndex getIndex)
+    {
+        object? obj = await EvaluateAsync(getIndex.Object);
+        object? key = await EvaluateAsync(getIndex.Index);
+        string keyStr = Stringify(key);
+
+        return obj switch
+        {
+            SharpTSObject tsObj => tsObj.DeleteProperty(keyStr),
+            SharpTSInstance tsInst => tsInst.DeleteField(keyStr),
+            Dictionary<string, object?> dict => dict.Remove(keyStr),
+            _ => true
+        };
+    }
+
+    /// <summary>
     /// Core unary operation logic, shared between sync and async evaluation.
     /// </summary>
     private object? EvaluateUnaryOperation(Token op, object? right)
@@ -267,6 +373,7 @@ public partial class Interpreter
             TokenType.MINUS when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(-biVal),
             TokenType.MINUS => -(double)right!,
             TokenType.TYPEOF => GetTypeofString(right),
+            TokenType.VOID => SharpTSUndefined.Instance,
             TokenType.TILDE when right is SharpTSBigInt bi => new SharpTSBigInt(~bi.Value),
             TokenType.TILDE when right is System.Numerics.BigInteger biVal => new SharpTSBigInt(~biVal),
             TokenType.TILDE => (double)(~ToInt32(right)),

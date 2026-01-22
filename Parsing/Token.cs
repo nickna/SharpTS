@@ -48,6 +48,8 @@ public enum TokenType
     YIELD,  // yield expression for generators
     SATISFIES,  // satisfies operator (TS 4.9+)
     USING,  // 'using' keyword for explicit resource management (TS 5.2+)
+    VOID,  // void operator
+    DELETE,  // delete operator
 
     // Variance modifiers (IN already exists for mapped types)
     OUT,  // out T (covariant)

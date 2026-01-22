@@ -638,11 +638,11 @@ public partial class ILEmitter
 
     private void EmitFunctionValueCall(Expr.Call c)
     {
-        // Emit the callee (should produce a TSFunction on the stack)
+        // Emit the callee and store in a local (may be $TSFunction, $BoundTSFunction, or other callable)
+        var calleeLocal = IL.DeclareLocal(_ctx.Types.Object);
         EmitExpression(c.Callee);
-
-        // Cast to TSFunction - needed for IL verification when the callee is stored in an object-typed local
-        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSFunctionType);
+        EmitBoxIfNeeded(c.Callee);
+        IL.Emit(OpCodes.Stloc, calleeLocal);
 
         // Check if any argument is a spread
         bool hasSpreads = c.Arguments.Any(a => a is Expr.Spread);
@@ -710,15 +710,16 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);
         }
 
-        // Call $TSFunction.InvokeWithThis(null, object[] args)
-        // This handles both regular arrow functions (HasOwnThis=false) and function expressions (HasOwnThis=true)
-        // InvokeWithThis checks if the first parameter is named "__this" and prepends thisArg (null) if so
-        // Store args in a local, push null for thisArg, then push args
+        // Call InvokeMethodValue(receiver, function, args)
+        // This handles $TSFunction directly and falls back to InvokeValue for other callables
+        // (like $BoundTSFunction which also has an Invoke method)
         var argsLocal = IL.DeclareLocal(_ctx.Types.ObjectArray);
         IL.Emit(OpCodes.Stloc, argsLocal);
-        IL.Emit(OpCodes.Ldnull);  // thisArg = null for non-method calls
-        IL.Emit(OpCodes.Ldloc, argsLocal);
-        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSFunctionInvokeWithThis);
+        IL.Emit(OpCodes.Ldnull);  // receiver = null for non-method calls
+        IL.Emit(OpCodes.Ldloc, calleeLocal);  // function
+        IL.Emit(OpCodes.Ldloc, argsLocal);  // args
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeMethodValue);
+        SetStackUnknown();
     }
 
     /// <summary>
