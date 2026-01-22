@@ -4,9 +4,9 @@ using SharpTS.Runtime.Types;
 namespace SharpTS.Runtime.BuiltIns;
 
 /// <summary>
-/// Provides runtime implementation for timer functions (setTimeout, clearTimeout).
-/// Uses System.Threading.Timer for reliable timer scheduling that doesn't compete
-/// with the general thread pool.
+/// Provides runtime implementation for timer functions (setTimeout, setInterval, clearTimeout, clearInterval).
+/// Uses virtual timers that are processed on the main thread during loop iterations,
+/// ensuring deterministic execution and avoiding thread scheduling issues across platforms.
 /// </summary>
 public static class TimerBuiltIns
 {

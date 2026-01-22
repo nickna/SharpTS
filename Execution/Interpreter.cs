@@ -138,8 +138,8 @@ public partial class Interpreter : IDisposable
                     toExecute.Add(timer);
                     if (timer.IsInterval)
                     {
-                        // Reschedule interval timer
-                        timer.FireTimeMs = now + timer.IntervalMs;
+                        // Reschedule interval timer (use += to avoid cumulative drift)
+                        timer.FireTimeMs += timer.IntervalMs;
                     }
                     else
                     {
@@ -175,6 +175,12 @@ public partial class Interpreter : IDisposable
         while (_pendingTimers.TryTake(out var timer))
         {
             timer.Cancel();
+        }
+
+        // Clear virtual timers to prevent memory leaks
+        lock (_virtualTimersLock)
+        {
+            _virtualTimers.Clear();
         }
 
         GC.SuppressFinalize(this);

@@ -181,6 +181,9 @@ public partial class Interpreter
                 if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
                 if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null) continue;
                 if (result.IsAbrupt) return result;
+
+                // Process any pending timer callbacks
+                ProcessPendingCallbacks();
             }
             return ExecutionResult.Success();
         }
@@ -207,8 +210,11 @@ public partial class Interpreter
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
+
+            // Process any pending timer callbacks
+            ProcessPendingCallbacks();
         }
-        
+
         return ExecutionResult.Success();
     }
 
@@ -306,8 +312,11 @@ public partial class Interpreter
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
+
+            // Process any pending timer callbacks
+            ProcessPendingCallbacks();
         }
-        
+
         return ExecutionResult.Success();
     }
 
@@ -382,6 +391,9 @@ public partial class Interpreter
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
             if (abruptResult.HasValue) return abruptResult.Value;
+
+            // Process any pending timer callbacks
+            ProcessPendingCallbacks();
         }
 
         return ExecutionResult.Success();

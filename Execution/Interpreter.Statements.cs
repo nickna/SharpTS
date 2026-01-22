@@ -639,6 +639,9 @@ public partial class Interpreter
                 if (shouldBreak) return ExecutionResult.Success();
                 if (shouldContinue) continue;
                 if (abruptResult.HasValue) return abruptResult.Value;
+
+                // Process any pending timer callbacks
+                ProcessPendingCallbacks();
             }
         }
         return ExecutionResult.Success();
