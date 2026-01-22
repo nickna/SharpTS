@@ -108,6 +108,13 @@ public partial class Interpreter
 
         // Evaluate the callee expression to get the class/constructor
         object? klass = Evaluate(newExpr.Callee);
+
+        // Bound functions cannot be used as constructors (JS spec compliance)
+        if (klass is BoundFunction)
+        {
+            throw new Exception("Runtime Error: Bound functions cannot be used as constructors.");
+        }
+
         if (klass is not SharpTSClass sharpClass)
         {
              throw new Exception("Type Error: Can only instantiate classes.");

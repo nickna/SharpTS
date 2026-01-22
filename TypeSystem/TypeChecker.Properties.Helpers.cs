@@ -35,6 +35,13 @@ public partial class TypeChecker
             TypeCategory.Error when objType is TypeInfo.Error err =>
                 BuiltInTypes.GetErrorMemberType(memberName, err.Name),
             TypeCategory.Timeout => BuiltInTypes.GetTimeoutMemberType(memberName),
+            TypeCategory.Function when objType is TypeInfo.Function func =>
+                BuiltInTypes.GetFunctionMemberType(memberName, func),
+            TypeCategory.Function when objType is TypeInfo.GenericFunction gf =>
+                BuiltInTypes.GetFunctionMemberType(memberName,
+                    new TypeInfo.Function(gf.ParamTypes, gf.ReturnType, gf.RequiredParams, gf.HasRestParam, gf.ThisType, gf.ParamNames)),
+            TypeCategory.Function when objType is TypeInfo.OverloadedFunction of =>
+                BuiltInTypes.GetFunctionMemberType(memberName, of.Implementation),
             _ => null
         };
     }

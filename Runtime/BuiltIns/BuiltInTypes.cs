@@ -506,4 +506,43 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for instance members on Function objects (bind, call, apply, length, name).
+    /// </summary>
+    /// <param name="name">The member name to look up</param>
+    /// <param name="funcType">The function type being accessed</param>
+    public static TypeInfo? GetFunctionMemberType(string name, TypeInfo funcType)
+    {
+        var returnType = funcType is TypeInfo.Function f ? f.ReturnType : AnyType;
+
+        // For bind(), return a function that accepts any number of args and returns the original return type
+        // This is permissive because we can't track bound arguments at compile time
+        var boundFunctionType = new TypeInfo.Function(
+            [new TypeInfo.Array(AnyType)],  // rest param for any args
+            returnType,
+            RequiredParams: 0,
+            HasRestParam: true);
+
+        return name switch
+        {
+            "length" => NumberType,
+            "name" => StringType,
+            "bind" => new TypeInfo.Function(
+                [AnyType],               // thisArg, followed by optional bound args
+                boundFunctionType,       // Returns a permissive function type
+                RequiredParams: 0,
+                HasRestParam: true),
+            "call" => new TypeInfo.Function(
+                [AnyType],               // thisArg, followed by spread args
+                returnType,              // Returns the function's return type
+                RequiredParams: 0,
+                HasRestParam: true),
+            "apply" => new TypeInfo.Function(
+                [AnyType, new TypeInfo.Union([new TypeInfo.Array(AnyType), new TypeInfo.Null()])],
+                returnType,              // Returns the function's return type
+                RequiredParams: 0),
+            _ => null
+        };
+    }
 }

@@ -143,6 +143,7 @@ public static class TypeCategoryResolver
         TypeCategory.RegExp => true,
         TypeCategory.Error => true,
         TypeCategory.Timeout => true,
+        TypeCategory.Function => true,
         _ => false
     };
 

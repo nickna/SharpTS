@@ -142,6 +142,7 @@ public partial class TypeChecker
         TypeCategory.RegExp => "RegExp",
         TypeCategory.Error when objType is TypeInfo.Error err => err.Name,
         TypeCategory.Timeout => "Timeout",
+        TypeCategory.Function => "function",
         _ => objType.ToString() ?? "unknown"
     };
 
