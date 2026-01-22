@@ -103,6 +103,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayFlat { get; set; } = null!;
     public MethodBuilder ArrayFlatMap { get; set; } = null!;
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
+    public MethodBuilder ArraySort { get; set; } = null!;
+    public MethodBuilder ArrayToSorted { get; set; } = null!;
 
     // String methods
     public MethodBuilder StringCharAt { get; set; } = null!;

@@ -541,5 +541,390 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
+
+    private void EmitArraySort(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArraySort(List<object> list, object? compareFn) -> List<object>
+        // Mutates the list in-place, returns the same list reference
+        var method = typeBuilder.DefineMethod(
+            "ArraySort",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, _types.Object]
+        );
+        runtime.ArraySort = method;
+
+        var il = method.GetILGenerator();
+
+        // Use a simple in-place insertion sort for stability
+        // This is efficient enough for typical use cases and guarantees stability
+        EmitSortBody(il, runtime, mutateInPlace: true);
+    }
+
+    private void EmitArrayToSorted(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArrayToSorted(List<object> list, object? compareFn) -> List<object>
+        // Returns a NEW sorted list, original is unchanged
+        var method = typeBuilder.DefineMethod(
+            "ArrayToSorted",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, _types.Object]
+        );
+        runtime.ArrayToSorted = method;
+
+        var il = method.GetILGenerator();
+
+        // Create a copy of the list first
+        var copyLocal = il.DeclareLocal(_types.ListOfObject);
+
+        // var copy = new List<object>(list)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Stloc, copyLocal);
+
+        // Now sort the copy using the same logic as EmitArraySort
+        // We need to emit sort body but use copyLocal instead of arg0
+        EmitSortBodyOnLocal(il, runtime, copyLocal);
+    }
+
+    /// <summary>
+    /// Emits the body of the sort algorithm (stable insertion sort).
+    /// When mutateInPlace is true, sorts arg0 and returns arg0.
+    /// </summary>
+    private void EmitSortBody(ILGenerator il, EmittedRuntime runtime, bool mutateInPlace)
+    {
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, listLocal);
+
+        EmitSortBodyOnLocal(il, runtime, listLocal);
+    }
+
+    /// <summary>
+    /// Emits the sort body operating on a local variable (for toSorted which creates a copy).
+    /// JavaScript spec: undefined values are always moved to end, never passed to compareFn.
+    /// </summary>
+    private void EmitSortBodyOnLocal(ILGenerator il, EmittedRuntime runtime, LocalBuilder listLocal)
+    {
+        // JavaScript sort algorithm:
+        // 1. Partition: separate defined values from undefined values
+        // 2. Sort only the defined values
+        // 3. Append undefined values at the end
+
+        var definedLocal = il.DeclareLocal(_types.ListOfObject);      // List of defined elements
+        var undefinedCountLocal = il.DeclareLocal(_types.Int32);       // Count of undefined elements
+        var iLocal = il.DeclareLocal(_types.Int32);
+        var jLocal = il.DeclareLocal(_types.Int32);
+        var tempLocal = il.DeclareLocal(_types.Object);
+        var compareResultLocal = il.DeclareLocal(_types.Int32);
+        var str1Local = il.DeclareLocal(_types.String);
+        var str2Local = il.DeclareLocal(_types.String);
+        var elementLocal = il.DeclareLocal(_types.Object);
+
+        // === Phase 1: Partition defined vs undefined ===
+        // defined = new List<object>()
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, definedLocal);
+
+        // undefinedCount = 0
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, undefinedCountLocal);
+
+        // for (i = 0; i < list.Count; i++)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var partitionLoopStart = il.DefineLabel();
+        var partitionLoopCondition = il.DefineLabel();
+        var isUndefinedLabel = il.DefineLabel();
+        var partitionNext = il.DefineLabel();
+
+        il.Emit(OpCodes.Br, partitionLoopCondition);
+
+        il.MarkLabel(partitionLoopStart);
+        // element = list[i]
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, elementLocal);
+
+        // if (element is $Undefined) undefinedCount++ else defined.Add(element)
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, isUndefinedLabel);
+
+        // Not undefined: defined.Add(element)
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, partitionNext);
+
+        // Is undefined: undefinedCount++
+        il.MarkLabel(isUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, undefinedCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, undefinedCountLocal);
+
+        il.MarkLabel(partitionNext);
+        // i++
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(partitionLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, partitionLoopStart);
+
+        // === Phase 2: Sort defined elements (stable insertion sort) ===
+        // for (i = 1; i < defined.Count; i++)
+        //     for (j = i; j > 0 && Compare(defined[j-1], defined[j]) > 0; j--)
+        //         Swap(defined, j-1, j)
+
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var outerLoopStart = il.DefineLabel();
+        var outerLoopCondition = il.DefineLabel();
+        var innerLoopStart = il.DefineLabel();
+        var innerLoopCondition = il.DefineLabel();
+        var incrementI = il.DefineLabel();
+
+        il.Emit(OpCodes.Br, outerLoopCondition);
+
+        // Outer loop body
+        il.MarkLabel(outerLoopStart);
+
+        // j = i
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Stloc, jLocal);
+
+        il.Emit(OpCodes.Br, innerLoopCondition);
+
+        // Inner loop body - swap if needed
+        il.MarkLabel(innerLoopStart);
+
+        // Swap defined[j-1] and defined[j]
+        // temp = defined[j]
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, tempLocal);
+
+        // defined[j] = defined[j-1]
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+
+        // defined[j-1] = temp
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, tempLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+
+        // j--
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, jLocal);
+
+        // Inner loop condition: j > 0 && Compare(defined[j-1], defined[j]) > 0
+        il.MarkLabel(innerLoopCondition);
+
+        // Check j > 0
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, incrementI);
+
+        // Check compareFn (arg1)
+        var hasCompareFn = il.DefineLabel();
+        var checkCompareResult = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brtrue, hasCompareFn);
+
+        // Default comparison: Stringify(a).CompareTo(Stringify(b)) using String.CompareOrdinal
+        // str1 = Stringify(defined[j-1])
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Stloc, str1Local);
+
+        // str2 = Stringify(defined[j])
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Stloc, str2Local);
+
+        // compareResult = String.CompareOrdinal(str1, str2)
+        il.Emit(OpCodes.Ldloc, str1Local);
+        il.Emit(OpCodes.Ldloc, str2Local);
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("CompareOrdinal", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+        il.Emit(OpCodes.Br, checkCompareResult);
+
+        // Custom compareFn: call InvokeValue(compareFn, [a, b])
+        il.MarkLabel(hasCompareFn);
+
+        // Build args array [defined[j-1], defined[j]]
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+
+        // args[0] = defined[j-1]
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        // args[1] = defined[j]
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Ldloc, jLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        // result = InvokeValue(compareFn, args)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+
+        // Convert result to int comparison value
+        // If result is double, use sign; if 0 or NaN, don't swap (stability)
+        var resultIsNotDouble = il.DefineLabel();
+        var resultLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, resultIsNotDouble);
+
+        // It's a double - check if > 0
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        var doubleResultLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Stloc, doubleResultLocal);
+
+        // Check for NaN (NaN means no swap for stability)
+        il.Emit(OpCodes.Ldloc, doubleResultLocal);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        var notNaN = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notNaN);
+        il.Emit(OpCodes.Ldc_I4_0);  // NaN -> 0 (no swap)
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+        il.Emit(OpCodes.Br, checkCompareResult);
+
+        il.MarkLabel(notNaN);
+        // Convert double to int sign
+        il.Emit(OpCodes.Ldloc, doubleResultLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        var isZero = il.DefineLabel();
+        var isPositive = il.DefineLabel();
+        il.Emit(OpCodes.Beq, isZero);
+
+        il.Emit(OpCodes.Ldloc, doubleResultLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, isPositive);
+
+        // Negative
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+        il.Emit(OpCodes.Br, checkCompareResult);
+
+        il.MarkLabel(isPositive);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+        il.Emit(OpCodes.Br, checkCompareResult);
+
+        il.MarkLabel(isZero);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+        il.Emit(OpCodes.Br, checkCompareResult);
+
+        il.MarkLabel(resultIsNotDouble);
+        // Not a double - treat as 0 (no swap)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, compareResultLocal);
+
+        il.MarkLabel(checkCompareResult);
+        // If compareResult > 0, swap (continue inner loop)
+        il.Emit(OpCodes.Ldloc, compareResultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, innerLoopStart);
+
+        il.MarkLabel(incrementI);
+        // i++
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        // Outer loop condition: i < defined.Count
+        il.MarkLabel(outerLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, outerLoopStart);
+
+        // === Phase 3: Rebuild original list with sorted defined + undefined at end ===
+        // list.Clear()
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear"));
+
+        // list.AddRange(defined)
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, definedLocal);
+        il.Emit(OpCodes.Callvirt, typeof(List<object?>).GetMethod("AddRange", [typeof(IEnumerable<object?>)])!);
+
+        // for (i = 0; i < undefinedCount; i++) list.Add($Undefined.Instance)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var appendLoopStart = il.DefineLabel();
+        var appendLoopCondition = il.DefineLabel();
+
+        il.Emit(OpCodes.Br, appendLoopCondition);
+
+        il.MarkLabel(appendLoopStart);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(appendLoopCondition);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, undefinedCountLocal);
+        il.Emit(OpCodes.Blt, appendLoopStart);
+
+        // Return the list
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

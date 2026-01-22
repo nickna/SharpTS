@@ -26,6 +26,8 @@ public static class ArrayBuiltIns
     private static readonly BuiltInMethod _reverse = new("reverse", 0, Reverse);
     private static readonly BuiltInMethod _flat = new("flat", 0, 1, Flat);
     private static readonly BuiltInMethod _flatMap = new("flatMap", 1, FlatMap);
+    private static readonly BuiltInMethod _sort = new("sort", 0, 1, Sort);
+    private static readonly BuiltInMethod _toSorted = new("toSorted", 0, 1, ToSorted);
 
     public static object? GetMember(SharpTSArray receiver, string name)
     {
@@ -53,6 +55,8 @@ public static class ArrayBuiltIns
             "reverse" => _reverse.Bind(receiver),
             "flat" => _flat.Bind(receiver),
             "flatMap" => _flatMap.Bind(receiver),
+            "sort" => _sort.Bind(receiver),
+            "toSorted" => _toSorted.Bind(receiver),
 
             _ => null
         };
@@ -393,6 +397,110 @@ public static class ArrayBuiltIns
             }
         }
         return new SharpTSArray(result);
+    }
+
+    private static object? Sort(Interpreter interp, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        // Frozen arrays cannot be modified; silent fail (matches reverse behavior)
+        if (arr.IsFrozen) return arr;
+
+        ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+
+        // Partition undefined to end (JS behavior)
+        var defined = new List<(object? Element, int Index)>();
+        int undefinedCount = 0;
+        for (int i = 0; i < arr.Elements.Count; i++)
+        {
+            if (IsUndefined(arr.Elements[i]))
+                undefinedCount++;
+            else
+                defined.Add((arr.Elements[i], i));
+        }
+
+        var sorted = StableSort(defined, compareFn, interp);
+
+        arr.Elements.Clear();
+        arr.Elements.AddRange(sorted);
+        for (int i = 0; i < undefinedCount; i++)
+            arr.Elements.Add(SharpTSUndefined.Instance);
+
+        return arr;
+    }
+
+    private static object? ToSorted(Interpreter interp, object? r, List<object?> args)
+    {
+        var arr = (SharpTSArray)r!;
+        ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+
+        // Same logic but returns NEW array
+        var defined = new List<(object? Element, int Index)>();
+        int undefinedCount = 0;
+        for (int i = 0; i < arr.Elements.Count; i++)
+        {
+            if (IsUndefined(arr.Elements[i]))
+                undefinedCount++;
+            else
+                defined.Add((arr.Elements[i], i));
+        }
+
+        var sorted = StableSort(defined, compareFn, interp);
+        for (int i = 0; i < undefinedCount; i++)
+            sorted.Add(SharpTSUndefined.Instance);
+
+        return new SharpTSArray(sorted);
+    }
+
+    /// <summary>
+    /// Performs a stable sort using LINQ OrderBy (which is stable).
+    /// </summary>
+    private static List<object?> StableSort(
+        List<(object? Element, int Index)> items,
+        ISharpTSCallable? compareFn,
+        Interpreter interp)
+    {
+        if (items.Count <= 1)
+            return items.Select(x => x.Element).ToList();
+
+        IEnumerable<(object? Element, int Index)> sorted;
+        if (compareFn != null)
+        {
+            sorted = items.OrderBy(x => x, new CompareFnComparer(compareFn, interp));
+        }
+        else
+        {
+            // Default lexicographic sort (JavaScript behavior: numbers sorted as strings)
+            sorted = items.OrderBy(x => Stringify(x.Element), StringComparer.Ordinal)
+                          .ThenBy(x => x.Index);
+        }
+
+        return sorted.Select(x => x.Element).ToList();
+    }
+
+    /// <summary>
+    /// Comparer that uses a user-provided comparison function.
+    /// </summary>
+    private class CompareFnComparer : IComparer<(object? Element, int Index)>
+    {
+        private readonly ISharpTSCallable _fn;
+        private readonly Interpreter _interp;
+
+        public CompareFnComparer(ISharpTSCallable fn, Interpreter interp)
+            => (_fn, _interp) = (fn, interp);
+
+        public int Compare((object? Element, int Index) x, (object? Element, int Index) y)
+        {
+            var result = _fn.Call(_interp, [x.Element, y.Element]);
+            if (result is double d && !double.IsNaN(d) && d != 0)
+                return d < 0 ? -1 : 1;
+            // Stability tie-breaker: preserve original order
+            return x.Index.CompareTo(y.Index);
+        }
+    }
+
+    private static bool IsUndefined(object? obj)
+    {
+        return obj is SharpTSUndefined;
     }
 
     private static bool IsTruthy(object? obj)

@@ -128,6 +128,16 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 
+            case "sort":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArraySort);
+                return true;
+
+            case "toSorted":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSorted);
+                return true;
+
             default:
                 return false;
         }

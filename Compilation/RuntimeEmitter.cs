@@ -1527,6 +1527,8 @@ public partial class RuntimeEmitter
         EmitArrayFlatMap(typeBuilder, runtime);
         EmitArrayFrom(typeBuilder, runtime);
         EmitArrayOf(typeBuilder, runtime);
+        EmitArraySort(typeBuilder, runtime);
+        EmitArrayToSorted(typeBuilder, runtime);
         // String methods
         EmitStringCharAt(typeBuilder, runtime);
         EmitStringSubstring(typeBuilder, runtime);

@@ -95,6 +95,14 @@ public static class BuiltInTypes
             "flatMap" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], AnyType)],
                 new TypeInfo.Array(AnyType)),
+            "sort" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType, elementType], NumberType)],
+                new TypeInfo.Array(elementType),
+                RequiredParams: 0),
+            "toSorted" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType, elementType], NumberType)],
+                new TypeInfo.Array(elementType),
+                RequiredParams: 0),
             _ => null
         };
     }
