@@ -3,6 +3,34 @@ using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
+/// <summary>
+/// Timer support for compiled TypeScript: setTimeout, clearTimeout, setInterval, clearInterval.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Implementation Notes:</strong>
+/// Timers use <see cref="System.Threading.Tasks.Task.Delay"/> with <c>ContinueWith</c> to schedule
+/// callbacks on the .NET thread pool. This provides non-blocking timer behavior without requiring
+/// a dedicated event loop thread.
+/// </para>
+/// <para>
+/// <strong>Important Behavioral Difference from Node.js:</strong>
+/// Unlike Node.js, timers do NOT keep the process alive. When <c>Main()</c> returns, the process
+/// exits regardless of pending timers. In Node.js, timers with <c>.ref()</c> (the default) keep
+/// the event loop running until all referenced timers complete or are cleared.
+/// </para>
+/// <para>
+/// This is a deliberate trade-off. Implementing Node.js-style event loop semantics would require:
+/// <list type="bullet">
+/// <item>A global timer registry tracking all active timers with <c>HasRef = true</c></item>
+/// <item>Modified entry point that waits for all referenced timers before returning</item>
+/// <item>Proper handling of <c>.ref()</c> and <c>.unref()</c> to add/remove from the registry</item>
+/// </list>
+/// For most compiled TypeScript use cases (CLI tools, services with their own lifecycle, scripts),
+/// the current behavior is acceptable. Programs that need timer-based keepalive can use explicit
+/// waiting mechanisms (busy-wait loops, <c>Thread.Sleep</c>, or async patterns).
+/// </para>
+/// </remarks>
 public partial class RuntimeEmitter
 {
     /// <summary>

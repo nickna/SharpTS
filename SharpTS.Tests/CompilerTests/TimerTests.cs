@@ -6,11 +6,31 @@ namespace SharpTS.Tests.CompilerTests;
 /// <summary>
 /// Timer tests for compiled code.
 /// setTimeout/clearTimeout are fully implemented including callback execution.
-/// NOTE: Tests that modify captured variables may not work due to a pre-existing
-/// compiler closure limitation (captured variable mutations don't propagate to outer scope).
 /// </summary>
 /// <remarks>
-/// Timer tests run in a dedicated collection to avoid race conditions with other tests.
+/// <para>
+/// <strong>Important: Timers do NOT keep the process alive.</strong>
+/// Unlike Node.js where timers with <c>.ref()</c> (the default) keep the event loop running,
+/// SharpTS compiled programs exit when <c>Main()</c> returns, regardless of pending timers.
+/// This is a deliberate trade-off: implementing Node.js-style event loop semantics would
+/// require significant runtime infrastructure. For most use cases (scripts, tools, services
+/// with their own lifecycle management), this behavior is acceptable.
+/// </para>
+/// <para>
+/// <strong>Test Design Implications:</strong>
+/// Tests that verify timer callback execution must be designed carefully to avoid race conditions:
+/// <list type="bullet">
+/// <item>Console output from thread pool threads may not flush before process exit</item>
+/// <item>Callbacks should perform their own cleanup (clearInterval/clearTimeout) when possible</item>
+/// <item>Critical assertions should be based on callback-produced output, not main thread output after the callback</item>
+/// </list>
+/// </para>
+/// <para>
+/// <strong>Closure Limitation:</strong>
+/// Tests that modify captured variables may not work due to a pre-existing compiler closure
+/// limitation (captured variable mutations don't propagate to outer scope).
+/// </para>
+/// <para>Timer tests run in a dedicated collection to avoid race conditions with other tests.</para>
 /// </remarks>
 [Collection("TimerTests")]
 public class TimerTests
@@ -265,16 +285,26 @@ public class TimerTests
     public void SetInterval_ExecutesCallback()
     {
         // setInterval should execute callback
+        // NOTE: The callback performs clearInterval and prints 'done' to avoid a race condition
+        // where console output from the thread pool thread may not flush before process exit.
+        // This is because timers don't keep the process alive (see TimerTests class docs).
         var source = @"
-            let t = setInterval(() => { console.log('tick'); }, 20);
+            let t = setInterval(() => {
+                console.log('tick');
+                clearInterval(t);
+                console.log('done');
+            }, 20);
+            // Keep process alive long enough for callback to execute
             let start = Date.now();
-            while (Date.now() - start < 100) { }
-            clearInterval(t);
-            console.log('done');
+            while (Date.now() - start < 500) { }
+            console.log('timeout');
         ";
         var output = TestHarness.RunCompiled(source);
         Assert.Contains("tick", output);
         Assert.Contains("done", output);
+        // Verify 'done' comes after 'tick' (callback completed properly)
+        Assert.True(output.IndexOf("tick") < output.IndexOf("done"),
+            "Expected 'done' to appear after 'tick' in output");
     }
 
     [Fact]
