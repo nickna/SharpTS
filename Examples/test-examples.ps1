@@ -412,13 +412,7 @@ function Invoke-CompiledDll {
         }
     }
 
-    # Copy runtime dependency
-    $runtimeDll = Join-Path $Script:ProjectRoot "bin\Debug\net10.0\SharpTS.dll"
-    if (Test-Path $runtimeDll) {
-        Copy-Item -Path $runtimeDll -Destination $outputDir -Force
-    }
-
-    # Also copy runtimeconfig.json if it exists
+    # Copy runtimeconfig.json if it exists
     $runtimeConfig = Join-Path $Script:ProjectRoot "bin\Debug\net10.0\SharpTS.runtimeconfig.json"
     if (Test-Path $runtimeConfig) {
         $newConfigPath = Join-Path $outputDir "$baseName.runtimeconfig.json"
@@ -463,12 +457,6 @@ function Invoke-CompiledExe {
             Duration = $compileResult.Duration
             CompileOutput = $compileResult.Output
         }
-    }
-
-    # Copy runtime dependency
-    $runtimeDll = Join-Path $Script:ProjectRoot "bin\Debug\net10.0\SharpTS.dll"
-    if (Test-Path $runtimeDll) {
-        Copy-Item -Path $runtimeDll -Destination $outputDir -Force
     }
 
     # Run the EXE
