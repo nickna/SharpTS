@@ -1,3 +1,4 @@
+using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Parsing;
@@ -36,6 +37,64 @@ public record TypeParam(
 /// <seealso cref="Stmt"/>
 public abstract record Expr
 {
+    /// <summary>
+    /// Dispatches to the appropriate visitor method for the given expression's concrete type.
+    /// Single source of truth for exhaustive expression dispatch.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the visitor methods.</typeparam>
+    /// <param name="expr">The expression to dispatch.</param>
+    /// <param name="visitor">The visitor implementation.</param>
+    /// <returns>The result from the visitor method.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if an unknown Expr type is encountered.</exception>
+    public static TResult Accept<TResult>(Expr expr, IExprVisitor<TResult> visitor) => expr switch
+    {
+        Binary e => visitor.VisitBinary(e),
+        Logical e => visitor.VisitLogical(e),
+        NullishCoalescing e => visitor.VisitNullishCoalescing(e),
+        Ternary e => visitor.VisitTernary(e),
+        Grouping e => visitor.VisitGrouping(e),
+        Literal e => visitor.VisitLiteral(e),
+        Unary e => visitor.VisitUnary(e),
+        Delete e => visitor.VisitDelete(e),
+        Variable e => visitor.VisitVariable(e),
+        Assign e => visitor.VisitAssign(e),
+        Call e => visitor.VisitCall(e),
+        Get e => visitor.VisitGet(e),
+        Set e => visitor.VisitSet(e),
+        GetPrivate e => visitor.VisitGetPrivate(e),
+        SetPrivate e => visitor.VisitSetPrivate(e),
+        CallPrivate e => visitor.VisitCallPrivate(e),
+        This e => visitor.VisitThis(e),
+        New e => visitor.VisitNew(e),
+        ArrayLiteral e => visitor.VisitArrayLiteral(e),
+        ObjectLiteral e => visitor.VisitObjectLiteral(e),
+        GetIndex e => visitor.VisitGetIndex(e),
+        SetIndex e => visitor.VisitSetIndex(e),
+        Super e => visitor.VisitSuper(e),
+        CompoundAssign e => visitor.VisitCompoundAssign(e),
+        CompoundSet e => visitor.VisitCompoundSet(e),
+        CompoundSetIndex e => visitor.VisitCompoundSetIndex(e),
+        LogicalAssign e => visitor.VisitLogicalAssign(e),
+        LogicalSet e => visitor.VisitLogicalSet(e),
+        LogicalSetIndex e => visitor.VisitLogicalSetIndex(e),
+        PrefixIncrement e => visitor.VisitPrefixIncrement(e),
+        PostfixIncrement e => visitor.VisitPostfixIncrement(e),
+        ArrowFunction e => visitor.VisitArrowFunction(e),
+        TemplateLiteral e => visitor.VisitTemplateLiteral(e),
+        TaggedTemplateLiteral e => visitor.VisitTaggedTemplateLiteral(e),
+        Spread e => visitor.VisitSpread(e),
+        TypeAssertion e => visitor.VisitTypeAssertion(e),
+        Satisfies e => visitor.VisitSatisfies(e),
+        Await e => visitor.VisitAwait(e),
+        DynamicImport e => visitor.VisitDynamicImport(e),
+        ImportMeta e => visitor.VisitImportMeta(e),
+        Yield e => visitor.VisitYield(e),
+        RegexLiteral e => visitor.VisitRegexLiteral(e),
+        NonNullAssertion e => visitor.VisitNonNullAssertion(e),
+        ClassExpr e => visitor.VisitClassExpr(e),
+        _ => throw new InvalidOperationException($"Unknown Expr type: {expr.GetType().Name}")
+    };
+
     public record Binary(Expr Left, Token Operator, Expr Right) : Expr;
     public record Logical(Expr Left, Token Operator, Expr Right) : Expr;
     public record NullishCoalescing(Expr Left, Expr Right) : Expr;
@@ -186,6 +245,58 @@ public record Decorator(Token AtToken, Expr Expression);
 /// <seealso cref="Expr"/>
 public abstract record Stmt
 {
+    /// <summary>
+    /// Dispatches to the appropriate visitor method for the given statement's concrete type.
+    /// Single source of truth for exhaustive statement dispatch.
+    /// </summary>
+    /// <typeparam name="TResult">The return type of the visitor methods.</typeparam>
+    /// <param name="stmt">The statement to dispatch.</param>
+    /// <param name="visitor">The visitor implementation.</param>
+    /// <returns>The result from the visitor method.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if an unknown Stmt type is encountered.</exception>
+    public static TResult Accept<TResult>(Stmt stmt, IStmtVisitor<TResult> visitor) => stmt switch
+    {
+        Expression s => visitor.VisitExpression(s),
+        Var s => visitor.VisitVar(s),
+        Const s => visitor.VisitConst(s),
+        Function s => visitor.VisitFunction(s),
+        Field s => visitor.VisitField(s),
+        Accessor s => visitor.VisitAccessor(s),
+        AutoAccessor s => visitor.VisitAutoAccessor(s),
+        Class s => visitor.VisitClass(s),
+        StaticBlock s => visitor.VisitStaticBlock(s),
+        Interface s => visitor.VisitInterface(s),
+        Block s => visitor.VisitBlock(s),
+        Sequence s => visitor.VisitSequence(s),
+        Return s => visitor.VisitReturn(s),
+        While s => visitor.VisitWhile(s),
+        For s => visitor.VisitFor(s),
+        DoWhile s => visitor.VisitDoWhile(s),
+        ForOf s => visitor.VisitForOf(s),
+        ForIn s => visitor.VisitForIn(s),
+        If s => visitor.VisitIf(s),
+        Print s => visitor.VisitPrint(s),
+        Break s => visitor.VisitBreak(s),
+        Continue s => visitor.VisitContinue(s),
+        LabeledStatement s => visitor.VisitLabeledStatement(s),
+        Switch s => visitor.VisitSwitch(s),
+        TryCatch s => visitor.VisitTryCatch(s),
+        Throw s => visitor.VisitThrow(s),
+        TypeAlias s => visitor.VisitTypeAlias(s),
+        Enum s => visitor.VisitEnum(s),
+        Namespace s => visitor.VisitNamespace(s),
+        ImportAlias s => visitor.VisitImportAlias(s),
+        ImportRequire s => visitor.VisitImportRequire(s),
+        Import s => visitor.VisitImport(s),
+        Export s => visitor.VisitExport(s),
+        FileDirective s => visitor.VisitFileDirective(s),
+        Directive s => visitor.VisitDirective(s),
+        DeclareModule s => visitor.VisitDeclareModule(s),
+        DeclareGlobal s => visitor.VisitDeclareGlobal(s),
+        Using s => visitor.VisitUsing(s),
+        _ => throw new InvalidOperationException($"Unknown Stmt type: {stmt.GetType().Name}")
+    };
+
     public record Expression(Expr Expr) : Stmt;
     public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false) : Stmt;
     /// <summary>

@@ -32,11 +32,15 @@ public abstract class AstVisitorBase
             case Expr.Grouping e: VisitGrouping(e); break;
             case Expr.Literal e: VisitLiteral(e); break;
             case Expr.Unary e: VisitUnary(e); break;
+            case Expr.Delete e: VisitDelete(e); break;
             case Expr.Variable e: VisitVariable(e); break;
             case Expr.Assign e: VisitAssign(e); break;
             case Expr.Call e: VisitCall(e); break;
             case Expr.Get e: VisitGet(e); break;
             case Expr.Set e: VisitSet(e); break;
+            case Expr.GetPrivate e: VisitGetPrivate(e); break;
+            case Expr.SetPrivate e: VisitSetPrivate(e); break;
+            case Expr.CallPrivate e: VisitCallPrivate(e); break;
             case Expr.This e: VisitThis(e); break;
             case Expr.New e: VisitNew(e); break;
             case Expr.ArrayLiteral e: VisitArrayLiteral(e); break;
@@ -57,6 +61,7 @@ public abstract class AstVisitorBase
             case Expr.TaggedTemplateLiteral e: VisitTaggedTemplateLiteral(e); break;
             case Expr.Spread e: VisitSpread(e); break;
             case Expr.TypeAssertion e: VisitTypeAssertion(e); break;
+            case Expr.Satisfies e: VisitSatisfies(e); break;
             case Expr.NonNullAssertion e: VisitNonNullAssertion(e); break;
             case Expr.Await e: VisitAwait(e); break;
             case Expr.DynamicImport e: VisitDynamicImport(e); break;
@@ -82,7 +87,9 @@ public abstract class AstVisitorBase
             case Stmt.Function s: VisitFunction(s); break;
             case Stmt.Field s: VisitField(s); break;
             case Stmt.Accessor s: VisitAccessor(s); break;
+            case Stmt.AutoAccessor s: VisitAutoAccessor(s); break;
             case Stmt.Class s: VisitClass(s); break;
+            case Stmt.StaticBlock s: VisitStaticBlock(s); break;
             case Stmt.Interface s: VisitInterface(s); break;
             case Stmt.Block s: VisitBlock(s); break;
             case Stmt.Sequence s: VisitSequence(s); break;
@@ -103,9 +110,15 @@ public abstract class AstVisitorBase
             case Stmt.TypeAlias s: VisitTypeAlias(s); break;
             case Stmt.Enum s: VisitEnum(s); break;
             case Stmt.Namespace s: VisitNamespace(s); break;
+            case Stmt.ImportAlias s: VisitImportAlias(s); break;
+            case Stmt.ImportRequire s: VisitImportRequire(s); break;
             case Stmt.Import s: VisitImport(s); break;
             case Stmt.Export s: VisitExport(s); break;
             case Stmt.FileDirective s: VisitFileDirective(s); break;
+            case Stmt.Directive s: VisitDirective(s); break;
+            case Stmt.DeclareModule s: VisitDeclareModule(s); break;
+            case Stmt.DeclareGlobal s: VisitDeclareGlobal(s); break;
+            case Stmt.Using s: VisitUsing(s); break;
         }
     }
 
@@ -151,6 +164,11 @@ public abstract class AstVisitorBase
         Visit(expr.Right);
     }
 
+    protected virtual void VisitDelete(Expr.Delete expr)
+    {
+        Visit(expr.Operand);
+    }
+
     protected virtual void VisitVariable(Expr.Variable expr)
     {
         // Leaf node - no children to visit
@@ -177,6 +195,24 @@ public abstract class AstVisitorBase
     {
         Visit(expr.Object);
         Visit(expr.Value);
+    }
+
+    protected virtual void VisitGetPrivate(Expr.GetPrivate expr)
+    {
+        Visit(expr.Object);
+    }
+
+    protected virtual void VisitSetPrivate(Expr.SetPrivate expr)
+    {
+        Visit(expr.Object);
+        Visit(expr.Value);
+    }
+
+    protected virtual void VisitCallPrivate(Expr.CallPrivate expr)
+    {
+        Visit(expr.Object);
+        foreach (var arg in expr.Arguments)
+            Visit(arg);
     }
 
     protected virtual void VisitThis(Expr.This expr)
@@ -308,6 +344,11 @@ public abstract class AstVisitorBase
         Visit(expr.Expression);
     }
 
+    protected virtual void VisitSatisfies(Expr.Satisfies expr)
+    {
+        Visit(expr.Expression);
+    }
+
     protected virtual void VisitNonNullAssertion(Expr.NonNullAssertion expr)
     {
         Visit(expr.Expression);
@@ -401,6 +442,12 @@ public abstract class AstVisitorBase
             Visit(s);
     }
 
+    protected virtual void VisitAutoAccessor(Stmt.AutoAccessor stmt)
+    {
+        if (stmt.Initializer != null)
+            Visit(stmt.Initializer);
+    }
+
     protected virtual void VisitClass(Stmt.Class stmt)
     {
         // Visit field initializers
@@ -416,6 +463,12 @@ public abstract class AstVisitorBase
         if (stmt.Accessors != null)
             foreach (var a in stmt.Accessors)
                 VisitAccessor(a);
+    }
+
+    protected virtual void VisitStaticBlock(Stmt.StaticBlock stmt)
+    {
+        foreach (var s in stmt.Body)
+            Visit(s);
     }
 
     protected virtual void VisitInterface(Stmt.Interface stmt)
@@ -553,6 +606,16 @@ public abstract class AstVisitorBase
             Visit(m);
     }
 
+    protected virtual void VisitImportAlias(Stmt.ImportAlias stmt)
+    {
+        // Declaration-only - no runtime expressions to visit
+    }
+
+    protected virtual void VisitImportRequire(Stmt.ImportRequire stmt)
+    {
+        // Declaration-only - no runtime expressions to visit
+    }
+
     protected virtual void VisitImport(Stmt.Import stmt)
     {
         // Declaration-only - no runtime expressions to visit
@@ -569,6 +632,33 @@ public abstract class AstVisitorBase
     protected virtual void VisitFileDirective(Stmt.FileDirective stmt)
     {
         // Metadata-only - no runtime expressions to visit
+    }
+
+    protected virtual void VisitDirective(Stmt.Directive stmt)
+    {
+        // Metadata-only - no runtime expressions to visit
+    }
+
+    protected virtual void VisitDeclareModule(Stmt.DeclareModule stmt)
+    {
+        foreach (var m in stmt.Members)
+            Visit(m);
+    }
+
+    protected virtual void VisitDeclareGlobal(Stmt.DeclareGlobal stmt)
+    {
+        foreach (var m in stmt.Members)
+            Visit(m);
+    }
+
+    protected virtual void VisitUsing(Stmt.Using stmt)
+    {
+        foreach (var binding in stmt.Bindings)
+        {
+            if (binding.DestructuringPattern != null)
+                Visit(binding.DestructuringPattern);
+            Visit(binding.Initializer);
+        }
     }
 
     #endregion
