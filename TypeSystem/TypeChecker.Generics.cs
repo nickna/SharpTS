@@ -53,6 +53,29 @@ public partial class TypeChecker
         var typeArgStrings = SplitTypeArguments(argsStr);
         var typeArgs = typeArgStrings.Select(ToTypeInfo).ToList();
 
+        return ResolveGenericType(baseName, typeArgs, typeArgStrings, suffix);
+    }
+
+    /// <summary>
+    /// Resolves a generic type with pre-parsed TypeInfo arguments.
+    /// Avoids string round-trip when TypeInfo objects are already available.
+    /// </summary>
+    /// <param name="baseName">The generic type name (e.g., "Promise", "Box").</param>
+    /// <param name="typeArgs">The type arguments as TypeInfo objects.</param>
+    /// <param name="suffix">Optional array suffix (e.g., "[][]").</param>
+    /// <returns>The resolved type.</returns>
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, string suffix = "")
+    {
+        // Lazily compute string representations only when needed for type alias expansion
+        List<string>? typeArgStrings = null;
+        return ResolveGenericType(baseName, typeArgs, typeArgStrings, suffix);
+    }
+
+    /// <summary>
+    /// Core generic type resolution logic.
+    /// </summary>
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, List<string>? typeArgStrings, string suffix)
+    {
         TypeInfo result;
 
         // Handle built-in generic types
@@ -205,6 +228,9 @@ public partial class TypeChecker
                 {
                     throw new TypeCheckException($" Type alias '{baseName}' requires {typeParamNames.Count} type argument(s), got {typeArgs.Count}.");
                 }
+
+                // Lazily compute string representations for type alias expansion
+                typeArgStrings ??= typeArgs.Select(TypeInfoToString).ToList();
 
                 // Create a unique key for this instantiation to detect recursive references
                 string aliasKey = $"{baseName}<{string.Join(",", typeArgStrings)}>";

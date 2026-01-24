@@ -52,9 +52,9 @@ public partial class TypeChecker
         {
             if (rta.TypeArguments is { Count: > 0 })
             {
-                // Generic recursive alias - reconstruct the type string
-                var typeArgStrings = rta.TypeArguments.Select(TypeInfoToString).ToList();
-                return ParseGenericTypeReference($"{rta.AliasName}<{string.Join(", ", typeArgStrings)}>");
+                // Generic recursive alias - resolve directly with TypeInfo arguments
+                // This avoids the TypeInfo -> string -> TypeInfo round-trip
+                return ResolveGenericType(rta.AliasName, rta.TypeArguments);
             }
 
             // Non-generic recursive alias
