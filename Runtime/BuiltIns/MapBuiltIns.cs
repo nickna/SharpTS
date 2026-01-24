@@ -86,9 +86,12 @@ public static class MapBuiltIns
                     ?? throw new Exception("Runtime Error: forEach requires a function argument.");
 
                 // JavaScript Map.forEach callback receives (value, key, map)
+                var callbackArgs = new List<object?>(3) { null, null, map };
                 foreach (var kvp in map.InternalEntries)
                 {
-                    callback.Call(interp, [kvp.Value, kvp.Key, map]);
+                    callbackArgs[0] = kvp.Value;
+                    callbackArgs[1] = kvp.Key;
+                    callback.Call(interp, callbackArgs);
                 }
                 return null;
             }),

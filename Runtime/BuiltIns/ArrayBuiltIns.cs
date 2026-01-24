@@ -146,9 +146,12 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: map requires a function argument.");
 
         List<object?> result = [];
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var callResult = callback.Call(interp, callbackArgs);
             result.Add(callResult);
         }
         return new SharpTSArray(result);
@@ -161,9 +164,12 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: filter requires a function argument.");
 
         List<object?> result = [];
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var callResult = callback.Call(interp, callbackArgs);
             if (IsTruthy(callResult))
             {
                 result.Add(arr.Elements[i]);
@@ -178,9 +184,12 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: forEach requires a function argument.");
 
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            callback.Call(interp, callbackArgs);
         }
         return null;
     }
@@ -191,9 +200,12 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: find requires a function argument.");
 
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var result = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var result = callback.Call(interp, callbackArgs);
             if (IsTruthy(result))
             {
                 return arr.Elements[i];
@@ -208,9 +220,12 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: findIndex requires a function argument.");
 
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var result = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var result = callback.Call(interp, callbackArgs);
             if (IsTruthy(result))
             {
                 return (double)i;
@@ -225,9 +240,12 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: some requires a function argument.");
 
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var result = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var result = callback.Call(interp, callbackArgs);
             if (IsTruthy(result))
             {
                 return true;
@@ -242,9 +260,12 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: every requires a function argument.");
 
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var result = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var result = callback.Call(interp, callbackArgs);
             if (!IsTruthy(result))
             {
                 return false;
@@ -276,9 +297,13 @@ public static class ArrayBuiltIns
             startIndex = 1;
         }
 
+        var callbackArgs = new List<object?>(4) { null, null, null, arr };
         for (int i = startIndex; i < arr.Elements.Count; i++)
         {
-            accumulator = callback.Call(interp, [accumulator, arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = accumulator;
+            callbackArgs[1] = arr.Elements[i];
+            callbackArgs[2] = (double)i;
+            accumulator = callback.Call(interp, callbackArgs);
         }
         return accumulator;
     }
@@ -386,9 +411,12 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: flatMap requires a function argument.");
 
         var result = new List<object?>();
+        var callbackArgs = new List<object?>(3) { null, null, arr };
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            var callResult = callback.Call(interp, [arr.Elements[i], (double)i, arr]);
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            var callResult = callback.Call(interp, callbackArgs);
 
             // flatMap flattens by 1 level only
             if (callResult is SharpTSArray mappedArray)
@@ -488,13 +516,16 @@ public static class ArrayBuiltIns
     {
         private readonly ISharpTSCallable _fn;
         private readonly Interpreter _interp;
+        private readonly List<object?> _compareArgs = new(2) { null, null };
 
         public CompareFnComparer(ISharpTSCallable fn, Interpreter interp)
             => (_fn, _interp) = (fn, interp);
 
         public int Compare((object? Element, int Index) x, (object? Element, int Index) y)
         {
-            var result = _fn.Call(_interp, [x.Element, y.Element]);
+            _compareArgs[0] = x.Element;
+            _compareArgs[1] = y.Element;
+            var result = _fn.Call(_interp, _compareArgs);
             if (result is double d && !double.IsNaN(d) && d != 0)
                 return d < 0 ? -1 : 1;
             // Stability tie-breaker: preserve original order

@@ -78,9 +78,12 @@ public static class SetBuiltIns
 
                 // JavaScript Set.forEach callback receives (value, value, set)
                 // The value is passed twice (for consistency with Map.forEach API)
+                var callbackArgs = new List<object?>(3) { null, null, set };
                 foreach (var value in set.InternalValues)
                 {
-                    callback.Call(interp, [value, value, set]);
+                    callbackArgs[0] = value;
+                    callbackArgs[1] = value;
+                    callback.Call(interp, callbackArgs);
                 }
                 return null;
             }),

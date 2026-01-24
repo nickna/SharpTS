@@ -25,9 +25,12 @@ public static class ArrayStaticBuiltIns
                 if (mapFn != null)
                 {
                     var result = new List<object?>();
+                    var callbackArgs = new List<object?>(2) { null, null };
                     for (int i = 0; i < elements.Count; i++)
                     {
-                        result.Add(mapFn.Call(interpreter, [elements[i], (double)i]));
+                        callbackArgs[0] = elements[i];
+                        callbackArgs[1] = (double)i;
+                        result.Add(mapFn.Call(interpreter, callbackArgs));
                     }
                     return new SharpTSArray(result);
                 }
