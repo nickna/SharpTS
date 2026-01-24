@@ -166,6 +166,15 @@ static void RunModuleFile(string absolutePath, DecoratorMode decoratorMode, bool
         // Interpretation
         var interpreter = new Interpreter();
         interpreter.SetDecoratorMode(decoratorMode);
+
+        // Variable Resolution Phase (enables O(1) lookups)
+        var varResolver = new VariableResolver(interpreter);
+        foreach (var module in allModules)
+        {
+            if (!module.IsBuiltIn)
+                varResolver.Resolve(module.Statements);
+        }
+
         interpreter.InterpretModules(allModules, resolver, typeMap);
     }
     catch (Exception ex)
@@ -228,6 +237,10 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
                 Console.WriteLine("Too many errors, stopping.");
             return;
         }
+
+        // Variable Resolution Phase (enables O(1) lookups)
+        var resolver = new VariableResolver(interpreter);
+        resolver.Resolve(parseResult.Statements);
 
         // Interpretation Phase
         interpreter.Interpret(parseResult.Statements, typeResult.TypeMap);
