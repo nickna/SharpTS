@@ -12,140 +12,133 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 public static class SetBuiltIns
 {
-    public static object? GetMember(SharpTSSet receiver, string name)
-    {
-        return name switch
-        {
-            "size" => (double)receiver.Size,
-
-            "add" => new BuiltInMethod("add", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var value = args[0];
-                if (value == null)
-                    throw new Exception("Runtime Error: Set value cannot be null.");
-                return set.Add(value);
-            }),
-
-            "has" => new BuiltInMethod("has", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var value = args[0];
-                if (value == null)
-                    throw new Exception("Runtime Error: Set value cannot be null.");
-                return set.Has(value);
-            }),
-
-            "delete" => new BuiltInMethod("delete", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var value = args[0];
-                if (value == null)
-                    throw new Exception("Runtime Error: Set value cannot be null.");
-                return set.Delete(value);
-            }),
-
-            "clear" => new BuiltInMethod("clear", 0, (_, recv, _) =>
-            {
-                var set = (SharpTSSet)recv!;
-                set.Clear();
-                return null;
-            }),
-
-            "keys" => new BuiltInMethod("keys", 0, (_, recv, _) =>
-            {
-                var set = (SharpTSSet)recv!;
-                return set.Keys();
-            }),
-
-            "values" => new BuiltInMethod("values", 0, (_, recv, _) =>
-            {
-                var set = (SharpTSSet)recv!;
-                return set.Values();
-            }),
-
-            "entries" => new BuiltInMethod("entries", 0, (_, recv, _) =>
-            {
-                var set = (SharpTSSet)recv!;
-                return set.Entries();
-            }),
-
-            "forEach" => new BuiltInMethod("forEach", 1, (interp, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var callback = args[0] as ISharpTSCallable
-                    ?? throw new Exception("Runtime Error: forEach requires a function argument.");
-
-                // JavaScript Set.forEach callback receives (value, value, set)
-                // The value is passed twice (for consistency with Map.forEach API)
-                var callbackArgs = new List<object?>(3) { null, null, set };
-                foreach (var value in set.InternalValues)
-                {
-                    callbackArgs[0] = value;
-                    callbackArgs[1] = value;
-                    callback.Call(interp, callbackArgs);
-                }
-                return null;
-            }),
-
+    private static readonly BuiltInTypeMemberLookup<SharpTSSet> _lookup =
+        BuiltInTypeBuilder<SharpTSSet>.ForInstanceType()
+            .Property("size", set => (double)set.Size)
+            .Method("add", 1, Add)
+            .Method("has", 1, Has)
+            .Method("delete", 1, Delete)
+            .Method("clear", 0, Clear)
+            .Method("keys", 0, Keys)
+            .Method("values", 0, Values)
+            .Method("entries", 0, Entries)
+            .Method("forEach", 1, ForEach)
             // ES2025 Set Operations
-            "union" => new BuiltInMethod("union", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: union requires a Set argument.");
-                return set.Union(other);
-            }),
+            .Method("union", 1, Union)
+            .Method("intersection", 1, Intersection)
+            .Method("difference", 1, Difference)
+            .Method("symmetricDifference", 1, SymmetricDifference)
+            .Method("isSubsetOf", 1, IsSubsetOf)
+            .Method("isSupersetOf", 1, IsSupersetOf)
+            .Method("isDisjointFrom", 1, IsDisjointFrom)
+            .Build();
 
-            "intersection" => new BuiltInMethod("intersection", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: intersection requires a Set argument.");
-                return set.Intersection(other);
-            }),
+    public static object? GetMember(SharpTSSet receiver, string name)
+        => _lookup.GetMember(receiver, name);
 
-            "difference" => new BuiltInMethod("difference", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: difference requires a Set argument.");
-                return set.Difference(other);
-            }),
+    private static object? Add(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var value = args[0];
+        if (value == null)
+            throw new Exception("Runtime Error: Set value cannot be null.");
+        return set.Add(value);
+    }
 
-            "symmetricDifference" => new BuiltInMethod("symmetricDifference", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: symmetricDifference requires a Set argument.");
-                return set.SymmetricDifference(other);
-            }),
+    private static object? Has(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var value = args[0];
+        if (value == null)
+            throw new Exception("Runtime Error: Set value cannot be null.");
+        return set.Has(value);
+    }
 
-            "isSubsetOf" => new BuiltInMethod("isSubsetOf", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: isSubsetOf requires a Set argument.");
-                return set.IsSubsetOf(other);
-            }),
+    private static object? Delete(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var value = args[0];
+        if (value == null)
+            throw new Exception("Runtime Error: Set value cannot be null.");
+        return set.Delete(value);
+    }
 
-            "isSupersetOf" => new BuiltInMethod("isSupersetOf", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: isSupersetOf requires a Set argument.");
-                return set.IsSupersetOf(other);
-            }),
+    private static object? Clear(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        set.Clear();
+        return null;
+    }
 
-            "isDisjointFrom" => new BuiltInMethod("isDisjointFrom", 1, (_, recv, args) =>
-            {
-                var set = (SharpTSSet)recv!;
-                var other = args[0] as SharpTSSet
-                    ?? throw new Exception("Runtime Error: isDisjointFrom requires a Set argument.");
-                return set.IsDisjointFrom(other);
-            }),
+    private static object? Keys(Interpreter _, SharpTSSet set, List<object?> args)
+        => set.Keys();
 
-            _ => null
-        };
+    private static object? Values(Interpreter _, SharpTSSet set, List<object?> args)
+        => set.Values();
+
+    private static object? Entries(Interpreter _, SharpTSSet set, List<object?> args)
+        => set.Entries();
+
+    private static object? ForEach(Interpreter interp, SharpTSSet set, List<object?> args)
+    {
+        var callback = args[0] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: forEach requires a function argument.");
+
+        // JavaScript Set.forEach callback receives (value, value, set)
+        // The value is passed twice (for consistency with Map.forEach API)
+        var callbackArgs = new List<object?>(3) { null, null, set };
+        foreach (var value in set.InternalValues)
+        {
+            callbackArgs[0] = value;
+            callbackArgs[1] = value;
+            callback.Call(interp, callbackArgs);
+        }
+        return null;
+    }
+
+    // ES2025 Set Operations
+    private static object? Union(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: union requires a Set argument.");
+        return set.Union(other);
+    }
+
+    private static object? Intersection(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: intersection requires a Set argument.");
+        return set.Intersection(other);
+    }
+
+    private static object? Difference(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: difference requires a Set argument.");
+        return set.Difference(other);
+    }
+
+    private static object? SymmetricDifference(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: symmetricDifference requires a Set argument.");
+        return set.SymmetricDifference(other);
+    }
+
+    private static object? IsSubsetOf(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: isSubsetOf requires a Set argument.");
+        return set.IsSubsetOf(other);
+    }
+
+    private static object? IsSupersetOf(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: isSupersetOf requires a Set argument.");
+        return set.IsSupersetOf(other);
+    }
+
+    private static object? IsDisjointFrom(Interpreter _, SharpTSSet set, List<object?> args)
+    {
+        var other = args[0] as SharpTSSet
+            ?? throw new Exception("Runtime Error: isDisjointFrom requires a Set argument.");
+        return set.IsDisjointFrom(other);
     }
 }

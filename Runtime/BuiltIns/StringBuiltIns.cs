@@ -6,76 +6,59 @@ namespace SharpTS.Runtime.BuiltIns;
 
 public static class StringBuiltIns
 {
-    // Cache unbound methods to avoid allocation on every access
-    private static readonly BuiltInMethod _charAt = new("charAt", 1, CharAt);
-    private static readonly BuiltInMethod _substring = new("substring", 1, 2, Substring);
-    private static readonly BuiltInMethod _indexOf = new("indexOf", 1, IndexOf);
-    private static readonly BuiltInMethod _toUpperCase = new("toUpperCase", 0, ToUpperCase);
-    private static readonly BuiltInMethod _toLowerCase = new("toLowerCase", 0, ToLowerCase);
-    private static readonly BuiltInMethod _trim = new("trim", 0, Trim);
-    private static readonly BuiltInMethod _replace = new("replace", 2, Replace);
-    private static readonly BuiltInMethod _split = new("split", 1, 2, Split); // optional limit parameter
-    private static readonly BuiltInMethod _match = new("match", 1, Match);
-    private static readonly BuiltInMethod _search = new("search", 1, Search);
-    private static readonly BuiltInMethod _includes = new("includes", 1, Includes);
-    private static readonly BuiltInMethod _startsWith = new("startsWith", 1, StartsWith);
-    private static readonly BuiltInMethod _endsWith = new("endsWith", 1, EndsWith);
-    private static readonly BuiltInMethod _slice = new("slice", 1, 2, Slice);
-    private static readonly BuiltInMethod _repeat = new("repeat", 1, Repeat);
-    private static readonly BuiltInMethod _padStart = new("padStart", 1, 2, PadStart);
-    private static readonly BuiltInMethod _padEnd = new("padEnd", 1, 2, PadEnd);
-    private static readonly BuiltInMethod _charCodeAt = new("charCodeAt", 1, CharCodeAt);
-    private static readonly BuiltInMethod _concat = new("concat", 0, int.MaxValue, Concat);
-    private static readonly BuiltInMethod _lastIndexOf = new("lastIndexOf", 1, LastIndexOf);
-    private static readonly BuiltInMethod _trimStart = new("trimStart", 0, TrimStart);
-    private static readonly BuiltInMethod _trimEnd = new("trimEnd", 0, TrimEnd);
-    private static readonly BuiltInMethod _replaceAll = new("replaceAll", 2, ReplaceAll);
-    private static readonly BuiltInMethod _at = new("at", 1, At);
+    private static readonly BuiltInTypeMemberLookup<string> _lookup =
+        BuiltInTypeBuilder<string>.ForInstanceType()
+            .Property("length", s => (double)s.Length)
+            .Method("charAt", 1, CharAt)
+            .Method("substring", 1, 2, Substring)
+            .Method("indexOf", 1, IndexOf)
+            .Method("toUpperCase", 0, ToUpperCase)
+            .Method("toLowerCase", 0, ToLowerCase)
+            .Method("trim", 0, Trim)
+            .Method("replace", 2, Replace)
+            .Method("split", 1, 2, Split)
+            .Method("match", 1, Match)
+            .Method("search", 1, Search)
+            .Method("includes", 1, Includes)
+            .Method("startsWith", 1, StartsWith)
+            .Method("endsWith", 1, EndsWith)
+            .Method("slice", 1, 2, Slice)
+            .Method("repeat", 1, Repeat)
+            .Method("padStart", 1, 2, PadStart)
+            .Method("padEnd", 1, 2, PadEnd)
+            .Method("charCodeAt", 1, CharCodeAt)
+            .Method("concat", 0, int.MaxValue, Concat)
+            .Method("lastIndexOf", 1, LastIndexOf)
+            .Method("trimStart", 0, TrimStart)
+            .Method("trimEnd", 0, TrimEnd)
+            .Method("replaceAll", 2, ReplaceAll)
+            .Method("at", 1, At)
+            .Build();
+
+    private static readonly BuiltInStaticMemberLookup _staticLookup =
+        BuiltInStaticBuilder.Create()
+            .Method("raw", 1, int.MaxValue, StringRaw)
+            .Build();
 
     public static object? GetMember(string receiver, string name)
-    {
-        return name switch
-        {
-            "length" => (double)receiver.Length,
-            "charAt" => _charAt.Bind(receiver),
-            "substring" => _substring.Bind(receiver),
-            "indexOf" => _indexOf.Bind(receiver),
-            "toUpperCase" => _toUpperCase.Bind(receiver),
-            "toLowerCase" => _toLowerCase.Bind(receiver),
-            "trim" => _trim.Bind(receiver),
-            "replace" => _replace.Bind(receiver),
-            "split" => _split.Bind(receiver),
-            "match" => _match.Bind(receiver),
-            "search" => _search.Bind(receiver),
-            "includes" => _includes.Bind(receiver),
-            "startsWith" => _startsWith.Bind(receiver),
-            "endsWith" => _endsWith.Bind(receiver),
-            "slice" => _slice.Bind(receiver),
-            "repeat" => _repeat.Bind(receiver),
-            "padStart" => _padStart.Bind(receiver),
-            "padEnd" => _padEnd.Bind(receiver),
-            "charCodeAt" => _charCodeAt.Bind(receiver),
-            "concat" => _concat.Bind(receiver),
-            "lastIndexOf" => _lastIndexOf.Bind(receiver),
-            "trimStart" => _trimStart.Bind(receiver),
-            "trimEnd" => _trimEnd.Bind(receiver),
-            "replaceAll" => _replaceAll.Bind(receiver),
-            "at" => _at.Bind(receiver),
-            _ => null
-        };
-    }
+        => _lookup.GetMember(receiver, name);
 
-    private static object? CharAt(Interpreter _, object? recv, List<object?> args)
+    /// <summary>
+    /// Gets a static member (method) from the String namespace.
+    /// Currently only supports String.raw for tagged templates.
+    /// </summary>
+    public static object? GetStaticMember(string name)
+        => _staticLookup.GetMember(name);
+
+    private static object? CharAt(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var index = (int)(double)args[0]!;
         if (index < 0 || index >= str.Length) return "";
         return str[index].ToString();
     }
 
-    private static object? Substring(Interpreter _, object? recv, List<object?> args)
+    private static object? Substring(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var start = Math.Max(0, (int)(double)args[0]!);
         var end = args.Count > 1 ? (int)(double)args[1]! : str.Length;
         if (start >= str.Length) return "";
@@ -84,31 +67,23 @@ public static class StringBuiltIns
         return str.Substring(start, end - start);
     }
 
-    private static object? IndexOf(Interpreter _, object? recv, List<object?> args)
+    private static object? IndexOf(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         return (double)str.IndexOf(search);
     }
 
-    private static object? ToUpperCase(Interpreter _, object? recv, List<object?> _args)
-    {
-        return ((string)recv!).ToUpper();
-    }
+    private static object? ToUpperCase(Interpreter _, string str, List<object?> args)
+        => str.ToUpper();
 
-    private static object? ToLowerCase(Interpreter _, object? recv, List<object?> _args)
-    {
-        return ((string)recv!).ToLower();
-    }
+    private static object? ToLowerCase(Interpreter _, string str, List<object?> args)
+        => str.ToLower();
 
-    private static object? Trim(Interpreter _, object? recv, List<object?> _args)
-    {
-        return ((string)recv!).Trim();
-    }
+    private static object? Trim(Interpreter _, string str, List<object?> args)
+        => str.Trim();
 
-    private static object? Replace(Interpreter _, object? recv, List<object?> args)
+    private static object? Replace(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var replacement = args[1]?.ToString() ?? "";
 
         // Handle RegExp pattern
@@ -124,9 +99,8 @@ public static class StringBuiltIns
         return str.Substring(0, index) + replacement + str.Substring(index + search.Length);
     }
 
-    private static object? Split(Interpreter _, object? recv, List<object?> args)
+    private static object? Split(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         int? limit = args.Count > 1 && args[1] is double d ? (int)d : null;
 
         // Handle RegExp separator
@@ -163,10 +137,8 @@ public static class StringBuiltIns
         return new SharpTSArray(elements);
     }
 
-    private static object? Match(Interpreter _, object? recv, List<object?> args)
+    private static object? Match(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
-
         // Handle RegExp pattern
         if (args[0] is SharpTSRegExp regex)
         {
@@ -191,10 +163,8 @@ public static class StringBuiltIns
         return new SharpTSArray([(object?)search]);
     }
 
-    private static object? Search(Interpreter _, object? recv, List<object?> args)
+    private static object? Search(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
-
         // Handle RegExp pattern
         if (args[0] is SharpTSRegExp regex)
         {
@@ -206,30 +176,26 @@ public static class StringBuiltIns
         return (double)str.IndexOf(search);
     }
 
-    private static object? Includes(Interpreter _, object? recv, List<object?> args)
+    private static object? Includes(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         return str.Contains(search);
     }
 
-    private static object? StartsWith(Interpreter _, object? recv, List<object?> args)
+    private static object? StartsWith(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         return str.StartsWith(search);
     }
 
-    private static object? EndsWith(Interpreter _, object? recv, List<object?> args)
+    private static object? EndsWith(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         return str.EndsWith(search);
     }
 
-    private static object? Slice(Interpreter _, object? recv, List<object?> args)
+    private static object? Slice(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var start = (int)(double)args[0]!;
         var end = args.Count > 1 ? (int)(double)args[1]! : str.Length;
 
@@ -245,18 +211,16 @@ public static class StringBuiltIns
         return str.Substring(start, end - start);
     }
 
-    private static object? Repeat(Interpreter _, object? recv, List<object?> args)
+    private static object? Repeat(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var count = (int)(double)args[0]!;
         if (count < 0) throw new Exception("Runtime Error: Invalid count value for repeat()");
         if (count == 0 || str.Length == 0) return "";
         return string.Concat(Enumerable.Repeat(str, count));
     }
 
-    private static object? PadStart(Interpreter _, object? recv, List<object?> args)
+    private static object? PadStart(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var targetLength = (int)(double)args[0]!;
         var padString = args.Count > 1 ? (string)args[1]! : " ";
 
@@ -269,9 +233,8 @@ public static class StringBuiltIns
         return padding + str;
     }
 
-    private static object? PadEnd(Interpreter _, object? recv, List<object?> args)
+    private static object? PadEnd(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var targetLength = (int)(double)args[0]!;
         var padString = args.Count > 1 ? (string)args[1]! : " ";
 
@@ -284,17 +247,15 @@ public static class StringBuiltIns
         return str + padding;
     }
 
-    private static object? CharCodeAt(Interpreter _, object? recv, List<object?> args)
+    private static object? CharCodeAt(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var index = (int)(double)args[0]!;
         if (index < 0 || index >= str.Length) return double.NaN;
         return (double)str[index];
     }
 
-    private static object? Concat(Interpreter _, object? recv, List<object?> args)
+    private static object? Concat(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var parts = new List<string> { str };
         foreach (var arg in args)
         {
@@ -303,35 +264,28 @@ public static class StringBuiltIns
         return string.Concat(parts);
     }
 
-    private static object? LastIndexOf(Interpreter _, object? recv, List<object?> args)
+    private static object? LastIndexOf(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         return (double)str.LastIndexOf(search);
     }
 
-    private static object? TrimStart(Interpreter _, object? recv, List<object?> _args)
-    {
-        return ((string)recv!).TrimStart();
-    }
+    private static object? TrimStart(Interpreter _, string str, List<object?> args)
+        => str.TrimStart();
 
-    private static object? TrimEnd(Interpreter _, object? recv, List<object?> _args)
-    {
-        return ((string)recv!).TrimEnd();
-    }
+    private static object? TrimEnd(Interpreter _, string str, List<object?> args)
+        => str.TrimEnd();
 
-    private static object? ReplaceAll(Interpreter _, object? recv, List<object?> args)
+    private static object? ReplaceAll(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var search = (string)args[0]!;
         var replacement = (string)args[1]!;
         if (search.Length == 0) return str;
         return str.Replace(search, replacement);
     }
 
-    private static object? At(Interpreter _, object? recv, List<object?> args)
+    private static object? At(Interpreter _, string str, List<object?> args)
     {
-        var str = (string)recv!;
         var index = (int)(double)args[0]!;
         // Handle negative indices
         if (index < 0) index = str.Length + index;
@@ -340,23 +294,10 @@ public static class StringBuiltIns
     }
 
     /// <summary>
-    /// Gets a static member (method) from the String namespace.
-    /// Currently only supports String.raw for tagged templates.
-    /// </summary>
-    public static object? GetStaticMember(string name)
-    {
-        return name switch
-        {
-            "raw" => new BuiltInMethod("raw", 1, int.MaxValue, StringRaw),
-            _ => null
-        };
-    }
-
-    /// <summary>
     /// String.raw tag function implementation.
     /// Returns raw strings from template literals with substitutions.
     /// </summary>
-    private static object? StringRaw(Interpreter _, object? _recv, List<object?> args)
+    private static object? StringRaw(Interpreter _, List<object?> args)
     {
         if (args.Count == 0)
             throw new Exception("TypeError: String.raw requires at least 1 argument.");

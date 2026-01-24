@@ -5,70 +5,40 @@ namespace SharpTS.Runtime.BuiltIns;
 
 public static class ArrayBuiltIns
 {
-    // Cache unbound methods to avoid allocation of the delegate and method definition on every access
-    private static readonly BuiltInMethod _push = new("push", 1, int.MaxValue, Push); // variadic: push(item1, item2, ...)
-    private static readonly BuiltInMethod _pop = new("pop", 0, Pop);
-    private static readonly BuiltInMethod _shift = new("shift", 0, Shift);
-    private static readonly BuiltInMethod _unshift = new("unshift", 1, Unshift);
-    private static readonly BuiltInMethod _slice = new("slice", 0, 2, Slice);
-    private static readonly BuiltInMethod _map = new("map", 1, Map);
-    private static readonly BuiltInMethod _filter = new("filter", 1, Filter);
-    private static readonly BuiltInMethod _forEach = new("forEach", 1, ForEach);
-    private static readonly BuiltInMethod _find = new("find", 1, Find);
-    private static readonly BuiltInMethod _findIndex = new("findIndex", 1, FindIndex);
-    private static readonly BuiltInMethod _some = new("some", 1, Some);
-    private static readonly BuiltInMethod _every = new("every", 1, Every);
-    private static readonly BuiltInMethod _reduce = new("reduce", 1, 2, Reduce);
-    private static readonly BuiltInMethod _includes = new("includes", 1, Includes);
-    private static readonly BuiltInMethod _indexOf = new("indexOf", 1, IndexOf);
-    private static readonly BuiltInMethod _join = new("join", 0, 1, Join);
-    private static readonly BuiltInMethod _concat = new("concat", 1, Concat);
-    private static readonly BuiltInMethod _reverse = new("reverse", 0, Reverse);
-    private static readonly BuiltInMethod _flat = new("flat", 0, 1, Flat);
-    private static readonly BuiltInMethod _flatMap = new("flatMap", 1, FlatMap);
-    private static readonly BuiltInMethod _sort = new("sort", 0, 1, Sort);
-    private static readonly BuiltInMethod _toSorted = new("toSorted", 0, 1, ToSorted);
-    private static readonly BuiltInMethod _splice = new("splice", 0, int.MaxValue, Splice);
-    private static readonly BuiltInMethod _toSpliced = new("toSpliced", 0, int.MaxValue, ToSpliced);
+    private static readonly BuiltInTypeMemberLookup<SharpTSArray> _lookup =
+        BuiltInTypeBuilder<SharpTSArray>.ForInstanceType()
+            .Property("length", arr => (double)arr.Elements.Count)
+            .Method("push", 1, int.MaxValue, Push)
+            .Method("pop", 0, Pop)
+            .Method("shift", 0, Shift)
+            .Method("unshift", 1, Unshift)
+            .Method("slice", 0, 2, Slice)
+            .Method("map", 1, Map)
+            .Method("filter", 1, Filter)
+            .Method("forEach", 1, ForEach)
+            .Method("find", 1, Find)
+            .Method("findIndex", 1, FindIndex)
+            .Method("some", 1, Some)
+            .Method("every", 1, Every)
+            .Method("reduce", 1, 2, Reduce)
+            .Method("includes", 1, Includes)
+            .Method("indexOf", 1, IndexOf)
+            .Method("join", 0, 1, Join)
+            .Method("concat", 1, Concat)
+            .Method("reverse", 0, Reverse)
+            .Method("flat", 0, 1, Flat)
+            .Method("flatMap", 1, FlatMap)
+            .Method("sort", 0, 1, Sort)
+            .Method("toSorted", 0, 1, ToSorted)
+            .Method("splice", 0, int.MaxValue, Splice)
+            .Method("toSpliced", 0, int.MaxValue, ToSpliced)
+            .Build();
 
     public static object? GetMember(SharpTSArray receiver, string name)
+        => _lookup.GetMember(receiver, name);
+
+    private static object? Push(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        return name switch
-        {
-            "length" => (double)receiver.Elements.Count,
-
-            "push" => _push.Bind(receiver),
-            "pop" => _pop.Bind(receiver),
-            "shift" => _shift.Bind(receiver),
-            "unshift" => _unshift.Bind(receiver),
-            "slice" => _slice.Bind(receiver),
-            "map" => _map.Bind(receiver),
-            "filter" => _filter.Bind(receiver),
-            "forEach" => _forEach.Bind(receiver),
-            "find" => _find.Bind(receiver),
-            "findIndex" => _findIndex.Bind(receiver),
-            "some" => _some.Bind(receiver),
-            "every" => _every.Bind(receiver),
-            "reduce" => _reduce.Bind(receiver),
-            "includes" => _includes.Bind(receiver),
-            "indexOf" => _indexOf.Bind(receiver),
-            "join" => _join.Bind(receiver),
-            "concat" => _concat.Bind(receiver),
-            "reverse" => _reverse.Bind(receiver),
-            "flat" => _flat.Bind(receiver),
-            "flatMap" => _flatMap.Bind(receiver),
-            "sort" => _sort.Bind(receiver),
-            "toSorted" => _toSorted.Bind(receiver),
-            "splice" => _splice.Bind(receiver),
-            "toSpliced" => _toSpliced.Bind(receiver),
-
-            _ => null
-        };
-    }
-
-    private static object? Push(Interpreter i, object? r, List<object?> args)
-    {
-        var arr = (SharpTSArray)r!;
         // Frozen/sealed arrays cannot have elements added
         if (arr.IsFrozen || arr.IsSealed)
         {
@@ -82,9 +52,8 @@ public static class ArrayBuiltIns
         return (double)arr.Elements.Count;
     }
 
-    private static object? Pop(Interpreter i, object? r, List<object?> args)
+    private static object? Pop(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Frozen/sealed arrays cannot have elements removed
         if (arr.IsFrozen || arr.IsSealed)
         {
@@ -96,9 +65,8 @@ public static class ArrayBuiltIns
         return last;
     }
 
-    private static object? Shift(Interpreter i, object? r, List<object?> args)
+    private static object? Shift(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Frozen/sealed arrays cannot have elements removed
         if (arr.IsFrozen || arr.IsSealed)
         {
@@ -110,9 +78,8 @@ public static class ArrayBuiltIns
         return first;
     }
 
-    private static object? Unshift(Interpreter i, object? r, List<object?> args)
+    private static object? Unshift(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Frozen/sealed arrays cannot have elements added
         if (arr.IsFrozen || arr.IsSealed)
         {
@@ -122,9 +89,8 @@ public static class ArrayBuiltIns
         return (double)arr.Elements.Count;
     }
 
-    private static object? Slice(Interpreter i, object? r, List<object?> args)
+    private static object? Slice(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var start = args.Count > 0 ? (int)(double)args[0]! : 0;
         var end = args.Count > 1 ? (int)(double)args[1]! : arr.Elements.Count;
 
@@ -139,9 +105,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(new List<object?>(sliced));
     }
 
-    private static object? Map(Interpreter interp, object? r, List<object?> args)
+    private static object? Map(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: map requires a function argument.");
 
@@ -157,9 +122,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? Filter(Interpreter interp, object? r, List<object?> args)
+    private static object? Filter(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: filter requires a function argument.");
 
@@ -178,9 +142,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? ForEach(Interpreter interp, object? r, List<object?> args)
+    private static object? ForEach(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: forEach requires a function argument.");
 
@@ -194,9 +157,8 @@ public static class ArrayBuiltIns
         return null;
     }
 
-    private static object? Find(Interpreter interp, object? r, List<object?> args)
+    private static object? Find(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: find requires a function argument.");
 
@@ -214,9 +176,8 @@ public static class ArrayBuiltIns
         return null;
     }
 
-    private static object? FindIndex(Interpreter interp, object? r, List<object?> args)
+    private static object? FindIndex(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: findIndex requires a function argument.");
 
@@ -234,9 +195,8 @@ public static class ArrayBuiltIns
         return -1.0;
     }
 
-    private static object? Some(Interpreter interp, object? r, List<object?> args)
+    private static object? Some(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: some requires a function argument.");
 
@@ -254,9 +214,8 @@ public static class ArrayBuiltIns
         return false;
     }
 
-    private static object? Every(Interpreter interp, object? r, List<object?> args)
+    private static object? Every(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: every requires a function argument.");
 
@@ -274,9 +233,8 @@ public static class ArrayBuiltIns
         return true;
     }
 
-    private static object? Reduce(Interpreter interp, object? r, List<object?> args)
+    private static object? Reduce(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: reduce requires a function argument.");
 
@@ -308,9 +266,8 @@ public static class ArrayBuiltIns
         return accumulator;
     }
 
-    private static object? Includes(Interpreter i, object? r, List<object?> args)
+    private static object? Includes(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var searchElement = args[0];
 
         foreach (var element in arr.Elements)
@@ -323,9 +280,8 @@ public static class ArrayBuiltIns
         return false;
     }
 
-    private static object? IndexOf(Interpreter i, object? r, List<object?> args)
+    private static object? IndexOf(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var searchElement = args[0];
 
         for (int idx = 0; idx < arr.Elements.Count; idx++)
@@ -338,18 +294,16 @@ public static class ArrayBuiltIns
         return -1.0;
     }
 
-    private static object? Join(Interpreter i, object? r, List<object?> args)
+    private static object? Join(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var separator = args.Count > 0 ? Stringify(args[0]) : ",";
 
         var parts = arr.Elements.Select(e => Stringify(e));
         return string.Join(separator, parts);
     }
 
-    private static object? Concat(Interpreter i, object? r, List<object?> args)
+    private static object? Concat(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var result = new List<object?>(arr.Elements);
 
         if (args[0] is SharpTSArray otherArr)
@@ -364,9 +318,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? Reverse(Interpreter i, object? r, List<object?> args)
+    private static object? Reverse(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Frozen arrays cannot be modified; sealed arrays allow in-place modifications
         if (arr.IsFrozen)
         {
@@ -376,9 +329,8 @@ public static class ArrayBuiltIns
         return arr;
     }
 
-    private static object? Flat(Interpreter i, object? r, List<object?> args)
+    private static object? Flat(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Default depth is 1, handle Infinity for complete flatten
         var depth = args.Count > 0 && args[0] is double d
             ? (double.IsPositiveInfinity(d) ? int.MaxValue : (int)d)
@@ -404,9 +356,8 @@ public static class ArrayBuiltIns
         }
     }
 
-    private static object? FlatMap(Interpreter interp, object? r, List<object?> args)
+    private static object? FlatMap(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: flatMap requires a function argument.");
 
@@ -431,9 +382,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? Sort(Interpreter interp, object? r, List<object?> args)
+    private static object? Sort(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         // Frozen arrays cannot be modified; silent fail (matches reverse behavior)
         if (arr.IsFrozen) return arr;
 
@@ -460,9 +410,8 @@ public static class ArrayBuiltIns
         return arr;
     }
 
-    private static object? ToSorted(Interpreter interp, object? r, List<object?> args)
+    private static object? ToSorted(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
 
         // Same logic but returns NEW array
@@ -551,9 +500,8 @@ public static class ArrayBuiltIns
         return defaultValue;
     }
 
-    private static object? Splice(Interpreter i, object? r, List<object?> args)
+    private static object? Splice(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         int len = arr.Elements.Count;
 
         // Frozen/sealed arrays throw TypeError
@@ -595,9 +543,8 @@ public static class ArrayBuiltIns
         return new SharpTSArray(new List<object?>(deleted));
     }
 
-    private static object? ToSpliced(Interpreter i, object? r, List<object?> args)
+    private static object? ToSpliced(Interpreter _, SharpTSArray arr, List<object?> args)
     {
-        var arr = (SharpTSArray)r!;
         int len = arr.Elements.Count;
 
         // toSpliced works on frozen/sealed arrays (creates new array)

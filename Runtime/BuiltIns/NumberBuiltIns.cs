@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using SharpTS.Execution;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -19,127 +20,135 @@ public static class NumberBuiltIns
     public const double MIN_SAFE_INTEGER = -9007199254740991; // -(2^53 - 1)
     public const double EPSILON = 2.220446049250313e-16;      // 2^-52
 
+    // Static member lookup for Number namespace
+    // Number constants use CallableConstant because they're accessed via GetStaticMethod
+    // which expects ISharpTSCallable (registry casts result to BuiltInMethod)
+    private static readonly BuiltInStaticMemberLookup _staticLookup =
+        BuiltInStaticBuilder.Create()
+            // Static properties (constants) - wrapped as callable for registry compatibility
+            .CallableConstant("MAX_VALUE", MAX_VALUE)
+            .CallableConstant("MIN_VALUE", MIN_VALUE)
+            .CallableConstant("NaN", double.NaN)
+            .CallableConstant("POSITIVE_INFINITY", POSITIVE_INFINITY)
+            .CallableConstant("NEGATIVE_INFINITY", NEGATIVE_INFINITY)
+            .CallableConstant("MAX_SAFE_INTEGER", MAX_SAFE_INTEGER)
+            .CallableConstant("MIN_SAFE_INTEGER", MIN_SAFE_INTEGER)
+            .CallableConstant("EPSILON", EPSILON)
+            // Static methods
+            .Method("parseInt", 1, 2, ParseIntMethod)
+            .Method("parseFloat", 1, ParseFloatMethod)
+            .Method("isNaN", 1, IsNaNMethod)
+            .Method("isFinite", 1, IsFiniteMethod)
+            .Method("isInteger", 1, IsIntegerMethod)
+            .Method("isSafeInteger", 1, IsSafeIntegerMethod)
+            .Build();
+
+    // Instance member lookup for number values
+    private static readonly BuiltInTypeMemberLookup<double> _instanceLookup =
+        BuiltInTypeBuilder<double>.ForInstanceType()
+            .Method("toFixed", 0, 1, ToFixed)
+            .Method("toPrecision", 0, 1, ToPrecision)
+            .Method("toExponential", 0, 1, ToExponential)
+            .Method("toString", 0, 1, ToStringMethod)
+            .Build();
+
     /// <summary>
     /// Gets a static member (property or method) from the Number namespace.
-    /// All members are returned as BuiltInMethod for consistency with the registry.
     /// </summary>
     public static object? GetStaticMember(string name)
-    {
-        return name switch
-        {
-            // Static properties (constants) - wrapped as zero-arity methods
-            "MAX_VALUE" => new BuiltInMethod("MAX_VALUE", 0, 0, (_, _, _) => MAX_VALUE),
-            "MIN_VALUE" => new BuiltInMethod("MIN_VALUE", 0, 0, (_, _, _) => MIN_VALUE),
-            "NaN" => new BuiltInMethod("NaN", 0, 0, (_, _, _) => double.NaN),
-            "POSITIVE_INFINITY" => new BuiltInMethod("POSITIVE_INFINITY", 0, 0, (_, _, _) => POSITIVE_INFINITY),
-            "NEGATIVE_INFINITY" => new BuiltInMethod("NEGATIVE_INFINITY", 0, 0, (_, _, _) => NEGATIVE_INFINITY),
-            "MAX_SAFE_INTEGER" => new BuiltInMethod("MAX_SAFE_INTEGER", 0, 0, (_, _, _) => MAX_SAFE_INTEGER),
-            "MIN_SAFE_INTEGER" => new BuiltInMethod("MIN_SAFE_INTEGER", 0, 0, (_, _, _) => MIN_SAFE_INTEGER),
-            "EPSILON" => new BuiltInMethod("EPSILON", 0, 0, (_, _, _) => EPSILON),
-
-            // Static methods
-            "parseInt" => new BuiltInMethod("parseInt", 1, 2, (_, _, args) =>
-            {
-                var str = args[0]?.ToString() ?? "";
-                var radix = args.Count > 1 && args[1] != null ? (int)(double)args[1]! : 10;
-                return ParseInt(str, radix);
-            }),
-
-            "parseFloat" => new BuiltInMethod("parseFloat", 1, (_, _, args) =>
-            {
-                var str = args[0]?.ToString() ?? "";
-                return ParseFloat(str);
-            }),
-
-            "isNaN" => new BuiltInMethod("isNaN", 1, (_, _, args) =>
-            {
-                // Number.isNaN only returns true for actual NaN values (stricter than global isNaN)
-                if (args[0] is not double d) return false;
-                return double.IsNaN(d);
-            }),
-
-            "isFinite" => new BuiltInMethod("isFinite", 1, (_, _, args) =>
-            {
-                // Number.isFinite only returns true for finite numbers (stricter than global isFinite)
-                if (args[0] is not double d) return false;
-                return double.IsFinite(d);
-            }),
-
-            "isInteger" => new BuiltInMethod("isInteger", 1, (_, _, args) =>
-            {
-                if (args[0] is not double d) return false;
-                return double.IsFinite(d) && Math.Truncate(d) == d;
-            }),
-
-            "isSafeInteger" => new BuiltInMethod("isSafeInteger", 1, (_, _, args) =>
-            {
-                if (args[0] is not double d) return false;
-                return double.IsFinite(d) &&
-                       Math.Truncate(d) == d &&
-                       Math.Abs(d) <= MAX_SAFE_INTEGER;
-            }),
-
-            _ => null
-        };
-    }
+        => _staticLookup.GetMember(name);
 
     /// <summary>
     /// Gets an instance member for a number value (e.g., (123).toFixed(2)).
     /// </summary>
     public static object? GetInstanceMember(double receiver, string name)
+        => _instanceLookup.GetMember(receiver, name);
+
+    // Static method implementations
+    private static object? ParseIntMethod(Interpreter _, List<object?> args)
     {
-        return name switch
+        var str = args[0]?.ToString() ?? "";
+        var radix = args.Count > 1 && args[1] != null ? (int)(double)args[1]! : 10;
+        return ParseInt(str, radix);
+    }
+
+    private static object? ParseFloatMethod(Interpreter _, List<object?> args)
+    {
+        var str = args[0]?.ToString() ?? "";
+        return ParseFloat(str);
+    }
+
+    private static object? IsNaNMethod(Interpreter _, List<object?> args)
+    {
+        // Number.isNaN only returns true for actual NaN values (stricter than global isNaN)
+        if (args[0] is not double d) return false;
+        return double.IsNaN(d);
+    }
+
+    private static object? IsFiniteMethod(Interpreter _, List<object?> args)
+    {
+        // Number.isFinite only returns true for finite numbers (stricter than global isFinite)
+        if (args[0] is not double d) return false;
+        return double.IsFinite(d);
+    }
+
+    private static object? IsIntegerMethod(Interpreter _, List<object?> args)
+    {
+        if (args[0] is not double d) return false;
+        return double.IsFinite(d) && Math.Truncate(d) == d;
+    }
+
+    private static object? IsSafeIntegerMethod(Interpreter _, List<object?> args)
+    {
+        if (args[0] is not double d) return false;
+        return double.IsFinite(d) &&
+               Math.Truncate(d) == d &&
+               Math.Abs(d) <= MAX_SAFE_INTEGER;
+    }
+
+    // Instance method implementations
+    private static object? ToFixed(Interpreter _, double value, List<object?> args)
+    {
+        var digits = args.Count > 0 && args[0] != null ? (int)(double)args[0]! : 0;
+        if (digits < 0 || digits > 100)
+            throw new Exception("Runtime Error: toFixed() digits argument must be between 0 and 100");
+        return value.ToString($"F{digits}", CultureInfo.InvariantCulture);
+    }
+
+    private static object? ToPrecision(Interpreter _, double value, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] == null) return value.ToString(CultureInfo.InvariantCulture);
+        var precision = (int)(double)args[0]!;
+        if (precision < 1 || precision > 100)
+            throw new Exception("Runtime Error: toPrecision() argument must be between 1 and 100");
+        return ToPrecisionImpl(value, precision);
+    }
+
+    private static object? ToExponential(Interpreter _, double value, List<object?> args)
+    {
+        if (double.IsNaN(value)) return "NaN";
+        if (double.IsPositiveInfinity(value)) return "Infinity";
+        if (double.IsNegativeInfinity(value)) return "-Infinity";
+
+        var fractionDigits = args.Count > 0 && args[0] != null ? (int)(double)args[0]! : -1;
+        if (fractionDigits != -1 && (fractionDigits < 0 || fractionDigits > 100))
+            throw new Exception("Runtime Error: toExponential() argument must be between 0 and 100");
+
+        if (fractionDigits == -1)
         {
-            "toFixed" => new BuiltInMethod("toFixed", 0, 1, (_, recv, args) =>
-            {
-                var value = (double)recv!;
-                var digits = args.Count > 0 && args[0] != null ? (int)(double)args[0]! : 0;
-                if (digits < 0 || digits > 100)
-                    throw new Exception("Runtime Error: toFixed() digits argument must be between 0 and 100");
-                return value.ToString($"F{digits}", CultureInfo.InvariantCulture);
-            }),
+            // No argument: use default precision
+            return value.ToString("e", CultureInfo.InvariantCulture);
+        }
+        return value.ToString($"e{fractionDigits}", CultureInfo.InvariantCulture);
+    }
 
-            "toPrecision" => new BuiltInMethod("toPrecision", 0, 1, (_, recv, args) =>
-            {
-                var value = (double)recv!;
-                if (args.Count == 0 || args[0] == null) return value.ToString(CultureInfo.InvariantCulture);
-                var precision = (int)(double)args[0]!;
-                if (precision < 1 || precision > 100)
-                    throw new Exception("Runtime Error: toPrecision() argument must be between 1 and 100");
-                return ToPrecision(value, precision);
-            }),
-
-            "toExponential" => new BuiltInMethod("toExponential", 0, 1, (_, recv, args) =>
-            {
-                var value = (double)recv!;
-                if (double.IsNaN(value)) return "NaN";
-                if (double.IsPositiveInfinity(value)) return "Infinity";
-                if (double.IsNegativeInfinity(value)) return "-Infinity";
-
-                var fractionDigits = args.Count > 0 && args[0] != null ? (int)(double)args[0]! : -1;
-                if (fractionDigits != -1 && (fractionDigits < 0 || fractionDigits > 100))
-                    throw new Exception("Runtime Error: toExponential() argument must be between 0 and 100");
-
-                if (fractionDigits == -1)
-                {
-                    // No argument: use default precision
-                    return value.ToString("e", CultureInfo.InvariantCulture);
-                }
-                return value.ToString($"e{fractionDigits}", CultureInfo.InvariantCulture);
-            }),
-
-            "toString" => new BuiltInMethod("toString", 0, 1, (_, recv, args) =>
-            {
-                var value = (double)recv!;
-                if (args.Count == 0 || args[0] == null) return value.ToString(CultureInfo.InvariantCulture);
-                var radix = (int)(double)args[0]!;
-                if (radix < 2 || radix > 36)
-                    throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
-                return ToStringWithRadix(value, radix);
-            }),
-
-            _ => null
-        };
+    private static object? ToStringMethod(Interpreter _, double value, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] == null) return value.ToString(CultureInfo.InvariantCulture);
+        var radix = (int)(double)args[0]!;
+        if (radix < 2 || radix > 36)
+            throw new Exception("Runtime Error: toString() radix must be between 2 and 36");
+        return ToStringWithRadix(value, radix);
     }
 
     /// <summary>
@@ -347,7 +356,7 @@ public static class NumberBuiltIns
         return result.ToString();
     }
 
-    private static string ToPrecision(double value, int precision)
+    private static string ToPrecisionImpl(double value, int precision)
     {
         if (double.IsNaN(value)) return "NaN";
         if (double.IsPositiveInfinity(value)) return "Infinity";

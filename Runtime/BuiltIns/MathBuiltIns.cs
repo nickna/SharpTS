@@ -18,77 +18,81 @@ public static class MathBuiltIns
 {
     private static readonly Random _random = new();
 
-    // Cache static methods to avoid allocation on every access
-    private static readonly BuiltInMethod _abs = new("abs", 1, Abs);
-    private static readonly BuiltInMethod _floor = new("floor", 1, Floor);
-    private static readonly BuiltInMethod _ceil = new("ceil", 1, Ceil);
-    private static readonly BuiltInMethod _round = new("round", 1, Round);
-    private static readonly BuiltInMethod _sqrt = new("sqrt", 1, Sqrt);
-    private static readonly BuiltInMethod _sin = new("sin", 1, Sin);
-    private static readonly BuiltInMethod _cos = new("cos", 1, Cos);
-    private static readonly BuiltInMethod _tan = new("tan", 1, Tan);
-    private static readonly BuiltInMethod _log = new("log", 1, Log);
-    private static readonly BuiltInMethod _exp = new("exp", 1, Exp);
-    private static readonly BuiltInMethod _sign = new("sign", 1, Sign);
-    private static readonly BuiltInMethod _trunc = new("trunc", 1, Trunc);
-    private static readonly BuiltInMethod _pow = new("pow", 2, Pow);
-    private static readonly BuiltInMethod _min = new("min", 2, int.MaxValue, Min);
-    private static readonly BuiltInMethod _max = new("max", 2, int.MaxValue, Max);
-    private static readonly BuiltInMethod _randomMethod = new("random", 0, RandomMethod);
+    private static readonly BuiltInStaticMemberLookup _lookup =
+        BuiltInStaticBuilder.Create()
+            // Constants
+            .Constant("PI", Math.PI)
+            .Constant("E", Math.E)
+            // Single argument methods
+            .Method("abs", 1, Abs)
+            .Method("floor", 1, Floor)
+            .Method("ceil", 1, Ceil)
+            .Method("round", 1, Round)
+            .Method("sqrt", 1, Sqrt)
+            .Method("sin", 1, Sin)
+            .Method("cos", 1, Cos)
+            .Method("tan", 1, Tan)
+            .Method("log", 1, Log)
+            .Method("exp", 1, Exp)
+            .Method("sign", 1, Sign)
+            .Method("trunc", 1, Trunc)
+            // Two argument methods
+            .Method("pow", 2, Pow)
+            .Method("min", 2, int.MaxValue, Min)
+            .Method("max", 2, int.MaxValue, Max)
+            // No argument methods
+            .Method("random", 0, RandomMethod)
+            .Build();
 
     public static object? GetMember(string name)
-    {
-        return name switch
-        {
-            // Constants
-            "PI" => Math.PI,
-            "E" => Math.E,
+        => _lookup.GetMember(name);
 
-            // Single argument methods
-            "abs" => _abs,
-            "floor" => _floor,
-            "ceil" => _ceil,
-            "round" => _round,
-            "sqrt" => _sqrt,
-            "sin" => _sin,
-            "cos" => _cos,
-            "tan" => _tan,
-            "log" => _log,
-            "exp" => _exp,
-            "sign" => _sign,
-            "trunc" => _trunc,
+    private static object? Abs(Interpreter _, List<object?> args)
+        => Math.Abs((double)args[0]!);
 
-            // Two argument methods
-            "pow" => _pow,
-            "min" => _min,
-            "max" => _max,
+    private static object? Floor(Interpreter _, List<object?> args)
+        => Math.Floor((double)args[0]!);
 
-            // No argument methods
-            "random" => _randomMethod,
+    private static object? Ceil(Interpreter _, List<object?> args)
+        => Math.Ceiling((double)args[0]!);
 
-            _ => null
-        };
-    }
+    private static object? Round(Interpreter _, List<object?> args)
+        => Math.Floor((double)args[0]! + 0.5); // JS rounds half towards +Infinity
 
-    private static object? Abs(Interpreter i, object? r, List<object?> args) => Math.Abs((double)args[0]!);
-    private static object? Floor(Interpreter i, object? r, List<object?> args) => Math.Floor((double)args[0]!);
-    private static object? Ceil(Interpreter i, object? r, List<object?> args) => Math.Ceiling((double)args[0]!);
-    private static object? Round(Interpreter i, object? r, List<object?> args) => Math.Floor((double)args[0]! + 0.5); // JS rounds half towards +∞
-    private static object? Sqrt(Interpreter i, object? r, List<object?> args) => Math.Sqrt((double)args[0]!);
-    private static object? Sin(Interpreter i, object? r, List<object?> args) => Math.Sin((double)args[0]!);
-    private static object? Cos(Interpreter i, object? r, List<object?> args) => Math.Cos((double)args[0]!);
-    private static object? Tan(Interpreter i, object? r, List<object?> args) => Math.Tan((double)args[0]!);
-    private static object? Log(Interpreter i, object? r, List<object?> args) => Math.Log((double)args[0]!);
-    private static object? Exp(Interpreter i, object? r, List<object?> args) => Math.Exp((double)args[0]!);
-    private static object? Sign(Interpreter i, object? r, List<object?> args) => (double)Math.Sign((double)args[0]!);
-    private static object? Trunc(Interpreter i, object? r, List<object?> args) => Math.Truncate((double)args[0]!);
-    private static object? Pow(Interpreter i, object? r, List<object?> args) => Math.Pow((double)args[0]!, (double)args[1]!);
-    private static object? RandomMethod(Interpreter i, object? r, List<object?> args) => _random.NextDouble();
+    private static object? Sqrt(Interpreter _, List<object?> args)
+        => Math.Sqrt((double)args[0]!);
 
-    private static object? Min(Interpreter i, object? r, List<object?> args)
+    private static object? Sin(Interpreter _, List<object?> args)
+        => Math.Sin((double)args[0]!);
+
+    private static object? Cos(Interpreter _, List<object?> args)
+        => Math.Cos((double)args[0]!);
+
+    private static object? Tan(Interpreter _, List<object?> args)
+        => Math.Tan((double)args[0]!);
+
+    private static object? Log(Interpreter _, List<object?> args)
+        => Math.Log((double)args[0]!);
+
+    private static object? Exp(Interpreter _, List<object?> args)
+        => Math.Exp((double)args[0]!);
+
+    private static object? Sign(Interpreter _, List<object?> args)
+        => (double)Math.Sign((double)args[0]!);
+
+    private static object? Trunc(Interpreter _, List<object?> args)
+        => Math.Truncate((double)args[0]!);
+
+    private static object? Pow(Interpreter _, List<object?> args)
+        => Math.Pow((double)args[0]!, (double)args[1]!);
+
+    private static object? RandomMethod(Interpreter _, List<object?> args)
+        => _random.NextDouble();
+
+    private static object? Min(Interpreter _, List<object?> args)
     {
         if (args.Count == 0) return double.PositiveInfinity;
-        
+
         double min = double.PositiveInfinity;
         foreach (var arg in args)
         {
@@ -98,7 +102,7 @@ public static class MathBuiltIns
         return min;
     }
 
-    private static object? Max(Interpreter i, object? r, List<object?> args)
+    private static object? Max(Interpreter _, List<object?> args)
     {
         if (args.Count == 0) return double.NegativeInfinity;
 
