@@ -39,6 +39,29 @@ public partial class Interpreter : IDisposable
     private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
     private TypeMap? _typeMap;
 
+    // Evaluation contexts for unified sync/async handling
+    private readonly SyncEvaluationContext _syncContext;
+    private readonly AsyncEvaluationContext _asyncContext;
+
+    /// <summary>
+    /// Gets the sync evaluation context for use in unified core methods.
+    /// </summary>
+    internal SyncEvaluationContext SyncContext => _syncContext;
+
+    /// <summary>
+    /// Gets the async evaluation context for use in unified core methods.
+    /// </summary>
+    internal AsyncEvaluationContext AsyncContext => _asyncContext;
+
+    /// <summary>
+    /// Initializes a new instance of the Interpreter with evaluation contexts.
+    /// </summary>
+    public Interpreter()
+    {
+        _syncContext = new SyncEvaluationContext(this);
+        _asyncContext = new AsyncEvaluationContext(this);
+    }
+
     // Module support
     private readonly Dictionary<string, ModuleInstance> _loadedModules = [];
     private ModuleResolver? _moduleResolver;
@@ -858,6 +881,20 @@ public partial class Interpreter : IDisposable
         };
         return _environment.Get(token);
     }
+
+    /// <summary>
+    /// Internal wrapper for Execute that allows evaluation contexts to dispatch statements.
+    /// </summary>
+    /// <param name="stmt">The statement to execute.</param>
+    /// <returns>The execution result.</returns>
+    internal ExecutionResult ExecuteStatement(Stmt stmt) => Execute(stmt);
+
+    /// <summary>
+    /// Internal async wrapper for ExecuteAsync that allows evaluation contexts to dispatch statements.
+    /// </summary>
+    /// <param name="stmt">The statement to execute.</param>
+    /// <returns>A task containing the execution result.</returns>
+    internal Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt) => ExecuteAsync(stmt);
 
     /// <summary>
     /// Dispatches a statement to the appropriate execution handler using pattern matching.

@@ -323,28 +323,34 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Executes a switch statement with case matching and fall-through semantics.
+    /// Core implementation for executing switch statements, shared between sync and async paths.
     /// </summary>
+    /// <param name="ctx">The evaluation context for evaluating case values and executing statements.</param>
     /// <param name="switchStmt">The switch statement AST node.</param>
-    /// <remarks>
-    /// Implements JavaScript/TypeScript switch semantics including fall-through behavior
-    /// and default case handling. Uses <see cref="BreakException"/> for break statements.
-    /// </remarks>
-    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
-    private ExecutionResult ExecuteSwitch(Stmt.Switch switchStmt)
+    /// <returns>A ValueTask containing the execution result.</returns>
+    private async ValueTask<ExecutionResult> ExecuteSwitchCore(IEvaluationContext ctx, Stmt.Switch switchStmt)
     {
-        object? subject = Evaluate(switchStmt.Subject);
+        object? subject = await ctx.EvaluateExprAsync(switchStmt.Subject);
         bool fallen = false;
         bool matched = false;
 
         foreach (var caseItem in switchStmt.Cases)
         {
-            if (fallen || IsEqual(subject, Evaluate(caseItem.Value)))
+            if (!fallen && !matched)
             {
-                matched = fallen = true;
+                object? caseValue = await ctx.EvaluateExprAsync(caseItem.Value);
+                if (IsEqual(subject, caseValue))
+                {
+                    matched = true;
+                }
+            }
+
+            if (fallen || matched)
+            {
+                fallen = true;
                 foreach (var stmt in caseItem.Body)
                 {
-                    var result = Execute(stmt);
+                    var result = await ctx.ExecuteStmtAsync(stmt);
                     if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
                     if (result.IsAbrupt) return result;
                 }
@@ -355,26 +361,37 @@ public partial class Interpreter
         {
             foreach (var stmt in switchStmt.DefaultBody)
             {
-                var result = Execute(stmt);
+                var result = await ctx.ExecuteStmtAsync(stmt);
                 if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
                 if (result.IsAbrupt) return result;
             }
         }
-        
+
         return ExecutionResult.Success();
     }
 
     /// <summary>
-    /// Executes a try/catch/finally statement with proper exception handling.
+    /// Executes a switch statement with case matching and fall-through semantics.
     /// </summary>
-    /// <param name="tryCatch">The try/catch statement AST node.</param>
+    /// <param name="switchStmt">The switch statement AST node.</param>
     /// <remarks>
-    /// Handles <see cref="ThrowException"/> from user throw statements. Ensures finally block
-    /// executes for all exit paths including return, break, and continue. The catch parameter
-    /// is bound in a new scope.
+    /// Implements JavaScript/TypeScript switch semantics including fall-through behavior
+    /// and default case handling. Uses <see cref="BreakException"/> for break statements.
     /// </remarks>
-    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch">MDN try...catch</seealso>
-    private ExecutionResult ExecuteTryCatch(Stmt.TryCatch tryCatch)
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
+    private ExecutionResult ExecuteSwitch(Stmt.Switch switchStmt)
+    {
+        // Use sync context - ValueTask with sync context completes synchronously
+        return ExecuteSwitchCore(_syncContext, switchStmt).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Core implementation for executing try/catch/finally, shared between sync and async paths.
+    /// </summary>
+    /// <param name="ctx">The evaluation context for executing statements.</param>
+    /// <param name="tryCatch">The try/catch statement AST node.</param>
+    /// <returns>A ValueTask containing the execution result.</returns>
+    private async ValueTask<ExecutionResult> ExecuteTryCatchCore(IEvaluationContext ctx, Stmt.TryCatch tryCatch)
     {
         ExecutionResult pendingResult = ExecutionResult.Success();
         bool exceptionHandled = false;
@@ -383,11 +400,11 @@ public partial class Interpreter
         {
             foreach (var stmt in tryCatch.TryBlock)
             {
-                var result = Execute(stmt);
+                var result = await ctx.ExecuteStmtAsync(stmt);
                 if (result.Type == ExecutionResult.ResultType.Throw)
                 {
                     pendingResult = result;
-                    exceptionHandled = HandleCatchBlock(tryCatch, result.Value, out pendingResult);
+                    (exceptionHandled, pendingResult) = await HandleCatchBlockCore(ctx, tryCatch, result.Value);
                     break;
                 }
                 else if (result.IsAbrupt)
@@ -402,13 +419,13 @@ public partial class Interpreter
             // Treat host exceptions as guest throws
             object? errorValue = TranslateException(ex);
             pendingResult = ExecutionResult.Throw(errorValue);
-            exceptionHandled = HandleCatchBlock(tryCatch, errorValue, out pendingResult);
+            (exceptionHandled, pendingResult) = await HandleCatchBlockCore(ctx, tryCatch, errorValue);
         }
 
         // Always execute finally
         if (tryCatch.FinallyBlock != null)
         {
-            var finallyResult = ExecuteFinally(tryCatch.FinallyBlock);
+            var finallyResult = await ExecuteFinallyCore(ctx, tryCatch.FinallyBlock);
             if (finallyResult.IsAbrupt)
             {
                 // Finally block overrides previous jump/throw
@@ -424,9 +441,14 @@ public partial class Interpreter
         return pendingResult;
     }
 
-    private bool HandleCatchBlock(Stmt.TryCatch tryCatch, object? errorValue, out ExecutionResult result)
+    /// <summary>
+    /// Core implementation for handling catch blocks, shared between sync and async paths.
+    /// </summary>
+    private async ValueTask<(bool Handled, ExecutionResult Result)> HandleCatchBlockCore(
+        IEvaluationContext ctx,
+        Stmt.TryCatch tryCatch,
+        object? errorValue)
     {
-        result = ExecutionResult.Success();
         if (tryCatch.CatchBlock != null)
         {
             RuntimeEnvironment catchEnv = new(_environment);
@@ -441,44 +463,51 @@ public partial class Interpreter
                 {
                     foreach (var catchStmt in tryCatch.CatchBlock)
                     {
-                        var catchResult = Execute(catchStmt);
+                        var catchResult = await ctx.ExecuteStmtAsync(catchStmt);
                         if (catchResult.IsAbrupt)
                         {
-                            result = catchResult;
-                            return true;
+                            return (true, catchResult);
                         }
                     }
-                    result = ExecutionResult.Success();
-                    return true;
+                    return (true, ExecutionResult.Success());
                 }
                 catch (Exception ex)
                 {
                     object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
-                    result = ExecutionResult.Throw(catchError);
-                    return true;
+                    return (true, ExecutionResult.Throw(catchError));
                 }
             }
         }
-        return false;
+        return (false, ExecutionResult.Throw(errorValue));
     }
 
     /// <summary>
-    /// Executes a finally block if present.
+    /// Core implementation for executing finally blocks, shared between sync and async paths.
     /// </summary>
-    /// <param name="finallyBlock">The list of statements in the finally block, or null if none.</param>
-    /// <remarks>
-    /// Helper method called by <see cref="ExecuteTryCatch"/> to ensure finally block
-    /// runs regardless of how the try block exits.
-    /// </remarks>
-    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch#the_finally_block">MDN finally Block</seealso>
-    private ExecutionResult ExecuteFinally(List<Stmt> finallyBlock)
+    private async ValueTask<ExecutionResult> ExecuteFinallyCore(IEvaluationContext ctx, List<Stmt> finallyBlock)
     {
         foreach (var stmt in finallyBlock)
         {
-            var result = Execute(stmt);
+            var result = await ctx.ExecuteStmtAsync(stmt);
             if (result.IsAbrupt) return result;
         }
         return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Executes a try/catch/finally statement with proper exception handling.
+    /// </summary>
+    /// <param name="tryCatch">The try/catch statement AST node.</param>
+    /// <remarks>
+    /// Handles <see cref="ThrowException"/> from user throw statements. Ensures finally block
+    /// executes for all exit paths including return, break, and continue. The catch parameter
+    /// is bound in a new scope.
+    /// </remarks>
+    /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch">MDN try...catch</seealso>
+    private ExecutionResult ExecuteTryCatch(Stmt.TryCatch tryCatch)
+    {
+        // Use sync context - ValueTask with sync context completes synchronously
+        return ExecuteTryCatchCore(_syncContext, tryCatch).GetAwaiter().GetResult();
     }
 
     /// <summary>

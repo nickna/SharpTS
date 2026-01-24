@@ -344,16 +344,62 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Evaluates an object literal expression, creating a runtime object.
+    /// Gets the string name from a property key using an evaluation context.
+    /// Shared between sync and async paths via IEvaluationContext.
     /// </summary>
+    private async ValueTask<string> GetPropertyKeyNameCore(IEvaluationContext ctx, Expr.PropertyKey key)
+    {
+        return key switch
+        {
+            Expr.IdentifierKey ik => ik.Name.Lexeme,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
+            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
+            Expr.ComputedKey ck => (await ctx.EvaluateExprAsync(ck.Expression))?.ToString() ?? "undefined",
+            _ => throw new InterpreterException(" Invalid property key for accessor.")
+        };
+    }
+
+    /// <summary>
+    /// Applies a property key-value pair to the target fields dictionaries using an evaluation context.
+    /// Shared between sync and async paths via IEvaluationContext.
+    /// </summary>
+    private async ValueTask ApplyPropertyToFieldsCore(
+        IEvaluationContext ctx,
+        Expr.PropertyKey key,
+        object? value,
+        Dictionary<string, object?> stringFields,
+        Dictionary<SharpTSSymbol, object?> symbolFields)
+    {
+        switch (key)
+        {
+            case Expr.IdentifierKey ik:
+                stringFields[ik.Name.Lexeme] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
+                stringFields[(string)lk.Literal.Literal!] = value;
+                break;
+            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
+                stringFields[lk.Literal.Literal!.ToString()!] = value;
+                break;
+            case Expr.ComputedKey ck:
+                object? keyValue = await ctx.EvaluateExprAsync(ck.Expression);
+                if (keyValue is SharpTSSymbol sym)
+                    symbolFields[sym] = value;
+                else if (keyValue is double numKey)
+                    stringFields[numKey.ToString()] = value;
+                else
+                    stringFields[keyValue?.ToString() ?? "undefined"] = value;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Core implementation for evaluating object literals, shared between sync and async paths.
+    /// </summary>
+    /// <param name="ctx">The evaluation context for evaluating property values and keys.</param>
     /// <param name="obj">The object literal expression AST node.</param>
-    /// <returns>A <see cref="SharpTSObject"/> containing the evaluated properties.</returns>
-    /// <remarks>
-    /// Supports spread properties (<c>...obj</c>) which copy all enumerable properties
-    /// from the source object or instance.
-    /// </remarks>
-    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
-    private object? EvaluateObject(Expr.ObjectLiteral obj)
+    /// <returns>A ValueTask containing the evaluated object.</returns>
+    private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
         Dictionary<SharpTSSymbol, object?> symbolFields = [];
@@ -364,27 +410,27 @@ public partial class Interpreter
         {
             if (prop.IsSpread)
             {
-                object? spreadValue = Evaluate(prop.Value);
+                object? spreadValue = await ctx.EvaluateExprAsync(prop.Value);
                 ApplySpreadToFields(spreadValue, stringFields);
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
-                string name = GetPropertyKeyName(prop.Key!, Evaluate);
+                string name = await GetPropertyKeyNameCore(ctx, prop.Key!);
                 var getter = CreateAccessorFunction(prop.Value);
                 getters ??= [];
                 getters.Add((name, getter));
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
             {
-                string name = GetPropertyKeyName(prop.Key!, Evaluate);
+                string name = await GetPropertyKeyNameCore(ctx, prop.Key!);
                 var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
                 setters ??= [];
                 setters.Add((name, setter));
             }
             else
             {
-                object? value = Evaluate(prop.Value);
-                ApplyPropertyToFields(prop.Key!, value, stringFields, symbolFields, Evaluate);
+                object? value = await ctx.EvaluateExprAsync(prop.Value);
+                await ApplyPropertyToFieldsCore(ctx, prop.Key!, value, stringFields, symbolFields);
             }
         }
 
@@ -410,18 +456,19 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Gets the string name from a property key.
+    /// Evaluates an object literal expression, creating a runtime object.
     /// </summary>
-    private static string GetPropertyKeyName(Expr.PropertyKey key, Func<Expr, object?> evaluateKey)
+    /// <param name="obj">The object literal expression AST node.</param>
+    /// <returns>A <see cref="SharpTSObject"/> containing the evaluated properties.</returns>
+    /// <remarks>
+    /// Supports spread properties (<c>...obj</c>) which copy all enumerable properties
+    /// from the source object or instance.
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
+    private object? EvaluateObject(Expr.ObjectLiteral obj)
     {
-        return key switch
-        {
-            Expr.IdentifierKey ik => ik.Name.Lexeme,
-            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
-            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => evaluateKey(ck.Expression)?.ToString() ?? "undefined",
-            _ => throw new InterpreterException(" Invalid property key for accessor.")
-        };
+        // Use sync context - ValueTask with sync context completes synchronously
+        return EvaluateObjectCore(_syncContext, obj).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -479,38 +526,21 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Applies a property key-value pair to the target fields dictionaries.
-    /// Shared between sync and async object evaluation paths.
+    /// Core implementation for evaluating array literals, shared between sync and async paths.
     /// </summary>
-    private static void ApplyPropertyToFields(
-        Expr.PropertyKey key,
-        object? value,
-        Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields,
-        Func<Expr, object?> evaluateKey)
+    /// <param name="ctx">The evaluation context for evaluating elements.</param>
+    /// <param name="array">The array literal expression AST node.</param>
+    /// <returns>A ValueTask containing the evaluated array.</returns>
+    private async ValueTask<object?> EvaluateArrayCore(IEvaluationContext ctx, Expr.ArrayLiteral array)
     {
-        switch (key)
+        var evaluated = new List<(bool isSpread, object? value)>();
+        foreach (var e in array.Elements)
         {
-            case Expr.IdentifierKey ik:
-                stringFields[ik.Name.Lexeme] = value;
-                break;
-            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
-                stringFields[(string)lk.Literal.Literal!] = value;
-                break;
-            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
-                // Number keys are converted to strings in JS/TS
-                stringFields[lk.Literal.Literal!.ToString()!] = value;
-                break;
-            case Expr.ComputedKey ck:
-                object? keyValue = evaluateKey(ck.Expression);
-                if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
-                else if (keyValue is double numKey)
-                    stringFields[numKey.ToString()] = value;
-                else
-                    stringFields[keyValue?.ToString() ?? "undefined"] = value;
-                break;
+            var isSpread = e is Expr.Spread;
+            var value = await ctx.EvaluateExprAsync(isSpread ? ((Expr.Spread)e).Expression : e);
+            evaluated.Add((isSpread, value));
         }
+        return BuildArrayFromElements(evaluated);
     }
 
     /// <summary>
@@ -524,9 +554,8 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/everyday-types.html#arrays">TypeScript Arrays</seealso>
     private object? EvaluateArray(Expr.ArrayLiteral array)
     {
-        var evaluated = array.Elements.Select(e =>
-            (e is Expr.Spread, Evaluate(e is Expr.Spread s ? s.Expression : e)));
-        return BuildArrayFromElements(evaluated);
+        // Use sync context - ValueTask with sync context completes synchronously
+        return EvaluateArrayCore(_syncContext, array).GetAwaiter().GetResult();
     }
 
     /// <summary>

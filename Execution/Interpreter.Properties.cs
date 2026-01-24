@@ -25,17 +25,13 @@ public partial class Interpreter
     private static bool IsSimpleIdentifier(Expr callee) => callee is Expr.Variable;
 
     /// <summary>
-    /// Evaluates a <c>new</c> expression, instantiating a class.
+    /// Core implementation for evaluating 'new' expressions, shared between sync and async paths.
+    /// Handles all built-in types (Date, RegExp, Map, Set, WeakMap, WeakSet, Error) and user classes.
     /// </summary>
+    /// <param name="ctx">The evaluation context for evaluating arguments.</param>
     /// <param name="newExpr">The new expression AST node.</param>
-    /// <returns>A new <see cref="SharpTSInstance"/> of the class.</returns>
-    /// <remarks>
-    /// Looks up the class by evaluating the callee expression,
-    /// and invokes the class's <see cref="SharpTSClass.Call"/> method.
-    /// Supports new on expressions: new ctor(), new Namespace.Class(), new (expr)()
-    /// </remarks>
-    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
-    private object? EvaluateNew(Expr.New newExpr)
+    /// <returns>A ValueTask containing the instantiated object.</returns>
+    private async ValueTask<object?> EvaluateNewCore(IEvaluationContext ctx, Expr.New newExpr)
     {
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
@@ -44,14 +40,14 @@ public partial class Interpreter
         // Handle new Date(...) constructor
         if (isSimpleName && simpleClassName == "Date")
         {
-            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
             return CreateDate(args);
         }
 
         // Handle new RegExp(...) constructor
         if (isSimpleName && simpleClassName == "RegExp")
         {
-            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
             var pattern = args.Count > 0 ? args[0]?.ToString() ?? "" : "";
             var flags = args.Count > 1 ? args[1]?.ToString() ?? "" : "";
             return new SharpTSRegExp(pattern, flags);
@@ -65,7 +61,7 @@ public partial class Interpreter
                 return new SharpTSMap();
             }
             // Handle new Map([[k1, v1], [k2, v2], ...])
-            var arg = Evaluate(newExpr.Arguments[0]);
+            var arg = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
             if (arg is SharpTSArray entriesArray)
             {
                 return SharpTSMap.FromEntries(entriesArray);
@@ -81,7 +77,7 @@ public partial class Interpreter
                 return new SharpTSSet();
             }
             // Handle new Set([v1, v2, v3, ...])
-            var arg = Evaluate(newExpr.Arguments[0]);
+            var arg = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
             if (arg is SharpTSArray valuesArray)
             {
                 return SharpTSSet.FromArray(valuesArray);
@@ -104,12 +100,12 @@ public partial class Interpreter
         // Handle new Error(...) and error subtype constructors
         if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
         {
-            List<object?> args = newExpr.Arguments.Select(Evaluate).ToList();
+            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
             return ErrorBuiltIns.CreateError(simpleClassName, args);
         }
 
         // Evaluate the callee expression to get the class/constructor
-        object? klass = Evaluate(newExpr.Callee);
+        object? klass = await ctx.EvaluateExprAsync(newExpr.Callee);
 
         // Bound functions cannot be used as constructors (JS spec compliance)
         if (klass is BoundFunction)
@@ -128,13 +124,25 @@ public partial class Interpreter
             throw new Exception($"Type Error: Cannot create an instance of abstract class '{sharpClass.Name}'.");
         }
 
-        List<object?> arguments = [];
-        foreach (Expr argument in newExpr.Arguments)
-        {
-            arguments.Add(Evaluate(argument));
-        }
-
+        List<object?> arguments = await ctx.EvaluateAllAsync(newExpr.Arguments);
         return sharpClass.Call(this, arguments);
+    }
+
+    /// <summary>
+    /// Evaluates a <c>new</c> expression, instantiating a class.
+    /// </summary>
+    /// <param name="newExpr">The new expression AST node.</param>
+    /// <returns>A new <see cref="SharpTSInstance"/> of the class.</returns>
+    /// <remarks>
+    /// Looks up the class by evaluating the callee expression,
+    /// and invokes the class's <see cref="SharpTSClass.Call"/> method.
+    /// Supports new on expressions: new ctor(), new Namespace.Class(), new (expr)()
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
+    private object? EvaluateNew(Expr.New newExpr)
+    {
+        // Use sync context - ValueTask with sync context completes synchronously
+        return EvaluateNewCore(_syncContext, newExpr).GetAwaiter().GetResult();
     }
 
     /// <summary>

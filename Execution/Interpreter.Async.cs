@@ -403,134 +403,14 @@ public partial class Interpreter
 
     private async Task<ExecutionResult> ExecuteSwitchAsync(Stmt.Switch switchStmt)
     {
-        object? subject = await EvaluateAsync(switchStmt.Subject);
-        bool matched = false;
-        bool fallThrough = false;
-
-        foreach (var caseItem in switchStmt.Cases)
-        {
-            if (!matched && !fallThrough)
-            {
-                object? caseValue = await EvaluateAsync(caseItem.Value);
-                if (IsEqual(subject, caseValue))
-                {
-                    matched = true;
-                }
-            }
-
-            if (matched || fallThrough)
-            {
-                foreach (var caseStmt in caseItem.Body)
-                {
-                    var result = await ExecuteAsync(caseStmt);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-                    if (result.IsAbrupt) return result;
-                }
-                fallThrough = true;
-            }
-        }
-
-        if (!matched && switchStmt.DefaultBody != null)
-        {
-            foreach (var defaultStmt in switchStmt.DefaultBody)
-            {
-                var result = await ExecuteAsync(defaultStmt);
-                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
-                if (result.IsAbrupt) return result;
-            }
-        }
-        
-        return ExecutionResult.Success();
+        // Use async context with unified core
+        return await ExecuteSwitchCore(_asyncContext, switchStmt);
     }
 
     private async Task<ExecutionResult> ExecuteTryCatchAsync(Stmt.TryCatch tryCatch)
     {
-        ExecutionResult pendingResult = ExecutionResult.Success();
-        bool exceptionHandled = false;
-
-        try
-        {
-            foreach (var stmt in tryCatch.TryBlock)
-            {
-                var result = await ExecuteAsync(stmt);
-                if (result.Type == ExecutionResult.ResultType.Throw)
-                {
-                    pendingResult = result;
-                    var catchOutcome = await HandleCatchBlockAsync(tryCatch, result.Value);
-                    exceptionHandled = catchOutcome.Handled;
-                    if (exceptionHandled) pendingResult = catchOutcome.Result;
-                    break;
-                }
-                else if (result.IsAbrupt)
-                {
-                    pendingResult = result;
-                    break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            object? errorValue = TranslateException(ex);
-            var catchOutcome = await HandleCatchBlockAsync(tryCatch, errorValue);
-            exceptionHandled = catchOutcome.Handled;
-            pendingResult = exceptionHandled ? catchOutcome.Result : ExecutionResult.Throw(errorValue);
-        }
-
-        if (tryCatch.FinallyBlock != null)
-        {
-            var finallyResult = await ExecuteFinallyAsync(tryCatch.FinallyBlock);
-            if (finallyResult.IsAbrupt) return finallyResult;
-        }
-
-        if (pendingResult.Type == ExecutionResult.ResultType.Throw && !exceptionHandled)
-        {
-            return pendingResult;
-        }
-
-        return pendingResult;
-    }
-
-    private async Task<ExecutionResult> ExecuteFinallyAsync(List<Stmt> finallyBlock)
-    {
-        foreach (var stmt in finallyBlock)
-        {
-            var result = await ExecuteAsync(stmt);
-            if (result.IsAbrupt) return result;
-        }
-        return ExecutionResult.Success();
-    }
-
-    private async Task<(bool Handled, ExecutionResult Result)> HandleCatchBlockAsync(Stmt.TryCatch tryCatch, object? value)
-    {
-        if (tryCatch.CatchBlock != null)
-        {
-            RuntimeEnvironment catchEnv = new(_environment);
-            if (tryCatch.CatchParam != null)
-            {
-                catchEnv.Define(tryCatch.CatchParam.Lexeme, value);
-            }
-
-            RuntimeEnvironment prev = _environment;
-            _environment = catchEnv;
-            try
-            {
-                foreach (var stmt in tryCatch.CatchBlock)
-                {
-                    var result = await ExecuteAsync(stmt);
-                    if (result.IsAbrupt) return (true, result);
-                }
-                return (true, ExecutionResult.Success());
-            }
-            catch (Exception ex)
-            {
-                return (true, ExecutionResult.Throw(TranslateException(ex)));
-            }
-            finally
-            {
-                _environment = prev;
-            }
-        }
-        return (false, ExecutionResult.Success());
+        // Use async context with unified core
+        return await ExecuteTryCatchCore(_asyncContext, tryCatch);
     }
 
     // ===================== Async Expression Helpers =====================
@@ -583,112 +463,8 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateCallAsync(Expr.Call call)
     {
-        // Handle console.log special case
-        if (call.Callee is Expr.Variable v && v.Name.Lexeme == "console.log")
-        {
-            List<object?> consoleArgs = [];
-            foreach (Expr argument in call.Arguments)
-            {
-                consoleArgs.Add(await EvaluateAsync(argument));
-            }
-            Console.WriteLine(string.Join(" ", consoleArgs.Select(Stringify)));
-            return null;
-        }
-
-        // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
-        if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable nsVar)
-        {
-            var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
-            if (method != null)
-            {
-                List<object?> args = [];
-                foreach (var arg in call.Arguments)
-                {
-                    args.Add(await EvaluateAsync(arg));
-                }
-                return method.Call(this, args);
-            }
-        }
-
-        // Handle __objectRest (internal helper for object rest patterns)
-        if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
-        {
-            if (call.Arguments.Count >= 2)
-            {
-                var source = await EvaluateAsync(call.Arguments[0]);
-                var excludeKeys = await EvaluateAsync(call.Arguments[1]) as SharpTSArray;
-                return ObjectBuiltIns.ObjectRest(source, excludeKeys?.Elements ?? []);
-            }
-            throw new Exception("__objectRest requires 2 arguments");
-        }
-
-        // Handle Symbol() constructor
-        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
-        {
-            string? description = null;
-            if (call.Arguments.Count > 0)
-            {
-                description = (await EvaluateAsync(call.Arguments[0]))?.ToString();
-            }
-            return new SharpTSSymbol(description);
-        }
-
-        // Handle BigInt() constructor - converts number/string to bigint
-        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
-        {
-            if (call.Arguments.Count != 1)
-                throw new InterpreterException(" BigInt() requires exactly one argument.");
-
-            var arg = await EvaluateAsync(call.Arguments[0]);
-            return arg switch
-            {
-                SharpTSBigInt bi => bi,
-                System.Numerics.BigInteger biVal => new SharpTSBigInt(biVal),
-                double d => new SharpTSBigInt(d),
-                string s => new SharpTSBigInt(s),
-                _ => throw new Exception($"Runtime Error: Cannot convert {arg?.GetType().Name ?? "null"} to bigint.")
-            };
-        }
-
-        // Handle Date() function call - returns current date as string (without 'new')
-        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
-        {
-            // Date() called without 'new' ignores all arguments and returns current date as string
-            return new SharpTSDate().ToString();
-        }
-
-        object? callee = await EvaluateAsync(call.Callee);
-
-        List<object?> arguments = [];
-        foreach (var arg in call.Arguments)
-        {
-            if (arg is Expr.Spread spread)
-            {
-                object? spreadValue = await EvaluateAsync(spread.Expression);
-                if (spreadValue is SharpTSArray arr)
-                {
-                    arguments.AddRange(arr.Elements);
-                }
-                else
-                {
-                    throw new InterpreterException(" Spread argument must be an array.");
-                }
-            }
-            else
-            {
-                arguments.Add(await EvaluateAsync(arg));
-            }
-        }
-
-        // Always use Call() to get the Promise object.
-        // The await expression will handle unwrapping via CallAsync.
-        if (callee is ISharpTSCallable callable)
-        {
-            return callable.Call(this, arguments);
-        }
-
-        throw new Exception("Can only call functions and classes.");
+        // Use async context with unified core - handles all special cases
+        return await EvaluateCallCore(_asyncContext, call);
     }
 
     private async Task<object?> EvaluateGetAsync(Expr.Get get)
@@ -724,150 +500,20 @@ public partial class Interpreter
 
     private async Task<object?> EvaluateNewAsync(Expr.New newExpr)
     {
-        // Built-in types only apply when callee is a simple identifier
-        bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
-        string? simpleClassName = GetSimpleClassName(newExpr.Callee);
-
-        // Handle built-in Error types
-        if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
-        {
-            List<object?> args = [];
-            foreach (var arg in newExpr.Arguments)
-            {
-                args.Add(await EvaluateAsync(arg));
-            }
-            return ErrorBuiltIns.CreateError(simpleClassName, args);
-        }
-
-        // Evaluate the callee expression to get the class
-        object? klass = await EvaluateAsync(newExpr.Callee);
-        if (klass is not SharpTSClass sharpClass)
-        {
-            throw new Exception("Can only instantiate classes.");
-        }
-
-        List<object?> arguments = [];
-        foreach (var arg in newExpr.Arguments)
-        {
-            arguments.Add(await EvaluateAsync(arg));
-        }
-
-        return sharpClass.Call(this, arguments);
+        // Use async context with unified core - handles all built-in types
+        return await EvaluateNewCore(_asyncContext, newExpr);
     }
 
     private async Task<object?> EvaluateArrayAsync(Expr.ArrayLiteral array)
     {
-        var evaluated = new List<(bool isSpread, object? value)>();
-        foreach (var e in array.Elements)
-        {
-            var isSpread = e is Expr.Spread;
-            var value = await EvaluateAsync(isSpread ? ((Expr.Spread)e).Expression : e);
-            evaluated.Add((isSpread, value));
-        }
-        return BuildArrayFromElements(evaluated);
+        // Use async context with unified core
+        return await EvaluateArrayCore(_asyncContext, array);
     }
 
     private async Task<object?> EvaluateObjectAsync(Expr.ObjectLiteral obj)
     {
-        Dictionary<string, object?> stringFields = [];
-        Dictionary<SharpTSSymbol, object?> symbolFields = [];
-        List<(string name, ISharpTSCallable getter)>? getters = null;
-        List<(string name, ISharpTSCallable setter)>? setters = null;
-
-        foreach (var prop in obj.Properties)
-        {
-            if (prop.IsSpread)
-            {
-                object? spreadValue = await EvaluateAsync(prop.Value);
-                ApplySpreadToFields(spreadValue, stringFields);
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
-            {
-                string name = await GetPropertyKeyNameAsync(prop.Key!);
-                var getter = CreateAccessorFunction(prop.Value);
-                getters ??= [];
-                getters.Add((name, getter));
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
-            {
-                string name = await GetPropertyKeyNameAsync(prop.Key!);
-                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
-                setters ??= [];
-                setters.Add((name, setter));
-            }
-            else
-            {
-                object? value = await EvaluateAsync(prop.Value);
-                await ApplyPropertyToFieldsAsync(prop.Key!, value, stringFields, symbolFields);
-            }
-        }
-
-        var result = BuildObjectFromFields(stringFields, symbolFields);
-
-        // Apply getters and setters
-        if (getters != null)
-        {
-            foreach (var (name, getter) in getters)
-            {
-                result.DefineGetter(name, getter);
-            }
-        }
-        if (setters != null)
-        {
-            foreach (var (name, setter) in setters)
-            {
-                result.DefineSetter(name, setter);
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Async version of GetPropertyKeyName for computed keys that need async evaluation.
-    /// </summary>
-    private async Task<string> GetPropertyKeyNameAsync(Expr.PropertyKey key)
-    {
-        return key switch
-        {
-            Expr.IdentifierKey ik => ik.Name.Lexeme,
-            Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
-            Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => (await EvaluateAsync(ck.Expression))?.ToString() ?? "undefined",
-            _ => throw new InterpreterException(" Invalid property key for accessor.")
-        };
-    }
-
-    /// <summary>
-    /// Async version of ApplyPropertyToFields for computed keys that need async evaluation.
-    /// </summary>
-    private async Task ApplyPropertyToFieldsAsync(
-        Expr.PropertyKey key,
-        object? value,
-        Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
-    {
-        switch (key)
-        {
-            case Expr.IdentifierKey ik:
-                stringFields[ik.Name.Lexeme] = value;
-                break;
-            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
-                stringFields[(string)lk.Literal.Literal!] = value;
-                break;
-            case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
-                stringFields[lk.Literal.Literal!.ToString()!] = value;
-                break;
-            case Expr.ComputedKey ck:
-                object? keyValue = await EvaluateAsync(ck.Expression);
-                if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
-                else if (keyValue is double numKey)
-                    stringFields[numKey.ToString()] = value;
-                else
-                    stringFields[keyValue?.ToString() ?? "undefined"] = value;
-                break;
-        }
+        // Use async context with unified core
+        return await EvaluateObjectCore(_asyncContext, obj);
     }
 
     private async Task<object?> EvaluateGetIndexAsync(Expr.GetIndex getIndex)

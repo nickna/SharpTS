@@ -13,25 +13,18 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     /// <summary>
-    /// Evaluates a function or method call expression.
+    /// Core implementation for evaluating function/method calls, shared between sync and async paths.
+    /// Handles all special cases: console.log, built-in methods, Symbol, BigInt, Date, Error, timers, etc.
     /// </summary>
+    /// <param name="ctx">The evaluation context for evaluating arguments.</param>
     /// <param name="call">The call expression AST node.</param>
-    /// <returns>The return value of the called function.</returns>
-    /// <remarks>
-    /// Handles special cases for <c>console.log</c>, <c>Object.*</c> static methods,
-    /// and the internal <c>__objectRest</c> helper. Supports spread arguments.
-    /// Validates arity before invoking the callable.
-    /// </remarks>
-    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
-    private object? EvaluateCall(Expr.Call call)
+    /// <returns>A ValueTask containing the return value of the called function.</returns>
+    private async ValueTask<object?> EvaluateCallCore(IEvaluationContext ctx, Expr.Call call)
     {
+        // Handle console.log special case
         if (call.Callee is Expr.Variable v && v.Name.Lexeme == "console.log")
         {
-            List<object?> arguments = [];
-            foreach (Expr argument in call.Arguments)
-            {
-                arguments.Add(Evaluate(argument));
-            }
+            List<object?> arguments = await ctx.EvaluateAllAsync(call.Arguments);
             Console.WriteLine(string.Join(" ", arguments.Select(Stringify)));
             return null;
         }
@@ -46,7 +39,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod("console", chainedGet.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = call.Arguments.Select(Evaluate).ToList();
+                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
                 return method.Call(this, args);
             }
         }
@@ -60,7 +53,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(gtInnerGet.Name.Lexeme, gtChainedGet.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = call.Arguments.Select(Evaluate).ToList();
+                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
                 return method.Call(this, args);
             }
         }
@@ -72,7 +65,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = call.Arguments.Select(Evaluate).ToList();
+                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
                 return method.Call(this, args);
             }
         }
@@ -82,8 +75,8 @@ public partial class Interpreter
         {
             if (call.Arguments.Count >= 2)
             {
-                var source = Evaluate(call.Arguments[0]);
-                var excludeKeys = Evaluate(call.Arguments[1]) as SharpTSArray;
+                var source = await ctx.EvaluateExprAsync(call.Arguments[0]);
+                var excludeKeys = await ctx.EvaluateExprAsync(call.Arguments[1]) as SharpTSArray;
                 return ObjectBuiltIns.ObjectRest(source, excludeKeys?.Elements ?? []);
             }
             throw new Exception("__objectRest requires 2 arguments");
@@ -95,7 +88,7 @@ public partial class Interpreter
             string? description = null;
             if (call.Arguments.Count > 0)
             {
-                var arg = Evaluate(call.Arguments[0]);
+                var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
                 description = arg?.ToString();
             }
             return new SharpTSSymbol(description);
@@ -107,7 +100,7 @@ public partial class Interpreter
             if (call.Arguments.Count != 1)
                 throw new InterpreterException(" BigInt() requires exactly one argument.");
 
-            var arg = Evaluate(call.Arguments[0]);
+            var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
             return arg switch
             {
                 SharpTSBigInt bi => bi,
@@ -128,7 +121,7 @@ public partial class Interpreter
         // Handle Error() and error subtypes called without 'new' - still creates an error object
         if (call.Callee is Expr.Variable errorVar && IsErrorType(errorVar.Name.Lexeme))
         {
-            List<object?> args = call.Arguments.Select(Evaluate).ToList();
+            List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
             return ErrorBuiltIns.CreateError(errorVar.Name.Lexeme, args);
         }
 
@@ -137,10 +130,14 @@ public partial class Interpreter
         {
             if (call.Arguments.Count < 1)
                 throw new InterpreterException(" parseInt() requires at least one argument.");
-            var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
-            var radix = call.Arguments.Count > 1 && Evaluate(call.Arguments[1]) != null
-                ? (int)(double)Evaluate(call.Arguments[1])!
-                : 10;
+            var str = (await ctx.EvaluateExprAsync(call.Arguments[0]))?.ToString() ?? "";
+            int radix = 10;
+            if (call.Arguments.Count > 1)
+            {
+                var radixValue = await ctx.EvaluateExprAsync(call.Arguments[1]);
+                if (radixValue != null)
+                    radix = (int)(double)radixValue;
+            }
             return NumberBuiltIns.ParseInt(str, radix);
         }
 
@@ -149,7 +146,7 @@ public partial class Interpreter
         {
             if (call.Arguments.Count < 1)
                 throw new InterpreterException(" parseFloat() requires at least one argument.");
-            var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
+            var str = (await ctx.EvaluateExprAsync(call.Arguments[0]))?.ToString() ?? "";
             return NumberBuiltIns.ParseFloat(str);
         }
 
@@ -157,7 +154,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
         {
             if (call.Arguments.Count < 1) return true; // isNaN() with no args returns true
-            var arg = Evaluate(call.Arguments[0]);
+            var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
             // Global isNaN coerces to number first (different from Number.isNaN)
             if (arg is double d) return double.IsNaN(d);
             if (arg is string s) return !double.TryParse(s, out _);
@@ -170,7 +167,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
         {
             if (call.Arguments.Count < 1) return false; // isFinite() with no args returns false
-            var arg = Evaluate(call.Arguments[0]);
+            var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
             // Global isFinite coerces to number first (different from Number.isFinite)
             if (arg is double d) return double.IsFinite(d);
             if (arg is string s && double.TryParse(s, out double parsed)) return double.IsFinite(parsed);
@@ -185,7 +182,7 @@ public partial class Interpreter
             if (call.Arguments.Count < 1)
                 throw new InterpreterException(" setTimeout() requires at least one argument (callback).");
 
-            var callbackValue = Evaluate(call.Arguments[0]);
+            var callbackValue = await ctx.EvaluateExprAsync(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
                 throw new InterpreterException(" setTimeout() callback must be a function.");
 
@@ -193,7 +190,7 @@ public partial class Interpreter
             double delayMs = 0;
             if (call.Arguments.Count >= 2)
             {
-                var delayValue = Evaluate(call.Arguments[1]);
+                var delayValue = await ctx.EvaluateExprAsync(call.Arguments[1]);
                 if (delayValue is double dv)
                     delayMs = dv;
                 else if (delayValue != null && delayValue is not SharpTSUndefined)
@@ -204,7 +201,7 @@ public partial class Interpreter
             List<object?> callbackArgs = [];
             for (int i = 2; i < call.Arguments.Count; i++)
             {
-                callbackArgs.Add(Evaluate(call.Arguments[i]));
+                callbackArgs.Add(await ctx.EvaluateExprAsync(call.Arguments[i]));
             }
 
             return TimerBuiltIns.SetTimeout(this, callback, delayMs, callbackArgs);
@@ -216,7 +213,7 @@ public partial class Interpreter
             object? handle = null;
             if (call.Arguments.Count > 0)
             {
-                handle = Evaluate(call.Arguments[0]);
+                handle = await ctx.EvaluateExprAsync(call.Arguments[0]);
             }
             TimerBuiltIns.ClearTimeout(handle);
             return null;
@@ -228,7 +225,7 @@ public partial class Interpreter
             if (call.Arguments.Count < 1)
                 throw new InterpreterException(" setInterval() requires at least one argument (callback).");
 
-            var callbackValue = Evaluate(call.Arguments[0]);
+            var callbackValue = await ctx.EvaluateExprAsync(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
                 throw new InterpreterException(" setInterval() callback must be a function.");
 
@@ -236,7 +233,7 @@ public partial class Interpreter
             double delayMs = 0;
             if (call.Arguments.Count >= 2)
             {
-                var delayValue = Evaluate(call.Arguments[1]);
+                var delayValue = await ctx.EvaluateExprAsync(call.Arguments[1]);
                 if (delayValue is double dv)
                     delayMs = dv;
                 else if (delayValue != null && delayValue is not SharpTSUndefined)
@@ -247,7 +244,7 @@ public partial class Interpreter
             List<object?> callbackArgs = [];
             for (int i = 2; i < call.Arguments.Count; i++)
             {
-                callbackArgs.Add(Evaluate(call.Arguments[i]));
+                callbackArgs.Add(await ctx.EvaluateExprAsync(call.Arguments[i]));
             }
 
             return TimerBuiltIns.SetInterval(this, callback, delayMs, callbackArgs);
@@ -259,26 +256,26 @@ public partial class Interpreter
             object? handle = null;
             if (call.Arguments.Count > 0)
             {
-                handle = Evaluate(call.Arguments[0]);
+                handle = await ctx.EvaluateExprAsync(call.Arguments[0]);
             }
             TimerBuiltIns.ClearInterval(handle);
             return null;
         }
 
-        object? callee = Evaluate(call.Callee);
+        object? callee = await ctx.EvaluateExprAsync(call.Callee);
 
         List<object?> argumentsList = [];
         foreach (Expr argument in call.Arguments)
         {
             if (argument is Expr.Spread spread)
             {
-                object? spreadValue = Evaluate(spread.Expression);
+                object? spreadValue = await ctx.EvaluateExprAsync(spread.Expression);
                 // Use GetIterableElements to support custom iterables with Symbol.iterator
                 argumentsList.AddRange(GetIterableElements(spreadValue));
             }
             else
             {
-                argumentsList.Add(Evaluate(argument));
+                argumentsList.Add(await ctx.EvaluateExprAsync(argument));
             }
         }
 
@@ -293,6 +290,23 @@ public partial class Interpreter
         }
 
         return function.Call(this, argumentsList);
+    }
+
+    /// <summary>
+    /// Evaluates a function or method call expression.
+    /// </summary>
+    /// <param name="call">The call expression AST node.</param>
+    /// <returns>The return value of the called function.</returns>
+    /// <remarks>
+    /// Handles special cases for <c>console.log</c>, <c>Object.*</c> static methods,
+    /// and the internal <c>__objectRest</c> helper. Supports spread arguments.
+    /// Validates arity before invoking the callable.
+    /// </remarks>
+    /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
+    private object? EvaluateCall(Expr.Call call)
+    {
+        // Use sync context - ValueTask with sync context completes synchronously
+        return EvaluateCallCore(_syncContext, call).GetAwaiter().GetResult();
     }
 
     /// <summary>
