@@ -370,14 +370,20 @@ public partial class ILCompiler
 
                 // Check if the result is a Task<object> and wait for it
                 // This provides "top-level await" behavior for compiled code
+                // Box value types first (e.g., delete returns boolean)
+                emitter.Helpers.EnsureBoxed();
+                var exprResult = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Stloc, exprResult);
+
                 var notTaskLabel = il.DefineLabel();
                 var doneLabel = il.DefineLabel();
 
-                il.Emit(OpCodes.Dup);  // Keep copy for Task check
+                il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Isinst, _types.TaskOfObject);
                 il.Emit(OpCodes.Brfalse, notTaskLabel);
 
                 // It's a Task<object> - wait for it
+                il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Castclass, _types.TaskOfObject);
                 var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
                 il.Emit(OpCodes.Call, getAwaiter);
@@ -387,10 +393,9 @@ public partial class ILCompiler
                 var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
                 il.Emit(OpCodes.Call, getResult);
                 il.Emit(OpCodes.Pop);  // Discard the result
-                il.Emit(OpCodes.Br, doneLabel);
 
                 il.MarkLabel(notTaskLabel);
-                il.Emit(OpCodes.Pop);  // Not a Task, just pop the original value
+                // No pop needed - value is in local
 
                 il.MarkLabel(doneLabel);
             }
@@ -497,13 +502,19 @@ public partial class ILCompiler
                 emitter.EmitExpression(exprStmt.Expr);
 
                 // Check for async calls and wait for them
+                // Box value types first (e.g., delete returns boolean)
+                emitter.Helpers.EnsureBoxed();
+                var exprResult = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Stloc, exprResult);
+
                 var notTaskLabel = il.DefineLabel();
                 var doneLabel = il.DefineLabel();
 
-                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Isinst, _types.TaskOfObject);
                 il.Emit(OpCodes.Brfalse, notTaskLabel);
 
+                il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Castclass, _types.TaskOfObject);
                 var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
                 il.Emit(OpCodes.Call, getAwaiter);
@@ -513,10 +524,9 @@ public partial class ILCompiler
                 var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
                 il.Emit(OpCodes.Call, getResult);
                 il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Br, doneLabel);
 
                 il.MarkLabel(notTaskLabel);
-                il.Emit(OpCodes.Pop);
+                // No pop needed - value is in local
 
                 il.MarkLabel(doneLabel);
             }

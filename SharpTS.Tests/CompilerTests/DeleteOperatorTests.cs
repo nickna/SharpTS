@@ -78,7 +78,7 @@ public class DeleteOperatorTests
         Assert.Equal("false\ntest\n", output);
     }
 
-    [Fact(Skip = "Known issue: NullReferenceException when checking deleted property with any type")]
+    [Fact]
     public void Delete_MultipleProperties()
     {
         // Note: Using 'any' type because optional property types have a bug with delete in compiled mode
