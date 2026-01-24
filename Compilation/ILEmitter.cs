@@ -51,10 +51,27 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     public ILGenerator ILGen => _ctx.IL;
 
     /// <summary>
+    /// Provides access to the IL generator via IEmitterContext.
+    /// </summary>
+    ILGenerator IEmitterContext.IL => _ctx.IL;
+
+    /// <summary>
     /// Resets the stack type tracking to unknown state.
     /// Exposed for call handlers that emit code changing the stack.
     /// </summary>
     public void ResetStackType() => _helpers.SetStackUnknown();
+
+    /// <summary>
+    /// Marks the stack as containing an unknown/object type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackUnknown() => _helpers.SetStackUnknown();
+
+    /// <summary>
+    /// Marks the stack as containing a specific type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackType(StackType type) => _helpers.SetStackType(type);
 
     /// <summary>
     /// Provides access to the emit helpers for call handlers.

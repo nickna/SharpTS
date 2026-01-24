@@ -15,6 +15,11 @@ public interface IEmitterContext
     CompilationContext Context { get; }
 
     /// <summary>
+    /// Gets the current ILGenerator for emitting IL instructions.
+    /// </summary>
+    ILGenerator IL { get; }
+
+    /// <summary>
     /// Emits IL for an expression, leaving the result on the evaluation stack.
     /// </summary>
     /// <param name="expr">The expression to emit.</param>
@@ -33,4 +38,15 @@ public interface IEmitterContext
     /// </summary>
     /// <param name="expr">The expression to emit as a double.</param>
     void EmitExpressionAsDouble(Expr expr);
+
+    /// <summary>
+    /// Marks the stack as containing an unknown/object type.
+    /// </summary>
+    void SetStackUnknown();
+
+    /// <summary>
+    /// Marks the stack as containing a specific type.
+    /// </summary>
+    /// <param name="type">The stack type.</param>
+    void SetStackType(StackType type);
 }

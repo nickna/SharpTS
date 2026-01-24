@@ -32,6 +32,11 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContex
     public CompilationContext Context => _ctx!;
 
     /// <summary>
+    /// Provides access to the IL generator via IEmitterContext.
+    /// </summary>
+    ILGenerator IEmitterContext.IL => _il;
+
+    /// <summary>
     /// Boxes the value on the stack if needed.
     /// In async context, we use the simpler EnsureBoxed approach.
     /// </summary>
@@ -60,6 +65,18 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContex
             EnsureDouble();
         }
     }
+
+    /// <summary>
+    /// Marks the stack as containing an unknown/object type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackUnknown() => _helpers.SetStackUnknown();
+
+    /// <summary>
+    /// Marks the stack as containing a specific type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackType(StackType type) => _helpers.SetStackType(type);
 
     #endregion
 
