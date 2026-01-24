@@ -17,12 +17,38 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
+    /// Comparer for compatibility cache keys using TypeInfoEqualityComparer.
+    /// Ensures structurally equivalent types (including those with List fields)
+    /// are treated as equal keys.
+    /// </summary>
+    private sealed class CompatibilityCacheKeyComparer
+        : IEqualityComparer<(TypeInfo Expected, TypeInfo Actual)>
+    {
+        public static readonly CompatibilityCacheKeyComparer Instance = new();
+
+        public bool Equals((TypeInfo Expected, TypeInfo Actual) x,
+                           (TypeInfo Expected, TypeInfo Actual) y)
+        {
+            return TypeInfoEqualityComparer.Instance.Equals(x.Expected, y.Expected)
+                && TypeInfoEqualityComparer.Instance.Equals(x.Actual, y.Actual);
+        }
+
+        public int GetHashCode((TypeInfo Expected, TypeInfo Actual) obj)
+        {
+            return HashCode.Combine(
+                TypeInfoEqualityComparer.Instance.GetHashCode(obj.Expected),
+                TypeInfoEqualityComparer.Instance.GetHashCode(obj.Actual)
+            );
+        }
+    }
+
+    /// <summary>
     /// Checks type compatibility with memoization.
     /// Uses structural equality of TypeInfo records for cache key matching.
     /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
     {
-        _compatibilityCache ??= new();
+        _compatibilityCache ??= new(CompatibilityCacheKeyComparer.Instance);
         var key = (expected, actual);
 
         if (_compatibilityCache.TryGetValue(key, out var cached))

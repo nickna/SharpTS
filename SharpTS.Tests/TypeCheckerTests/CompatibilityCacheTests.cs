@@ -1,4 +1,6 @@
+using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using Xunit;
 
 namespace SharpTS.Tests.TypeCheckerTests;
@@ -253,5 +255,95 @@ public class CompatibilityCacheTests
 
         var result = TestHarness.RunInterpreted(source);
         Assert.Equal($"{assignedType}\n", result);
+    }
+
+    // Unit tests for TypeInfoEqualityComparer behavior with List-containing TypeInfo types
+
+    [Fact]
+    public void TypeInfoEqualityComparer_HandlesUnionTypesWithEquivalentMembers()
+    {
+        // Two Union instances with same member types but different List instances
+        var union1 = new TypeInfo.Union([
+            new TypeInfo.String(),
+            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+        ]);
+        var union2 = new TypeInfo.Union([
+            new TypeInfo.String(),
+            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+        ]);
+
+        // Record equality would fail (different List instances)
+        // But TypeInfoEqualityComparer should treat them as equal
+        Assert.True(TypeInfoEqualityComparer.Instance.Equals(union1, union2));
+        Assert.Equal(
+            TypeInfoEqualityComparer.Instance.GetHashCode(union1),
+            TypeInfoEqualityComparer.Instance.GetHashCode(union2)
+        );
+    }
+
+    [Fact]
+    public void TypeInfoEqualityComparer_HandlesFunctionTypesWithEquivalentParams()
+    {
+        var func1 = new TypeInfo.Function(
+            [new TypeInfo.String(), new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
+            new TypeInfo.Void()
+        );
+        var func2 = new TypeInfo.Function(
+            [new TypeInfo.String(), new TypeInfo.Primitive(TokenType.TYPE_NUMBER)],
+            new TypeInfo.Void()
+        );
+
+        Assert.True(TypeInfoEqualityComparer.Instance.Equals(func1, func2));
+        Assert.Equal(
+            TypeInfoEqualityComparer.Instance.GetHashCode(func1),
+            TypeInfoEqualityComparer.Instance.GetHashCode(func2)
+        );
+    }
+
+    [Fact]
+    public void TypeInfoEqualityComparer_DistinguishesDifferentUnionTypes()
+    {
+        var union1 = new TypeInfo.Union([new TypeInfo.String()]);
+        var union2 = new TypeInfo.Union([new TypeInfo.Primitive(TokenType.TYPE_NUMBER)]);
+
+        Assert.False(TypeInfoEqualityComparer.Instance.Equals(union1, union2));
+    }
+
+    [Fact]
+    public void TypeInfoEqualityComparer_HandlesIntersectionTypes()
+    {
+        var intersection1 = new TypeInfo.Intersection([
+            new TypeInfo.String(),
+            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+        ]);
+        var intersection2 = new TypeInfo.Intersection([
+            new TypeInfo.String(),
+            new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+        ]);
+
+        Assert.True(TypeInfoEqualityComparer.Instance.Equals(intersection1, intersection2));
+        Assert.Equal(
+            TypeInfoEqualityComparer.Instance.GetHashCode(intersection1),
+            TypeInfoEqualityComparer.Instance.GetHashCode(intersection2)
+        );
+    }
+
+    [Fact]
+    public void TypeInfoEqualityComparer_HandlesTupleTypes()
+    {
+        var tuple1 = new TypeInfo.Tuple([
+            new TypeInfo.TupleElement(new TypeInfo.String(), TupleElementKind.Required),
+            new TypeInfo.TupleElement(new TypeInfo.Primitive(TokenType.TYPE_NUMBER), TupleElementKind.Required)
+        ], RequiredCount: 2);
+        var tuple2 = new TypeInfo.Tuple([
+            new TypeInfo.TupleElement(new TypeInfo.String(), TupleElementKind.Required),
+            new TypeInfo.TupleElement(new TypeInfo.Primitive(TokenType.TYPE_NUMBER), TupleElementKind.Required)
+        ], RequiredCount: 2);
+
+        Assert.True(TypeInfoEqualityComparer.Instance.Equals(tuple1, tuple2));
+        Assert.Equal(
+            TypeInfoEqualityComparer.Instance.GetHashCode(tuple1),
+            TypeInfoEqualityComparer.Instance.GetHashCode(tuple2)
+        );
     }
 }
