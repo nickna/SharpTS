@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.Runtime;
 
 namespace SharpTS.TypeSystem;
 
@@ -15,26 +16,17 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 /// <seealso cref="RuntimeEnvironment"/>
 /// <seealso cref="TypeInfo"/>
-public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode = null)
+public class TypeEnvironment : ScopeChain<TypeInfo, TypeEnvironment>
 {
-    private readonly Dictionary<string, TypeInfo> _types = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _typeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string Definition, List<string> TypeParams)> _genericTypeAliases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo> _typeParameters = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TypeInfo.Namespace> _namespaces = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (TypeInfo Type, bool IsValue)> _importAliases = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _constNames = new(StringComparer.Ordinal);
-    private readonly TypeEnvironment? _enclosing = enclosing;
 
-    /// <summary>
-    /// Whether this environment is in JavaScript strict mode.
-    /// Strict mode is inherited from enclosing scopes unless explicitly set.
-    /// </summary>
-    public bool IsStrictMode { get; } = strictMode ?? enclosing?.IsStrictMode ?? false;
-
-    public void Define(string name, TypeInfo type)
+    public TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode = null)
+        : base(enclosing, strictMode)
     {
-        _types[name] = type;
     }
 
     /// <summary>
@@ -52,70 +44,41 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         if (_typeParameters.TryGetValue(name, out var typeParam))
             return typeParam;
-        return _enclosing?.GetTypeParameter(name);
+        return Enclosing?.GetTypeParameter(name);
     }
 
-    public TypeInfo? Get(string name)
+    public override TypeInfo? Get(string name)
     {
         // Check type parameters first (for generic body checking)
         if (_typeParameters.TryGetValue(name, out var typeParam))
             return typeParam;
 
-        if (_types.TryGetValue(name, out TypeInfo? type))
-        {
-            return type;
-        }
-
-        if (_enclosing != null) return _enclosing.Get(name);
-
-        return null;
-    }
-
-    public bool IsDefined(string name)
-    {
-        if (_types.ContainsKey(name)) return true;
-        return _enclosing?.IsDefined(name) ?? false;
-    }
-
-    /// <summary>
-    /// Checks if a name is defined in the current scope only (not in enclosing scopes).
-    /// Used for function hoisting to avoid re-defining already hoisted functions.
-    /// </summary>
-    public bool IsDefinedLocally(string name)
-    {
-        return _types.ContainsKey(name);
+        return base.Get(name);
     }
 
     /// <summary>
     /// Marks a variable as const (read-only). Used for named function expressions
     /// where the function name cannot be reassigned inside the function body.
     /// </summary>
-    public void MarkAsConst(string name)
-    {
-        _constNames.Add(name);
-    }
+    public void MarkAsConst(string name) => MarkAsReadOnly(name);
 
     /// <summary>
     /// Checks if a variable is marked as const in the current or enclosing scopes.
     /// </summary>
-    public bool IsConst(string name)
-    {
-        if (_constNames.Contains(name)) return true;
-        return _enclosing?.IsConst(name) ?? false;
-    }
+    public bool IsConst(string name) => IsReadOnly(name);
 
     public void Assign(Token name, TypeInfo type)
     {
-        if (_types.ContainsKey(name.Lexeme))
+        if (_values.ContainsKey(name.Lexeme))
         {
             // In a stricter system, we might check if the re-assignment type matches the declared type here
             // But usually we just want to look up the existing declared type.
             return;
         }
 
-        if (_enclosing != null)
+        if (Enclosing != null)
         {
-            _enclosing.Assign(name, type);
+            Enclosing.Assign(name, type);
             return;
         }
 
@@ -132,7 +95,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         if (_typeAliases.TryGetValue(name, out var definition))
             return definition;
-        return _enclosing?.GetTypeAlias(name);
+        return Enclosing?.GetTypeAlias(name);
     }
 
     /// <summary>
@@ -150,7 +113,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         if (_genericTypeAliases.TryGetValue(name, out var alias))
             return alias;
-        return _enclosing?.GetGenericTypeAlias(name);
+        return Enclosing?.GetGenericTypeAlias(name);
     }
 
     /// <summary>
@@ -174,13 +137,13 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
             // Create new namespace with merged collections
             var mergedNs = new TypeInfo.Namespace(name, mergedTypes.ToFrozenDictionary(), mergedValues.ToFrozenDictionary());
             _namespaces[name] = mergedNs;
-            _types[name] = mergedNs;
+            _values[name] = mergedNs;
         }
         else
         {
             _namespaces[name] = ns;
-            // Also define in types so it can be looked up via Get()
-            _types[name] = ns;
+            // Also define in values so it can be looked up via Get()
+            _values[name] = ns;
         }
     }
 
@@ -191,7 +154,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         if (_namespaces.TryGetValue(name, out var ns))
             return ns;
-        return _enclosing?.GetNamespace(name);
+        return Enclosing?.GetNamespace(name);
     }
 
     /// <summary>
@@ -205,7 +168,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         _importAliases[name] = (type, isValue);
         // Also define as a regular type so it can be looked up via Get()
-        _types[name] = type;
+        _values[name] = type;
     }
 
     /// <summary>
@@ -216,7 +179,7 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     {
         if (_importAliases.TryGetValue(name, out var alias))
             return alias;
-        return _enclosing?.GetImportAlias(name);
+        return Enclosing?.GetImportAlias(name);
     }
 
     /// <summary>
@@ -225,6 +188,6 @@ public class TypeEnvironment(TypeEnvironment? enclosing = null, bool? strictMode
     public bool IsImportAlias(string name)
     {
         if (_importAliases.ContainsKey(name)) return true;
-        return _enclosing?.IsImportAlias(name) ?? false;
+        return Enclosing?.IsImportAlias(name) ?? false;
     }
 }

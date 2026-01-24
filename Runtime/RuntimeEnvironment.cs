@@ -7,28 +7,19 @@ namespace SharpTS.Runtime;
 /// Manages variable scopes during runtime interpretation.
 /// </summary>
 /// <remarks>
-/// Implements a linked list of scopes via the <see cref="Enclosing"/> property.
+/// Implements a linked list of scopes via the <see cref="ScopeChain{TValue,TSelf}.Enclosing"/> property.
 /// Each scope holds variable bindings in a dictionary. Variable lookup (Get) and
 /// assignment (Assign) walk up the scope chain until found. Used by <see cref="Interpreter"/>
 /// for lexical scoping and by <see cref="SharpTSFunction"/> for closures.
 /// </remarks>
 /// <seealso cref="TypeEnvironment"/>
-public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
+public class RuntimeEnvironment : ScopeChain<object?, RuntimeEnvironment>
 {
-    private readonly Dictionary<string, object?> _values = [];
     private readonly Dictionary<string, SharpTSNamespace> _namespaces = [];
-    private readonly HashSet<string> _readOnlyNames = [];
-    public RuntimeEnvironment? Enclosing { get; } = enclosing;
 
-    /// <summary>
-    /// Whether this environment is in JavaScript strict mode.
-    /// Strict mode is inherited from enclosing scopes unless explicitly set.
-    /// </summary>
-    public bool IsStrictMode { get; } = strictMode ?? enclosing?.IsStrictMode ?? false;
-
-    public void Define(string name, object? value)
+    public RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
+        : base(enclosing, strictMode)
     {
-        _values[name] = value;
     }
 
     public object? Get(Token name)
@@ -41,16 +32,6 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? stri
         if (Enclosing != null) return Enclosing.Get(name);
 
         throw new Exception($"Undefined variable '{name.Lexeme}'.");
-    }
-
-    /// <summary>
-    /// Checks if a variable is defined in this scope or any enclosing scope.
-    /// </summary>
-    public bool IsDefined(string name)
-    {
-        if (_values.ContainsKey(name))
-            return true;
-        return Enclosing?.IsDefined(name) ?? false;
     }
 
     /// <summary>
@@ -71,33 +52,6 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? stri
 
         value = null;
         return false;
-    }
-
-    /// <summary>
-    /// Checks if a variable is defined in this scope only (not in enclosing scopes).
-    /// Used for function hoisting to avoid re-defining already hoisted functions.
-    /// </summary>
-    public bool IsDefinedLocally(string name)
-    {
-        return _values.ContainsKey(name);
-    }
-
-    /// <summary>
-    /// Marks a variable as read-only. Used for named function expressions
-    /// where the function name cannot be reassigned inside the function body.
-    /// </summary>
-    public void MarkAsReadOnly(string name)
-    {
-        _readOnlyNames.Add(name);
-    }
-
-    /// <summary>
-    /// Checks if a variable is read-only in the current or enclosing scopes.
-    /// </summary>
-    public bool IsReadOnly(string name)
-    {
-        if (_readOnlyNames.Contains(name)) return true;
-        return Enclosing?.IsReadOnly(name) ?? false;
     }
 
     public void Assign(Token name, object? value)
@@ -141,7 +95,7 @@ public class RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? stri
         RuntimeEnvironment environment = this;
         for (int i = 0; i < distance; i++)
         {
-            environment = environment.Enclosing!; 
+            environment = environment.Enclosing!;
         }
         return environment;
     }
