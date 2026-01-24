@@ -14,6 +14,23 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
+    /// Finds a constructor by walking up the inheritance chain.
+    /// Returns the constructor type and the class that owns it, or (null, null) if no constructor found.
+    /// </summary>
+    private (TypeInfo? Constructor, TypeInfo? OwningClass) FindInheritedConstructor(TypeInfo classType)
+    {
+        TypeInfo? current = classType;
+        while (current != null)
+        {
+            var methods = GetMethods(current);
+            if (methods?.TryGetValue("constructor", out var ctor) == true)
+                return (ctor, current);
+            current = GetSuperclass(current);
+        }
+        return (null, null);
+    }
+
+    /// <summary>
     /// Extracts the simple class name from a new expression callee for error messages.
     /// </summary>
     private static string GetCalleeClassName(Expr callee)
@@ -333,8 +350,9 @@ public partial class TypeChecker
             for (int i = 0; i < genericClass.TypeParams.Count; i++)
                 subs[genericClass.TypeParams[i].Name] = typeArgs[i];
 
-            // Check constructor with substituted parameter types
-            if (genericClass.Methods.TryGetValue("constructor", out var ctorTypeInfo))
+            // Check constructor with substituted parameter types (walk inheritance chain)
+            var (ctorTypeInfo, _) = FindInheritedConstructor(genericClass);
+            if (ctorTypeInfo != null)
             {
                 // Handle both Function and OverloadedFunction for constructor
                 if (ctorTypeInfo is TypeInfo.OverloadedFunction overloadedCtor)
@@ -389,7 +407,9 @@ public partial class TypeChecker
 
         if (type is TypeInfo.Class classType)
         {
-            if (classType.Methods.TryGetValue("constructor", out var ctorTypeInfo))
+            // Walk inheritance chain to find constructor
+            var (ctorTypeInfo, _) = FindInheritedConstructor(classType);
+            if (ctorTypeInfo != null)
             {
                 // Handle both Function and OverloadedFunction for constructor
                 if (ctorTypeInfo is TypeInfo.OverloadedFunction overloadedCtor)

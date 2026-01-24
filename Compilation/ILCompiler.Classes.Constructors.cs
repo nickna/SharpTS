@@ -131,8 +131,13 @@ public partial class ILCompiler
         string? qualifiedSuperclass = classStmt.Superclass != null ? defCtx.ResolveClassName(classStmt.Superclass.Lexeme) : null;
         if (constructor == null && qualifiedSuperclass != null && _classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor))
         {
-            // No explicit constructor but has superclass - call parent's parameterless constructor
+            // No explicit constructor but has superclass - forward all arguments to parent constructor
             il.Emit(OpCodes.Ldarg_0);
+            var parentParams = parentCtor.GetParameters();
+            for (int i = 0; i < parentParams.Length; i++)
+            {
+                il.Emit(OpCodes.Ldarg, i + 1);  // +1 because arg 0 is 'this'
+            }
             il.Emit(OpCodes.Call, parentCtor);
         }
         else

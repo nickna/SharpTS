@@ -254,10 +254,29 @@ public partial class ILCompiler
         {
             var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
             // Use typed parameters from TypeMap
-            var ctorParamTypes = constructor != null
-                ? ParameterTypeResolver.ResolveConstructorParameters(
-                    classStmt.Name.Lexeme, constructor.Parameters, _typeMapper, _typeMap)
-                : [];
+            Type[] ctorParamTypes;
+            if (constructor != null)
+            {
+                ctorParamTypes = ParameterTypeResolver.ResolveConstructorParameters(
+                    classStmt.Name.Lexeme, constructor.Parameters, _typeMapper, _typeMap);
+            }
+            else if (classStmt.Superclass != null)
+            {
+                // No explicit constructor - inherit parent's parameter types
+                string qualifiedSuperclass = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
+                if (_classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor))
+                {
+                    ctorParamTypes = parentCtor.GetParameters().Select(p => p.ParameterType).ToArray();
+                }
+                else
+                {
+                    ctorParamTypes = [];
+                }
+            }
+            else
+            {
+                ctorParamTypes = [];
+            }
 
             var ctorBuilder = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,

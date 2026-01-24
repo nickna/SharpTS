@@ -233,4 +233,149 @@ public class ClassTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("1\n2\n10\n2\n", output);
     }
+
+    [Fact]
+    public void InheritedConstructor_Basic()
+    {
+        // Dog extends Animal with no explicit constructor - should inherit Animal's constructor
+        var source = """
+            class Animal {
+                name: string;
+                constructor(name: string) {
+                    this.name = name;
+                }
+                speak(): string {
+                    return this.name + " makes a sound";
+                }
+            }
+            class Dog extends Animal {
+                bark(): string {
+                    return this.name + " barks!";
+                }
+            }
+            let d: Dog = new Dog("Rex");
+            console.log(d.bark());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Rex barks!\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_MultiLevel()
+    {
+        // C extends B extends A - C should inherit A's constructor through B
+        var source = """
+            class A {
+                value: number;
+                constructor(v: number) {
+                    this.value = v;
+                }
+            }
+            class B extends A { }
+            class C extends B {
+                triple(): number {
+                    return this.value * 3;
+                }
+            }
+            let c: C = new C(10);
+            console.log(c.triple());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("30\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_MultipleParameters()
+    {
+        // Child inherits parent's constructor with multiple parameters
+        var source = """
+            class Point {
+                x: number;
+                y: number;
+                constructor(x: number, y: number) {
+                    this.x = x;
+                    this.y = y;
+                }
+            }
+            class ColorPoint extends Point {
+                getCoords(): string {
+                    return "(" + this.x + ", " + this.y + ")";
+                }
+            }
+            let p: ColorPoint = new ColorPoint(3, 4);
+            console.log(p.getCoords());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("(3, 4)\n", output);
+    }
+
+    [Fact(Skip = "IL compiler doesn't yet support extending instantiated generic types (e.g., extends Box<string>)")]
+    public void InheritedConstructor_GenericParent()
+    {
+        // StringBox extends Box<string> - should inherit Box's constructor
+        // Note: This works in the interpreter but not in the IL compiler because
+        // the compiler needs special handling to create a closed generic type
+        // (Box`1[String]) as the base type instead of the open generic (Box`1).
+        var source = """
+            class Box<T> {
+                value: T;
+                constructor(v: T) {
+                    this.value = v;
+                }
+            }
+            class StringBox extends Box<string> {
+                upper(): string {
+                    return this.value.toUpperCase();
+                }
+            }
+            let sb: StringBox = new StringBox("hello");
+            console.log(sb.upper());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("HELLO\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_TypeError_WrongArgCount()
+    {
+        // Should get a type error when wrong number of arguments passed
+        var source = """
+            class Animal {
+                name: string;
+                constructor(name: string) {
+                    this.name = name;
+                }
+            }
+            class Dog extends Animal { }
+            let d: Dog = new Dog();
+            """;
+
+        var ex = Assert.Throws<SharpTS.TypeSystem.Exceptions.TypeCheckException>(
+            () => TestHarness.RunCompiled(source));
+        Assert.Contains("expected at least 1 argument", ex.Message);
+    }
+
+    [Fact]
+    public void InheritedConstructor_TypeError_WrongArgType()
+    {
+        // Should get a type error when wrong argument type passed
+        var source = """
+            class Animal {
+                name: string;
+                constructor(name: string) {
+                    this.name = name;
+                }
+            }
+            class Dog extends Animal { }
+            let d: Dog = new Dog(42);
+            """;
+
+        var ex = Assert.Throws<SharpTS.TypeSystem.Exceptions.TypeCheckException>(
+            () => TestHarness.RunCompiled(source));
+        Assert.Contains("expected type 'string'", ex.Message);
+    }
 }
