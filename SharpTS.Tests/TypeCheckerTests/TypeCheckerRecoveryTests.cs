@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
@@ -13,7 +14,7 @@ public class TypeCheckerRecoveryTests
 {
     #region Helpers
 
-    private static TypeCheckResult CheckWithRecovery(string source)
+    private static TypeCheckDiagnosticResult CheckWithRecovery(string source)
     {
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
@@ -21,7 +22,7 @@ public class TypeCheckerRecoveryTests
         var parseResult = parser.Parse();
 
         if (!parseResult.IsSuccess)
-            throw new Exception($"Parse failed: {parseResult.Errors[0]}");
+            throw new Exception($"Parse failed: {parseResult.Diagnostics.First()}");
 
         var checker = new TypeChecker();
         return checker.CheckWithRecovery(parseResult.Statements);
@@ -41,7 +42,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
         Assert.NotNull(result.TypeMap);
     }
 
@@ -54,7 +55,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
     }
 
     [Fact]
@@ -68,7 +69,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(3, result.Errors.Count);
+        Assert.Equal(3, result.ErrorCount);
     }
 
     [Fact]
@@ -82,10 +83,10 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(2, result.Errors.Count);
+        Assert.Equal(2, result.ErrorCount);
 
-        // Errors should have line numbers
-        Assert.All(result.Errors, e => Assert.True(e.Line.HasValue));
+        // Errors should have line numbers (Location not null means explicit line was set)
+        Assert.All(result.Diagnostics, e => Assert.NotNull(e.Location));
     }
 
     #endregion
@@ -104,7 +105,7 @@ public class TypeCheckerRecoveryTests
 
         Assert.False(result.IsSuccess);
         Assert.True(result.HitErrorLimit);
-        Assert.Equal(10, result.Errors.Count);
+        Assert.Equal(10, result.ErrorCount);
     }
 
     [Fact]
@@ -119,7 +120,7 @@ public class TypeCheckerRecoveryTests
 
         Assert.False(result.IsSuccess);
         Assert.False(result.HitErrorLimit);
-        Assert.Equal(3, result.Errors.Count);
+        Assert.Equal(3, result.ErrorCount);
     }
 
     #endregion
@@ -136,7 +137,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
         // TypeMap should still contain the valid variable
         Assert.NotNull(result.TypeMap);
     }
@@ -152,7 +153,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
     }
 
     [Fact]
@@ -167,7 +168,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     #endregion
@@ -183,9 +184,9 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
 
-        var error = result.Errors[0];
+        var error = result.Diagnostics.First();
         // For type mismatch errors, we capture expected and actual types
         // Note: These may or may not be set depending on the exception type
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
@@ -200,8 +201,8 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
-        Assert.Contains("undefinedVar", result.Errors[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, result.ErrorCount);
+        Assert.Contains("undefinedVar", result.Diagnostics.First().Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -219,11 +220,11 @@ public class TypeCheckerRecoveryTests
         if (result.IsSuccess)
         {
             // Document that undefined types are treated as 'any'
-            Assert.Empty(result.Errors);
+            Assert.Empty(result.Diagnostics);
         }
         else
         {
-            Assert.True(result.Errors.Count >= 1);
+            Assert.True(result.ErrorCount >= 1);
         }
     }
 
@@ -237,7 +238,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     [Fact]
@@ -251,7 +252,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     [Fact]
@@ -266,8 +267,8 @@ public class TypeCheckerRecoveryTests
 
         Assert.False(result.IsSuccess);
         // Should fail on assigning string to number
-        Assert.True(result.Errors.Count >= 1,
-            $"Expected error for assigning string to number, got {result.Errors.Count} errors");
+        Assert.True(result.ErrorCount >= 1,
+            $"Expected error for assigning string to number, got {result.ErrorCount} errors");
     }
 
     #endregion
@@ -288,7 +289,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     [Fact]
@@ -307,7 +308,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     [Fact]
@@ -325,8 +326,8 @@ public class TypeCheckerRecoveryTests
         Assert.False(result.IsSuccess);
         // Should ideally collect errors for both missing interface methods
         // Current behavior may aggregate into one error - document this
-        Assert.True(result.Errors.Count >= 1,
-            $"Expected at least 1 error for missing interface implementations, got {result.Errors.Count}");
+        Assert.True(result.ErrorCount >= 1,
+            $"Expected at least 1 error for missing interface implementations, got {result.ErrorCount}");
         // TODO: Consider if we should report separate errors for each missing method
     }
 
@@ -348,7 +349,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(3, result.Errors.Count);
+        Assert.Equal(3, result.ErrorCount);
     }
 
     [Fact]
@@ -367,8 +368,8 @@ public class TypeCheckerRecoveryTests
         Assert.False(result.IsSuccess);
         // Both functions have wrong return types - ideally should catch both
         // Document actual behavior
-        Assert.True(result.Errors.Count >= 1,
-            $"Expected at least 1 error for wrong return types, got {result.Errors.Count}");
+        Assert.True(result.ErrorCount >= 1,
+            $"Expected at least 1 error for wrong return types, got {result.ErrorCount}");
         // TODO: Investigate if nested function errors should be collected separately
     }
 
@@ -382,7 +383,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 2);
+        Assert.True(result.ErrorCount >= 2);
     }
 
     #endregion
@@ -397,9 +398,9 @@ public class TypeCheckerRecoveryTests
             """;
         var result = CheckWithRecovery(source);
 
-        Assert.Single(result.Errors);
-        var error = result.Errors[0];
-        Assert.True(error.Line.HasValue);
+        Assert.Equal(1, result.ErrorCount);
+        var error = result.Diagnostics.First();
+        Assert.NotNull(error.Location);
 
         var errorString = error.ToString();
         Assert.Contains("line", errorString.ToLower());
@@ -413,8 +414,8 @@ public class TypeCheckerRecoveryTests
             """;
         var result = CheckWithRecovery(source);
 
-        Assert.Single(result.Errors);
-        var error = result.Errors[0];
+        Assert.Equal(1, result.ErrorCount);
+        var error = result.Diagnostics.First();
 
         // Error message should mention the types involved
         Assert.False(string.IsNullOrWhiteSpace(error.Message));
@@ -448,7 +449,7 @@ public class TypeCheckerRecoveryTests
 
         // Should find the type error in "let y"
         Assert.False(typeResult.IsSuccess);
-        Assert.True(typeResult.Errors.Count >= 1);
+        Assert.True(typeResult.ErrorCount >= 1);
     }
 
     #endregion
@@ -507,7 +508,7 @@ public class TypeCheckerRecoveryTests
         var result = checker.CheckWithRecovery(parseResult.Statements);
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
     }
 
     [Fact]
@@ -523,7 +524,7 @@ public class TypeCheckerRecoveryTests
         var result = CheckWithRecovery(source);
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
     }
 
     #endregion

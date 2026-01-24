@@ -37,6 +37,8 @@ using System.Reflection;
 using SharpTS.Cli;
 using SharpTS.Compilation;
 using SharpTS.Declaration;
+using SharpTS.Diagnostics;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Execution;
 using SharpTS.LspBridge;
 using SharpTS.LspBridge.Project;
@@ -200,12 +202,12 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     List<Token> tokens = lexer.ScanTokens();
 
     Parser parser = new(tokens, decoratorMode);
-    ParseResult parseResult = parser.Parse();
+    var parseResult = parser.Parse();
 
     if (!parseResult.IsSuccess)
     {
-        foreach (var error in parseResult.Errors)
-            Console.WriteLine($"Error: {error}");
+        foreach (var diagnostic in parseResult.Diagnostics)
+            Console.WriteLine($"Error: {diagnostic}");
         if (parseResult.HitErrorLimit)
             Console.WriteLine("Too many errors, stopping.");
         return;
@@ -216,12 +218,12 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
         // Static Analysis Phase
         TypeChecker checker = new();
         checker.SetDecoratorMode(decoratorMode);
-        TypeCheckResult typeResult = checker.CheckWithRecovery(parseResult.Statements);
+        var typeResult = checker.CheckWithRecovery(parseResult.Statements);
 
         if (!typeResult.IsSuccess)
         {
-            foreach (var error in typeResult.Errors)
-                Console.WriteLine($"Error: {error}");
+            foreach (var diagnostic in typeResult.Diagnostics)
+                Console.WriteLine($"Error: {diagnostic}");
             if (typeResult.HitErrorLimit)
                 Console.WriteLine("Too many errors, stopping.");
             return;
@@ -229,6 +231,10 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
 
         // Interpretation Phase
         interpreter.Interpret(parseResult.Statements, typeResult.TypeMap);
+    }
+    catch (SharpTSException ex)
+    {
+        Console.WriteLine($"Error: {ex.Diagnostic}");
     }
     catch (Exception ex)
     {
@@ -287,21 +293,18 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
             }
         }
 
+        // Set up diagnostic reporter
+        var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
+
         // Parse first to check for module statements and path references
         Lexer lexer = new(source);
         List<Token> tokens = lexer.ScanTokens();
-        Parser parser = new(tokens, decoratorMode);
-        ParseResult parseResult = parser.Parse();
+        Parser parser = new Parser(tokens, decoratorMode).WithFilePath(absolutePath);
+        var parseResult = parser.Parse();
 
         if (!parseResult.IsSuccess)
         {
-            foreach (var error in parseResult.Errors)
-            {
-                if (outputOptions.MsBuildErrors)
-                    Console.Error.WriteLine($"{inputPath}({error.Line},1): error SHARPTS001: {error.Message}");
-                else
-                    Console.WriteLine($"Error: {error}");
-            }
+            reporter.ReportAll(parseResult.Diagnostics);
             if (parseResult.HitErrorLimit)
                 Console.WriteLine("Too many errors, stopping.");
             Environment.Exit(1);
@@ -330,6 +333,12 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         {
             CreateNuGetPackage(outputPath, packageJson, packOptions);
         }
+    }
+    catch (SharpTSException ex)
+    {
+        var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors };
+        reporter.Report(ex.Diagnostic);
+        Environment.Exit(1);
     }
     catch (Exception ex)
     {
@@ -440,20 +449,17 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
 static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target)
 {
+    // Set up diagnostic reporter
+    var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
+
     // Static Analysis Phase
-    TypeChecker checker = new();
+    TypeChecker checker = new TypeChecker().WithFilePath(outputPath);
     checker.SetDecoratorMode(decoratorMode);
-    TypeCheckResult typeResult = checker.CheckWithRecovery(statements);
+    var typeResult = checker.CheckWithRecovery(statements);
 
     if (!typeResult.IsSuccess)
     {
-        foreach (var error in typeResult.Errors)
-        {
-            if (outputOptions.MsBuildErrors)
-                Console.Error.WriteLine($"{outputPath}({error.Line ?? 1},1): error SHARPTS002: {error.Message}");
-            else
-                Console.WriteLine($"Error: {error}");
-        }
+        reporter.ReportAll(typeResult.Diagnostics);
         if (typeResult.HitErrorLimit)
             Console.WriteLine("Too many errors, stopping.");
         Environment.Exit(1);

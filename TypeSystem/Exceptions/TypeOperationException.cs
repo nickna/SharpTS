@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics;
+
 namespace SharpTS.TypeSystem.Exceptions;
 
 /// <summary>
@@ -6,7 +8,7 @@ namespace SharpTS.TypeSystem.Exceptions;
 public class TypeOperationException : TypeCheckException
 {
     public TypeOperationException(string message, int? line = null, int? column = null)
-        : base(message, line, column)
+        : base(DiagnosticCode.TypeOperation, message, line, column)
     {
     }
 }

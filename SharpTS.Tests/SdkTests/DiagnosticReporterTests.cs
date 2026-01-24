@@ -1,4 +1,4 @@
-using SharpTS.Compilation;
+using SharpTS.Diagnostics;
 using Xunit;
 
 namespace SharpTS.Tests.SdkTests;
@@ -13,7 +13,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.TypeError, "Type mismatch", "src/app.ts", 15, 10));
+            reporter.ReportError(DiagnosticCode.TypeError, "Type mismatch", new SourceLocation("src/app.ts", 15, 10)));
 
         Assert.Equal("src/app.ts(15,10): error SHARPTS001: Type mismatch", output.Trim());
     }
@@ -23,9 +23,9 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = false };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.TypeError, "Type mismatch", "src/app.ts", 15, 10));
+            reporter.ReportError(DiagnosticCode.TypeError, "Type mismatch", new SourceLocation("src/app.ts", 15, 10)));
 
-        Assert.Equal("Error at src/app.ts:15:10: Type mismatch", output.Trim());
+        Assert.Equal("Type Error at src/app.ts:15:10: Type mismatch", output.Trim());
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class DiagnosticReporterTests
         var output = CaptureStdErr(() =>
             reporter.ReportError(DiagnosticCode.ConfigError, "Invalid configuration"));
 
-        Assert.Equal("Error: Invalid configuration", output.Trim());
+        Assert.Equal("Config Error: Invalid configuration", output.Trim());
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdOut(() =>
-            reporter.ReportWarning(DiagnosticCode.TypeError, "Unused variable", "src/app.ts", 5, 1));
+            reporter.ReportWarning(DiagnosticCode.TypeError, "Unused variable", new SourceLocation("src/app.ts", 5, 1)));
 
         Assert.Equal("src/app.ts(5,1): warning SHARPTS001: Unused variable", output.Trim());
     }
@@ -53,7 +53,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = false };
         var output = CaptureStdOut(() =>
-            reporter.ReportWarning(DiagnosticCode.TypeError, "Unused variable", "src/app.ts", 5, 1));
+            reporter.ReportWarning(DiagnosticCode.TypeError, "Unused variable", new SourceLocation("src/app.ts", 5, 1)));
 
         Assert.Equal("Warning at src/app.ts:5:1: Unused variable", output.Trim());
     }
@@ -83,7 +83,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.General, "Unknown error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.General, "Unknown error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS000", output);
     }
@@ -93,7 +93,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.TypeError, "Type error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.TypeError, "Type error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS001", output);
     }
@@ -103,7 +103,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.ParseError, "Parse error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.ParseError, "Parse error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS002", output);
     }
@@ -113,7 +113,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.ModuleError, "Module error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.ModuleError, "Module error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS003", output);
     }
@@ -123,7 +123,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.CompileError, "Compile error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.CompileError, "Compile error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS004", output);
     }
@@ -133,7 +133,7 @@ public class DiagnosticReporterTests
     {
         var reporter = new DiagnosticReporter { MsBuildFormat = true };
         var output = CaptureStdErr(() =>
-            reporter.ReportError(DiagnosticCode.ConfigError, "Config error", "file.ts", 1, 1));
+            reporter.ReportError(DiagnosticCode.ConfigError, "Config error", new SourceLocation("file.ts", 1, 1)));
 
         Assert.Contains("SHARPTS005", output);
     }
@@ -141,7 +141,7 @@ public class DiagnosticReporterTests
     [Fact]
     public void StaticHelper_TypeError_CreatesDiagnostic()
     {
-        var diagnostic = DiagnosticReporter.TypeError("Type mismatch", "app.ts", 10, 5);
+        var diagnostic = Diagnostic.TypeError("Type mismatch", new SourceLocation("app.ts", 10, 5));
 
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(DiagnosticCode.TypeError, diagnostic.Code);
@@ -154,7 +154,7 @@ public class DiagnosticReporterTests
     [Fact]
     public void StaticHelper_ParseError_CreatesDiagnostic()
     {
-        var diagnostic = DiagnosticReporter.ParseError("Unexpected token", "app.ts", 20, 15);
+        var diagnostic = Diagnostic.ParseError("Unexpected token", new SourceLocation("app.ts", 20, 15));
 
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(DiagnosticCode.ParseError, diagnostic.Code);
@@ -164,7 +164,7 @@ public class DiagnosticReporterTests
     [Fact]
     public void StaticHelper_ModuleError_CreatesDiagnostic()
     {
-        var diagnostic = DiagnosticReporter.ModuleError("Cannot resolve module");
+        var diagnostic = Diagnostic.ModuleError("Cannot resolve module");
 
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(DiagnosticCode.ModuleError, diagnostic.Code);
@@ -174,7 +174,7 @@ public class DiagnosticReporterTests
     [Fact]
     public void StaticHelper_CompileError_CreatesDiagnostic()
     {
-        var diagnostic = DiagnosticReporter.CompileError("IL emission failed");
+        var diagnostic = Diagnostic.CompileError("IL emission failed");
 
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(DiagnosticCode.CompileError, diagnostic.Code);
@@ -183,7 +183,7 @@ public class DiagnosticReporterTests
     [Fact]
     public void StaticHelper_ConfigError_CreatesDiagnostic()
     {
-        var diagnostic = DiagnosticReporter.ConfigError("Invalid tsconfig.json");
+        var diagnostic = Diagnostic.ConfigError("Invalid tsconfig.json");
 
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(DiagnosticCode.ConfigError, diagnostic.Code);
@@ -197,9 +197,7 @@ public class DiagnosticReporterTests
             DiagnosticSeverity.Error,
             DiagnosticCode.TypeError,
             "Cannot assign string to number",
-            "src/index.ts",
-            42,
-            8
+            new SourceLocation("src/index.ts", 42, 8)
         );
 
         var output = CaptureStdErr(() => reporter.Report(diagnostic));

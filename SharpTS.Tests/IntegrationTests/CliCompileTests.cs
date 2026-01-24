@@ -162,7 +162,8 @@ public class CliCompileTests
         var result = CliTestHelper.RunCli($"-c \"{scriptPath}\"", tempDir.Path);
 
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("Error:", result.StandardOutput);
+        // Errors are written to stderr
+        Assert.Contains("Error", result.StandardError);
     }
 
     [Fact]
@@ -174,7 +175,8 @@ public class CliCompileTests
         var result = CliTestHelper.RunCli($"-c \"{scriptPath}\"", tempDir.Path);
 
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("Error:", result.StandardOutput);
+        // Errors are written to stderr
+        Assert.Contains("Error", result.StandardError);
     }
 
     [Fact]

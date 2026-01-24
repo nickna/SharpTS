@@ -6,6 +6,8 @@ using SharpTS.Runtime.Types;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 /// <summary>
 /// Async expression and statement evaluation for async/await support.
 /// </summary>
@@ -197,7 +199,7 @@ public partial class Interpreter
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             string s => s.Select(c => (object?)c.ToString()),
-            _ => throw new Exception("Runtime Error: for...of requires an iterable (array, Map, Set, or iterator).")
+            _ => throw new InterpreterException(" for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
         foreach (var item in items)
@@ -381,7 +383,7 @@ public partial class Interpreter
             SharpTSObject o => o.Fields.Keys,
             SharpTSInstance inst => inst.GetFieldNames(),
             SharpTSArray arr => Enumerable.Range(0, arr.Elements.Count).Select(i => i.ToString()),
-            _ => throw new Exception("Runtime Error: for...in requires an object.")
+            _ => throw new InterpreterException(" for...in requires an object.")
         };
 
         foreach (var key in keys)
@@ -636,7 +638,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
         {
             if (call.Arguments.Count != 1)
-                throw new Exception("Runtime Error: BigInt() requires exactly one argument.");
+                throw new InterpreterException(" BigInt() requires exactly one argument.");
 
             var arg = await EvaluateAsync(call.Arguments[0]);
             return arg switch
@@ -670,7 +672,7 @@ public partial class Interpreter
                 }
                 else
                 {
-                    throw new Exception("Runtime Error: Spread argument must be an array.");
+                    throw new InterpreterException(" Spread argument must be an array.");
                 }
             }
             else
@@ -832,7 +834,7 @@ public partial class Interpreter
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
             Expr.ComputedKey ck => (await EvaluateAsync(ck.Expression))?.ToString() ?? "undefined",
-            _ => throw new Exception("Runtime Error: Invalid property key for accessor.")
+            _ => throw new InterpreterException(" Invalid property key for accessor.")
         };
     }
 
@@ -1001,7 +1003,7 @@ public partial class Interpreter
         object? tag = await EvaluateAsync(tagged.Tag);
 
         if (tag is not Runtime.Types.ISharpTSCallable callable)
-            throw new Exception("Runtime Error: Tagged template tag must be a function.");
+            throw new InterpreterException(" Tagged template tag must be a function.");
 
         var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
         var stringsArray = new Runtime.Types.SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);

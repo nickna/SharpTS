@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -23,9 +24,9 @@ public class NegativeTests
     }
 
     /// <summary>
-    /// Parses source code using recovery mode and returns the ParseResult.
+    /// Parses source code using recovery mode and returns the ParseDiagnosticResult.
     /// </summary>
-    private static ParseResult TryParse(string source)
+    private static ParseDiagnosticResult TryParse(string source)
     {
         var tokens = TryLex(source);
         var parser = new Parser(tokens);
@@ -568,7 +569,7 @@ public class NegativeTests
         var result = TryParse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 2, $"Expected at least 2 errors, got {result.Errors.Count}");
+        Assert.True(result.ErrorCount >= 2, $"Expected at least 2 errors, got {result.ErrorCount}");
     }
 
     [Fact]
@@ -580,7 +581,7 @@ public class NegativeTests
 
         Assert.False(result.IsSuccess);
         Assert.True(result.HitErrorLimit);
-        Assert.Equal(10, result.Errors.Count);
+        Assert.Equal(10, result.ErrorCount);
     }
 
     [Fact]
@@ -618,8 +619,8 @@ public class NegativeTests
         var typeCheckResult = checker.CheckWithRecovery(parseResult.Statements);
 
         Assert.False(typeCheckResult.IsSuccess);
-        Assert.True(typeCheckResult.Errors.Count >= 2,
-            $"Expected at least 2 type errors, got {typeCheckResult.Errors.Count}");
+        Assert.True(typeCheckResult.ErrorCount >= 2,
+            $"Expected at least 2 type errors, got {typeCheckResult.ErrorCount}");
     }
 
     #endregion

@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
@@ -1122,13 +1123,13 @@ public partial class ILEmitter
                 return;
             }
 
-            throw new Exception($"Property or field '{propertyName}' not found on external type {externalType.FullName}");
+            throw new CompileException($"Property or field '{propertyName}' not found on external type {externalType.FullName}");
         }
 
         var getter = property.GetGetMethod();
         if (getter == null)
         {
-            throw new Exception($"Property '{property.Name}' on external type {externalType.FullName} has no getter");
+            throw new CompileException($"Property '{property.Name}' on external type {externalType.FullName} has no getter");
         }
 
         // Emit property access
@@ -1184,13 +1185,13 @@ public partial class ILEmitter
                 return;
             }
 
-            throw new Exception($"Property or field '{propertyName}' not found on external type {externalType.FullName}");
+            throw new CompileException($"Property or field '{propertyName}' not found on external type {externalType.FullName}");
         }
 
         var setter = property.GetSetMethod();
         if (setter == null)
         {
-            throw new Exception($"Property '{property.Name}' on external type {externalType.FullName} has no setter");
+            throw new CompileException($"Property '{property.Name}' on external type {externalType.FullName} has no setter");
         }
 
         // Emit property set

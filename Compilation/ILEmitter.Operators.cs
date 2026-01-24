@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using static SharpTS.TypeSystem.OperatorDescriptor;
@@ -971,8 +972,8 @@ public partial class ILEmitter
         if (method == null || resultType == BigIntResultType.Unsupported)
         {
             if (b.Operator.Type == TokenType.GREATER_GREATER_GREATER)
-                throw new Exception("Runtime Error: Unsigned right shift (>>>) is not supported for bigint.");
-            throw new Exception($"Unsupported bigint operator: {b.Operator.Type}");
+                throw new CompileException("Unsigned right shift (>>>) is not supported for bigint.");
+            throw new CompileException($"Unsupported bigint operator: {b.Operator.Type}");
         }
 
         // Call the runtime method

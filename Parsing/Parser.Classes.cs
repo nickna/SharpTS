@@ -413,7 +413,7 @@ public partial class Parser
             {
                 RecordError(ex.Message);
                 SynchronizeInClassBody();
-                if (_errors.Count >= MaxErrors) break;
+                if (_diagnostics.HitErrorLimit) break;
             }
         }
 
@@ -763,7 +763,7 @@ public partial class Parser
             {
                 RecordError(ex.Message);
                 SynchronizeInClassBody();
-                if (_errors.Count >= MaxErrors) break;
+                if (_diagnostics.HitErrorLimit) break;
             }
         }
 

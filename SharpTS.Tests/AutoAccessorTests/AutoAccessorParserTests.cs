@@ -1,4 +1,5 @@
 using Xunit;
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 
 namespace SharpTS.Tests.AutoAccessorTests;
@@ -8,7 +9,7 @@ namespace SharpTS.Tests.AutoAccessorTests;
 /// </summary>
 public class AutoAccessorParserTests
 {
-    private static ParseResult Parse(string code)
+    private static ParseDiagnosticResult Parse(string code)
     {
         var lexer = new Lexer(code);
         var tokens = lexer.ScanTokens();
@@ -26,7 +27,7 @@ public class AutoAccessorParserTests
         ";
         var result = Parse(code);
         Assert.False(result.IsSuccess);
-        Assert.Contains(result.Errors, e => e.Message.Contains("abstract", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Diagnostics, e => e.Message.Contains("abstract", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -8,6 +8,8 @@ using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 public partial class Interpreter
 {
     // Stack of using declaration trackers for nested scopes
@@ -508,7 +510,7 @@ public partial class Interpreter
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             string s => s.Select(c => (object?)c.ToString()),
-            _ => throw new Exception("Runtime Error: for...of requires an iterable (array, Map, Set, or iterator).")
+            _ => throw new InterpreterException(" for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
         return IterateWithBreakContinue(elements, forOf.Variable.Lexeme, forOf.Body);
@@ -532,7 +534,7 @@ public partial class Interpreter
             SharpTSObject o => o.Fields.Keys,
             SharpTSInstance i => i.GetFieldNames(),
             SharpTSArray a => Enumerable.Range(0, a.Elements.Count).Select(i => i.ToString()),
-            _ => throw new Exception("Runtime Error: for...in requires an object.")
+            _ => throw new InterpreterException(" for...in requires an object.")
         };
 
         return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable.Lexeme, forIn.Body);
@@ -594,7 +596,7 @@ public partial class Interpreter
         }
         else
         {
-            throw new Exception("Runtime Error: [Symbol.iterator] must be a function.");
+            throw new InterpreterException(" [Symbol.iterator] must be a function.");
         }
 
         // Iterate using the iterator protocol
@@ -619,7 +621,7 @@ public partial class Interpreter
 
             if (nextMethod == null)
             {
-                throw new Exception("Runtime Error: Iterator must have a next() method.");
+                throw new InterpreterException(" Iterator must have a next() method.");
             }
 
             // Bind next() to the iterator object so 'this' works correctly
@@ -644,7 +646,7 @@ public partial class Interpreter
             }
             else
             {
-                throw new Exception("Runtime Error: Iterator.next must be a function.");
+                throw new InterpreterException(" Iterator.next must be a function.");
             }
 
             // Get done and value from result
@@ -708,7 +710,7 @@ public partial class Interpreter
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             string s => s.Select(c => (object?)c.ToString()),
-            null => throw new Exception("Runtime Error: Cannot spread null or undefined."),
+            null => throw new InterpreterException(" Cannot spread null or undefined."),
             _ => throw new Exception($"Runtime Error: Value of type '{value.GetType().Name}' is not iterable. Expected an array, string, Map, Set, generator, or object with [Symbol.iterator].")
         };
     }

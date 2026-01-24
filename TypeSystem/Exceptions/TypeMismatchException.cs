@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics;
+
 namespace SharpTS.TypeSystem.Exceptions;
 
 /// <summary>
@@ -16,14 +18,14 @@ public class TypeMismatchException : TypeCheckException
     public TypeInfo Actual { get; init; }
 
     public TypeMismatchException(TypeInfo expected, TypeInfo actual, int? line = null, int? column = null)
-        : base($"Type '{actual}' is not assignable to type '{expected}'", line, column)
+        : base(DiagnosticCode.TypeMismatch, $"Type '{actual}' is not assignable to type '{expected}'", line, column)
     {
         Expected = expected;
         Actual = actual;
     }
 
     public TypeMismatchException(string customMessage, TypeInfo expected, TypeInfo actual, int? line = null, int? column = null)
-        : base(customMessage, line, column)
+        : base(DiagnosticCode.TypeMismatch, customMessage, line, column)
     {
         Expected = expected;
         Actual = actual;

@@ -17,7 +17,7 @@ public class CliErrorTests
         var result = CliTestHelper.RunCli($"-c \"{scriptPath}\"", tempDir.Path);
 
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("Error:", result.StandardOutput);
+        Assert.Contains("Error", result.StandardError);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class CliErrorTests
 
         Assert.Equal(1, result.ExitCode);
         // Should show multiple error messages
-        var errorCount = Regex.Matches(result.StandardOutput, "Error:").Count;
+        var errorCount = Regex.Matches(result.StandardError, "Error").Count;
         Assert.True(errorCount >= 2, $"Expected at least 2 errors, got {errorCount}");
     }
 
@@ -151,8 +151,8 @@ public class CliErrorTests
 
         Assert.Equal(1, result.ExitCode);
         // Count error occurrences - should not be duplicated
-        var errorLines = result.StandardOutput.Split('\n')
-            .Where(line => line.Contains("Error:"))
+        var errorLines = result.StandardError.Split('\n')
+            .Where(line => line.Contains("Error"))
             .ToList();
 
         // Each unique error should appear only once

@@ -7,6 +7,8 @@ using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 public partial class Interpreter
 {
     /// <summary>
@@ -112,7 +114,7 @@ public partial class Interpreter
         // Bound functions cannot be used as constructors (JS spec compliance)
         if (klass is BoundFunction)
         {
-            throw new Exception("Runtime Error: Bound functions cannot be used as constructors.");
+            throw new InterpreterException("Bound functions cannot be used as constructors.");
         }
 
         if (klass is not SharpTSClass sharpClass)

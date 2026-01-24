@@ -6,6 +6,8 @@ using System.Reflection.PortableExecutable;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Compilation.Registries;
+using SharpTS.Diagnostics;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
@@ -836,7 +838,7 @@ public partial class ILCompiler
 
             // Get the SDK reference assembly path (use explicit path if provided)
             var refAssemblyPath = _sdkPath ?? SdkResolver.FindReferenceAssembliesPath()
-                ?? throw new InvalidOperationException(
+                ?? throw new CompileException(
                     "Could not find SDK reference assemblies for post-processing. " +
                     "Ensure the .NET SDK is installed.");
 

@@ -604,7 +604,7 @@ public class IntegrationTests
         var result = CliTestHelper.RunCli($"--compile \"{scriptPath}\" --pack", tempDir.Path);
 
         Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("Error:", result.StandardOutput);
+        Assert.Contains("Error", result.StandardError);
         // Should not have created a package
         var packages = GetNupkgFiles(tempDir.Path);
         Assert.Empty(packages);

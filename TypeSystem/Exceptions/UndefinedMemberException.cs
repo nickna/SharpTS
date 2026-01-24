@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics;
+
 namespace SharpTS.TypeSystem.Exceptions;
 
 /// <summary>
@@ -16,14 +18,14 @@ public class UndefinedMemberException : TypeCheckException
     public TypeInfo Type { get; init; }
 
     public UndefinedMemberException(string memberName, TypeInfo type, int? line = null, int? column = null)
-        : base($"Property '{memberName}' does not exist on type '{type}'", line, column)
+        : base(DiagnosticCode.UndefinedMember, $"Property '{memberName}' does not exist on type '{type}'", line, column)
     {
         MemberName = memberName;
         Type = type;
     }
 
     public UndefinedMemberException(string customMessage, string memberName, TypeInfo type, int? line = null, int? column = null)
-        : base(customMessage, line, column)
+        : base(DiagnosticCode.UndefinedMember, customMessage, line, column)
     {
         MemberName = memberName;
         Type = type;

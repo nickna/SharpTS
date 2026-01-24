@@ -329,7 +329,7 @@ public partial class Parser
             {
                 RecordError(ex.Message);
                 SynchronizeInBlock();
-                if (_errors.Count >= MaxErrors) break;
+                if (_diagnostics.HitErrorLimit) break;
             }
         }
 

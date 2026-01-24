@@ -8,6 +8,8 @@ using SharpTS.Runtime.Types;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 public partial class Interpreter
 {
     /// <summary>
@@ -62,7 +64,7 @@ public partial class Interpreter
             Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
             Expr.Satisfies sat => Evaluate(sat.Expression), // Satisfies is pass-through at runtime
             Expr.NonNullAssertion nna => Evaluate(nna.Expression), // Non-null assertions are pass-through at runtime
-            Expr.Await => throw new Exception("Runtime Error: 'await' can only be used inside async functions."),
+            Expr.Await => throw new InterpreterException(" 'await' can only be used inside async functions."),
             Expr.DynamicImport di => EvaluateDynamicImport(di),
             Expr.ImportMeta im => EvaluateImportMeta(im),
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
@@ -231,7 +233,7 @@ public partial class Interpreter
         object? tag = Evaluate(tagged.Tag);
 
         if (tag is not ISharpTSCallable callable)
-            throw new Exception("Runtime Error: Tagged template tag must be a function.");
+            throw new InterpreterException(" Tagged template tag must be a function.");
 
         // Create template strings array with raw property
         // Cooked values: null becomes undefined (or just null in our runtime)
@@ -418,7 +420,7 @@ public partial class Interpreter
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
             Expr.ComputedKey ck => evaluateKey(ck.Expression)?.ToString() ?? "undefined",
-            _ => throw new Exception("Runtime Error: Invalid property key for accessor.")
+            _ => throw new InterpreterException(" Invalid property key for accessor.")
         };
     }
 
@@ -431,9 +433,9 @@ public partial class Interpreter
         if (body is Expr.ArrowFunction arrow)
         {
             return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
-                   ?? throw new Exception("Runtime Error: Failed to create getter function.");
+                   ?? throw new InterpreterException(" Failed to create getter function.");
         }
-        throw new Exception("Runtime Error: Getter must be a function expression.");
+        throw new InterpreterException(" Getter must be a function expression.");
     }
 
     /// <summary>
@@ -445,9 +447,9 @@ public partial class Interpreter
         if (body is Expr.ArrowFunction arrow)
         {
             return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
-                   ?? throw new Exception("Runtime Error: Failed to create setter function.");
+                   ?? throw new InterpreterException(" Failed to create setter function.");
         }
-        throw new Exception("Runtime Error: Setter must be a function expression.");
+        throw new InterpreterException(" Setter must be a function expression.");
     }
 
     /// <summary>
@@ -472,7 +474,7 @@ public partial class Interpreter
         }
         else
         {
-            throw new Exception("Runtime Error: Spread in object literal requires an object.");
+            throw new InterpreterException(" Spread in object literal requires an object.");
         }
     }
 
@@ -677,7 +679,7 @@ public partial class Interpreter
         // Evaluate the path expression
         object? pathValue = Evaluate(di.PathExpression);
         string specifier = pathValue?.ToString()
-            ?? throw new Exception("Runtime Error: Dynamic import path cannot be null.");
+            ?? throw new InterpreterException(" Dynamic import path cannot be null.");
 
         // Create resolver if needed (single-file mode without module context)
         _moduleResolver ??= new ModuleResolver(

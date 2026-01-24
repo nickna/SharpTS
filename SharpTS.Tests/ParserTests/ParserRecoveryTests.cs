@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using Xunit;
 
@@ -11,7 +12,7 @@ public class ParserRecoveryTests
 {
     #region Helpers
 
-    private static ParseResult Parse(string source)
+    private static ParseDiagnosticResult Parse(string source)
     {
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
@@ -29,7 +30,7 @@ public class ParserRecoveryTests
         var result = Parse("let x = 5;");
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
         Assert.Single(result.Statements);
     }
 
@@ -39,8 +40,8 @@ public class ParserRecoveryTests
         var result = Parse("let x = ;");
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
-        Assert.Equal(1, result.Errors[0].Line);
+        Assert.Equal(1, result.ErrorCount);
+        Assert.Equal(1, result.Diagnostics.First().Line);
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 2, $"Expected at least 2 errors, got {result.Errors.Count}");
+        Assert.True(result.ErrorCount >= 2, $"Expected at least 2 errors, got {result.ErrorCount}");
     }
 
     [Fact]
@@ -68,10 +69,10 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 2);
+        Assert.True(result.ErrorCount >= 2);
 
         // Errors should be on different lines
-        var lines = result.Errors.Select(e => e.Line).Distinct().ToList();
+        var lines = result.Diagnostics.Select(e => e.Line).Distinct().ToList();
         Assert.True(lines.Count >= 2, "Errors should be on different lines");
     }
 
@@ -88,7 +89,7 @@ public class ParserRecoveryTests
 
         Assert.False(result.IsSuccess);
         Assert.True(result.HitErrorLimit);
-        Assert.Equal(10, result.Errors.Count);
+        Assert.Equal(10, result.ErrorCount);
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public class ParserRecoveryTests
 
         Assert.False(result.IsSuccess);
         Assert.False(result.HitErrorLimit);
-        Assert.True(result.Errors.Count < 10);
+        Assert.True(result.ErrorCount < 10);
     }
 
     [Fact]
@@ -115,7 +116,7 @@ public class ParserRecoveryTests
 
         Assert.False(result.IsSuccess);
         Assert.True(result.HitErrorLimit);
-        Assert.Equal(10, result.Errors.Count);
+        Assert.Equal(10, result.ErrorCount);
     }
 
     #endregion
@@ -170,7 +171,7 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
 
         // All three valid statements should be parsed
         var varStatements = result.Statements.OfType<Stmt.Var>().ToList();
@@ -205,7 +206,7 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
         // Should recover at "class" and parse the class
         var classStatements = result.Statements.OfType<Stmt.Class>().ToList();
         Assert.Single(classStatements);
@@ -309,7 +310,7 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.True(result.IsSuccess,
-            $"Expected success but got errors: {string.Join(", ", result.Errors.Select(e => e.Message))}");
+            $"Expected success but got errors: {string.Join(", ", result.Diagnostics.Select(e => e.Message))}");
         // The class is parsed as a class EXPRESSION, not a class statement
         var varStatements = result.Statements.OfType<Stmt.Var>().ToList();
         Assert.Single(varStatements);
@@ -371,8 +372,8 @@ public class ParserRecoveryTests
     {
         var result = Parse("let x = ;");
 
-        Assert.Single(result.Errors);
-        var errorString = result.Errors[0].ToString();
+        Assert.Equal(1, result.ErrorCount);
+        var errorString = result.Diagnostics.First().ToString();
         Assert.Contains("line", errorString.ToLower());
     }
 
@@ -381,19 +382,19 @@ public class ParserRecoveryTests
     {
         var result = Parse("let x = ;");
 
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
         // Error message should indicate what was expected or what went wrong
-        Assert.False(string.IsNullOrWhiteSpace(result.Errors[0].Message));
+        Assert.False(string.IsNullOrWhiteSpace(result.Diagnostics.First().Message));
     }
 
     [Fact]
-    public void Parse_Error_HasTokenLexeme()
+    public void Parse_Error_HasLocation()
     {
         var result = Parse("let x = ;");
 
-        Assert.Single(result.Errors);
-        // TokenLexeme should be captured for context
-        Assert.NotNull(result.Errors[0].TokenLexeme);
+        Assert.Equal(1, result.ErrorCount);
+        // Location should be captured for context
+        Assert.NotNull(result.Diagnostics.First().Location);
     }
 
     #endregion
@@ -449,7 +450,7 @@ public class ParserRecoveryTests
         var result = Parse(source);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(3, result.Errors.Count);
+        Assert.Equal(3, result.ErrorCount);
 
         // Check that valid declarations were parsed
         var varStatements = result.Statements.OfType<Stmt.Var>().ToList();
@@ -473,7 +474,7 @@ public class ParserRecoveryTests
         var result = Parse("");
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
         Assert.Empty(result.Statements);
     }
 
@@ -483,7 +484,7 @@ public class ParserRecoveryTests
         var result = Parse(";;;");
 
         Assert.True(result.IsSuccess);
-        Assert.Empty(result.Errors);
+        Assert.Empty(result.Diagnostics);
     }
 
     [Fact]
@@ -492,7 +493,7 @@ public class ParserRecoveryTests
         var result = Parse("let x =");
 
         Assert.False(result.IsSuccess);
-        Assert.Single(result.Errors);
+        Assert.Equal(1, result.ErrorCount);
     }
 
     [Fact]
@@ -507,7 +508,7 @@ public class ParserRecoveryTests
 
         Assert.False(result.IsSuccess);
         // Should still attempt to parse what it can
-        Assert.True(result.Errors.Count >= 1);
+        Assert.True(result.ErrorCount >= 1);
     }
 
     #endregion

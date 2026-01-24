@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics;
+
 namespace SharpTS.TypeSystem.Exceptions;
 
 /// <summary>
@@ -11,12 +13,12 @@ public class InvalidCallException : TypeCheckException
     public TypeInfo? CalleeType { get; init; }
 
     public InvalidCallException(string message, int? line = null, int? column = null)
-        : base(message, line, column)
+        : base(DiagnosticCode.InvalidCall, message, line, column)
     {
     }
 
     public InvalidCallException(string message, TypeInfo calleeType, int? line = null, int? column = null)
-        : base(message, line, column)
+        : base(DiagnosticCode.InvalidCall, message, line, column)
     {
         CalleeType = calleeType;
     }

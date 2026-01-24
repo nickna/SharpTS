@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics;
+
 namespace SharpTS.Parsing;
 
 /// <summary>
@@ -35,8 +37,17 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private int _tempVarCounter = 0;
 
     // Error recovery support
-    private readonly List<ParseError> _errors = [];
-    private const int MaxErrors = 10;
+    private readonly DiagnosticCollector _diagnostics = new();
+    private string? _filePath = null;
+
+    /// <summary>
+    /// Sets the file path for source location reporting.
+    /// </summary>
+    public Parser WithFilePath(string? filePath)
+    {
+        _filePath = filePath;
+        return this;
+    }
 
     // Internal pattern representation for destructuring (not AST nodes)
     private abstract record DestructurePattern;
@@ -54,8 +65,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     /// <summary>
     /// Parses the token stream with error recovery, collecting multiple errors.
     /// </summary>
-    /// <returns>A ParseResult containing parsed statements and any errors encountered.</returns>
-    public ParseResult Parse()
+    /// <returns>A ParseDiagnosticResult containing parsed statements and any errors encountered.</returns>
+    public ParseDiagnosticResult Parse()
     {
         List<Stmt> statements = [];
 
@@ -74,11 +85,11 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             {
                 RecordError(ex.Message);
                 Synchronize();
-                if (_errors.Count >= MaxErrors)
-                    return new ParseResult(statements, _errors) { HitErrorLimit = true };
+                if (_diagnostics.HitErrorLimit)
+                    return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics, HitErrorLimit: true);
             }
         }
-        return new ParseResult(statements, _errors);
+        return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }
 
     /// <summary>
@@ -120,7 +131,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     public List<Stmt> ParseOrThrow()
     {
         var result = Parse();
-        if (!result.IsSuccess) throw new Exception(result.Errors[0].ToString());
+        if (!result.IsSuccess) throw new Exception(result.Diagnostics.First().ToString());
         return result.Statements;
     }
 
@@ -130,7 +141,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private void RecordError(string message)
     {
         Token current = IsAtEnd() ? Previous() : Peek();
-        _errors.Add(new ParseError(message, current.Line, null, current.Lexeme));
+        var location = new SourceLocation(_filePath, current.Line);
+        _diagnostics.AddError(DiagnosticCode.ParseError, message, location);
     }
 
     /// <summary>

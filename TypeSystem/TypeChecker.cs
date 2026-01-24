@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem.Exceptions;
@@ -74,8 +75,17 @@ public partial class TypeChecker
     private record VariancePositions(bool AppearsInOutput, bool AppearsInInput);
 
     // Error recovery support
-    private readonly List<TypeCheckError> _errors = [];
-    private const int MaxErrors = 10;
+    private readonly DiagnosticCollector _diagnostics = new();
+    private string? _filePath = null;
+
+    /// <summary>
+    /// Sets the file path for source location reporting.
+    /// </summary>
+    public TypeChecker WithFilePath(string? filePath)
+    {
+        _filePath = filePath;
+        return this;
+    }
 
     /// <summary>
     /// Maximum depth for recursive type alias expansion.
@@ -301,10 +311,10 @@ public partial class TypeChecker
     /// Type-checks the given statements with error recovery, collecting multiple errors.
     /// </summary>
     /// <param name="statements">The AST statements to check.</param>
-    /// <returns>A TypeCheckResult containing the type map and any errors encountered.</returns>
-    public TypeCheckResult CheckWithRecovery(List<Stmt> statements)
+    /// <returns>A TypeCheckDiagnosticResult containing the type map and any errors encountered.</returns>
+    public TypeCheckDiagnosticResult CheckWithRecovery(List<Stmt> statements)
     {
-        _errors.Clear();
+        _diagnostics.Clear();
         _compatibilityCache = null;
 
         // Pre-define built-ins
@@ -320,8 +330,8 @@ public partial class TypeChecker
 
         foreach (Stmt statement in statements)
         {
-            if (_errors.Count >= MaxErrors)
-                return new TypeCheckResult(_typeMap, _errors) { HitErrorLimit = true };
+            if (_diagnostics.HitErrorLimit)
+                return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics, HitErrorLimit: true);
 
             try
             {
@@ -341,7 +351,7 @@ public partial class TypeChecker
             }
         }
 
-        return new TypeCheckResult(_typeMap, _errors);
+        return new TypeCheckDiagnosticResult(_typeMap, _diagnostics.Diagnostics);
     }
 
     /// <summary>
@@ -349,13 +359,6 @@ public partial class TypeChecker
     /// </summary>
     private void RecordTypeError(TypeCheckException ex)
     {
-        TypeInfo? expected = null, actual = null;
-        if (ex is TypeMismatchException m)
-        {
-            expected = m.Expected;
-            actual = m.Actual;
-        }
-
         // Extract the core message by removing the "Type Error: " or "Type Error at line X: " prefix
         string message = ex.Message;
         if (message.StartsWith("Type Error at line"))
@@ -369,7 +372,21 @@ public partial class TypeChecker
             message = message["Type Error: ".Length..];
         }
 
-        _errors.Add(new TypeCheckError(message, ex.Line, ex.Column, expected, actual));
+        // Map exception type to diagnostic code
+        DiagnosticCode code = ex switch
+        {
+            TypeMismatchException => DiagnosticCode.TypeMismatch,
+            UndefinedMemberException => DiagnosticCode.UndefinedMember,
+            InvalidCallException => DiagnosticCode.InvalidCall,
+            TypeOperationException => DiagnosticCode.TypeOperation,
+            _ => DiagnosticCode.TypeError
+        };
+
+        SourceLocation? location = ex.Line.HasValue
+            ? new SourceLocation(_filePath, ex.Line.Value, ex.Column ?? 1)
+            : null;
+
+        _diagnostics.AddError(code, message, location);
     }
 
     /// <summary>
@@ -377,7 +394,10 @@ public partial class TypeChecker
     /// </summary>
     private void RecordTypeError(string message, int? line = null)
     {
-        _errors.Add(new TypeCheckError(message, line));
+        SourceLocation? location = line.HasValue
+            ? new SourceLocation(_filePath, line.Value)
+            : null;
+        _diagnostics.AddError(DiagnosticCode.TypeError, message, location);
     }
 
     /// <summary>

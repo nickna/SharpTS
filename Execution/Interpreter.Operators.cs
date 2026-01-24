@@ -6,6 +6,8 @@ using SharpTS.Runtime.Types;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 public partial class Interpreter
 {
     /// <summary>
@@ -500,7 +502,7 @@ public partial class Interpreter
             return false;
         }
 
-        throw new Exception("Runtime Error: 'in' operator requires an object on the right side.");
+        throw new InterpreterException("'in' operator requires an object on the right side.");
     }
 
     /// <summary>

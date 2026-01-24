@@ -263,7 +263,7 @@ public class ModuleResolver
             // For module loading, we throw on parse errors (backward compatible)
             if (!parseResult.IsSuccess)
             {
-                throw new Exception(parseResult.Errors[0].ToString());
+                throw new Exception(parseResult.Diagnostics.First().ToString());
             }
 
             var statements = parseResult.Statements;

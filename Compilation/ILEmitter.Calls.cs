@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation.CallHandlers;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -256,7 +257,7 @@ public partial class ILEmitter
         if (c.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
         {
             if (c.Arguments.Count != 1)
-                throw new Exception("BigInt() requires exactly one argument.");
+                throw new CompileException("BigInt() requires exactly one argument.");
 
             EmitExpression(c.Arguments[0]);
             EmitBoxIfNeeded(c.Arguments[0]);
@@ -1636,7 +1637,7 @@ public partial class ILEmitter
 
         if (methods.Length == 0)
         {
-            throw new Exception($"Instance method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
+            throw new CompileException($"Instance method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
 
         // Use type-aware overload resolution
@@ -1677,7 +1678,7 @@ public partial class ILEmitter
 
         if (ctors.Length == 0)
         {
-            throw new Exception($"No public constructors found on external type {externalType.FullName}");
+            throw new CompileException($"No public constructors found on external type {externalType.FullName}");
         }
 
         // Use type-aware overload resolution
@@ -1706,7 +1707,7 @@ public partial class ILEmitter
 
         if (methods.Length == 0)
         {
-            throw new Exception($"Static method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
+            throw new CompileException($"Static method '{methodName}' (or '{pascalMethodName}') not found on external type {externalType.FullName}");
         }
 
         // Use type-aware overload resolution

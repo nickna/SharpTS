@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
@@ -12,7 +13,7 @@ public class TypePredicateTests
 {
     #region Helpers
 
-    private static TypeCheckResult CheckWithRecovery(string source)
+    private static TypeCheckDiagnosticResult CheckWithRecovery(string source)
     {
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
@@ -20,7 +21,7 @@ public class TypePredicateTests
         var parseResult = parser.Parse();
 
         if (!parseResult.IsSuccess)
-            throw new Exception($"Parse failed: {parseResult.Errors[0]}");
+            throw new Exception($"Parse failed: {parseResult.Diagnostics.First()}");
 
         var checker = new TypeChecker();
         return checker.CheckWithRecovery(parseResult.Statements);

@@ -8,6 +8,8 @@ using SharpTS.TypeSystem;
 
 namespace SharpTS.Execution;
 
+// Note: This file uses InterpreterException for runtime errors
+
 public partial class Interpreter
 {
     /// <summary>
@@ -103,7 +105,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
         {
             if (call.Arguments.Count != 1)
-                throw new Exception("Runtime Error: BigInt() requires exactly one argument.");
+                throw new InterpreterException(" BigInt() requires exactly one argument.");
 
             var arg = Evaluate(call.Arguments[0]);
             return arg switch
@@ -134,7 +136,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
         {
             if (call.Arguments.Count < 1)
-                throw new Exception("Runtime Error: parseInt() requires at least one argument.");
+                throw new InterpreterException(" parseInt() requires at least one argument.");
             var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
             var radix = call.Arguments.Count > 1 && Evaluate(call.Arguments[1]) != null
                 ? (int)(double)Evaluate(call.Arguments[1])!
@@ -146,7 +148,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
         {
             if (call.Arguments.Count < 1)
-                throw new Exception("Runtime Error: parseFloat() requires at least one argument.");
+                throw new InterpreterException(" parseFloat() requires at least one argument.");
             var str = Evaluate(call.Arguments[0])?.ToString() ?? "";
             return NumberBuiltIns.ParseFloat(str);
         }
@@ -181,11 +183,11 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout")
         {
             if (call.Arguments.Count < 1)
-                throw new Exception("Runtime Error: setTimeout() requires at least one argument (callback).");
+                throw new InterpreterException(" setTimeout() requires at least one argument (callback).");
 
             var callbackValue = Evaluate(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
-                throw new Exception("Runtime Error: setTimeout() callback must be a function.");
+                throw new InterpreterException(" setTimeout() callback must be a function.");
 
             // Get delay (defaults to 0)
             double delayMs = 0;
@@ -224,11 +226,11 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval")
         {
             if (call.Arguments.Count < 1)
-                throw new Exception("Runtime Error: setInterval() requires at least one argument (callback).");
+                throw new InterpreterException(" setInterval() requires at least one argument (callback).");
 
             var callbackValue = Evaluate(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
-                throw new Exception("Runtime Error: setInterval() callback must be a function.");
+                throw new InterpreterException(" setInterval() callback must be a function.");
 
             // Get delay (defaults to 0)
             double delayMs = 0;
@@ -412,7 +414,7 @@ public partial class Interpreter
 
         // All other operators require both to be bigint
         if (!leftBi.HasValue || !rightBi.HasValue)
-            throw new Exception("Runtime Error: Cannot mix bigint and other types in operations.");
+            throw new InterpreterException(" Cannot mix bigint and other types in operations.");
 
         // Use centralized helper for all BigInt operations
         return BigIntOperatorHelper.EvaluateBinary(op, leftBi.Value, rightBi.Value);
