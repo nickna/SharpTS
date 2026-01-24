@@ -30,7 +30,13 @@ namespace SharpTS.TypeSystem;
 ///   <item><description><c>TypeChecker.Properties.cs</c> - Property access (CheckGet, CheckSet, CheckNew, CheckThis, CheckSuper, indexing)</description></item>
 ///   <item><description><c>TypeChecker.Calls.cs</c> - Function calls (CheckCall, overload resolution)</description></item>
 ///   <item><description><c>TypeChecker.Operators.cs</c> - Operators (binary, unary, logical, compound assignment)</description></item>
-///   <item><description><c>TypeChecker.Compatibility.cs</c> - Type compatibility (IsCompatible, structural typing, type guards)</description></item>
+///   <item><description><c>TypeChecker.Compatibility.cs</c> - Type compatibility core (IsCompatible, IsCompatibleCore, caching)</description></item>
+///   <item><description><c>TypeChecker.Compatibility.Helpers.cs</c> - Type predicates and class accessors</description></item>
+///   <item><description><c>TypeChecker.Compatibility.TypeGuards.cs</c> - Control-flow type narrowing</description></item>
+///   <item><description><c>TypeChecker.Compatibility.Structural.cs</c> - Duck typing and member access</description></item>
+///   <item><description><c>TypeChecker.Compatibility.Tuples.cs</c> - Tuple and array compatibility</description></item>
+///   <item><description><c>TypeChecker.Compatibility.Callable.cs</c> - Callable/constructable interface matching</description></item>
+///   <item><description><c>TypeChecker.Compatibility.TemplateLiterals.cs</c> - Template literal pattern matching</description></item>
 ///   <item><description><c>TypeChecker.Generics.cs</c> - Generic types (instantiation, substitution, type inference)</description></item>
 ///   <item><description><c>TypeChecker.TypeParsing.cs</c> - Type string parsing (ToTypeInfo, union/intersection/tuple/function parsing)</description></item>
 ///   <item><description><c>TypeChecker.Validation.cs</c> - Validation (interface implementation, abstract members, override checking)</description></item>
