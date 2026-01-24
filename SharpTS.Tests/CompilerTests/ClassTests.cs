@@ -312,13 +312,10 @@ public class ClassTests
         Assert.Equal("(3, 4)\n", output);
     }
 
-    [Fact(Skip = "IL compiler doesn't yet support extending instantiated generic types (e.g., extends Box<string>)")]
+    [Fact]
     public void InheritedConstructor_GenericParent()
     {
         // StringBox extends Box<string> - should inherit Box's constructor
-        // Note: This works in the interpreter but not in the IL compiler because
-        // the compiler needs special handling to create a closed generic type
-        // (Box`1[String]) as the base type instead of the open generic (Box`1).
         var source = """
             class Box<T> {
                 value: T;
@@ -337,6 +334,110 @@ public class ClassTests
 
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("HELLO\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_GenericParent_MultipleTypeParams()
+    {
+        // StringNumberPair extends Pair<string, number>
+        var source = """
+            class Pair<K, V> {
+                key: K;
+                value: V;
+                constructor(k: K, v: V) {
+                    this.key = k;
+                    this.value = v;
+                }
+            }
+            class StringNumberPair extends Pair<string, number> {
+                describe(): string {
+                    return this.key + " = " + this.value;
+                }
+            }
+            let p: StringNumberPair = new StringNumberPair("count", 42);
+            console.log(p.describe());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("count = 42\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_GenericParent_TypeParamForwarding()
+    {
+        // Derived<T> extends Base<T> - forwards type parameter
+        var source = """
+            class Base<T> {
+                value: T;
+                constructor(v: T) {
+                    this.value = v;
+                }
+            }
+            class Derived<T> extends Base<T> {
+                getValue(): T {
+                    return this.value;
+                }
+            }
+            let d: Derived<string> = new Derived<string>("test");
+            console.log(d.getValue());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_GenericParent_MixedTypeArgs()
+    {
+        // Mixed<X> extends Triple<string, X, number> - some concrete, some forwarded
+        var source = """
+            class Triple<A, B, C> {
+                a: A;
+                b: B;
+                c: C;
+                constructor(a: A, b: B, c: C) {
+                    this.a = a;
+                    this.b = b;
+                    this.c = c;
+                }
+            }
+            class Mixed<X> extends Triple<string, X, number> {
+                getB(): X {
+                    return this.b;
+                }
+            }
+            let m: Mixed<boolean> = new Mixed<boolean>("hello", true, 42);
+            console.log(m.a);
+            console.log(m.getB());
+            console.log(m.c);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("hello\ntrue\n42\n", output);
+    }
+
+    [Fact]
+    public void InheritedConstructor_GenericParent_WithOwnMethod()
+    {
+        // NumberBox extends Box<number> with its own method
+        var source = """
+            class Box<T> {
+                value: T;
+                constructor(v: T) {
+                    this.value = v;
+                }
+            }
+            class NumberBox extends Box<number> {
+                double(): number {
+                    return this.value * 2;
+                }
+            }
+            let nb: NumberBox = new NumberBox(21);
+            console.log(nb.double());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
     }
 
     [Fact]

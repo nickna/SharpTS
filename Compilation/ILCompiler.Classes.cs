@@ -61,19 +61,6 @@ public partial class ILCompiler
             return;
         }
 
-        Type? baseType = null;
-        string? qualifiedSuperclassName = null;
-        if (classStmt.Superclass != null)
-        {
-            // Resolve superclass name (includes module prefix and .NET namespace if set)
-            qualifiedSuperclassName = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
-
-            if (_classes.Builders.TryGetValue(qualifiedSuperclassName, out var superBuilder))
-            {
-                baseType = superBuilder;
-            }
-        }
-
         // Set TypeAttributes.Abstract if the class is abstract
         TypeAttributes typeAttrs = TypeAttributes.Public | TypeAttributes.Class;
         if (classStmt.IsAbstract)
@@ -81,20 +68,29 @@ public partial class ILCompiler
             typeAttrs |= TypeAttributes.Abstract;
         }
 
+        // Resolve superclass name for tracking (before creating TypeBuilder)
+        string? qualifiedSuperclassName = null;
+        if (classStmt.Superclass != null)
+        {
+            qualifiedSuperclassName = ctx.ResolveClassName(classStmt.Superclass.Lexeme);
+        }
+
+        // Create TypeBuilder initially without parent - we'll set it after defining generic params
+        // This is necessary because the base type may reference our generic params (e.g., class Foo<T> extends Box<T>)
         var typeBuilder = _moduleBuilder.DefineType(
             qualifiedClassName,
-            typeAttrs,
-            baseType
+            typeAttrs
         );
 
         // Track superclass for inheritance-aware method resolution
         _classes.Superclass[qualifiedClassName] = qualifiedSuperclassName;
 
-        // Handle generic type parameters
+        // Handle generic type parameters FIRST (before resolving superclass type args)
+        GenericTypeParameterBuilder[]? classGenericParams = null;
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
             string[] typeParamNames = classStmt.TypeParams.Select(tp => tp.Name.Lexeme).ToArray();
-            var genericParams = typeBuilder.DefineGenericParameters(typeParamNames);
+            classGenericParams = typeBuilder.DefineGenericParameters(typeParamNames);
 
             // Apply constraints
             for (int i = 0; i < classStmt.TypeParams.Count; i++)
@@ -104,13 +100,38 @@ public partial class ILCompiler
                 {
                     Type constraintType = ResolveConstraintType(constraint);
                     if (constraintType.IsInterface)
-                        genericParams[i].SetInterfaceConstraints(constraintType);
+                        classGenericParams[i].SetInterfaceConstraints(constraintType);
                     else
-                        genericParams[i].SetBaseTypeConstraint(constraintType);
+                        classGenericParams[i].SetBaseTypeConstraint(constraintType);
                 }
             }
 
-            _classes.GenericParams[qualifiedClassName] = genericParams;
+            _classes.GenericParams[qualifiedClassName] = classGenericParams;
+        }
+
+        // NOW resolve the base type (may use our generic params for type arguments)
+        Type? baseType = null;
+        if (qualifiedSuperclassName != null && _classes.Builders.TryGetValue(qualifiedSuperclassName, out var superBuilder))
+        {
+            if (classStmt.SuperclassTypeArgs != null && classStmt.SuperclassTypeArgs.Count > 0)
+            {
+                // Resolve type arguments - may reference our own generic params
+                var typeArgs = ResolveSuperclassTypeArguments(
+                    classStmt.SuperclassTypeArgs,
+                    classGenericParams,
+                    classStmt.TypeParams);
+                baseType = superBuilder.MakeGenericType(typeArgs);
+            }
+            else
+            {
+                baseType = superBuilder;
+            }
+        }
+
+        // Set the parent type (defaults to Object if baseType is null)
+        if (baseType != null)
+        {
+            typeBuilder.SetParent(baseType);
         }
 
         string className = qualifiedClassName;
@@ -191,9 +212,6 @@ public partial class ILCompiler
             );
             _locks.StaticReentrancyFields[className] = staticReentrancyField;
         }
-
-        // Get class generic params if any
-        _classes.GenericParams.TryGetValue(className, out var classGenericParams);
 
         // Define real .NET properties with typed backing fields for instance fields
         // Skip fields with generic type parameters - they'll use _extras dictionary instead
@@ -434,6 +452,165 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Resolves superclass type arguments to .NET Types.
+    /// Handles primitive types, user-defined classes, array types, and type parameter forwarding.
+    /// </summary>
+    /// <param name="typeArgs">The type argument strings from the AST (e.g., ["string", "T"])</param>
+    /// <param name="classGenericParams">The class's own generic type parameters (for forwarding like extends Box&lt;T&gt;)</param>
+    /// <param name="classTypeParams">The class's type parameter declarations (for matching names)</param>
+    /// <returns>Array of resolved .NET Types</returns>
+    private Type[] ResolveSuperclassTypeArguments(
+        List<string> typeArgs,
+        GenericTypeParameterBuilder[]? classGenericParams,
+        List<Parsing.TypeParam>? classTypeParams)
+    {
+        var result = new Type[typeArgs.Count];
+        for (int i = 0; i < typeArgs.Count; i++)
+        {
+            result[i] = ResolveTypeArgument(typeArgs[i], classGenericParams, classTypeParams);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves a single type argument string to a .NET Type.
+    /// </summary>
+    private Type ResolveTypeArgument(
+        string typeArg,
+        GenericTypeParameterBuilder[]? classGenericParams,
+        List<Parsing.TypeParam>? classTypeParams)
+    {
+        // 1. Check if it's a reference to the class's own type parameter (e.g., class Foo<T> extends Box<T>)
+        if (classGenericParams != null && classTypeParams != null)
+        {
+            for (int i = 0; i < classTypeParams.Count; i++)
+            {
+                if (classTypeParams[i].Name.Lexeme == typeArg)
+                    return classGenericParams[i];
+            }
+        }
+
+        // 2. Check if it's a primitive type
+        var primitiveType = TypeMapper.GetClrType(typeArg);
+        if (primitiveType != typeof(object))
+            return primitiveType;
+
+        // 3. Check for specific primitive type names that map to object but should be typed
+        if (PrimitiveTypeMappings.StringToClrType.TryGetValue(typeArg, out var mappedType))
+            return mappedType;
+
+        // 4. Check if it's a user-defined class
+        var defCtx = GetDefinitionContext();
+        var resolvedClassName = defCtx.ResolveClassName(typeArg);
+        if (_classes.Builders.TryGetValue(resolvedClassName, out var classBuilder))
+            return classBuilder;
+
+        // Also try the simple name
+        if (_classes.Builders.TryGetValue(typeArg, out classBuilder))
+            return classBuilder;
+
+        // 5. Check for array types (e.g., "number[]")
+        if (typeArg.EndsWith("[]"))
+        {
+            var elementTypeArg = typeArg[..^2];
+            var elementType = ResolveTypeArgument(elementTypeArg, classGenericParams, classTypeParams);
+            return elementType.MakeArrayType();
+        }
+
+        // 6. Check for nested generics (e.g., "Map<string, number>")
+        if (typeArg.Contains('<'))
+        {
+            return ResolveNestedGenericTypeArgument(typeArg, classGenericParams, classTypeParams);
+        }
+
+        // Fallback to object
+        return typeof(object);
+    }
+
+    /// <summary>
+    /// Resolves a nested generic type argument (e.g., "Map&lt;string, number&gt;").
+    /// </summary>
+    private Type ResolveNestedGenericTypeArgument(
+        string typeArg,
+        GenericTypeParameterBuilder[]? classGenericParams,
+        List<Parsing.TypeParam>? classTypeParams)
+    {
+        // Parse "Map<string, number>" into baseName and type args
+        int angleIndex = typeArg.IndexOf('<');
+        string baseName = typeArg[..angleIndex];
+        string typeArgsStr = typeArg[(angleIndex + 1)..^1]; // Remove < and >
+
+        // Split type args (handling nested generics)
+        var nestedTypeArgs = ParseTypeArgsString(typeArgsStr);
+
+        // Resolve base type
+        Type? baseType = null;
+        var defCtx = GetDefinitionContext();
+        var resolvedBaseName = defCtx.ResolveClassName(baseName);
+        if (_classes.Builders.TryGetValue(resolvedBaseName, out var classBuilder))
+        {
+            baseType = classBuilder;
+        }
+        else if (_classes.Builders.TryGetValue(baseName, out classBuilder))
+        {
+            baseType = classBuilder;
+        }
+        else if (baseName == "Map")
+        {
+            baseType = typeof(Dictionary<,>);
+        }
+        else if (baseName == "Set")
+        {
+            baseType = typeof(HashSet<>);
+        }
+        else if (baseName == "Promise")
+        {
+            baseType = typeof(Task<>);
+        }
+
+        if (baseType == null)
+            return typeof(object);
+
+        // Resolve each type argument recursively
+        var resolvedArgs = nestedTypeArgs
+            .Select(ta => ResolveTypeArgument(ta.Trim(), classGenericParams, classTypeParams))
+            .ToArray();
+
+        return baseType.MakeGenericType(resolvedArgs);
+    }
+
+    /// <summary>
+    /// Parses a comma-separated type arguments string, handling nested generics.
+    /// E.g., "string, Map&lt;string, number&gt;" -> ["string", "Map&lt;string, number&gt;"]
+    /// </summary>
+    private static List<string> ParseTypeArgsString(string typeArgsStr)
+    {
+        var result = new List<string>();
+        int depth = 0;
+        int start = 0;
+
+        for (int i = 0; i < typeArgsStr.Length; i++)
+        {
+            char c = typeArgsStr[i];
+            if (c == '<') depth++;
+            else if (c == '>') depth--;
+            else if (c == ',' && depth == 0)
+            {
+                result.Add(typeArgsStr[start..i].Trim());
+                start = i + 1;
+            }
+        }
+
+        // Add last segment
+        if (start < typeArgsStr.Length)
+        {
+            result.Add(typeArgsStr[start..].Trim());
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Defines types for all collected class expressions.
     /// Class expressions are collected during arrow function collection phase.
     /// </summary>
@@ -453,35 +630,8 @@ public partial class ILCompiler
     {
         string className = _classExprs.Names[classExpr];
 
-        // Resolve superclass - check both class declarations and other class expressions
-        Type? baseType = null;
-        string? superclassName = null;
-        if (classExpr.Superclass != null)
-        {
-            superclassName = classExpr.Superclass.Lexeme;
-
-            // Check class declarations first (with module resolution)
-            var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
-            if (_classes.Builders.TryGetValue(resolvedSuperName, out var superTypeBuilder))
-            {
-                baseType = superTypeBuilder;
-            }
-            else
-            {
-                // Check other class expressions by their generated name
-                foreach (var (expr, name) in _classExprs.Names)
-                {
-                    if (name == superclassName && _classExprs.Builders.TryGetValue(expr, out var superExprBuilder))
-                    {
-                        baseType = superExprBuilder;
-                        break;
-                    }
-                }
-            }
-        }
-        _classExprs.Superclass[classExpr] = superclassName;
-
         // Create TypeBuilder with appropriate attributes
+        // Note: We create without parent initially, set it after defining generic params
         TypeAttributes typeAttrs = TypeAttributes.Public | TypeAttributes.Class;
         if (classExpr.IsAbstract)
         {
@@ -490,11 +640,14 @@ public partial class ILCompiler
 
         var typeBuilder = _moduleBuilder.DefineType(
             className,
-            typeAttrs,
-            baseType ?? typeof(object)
+            typeAttrs
         );
 
-        // Handle generic type parameters
+        // Track superclass name for inheritance resolution
+        string? superclassName = classExpr.Superclass?.Lexeme;
+        _classExprs.Superclass[classExpr] = superclassName;
+
+        // Handle generic type parameters FIRST (before resolving superclass type args)
         GenericTypeParameterBuilder[]? classGenericParams = null;
         if (classExpr.TypeParams != null && classExpr.TypeParams.Count > 0)
         {
@@ -516,6 +669,55 @@ public partial class ILCompiler
             }
 
             _classExprs.GenericParams[classExpr] = classGenericParams;
+        }
+
+        // NOW resolve superclass (may use our generic params for type arguments)
+        Type? baseType = null;
+        if (superclassName != null)
+        {
+            // Check class declarations first (with module resolution)
+            var resolvedSuperName = GetDefinitionContext().ResolveClassName(superclassName);
+            TypeBuilder? superTypeBuilder = null;
+
+            if (_classes.Builders.TryGetValue(resolvedSuperName, out superTypeBuilder))
+            {
+                // Found in class declarations
+            }
+            else
+            {
+                // Check other class expressions by their generated name
+                foreach (var (expr, name) in _classExprs.Names)
+                {
+                    if (name == superclassName && _classExprs.Builders.TryGetValue(expr, out var superExprBuilder))
+                    {
+                        superTypeBuilder = superExprBuilder;
+                        break;
+                    }
+                }
+            }
+
+            if (superTypeBuilder != null)
+            {
+                // Check for type arguments
+                if (classExpr.SuperclassTypeArgs != null && classExpr.SuperclassTypeArgs.Count > 0)
+                {
+                    var typeArgs = ResolveSuperclassTypeArguments(
+                        classExpr.SuperclassTypeArgs,
+                        classGenericParams,
+                        classExpr.TypeParams);
+                    baseType = superTypeBuilder.MakeGenericType(typeArgs);
+                }
+                else
+                {
+                    baseType = superTypeBuilder;
+                }
+            }
+        }
+
+        // Set the parent type
+        if (baseType != null)
+        {
+            typeBuilder.SetParent(baseType);
         }
 
         // Initialize tracking dictionaries for this class expression

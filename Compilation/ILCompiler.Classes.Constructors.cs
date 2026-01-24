@@ -138,7 +138,18 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Ldarg, i + 1);  // +1 because arg 0 is 'this'
             }
-            il.Emit(OpCodes.Call, parentCtor);
+
+            // Handle generic superclass with type arguments (e.g., extends Box<string>)
+            // We need to call the constructor on the closed generic type, not the open generic
+            ConstructorInfo ctorToCall = parentCtor;
+            Type? baseType = typeBuilder.BaseType;
+            if (baseType != null && baseType.IsGenericType && baseType.IsConstructedGenericType)
+            {
+                // Get the constructor for the closed generic type
+                ctorToCall = TypeBuilder.GetConstructor(baseType, parentCtor);
+            }
+
+            il.Emit(OpCodes.Call, ctorToCall);
         }
         else
         {

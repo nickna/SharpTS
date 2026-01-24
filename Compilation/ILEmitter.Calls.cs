@@ -56,7 +56,15 @@ public partial class ILEmitter
                 }
 
                 // Call parent constructor
-                IL.Emit(OpCodes.Call, parentCtor);
+                // Handle generic superclass with type arguments (e.g., extends Box<string>)
+                ConstructorInfo ctorToCall = parentCtor;
+                Type? baseType = _ctx.CurrentClassBuilder?.BaseType;
+                if (baseType != null && baseType.IsGenericType && baseType.IsConstructedGenericType)
+                {
+                    // Get the constructor for the closed generic type
+                    ctorToCall = TypeBuilder.GetConstructor(baseType, parentCtor);
+                }
+                IL.Emit(OpCodes.Call, ctorToCall);
                 IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
                 SetStackUnknown();
                 return;
@@ -112,7 +120,15 @@ public partial class ILEmitter
                     }
 
                     // Call parent constructor
-                    IL.Emit(OpCodes.Call, parentExprCtor);
+                    // Handle generic superclass with type arguments (e.g., extends Box<string>)
+                    ConstructorInfo exprCtorToCall = parentExprCtor;
+                    Type? exprBaseType = _ctx.CurrentClassBuilder?.BaseType;
+                    if (exprBaseType != null && exprBaseType.IsGenericType && exprBaseType.IsConstructedGenericType)
+                    {
+                        // Get the constructor for the closed generic type
+                        exprCtorToCall = TypeBuilder.GetConstructor(exprBaseType, parentExprCtor);
+                    }
+                    IL.Emit(OpCodes.Call, exprCtorToCall);
                     IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
                     SetStackUnknown();
                     return;
