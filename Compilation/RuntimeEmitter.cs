@@ -83,6 +83,10 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
         EmitTSHashClass(moduleBuilder, runtime);
 
+        // Emit $Hmac class for standalone crypto HMAC support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHmac
+        EmitTSHmacClass(moduleBuilder, runtime);
+
         // Emit $TSTimeout class for timer support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTimeout
         EmitTSTimeoutClass(moduleBuilder, runtime);

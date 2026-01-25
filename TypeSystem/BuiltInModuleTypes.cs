@@ -420,6 +420,7 @@ public static class BuiltInModuleTypes
         {
             // Methods
             ["createHash"] = new TypeInfo.Function([stringType], anyType), // Returns Hash object
+            ["createHmac"] = new TypeInfo.Function([stringType, anyType], anyType), // Returns Hmac object
             ["randomBytes"] = new TypeInfo.Function([numberType], new TypeInfo.Array(numberType)),
             ["randomUUID"] = new TypeInfo.Function([], stringType),
             ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1)

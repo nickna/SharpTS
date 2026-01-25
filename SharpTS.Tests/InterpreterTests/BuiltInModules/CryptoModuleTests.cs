@@ -373,4 +373,150 @@ public class CryptoModuleTests
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
         Assert.Equal("true\ntrue\n", output);
     }
+
+    // ============ HMAC TESTS ============
+
+    [Fact]
+    public void Crypto_CreateHmac_Sha256()
+    {
+        // Known HMAC-SHA256 value verification
+        // HMAC-SHA256("key", "The quick brown fox jumps over the lazy dog")
+        // = f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const hmac = crypto.createHmac('sha256', 'key');
+                hmac.update('The quick brown fox jumps over the lazy dog');
+                const digest = hmac.digest('hex');
+                console.log(typeof digest === 'string');
+                console.log(digest.length === 64);
+                console.log(digest === 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateHmac_AllAlgorithms()
+    {
+        // Test that all supported algorithms produce valid output lengths
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                // MD5 = 32 hex chars
+                const md5 = crypto.createHmac('md5', 'secret');
+                md5.update('test');
+                console.log(md5.digest('hex').length === 32);
+                // SHA1 = 40 hex chars
+                const sha1 = crypto.createHmac('sha1', 'secret');
+                sha1.update('test');
+                console.log(sha1.digest('hex').length === 40);
+                // SHA256 = 64 hex chars
+                const sha256 = crypto.createHmac('sha256', 'secret');
+                sha256.update('test');
+                console.log(sha256.digest('hex').length === 64);
+                // SHA384 = 96 hex chars
+                const sha384 = crypto.createHmac('sha384', 'secret');
+                sha384.update('test');
+                console.log(sha384.digest('hex').length === 96);
+                // SHA512 = 128 hex chars
+                const sha512 = crypto.createHmac('sha512', 'secret');
+                sha512.update('test');
+                console.log(sha512.digest('hex').length === 128);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateHmac_UpdateMultiple()
+    {
+        // Multiple updates should produce same result as single update
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                // HMAC with single update
+                const hmac1 = crypto.createHmac('sha256', 'secret');
+                hmac1.update('helloworld');
+                const digest1 = hmac1.digest('hex');
+                // HMAC with multiple updates
+                const hmac2 = crypto.createHmac('sha256', 'secret');
+                hmac2.update('hello');
+                hmac2.update('world');
+                const digest2 = hmac2.digest('hex');
+                console.log(digest1 === digest2);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateHmac_Base64Encoding()
+    {
+        // HMAC digest with base64 encoding
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const hmac = crypto.createHmac('sha256', 'secret');
+                hmac.update('hello');
+                const digest = hmac.digest('base64');
+                console.log(typeof digest === 'string');
+                // Base64 encoded SHA256 HMAC should be 44 chars (with padding)
+                console.log(digest.length === 44);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateHmac_DifferentKeys()
+    {
+        // Same message, different keys should produce different results
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const hmac1 = crypto.createHmac('sha256', 'key1');
+                hmac1.update('message');
+                const digest1 = hmac1.digest('hex');
+                const hmac2 = crypto.createHmac('sha256', 'key2');
+                hmac2.update('message');
+                const digest2 = hmac2.digest('hex');
+                console.log(digest1 !== digest2);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateHmac_MethodChaining()
+    {
+        // createHmac().update().digest() chain
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const digest = crypto.createHmac('sha256', 'secret').update('test').digest('hex');
+                console.log(typeof digest === 'string');
+                console.log(digest.length === 64);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
 }

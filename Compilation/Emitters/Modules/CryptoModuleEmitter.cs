@@ -13,7 +13,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "createHash", "randomBytes", "randomUUID", "randomInt"
+        "createHash", "createHmac", "randomBytes", "randomUUID", "randomInt"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -23,6 +23,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         return methodName switch
         {
             "createHash" => EmitCreateHash(emitter, arguments),
+            "createHmac" => EmitCreateHmac(emitter, arguments),
             "randomBytes" => EmitRandomBytes(emitter, arguments),
             "randomUUID" => EmitRandomUUID(emitter),
             "randomInt" => EmitRandomInt(emitter, arguments),
@@ -55,6 +56,62 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper to create hash
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateHash);
+        return true;
+    }
+
+    private static bool EmitCreateHmac(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            // Missing arguments - throw at runtime
+            il.Emit(OpCodes.Ldstr, "crypto.createHmac requires algorithm and key arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit algorithm argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Emit key argument - convert to byte[]
+        // For string keys, use UTF-8 encoding
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Check if it's a string and convert to byte[]
+        var keyLocal = il.DeclareLocal(ctx.Types.Object);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        var isStringLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Isinst, ctx.Types.String);
+        il.Emit(OpCodes.Brtrue, isStringLabel);
+
+        // Not a string - convert via ToString() and then UTF-8
+        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // String - convert via UTF-8
+        il.MarkLabel(isStringLabel);
+        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Castclass, ctx.Types.String);
+        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+
+        il.MarkLabel(endLabel);
+
+        // Call runtime helper to create HMAC
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateHmac);
         return true;
     }
 

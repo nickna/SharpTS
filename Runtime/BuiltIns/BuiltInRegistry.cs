@@ -143,6 +143,7 @@ public sealed class BuiltInRegistry
         RegisterStdoutType(registry);
         RegisterStderrType(registry);
         RegisterHashType(registry);
+        RegisterHmacType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
@@ -406,6 +407,13 @@ public sealed class BuiltInRegistry
         // Hash members accessed via property access (hash.update, hash.digest)
         registry.RegisterInstanceType(typeof(SharpTSHash), (instance, name) =>
             ((SharpTSHash)instance).GetMember(name));
+    }
+
+    private static void RegisterHmacType(BuiltInRegistry registry)
+    {
+        // Hmac members accessed via property access (hmac.update, hmac.digest)
+        registry.RegisterInstanceType(typeof(SharpTSHmac), (instance, name) =>
+            ((SharpTSHmac)instance).GetMember(name));
     }
 
     private static void RegisterReadlineInterfaceType(BuiltInRegistry registry)

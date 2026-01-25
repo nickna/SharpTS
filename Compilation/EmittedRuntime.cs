@@ -639,6 +639,14 @@ public class EmittedRuntime
     public MethodBuilder TSHashUpdateMethod { get; set; } = null!;
     public MethodBuilder TSHashDigestMethod { get; set; } = null!;
 
+    // $Hmac type - emitted for standalone crypto support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHmac
+    public MethodBuilder CryptoCreateHmac { get; set; } = null!;
+    public Type TSHmacType { get; set; } = null!;
+    public ConstructorBuilder TSHmacCtor { get; set; } = null!;
+    public MethodBuilder TSHmacUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSHmacDigestMethod { get; set; } = null!;
+
     // Util module methods
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;

@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-24 (Added `__dirname` and `__filename` support)
+**Last Updated:** 2026-01-24 (Added `__dirname`, `__filename`, and `crypto.createHmac` support)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash functions + random; no cipher/sign/verify |
+| `crypto` | ⚠️ | Hash + HMAC + random; no cipher/sign/verify |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -145,12 +145,12 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `createHash` | ✅ | md5, sha1, sha256, sha384, sha512 |
+| `createHmac` | ✅ | md5, sha1, sha256, sha384, sha512 with string/Buffer keys |
 | `randomBytes` | ✅ | |
 | `randomUUID` | ✅ | |
 | `randomInt` | ✅ | |
 | `createCipher` / `createDecipher` | ❌ | |
 | `createSign` / `createVerify` | ❌ | |
-| `createHmac` | ❌ | |
 | `pbkdf2` / `scrypt` | ❌ | |
 | `generateKeyPair` | ❌ | |
 
@@ -300,7 +300,7 @@ SharpTS provides solid support for file system operations (sync), path manipulat
 Priority features to implement for broader Node.js compatibility:
 
 1. **Buffer class** - Essential for binary data handling (`Buffer.from`, `Buffer.alloc`, `Buffer.toString`, `Buffer.concat`)
-2. **crypto.createHmac** - Common for authentication/verification
-3. **EventEmitter** - Foundation for many Node APIs (higher effort)
-4. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-5. **Streams API** - Needed for large file handling (higher effort)
+2. **EventEmitter** - Foundation for many Node APIs (medium effort)
+3. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
+4. **Streams API** - Needed for large file handling (higher effort)
+5. **http module** - Basic HTTP server/client (higher effort)

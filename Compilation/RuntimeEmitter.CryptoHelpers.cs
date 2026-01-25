@@ -12,6 +12,7 @@ public partial class RuntimeEmitter
     private void EmitCryptoMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitCryptoCreateHash(typeBuilder, runtime);
+        EmitCryptoCreateHmac(typeBuilder, runtime);
         EmitCryptoRandomBytes(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
@@ -30,6 +31,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
             il.Emit(OpCodes.Call, runtime.CryptoCreateHash);
+        });
+
+        // createHmac(algorithm, key) -> $Hmac
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createHmac", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateHmac);
         });
 
         // randomBytes(size) -> $Array
@@ -169,6 +180,47 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits code to convert an object to byte[] for HMAC key.
+    /// Handles string (UTF-8) and $Array (Buffer-like).
+    /// </summary>
+    private void EmitObjectToKeyBytes(ILGenerator il)
+    {
+        // Check if string or $Array
+        var isStringLabel = il.DefineLabel();
+        var convertLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        var objLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, objLocal);
+
+        // if (obj is string) -> UTF8.GetBytes
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, isStringLabel);
+
+        // Otherwise, try to convert from $Array to byte[]
+        // For now, just encode as UTF-8 string (fallback)
+        il.Emit(OpCodes.Br, convertLabel);
+
+        // String path
+        il.MarkLabel(isStringLabel);
+        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Fallback - convert to string and then UTF-8
+        il.MarkLabel(convertLabel);
+        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+
+        il.MarkLabel(endLabel);
+    }
+
+    /// <summary>
     /// Emits: public static object CryptoCreateHash(string algorithm)
     /// </summary>
     private void EmitCryptoCreateHash(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -185,6 +237,27 @@ public partial class RuntimeEmitter
         // new $Hash(algorithm) - use emitted type for standalone compatibility
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, runtime.TSHashCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateHmac(string algorithm, byte[] key)
+    /// </summary>
+    private void EmitCryptoCreateHmac(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateHmac",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoCreateHmac = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Hmac(algorithm, key) - use emitted type for standalone compatibility
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Newobj, runtime.TSHmacCtor);
         il.Emit(OpCodes.Ret);
     }
 

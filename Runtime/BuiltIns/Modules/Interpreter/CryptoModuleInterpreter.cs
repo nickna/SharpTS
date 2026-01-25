@@ -10,6 +10,7 @@ namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 /// <remarks>
 /// Provides cryptographic functionality including:
 /// - createHash() - create hash objects for MD5, SHA1, SHA256, SHA512
+/// - createHmac() - create HMAC objects for keyed-hash message authentication
 /// - randomBytes() - generate cryptographically secure random bytes
 /// - randomUUID() - generate a random UUID
 /// - randomInt() - generate a random integer in a range
@@ -24,6 +25,7 @@ public static class CryptoModuleInterpreter
         return new Dictionary<string, object?>
         {
             ["createHash"] = new BuiltInMethod("createHash", 1, CreateHash),
+            ["createHmac"] = new BuiltInMethod("createHmac", 2, CreateHmac),
             ["randomBytes"] = new BuiltInMethod("randomBytes", 1, RandomBytes),
             ["randomUUID"] = new BuiltInMethod("randomUUID", 0, RandomUUID),
             ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt)
@@ -36,6 +38,15 @@ public static class CryptoModuleInterpreter
             throw new Exception("crypto.createHash requires an algorithm name");
 
         return new SharpTSHash(algorithm);
+    }
+
+    private static object? CreateHmac(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2 || args[0] is not string algorithm)
+            throw new Exception("crypto.createHmac requires an algorithm name and a key");
+
+        var key = args[1] ?? throw new Exception("crypto.createHmac requires a key");
+        return new SharpTSHmac(algorithm, key);
     }
 
     private static object? RandomBytes(Interp interpreter, object? receiver, List<object?> args)
