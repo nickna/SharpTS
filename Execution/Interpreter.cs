@@ -1266,7 +1266,15 @@ public partial class Interpreter : IDisposable
                 _environment.Assign(classStmt.Name, klass);
                 return ExecutionResult.Success();
             case Stmt.TypeAlias:
-                // Type aliases are compile-time only, no runtime effect
+            case Stmt.Interface:
+            case Stmt.FileDirective:
+                // Type-only declarations - compile-time only, no runtime effect
+                return ExecutionResult.Success();
+            case Stmt.Field:
+            case Stmt.Accessor:
+            case Stmt.AutoAccessor:
+            case Stmt.StaticBlock:
+                // Class member declarations - handled within class processing, not executed directly
                 return ExecutionResult.Success();
             case Stmt.Enum enumStmt:
                 ExecuteEnumDeclaration(enumStmt);
@@ -1302,7 +1310,7 @@ public partial class Interpreter : IDisposable
             case Stmt.Using usingStmt:
                 return ExecuteUsingDeclaration(usingStmt);
             default:
-                return ExecutionResult.Success();
+                throw new InvalidOperationException($"Runtime Error: Unhandled statement type in Interpreter: {stmt.GetType().Name}");
         }
     }
 

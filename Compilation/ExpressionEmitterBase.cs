@@ -197,8 +197,7 @@ public abstract class ExpressionEmitterBase
                 EmitClassExpression(ce);
                 break;
             default:
-                EmitUnknownExpression(expr);
-                break;
+                throw new InvalidOperationException($"Compilation Error: Unhandled expression type in ILEmitter: {expr.GetType().Name}");
         }
     }
     #endregion
@@ -234,7 +233,6 @@ public abstract class ExpressionEmitterBase
     protected abstract void EmitArrowFunction(Expr.ArrowFunction af);
     protected abstract void EmitDynamicImport(Expr.DynamicImport di);
     protected abstract void EmitImportMeta(Expr.ImportMeta im);
-    protected abstract void EmitUnknownExpression(Expr expr);
     protected abstract void EmitClassExpression(Expr.ClassExpr ce);
     protected abstract void EmitDelete(Expr.Delete del);
     #endregion

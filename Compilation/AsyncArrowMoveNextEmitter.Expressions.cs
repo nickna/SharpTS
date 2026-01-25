@@ -924,11 +924,4 @@ public partial class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetSuperMethod);
         SetStackUnknown();
     }
-
-    protected override void EmitUnknownExpression(Expr expr)
-    {
-        // For unhandled expressions, push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
 }

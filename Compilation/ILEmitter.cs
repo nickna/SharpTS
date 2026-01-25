@@ -255,6 +255,27 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 // Static blocks are handled specially in EmitStaticConstructor.
                 // If encountered here, it's a no-op (block body already emitted inline).
                 break;
+
+            case Stmt.Using u:
+                EmitUsingDeclaration(u);
+                break;
+
+            case Stmt.DeclareModule:
+            case Stmt.DeclareGlobal:
+                // Module/global augmentations are type-only - no IL emission needed
+                break;
+
+            case Stmt.Directive:
+            case Stmt.FileDirective:
+            case Stmt.Field:
+            case Stmt.Accessor:
+            case Stmt.AutoAccessor:
+                // Directives are handled at parse time; class member declarations
+                // are handled within class processing, not emitted directly
+                break;
+
+            default:
+                throw new InvalidOperationException($"Compilation Error: Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
         }
     }
 

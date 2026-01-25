@@ -70,7 +70,7 @@ public partial class Interpreter
             Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
             Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
             Expr.ClassExpr classExpr => EvaluateClassExpression(classExpr),
-            _ => throw new Exception("Unknown expression type.")
+            _ => throw new InvalidOperationException($"Runtime Error: Unhandled expression type in Interpreter: {expr.GetType().Name}")
         };
     }
 
@@ -140,7 +140,7 @@ public partial class Interpreter
             case Expr.Yield yieldExpr: return EvaluateYield(yieldExpr);
             case Expr.RegexLiteral regex: return new SharpTSRegExp(regex.Pattern, regex.Flags);
             case Expr.ClassExpr classExpr: return EvaluateClassExpression(classExpr);
-            default: throw new Exception("Unknown expression type.");
+            default: throw new InvalidOperationException($"Runtime Error: Unhandled expression type in async Interpreter: {expr.GetType().Name}");
         }
     }
 

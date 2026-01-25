@@ -1714,12 +1714,5 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    protected override void EmitUnknownExpression(Expr expr)
-    {
-        // Unknown expression - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     #endregion
 }

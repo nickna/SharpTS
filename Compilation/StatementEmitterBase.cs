@@ -124,15 +124,6 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Ctx.Runtime!.IsTruthy);
     }
 
-    /// <summary>
-    /// Called for unknown statement types.
-    /// Default: ignored. ILEmitter overrides for Namespace, Import, Export.
-    /// </summary>
-    protected virtual void EmitUnknownStatement(Stmt stmt)
-    {
-        // Default: ignore unknown statements
-    }
-
     #endregion
 
     #region Core Statement Dispatch
@@ -233,10 +224,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             case Stmt.Using u:
                 EmitUsingDeclaration(u);
                 break;
-
             default:
-                EmitUnknownStatement(stmt);
-                break;
+                throw new InvalidOperationException($"Compilation Error: Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
         }
     }
 

@@ -409,13 +409,6 @@ public partial class ILEmitter
         EmitCallUnknown(_ctx.Runtime!.CreateRegExpWithFlags);
     }
 
-    protected override void EmitUnknownExpression(Expr expr)
-    {
-        // Fallback: push null
-        IL.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     protected override void EmitClassExpression(Expr.ClassExpr ce)
     {
         // Class expressions evaluate to the Type object at runtime.

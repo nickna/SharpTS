@@ -44,12 +44,5 @@ public partial class GeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
-    protected override void EmitUnknownExpression(Expr expr)
-    {
-        // Unsupported expression - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     #endregion
 }

@@ -62,7 +62,7 @@ public partial class TypeChecker
             Expr.Yield yieldExpr => CheckYield(yieldExpr),
             Expr.RegexLiteral => new TypeInfo.RegExp(),
             Expr.ClassExpr classExpr => CheckClassExpression(classExpr),
-            _ => new TypeInfo.Any()
+            _ => throw new InvalidOperationException($"Type Error: Unhandled expression type in TypeChecker: {expr.GetType().Name}")
         };
 
         // Store the resolved type in the TypeMap for use by ILCompiler/Interpreter

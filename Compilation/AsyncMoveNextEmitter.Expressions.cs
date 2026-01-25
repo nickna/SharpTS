@@ -902,13 +902,6 @@ public partial class AsyncMoveNextEmitter
         SetStackUnknown();
     }
 
-    protected override void EmitUnknownExpression(Expr expr)
-    {
-        // Unsupported expression - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
     #region Ambiguous Method Runtime Dispatch
 
     /// <summary>

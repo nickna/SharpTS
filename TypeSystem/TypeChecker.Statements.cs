@@ -580,6 +580,15 @@ public partial class TypeChecker
             case Stmt.Using usingStmt:
                 CheckUsingDeclaration(usingStmt);
                 break;
+
+            case Stmt.Field:
+            case Stmt.Accessor:
+            case Stmt.AutoAccessor:
+                // Class member declarations - handled within class type checking context
+                break;
+
+            default:
+                throw new InvalidOperationException($"Type Error: Unhandled statement type in TypeChecker: {stmt.GetType().Name}");
         }
     }
 
