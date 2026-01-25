@@ -775,10 +775,7 @@ public partial class Interpreter
             classEnv.Define("super", superclass);
         }
 
-        var savedEnv = _environment;
-        _environment = classEnv;
-
-        try
+        using (PushScope(classEnv))
         {
             Dictionary<string, SharpTSFunction> methods = [];
             Dictionary<string, SharpTSFunction> staticMethods = [];
@@ -875,10 +872,7 @@ public partial class Interpreter
                     staticEnv.Define(classExpr.Name.Lexeme, klass);
                 }
 
-                var prevEnv = _environment;
-                _environment = staticEnv;
-
-                try
+                using (PushScope(staticEnv))
                 {
                     foreach (var initializer in classExpr.StaticInitializers!)
                     {
@@ -909,10 +903,6 @@ public partial class Interpreter
                         }
                     }
                 }
-                finally
-                {
-                    _environment = prevEnv;
-                }
             }
 
             // Update self-reference if named
@@ -922,10 +912,6 @@ public partial class Interpreter
             }
 
             return klass;
-        }
-        finally
-        {
-            _environment = savedEnv;
         }
     }
 }

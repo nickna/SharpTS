@@ -47,10 +47,7 @@ public partial class Interpreter
             }
         }
 
-        var savedEnv = _environment;
-        _environment = namespaceEnv;
-
-        try
+        using (PushScope(namespaceEnv))
         {
             foreach (var member in ns.Members)
             {
@@ -58,11 +55,7 @@ public partial class Interpreter
                 if (result.IsAbrupt) return result;
             }
         }
-        finally
-        {
-            _environment = savedEnv;
-        }
-        
+
         return ExecutionResult.Success();
     }
 

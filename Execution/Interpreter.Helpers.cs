@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.Types;
@@ -237,6 +238,85 @@ public partial class Interpreter
         public void Dispose()
         {
             _interpreter._environment = _previous;
+        }
+    }
+
+    /// <summary>
+    /// Creates a scoped context for script execution that saves/restores environment and current module.
+    /// Use with <c>using</c> statement to ensure proper context cleanup.
+    /// </summary>
+    /// <param name="newEnvironment">The new environment to use within the scope.</param>
+    /// <param name="newModule">The new current module to use within the scope.</param>
+    /// <returns>A disposable scope guard that restores the previous context on disposal.</returns>
+    private ScopedScriptContext PushScriptContext(RuntimeEnvironment newEnvironment, ParsedModule? newModule)
+    {
+        return new ScopedScriptContext(this, newEnvironment, newModule);
+    }
+
+    /// <summary>
+    /// A disposable scope guard that manages environment and module context switching for script execution.
+    /// </summary>
+    private readonly struct ScopedScriptContext : IDisposable
+    {
+        private readonly Interpreter _interpreter;
+        private readonly RuntimeEnvironment _previousEnvironment;
+        private readonly ParsedModule? _previousModule;
+
+        public ScopedScriptContext(Interpreter interpreter, RuntimeEnvironment newEnvironment, ParsedModule? newModule)
+        {
+            _interpreter = interpreter;
+            _previousEnvironment = interpreter._environment;
+            _previousModule = interpreter._currentModule;
+            interpreter._environment = newEnvironment;
+            interpreter._currentModule = newModule;
+        }
+
+        public void Dispose()
+        {
+            _interpreter._environment = _previousEnvironment;
+            _interpreter._currentModule = _previousModule;
+        }
+    }
+
+    /// <summary>
+    /// Creates a scoped context for module execution that saves/restores environment, current module, and module instance.
+    /// Use with <c>using</c> statement to ensure proper context cleanup.
+    /// </summary>
+    /// <param name="newEnvironment">The new environment to use within the scope.</param>
+    /// <param name="newModule">The new current module to use within the scope.</param>
+    /// <param name="newModuleInstance">The new module instance to use within the scope.</param>
+    /// <returns>A disposable scope guard that restores the previous context on disposal.</returns>
+    private ScopedModuleContext PushModuleContext(RuntimeEnvironment newEnvironment, ParsedModule? newModule, ModuleInstance? newModuleInstance)
+    {
+        return new ScopedModuleContext(this, newEnvironment, newModule, newModuleInstance);
+    }
+
+    /// <summary>
+    /// A disposable scope guard that manages full module context switching (environment, module, and module instance).
+    /// </summary>
+    private readonly struct ScopedModuleContext : IDisposable
+    {
+        private readonly Interpreter _interpreter;
+        private readonly RuntimeEnvironment _previousEnvironment;
+        private readonly ParsedModule? _previousModule;
+        private readonly ModuleInstance? _previousModuleInstance;
+
+        public ScopedModuleContext(Interpreter interpreter, RuntimeEnvironment newEnvironment, ParsedModule? newModule, ModuleInstance? newModuleInstance)
+        {
+            _interpreter = interpreter;
+            _previousEnvironment = interpreter._environment;
+            _previousModule = interpreter._currentModule;
+            _previousModuleInstance = interpreter._currentModuleInstance;
+            interpreter._environment = newEnvironment;
+            interpreter._currentModule = newModule;
+            interpreter._currentModuleInstance = newModuleInstance;
+        }
+
+        public void Dispose()
+        {
+            _interpreter._environment = _previousEnvironment;
+            _interpreter._currentModule = _previousModule;
+            _interpreter._currentModuleInstance = _previousModuleInstance;
         }
     }
 

@@ -20,20 +20,14 @@ public partial class Interpreter
     /// </summary>
     internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
-        RuntimeEnvironment previous = _environment;
-        try
+        using (PushScope(environment))
         {
-            _environment = environment;
             foreach (Stmt statement in statements)
             {
                 var result = await ExecuteAsync(statement);
                 if (result.IsAbrupt) return result;
             }
             return ExecutionResult.Success();
-        }
-        finally
-        {
-            _environment = previous;
         }
     }
 

@@ -360,14 +360,7 @@ public partial class Interpreter : IDisposable
             return;
         }
 
-        // Save context
-        var savedEnv = _environment;
-        var savedModule = _currentModule;
-
-        _environment = scriptEnv;
-        _currentModule = script;
-
-        try
+        using (PushScriptContext(scriptEnv, script))
         {
             // Check for "use strict" directive
             bool isStrict = CheckForUseStrict(script.Statements);
@@ -402,11 +395,6 @@ public partial class Interpreter : IDisposable
             }
 
             script.IsExecuted = true;
-        }
-        finally
-        {
-            _environment = savedEnv;
-            _currentModule = savedModule;
         }
     }
 
@@ -511,16 +499,7 @@ public partial class Interpreter : IDisposable
         // Bind imports from dependencies
         BindModuleImports(module, moduleEnv);
 
-        // Save context
-        var savedEnv = _environment;
-        var savedModule = _currentModule;
-        var savedModuleInstance = _currentModuleInstance;
-
-        _environment = moduleEnv;
-        _currentModule = module;
-        _currentModuleInstance = moduleInstance;
-
-        try
+        using (PushModuleContext(moduleEnv, module, moduleInstance))
         {
             // First pass: hoist function declarations
             HoistFunctionDeclarations(module.Statements);
@@ -550,12 +529,6 @@ public partial class Interpreter : IDisposable
                 }
             }
             moduleInstance.IsExecuted = true;
-        }
-        finally
-        {
-            _environment = savedEnv;
-            _currentModule = savedModule;
-            _currentModuleInstance = savedModuleInstance;
         }
     }
 
