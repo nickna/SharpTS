@@ -34,9 +34,9 @@ public static class AppHostGenerator
     /// <param name="assemblyName">Name of the assembly (without extension)</param>
     public static void CreateSingleFileExecutableDirect(string managedDllPath, string outputExePath, string assemblyName)
     {
-        // Find the apphost template
-        var apphostPath = FindAppHostTemplate();
-        if (apphostPath == null)
+        // Find the apphost template and SDK version
+        var (apphostPath, sdkVersion) = FindAppHostTemplateWithVersion();
+        if (apphostPath == null || sdkVersion == null)
         {
             throw new InvalidOperationException(
                 "Could not find apphost template. Ensure the .NET SDK is installed.");
@@ -68,7 +68,7 @@ public static class AppHostGenerator
 
         // Read input files
         var dllBytes = File.ReadAllBytes(managedDllPath);
-        var runtimeConfig = GenerateRuntimeConfigJson(assemblyName);
+        var runtimeConfig = GenerateRuntimeConfigJson(sdkVersion);
         var runtimeConfigBytes = Encoding.UTF8.GetBytes(runtimeConfig);
 
         // Ensure output directory exists
@@ -198,15 +198,15 @@ public static class AppHostGenerator
         return -1;
     }
 
-    private static string GenerateRuntimeConfigJson(string assemblyName)
+    private static string GenerateRuntimeConfigJson(Version sdkVersion)
     {
         return $$"""
             {
               "runtimeOptions": {
-                "tfm": "net10.0",
+                "tfm": "net{{sdkVersion.Major}}.{{sdkVersion.Minor}}",
                 "framework": {
                   "name": "Microsoft.NETCore.App",
-                  "version": "10.0.0"
+                  "version": "{{sdkVersion.Major}}.{{sdkVersion.Minor}}.{{sdkVersion.Build}}"
                 }
               }
             }
@@ -216,24 +216,29 @@ public static class AppHostGenerator
     /// <summary>
     /// Finds the apphost template from the installed .NET SDK.
     /// </summary>
-    public static string? FindAppHostTemplate()
+    public static string? FindAppHostTemplate() => FindAppHostTemplateWithVersion().Path;
+
+    /// <summary>
+    /// Finds the apphost template and returns both the path and the SDK version.
+    /// </summary>
+    public static (string? Path, Version? Version) FindAppHostTemplateWithVersion()
     {
         var dotnetRoot = GetDotNetRoot();
-        if (dotnetRoot == null) return null;
+        if (dotnetRoot == null) return (null, null);
 
         var rid = GetCurrentRuntimeIdentifier();
         var packsDir = Path.Combine(dotnetRoot, "packs");
         var hostPackPattern = $"Microsoft.NETCore.App.Host.{rid}";
 
-        if (!Directory.Exists(packsDir)) return null;
+        if (!Directory.Exists(packsDir)) return (null, null);
 
         var hostPackDirs = Directory.GetDirectories(packsDir)
             .Where(d => Path.GetFileName(d).StartsWith(hostPackPattern, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        if (hostPackDirs.Count == 0) return null;
+        if (hostPackDirs.Count == 0) return (null, null);
 
-        // Find highest 10.x version
+        // Find highest available version (prefer newer SDKs)
         string? bestPath = null;
         Version? bestVersion = null;
 
@@ -245,7 +250,7 @@ public static class AppHostGenerator
                 var dashIndex = versionStr.IndexOf('-');
                 var cleanVersion = dashIndex > 0 ? versionStr[..dashIndex] : versionStr;
 
-                if (Version.TryParse(cleanVersion, out var version) && version.Major == 10)
+                if (Version.TryParse(cleanVersion, out var version))
                 {
                     if (bestVersion == null || version > bestVersion)
                     {
@@ -261,7 +266,7 @@ public static class AppHostGenerator
             }
         }
 
-        return bestPath;
+        return (bestPath, bestVersion);
     }
 
     private static string? GetDotNetRoot()
