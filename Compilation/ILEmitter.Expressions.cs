@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
@@ -78,6 +79,24 @@ public partial class ILEmitter
         if (name == "globalThis")
         {
             EmitNullConstant(); // globalThis is handled specially in property access
+            return;
+        }
+
+        // Check for Node.js module globals (__dirname, __filename)
+        if (name == "__filename")
+        {
+            IL.Emit(OpCodes.Ldstr, _ctx.CurrentModulePath ?? "");
+            SetStackUnknown();
+            return;
+        }
+
+        if (name == "__dirname")
+        {
+            string dirname = string.IsNullOrEmpty(_ctx.CurrentModulePath)
+                ? ""
+                : Path.GetDirectoryName(_ctx.CurrentModulePath) ?? "";
+            IL.Emit(OpCodes.Ldstr, dirname);
+            SetStackUnknown();
             return;
         }
 

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
@@ -558,22 +559,38 @@ public partial class ILEmitter
 
     /// <summary>
     /// Emits an import.meta expression.
-    /// Returns an object with 'url' property containing the current module path.
+    /// Returns an object with 'url', 'filename', and 'dirname' properties containing the current module path.
     /// </summary>
     protected override void EmitImportMeta(Expr.ImportMeta im)
     {
         // Get current module path and convert to file:// URL
-        string url = _ctx.CurrentModulePath ?? "";
+        string path = _ctx.CurrentModulePath ?? "";
+        string url = path;
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
         {
             url = "file:///" + url.Replace("\\", "/");
         }
+        string dirname = string.IsNullOrEmpty(path) ? "" : Path.GetDirectoryName(path) ?? "";
 
-        // Create Dictionary<string, object> and add "url" property
+        // Create Dictionary<string, object> and add properties
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
+
+        // Add "url" property
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Ldstr, "url");
         IL.Emit(OpCodes.Ldstr, url);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+
+        // Add "filename" property
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Ldstr, "filename");
+        IL.Emit(OpCodes.Ldstr, path);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+
+        // Add "dirname" property
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Ldstr, "dirname");
+        IL.Emit(OpCodes.Ldstr, dirname);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
 
         // Wrap in SharpTSObject

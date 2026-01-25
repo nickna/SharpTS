@@ -239,6 +239,10 @@ public partial class Interpreter : IDisposable
         if (name.Lexeme == "Infinity") return double.PositiveInfinity;
         if (name.Lexeme == "undefined") return Runtime.Types.SharpTSUndefined.Instance;
 
+        // Check for Node.js module globals (__dirname, __filename)
+        if (name.Lexeme == "__filename") return _currentModule?.Path ?? "";
+        if (name.Lexeme == "__dirname") return Path.GetDirectoryName(_currentModule?.Path) ?? "";
+
         throw new Exception($"Undefined variable '{name.Lexeme}'.");
     }
 

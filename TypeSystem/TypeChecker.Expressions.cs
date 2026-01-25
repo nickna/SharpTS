@@ -84,11 +84,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckImportMeta(Expr.ImportMeta im)
     {
-        // import.meta is an object with 'url' property
+        // import.meta is an object with 'url', 'dirname', and 'filename' properties
         return new TypeInfo.Record(
             new Dictionary<string, TypeInfo>
             {
-                ["url"] = new TypeInfo.String()
+                ["url"] = new TypeInfo.String(),
+                ["dirname"] = new TypeInfo.String(),
+                ["filename"] = new TypeInfo.String()
             }.ToFrozenDictionary()
         );
     }
@@ -1060,6 +1062,8 @@ public partial class TypeChecker
         if (name.Lexeme == "undefined") return new TypeInfo.Undefined(); // Global undefined
         if (name.Lexeme == "NaN") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global NaN
         if (name.Lexeme == "Infinity") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global Infinity
+        if (name.Lexeme == "__dirname") return new TypeInfo.Primitive(TokenType.TYPE_STRING); // Node.js __dirname
+        if (name.Lexeme == "__filename") return new TypeInfo.Primitive(TokenType.TYPE_STRING); // Node.js __filename
 
         var type = _environment.Get(name.Lexeme);
         if (type == null)

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Numerics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
@@ -686,7 +687,8 @@ public partial class Interpreter
     private object? EvaluateImportMeta(Expr.ImportMeta im)
     {
         // Get current module path
-        string url = _currentModule?.Path ?? "";
+        string path = _currentModule?.Path ?? "";
+        string url = path;
 
         // Convert to file:// URL format if it's a file path
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
@@ -696,7 +698,9 @@ public partial class Interpreter
 
         return new SharpTSObject(new Dictionary<string, object?>
         {
-            ["url"] = url
+            ["url"] = url,
+            ["filename"] = path,
+            ["dirname"] = Path.GetDirectoryName(path) ?? ""
         });
     }
 

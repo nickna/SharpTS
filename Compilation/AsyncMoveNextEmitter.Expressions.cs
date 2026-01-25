@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
@@ -884,17 +885,33 @@ public partial class AsyncMoveNextEmitter
     protected override void EmitImportMeta(Expr.ImportMeta im)
     {
         // Get current module path and convert to file:// URL
-        string url = _ctx?.CurrentModulePath ?? "";
+        string path = _ctx?.CurrentModulePath ?? "";
+        string url = path;
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
         {
             url = "file:///" + url.Replace("\\", "/");
         }
+        string dirname = string.IsNullOrEmpty(path) ? "" : Path.GetDirectoryName(path) ?? "";
 
-        // Create Dictionary<string, object> and add "url" property
+        // Create Dictionary<string, object> and add properties
         _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+
+        // Add "url" property
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "url");
         _il.Emit(OpCodes.Ldstr, url);
+        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+
+        // Add "filename" property
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Ldstr, "filename");
+        _il.Emit(OpCodes.Ldstr, path);
+        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+
+        // Add "dirname" property
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Ldstr, "dirname");
+        _il.Emit(OpCodes.Ldstr, dirname);
         _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
 
         // Wrap in SharpTSObject
