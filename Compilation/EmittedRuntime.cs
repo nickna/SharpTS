@@ -108,6 +108,10 @@ public class EmittedRuntime
     public MethodBuilder ArraySplice { get; set; } = null!;
     public MethodBuilder ArrayToSpliced { get; set; } = null!;
     public MethodBuilder ToIntegerOrInfinity { get; set; } = null!;
+    public MethodBuilder ArrayFindLast { get; set; } = null!;
+    public MethodBuilder ArrayFindLastIndex { get; set; } = null!;
+    public MethodBuilder ArrayToReversed { get; set; } = null!;
+    public MethodBuilder ArrayWith { get; set; } = null!;
 
     // String methods
     public MethodBuilder StringCharAt { get; set; } = null!;

@@ -148,6 +148,26 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSpliced);
                 return true;
 
+            case "findLast":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFindLast);
+                return true;
+
+            case "findLastIndex":
+                EmitSingleArgOrNull(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFindLastIndex);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                return true;
+
+            case "toReversed":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToReversed);
+                return true;
+
+            case "with":
+                EmitArgsArray(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayWith);
+                return true;
+
             default:
                 return false;
         }

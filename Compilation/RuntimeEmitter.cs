@@ -1514,6 +1514,8 @@ public partial class RuntimeEmitter
         EmitArrayPush(typeBuilder, runtime);
         EmitArrayFind(typeBuilder, runtime);
         EmitArrayFindIndex(typeBuilder, runtime);
+        EmitArrayFindLast(typeBuilder, runtime);
+        EmitArrayFindLastIndex(typeBuilder, runtime);
         EmitArraySome(typeBuilder, runtime);
         EmitArrayEvery(typeBuilder, runtime);
         EmitArrayReduce(typeBuilder, runtime);
@@ -1529,9 +1531,11 @@ public partial class RuntimeEmitter
         EmitArrayOf(typeBuilder, runtime);
         EmitArraySort(typeBuilder, runtime);
         EmitArrayToSorted(typeBuilder, runtime);
-        EmitToIntegerOrInfinityHelper(typeBuilder, runtime); // Must be before EmitArraySplice
+        EmitToIntegerOrInfinityHelper(typeBuilder, runtime); // Must be before EmitArraySplice/EmitArrayWith
         EmitArraySplice(typeBuilder, runtime);
         EmitArrayToSpliced(typeBuilder, runtime);
+        EmitArrayToReversed(typeBuilder, runtime);
+        EmitArrayWith(typeBuilder, runtime);
         // String methods
         EmitStringCharAt(typeBuilder, runtime);
         EmitStringSubstring(typeBuilder, runtime);

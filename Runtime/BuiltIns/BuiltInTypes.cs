@@ -113,6 +113,14 @@ public static class BuiltInTypes
                 new TypeInfo.Array(elementType),
                 RequiredParams: 0,
                 HasRestParam: true),
+            "findLast" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType], BooleanType)],
+                elementType),
+            "findLastIndex" => new TypeInfo.Function(
+                [new TypeInfo.Function([elementType], BooleanType)],
+                NumberType),
+            "toReversed" => new TypeInfo.Function([], new TypeInfo.Array(elementType)),
+            "with" => new TypeInfo.Function([NumberType, elementType], new TypeInfo.Array(elementType)),
             _ => null
         };
     }

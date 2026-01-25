@@ -32,6 +32,10 @@ public static class ArrayBuiltIns
             .Method("toSorted", 0, 1, ToSorted)
             .Method("splice", 0, int.MaxValue, Splice)
             .Method("toSpliced", 0, int.MaxValue, ToSpliced)
+            .Method("findLast", 1, FindLast)
+            .Method("findLastIndex", 1, FindLastIndex)
+            .Method("toReversed", 0, ToReversed)
+            .Method("with", 2, With)
             .Build();
 
     public static object? GetMember(SharpTSArray receiver, string name)
@@ -577,6 +581,58 @@ public static class ArrayBuiltIns
             result.AddRange(args.Skip(2));
         result.AddRange(arr.Elements.Skip(actualStart + actualSkipCount));
 
+        return new SharpTSArray(result);
+    }
+
+    private static object? FindLast(Interpreter interp, SharpTSArray arr, List<object?> args)
+    {
+        var callback = args[0] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: findLast requires a function argument.");
+
+        var callbackArgs = new List<object?>(3) { null, null, arr };
+        for (int i = arr.Elements.Count - 1; i >= 0; i--)
+        {
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            if (IsTruthy(callback.Call(interp, callbackArgs)))
+                return arr.Elements[i];
+        }
+        return null;
+    }
+
+    private static object? FindLastIndex(Interpreter interp, SharpTSArray arr, List<object?> args)
+    {
+        var callback = args[0] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: findLastIndex requires a function argument.");
+
+        var callbackArgs = new List<object?>(3) { null, null, arr };
+        for (int i = arr.Elements.Count - 1; i >= 0; i--)
+        {
+            callbackArgs[0] = arr.Elements[i];
+            callbackArgs[1] = (double)i;
+            if (IsTruthy(callback.Call(interp, callbackArgs)))
+                return (double)i;
+        }
+        return -1.0;
+    }
+
+    private static object? ToReversed(Interpreter _, SharpTSArray arr, List<object?> args)
+    {
+        var result = new List<object?>(arr.Elements.Count);
+        for (int i = arr.Elements.Count - 1; i >= 0; i--)
+            result.Add(arr.Elements[i]);
+        return new SharpTSArray(result);
+    }
+
+    private static object? With(Interpreter _, SharpTSArray arr, List<object?> args)
+    {
+        int len = arr.Elements.Count;
+        int index = ToIntegerOrInfinity(args[0], 0);
+        int actualIndex = index < 0 ? len + index : index;
+        if (actualIndex < 0 || actualIndex >= len)
+            throw new Exception("RangeError: Invalid index for with()");
+        var result = new List<object?>(arr.Elements);
+        result[actualIndex] = args[1];
         return new SharpTSArray(result);
     }
 

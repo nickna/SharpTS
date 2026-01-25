@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-22 (Added array `sort()` and `toSorted()` methods with JS-compliant undefined handling)
+**Last Updated:** 2026-01-24 (Added ES2023 array methods: `findLast()`, `findLastIndex()`, `toReversed()`, `with()`)
 
 ## Legend
 - ✅ Implemented
@@ -208,7 +208,7 @@ This document tracks TypeScript language features and their implementation statu
 | `console.log` | ✅ | Multiple arguments |
 | `Math` object | ✅ | PI, E, abs, floor, ceil, round, sqrt, sin, cos, tan, log, exp, sign, trunc, pow, min, max, random |
 | String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at |
-| Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, some, every, reduce, includes, indexOf, join, sort, toSorted, flat, flatMap |
+| Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, findLast, findLastIndex, some, every, reduce, includes, indexOf, join, sort, toSorted, toReversed, with, flat, flatMap, splice, toSpliced |
 | `JSON.parse`/`stringify` | ✅ | With reviver, replacer, indentation, class instances, toJSON(), BigInt TypeError |
 | `Object.keys`/`values`/`entries`/`fromEntries`/`hasOwn` | ✅ | Full support for object literals and class instances |
 | `Array.isArray` | ✅ | Type guard for array detection |

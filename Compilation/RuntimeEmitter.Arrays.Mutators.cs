@@ -1175,6 +1175,155 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitArrayToReversed(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArrayToReversed(List<object> list) -> List<object>
+        // Returns a NEW reversed list, original is unchanged
+        var method = typeBuilder.DefineMethod(
+            "ArrayToReversed",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject]
+        );
+        runtime.ArrayToReversed = method;
+
+        var il = method.GetILGenerator();
+
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var iLocal = il.DeclareLocal(_types.Int32);
+
+        // result = new List<object>()
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // i = list.Count - 1
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        // Loop: for (int i = list.Count - 1; i >= 0; i--)
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, loopEnd);
+
+        // result.Add(list[i])
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+
+        // i--
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayWith(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArrayWith(List<object> list, object[] args) -> List<object>
+        // args[0] = index, args[1] = value
+        // Returns a NEW list with element at index replaced
+        var method = typeBuilder.DefineMethod(
+            "ArrayWith",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, _types.ObjectArray]
+        );
+        runtime.ArrayWith = method;
+
+        var il = method.GetILGenerator();
+
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var actualIndexLocal = il.DeclareLocal(_types.Int32);
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+
+        // len = list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // index = ToIntegerOrInfinity(args[0], 0)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        // actualIndex = index < 0 ? len + index : index
+        var indexNotNegative = il.DefineLabel();
+        var indexDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, indexNotNegative);
+
+        // Negative: len + index
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, actualIndexLocal);
+        il.Emit(OpCodes.Br, indexDone);
+
+        il.MarkLabel(indexNotNegative);
+        // Non-negative: use index directly
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Stloc, actualIndexLocal);
+
+        il.MarkLabel(indexDone);
+
+        // if (actualIndex < 0 || actualIndex >= len) throw RangeError
+        var throwRangeError = il.DefineLabel();
+        var validIndex = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwRangeError);
+
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, throwRangeError);
+        il.Emit(OpCodes.Br, validIndex);
+
+        // Throw RangeError
+        il.MarkLabel(throwRangeError);
+        il.Emit(OpCodes.Ldstr, "RangeError: Invalid index for with()");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(validIndex);
+
+        // result = new List<object>(list)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // result[actualIndex] = args[1]
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+
+        // return result
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayToSpliced(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayToSpliced(List<object> list, object[] args) -> List<object>

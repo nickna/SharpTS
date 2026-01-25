@@ -559,6 +559,169 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitArrayFindLast(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayFindLast",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.ListOfObject, _types.Object]
+        );
+        runtime.ArrayFindLast = method;
+
+        var il = method.GetILGenerator();
+
+        // int i = list.Count - 1
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        // Loop: for (int i = list.Count - 1; i >= 0; i--)
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, loopEnd);
+
+        // Create args array: [list[i], (double)i, list]
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Newarr, _types.Object);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        // Call callback
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+
+        // if (IsTruthy(result)) return list[i]
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        var notFound = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notFound);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notFound);
+        // i--
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayFindLastIndex(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayFindLastIndex",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.ListOfObject, _types.Object]
+        );
+        runtime.ArrayFindLastIndex = method;
+
+        var il = method.GetILGenerator();
+
+        // int i = list.Count - 1
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        // Loop: for (int i = list.Count - 1; i >= 0; i--)
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, loopEnd);
+
+        // Create args array
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Newarr, _types.Object);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stelem_Ref);
+
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+
+        var notFound = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notFound);
+        // Return index as double
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notFound);
+        // i--
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+        // Return -1
+        il.Emit(OpCodes.Ldc_R8, -1.0);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayReduce(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

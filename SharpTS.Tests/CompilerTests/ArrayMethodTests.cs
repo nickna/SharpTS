@@ -385,4 +385,205 @@ public class ArrayMethodTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("has 2\n", output);
     }
+
+    // ES2023: findLast
+    [Fact]
+    public void Array_FindLast_ReturnsLastMatchingElement()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            let result: number | null = nums.findLast((n: number): boolean => n > 2);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n", output);
+    }
+
+    [Fact]
+    public void Array_FindLast_ReturnsNullWhenNotFound()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let result: number | null = nums.findLast((n: number): boolean => n > 10);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("null\n", output);
+    }
+
+    [Fact]
+    public void Array_FindLast_EmptyArrayReturnsNull()
+    {
+        var source = """
+            let nums: number[] = [];
+            let result: number | null = nums.findLast((n: number): boolean => n > 0);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("null\n", output);
+    }
+
+    // ES2023: findLastIndex
+    [Fact]
+    public void Array_FindLastIndex_ReturnsLastMatchingIndex()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            console.log(nums.findLastIndex((n: number): boolean => n > 2));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("4\n", output);
+    }
+
+    [Fact]
+    public void Array_FindLastIndex_ReturnsMinusOneWhenNotFound()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            console.log(nums.findLastIndex((n: number): boolean => n > 10));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("-1\n", output);
+    }
+
+    [Fact]
+    public void Array_FindLastIndex_EmptyArrayReturnsMinusOne()
+    {
+        var source = """
+            let nums: number[] = [];
+            console.log(nums.findLastIndex((n: number): boolean => n > 0));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("-1\n", output);
+    }
+
+    // ES2023: toReversed
+    [Fact]
+    public void Array_ToReversed_ReturnsNewReversedArray()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            let reversed: number[] = nums.toReversed();
+            console.log(reversed[0]);
+            console.log(reversed[4]);
+            console.log(nums[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n1\n1\n", output);
+    }
+
+    [Fact]
+    public void Array_ToReversed_OriginalUnchanged()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let reversed: number[] = nums.toReversed();
+            console.log(nums.join(","));
+            console.log(reversed.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1,2,3\n3,2,1\n", output);
+    }
+
+    [Fact]
+    public void Array_ToReversed_EmptyArrayReturnsEmpty()
+    {
+        var source = """
+            let nums: number[] = [];
+            let reversed: number[] = nums.toReversed();
+            console.log(reversed.length);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n", output);
+    }
+
+    [Fact]
+    public void Array_ToReversed_SingleElementArray()
+    {
+        var source = """
+            let nums: number[] = [42];
+            let reversed: number[] = nums.toReversed();
+            console.log(reversed[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n", output);
+    }
+
+    // ES2023: with
+    [Fact]
+    public void Array_With_ReplacesElementAtIndex()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let result: number[] = nums.with(1, 99);
+            console.log(result.join(","));
+            console.log(nums.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1,99,3\n1,2,3\n", output);
+    }
+
+    [Fact]
+    public void Array_With_NegativeIndex()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let result: number[] = nums.with(-1, 99);
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1,2,99\n", output);
+    }
+
+    [Fact]
+    public void Array_With_FirstElement()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let result: number[] = nums.with(0, 99);
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("99,2,3\n", output);
+    }
+
+    [Fact]
+    public void Array_With_LastElement()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            let result: number[] = nums.with(2, 99);
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1,2,99\n", output);
+    }
+
+    [Fact]
+    public void Array_With_OriginalUnchanged()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            let result: number[] = nums.with(2, 99);
+            console.log(nums[2]);
+            console.log(result[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("3\n99\n", output);
+    }
 }
