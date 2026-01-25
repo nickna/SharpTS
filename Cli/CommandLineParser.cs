@@ -14,6 +14,7 @@
 // =============================================================================
 
 using SharpTS.Compilation;
+using SharpTS.Compilation.Bundling;
 using SharpTS.Parsing;
 
 namespace SharpTS.Cli;
@@ -39,6 +40,7 @@ public record GlobalOptions(
 /// <param name="MsBuildErrors">Output errors in MSBuild format</param>
 /// <param name="QuietMode">Suppress success messages</param>
 /// <param name="References">Assembly references to add</param>
+/// <param name="Bundler">Bundler selection mode for EXE targets</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -47,7 +49,8 @@ public record CompileOptions(
     bool VerifyIL = false,
     bool MsBuildErrors = false,
     bool QuietMode = false,
-    IReadOnlyList<string>? References = null
+    IReadOnlyList<string>? References = null,
+    BundlerMode Bundler = BundlerMode.Auto
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -268,6 +271,7 @@ public class CommandLineParser
         bool msbuildErrors = false;
         bool quietMode = false;
         string? sdkPath = null;
+        BundlerMode bundlerMode = BundlerMode.Auto;
 
         // Packaging options
         bool pack = false;
@@ -309,6 +313,33 @@ public class CommandLineParser
                 {
                     return new ParsedCommand.Error(
                         $"Error: Invalid target '{targetArg}'. Use 'dll' or 'exe'.",
+                        64,
+                        ShowCompileUsage: true
+                    );
+                }
+            }
+            else if (args[i] == "--bundler")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    return new ParsedCommand.Error(
+                        "Error: --bundler requires a value (auto, sdk, or builtin)",
+                        64,
+                        ShowCompileUsage: true
+                    );
+                }
+                var bundlerArg = args[++i].ToLowerInvariant();
+                bundlerMode = bundlerArg switch
+                {
+                    "auto" => BundlerMode.Auto,
+                    "sdk" => BundlerMode.Sdk,
+                    "builtin" => BundlerMode.BuiltIn,
+                    _ => (BundlerMode)(-1) // Signal invalid value
+                };
+                if ((int)bundlerMode == -1)
+                {
+                    return new ParsedCommand.Error(
+                        $"Error: Invalid bundler '{bundlerArg}'. Use 'auto', 'sdk', or 'builtin'.",
                         64,
                         ShowCompileUsage: true
                     );
@@ -376,7 +407,8 @@ public class CommandLineParser
             VerifyIL: verifyIL,
             MsBuildErrors: msbuildErrors,
             QuietMode: quietMode,
-            References: references
+            References: references,
+            Bundler: bundlerMode
         );
 
         var packOptions = new PackOptions(

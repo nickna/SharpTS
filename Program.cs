@@ -36,6 +36,7 @@
 using System.Reflection;
 using SharpTS.Cli;
 using SharpTS.Compilation;
+using SharpTS.Compilation.Bundling;
 using SharpTS.Declaration;
 using SharpTS.Diagnostics;
 using SharpTS.Diagnostics.Exceptions;
@@ -90,7 +91,8 @@ switch (command)
             compile.PackOptions,
             outputOptions,
             compile.CompileOptions.References,
-            compile.CompileOptions.Target
+            compile.CompileOptions.Target,
+            compile.CompileOptions.Bundler
         );
         break;
 
@@ -255,7 +257,7 @@ static void Run(string source, DecoratorMode decoratorMode, bool emitDecoratorMe
     }
 }
 
-static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target)
+static void CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode)
 {
     try
     {
@@ -334,11 +336,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode);
         }
 
         // Package if requested
@@ -368,7 +370,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode)
 {
     // Phase 1: Load all static dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -425,11 +427,21 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
             }
 
             // Bundle into single-file EXE
-            AppHostGenerator.CreateSingleFileExecutableDirect(tempDllPath, outputPath, assemblyName);
-
-            if (!outputOptions.QuietMode)
+            try
             {
-                Console.WriteLine($"Compiled to {outputPath}");
+                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(tempDllPath, outputPath, assemblyName, bundlerMode);
+
+                if (!outputOptions.QuietMode)
+                {
+                    Console.WriteLine($"Compiled to {outputPath} (using {bundleResult.TechniqueDescription})");
+                }
+            }
+            catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
+            {
+                var bundlerName = bundlerMode == BundlerMode.Sdk ? "SDK" : "built-in";
+                Console.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
+                Console.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
+                Environment.Exit(1);
             }
         }
         finally
@@ -460,7 +472,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode)
 {
     // Set up diagnostic reporter
     var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
@@ -506,11 +518,21 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
             }
 
             // Bundle into single-file EXE
-            AppHostGenerator.CreateSingleFileExecutableDirect(tempDllPath, outputPath, assemblyName);
-
-            if (!outputOptions.QuietMode)
+            try
             {
-                Console.WriteLine($"Compiled to {outputPath}");
+                var bundleResult = AppHostGenerator.CreateSingleFileExecutable(tempDllPath, outputPath, assemblyName, bundlerMode);
+
+                if (!outputOptions.QuietMode)
+                {
+                    Console.WriteLine($"Compiled to {outputPath} (using {bundleResult.TechniqueDescription})");
+                }
+            }
+            catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
+            {
+                var bundlerName = bundlerMode == BundlerMode.Sdk ? "SDK" : "built-in";
+                Console.WriteLine($"Error: {bundlerName} bundler failed: {ex.Message}");
+                Console.WriteLine($"The {bundlerName} bundler was explicitly requested. Use '--bundler auto' to allow fallback.");
+                Environment.Exit(1);
             }
         }
         finally
@@ -749,6 +771,7 @@ static void PrintHelp()
     Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
+    Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  -r, --reference <asm.dll>     Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
@@ -782,6 +805,7 @@ static void PrintCompileUsage()
     Console.WriteLine("Options:");
     Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
+    Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
     Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
     Console.WriteLine("  --ref-asm              Emit reference-assembly-compatible output");
