@@ -72,8 +72,17 @@ public static class UtilHelpers
 
     /// <summary>
     /// util.types.isFunction - checks if value is a function.
+    /// Checks for Delegate, TSFunction (from RuntimeTypes), and $TSFunction (emitted into compiled DLLs).
     /// </summary>
-    public static bool IsFunction(object? value) => value is Delegate;
+    public static bool IsFunction(object? value)
+    {
+        if (value is null) return false;
+        if (value is Delegate) return true;
+        if (value is TSFunction) return true;
+        // Check for emitted $TSFunction type (or $BoundTSFunction)
+        var typeName = value.GetType().Name;
+        return typeName is "$TSFunction" or "$BoundTSFunction";
+    }
 
     /// <summary>
     /// util.types.isNull - checks if value is null.

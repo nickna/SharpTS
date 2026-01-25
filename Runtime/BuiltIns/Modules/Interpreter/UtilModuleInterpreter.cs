@@ -194,11 +194,11 @@ public static class UtilModuleInterpreter
         => args.Count > 0 && args[0] is SharpTSDate;
 
     private static object? IsFunction(Interp interpreter, object? receiver, List<object?> args)
-        => args.Count > 0 && (args[0] is SharpTSFunction or BuiltInMethod);
+        => args.Count > 0 && (args[0] is SharpTSFunction or SharpTSArrowFunction or BuiltInMethod);
 
     private static object? IsNull(Interp interpreter, object? receiver, List<object?> args)
         => args.Count > 0 && args[0] == null;
 
     private static object? IsUndefined(Interp interpreter, object? receiver, List<object?> args)
-        => args.Count > 0 && args[0] == null; // In SharpTS, undefined is represented as null
+        => args.Count > 0 && args[0] is SharpTSUndefined;
 }

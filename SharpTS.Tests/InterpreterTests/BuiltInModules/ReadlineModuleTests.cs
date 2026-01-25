@@ -31,36 +31,32 @@ public class ReadlineModuleTests
     [Fact]
     public void Module_HasQuestionSync()
     {
-        // readline module should export questionSync as a callable
-        // Note: BuiltInMethod returns 'object' from typeof, not 'function'
+        // readline module should export questionSync as a function
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as readline from 'readline';
-                console.log('questionSync' in readline);
-                console.log(readline.questionSync !== undefined);
+                console.log(typeof readline.questionSync === 'function');
                 """
         };
 
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\n", output);
+        Assert.Equal("true\n", output);
     }
 
     [Fact]
     public void Module_HasCreateInterface()
     {
-        // readline module should export createInterface as a callable
-        // Note: BuiltInMethod returns 'object' from typeof, not 'function'
+        // readline module should export createInterface as a function
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as readline from 'readline';
-                console.log('createInterface' in readline);
-                console.log(readline.createInterface !== undefined);
+                console.log(typeof readline.createInterface === 'function');
                 """
         };
 
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\n", output);
+        Assert.Equal("true\n", output);
     }
 }

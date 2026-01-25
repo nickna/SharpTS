@@ -170,6 +170,26 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
+    // ============ TYPEOF BUILTIN TESTS ============
+
+    [Fact]
+    public void Typeof_BuiltInMethod_ReturnsFunction()
+    {
+        // typeof should return 'function' for built-in methods
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(typeof util.format === 'function');
+                console.log(typeof util.inspect === 'function');
+                console.log(typeof Math.floor === 'function');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
     // ============ TYPES TESTS ============
 
     [Fact]
@@ -192,60 +212,60 @@ public class UtilModuleTests
     [Fact]
     public void Types_IsFunction()
     {
-        // Note: util.types.isFunction checks for SharpTSFunction or BuiltInMethod
-        // Arrow functions are SharpTSArrowFunction (different type)
-        // Testing with a regular function declaration
+        // Tests all function types: regular functions, arrow functions, and built-in methods
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as util from 'util';
                 function regularFn() {}
+                const arrowFn = () => {};
                 console.log(util.types.isFunction(regularFn));
+                console.log(util.types.isFunction(arrowFn));
+                console.log(util.types.isFunction(util.format));
                 console.log(util.types.isFunction('not function'));
                 console.log(util.types.isFunction(42));
                 """
         };
 
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\nfalse\nfalse\n", output);
+        Assert.Equal("true\ntrue\ntrue\nfalse\nfalse\n", output);
     }
 
     [Fact]
     public void Types_IsNull()
     {
-        // Note: In SharpTS, undefined is represented as SharpTSUndefined.Instance
-        // The util.types.isNull checks for args[0] == null
+        // isNull returns true only for null, not for undefined
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as util from 'util';
                 console.log(util.types.isNull(null));
+                console.log(util.types.isNull(undefined));
                 console.log(util.types.isNull(0));
                 console.log(util.types.isNull(''));
                 """
         };
 
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\nfalse\nfalse\n", output);
+        Assert.Equal("true\nfalse\nfalse\nfalse\n", output);
     }
 
     [Fact]
     public void Types_IsUndefined()
     {
-        // Note: In SharpTS, undefined is represented as SharpTSUndefined.Instance
-        // The util.types.isUndefined checks for args[0] == null
-        // This test verifies it returns false for non-null values
+        // isUndefined returns true only for undefined, not for null
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as util from 'util';
+                console.log(util.types.isUndefined(undefined));
+                console.log(util.types.isUndefined(null));
                 console.log(util.types.isUndefined(0));
                 console.log(util.types.isUndefined('test'));
-                console.log(util.types.isUndefined({}));
                 """
         };
 
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("false\nfalse\nfalse\n", output);
+        Assert.Equal("true\nfalse\nfalse\nfalse\n", output);
     }
 }
