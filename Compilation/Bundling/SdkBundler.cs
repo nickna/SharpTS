@@ -177,6 +177,7 @@ public class SdkBundler : IBundler
                             File.Move(actualOutputPath, outputPath);
                         }
                         // If same path, file is already in the right place
+                        ManualBundler.SetExecutePermission(outputPath);
                         return; // Success!
                     }
 
@@ -195,6 +196,7 @@ public class SdkBundler : IBundler
                             }
                             File.Move(altOutputPath, outputPath);
                         }
+                        ManualBundler.SetExecutePermission(outputPath);
                         return; // Success!
                     }
 

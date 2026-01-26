@@ -156,6 +156,9 @@ public class ManualBundler : IBundler
         // Write the final bundle to disk
         File.WriteAllBytes(exePath, bundleBytes);
 
+        // Set execute permissions on Unix
+        SetExecutePermission(exePath);
+
         return new BundleResult(exePath, BundleTechnique.ManualBundler);
     }
 
@@ -307,5 +310,23 @@ public class ManualBundler : IBundler
         if (OperatingSystem.IsMacOS()) return $"osx-{arch}";
 
         return $"win-{arch}";
+    }
+
+    /// <summary>
+    /// Sets execute permission on the file for Unix systems.
+    /// On Windows, this is a no-op.
+    /// </summary>
+    internal static void SetExecutePermission(string filePath)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // On Unix, set the execute bit (owner, group, and others can execute)
+        // Using UnixFileMode which is available on .NET 6+
+        var currentMode = File.GetUnixFileMode(filePath);
+        var newMode = currentMode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+        File.SetUnixFileMode(filePath, newMode);
     }
 }
