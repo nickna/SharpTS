@@ -84,7 +84,7 @@ Then use the SDK without a version number:
     <!-- Compiler options -->
     <SharpTSPreserveConstEnums>false</SharpTSPreserveConstEnums>
     <SharpTSExperimentalDecorators>false</SharpTSExperimentalDecorators>
-    <SharpTSDecorators>false</SharpTSDecorators>
+    <SharpTSNoDecorators>false</SharpTSNoDecorators>
     <SharpTSEmitDecoratorMetadata>false</SharpTSEmitDecoratorMetadata>
     <SharpTSVerifyIL>false</SharpTSVerifyIL>
     <SharpTSUseReferenceAssemblies>false</SharpTSUseReferenceAssemblies>
@@ -117,8 +117,8 @@ Then use the SDK without a version number:
 | Property | Default | CLI Equivalent | Description |
 |----------|---------|----------------|-------------|
 | `SharpTSPreserveConstEnums` | `false` | `--preserveConstEnums` | Keep const enum declarations in output |
-| `SharpTSExperimentalDecorators` | `false` | `--experimentalDecorators` | Enable legacy (Stage 2) decorators |
-| `SharpTSDecorators` | `false` | `--decorators` | Enable TC39 Stage 3 decorators |
+| `SharpTSExperimentalDecorators` | `false` | `--experimentalDecorators` | Use Legacy (Stage 2) decorators instead of default Stage 3 |
+| `SharpTSNoDecorators` | `false` | `--noDecorators` | Disable decorator support |
 | `SharpTSEmitDecoratorMetadata` | `false` | `--emitDecoratorMetadata` | Emit design-time type metadata |
 | `SharpTSVerifyIL` | `false` | `--verify` | Verify generated IL after compilation |
 | `SharpTSUseReferenceAssemblies` | `false` | `--ref-asm` | Emit reference-assembly-compatible output |
@@ -140,8 +140,7 @@ The SDK automatically reads `tsconfig.json` if present in the project directory.
 | tsconfig.json Path | Maps To | Notes |
 |--------------------|---------|-------|
 | `compilerOptions.preserveConstEnums` | `SharpTSPreserveConstEnums` | |
-| `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` | |
-| `compilerOptions.decorators` | `SharpTSDecorators` | TC39 Stage 3 |
+| `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` | Use Legacy (Stage 2) decorators |
 | `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` | |
 | `files[0]` | `SharpTSEntryPoint` | First file used as entry point |
 
@@ -504,7 +503,7 @@ console.log("Fibonacci(10) =", fibonacci(10));
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/index.ts</SharpTSEntryPoint>
-    <SharpTSDecorators>true</SharpTSDecorators>
+    <!-- Decorators are enabled by default (Stage 3) -->
     <SharpTSEmitDecoratorMetadata>true</SharpTSEmitDecoratorMetadata>
     <SharpTSUseReferenceAssemblies>true</SharpTSUseReferenceAssemblies>
   </PropertyGroup>
@@ -518,7 +517,7 @@ console.log("Fibonacci(10) =", fibonacci(10));
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/library.ts</SharpTSEntryPoint>
-    <SharpTSDecorators>true</SharpTSDecorators>
+    <!-- Decorators are enabled by default -->
   </PropertyGroup>
 </Project>
 ```

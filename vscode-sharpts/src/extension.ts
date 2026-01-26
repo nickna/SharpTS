@@ -10,6 +10,8 @@ import { BridgeCache } from './bridge/BridgeCache';
 import { SharpTSCompletionProvider } from './features/CompletionProvider';
 import { SharpTSSignatureProvider } from './features/SignatureProvider';
 import { SharpTSHoverProvider } from './features/HoverProvider';
+import { DeclarationGenerator } from './features/DeclarationGenerator';
+import { CompileCommands } from './commands/CompileCommands';
 
 let bridgeClient: BridgeClient | undefined;
 let cache: BridgeCache;
@@ -18,38 +20,15 @@ export async function activate(context: vscode.ExtensionContext) {
     const config = vscode.workspace.getConfiguration('sharpts');
     cache = new BridgeCache();
 
-    // Get configuration
-    const execPath = config.get<string>('executablePath', 'dotnet');
-    let projectPath = config.get<string>('projectPath', '');
+    // Resolve path to bundled bridge DLL
+    const bridgePath = path.join(context.extensionPath, 'bin', 'bridge', 'SharpTS.dll');
 
-    // If no project path specified, try to find SharpTS in common locations
-    if (!projectPath) {
-        // Try to find relative to extension
-        const extensionPath = context.extensionPath;
-        const parentDir = path.dirname(extensionPath);
-
-        // Common relative paths to check
-        const possiblePaths = [
-            path.join(parentDir, 'SharpTS'),
-            path.join(parentDir, '..', 'SharpTS'),
-            path.join(extensionPath, '..'),
-        ];
-
-        for (const p of possiblePaths) {
-            const csprojPath = path.join(p, 'SharpTS.csproj');
-            try {
-                await vscode.workspace.fs.stat(vscode.Uri.file(csprojPath));
-                projectPath = p;
-                break;
-            } catch {
-                // Path doesn't exist, try next
-            }
-        }
-    }
-
-    if (!projectPath) {
-        vscode.window.showWarningMessage(
-            'SharpTS project path not configured. Please set sharpts.projectPath in settings.'
+    // Verify bridge exists
+    try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(bridgePath));
+    } catch {
+        vscode.window.showErrorMessage(
+            'SharpTS bridge not found. The extension may need to be reinstalled.'
         );
         return;
     }
@@ -68,7 +47,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Create and start bridge
-    bridgeClient = new BridgeClient(execPath, projectPath, args, config);
+    bridgeClient = new BridgeClient(bridgePath, args, config);
 
     const started = await bridgeClient.start();
     if (!started) {
@@ -80,6 +59,19 @@ export async function activate(context: vscode.ExtensionContext) {
                 bridgeClient?.showOutput();
             }
         });
+    }
+
+    // Generate TypeScript declarations for annotations
+    if (started && vscode.workspace.workspaceFolders?.length) {
+        const generator = new DeclarationGenerator(bridgeClient);
+        for (const folder of vscode.workspace.workspaceFolders) {
+            try {
+                await generator.generate(folder);
+            } catch (err) {
+                // Log but don't fail activation
+                console.error('Failed to generate declarations:', err);
+            }
+        }
     }
 
     // Register providers
@@ -111,7 +103,7 @@ export async function activate(context: vscode.ExtensionContext) {
             cache.invalidate();
             if (bridgeClient) {
                 bridgeClient.dispose();
-                bridgeClient = new BridgeClient(execPath, projectPath, args, config);
+                bridgeClient = new BridgeClient(bridgePath, args, config);
                 await bridgeClient.start();
             }
         }),
@@ -130,6 +122,15 @@ export async function activate(context: vscode.ExtensionContext) {
             }
             bridgeClient?.showOutput();
         })
+    );
+
+    // Register compile/run commands
+    const compileCommands = new CompileCommands(bridgePath);
+    context.subscriptions.push(
+        vscode.commands.registerCommand('sharpts.compile', () => compileCommands.compile()),
+        vscode.commands.registerCommand('sharpts.run', () => compileCommands.run()),
+        vscode.commands.registerCommand('sharpts.compileAndRun', () => compileCommands.compileAndRun()),
+        { dispose: () => compileCommands.dispose() }
     );
 
     // Watch for configuration changes

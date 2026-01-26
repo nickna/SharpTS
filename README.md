@@ -135,9 +135,12 @@ Package metadata is read from `package.json` in the source directory.
 
 **Decorator support:**
 
+Decorators are enabled by default (TC39 Stage 3).
+
 ```bash
+sharpts script.ts                           # Stage 3 decorators (default)
 sharpts --experimentalDecorators script.ts  # Legacy (Stage 2) decorators
-sharpts --decorators script.ts              # TC39 Stage 3 decorators
+sharpts --noDecorators script.ts            # Disable decorators
 ```
 
 ## Examples
@@ -228,7 +231,7 @@ console.log(sb.toString());
 ```
 
 ```bash
-$ sharpts --experimentalDecorators --compile dotnet-example.ts
+$ sharpts --compile dotnet-example.ts
 $ dotnet dotnet-example.dll
 Hello from .NET!
 ```

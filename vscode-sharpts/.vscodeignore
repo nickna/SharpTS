@@ -5,3 +5,4 @@ src/**
 tsconfig.json
 **/*.map
 **/*.ts
+!bin/**

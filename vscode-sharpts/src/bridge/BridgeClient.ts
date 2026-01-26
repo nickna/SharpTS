@@ -27,8 +27,7 @@ export class BridgeClient implements vscode.Disposable {
     private isReady = false;
 
     constructor(
-        private executablePath: string,
-        private projectPath: string,
+        private bridgePath: string,
         private args: string[],
         private config: vscode.WorkspaceConfiguration
     ) {
@@ -43,16 +42,14 @@ export class BridgeClient implements vscode.Disposable {
         try {
             this.updateStatus('starting');
             this.outputChannel.appendLine(`[Info] Starting bridge...`);
-            this.outputChannel.appendLine(`[Info] Executable: ${this.executablePath}`);
-            this.outputChannel.appendLine(`[Info] Project path: ${this.projectPath}`);
+            this.outputChannel.appendLine(`[Info] Bridge path: ${this.bridgePath}`);
             this.outputChannel.appendLine(`[Info] Args: ${this.args.join(' ')}`);
 
-            // Build command: dotnet run -- lsp-bridge [args]
-            const spawnArgs = ['run', '--project', this.projectPath, '--', 'lsp-bridge', ...this.args];
+            // Run the bundled bridge DLL
+            const spawnArgs = [this.bridgePath, 'lsp-bridge', ...this.args];
 
-            this.process = cp.spawn(this.executablePath, spawnArgs, {
-                stdio: ['pipe', 'pipe', 'pipe'],
-                cwd: this.projectPath
+            this.process = cp.spawn('dotnet', spawnArgs, {
+                stdio: ['pipe', 'pipe', 'pipe']
             });
 
             this.process.on('error', (err) => {

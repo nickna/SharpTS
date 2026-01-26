@@ -168,9 +168,9 @@ sharpts <file.ts>
 # Start REPL
 sharpts
 
-# With decorator support
-sharpts <file.ts> --experimentalDecorators    # Stage 2 decorators
-sharpts <file.ts> --decorators                # Stage 3 decorators
+# Decorator options (Stage 3 enabled by default)
+sharpts <file.ts> --experimentalDecorators    # Legacy (Stage 2) decorators
+sharpts <file.ts> --noDecorators              # Disable decorators
 sharpts <file.ts> --emitDecoratorMetadata     # Emit type metadata
 ```
 
@@ -190,8 +190,8 @@ sharpts -c <file.ts> [options]
 | `--ref-asm` | Emit reference-assembly-compatible output |
 | `--sdk-path <path>` | Explicit path to .NET SDK reference assemblies |
 | `--verify` | Verify emitted IL using Microsoft.ILVerification |
-| `--experimentalDecorators` | Enable Stage 2 decorators |
-| `--decorators` | Enable Stage 3 decorators |
+| `--experimentalDecorators` | Use Legacy (Stage 2) decorators instead of Stage 3 |
+| `--noDecorators` | Disable decorator support |
 | `--emitDecoratorMetadata` | Emit design-time type metadata |
 | `--pack` | Generate NuGet package after compilation |
 | `--push <source>` | Push package to NuGet feed (implies `--pack`) |

@@ -22,10 +22,10 @@ namespace SharpTS.Cli;
 /// <summary>
 /// Global options that apply across all execution modes.
 /// </summary>
-/// <param name="DecoratorMode">Decorator parsing mode (None, Legacy, Stage3)</param>
+/// <param name="DecoratorMode">Decorator parsing mode (None, Legacy, Stage3). Defaults to Stage3.</param>
 /// <param name="EmitDecoratorMetadata">Whether to emit design-time type metadata</param>
 public record GlobalOptions(
-    DecoratorMode DecoratorMode = DecoratorMode.None,
+    DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false
 );
 
@@ -214,7 +214,7 @@ public class CommandLineParser
 
     private static (GlobalOptions options, string[] remainingArgs, string[] scriptArgs) ParseGlobalOptions(string[] args)
     {
-        var decoratorMode = DecoratorMode.None;
+        var decoratorMode = DecoratorMode.Stage3;  // Stage3 decorators enabled by default
         var emitDecoratorMetadata = false;
         List<string> remaining = [];
         List<string> scriptArgs = [];
@@ -240,8 +240,8 @@ public class CommandLineParser
                 case "--experimentalDecorators":
                     decoratorMode = DecoratorMode.Legacy;
                     break;
-                case "--decorators":
-                    decoratorMode = DecoratorMode.Stage3;
+                case "--noDecorators":
+                    decoratorMode = DecoratorMode.None;
                     break;
                 case "--emitDecoratorMetadata":
                     emitDecoratorMetadata = true;

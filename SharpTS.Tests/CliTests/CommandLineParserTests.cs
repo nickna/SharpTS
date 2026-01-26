@@ -58,9 +58,9 @@ public class CommandLineParserTests
     }
 
     [Fact]
-    public void Parse_OnlyDecoratorFlags_ReturnsReplWithDecorators()
+    public void Parse_NoArgs_DefaultsToStage3Decorators()
     {
-        var result = _parser.Parse(["--decorators"]);
+        var result = _parser.Parse([]);
 
         var repl = Assert.IsType<ParsedCommand.Repl>(result);
         Assert.Equal(DecoratorMode.Stage3, repl.Options.DecoratorMode);
@@ -121,11 +121,11 @@ public class CommandLineParserTests
     [Fact]
     public void Parse_ScriptWithGlobalOptions_AppliesOptions()
     {
-        var result = _parser.Parse(["--decorators", "script.ts"]);
+        var result = _parser.Parse(["--experimentalDecorators", "script.ts"]);
 
         var script = Assert.IsType<ParsedCommand.Script>(result);
         Assert.Equal("script.ts", script.ScriptPath);
-        Assert.Equal(DecoratorMode.Stage3, script.Options.DecoratorMode);
+        Assert.Equal(DecoratorMode.Legacy, script.Options.DecoratorMode);
     }
 
     [Fact]
@@ -283,10 +283,10 @@ public class CommandLineParserTests
     [Fact]
     public void Parse_Compile_WithGlobalDecorators_AppliesGlobalOptions()
     {
-        var result = _parser.Parse(["--decorators", "-c", "file.ts"]);
+        var result = _parser.Parse(["--experimentalDecorators", "-c", "file.ts"]);
 
         var compile = Assert.IsType<ParsedCommand.Compile>(result);
-        Assert.Equal(DecoratorMode.Stage3, compile.GlobalOptions.DecoratorMode);
+        Assert.Equal(DecoratorMode.Legacy, compile.GlobalOptions.DecoratorMode);
     }
 
     #endregion
@@ -450,10 +450,10 @@ public class CommandLineParserTests
     [Fact]
     public void Parse_MultipleDecoratorFlags_LastOneWins()
     {
-        var result = _parser.Parse(["--experimentalDecorators", "--decorators"]);
+        var result = _parser.Parse(["--experimentalDecorators", "--noDecorators"]);
 
         var repl = Assert.IsType<ParsedCommand.Repl>(result);
-        Assert.Equal(DecoratorMode.Stage3, repl.Options.DecoratorMode);
+        Assert.Equal(DecoratorMode.None, repl.Options.DecoratorMode);
     }
 
     [Fact]

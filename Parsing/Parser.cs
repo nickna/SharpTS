@@ -7,11 +7,11 @@ namespace SharpTS.Parsing;
 /// </summary>
 public enum DecoratorMode
 {
-    /// <summary>No decorator support (default for backwards compatibility)</summary>
+    /// <summary>No decorator support. Use --noDecorators flag to disable.</summary>
     None,
-    /// <summary>Legacy/Experimental TypeScript decorators (Stage 2)</summary>
+    /// <summary>Legacy/Experimental TypeScript decorators (Stage 2). Use --experimentalDecorators flag.</summary>
     Legacy,
-    /// <summary>TC39 Stage 3 decorators (ES2023+)</summary>
+    /// <summary>TC39 Stage 3 decorators (ES2023+). This is the default.</summary>
     Stage3
 }
 

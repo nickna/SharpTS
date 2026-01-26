@@ -87,7 +87,7 @@ Both `Person` and `Employee` will be emitted in the `MyCompany.Libraries` namesp
 
 **Key points:**
 - The decorator applies file-wide (all classes in the file use the same namespace)
-- Requires `--decorators` flag during compilation
+- Decorators are enabled by default (Stage 3), so no extra flags needed
 - Nested namespaces supported: `@Namespace("MyCompany.Libraries.Data")`
 - Without the decorator, classes are emitted at the root namespace (backward compatible)
 

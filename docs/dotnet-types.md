@@ -16,8 +16,9 @@ This guide covers **inbound interop** - calling .NET code from TypeScript using 
 ## Prerequisites
 
 - .NET 10.0 SDK
-- SharpTS with `--experimentalDecorators` or `--decorators` flag
 - Compilation mode (`--compile`) - this feature is available only in compiled execution
+
+> **Note:** Decorators are enabled by default (TC39 Stage 3). Use `--experimentalDecorators` for Legacy (Stage 2) decorators, or `--noDecorators` to disable decorator support.
 
 ## Quick Start
 
@@ -39,7 +40,7 @@ console.log(sb.toString());  // Output: Hello, World!
 
 Compile and run:
 ```bash
-sharpts --compile example.ts --experimentalDecorators
+sharpts --compile example.ts
 dotnet example.dll
 ```
 
@@ -171,7 +172,7 @@ sb.append(", Active: ");
 sb.append(true);
 
 console.log(sb.toString());  // Name: Alice, Age: 30, Active: True
-console.log(sb.length);      // 35
+console.log(sb.length);      // 34
 ```
 
 ### Guid (Static Methods)
@@ -478,7 +479,7 @@ For unsupported features, consider:
 
 **Error:** `Unknown decorator: DotNetType`
 
-- Ensure you're using the `--experimentalDecorators` or `--decorators` flag
+- Decorators are enabled by default. If you used `--noDecorators`, remove that flag.
 - `@DotNetType` is a built-in compiler decorator, not a user-defined one
 
 ### Compilation Only

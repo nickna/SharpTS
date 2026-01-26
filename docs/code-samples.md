@@ -1863,7 +1863,7 @@ Greet("World");  // "Hello, World"
 
 ## Decorators
 
-> **Note:** Enable decorators with `--experimentalDecorators` (Stage 2) or `--decorators` (Stage 3).
+> **Note:** Decorators are enabled by default (Stage 3). Use `--experimentalDecorators` for Legacy (Stage 2) decorators.
 
 ### Class Decorator
 

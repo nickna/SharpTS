@@ -4,6 +4,11 @@
   "description": ".NET attribute support for TypeScript decorators",
   "version": "0.1.0",
   "publisher": "sharpts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nickna/SharpTS"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -19,16 +24,6 @@
     "configuration": {
       "title": "SharpTS",
       "properties": {
-        "sharpts.executablePath": {
-          "type": "string",
-          "default": "dotnet",
-          "description": "Path to dotnet CLI or SharpTS executable"
-        },
-        "sharpts.projectPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to SharpTS project (directory containing SharpTS.csproj)"
-        },
         "sharpts.projectFile": {
           "type": "string",
           "default": "",
@@ -62,6 +57,18 @@
       {
         "command": "sharpts.showBridgeStatus",
         "title": "SharpTS: Show Bridge Status"
+      },
+      {
+        "command": "sharpts.compile",
+        "title": "SharpTS: Compile Current File"
+      },
+      {
+        "command": "sharpts.run",
+        "title": "SharpTS: Run Current File"
+      },
+      {
+        "command": "sharpts.compileAndRun",
+        "title": "SharpTS: Compile and Run"
       }
     ]
   },
@@ -69,6 +76,10 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
+    "bundle-bridge": "dotnet publish ../SharpTS.csproj -c Release -o ./bin/bridge",
+    "prebuild": "npm run bundle-bridge",
+    "build": "npm run compile",
+    "prepackage": "npm run build",
     "package": "vsce package"
   },
   "devDependencies": {
