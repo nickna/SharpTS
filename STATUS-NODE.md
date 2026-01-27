@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added createSign/createVerify for RSA/EC signatures)
+**Last Updated:** 2026-01-27 (Added DH/ECDH key exchange, generateKeyPairSync, getHashes/getCiphers)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt + timingSafeEqual + Sign/Verify |
+| `crypto` | ⚠️ | Hash, HMAC, Cipher, PBKDF2, scrypt, timingSafeEqual, Sign/Verify, DH/ECDH, KeyPair |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -163,7 +163,16 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `timingSafeEqual` | ✅ | Constant-time buffer comparison (prevents timing attacks) |
 | **Signing** | | |
 | `createSign` / `createVerify` | ✅ | RSA and EC keys; SHA1/256/384/512; hex/base64/Buffer output |
-| `generateKeyPair` | ❌ | |
+| **Key Generation** | | |
+| `generateKeyPairSync` | ✅ | RSA (2048/4096) and EC (P-256/P-384/P-521); PEM format |
+| `generateKeyPair` | ❌ | Async version - use sync version |
+| **Diffie-Hellman** | | |
+| `createDiffieHellman` | ✅ | With prime length or explicit prime/generator |
+| `getDiffieHellman` | ✅ | Predefined groups: modp1, modp2, modp5, modp14-18 |
+| `createECDH` | ✅ | P-256 (prime256v1), P-384 (secp384r1), P-521 (secp521r1) |
+| **Discovery** | | |
+| `getHashes` | ✅ | Returns array of supported hash algorithms |
+| `getCiphers` | ✅ | Returns array of supported cipher algorithms |
 
 ---
 

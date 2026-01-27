@@ -708,6 +708,26 @@ public class EmittedRuntime
     public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
     public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;
 
+    // Crypto info methods (getHashes, getCiphers)
+    public MethodBuilder CryptoGetHashes { get; set; } = null!;
+    public MethodBuilder CryptoGetCiphers { get; set; } = null!;
+
+    // Key pair generation
+    public MethodBuilder CryptoGenerateKeyPairSync { get; set; } = null!;
+
+    // DiffieHellman support
+    public MethodBuilder CryptoCreateDiffieHellman { get; set; } = null!;
+    public MethodBuilder CryptoGetDiffieHellman { get; set; } = null!;
+    public Type TSDiffieHellmanType { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorPrimeLength { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorPrimeGenerator { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorGroup { get; set; } = null!;
+
+    // ECDH support
+    public MethodBuilder CryptoCreateECDH { get; set; } = null!;
+    public Type TSECDHType { get; set; } = null!;
+    public ConstructorBuilder TSECDHCtor { get; set; } = null!;
+
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
     public Type TSBufferType { get; set; } = null!;

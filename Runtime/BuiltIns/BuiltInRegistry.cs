@@ -148,6 +148,8 @@ public sealed class BuiltInRegistry
         RegisterDecipherType(registry);
         RegisterSignType(registry);
         RegisterVerifyType(registry);
+        RegisterDiffieHellmanType(registry);
+        RegisterECDHType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
@@ -530,6 +532,20 @@ public sealed class BuiltInRegistry
         // Register Buffer constructor member lookup
         registry.RegisterInstanceType(typeof(SharpTSBufferConstructor), (instance, name) =>
             ((SharpTSBufferConstructor)instance).GetProperty(name));
+    }
+
+    private static void RegisterDiffieHellmanType(BuiltInRegistry registry)
+    {
+        // DiffieHellman members accessed via property access (dh.generateKeys, dh.computeSecret, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSDiffieHellman), (instance, name) =>
+            ((SharpTSDiffieHellman)instance).GetMember(name));
+    }
+
+    private static void RegisterECDHType(BuiltInRegistry registry)
+    {
+        // ECDH members accessed via property access (ecdh.generateKeys, ecdh.computeSecret, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSECDH), (instance, name) =>
+            ((SharpTSECDH)instance).GetMember(name));
     }
 
     private static string Stringify(object? obj)

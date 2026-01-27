@@ -67,8 +67,10 @@ public static class UtilHelpers
 {
     /// <summary>
     /// util.types.isArray - checks if value is an array.
+    /// Checks for both emitted $Array (implements IList) and interpreter SharpTSArray.
     /// </summary>
-    public static bool IsArray(object? value) => value is IList<object?>;
+    public static bool IsArray(object? value) =>
+        value is IList<object?> || value is SharpTS.Runtime.Types.SharpTSArray;
 
     /// <summary>
     /// util.types.isFunction - checks if value is a function.

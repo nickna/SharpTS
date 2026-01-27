@@ -550,7 +550,37 @@ public static class BuiltInModuleTypes
             // createSign(algorithm) -> Sign object
             ["createSign"] = new TypeInfo.Function([stringType], anyType),
             // createVerify(algorithm) -> Verify object
-            ["createVerify"] = new TypeInfo.Function([stringType], anyType)
+            ["createVerify"] = new TypeInfo.Function([stringType], anyType),
+
+            // Discovery functions
+            // getHashes() -> string[]
+            ["getHashes"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+            // getCiphers() -> string[]
+            ["getCiphers"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+
+            // Key pair generation
+            // generateKeyPairSync(type, options?) -> { publicKey, privateKey }
+            ["generateKeyPairSync"] = new TypeInfo.Function(
+                [stringType, anyType],
+                new TypeInfo.Record(new Dictionary<string, TypeInfo>
+                {
+                    ["publicKey"] = stringType,
+                    ["privateKey"] = stringType
+                }.ToFrozenDictionary()),
+                RequiredParams: 1),
+
+            // Diffie-Hellman key exchange
+            // createDiffieHellman(primeLength) or createDiffieHellman(prime, generator?) -> DiffieHellman object
+            ["createDiffieHellman"] = new TypeInfo.Function(
+                [new TypeInfo.Union([numberType, bufferOrStringType]), bufferOrStringType],
+                anyType,
+                RequiredParams: 1),
+            // getDiffieHellman(groupName) -> DiffieHellman object
+            ["getDiffieHellman"] = new TypeInfo.Function([stringType], anyType),
+
+            // Elliptic curve Diffie-Hellman
+            // createECDH(curveName) -> ECDH object
+            ["createECDH"] = new TypeInfo.Function([stringType], anyType)
         };
     }
 

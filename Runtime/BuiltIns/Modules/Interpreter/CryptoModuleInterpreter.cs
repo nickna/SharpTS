@@ -35,7 +35,13 @@ public static class CryptoModuleInterpreter
             ["scryptSync"] = new BuiltInMethod("scryptSync", 3, 4, ScryptSync),
             ["timingSafeEqual"] = new BuiltInMethod("timingSafeEqual", 2, TimingSafeEqual),
             ["createSign"] = new BuiltInMethod("createSign", 1, CreateSign),
-            ["createVerify"] = new BuiltInMethod("createVerify", 1, CreateVerify)
+            ["createVerify"] = new BuiltInMethod("createVerify", 1, CreateVerify),
+            ["getHashes"] = new BuiltInMethod("getHashes", 0, GetHashes),
+            ["getCiphers"] = new BuiltInMethod("getCiphers", 0, GetCiphers),
+            ["generateKeyPairSync"] = new BuiltInMethod("generateKeyPairSync", 1, 2, GenerateKeyPairSync),
+            ["createDiffieHellman"] = new BuiltInMethod("createDiffieHellman", 1, 2, CreateDiffieHellman),
+            ["getDiffieHellman"] = new BuiltInMethod("getDiffieHellman", 1, GetDiffieHellman),
+            ["createECDH"] = new BuiltInMethod("createECDH", 1, CreateECDH)
         };
     }
 
@@ -240,5 +246,125 @@ public static class CryptoModuleInterpreter
 
         // Use .NET's constant-time comparison
         return CryptographicOperations.FixedTimeEquals(a, b);
+    }
+
+    /// <summary>
+    /// Returns an array of supported hash algorithm names.
+    /// </summary>
+    private static object? GetHashes(Interp interpreter, object? receiver, List<object?> args)
+    {
+        return new SharpTSArray(new List<object?> { "md5", "sha1", "sha256", "sha384", "sha512" });
+    }
+
+    /// <summary>
+    /// Returns an array of supported cipher algorithm names.
+    /// </summary>
+    private static object? GetCiphers(Interp interpreter, object? receiver, List<object?> args)
+    {
+        return new SharpTSArray(new List<object?>
+        {
+            "aes-128-cbc", "aes-192-cbc", "aes-256-cbc",
+            "aes-128-gcm", "aes-192-gcm", "aes-256-gcm"
+        });
+    }
+
+    /// <summary>
+    /// Generates a key pair synchronously for RSA or EC algorithms.
+    /// </summary>
+    private static object? GenerateKeyPairSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not string keyType)
+            throw new Exception("crypto.generateKeyPairSync requires a key type argument");
+
+        var options = args.Count > 1 ? args[1] as SharpTSObject : null;
+
+        return keyType.ToLowerInvariant() switch
+        {
+            "rsa" => GenerateRsaKeyPair(options),
+            "ec" => GenerateEcKeyPair(options),
+            _ => throw new Exception($"crypto.generateKeyPairSync: unsupported key type '{keyType}'")
+        };
+    }
+
+    private static SharpTSObject GenerateRsaKeyPair(SharpTSObject? options)
+    {
+        int modulusLength = 2048;
+        if (options?.Fields.TryGetValue("modulusLength", out var ml) == true && ml is double d)
+            modulusLength = (int)d;
+
+        using var rsa = RSA.Create(modulusLength);
+        return new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["publicKey"] = rsa.ExportSubjectPublicKeyInfoPem(),
+            ["privateKey"] = rsa.ExportPkcs8PrivateKeyPem()
+        });
+    }
+
+    private static SharpTSObject GenerateEcKeyPair(SharpTSObject? options)
+    {
+        var curveName = "prime256v1";
+        if (options?.Fields.TryGetValue("namedCurve", out var nc) == true && nc is string s)
+            curveName = s;
+
+        var curve = curveName.ToLowerInvariant() switch
+        {
+            "prime256v1" or "secp256r1" or "p-256" => ECCurve.NamedCurves.nistP256,
+            "secp384r1" or "p-384" => ECCurve.NamedCurves.nistP384,
+            "secp521r1" or "p-521" => ECCurve.NamedCurves.nistP521,
+            _ => throw new Exception($"crypto.generateKeyPairSync: unsupported curve '{curveName}'")
+        };
+
+        using var ecdsa = ECDsa.Create(curve);
+        return new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["publicKey"] = ecdsa.ExportSubjectPublicKeyInfoPem(),
+            ["privateKey"] = ecdsa.ExportPkcs8PrivateKeyPem()
+        });
+    }
+
+    /// <summary>
+    /// Creates a Diffie-Hellman key exchange object.
+    /// </summary>
+    private static object? CreateDiffieHellman(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("crypto.createDiffieHellman requires at least one argument");
+
+        // Check if first arg is a number (prime length) or Buffer/string (prime)
+        if (args[0] is double primeLength)
+        {
+            return new SharpTSDiffieHellman((int)primeLength);
+        }
+
+        var prime = ConvertToBytes(args[0]) ?? throw new Exception("crypto.createDiffieHellman: prime must be a number, Buffer, or string");
+        byte[]? generator = null;
+        if (args.Count > 1 && args[1] != null)
+        {
+            generator = ConvertToBytes(args[1]);
+        }
+
+        return new SharpTSDiffieHellman(prime, generator);
+    }
+
+    /// <summary>
+    /// Gets a predefined Diffie-Hellman group by name.
+    /// </summary>
+    private static object? GetDiffieHellman(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not string groupName)
+            throw new Exception("crypto.getDiffieHellman requires a group name");
+
+        return new SharpTSDiffieHellman(groupName, isGroup: true);
+    }
+
+    /// <summary>
+    /// Creates an Elliptic Curve Diffie-Hellman key exchange object.
+    /// </summary>
+    private static object? CreateECDH(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not string curveName)
+            throw new Exception("crypto.createECDH requires a curve name");
+
+        return new SharpTSECDH(curveName);
     }
 }
