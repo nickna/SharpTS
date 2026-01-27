@@ -581,6 +581,13 @@ public partial class TypeChecker
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Timeout'.");
         }
+        // Handle Buffer instance methods and properties
+        if (objType is TypeInfo.Buffer)
+        {
+            var memberType = BuiltInTypes.GetBufferMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Buffer'.");
+        }
 
         // Handle Any type
         if (objType is TypeInfo.Any)

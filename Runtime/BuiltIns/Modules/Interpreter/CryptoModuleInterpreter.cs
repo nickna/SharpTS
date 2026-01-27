@@ -57,13 +57,8 @@ public static class CryptoModuleInterpreter
         var byteCount = (int)size;
         var bytes = RandomNumberGenerator.GetBytes(byteCount);
 
-        // Convert to array of numbers (matching Node.js Buffer)
-        var elements = new List<object?>(byteCount);
-        foreach (var b in bytes)
-        {
-            elements.Add((double)b);
-        }
-        return new SharpTSArray(elements);
+        // Return as Buffer (matching Node.js behavior)
+        return new SharpTSBuffer(bytes);
     }
 
     private static object? RandomUUID(Interp interpreter, object? receiver, List<object?> args)

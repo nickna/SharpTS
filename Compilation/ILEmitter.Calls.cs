@@ -785,6 +785,15 @@ public partial class ILEmitter
             // Handle union types - try emitters for member types
             if (objType is TypeSystem.TypeInfo.Union union)
             {
+                // Try buffer emitter if union contains buffer
+                bool hasBufferMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Buffer);
+                if (hasBufferMember)
+                {
+                    var bufferStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Buffer());
+                    if (bufferStrategy != null && bufferStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                        return;
+                }
+
                 // Try string emitter if union contains string
                 bool hasStringMember = union.Types.Any(t => t is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral);
                 if (hasStringMember)

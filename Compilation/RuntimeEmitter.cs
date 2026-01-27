@@ -79,6 +79,11 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with AssertionError in AssertModuleInterpreter.cs
         EmitTSAssertionErrorClass(moduleBuilder, runtime);
 
+        // Emit $Buffer class for standalone buffer support
+        // NOTE: Must come before $Hash and $Hmac since they return Buffer
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
+        EmitTSBufferClass(moduleBuilder, runtime);
+
         // Emit $Hash class for standalone crypto hash support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
         EmitTSHashClass(moduleBuilder, runtime);

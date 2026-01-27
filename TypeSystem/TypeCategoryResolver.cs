@@ -35,6 +35,7 @@ public static class TypeCategoryResolver
         TypeInfo.Error => TypeCategory.Error,
         TypeInfo.Promise => TypeCategory.Promise,
         TypeInfo.Timeout => TypeCategory.Timeout,
+        TypeInfo.Buffer => TypeCategory.Buffer,
         TypeInfo.Iterator => TypeCategory.Iterator,
         TypeInfo.Generator => TypeCategory.Generator,
         TypeInfo.AsyncGenerator => TypeCategory.AsyncGenerator,
@@ -105,6 +106,7 @@ public static class TypeCategoryResolver
         SharpTSError => TypeCategory.Error,
         SharpTSPromise => TypeCategory.Promise,
         SharpTSTimeout => TypeCategory.Timeout,
+        SharpTSBuffer => TypeCategory.Buffer,
         SharpTSIterator => TypeCategory.Iterator,
         SharpTSGenerator => TypeCategory.Generator,
         SharpTSAsyncGenerator => TypeCategory.AsyncGenerator,
@@ -143,6 +145,7 @@ public static class TypeCategoryResolver
         TypeCategory.RegExp => true,
         TypeCategory.Error => true,
         TypeCategory.Timeout => true,
+        TypeCategory.Buffer => true,
         TypeCategory.Function => true,
         _ => false
     };
@@ -164,6 +167,7 @@ public static class TypeCategoryResolver
         TypeCategory.Error => true,
         TypeCategory.Promise => true,
         TypeCategory.Timeout => true,
+        TypeCategory.Buffer => true,
         TypeCategory.Iterator => true,
         TypeCategory.Generator => true,
         TypeCategory.AsyncGenerator => true,

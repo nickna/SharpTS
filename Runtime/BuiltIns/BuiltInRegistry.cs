@@ -149,6 +149,8 @@ public sealed class BuiltInRegistry
         RegisterGlobalThisType(registry);
         RegisterTimeoutType(registry);
         RegisterFunctionTypes(registry);
+        RegisterBufferNamespace(registry);
+        RegisterBufferType(registry);
 
         return registry;
     }
@@ -474,6 +476,28 @@ public sealed class BuiltInRegistry
             FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
         registry.RegisterInstanceType(typeof(BuiltInMethod), (instance, name) =>
             FunctionBuiltIns.GetMember((ISharpTSCallable)instance, name));
+    }
+
+    private static void RegisterBufferNamespace(BuiltInRegistry registry)
+    {
+        // Buffer is both a global namespace and a constructor
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Buffer",
+            IsSingleton: true,
+            SingletonFactory: () => SharpTSBufferConstructor.Instance,
+            GetMethod: name => SharpTSBufferConstructor.Instance.GetProperty(name) as BuiltInMethod
+        ));
+    }
+
+    private static void RegisterBufferType(BuiltInRegistry registry)
+    {
+        // Register Buffer instance member lookup
+        registry.RegisterInstanceType(typeof(SharpTSBuffer), (instance, name) =>
+            ((SharpTSBuffer)instance).GetMember(name));
+
+        // Register Buffer constructor member lookup
+        registry.RegisterInstanceType(typeof(SharpTSBufferConstructor), (instance, name) =>
+            ((SharpTSBufferConstructor)instance).GetProperty(name));
     }
 
     private static string Stringify(object? obj)

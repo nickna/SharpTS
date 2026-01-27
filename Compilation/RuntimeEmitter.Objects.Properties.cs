@@ -588,6 +588,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringLabel);
 
+        // $Buffer - check for "length" and "toString"
+        var tsBufferLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Brtrue, tsBufferLabel);
+
         // $TSFunction - check for bind/call/apply
         var tsFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -724,6 +730,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        il.Emit(OpCodes.Ret);
+
+        // $Buffer handler - "length" and "toString"
+        il.MarkLabel(tsBufferLabel);
+        // Check for "length"
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notBufferLenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notBufferLenLabel);
+        // Get buf.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
+        il.Emit(OpCodes.Call, runtime.TSBufferLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBufferLenLabel);
+        // Check for "toString" - return a wrapper that calls ToEncodedString
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notBufferToStringLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notBufferToStringLabel);
+        // Create a TSFunction wrapper for ToEncodedString
+        // For dynamically generated types, we need both method and type tokens
+        il.Emit(OpCodes.Ldarg_0);  // target (the buffer)
+        il.Emit(OpCodes.Ldtoken, runtime.TSBufferToString);
+        il.Emit(OpCodes.Ldtoken, runtime.TSBufferType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBufferToStringLabel);
+        // Unknown buffer property - return null
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(stringLabel);

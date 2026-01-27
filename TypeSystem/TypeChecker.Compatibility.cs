@@ -474,6 +474,12 @@ public partial class TypeChecker
             return true;
         }
 
+        // Buffer type compatibility
+        if (expected is TypeInfo.Buffer && actual is TypeInfo.Buffer)
+        {
+            return true;
+        }
+
         // Promise type compatibility - Promise<A> is compatible with Promise<B> if A is compatible with B
         if (expected is TypeInfo.Promise expPromise && actual is TypeInfo.Promise actPromise)
         {

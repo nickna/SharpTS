@@ -553,4 +553,76 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for instance members on Buffer objects.
+    /// </summary>
+    public static TypeInfo? GetBufferMemberType(string name)
+    {
+        var bufferType = new TypeInfo.Buffer();
+
+        return name switch
+        {
+            // Properties
+            "length" => NumberType,
+
+            // Methods
+            "toString" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0), // encoding optional
+            "slice" => new TypeInfo.Function([NumberType, NumberType], bufferType, RequiredParams: 0), // start, end optional
+            "copy" => new TypeInfo.Function(
+                [bufferType, NumberType, NumberType, NumberType],
+                NumberType,
+                RequiredParams: 1), // target required, others optional
+            "compare" => new TypeInfo.Function([bufferType], NumberType),
+            "equals" => new TypeInfo.Function([bufferType], BooleanType),
+            "fill" => new TypeInfo.Function(
+                [AnyType, NumberType, NumberType, StringType],
+                bufferType,
+                RequiredParams: 1), // value required, others optional
+            "write" => new TypeInfo.Function(
+                [StringType, NumberType, NumberType, StringType],
+                NumberType,
+                RequiredParams: 1), // data required, others optional
+            "readUInt8" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "writeUInt8" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "toJSON" => new TypeInfo.Function([], AnyType),
+
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Type signatures for static methods on the Buffer namespace.
+    /// </summary>
+    public static TypeInfo? GetBufferStaticMethodType(string name)
+    {
+        var bufferType = new TypeInfo.Buffer();
+
+        return name switch
+        {
+            "from" => new TypeInfo.Function(
+                [new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), bufferType]), StringType],
+                bufferType,
+                RequiredParams: 1), // data required, encoding optional
+            "alloc" => new TypeInfo.Function(
+                [NumberType, AnyType, StringType],
+                bufferType,
+                RequiredParams: 1), // size required, fill and encoding optional
+            "allocUnsafe" => new TypeInfo.Function([NumberType], bufferType),
+            "allocUnsafeSlow" => new TypeInfo.Function([NumberType], bufferType),
+            "concat" => new TypeInfo.Function(
+                [new TypeInfo.Array(bufferType), NumberType],
+                bufferType,
+                RequiredParams: 1), // list required, totalLength optional
+            "isBuffer" => new TypeInfo.Function([AnyType], BooleanType),
+            "byteLength" => new TypeInfo.Function(
+                [new TypeInfo.Union([StringType, bufferType]), StringType],
+                NumberType,
+                RequiredParams: 1), // string required, encoding optional
+            "compare" => new TypeInfo.Function([bufferType, bufferType], NumberType),
+            "isEncoding" => new TypeInfo.Function([StringType], BooleanType),
+
+            _ => null
+        };
+    }
 }

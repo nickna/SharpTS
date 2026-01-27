@@ -173,6 +173,19 @@ public partial class TypeChecker
             }
         }
 
+        // Handle Buffer.from(), Buffer.alloc(), Buffer.isBuffer(), etc.
+        if (call.Callee is Expr.Get bufferGet &&
+            bufferGet.Object is Expr.Variable bufferVar &&
+            bufferVar.Name.Lexeme == "Buffer")
+        {
+            var methodType = BuiltInTypes.GetBufferStaticMethodType(bufferGet.Name.Lexeme);
+            if (methodType is TypeInfo.Function bufferMethodType)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                return bufferMethodType.ReturnType;
+            }
+        }
+
         // Handle global parseInt()
         if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
         {

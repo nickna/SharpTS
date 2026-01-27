@@ -95,7 +95,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static object FsReadFileSync(object path, object? encoding)
-    /// Returns string if encoding specified, byte[] otherwise.
+    /// Returns string if encoding specified, $Buffer otherwise.
     /// </summary>
     private void EmitFsReadFileSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -130,50 +130,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultLocal);
             il.Emit(OpCodes.Br, afterReadLabel);
 
-            // Read as bytes: File.ReadAllBytes(path) - wrap in List<object>
+            // Read as bytes: File.ReadAllBytes(path) - wrap in $Buffer
             il.MarkLabel(readBytesLabel);
             il.Emit(OpCodes.Ldloc, pathLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "ReadAllBytes", _types.String));
 
-            // Convert byte[] to List<object> for JS array compatibility
-            var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-            il.Emit(OpCodes.Stloc, bytesLocal);
-
-            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
-            var listLocal = il.DeclareLocal(_types.ListOfObject);
-            il.Emit(OpCodes.Stloc, listLocal);
-
-            // Loop: for each byte, add to list
-            var loopStart = il.DefineLabel();
-            var loopEnd = il.DefineLabel();
-            var indexLocal = il.DeclareLocal(_types.Int32);
-
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stloc, indexLocal);
-
-            il.MarkLabel(loopStart);
-            il.Emit(OpCodes.Ldloc, indexLocal);
-            il.Emit(OpCodes.Ldloc, bytesLocal);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Bge, loopEnd);
-
-            il.Emit(OpCodes.Ldloc, listLocal);
-            il.Emit(OpCodes.Ldloc, bytesLocal);
-            il.Emit(OpCodes.Ldloc, indexLocal);
-            il.Emit(OpCodes.Ldelem_U1);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-
-            il.Emit(OpCodes.Ldloc, indexLocal);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, indexLocal);
-            il.Emit(OpCodes.Br, loopStart);
-
-            il.MarkLabel(loopEnd);
-            il.Emit(OpCodes.Ldloc, listLocal);
+            // Create $Buffer from byte[]
+            il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
             il.Emit(OpCodes.Stloc, resultLocal);
 
             il.MarkLabel(afterReadLabel);

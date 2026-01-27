@@ -534,6 +534,7 @@ public partial class Interpreter
         IEnumerable<object?> elements = iterable switch
         {
             SharpTSArray array => array.Elements,
+            SharpTSBuffer buffer => buffer.Data.Select(b => (object?)(double)b),  // yields byte values as numbers
             SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,

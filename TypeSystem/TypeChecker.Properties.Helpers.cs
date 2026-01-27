@@ -35,6 +35,7 @@ public partial class TypeChecker
             TypeCategory.Error when objType is TypeInfo.Error err =>
                 BuiltInTypes.GetErrorMemberType(memberName, err.Name),
             TypeCategory.Timeout => BuiltInTypes.GetTimeoutMemberType(memberName),
+            TypeCategory.Buffer => BuiltInTypes.GetBufferMemberType(memberName),
             TypeCategory.Function when objType is TypeInfo.Function func =>
                 BuiltInTypes.GetFunctionMemberType(memberName, func),
             TypeCategory.Function when objType is TypeInfo.GenericFunction gf =>

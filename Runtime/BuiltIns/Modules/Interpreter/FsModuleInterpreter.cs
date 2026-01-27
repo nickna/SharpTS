@@ -96,14 +96,9 @@ public static class FsModuleInterpreter
             }
             else
             {
-                // Return as byte array (List<object> with numbers)
+                // Return as Buffer
                 var bytes = File.ReadAllBytes(path);
-                var list = new List<object?>();
-                foreach (var b in bytes)
-                {
-                    list.Add((double)b);
-                }
-                return new SharpTSArray(list);
+                return new SharpTSBuffer(bytes);
             }
         });
     }

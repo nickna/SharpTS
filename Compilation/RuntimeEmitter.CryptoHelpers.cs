@@ -263,6 +263,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static object CryptoRandomBytes(int size)
+    /// Returns a $Buffer containing random bytes.
     /// </summary>
     private void EmitCryptoRandomBytes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -276,57 +277,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // var bytes = RandomNumberGenerator.GetBytes(size);
-        var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(RandomNumberGenerator).GetMethod("GetBytes", [typeof(int)])!);
-        il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // Create List<object?> for $Array
-        var listType = _types.ListOfObject;
-        var listCtor = _types.GetConstructor(listType, _types.Int32);
-        var listAdd = _types.GetMethod(listType, "Add", _types.Object);
-
-        var listLocal = il.DeclareLocal(listType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, listCtor);
-        il.Emit(OpCodes.Stloc, listLocal);
-
-        // Loop through bytes and add to list
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // list.Add((double)bytes[i])
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_U1);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, listAdd);
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // Return new $Array(list)
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        // Return new $Buffer(bytes)
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
     }
 }

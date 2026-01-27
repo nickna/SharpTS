@@ -28,6 +28,7 @@ public enum TypeCategory
     Iterator,
     Generator,
     AsyncGenerator,
+    Buffer,
 
     // User-defined types
     Class,          // Static access on class constructor (Foo.staticProp)

@@ -248,6 +248,7 @@ public partial class TypeChecker
         if (typeName == "unknown") return new TypeInfo.Unknown();
         if (typeName == "never") return new TypeInfo.Never();
         if (typeName == "object") return new TypeInfo.Object();
+        if (typeName == "Buffer") return new TypeInfo.Buffer();
 
         TypeInfo? type = _environment.Get(typeName);
         if (type is TypeInfo.MutableClass mutableClass)

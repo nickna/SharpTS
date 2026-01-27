@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-24 (Added `__dirname`, `__filename`, and `crypto.createHmac` support)
+**Last Updated:** 2026-01-26 (Added global `Buffer` class with full instance methods)
 
 ## Legend
 - ✅ Implemented
@@ -28,7 +28,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ❌ | EventEmitter not implemented |
 | `stream` | ❌ | No Readable/Writable/Transform |
-| `buffer` | ❌ | No dedicated Buffer class |
+| `buffer` | ✅ | Full Buffer class with static and instance methods |
 | `http` / `https` | ❌ | No network server/client |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ❌ | No DNS resolution |
@@ -231,7 +231,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `require` | ❌ | Use `import` syntax |
 | `module` | ❌ | |
 | `exports` | ❌ | |
-| `Buffer` | ❌ | Use arrays or typed arrays |
+| `Buffer` | ✅ | Full Buffer class available globally |
 | `global` | ⚠️ | Use `globalThis` |
 
 ---
@@ -268,29 +268,50 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `Buffer.from()` | ❌ | Use arrays |
-| `Buffer.alloc()` | ❌ | |
-| `Buffer.allocUnsafe()` | ❌ | |
-| `Buffer.concat()` | ❌ | |
-| `Buffer.isBuffer()` | ❌ | |
-| Buffer instance methods | ❌ | |
+| **Static Methods** | | |
+| `Buffer.from()` | ✅ | From string, array, or Buffer |
+| `Buffer.alloc()` | ✅ | Zero-filled allocation |
+| `Buffer.allocUnsafe()` | ✅ | Uninitialized allocation |
+| `Buffer.concat()` | ✅ | Concatenate multiple buffers |
+| `Buffer.isBuffer()` | ✅ | Type check |
+| `Buffer.byteLength()` | ✅ | String byte length |
+| `Buffer.compare()` | ✅ | Static comparison |
+| `Buffer.isEncoding()` | ✅ | Encoding validation |
+| **Instance Properties** | | |
+| `length` | ✅ | Buffer byte length |
+| **Instance Methods** | | |
+| `toString()` | ✅ | With encoding support |
+| `slice()` | ✅ | Create view/copy |
+| `copy()` | ✅ | Copy to target buffer |
+| `compare()` | ✅ | Compare with other buffer |
+| `equals()` | ✅ | Equality check |
+| `fill()` | ✅ | Fill with value/string |
+| `write()` | ✅ | Write string at offset |
+| `readUInt8()` | ✅ | Read unsigned byte |
+| `writeUInt8()` | ✅ | Write unsigned byte |
+| `toJSON()` | ✅ | Serialize to {type, data} |
+| **Not Implemented** | | |
+| `readUInt16LE/BE` | ❌ | Multi-byte reads |
+| `writeUInt16LE/BE` | ❌ | Multi-byte writes |
+| `readInt8/16/32` | ❌ | Signed integer reads |
+| `readFloat/Double` | ❌ | Floating point reads |
+| `swap16/32/64` | ❌ | Byte order swapping |
+| `indexOf/includes` | ❌ | Search operations |
 
 ---
 
 ## Summary
 
-SharpTS provides solid support for file system operations (sync), path manipulation, OS information, process management, basic crypto, and URL parsing. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides solid support for file system operations (sync), path manipulation, OS information, process management, basic crypto, URL parsing, and binary data handling via Buffer. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
 - No EventEmitter pattern (blocks event-based APIs)
 - No Stream classes (limits file/network streaming)
 - No async fs operations (sync-only workaround)
-- No Buffer class (arrays used as workaround)
 - No network modules (http, net, dns)
 
 **Recommended Workarounds:**
 - Use `*Sync` versions of fs methods
-- Use arrays instead of Buffer for byte data
 - Use ES module syntax instead of `require()`
 
 ---
@@ -299,8 +320,8 @@ SharpTS provides solid support for file system operations (sync), path manipulat
 
 Priority features to implement for broader Node.js compatibility:
 
-1. **Buffer class** - Essential for binary data handling (`Buffer.from`, `Buffer.alloc`, `Buffer.toString`, `Buffer.concat`)
-2. **EventEmitter** - Foundation for many Node APIs (medium effort)
-3. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-4. **Streams API** - Needed for large file handling (higher effort)
-5. **http module** - Basic HTTP server/client (higher effort)
+1. **EventEmitter** - Foundation for many Node APIs (medium effort)
+2. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
+3. **Streams API** - Needed for large file handling (higher effort)
+4. **http module** - Basic HTTP server/client (higher effort)
+5. **Buffer multi-byte methods** - `readUInt16LE/BE`, `readInt32LE/BE`, etc. (low effort)

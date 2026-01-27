@@ -19,7 +19,8 @@ public static class BuiltInModuleRegistry
         "crypto",
         "util",
         "readline",
-        "child_process"
+        "child_process",
+        "buffer"
     ];
 
     /// <summary>

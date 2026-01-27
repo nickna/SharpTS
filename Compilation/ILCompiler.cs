@@ -559,6 +559,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(new ArrayEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Buffer>(new BufferEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(new DateEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(new MapEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(new SetEmitter());
@@ -573,6 +574,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("JSON", new JSONStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Object", new ObjectStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Array", new ArrayStaticEmitter());
+        _typeEmitterRegistry.RegisterStatic("Buffer", new BufferStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Number", new NumberStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Promise", new PromiseStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
@@ -591,6 +593,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new UtilModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ReadlineModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
     }
 
     #endregion

@@ -973,7 +973,7 @@ public class BuiltInModuleParityTests
             import * as crypto from 'crypto';
             const bytes16 = crypto.randomBytes(16);
             const bytes32 = crypto.randomBytes(32);
-            console.log(Array.isArray(bytes16));
+            console.log(Buffer.isBuffer(bytes16));
             console.log(bytes16.length === 16);
             console.log(bytes32.length === 32);
             """);

@@ -62,6 +62,12 @@ public sealed class SharpTSGlobalThis
             return BuiltInRegistry.Instance.GetStaticMethod("Number", name);
         }
 
+        // Buffer is globally available
+        if (name == "Buffer")
+        {
+            return SharpTSBufferConstructor.Instance;
+        }
+
         // Built-in constants
         if (name == "undefined")
         {

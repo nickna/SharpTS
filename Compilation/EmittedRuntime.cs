@@ -647,6 +647,32 @@ public class EmittedRuntime
     public MethodBuilder TSHmacUpdateMethod { get; set; } = null!;
     public MethodBuilder TSHmacDigestMethod { get; set; } = null!;
 
+    // $Buffer type - emitted for standalone buffer support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
+    public Type TSBufferType { get; set; } = null!;
+    public ConstructorBuilder TSBufferCtor { get; set; } = null!;
+    public ConstructorBuilder TSBufferCtorSize { get; set; } = null!;
+    public MethodBuilder TSBufferLengthGetter { get; set; } = null!;
+    public MethodBuilder TSBufferFromString { get; set; } = null!;
+    public MethodBuilder TSBufferFromArray { get; set; } = null!;
+    public MethodBuilder TSBufferAlloc { get; set; } = null!;
+    public MethodBuilder TSBufferAllocUnsafe { get; set; } = null!;
+    public MethodBuilder TSBufferConcat { get; set; } = null!;
+    public MethodBuilder CalculateBuffersTotalLength { get; set; } = null!;
+    public MethodBuilder TSBufferIsBuffer { get; set; } = null!;
+    public MethodBuilder TSBufferToString { get; set; } = null!;
+    public MethodBuilder TSBufferSlice { get; set; } = null!;
+    public MethodBuilder TSBufferGetData { get; set; } = null!;
+    public MethodBuilder TSBufferCopy { get; set; } = null!;
+    public MethodBuilder TSBufferCompare { get; set; } = null!;
+    public MethodBuilder TSBufferEquals { get; set; } = null!;
+    public MethodBuilder TSBufferFill { get; set; } = null!;
+    public MethodBuilder TSBufferWrite { get; set; } = null!;
+    public MethodBuilder TSBufferReadUInt8 { get; set; } = null!;
+    public MethodBuilder TSBufferWriteUInt8 { get; set; } = null!;
+    public MethodBuilder TSBufferToJSON { get; set; } = null!;
+    public MethodBuilder GetBufferMethod { get; set; } = null!;
+
     // Util module methods
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;

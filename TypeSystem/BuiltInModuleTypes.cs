@@ -147,10 +147,10 @@ public static class BuiltInModuleTypes
             // File check - returns false on error (doesn't throw)
             ["existsSync"] = new TypeInfo.Function([new TypeInfo.String()], BooleanType),
 
-            // Read file - returns string if encoding provided, Buffer (array) otherwise
+            // Read file - returns string if encoding provided, Buffer otherwise
             ["readFileSync"] = new TypeInfo.Function(
                 [new TypeInfo.String(), new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Null()])],
-                new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Array(numberType)]),
+                new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Buffer()]),
                 RequiredParams: 1
             ),
 
@@ -421,7 +421,7 @@ public static class BuiltInModuleTypes
             // Methods
             ["createHash"] = new TypeInfo.Function([stringType], anyType), // Returns Hash object
             ["createHmac"] = new TypeInfo.Function([stringType, anyType], anyType), // Returns Hmac object
-            ["randomBytes"] = new TypeInfo.Function([numberType], new TypeInfo.Array(numberType)),
+            ["randomBytes"] = new TypeInfo.Function([numberType], new TypeInfo.Buffer()),
             ["randomUUID"] = new TypeInfo.Function([], stringType),
             ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1)
         };
@@ -500,6 +500,47 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
+    /// Gets the exported types for the buffer module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetBufferModuleTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var bufferType = new TypeInfo.Buffer();
+
+        // Buffer constructor type - an object with static methods
+        var bufferConstructorType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["from"] = new TypeInfo.Function(
+                [new TypeInfo.Union([stringType, new TypeInfo.Array(numberType), bufferType]), stringType],
+                bufferType,
+                RequiredParams: 1),
+            ["alloc"] = new TypeInfo.Function(
+                [numberType, new TypeInfo.Any(), stringType],
+                bufferType,
+                RequiredParams: 1),
+            ["allocUnsafe"] = new TypeInfo.Function([numberType], bufferType),
+            ["allocUnsafeSlow"] = new TypeInfo.Function([numberType], bufferType),
+            ["concat"] = new TypeInfo.Function(
+                [new TypeInfo.Array(bufferType), numberType],
+                bufferType,
+                RequiredParams: 1),
+            ["isBuffer"] = new TypeInfo.Function([new TypeInfo.Any()], BooleanType),
+            ["byteLength"] = new TypeInfo.Function(
+                [new TypeInfo.Union([stringType, bufferType]), stringType],
+                numberType,
+                RequiredParams: 1),
+            ["compare"] = new TypeInfo.Function([bufferType, bufferType], numberType),
+            ["isEncoding"] = new TypeInfo.Function([stringType], BooleanType)
+        }.ToFrozenDictionary());
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["Buffer"] = bufferConstructorType
+        };
+    }
+
+    /// <summary>
     /// Gets the exported types for a built-in module by name.
     /// </summary>
     /// <param name="moduleName">The module name (e.g., "path", "fs", "os").</param>
@@ -519,6 +560,7 @@ public static class BuiltInModuleTypes
             "util" => GetUtilModuleTypes(),
             "readline" => GetReadlineModuleTypes(),
             "child_process" => GetChildProcessModuleTypes(),
+            "buffer" => GetBufferModuleTypes(),
             _ => null
         };
     }

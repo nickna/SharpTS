@@ -48,6 +48,7 @@ public class SharpTSHmac
         return key switch
         {
             string s => Encoding.UTF8.GetBytes(s),
+            SharpTSBuffer buf => buf.Data,
             SharpTSArray arr => ConvertArrayToBytes(arr),
             byte[] bytes => bytes,
             _ => throw new ArgumentException("Key must be a string or Buffer (array of bytes)")
@@ -105,18 +106,8 @@ public class SharpTSHmac
         {
             "hex" => Convert.ToHexString(hmacBytes).ToLowerInvariant(),
             "base64" => Convert.ToBase64String(hmacBytes),
-            _ => ConvertToNumberArray(hmacBytes)
+            _ => new SharpTSBuffer(hmacBytes)
         };
-    }
-
-    private static SharpTSArray ConvertToNumberArray(byte[] bytes)
-    {
-        var elements = new List<object?>(bytes.Length);
-        foreach (var b in bytes)
-        {
-            elements.Add((double)b);
-        }
-        return new SharpTSArray(elements);
     }
 
     /// <summary>

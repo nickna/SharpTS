@@ -289,57 +289,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBase64String", [_types.MakeArrayType(_types.Byte)])!);
         il.Emit(OpCodes.Ret);
 
-        // Return number array: create $Array from bytes
+        // Return Buffer: create $Buffer from bytes
         il.MarkLabel(returnArrayLabel);
 
-        // Create List<object?> for $Array
-        var listType = _types.ListOfObject;
-        var listCtor = _types.GetConstructor(listType, _types.Int32);
-        var listAdd = _types.GetMethod(listType, "Add", _types.Object);
-
-        var listLocal = il.DeclareLocal(listType);
+        // Return new $Buffer(hashBytes)
         il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, listCtor);
-        il.Emit(OpCodes.Stloc, listLocal);
-
-        // Loop through bytes and add to list as doubles
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // list.Add((double)bytes[i])
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_U1);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, listAdd);
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // Return new $Array(list)
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
     }
 }

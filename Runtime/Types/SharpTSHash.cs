@@ -70,18 +70,8 @@ public class SharpTSHash
         {
             "hex" => Convert.ToHexString(hashBytes).ToLowerInvariant(),
             "base64" => Convert.ToBase64String(hashBytes),
-            _ => ConvertToNumberArray(hashBytes)
+            _ => new SharpTSBuffer(hashBytes)
         };
-    }
-
-    private static SharpTSArray ConvertToNumberArray(byte[] bytes)
-    {
-        var elements = new List<object?>(bytes.Length);
-        foreach (var b in bytes)
-        {
-            elements.Add((double)b);
-        }
-        return new SharpTSArray(elements);
     }
 
     /// <summary>

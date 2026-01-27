@@ -725,6 +725,15 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a Buffer type for binary data handling.
+    /// Node.js-compatible Buffer class for working with binary data.
+    /// </summary>
+    public record Buffer() : TypeInfo
+    {
+        public override string ToString() => "Buffer";
+    }
+
+    /// <summary>
     /// Represents a module namespace type returned by dynamic import.
     /// Contains the exported members and optional default export.
     /// Used for typeof import('./path') type inference.
