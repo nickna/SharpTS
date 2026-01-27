@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-26 (Added global `Buffer` class with full instance methods)
+**Last Updated:** 2026-01-26 (Verified multi-byte Buffer methods are fully implemented)
 
 ## Legend
 - ✅ Implemented
@@ -28,7 +28,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ❌ | EventEmitter not implemented |
 | `stream` | ❌ | No Readable/Writable/Transform |
-| `buffer` | ✅ | Full Buffer class with static and instance methods |
+| `buffer` | ✅ | Full Buffer class with multi-byte LE/BE, float/double, BigInt, search, swap |
 | `http` / `https` | ❌ | No network server/client |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ❌ | No DNS resolution |
@@ -290,13 +290,30 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `readUInt8()` | ✅ | Read unsigned byte |
 | `writeUInt8()` | ✅ | Write unsigned byte |
 | `toJSON()` | ✅ | Serialize to {type, data} |
-| **Not Implemented** | | |
-| `readUInt16LE/BE` | ❌ | Multi-byte reads |
-| `writeUInt16LE/BE` | ❌ | Multi-byte writes |
-| `readInt8/16/32` | ❌ | Signed integer reads |
-| `readFloat/Double` | ❌ | Floating point reads |
-| `swap16/32/64` | ❌ | Byte order swapping |
-| `indexOf/includes` | ❌ | Search operations |
+| **Multi-byte Reads** | | |
+| `readUInt16LE/BE()` | ✅ | Unsigned 16-bit |
+| `readUInt32LE/BE()` | ✅ | Unsigned 32-bit |
+| `readInt8()` | ✅ | Signed 8-bit |
+| `readInt16LE/BE()` | ✅ | Signed 16-bit |
+| `readInt32LE/BE()` | ✅ | Signed 32-bit |
+| `readBigInt64LE/BE()` | ✅ | Signed 64-bit BigInt |
+| `readBigUInt64LE/BE()` | ✅ | Unsigned 64-bit BigInt |
+| `readFloatLE/BE()` | ✅ | 32-bit float |
+| `readDoubleLE/BE()` | ✅ | 64-bit double |
+| **Multi-byte Writes** | | |
+| `writeUInt16LE/BE()` | ✅ | Unsigned 16-bit |
+| `writeUInt32LE/BE()` | ✅ | Unsigned 32-bit |
+| `writeInt8()` | ✅ | Signed 8-bit |
+| `writeInt16LE/BE()` | ✅ | Signed 16-bit |
+| `writeInt32LE/BE()` | ✅ | Signed 32-bit |
+| `writeBigInt64LE/BE()` | ✅ | Signed 64-bit BigInt |
+| `writeBigUInt64LE/BE()` | ✅ | Unsigned 64-bit BigInt |
+| `writeFloatLE/BE()` | ✅ | 32-bit float |
+| `writeDoubleLE/BE()` | ✅ | 64-bit double |
+| **Search & Swap** | | |
+| `indexOf()` | ✅ | Find first occurrence |
+| `includes()` | ✅ | Check if value exists |
+| `swap16/32/64()` | ✅ | Byte order swapping |
 
 ---
 
@@ -324,4 +341,4 @@ Priority features to implement for broader Node.js compatibility:
 2. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
 3. **Streams API** - Needed for large file handling (higher effort)
 4. **http module** - Basic HTTP server/client (higher effort)
-5. **Buffer multi-byte methods** - `readUInt16LE/BE`, `readInt32LE/BE`, etc. (low effort)
+5. **zlib module** - Compression/decompression (medium effort, uses .NET System.IO.Compression)
