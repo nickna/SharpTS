@@ -446,7 +446,13 @@ public static class BuiltInModuleTypes
             ["scryptSync"] = new TypeInfo.Function(
                 [bufferOrStringType, bufferOrStringType, numberType, anyType],
                 bufferType,
-                RequiredParams: 3)
+                RequiredParams: 3),
+
+            // Timing-safe comparison
+            // timingSafeEqual(a, b) -> boolean
+            ["timingSafeEqual"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType],
+                BooleanType)
         };
     }
 

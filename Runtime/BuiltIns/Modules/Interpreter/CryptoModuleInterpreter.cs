@@ -32,7 +32,8 @@ public static class CryptoModuleInterpreter
             ["randomUUID"] = new BuiltInMethod("randomUUID", 0, RandomUUID),
             ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt),
             ["pbkdf2Sync"] = new BuiltInMethod("pbkdf2Sync", 5, Pbkdf2Sync),
-            ["scryptSync"] = new BuiltInMethod("scryptSync", 3, 4, ScryptSync)
+            ["scryptSync"] = new BuiltInMethod("scryptSync", 3, 4, ScryptSync),
+            ["timingSafeEqual"] = new BuiltInMethod("timingSafeEqual", 2, TimingSafeEqual)
         };
     }
 
@@ -204,5 +205,22 @@ public static class CryptoModuleInterpreter
         // Use shared scrypt implementation
         var derivedKey = SharpTS.Compilation.ScryptImpl.DeriveBytes(password, salt, N, r, p, keylen);
         return new SharpTSBuffer(derivedKey);
+    }
+
+    private static object? TimingSafeEqual(Interp interpreter, object? receiver, List<object?> args)
+    {
+        // timingSafeEqual(a, b)
+        if (args.Count < 2)
+            throw new Exception("crypto.timingSafeEqual requires two arguments");
+
+        var a = ConvertToBytes(args[0]) ?? throw new Exception("crypto.timingSafeEqual: first argument must be a Buffer or string");
+        var b = ConvertToBytes(args[1]) ?? throw new Exception("crypto.timingSafeEqual: second argument must be a Buffer or string");
+
+        // Node.js throws if lengths don't match
+        if (a.Length != b.Length)
+            throw new Exception($"crypto.timingSafeEqual: Input buffers must have the same byte length. Received {a.Length} and {b.Length}");
+
+        // Use .NET's constant-time comparison
+        return CryptographicOperations.FixedTimeEquals(a, b);
     }
 }

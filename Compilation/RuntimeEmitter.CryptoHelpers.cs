@@ -18,6 +18,7 @@ public partial class RuntimeEmitter
         EmitCryptoRandomBytes(typeBuilder, runtime);
         EmitCryptoPbkdf2Sync(typeBuilder, runtime);
         EmitCryptoScryptSync(typeBuilder, runtime);
+        EmitCryptoTimingSafeEqual(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
@@ -159,6 +160,16 @@ public partial class RuntimeEmitter
             EmitObjectToInt32(il);
             il.Emit(OpCodes.Ldarg_3);  // options (can be null)
             il.Emit(OpCodes.Call, runtime.CryptoScryptSync);
+        });
+
+        // timingSafeEqual(a, b) -> boolean
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "timingSafeEqual", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Call, runtime.CryptoTimingSafeEqual);
         });
     }
 
@@ -696,6 +707,84 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(ScryptImpl).GetMethod("DeriveBytes",
             [typeof(byte[]), typeof(byte[]), typeof(int), typeof(int), typeof(int), typeof(int)])!);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoTimingSafeEqual(byte[] a, byte[] b)
+    /// Returns a boxed boolean indicating whether the buffers are equal using constant-time comparison.
+    /// Throws if the buffers have different lengths (Node.js behavior).
+    /// </summary>
+    private void EmitCryptoTimingSafeEqual(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoTimingSafeEqual",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoTimingSafeEqual = method;
+
+        var il = method.GetILGenerator();
+
+        // Check if lengths are equal
+        var lengthsMatchLabel = il.DefineLabel();
+        var aLenLocal = il.DeclareLocal(_types.Int32);
+        var bLenLocal = il.DeclareLocal(_types.Int32);
+
+        // Get length of a
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, aLenLocal);
+
+        // Get length of b
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, bLenLocal);
+
+        // if (a.Length == b.Length) goto lengthsMatch
+        il.Emit(OpCodes.Ldloc, aLenLocal);
+        il.Emit(OpCodes.Ldloc, bLenLocal);
+        il.Emit(OpCodes.Beq, lengthsMatchLabel);
+
+        // Throw exception with Node.js-style message
+        // "Input buffers must have the same byte length. Received {aLen} and {bLen}"
+        il.Emit(OpCodes.Ldstr, "crypto.timingSafeEqual: Input buffers must have the same byte length. Received ");
+        il.Emit(OpCodes.Ldloca, aLenLocal);
+        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldstr, " and ");
+        il.Emit(OpCodes.Ldloca, bLenLocal);
+        il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Newobj, typeof(ArgumentException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(lengthsMatchLabel);
+
+        // Call our static helper method that handles the Span conversion
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(CryptoTimingSafeEqualHelper).GetMethod("Compare",
+            [typeof(byte[]), typeof(byte[])])!);
+
+        // Box the result and return
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+    }
+}
+
+/// <summary>
+/// Static helper for timing-safe comparison.
+/// Used by compiled code to avoid Span emission complexities.
+/// </summary>
+public static class CryptoTimingSafeEqualHelper
+{
+    /// <summary>
+    /// Performs constant-time comparison of two byte arrays.
+    /// </summary>
+    public static bool Compare(byte[] a, byte[] b)
+    {
+        return CryptographicOperations.FixedTimeEquals(a, b);
     }
 }
 

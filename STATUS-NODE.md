@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-26 (Added pbkdf2Sync and scryptSync key derivation functions)
+**Last Updated:** 2026-01-27 (Added timingSafeEqual constant-time comparison)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt; no sign/verify |
+| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt + timingSafeEqual; no sign/verify |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -159,6 +159,8 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `pbkdf2Sync` | ✅ | sha1, sha256, sha384, sha512 (not md5) |
 | `scryptSync` | ✅ | With N/cost, r/blockSize, p/parallelization options |
 | `pbkdf2` / `scrypt` | ❌ | Async versions - use sync versions |
+| **Comparison** | | |
+| `timingSafeEqual` | ✅ | Constant-time buffer comparison (prevents timing attacks) |
 | **Signing** | | |
 | `createSign` / `createVerify` | ❌ | |
 | `generateKeyPair` | ❌ | |

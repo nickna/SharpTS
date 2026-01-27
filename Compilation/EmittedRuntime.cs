@@ -674,6 +674,9 @@ public class EmittedRuntime
     public MethodBuilder CryptoScryptSync { get; set; } = null!;
     public MethodBuilder ScryptDeriveBytes { get; set; } = null!;
 
+    // Timing-safe comparison
+    public MethodBuilder CryptoTimingSafeEqual { get; set; } = null!;
+
     // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
     public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
     public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;

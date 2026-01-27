@@ -14,7 +14,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
     private static readonly string[] _exportedMembers =
     [
         "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
-        "pbkdf2Sync", "scryptSync"
+        "pbkdf2Sync", "scryptSync", "timingSafeEqual"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -32,6 +32,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "randomInt" => EmitRandomInt(emitter, arguments),
             "pbkdf2Sync" => EmitPbkdf2Sync(emitter, arguments),
             "scryptSync" => EmitScryptSync(emitter, arguments),
+            "timingSafeEqual" => EmitTimingSafeEqual(emitter, arguments),
             _ => false
         };
     }
@@ -395,6 +396,34 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoScryptSync);
+        return true;
+    }
+
+    private static bool EmitTimingSafeEqual(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.timingSafeEqual requires two arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit first argument - convert to byte[]
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit second argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoTimingSafeEqual);
         return true;
     }
 }
