@@ -541,6 +541,88 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
+    /// Gets the exported types for the zlib module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetZlibModuleTypes()
+    {
+        var bufferType = new TypeInfo.Buffer();
+        var anyType = new TypeInfo.Any();
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // Gzip methods
+            ["gzipSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+            ["gunzipSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // Deflate methods (with zlib header)
+            ["deflateSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+            ["inflateSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // DeflateRaw methods (no header)
+            ["deflateRawSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+            ["inflateRawSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // Brotli methods
+            ["brotliCompressSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+            ["brotliDecompressSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // Zstd methods
+            ["zstdCompressSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+            ["zstdDecompressSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // Unzip (auto-detect)
+            ["unzipSync"] = new TypeInfo.Function(
+                [new TypeInfo.Union([bufferType, new TypeInfo.String()]), anyType],
+                bufferType,
+                RequiredParams: 1
+            ),
+
+            // Constants object
+            ["constants"] = anyType
+        };
+    }
+
+    /// <summary>
     /// Gets the exported types for a built-in module by name.
     /// </summary>
     /// <param name="moduleName">The module name (e.g., "path", "fs", "os").</param>
@@ -561,6 +643,7 @@ public static class BuiltInModuleTypes
             "readline" => GetReadlineModuleTypes(),
             "child_process" => GetChildProcessModuleTypes(),
             "buffer" => GetBufferModuleTypes(),
+            "zlib" => GetZlibModuleTypes(),
             _ => null
         };
     }

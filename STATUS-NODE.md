@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-26 (Verified multi-byte Buffer methods are fully implemented)
+**Last Updated:** 2026-01-26 (Added zlib module with gzip, deflate, brotli, zstd support)
 
 ## Legend
 - ✅ Implemented
@@ -32,7 +32,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `http` / `https` | ❌ | No network server/client |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ❌ | No DNS resolution |
-| `zlib` | ❌ | No compression |
+| `zlib` | ✅ | gzip, deflate, deflateRaw, brotli, zstd (sync APIs) |
 | `worker_threads` | ❌ | No worker support |
 | `cluster` | ❌ | No cluster support |
 
@@ -264,7 +264,45 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 13. BUFFER
+## 13. ZLIB (Compression)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Gzip** | | |
+| `gzipSync` | ✅ | Compress using gzip |
+| `gunzipSync` | ✅ | Decompress gzip data |
+| **Deflate** | | |
+| `deflateSync` | ✅ | Compress with zlib header |
+| `inflateSync` | ✅ | Decompress zlib data |
+| `deflateRawSync` | ✅ | Compress without header |
+| `inflateRawSync` | ✅ | Decompress raw deflate |
+| **Brotli** | | |
+| `brotliCompressSync` | ✅ | Brotli compression |
+| `brotliDecompressSync` | ✅ | Brotli decompression |
+| **Zstd** | | |
+| `zstdCompressSync` | ✅ | Zstandard compression |
+| `zstdDecompressSync` | ✅ | Zstandard decompression |
+| **Utilities** | | |
+| `unzipSync` | ✅ | Auto-detect and decompress |
+| `constants` | ✅ | Compression constants object |
+| **Options** | | |
+| `level` | ✅ | Compression level (0-9) |
+| `chunkSize` | ✅ | Buffer size for streaming |
+| `maxOutputLength` | ✅ | Maximum output size limit |
+| `windowBits` | ⚠️ | Not directly supported in .NET |
+| `memLevel` | ⚠️ | Not directly supported in .NET |
+| `strategy` | ⚠️ | Not directly supported in .NET |
+| **Async APIs** | | |
+| `gzip` / `gunzip` | ❌ | Use sync versions |
+| `deflate` / `inflate` | ❌ | Use sync versions |
+| `brotliCompress` / `brotliDecompress` | ❌ | Use sync versions |
+| **Streaming APIs** | | |
+| `createGzip` / `createGunzip` | ❌ | No stream support |
+| `createDeflate` / `createInflate` | ❌ | No stream support |
+
+---
+
+## 14. BUFFER
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -341,4 +379,3 @@ Priority features to implement for broader Node.js compatibility:
 2. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
 3. **Streams API** - Needed for large file handling (higher effort)
 4. **http module** - Basic HTTP server/client (higher effort)
-5. **zlib module** - Compression/decompression (medium effort, uses .NET System.IO.Compression)

@@ -783,33 +783,49 @@ public partial class ILEmitter
                 return;
 
             // Handle union types - try emitters for member types
+            // BUT for methods that exist on multiple types, use runtime dispatch instead
             if (objType is TypeSystem.TypeInfo.Union union)
             {
-                // Try buffer emitter if union contains buffer
                 bool hasBufferMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Buffer);
-                if (hasBufferMember)
-                {
-                    var bufferStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Buffer());
-                    if (bufferStrategy != null && bufferStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
-                        return;
-                }
-
-                // Try string emitter if union contains string
                 bool hasStringMember = union.Types.Any(t => t is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral);
-                if (hasStringMember)
-                {
-                    var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
-                    if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
-                        return;
-                }
-
-                // Try array emitter if union contains array
                 bool hasArrayMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Array);
-                if (hasArrayMember)
+
+                // Count how many types in the union could have this method
+                // Methods like includes, indexOf, slice exist on multiple types
+                bool isAmbiguousMethod = methodName is "slice" or "concat" or "includes" or "indexOf"
+                    or "toString" or "valueOf";
+                int typesWithMethod = 0;
+                if (hasBufferMember && isAmbiguousMethod) typesWithMethod++;
+                if (hasStringMember && isAmbiguousMethod) typesWithMethod++;
+                if (hasArrayMember && isAmbiguousMethod) typesWithMethod++;
+
+                // If multiple types could have this method, skip type-specific emitters
+                // and let runtime dispatch handle it below
+                if (typesWithMethod <= 1)
                 {
-                    var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
-                    if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
-                        return;
+                    // Try buffer emitter if union contains buffer
+                    if (hasBufferMember)
+                    {
+                        var bufferStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Buffer());
+                        if (bufferStrategy != null && bufferStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                            return;
+                    }
+
+                    // Try string emitter if union contains string
+                    if (hasStringMember)
+                    {
+                        var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
+                        if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                            return;
+                    }
+
+                    // Try array emitter if union contains array
+                    if (hasArrayMember)
+                    {
+                        var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
+                        if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, arguments))
+                            return;
+                    }
                 }
             }
         }

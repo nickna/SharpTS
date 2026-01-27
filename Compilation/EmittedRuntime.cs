@@ -736,6 +736,20 @@ public class EmittedRuntime
     public MethodBuilder QuerystringParse { get; set; } = null!;
     public MethodBuilder QuerystringStringify { get; set; } = null!;
 
+    // Zlib module methods
+    public MethodBuilder ZlibGzipSync { get; set; } = null!;
+    public MethodBuilder ZlibGunzipSync { get; set; } = null!;
+    public MethodBuilder ZlibDeflateSync { get; set; } = null!;
+    public MethodBuilder ZlibInflateSync { get; set; } = null!;
+    public MethodBuilder ZlibDeflateRawSync { get; set; } = null!;
+    public MethodBuilder ZlibInflateRawSync { get; set; } = null!;
+    public MethodBuilder ZlibBrotliCompressSync { get; set; } = null!;
+    public MethodBuilder ZlibBrotliDecompressSync { get; set; } = null!;
+    public MethodBuilder ZlibZstdCompressSync { get; set; } = null!;
+    public MethodBuilder ZlibZstdDecompressSync { get; set; } = null!;
+    public MethodBuilder ZlibUnzipSync { get; set; } = null!;
+    public MethodBuilder ZlibGetConstants { get; set; } = null!;
+
     // Assert module - emitted $AssertionError type for standalone assemblies
     // NOTE: Must stay in sync with AssertionError in AssertModuleInterpreter.cs
     public TypeBuilder TSAssertionErrorType { get; set; } = null!;

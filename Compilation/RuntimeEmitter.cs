@@ -1638,6 +1638,8 @@ public partial class RuntimeEmitter
         EmitClearTimeoutMethod(typeBuilder, runtime);
         EmitSetIntervalMethod(typeBuilder, runtime);
         EmitClearIntervalMethod(typeBuilder, runtime);
+        // Zlib module methods
+        EmitZlibMethods(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

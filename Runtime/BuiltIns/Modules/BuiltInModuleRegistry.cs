@@ -20,7 +20,8 @@ public static class BuiltInModuleRegistry
         "util",
         "readline",
         "child_process",
-        "buffer"
+        "buffer",
+        "zlib"
     ];
 
     /// <summary>
