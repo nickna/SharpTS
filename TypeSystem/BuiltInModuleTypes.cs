@@ -415,13 +415,24 @@ public static class BuiltInModuleTypes
         var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         var stringType = new TypeInfo.String();
         var anyType = new TypeInfo.Any();
+        var bufferType = new TypeInfo.Buffer();
 
         return new Dictionary<string, TypeInfo>
         {
-            // Methods
+            // Hash methods
             ["createHash"] = new TypeInfo.Function([stringType], anyType), // Returns Hash object
             ["createHmac"] = new TypeInfo.Function([stringType, anyType], anyType), // Returns Hmac object
-            ["randomBytes"] = new TypeInfo.Function([numberType], new TypeInfo.Buffer()),
+
+            // Cipher methods
+            ["createCipheriv"] = new TypeInfo.Function(
+                [stringType, new TypeInfo.Union([bufferType, stringType]), new TypeInfo.Union([bufferType, stringType])],
+                anyType), // Returns Cipher object
+            ["createDecipheriv"] = new TypeInfo.Function(
+                [stringType, new TypeInfo.Union([bufferType, stringType]), new TypeInfo.Union([bufferType, stringType])],
+                anyType), // Returns Decipher object
+
+            // Random methods
+            ["randomBytes"] = new TypeInfo.Function([numberType], bufferType),
             ["randomUUID"] = new TypeInfo.Function([], stringType),
             ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1)
         };

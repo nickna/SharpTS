@@ -337,6 +337,25 @@ public class TypeProvider
     public Type IncrementalHash => typeof(System.Security.Cryptography.IncrementalHash);
     public Type HashAlgorithmName => typeof(System.Security.Cryptography.HashAlgorithmName);
     public Type RandomNumberGenerator => typeof(System.Security.Cryptography.RandomNumberGenerator);
+    public Type Aes => typeof(System.Security.Cryptography.Aes);
+    public Type AesGcm => typeof(System.Security.Cryptography.AesGcm);
+    public Type ICryptoTransform => typeof(System.Security.Cryptography.ICryptoTransform);
+    public Type CipherMode => typeof(System.Security.Cryptography.CipherMode);
+    public Type PaddingMode => typeof(System.Security.Cryptography.PaddingMode);
+
+    #endregion
+
+    #region Span Types
+
+    public Type SpanOfByte => typeof(Span<byte>);
+    public Type ReadOnlySpanOfByte => typeof(ReadOnlySpan<byte>);
+
+    #endregion
+
+    #region List<byte> Types
+
+    public Type ListOfByte => MakeGenericType(ListOpen, Byte);
+    public Type IEnumerableOfByte => MakeGenericType(IEnumerableOpen, Byte);
 
     #endregion
 

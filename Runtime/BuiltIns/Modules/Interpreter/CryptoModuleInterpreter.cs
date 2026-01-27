@@ -26,6 +26,8 @@ public static class CryptoModuleInterpreter
         {
             ["createHash"] = new BuiltInMethod("createHash", 1, CreateHash),
             ["createHmac"] = new BuiltInMethod("createHmac", 2, CreateHmac),
+            ["createCipheriv"] = new BuiltInMethod("createCipheriv", 3, CreateCipheriv),
+            ["createDecipheriv"] = new BuiltInMethod("createDecipheriv", 3, CreateDecipheriv),
             ["randomBytes"] = new BuiltInMethod("randomBytes", 1, RandomBytes),
             ["randomUUID"] = new BuiltInMethod("randomUUID", 0, RandomUUID),
             ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt)
@@ -47,6 +49,43 @@ public static class CryptoModuleInterpreter
 
         var key = args[1] ?? throw new Exception("crypto.createHmac requires a key");
         return new SharpTSHmac(algorithm, key);
+    }
+
+    private static object? CreateCipheriv(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 3 || args[0] is not string algorithm)
+            throw new Exception("crypto.createCipheriv requires algorithm, key, and iv arguments");
+
+        var key = ConvertToBytes(args[1]) ?? throw new Exception("crypto.createCipheriv requires a key");
+        var iv = ConvertToBytes(args[2]) ?? throw new Exception("crypto.createCipheriv requires an iv");
+
+        return new SharpTSCipher(algorithm, key, iv);
+    }
+
+    private static object? CreateDecipheriv(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 3 || args[0] is not string algorithm)
+            throw new Exception("crypto.createDecipheriv requires algorithm, key, and iv arguments");
+
+        var key = ConvertToBytes(args[1]) ?? throw new Exception("crypto.createDecipheriv requires a key");
+        var iv = ConvertToBytes(args[2]) ?? throw new Exception("crypto.createDecipheriv requires an iv");
+
+        return new SharpTSDecipher(algorithm, key, iv);
+    }
+
+    /// <summary>
+    /// Converts a value to a byte array for crypto operations.
+    /// </summary>
+    private static byte[]? ConvertToBytes(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            string s => System.Text.Encoding.UTF8.GetBytes(s),
+            SharpTSBuffer buf => buf.Data,
+            byte[] bytes => bytes,
+            _ => throw new Exception("Value must be a string or Buffer")
+        };
     }
 
     private static object? RandomBytes(Interp interpreter, object? receiver, List<object?> args)

@@ -647,6 +647,32 @@ public class EmittedRuntime
     public MethodBuilder TSHmacUpdateMethod { get; set; } = null!;
     public MethodBuilder TSHmacDigestMethod { get; set; } = null!;
 
+    // $Cipher type - emitted for standalone crypto support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSCipher
+    public MethodBuilder CryptoCreateCipheriv { get; set; } = null!;
+    public Type TSCipherType { get; set; } = null!;
+    public ConstructorBuilder TSCipherCtor { get; set; } = null!;
+    public MethodBuilder TSCipherUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSCipherFinalMethod { get; set; } = null!;
+    public MethodBuilder TSCipherSetAutoPaddingMethod { get; set; } = null!;
+    public MethodBuilder TSCipherGetAuthTagMethod { get; set; } = null!;
+    public MethodBuilder TSCipherSetAADMethod { get; set; } = null!;
+
+    // $Decipher type - emitted for standalone crypto support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDecipher
+    public MethodBuilder CryptoCreateDecipheriv { get; set; } = null!;
+    public Type TSDecipherType { get; set; } = null!;
+    public ConstructorBuilder TSDecipherCtor { get; set; } = null!;
+    public MethodBuilder TSDecipherUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSDecipherFinalMethod { get; set; } = null!;
+    public MethodBuilder TSDecipherSetAutoPaddingMethod { get; set; } = null!;
+    public MethodBuilder TSDecipherSetAuthTagMethod { get; set; } = null!;
+    public MethodBuilder TSDecipherSetAADMethod { get; set; } = null!;
+
+    // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
+    public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
+    public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;
+
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
     public Type TSBufferType { get; set; } = null!;

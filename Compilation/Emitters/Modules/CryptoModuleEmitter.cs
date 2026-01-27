@@ -13,7 +13,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "createHash", "createHmac", "randomBytes", "randomUUID", "randomInt"
+        "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -24,6 +24,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         {
             "createHash" => EmitCreateHash(emitter, arguments),
             "createHmac" => EmitCreateHmac(emitter, arguments),
+            "createCipheriv" => EmitCreateCipheriv(emitter, arguments),
+            "createDecipheriv" => EmitCreateDecipheriv(emitter, arguments),
             "randomBytes" => EmitRandomBytes(emitter, arguments),
             "randomUUID" => EmitRandomUUID(emitter),
             "randomInt" => EmitRandomInt(emitter, arguments),
@@ -113,6 +115,124 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         // Call runtime helper to create HMAC
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateHmac);
         return true;
+    }
+
+    private static bool EmitCreateCipheriv(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 3)
+        {
+            // Missing arguments - throw at runtime
+            il.Emit(OpCodes.Ldstr, "crypto.createCipheriv requires algorithm, key, and iv arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit algorithm argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Emit key argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit iv argument - convert to byte[]
+        emitter.EmitExpression(arguments[2]);
+        emitter.EmitBoxIfNeeded(arguments[2]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper to create cipher
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateCipheriv);
+        return true;
+    }
+
+    private static bool EmitCreateDecipheriv(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 3)
+        {
+            // Missing arguments - throw at runtime
+            il.Emit(OpCodes.Ldstr, "crypto.createDecipheriv requires algorithm, key, and iv arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit algorithm argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Emit key argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit iv argument - convert to byte[]
+        emitter.EmitExpression(arguments[2]);
+        emitter.EmitBoxIfNeeded(arguments[2]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper to create decipher
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateDecipheriv);
+        return true;
+    }
+
+    /// <summary>
+    /// Emits code to convert an object (string or $Buffer) to byte[].
+    /// Expects the object on the stack; leaves byte[] on the stack.
+    /// </summary>
+    private static void EmitConvertToByteArray(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        var keyLocal = il.DeclareLocal(ctx.Types.Object);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        var isStringLabel = il.DefineLabel();
+        var isBufferLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        // Check if it's a string
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Isinst, ctx.Types.String);
+        il.Emit(OpCodes.Brtrue, isStringLabel);
+
+        // Check if it's a $Buffer
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Isinst, ctx.Runtime!.TSBufferType);
+        il.Emit(OpCodes.Brtrue, isBufferLabel);
+
+        // Not a string or buffer - convert via ToString() and then UTF-8
+        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // String - convert via UTF-8
+        il.MarkLabel(isStringLabel);
+        il.Emit(OpCodes.Call, ctx.Types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Castclass, ctx.Types.String);
+        il.Emit(OpCodes.Callvirt, ctx.Types.Encoding.GetMethod("GetBytes", [ctx.Types.String])!);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Buffer - get data
+        il.MarkLabel(isBufferLabel);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Castclass, ctx.Runtime.TSBufferType);
+        il.Emit(OpCodes.Call, ctx.Runtime.TSBufferGetData);
+
+        il.MarkLabel(endLabel);
     }
 
     private static bool EmitRandomBytes(IEmitterContext emitter, List<Expr> arguments)

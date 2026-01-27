@@ -13,6 +13,8 @@ public partial class RuntimeEmitter
     {
         EmitCryptoCreateHash(typeBuilder, runtime);
         EmitCryptoCreateHmac(typeBuilder, runtime);
+        EmitCryptoCreateCipheriv(typeBuilder, runtime);
+        EmitCryptoCreateDecipheriv(typeBuilder, runtime);
         EmitCryptoRandomBytes(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
@@ -102,6 +104,30 @@ public partial class RuntimeEmitter
                 _types.Int32, _types.Int32));
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
+        });
+
+        // createCipheriv(algorithm, key, iv) -> $Cipher
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createCipheriv", 3, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateCipheriv);
+        });
+
+        // createDecipheriv(algorithm, key, iv) -> $Decipher
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createDecipheriv", 3, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateDecipheriv);
         });
     }
 
@@ -258,6 +284,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Newobj, runtime.TSHmacCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateCipheriv(string algorithm, byte[] key, byte[] iv)
+    /// </summary>
+    private void EmitCryptoCreateCipheriv(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateCipheriv",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoCreateCipheriv = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Cipher(algorithm, key, iv)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newobj, runtime.TSCipherCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateDecipheriv(string algorithm, byte[] key, byte[] iv)
+    /// </summary>
+    private void EmitCryptoCreateDecipheriv(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateDecipheriv",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoCreateDecipheriv = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Decipher(algorithm, key, iv)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newobj, runtime.TSDecipherCtor);
         il.Emit(OpCodes.Ret);
     }
 
