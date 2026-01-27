@@ -705,9 +705,45 @@ public class EmittedRuntime
     // Timing-safe comparison
     public MethodBuilder CryptoTimingSafeEqual { get; set; } = null!;
 
+    // $Sign type - emitted for standalone crypto signing support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSign
+    public MethodBuilder CryptoCreateSign { get; set; } = null!;
+    public Type TSSignType { get; set; } = null!;
+    public ConstructorBuilder TSSignCtor { get; set; } = null!;
+    public MethodBuilder TSSignUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSSignSignMethod { get; set; } = null!;
+
+    // $Verify type - emitted for standalone crypto verification support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSVerify
+    public MethodBuilder CryptoCreateVerify { get; set; } = null!;
+    public Type TSVerifyType { get; set; } = null!;
+    public ConstructorBuilder TSVerifyCtor { get; set; } = null!;
+    public MethodBuilder TSVerifyUpdateMethod { get; set; } = null!;
+    public MethodBuilder TSVerifyVerifyMethod { get; set; } = null!;
+
     // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
     public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
     public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;
+
+    // Crypto info methods (getHashes, getCiphers)
+    public MethodBuilder CryptoGetHashes { get; set; } = null!;
+    public MethodBuilder CryptoGetCiphers { get; set; } = null!;
+
+    // Key pair generation
+    public MethodBuilder CryptoGenerateKeyPairSync { get; set; } = null!;
+
+    // DiffieHellman support
+    public MethodBuilder CryptoCreateDiffieHellman { get; set; } = null!;
+    public MethodBuilder CryptoGetDiffieHellman { get; set; } = null!;
+    public Type TSDiffieHellmanType { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorPrimeLength { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorPrimeGenerator { get; set; } = null!;
+    public ConstructorBuilder TSDiffieHellmanCtorGroup { get; set; } = null!;
+
+    // ECDH support
+    public MethodBuilder CryptoCreateECDH { get; set; } = null!;
+    public Type TSECDHType { get; set; } = null!;
+    public ConstructorBuilder TSECDHCtor { get; set; } = null!;
 
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer

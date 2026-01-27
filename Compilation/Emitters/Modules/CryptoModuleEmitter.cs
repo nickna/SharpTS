@@ -14,7 +14,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
     private static readonly string[] _exportedMembers =
     [
         "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
-        "pbkdf2Sync", "scryptSync", "timingSafeEqual"
+        "pbkdf2Sync", "scryptSync", "timingSafeEqual", "createSign", "createVerify",
+        "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -33,6 +34,14 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "pbkdf2Sync" => EmitPbkdf2Sync(emitter, arguments),
             "scryptSync" => EmitScryptSync(emitter, arguments),
             "timingSafeEqual" => EmitTimingSafeEqual(emitter, arguments),
+            "createSign" => EmitCreateSign(emitter, arguments),
+            "createVerify" => EmitCreateVerify(emitter, arguments),
+            "getHashes" => EmitGetHashes(emitter),
+            "getCiphers" => EmitGetCiphers(emitter),
+            "generateKeyPairSync" => EmitGenerateKeyPairSync(emitter, arguments),
+            "createDiffieHellman" => EmitCreateDiffieHellman(emitter, arguments),
+            "getDiffieHellman" => EmitGetDiffieHellman(emitter, arguments),
+            "createECDH" => EmitCreateECDH(emitter, arguments),
             _ => false
         };
     }
@@ -424,6 +433,183 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoTimingSafeEqual);
+        return true;
+    }
+
+    private static bool EmitCreateSign(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // Default to sha256 if no algorithm specified
+            il.Emit(OpCodes.Ldstr, "sha256");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Call runtime helper to create Sign
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateSign);
+        return true;
+    }
+
+    private static bool EmitCreateVerify(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // Default to sha256 if no algorithm specified
+            il.Emit(OpCodes.Ldstr, "sha256");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Call runtime helper to create Verify
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateVerify);
+        return true;
+    }
+
+    private static bool EmitGetHashes(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper to get hashes array
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetHashes);
+        return true;
+    }
+
+    private static bool EmitGetCiphers(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper to get ciphers array
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetCiphers);
+        return true;
+    }
+
+    private static bool EmitGenerateKeyPairSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.generateKeyPairSync requires a key type argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key type argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Emit options argument (or null if not provided)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGenerateKeyPairSync);
+        return true;
+    }
+
+    private static bool EmitCreateDiffieHellman(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.createDiffieHellman requires at least one argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit first argument (prime length or prime)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit second argument (generator, or null if not provided)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateDiffieHellman);
+        return true;
+    }
+
+    private static bool EmitGetDiffieHellman(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.getDiffieHellman requires a group name");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit group name argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoGetDiffieHellman);
+        return true;
+    }
+
+    private static bool EmitCreateECDH(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.createECDH requires a curve name");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit curve name argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateECDH);
         return true;
     }
 }

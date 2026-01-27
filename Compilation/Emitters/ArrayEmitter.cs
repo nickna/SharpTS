@@ -21,8 +21,9 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
 
-        // Cast to List<object>
-        il.Emit(OpCodes.Castclass, ctx.Types.ListOfObject);
+        // Handle both List<object> and $Array types
+        // For $Array, extract the Elements property
+        EmitGetListFromArrayOrList(il, ctx);
 
         switch (methodName)
         {
@@ -194,6 +195,37 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     }
 
     #region Helper Methods
+
+    /// <summary>
+    /// Emits code to convert an array value (either List&lt;object&gt; or $Array) to List&lt;object&gt;.
+    /// The value is expected to be on the stack; leaves List&lt;object&gt; on the stack.
+    /// </summary>
+    private static void EmitGetListFromArrayOrList(ILGenerator il, CompilationContext ctx)
+    {
+        var objLocal = il.DeclareLocal(ctx.Types.Object);
+        il.Emit(OpCodes.Stloc, objLocal);
+
+        var isListLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        // Check if it's already a List<object>
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Isinst, ctx.Types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, isListLabel);
+
+        // Not a List - assume it's $Array, get Elements
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Castclass, ctx.Runtime!.TSArrayType);
+        il.Emit(OpCodes.Callvirt, ctx.Runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Already a List - cast it
+        il.MarkLabel(isListLabel);
+        il.Emit(OpCodes.Ldloc, objLocal);
+        il.Emit(OpCodes.Castclass, ctx.Types.ListOfObject);
+
+        il.MarkLabel(endLabel);
+    }
 
     /// <summary>
     /// Emits a single argument or null if no arguments provided.

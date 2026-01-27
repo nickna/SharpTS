@@ -19,6 +19,14 @@ public partial class RuntimeEmitter
         EmitCryptoPbkdf2Sync(typeBuilder, runtime);
         EmitCryptoScryptSync(typeBuilder, runtime);
         EmitCryptoTimingSafeEqual(typeBuilder, runtime);
+        EmitCryptoCreateSign(typeBuilder, runtime);
+        EmitCryptoCreateVerify(typeBuilder, runtime);
+        EmitCryptoGetHashes(typeBuilder, runtime);
+        EmitCryptoGetCiphers(typeBuilder, runtime);
+        EmitCryptoGenerateKeyPairSync(typeBuilder, runtime);
+        EmitCryptoCreateDiffieHellman(typeBuilder, runtime);
+        EmitCryptoGetDiffieHellman(typeBuilder, runtime);
+        EmitCryptoCreateECDH(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
@@ -170,6 +178,67 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Call, runtime.CryptoTimingSafeEqual);
+        });
+
+        // createSign(algorithm) -> $Sign
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createSign", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateSign);
+        });
+
+        // createVerify(algorithm) -> $Verify
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createVerify", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateVerify);
+        });
+
+        // getHashes() -> $Array
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "getHashes", 0, il =>
+        {
+            il.Emit(OpCodes.Call, runtime.CryptoGetHashes);
+        });
+
+        // getCiphers() -> $Array
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "getCiphers", 0, il =>
+        {
+            il.Emit(OpCodes.Call, runtime.CryptoGetCiphers);
+        });
+
+        // generateKeyPairSync(type, options?) -> $Object
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "generateKeyPairSync", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Ldarg_1);  // options (can be null)
+            il.Emit(OpCodes.Call, runtime.CryptoGenerateKeyPairSync);
+        });
+
+        // createDiffieHellman(primeOrLength, generator?) -> $DiffieHellman
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createDiffieHellman", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // prime or length
+            il.Emit(OpCodes.Ldarg_1);  // generator (can be null)
+            il.Emit(OpCodes.Call, runtime.CryptoCreateDiffieHellman);
+        });
+
+        // getDiffieHellman(groupName) -> $DiffieHellman
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "getDiffieHellman", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoGetDiffieHellman);
+        });
+
+        // createECDH(curveName) -> $ECDH
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createECDH", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateECDH);
         });
     }
 
@@ -771,6 +840,233 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateSign(string algorithm)
+    /// </summary>
+    private void EmitCryptoCreateSign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateSign",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoCreateSign = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Sign(algorithm) - use emitted type for standalone compatibility
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, runtime.TSSignCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateVerify(string algorithm)
+    /// </summary>
+    private void EmitCryptoCreateVerify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateVerify",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoCreateVerify = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Verify(algorithm) - use emitted type for standalone compatibility
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, runtime.TSVerifyCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoGetHashes()
+    /// Returns an array of supported hash algorithm names.
+    /// </summary>
+    private void EmitCryptoGetHashes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoGetHashes",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        runtime.CryptoGetHashes = method;
+
+        var il = method.GetILGenerator();
+
+        // Create List<object?> with hash names
+        string[] hashes = ["md5", "sha1", "sha256", "sha384", "sha512"];
+
+        // new List<object?>()
+        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, listLocal);
+
+        // Add each hash name to the list
+        foreach (var hash in hashes)
+        {
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldstr, hash);
+            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        }
+
+        // return new $Array(list)
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoGetCiphers()
+    /// Returns an array of supported cipher algorithm names.
+    /// </summary>
+    private void EmitCryptoGetCiphers(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoGetCiphers",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        runtime.CryptoGetCiphers = method;
+
+        var il = method.GetILGenerator();
+
+        // Create List<object?> with cipher names
+        string[] ciphers = ["aes-128-cbc", "aes-192-cbc", "aes-256-cbc", "aes-128-gcm", "aes-192-gcm", "aes-256-gcm"];
+
+        // new List<object?>()
+        il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, listLocal);
+
+        // Add each cipher name to the list
+        foreach (var cipher in ciphers)
+        {
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldstr, cipher);
+            il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+        }
+
+        // return new $Array(list)
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoGenerateKeyPairSync(string type, object? options)
+    /// Generates an RSA or EC key pair.
+    /// </summary>
+    private void EmitCryptoGenerateKeyPairSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoGenerateKeyPairSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.Object]);
+        runtime.CryptoGenerateKeyPairSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns (publicKey, privateKey) tuple
+        il.Emit(OpCodes.Ldarg_0);  // type
+        il.Emit(OpCodes.Ldarg_1);  // options
+        il.Emit(OpCodes.Call, typeof(CryptoKeyPairHelper).GetMethod("GenerateKeyPairRaw")!);
+
+        // Store tuple in local
+        var tupleLocal = il.DeclareLocal(typeof((string, string)));
+        il.Emit(OpCodes.Stloc, tupleLocal);
+
+        // Create Dictionary<string, object?> for $Object
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObject.GetConstructor(Type.EmptyTypes)!);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // dict["publicKey"] = tuple.Item1
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "publicKey");
+        il.Emit(OpCodes.Ldloca, tupleLocal);
+        il.Emit(OpCodes.Ldfld, typeof((string, string)).GetField("Item1")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+
+        // dict["privateKey"] = tuple.Item2
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "privateKey");
+        il.Emit(OpCodes.Ldloca, tupleLocal);
+        il.Emit(OpCodes.Ldfld, typeof((string, string)).GetField("Item2")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("set_Item", [_types.String, _types.Object])!);
+
+        // return new $Object(dict)
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateDiffieHellman(object primeOrLength, object? generator)
+    /// Creates a DiffieHellman object.
+    /// </summary>
+    private void EmitCryptoCreateDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateDiffieHellman",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+        runtime.CryptoCreateDiffieHellman = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // primeOrLength
+        il.Emit(OpCodes.Ldarg_1);  // generator
+        il.Emit(OpCodes.Call, typeof(CryptoDHHelper).GetMethod("CreateDiffieHellman")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoGetDiffieHellman(string groupName)
+    /// Gets a predefined DiffieHellman group.
+    /// </summary>
+    private void EmitCryptoGetDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoGetDiffieHellman",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoGetDiffieHellman = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // groupName
+        il.Emit(OpCodes.Call, typeof(CryptoDHHelper).GetMethod("GetDiffieHellman")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateECDH(string curveName)
+    /// Creates an ECDH object.
+    /// </summary>
+    private void EmitCryptoCreateECDH(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateECDH",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoCreateECDH = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // curveName
+        il.Emit(OpCodes.Call, typeof(CryptoECDHHelper).GetMethod("CreateECDH")!);
+        il.Emit(OpCodes.Ret);
+    }
 }
 
 /// <summary>
@@ -1005,5 +1301,198 @@ public static class ScryptImpl
     private static uint RotateLeft(uint value, int count)
     {
         return (value << count) | (value >> (32 - count));
+    }
+}
+
+/// <summary>
+/// Static helper for getHashes() and getCiphers().
+/// Used by compiled code.
+/// </summary>
+public static class CryptoInfoHelper
+{
+    private static readonly string[] _hashes = ["md5", "sha1", "sha256", "sha384", "sha512"];
+    private static readonly string[] _ciphers = ["aes-128-cbc", "aes-192-cbc", "aes-256-cbc", "aes-128-gcm", "aes-192-gcm", "aes-256-gcm"];
+
+    public static object GetHashes()
+    {
+        return new SharpTS.Runtime.Types.SharpTSArray(new List<object?>(_hashes));
+    }
+
+    public static object GetCiphers()
+    {
+        return new SharpTS.Runtime.Types.SharpTSArray(new List<object?>(_ciphers));
+    }
+}
+
+/// <summary>
+/// Static helper for generateKeyPairSync().
+/// Used by compiled code.
+/// </summary>
+public static class CryptoKeyPairHelper
+{
+    public static object GenerateKeyPairSync(string type, object? options)
+    {
+        return type.ToLowerInvariant() switch
+        {
+            "rsa" => GenerateRsaKeyPair(options),
+            "ec" => GenerateEcKeyPair(options),
+            _ => throw new ArgumentException($"crypto.generateKeyPairSync: unsupported key type '{type}'")
+        };
+    }
+
+    /// <summary>
+    /// Returns raw (publicKey, privateKey) tuple for compiled mode to wrap in $Object.
+    /// </summary>
+    public static (string publicKey, string privateKey) GenerateKeyPairRaw(string type, object? options)
+    {
+        return type.ToLowerInvariant() switch
+        {
+            "rsa" => GenerateRsaKeyPairRaw(options),
+            "ec" => GenerateEcKeyPairRaw(options),
+            _ => throw new ArgumentException($"crypto.generateKeyPairSync: unsupported key type '{type}'")
+        };
+    }
+
+    private static object GenerateRsaKeyPair(object? options)
+    {
+        var (publicKey, privateKey) = GenerateRsaKeyPairRaw(options);
+        return new SharpTS.Runtime.Types.SharpTSObject(new Dictionary<string, object?>
+        {
+            ["publicKey"] = publicKey,
+            ["privateKey"] = privateKey
+        });
+    }
+
+    private static (string publicKey, string privateKey) GenerateRsaKeyPairRaw(object? options)
+    {
+        int modulusLength = 2048;
+        if (options != null)
+        {
+            modulusLength = GetOptionInt(options, "modulusLength", modulusLength);
+        }
+
+        using var rsa = RSA.Create(modulusLength);
+        return (rsa.ExportSubjectPublicKeyInfoPem(), rsa.ExportPkcs8PrivateKeyPem());
+    }
+
+    private static object GenerateEcKeyPair(object? options)
+    {
+        var (publicKey, privateKey) = GenerateEcKeyPairRaw(options);
+        return new SharpTS.Runtime.Types.SharpTSObject(new Dictionary<string, object?>
+        {
+            ["publicKey"] = publicKey,
+            ["privateKey"] = privateKey
+        });
+    }
+
+    private static (string publicKey, string privateKey) GenerateEcKeyPairRaw(object? options)
+    {
+        var curveName = "prime256v1";
+        if (options != null)
+        {
+            curveName = GetOptionString(options, "namedCurve", curveName);
+        }
+
+        var curve = curveName.ToLowerInvariant() switch
+        {
+            "prime256v1" or "secp256r1" or "p-256" => ECCurve.NamedCurves.nistP256,
+            "secp384r1" or "p-384" => ECCurve.NamedCurves.nistP384,
+            "secp521r1" or "p-521" => ECCurve.NamedCurves.nistP521,
+            _ => throw new ArgumentException($"crypto.generateKeyPairSync: unsupported curve '{curveName}'")
+        };
+
+        using var ecdsa = ECDsa.Create(curve);
+        return (ecdsa.ExportSubjectPublicKeyInfoPem(), ecdsa.ExportPkcs8PrivateKeyPem());
+    }
+
+    private static int GetOptionInt(object options, string name, int defaultValue)
+    {
+        var type = options.GetType();
+        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
+        if (getPropertyMethod != null)
+        {
+            var value = getPropertyMethod.Invoke(options, [name]);
+            if (value is double d) return (int)d;
+            return defaultValue;
+        }
+
+        var fieldsProperty = type.GetProperty("Fields");
+        if (fieldsProperty != null)
+        {
+            var fields = fieldsProperty.GetValue(options) as IReadOnlyDictionary<string, object?>;
+            if (fields != null && fields.TryGetValue(name, out var val) && val is double dVal)
+                return (int)dVal;
+        }
+
+        return defaultValue;
+    }
+
+    private static string GetOptionString(object options, string name, string defaultValue)
+    {
+        var type = options.GetType();
+        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
+        if (getPropertyMethod != null)
+        {
+            var value = getPropertyMethod.Invoke(options, [name]);
+            if (value is string s) return s;
+            return defaultValue;
+        }
+
+        var fieldsProperty = type.GetProperty("Fields");
+        if (fieldsProperty != null)
+        {
+            var fields = fieldsProperty.GetValue(options) as IReadOnlyDictionary<string, object?>;
+            if (fields != null && fields.TryGetValue(name, out var val) && val is string sVal)
+                return sVal;
+        }
+
+        return defaultValue;
+    }
+}
+
+/// <summary>
+/// Static helper for createDiffieHellman() and getDiffieHellman().
+/// Used by compiled code.
+/// </summary>
+public static class CryptoDHHelper
+{
+    public static object CreateDiffieHellman(object primeOrLength, object? generator)
+    {
+        if (primeOrLength is double d)
+        {
+            return new SharpTS.Runtime.Types.SharpTSDiffieHellman((int)d);
+        }
+
+        var prime = ConvertToBytes(primeOrLength);
+        byte[]? gen = generator != null ? ConvertToBytes(generator) : null;
+        return new SharpTS.Runtime.Types.SharpTSDiffieHellman(prime, gen);
+    }
+
+    public static object GetDiffieHellman(string groupName)
+    {
+        return new SharpTS.Runtime.Types.SharpTSDiffieHellman(groupName, isGroup: true);
+    }
+
+    private static byte[] ConvertToBytes(object value)
+    {
+        if (value is SharpTS.Runtime.Types.SharpTSBuffer buffer)
+            return buffer.Data;
+        if (value is byte[] bytes)
+            return bytes;
+        if (value is string str)
+            return System.Text.Encoding.UTF8.GetBytes(str);
+        throw new ArgumentException("Value must be a Buffer, byte array, or string");
+    }
+}
+
+/// <summary>
+/// Static helper for createECDH().
+/// Used by compiled code.
+/// </summary>
+public static class CryptoECDHHelper
+{
+    public static object CreateECDH(string curveName)
+    {
+        return new SharpTS.Runtime.Types.SharpTSECDH(curveName);
     }
 }

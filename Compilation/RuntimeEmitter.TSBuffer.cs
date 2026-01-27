@@ -558,6 +558,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static bool IsBuffer(object? obj)
+    /// Checks for both $Buffer (emitted type) and SharpTSBuffer (interpreter type)
     /// </summary>
     private void EmitTSBufferIsBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -571,11 +572,30 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // return obj is $Buffer
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+        var endLabel = il.DefineLabel();
+
+        // Check if obj is $Buffer (emitted type)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Cgt_Un);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check if obj is SharpTSBuffer (interpreter type)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(SharpTS.Runtime.Types.SharpTSBuffer));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Neither - return false
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Is buffer - return true
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+
+        il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
     }
 
