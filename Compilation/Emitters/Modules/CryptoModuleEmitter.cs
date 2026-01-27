@@ -13,7 +13,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt"
+        "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
+        "pbkdf2Sync", "scryptSync"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -29,6 +30,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "randomBytes" => EmitRandomBytes(emitter, arguments),
             "randomUUID" => EmitRandomUUID(emitter),
             "randomInt" => EmitRandomInt(emitter, arguments),
+            "pbkdf2Sync" => EmitPbkdf2Sync(emitter, arguments),
+            "scryptSync" => EmitScryptSync(emitter, arguments),
             _ => false
         };
     }
@@ -308,6 +311,90 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         // Convert to double for JS number
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitPbkdf2Sync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 5)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.pbkdf2Sync requires password, salt, iterations, keylen, and digest arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit password - convert to byte[]
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit salt - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit iterations - convert to int
+        emitter.EmitExpressionAsDouble(arguments[2]);
+        il.Emit(OpCodes.Conv_I4);
+
+        // Emit keylen - convert to int
+        emitter.EmitExpressionAsDouble(arguments[3]);
+        il.Emit(OpCodes.Conv_I4);
+
+        // Emit digest - convert to string
+        emitter.EmitExpression(arguments[4]);
+        emitter.EmitBoxIfNeeded(arguments[4]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPbkdf2Sync);
+        return true;
+    }
+
+    private static bool EmitScryptSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 3)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.scryptSync requires password, salt, and keylen arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit password - convert to byte[]
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit salt - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit keylen - convert to int
+        emitter.EmitExpressionAsDouble(arguments[2]);
+        il.Emit(OpCodes.Conv_I4);
+
+        // Emit options (or null if not provided)
+        if (arguments.Count > 3)
+        {
+            emitter.EmitExpression(arguments[3]);
+            emitter.EmitBoxIfNeeded(arguments[3]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoScryptSync);
         return true;
     }
 }

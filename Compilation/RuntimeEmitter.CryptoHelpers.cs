@@ -16,6 +16,8 @@ public partial class RuntimeEmitter
         EmitCryptoCreateCipheriv(typeBuilder, runtime);
         EmitCryptoCreateDecipheriv(typeBuilder, runtime);
         EmitCryptoRandomBytes(typeBuilder, runtime);
+        EmitCryptoPbkdf2Sync(typeBuilder, runtime);
+        EmitCryptoScryptSync(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
@@ -128,6 +130,35 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_2);
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Call, runtime.CryptoCreateDecipheriv);
+        });
+
+        // pbkdf2Sync(password, salt, iterations, keylen, digest) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "pbkdf2Sync", 5, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToInt32(il);
+            il.Emit(OpCodes.Ldarg_3);
+            EmitObjectToInt32(il);
+            il.Emit(OpCodes.Ldarg, 4);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoPbkdf2Sync);
+        });
+
+        // scryptSync(password, salt, keylen, options?) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "scryptSync", 4, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToInt32(il);
+            il.Emit(OpCodes.Ldarg_3);  // options (can be null)
+            il.Emit(OpCodes.Call, runtime.CryptoScryptSync);
         });
     }
 
@@ -353,5 +384,537 @@ public partial class RuntimeEmitter
         // Return new $Buffer(bytes)
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoPbkdf2Sync(byte[] password, byte[] salt, int iterations, int keylen, string digest)
+    /// Returns a $Buffer containing the derived key.
+    /// </summary>
+    private void EmitCryptoPbkdf2Sync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoPbkdf2Sync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte), _types.Int32, _types.Int32, _types.String]);
+        runtime.CryptoPbkdf2Sync = method;
+
+        var il = method.GetILGenerator();
+
+        // Get HashAlgorithmName based on digest string
+        var hashLocal = il.DeclareLocal(typeof(HashAlgorithmName));
+        var sha1Label = il.DefineLabel();
+        var sha256Label = il.DefineLabel();
+        var sha384Label = il.DefineLabel();
+        var sha512Label = il.DefineLabel();
+        var md5Label = il.DefineLabel();
+        var callPbkdf2Label = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Convert digest to lowercase for comparison
+        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("ToLowerInvariant")!);
+        var digestLower = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, digestLower);
+
+        // Check for sha256 (most common)
+        il.Emit(OpCodes.Ldloc, digestLower);
+        il.Emit(OpCodes.Ldstr, "sha256");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, sha256Label);
+
+        // Check for sha1
+        il.Emit(OpCodes.Ldloc, digestLower);
+        il.Emit(OpCodes.Ldstr, "sha1");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, sha1Label);
+
+        // Check for sha384
+        il.Emit(OpCodes.Ldloc, digestLower);
+        il.Emit(OpCodes.Ldstr, "sha384");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, sha384Label);
+
+        // Check for sha512
+        il.Emit(OpCodes.Ldloc, digestLower);
+        il.Emit(OpCodes.Ldstr, "sha512");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, sha512Label);
+
+        // Check for md5
+        il.Emit(OpCodes.Ldloc, digestLower);
+        il.Emit(OpCodes.Ldstr, "md5");
+        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, md5Label);
+
+        // Unknown algorithm - throw
+        il.Emit(OpCodes.Br, throwLabel);
+
+        // sha256 case
+        il.MarkLabel(sha256Label);
+        il.Emit(OpCodes.Call, typeof(HashAlgorithmName).GetProperty("SHA256")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, hashLocal);
+        il.Emit(OpCodes.Br, callPbkdf2Label);
+
+        // sha1 case
+        il.MarkLabel(sha1Label);
+        il.Emit(OpCodes.Call, typeof(HashAlgorithmName).GetProperty("SHA1")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, hashLocal);
+        il.Emit(OpCodes.Br, callPbkdf2Label);
+
+        // sha384 case
+        il.MarkLabel(sha384Label);
+        il.Emit(OpCodes.Call, typeof(HashAlgorithmName).GetProperty("SHA384")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, hashLocal);
+        il.Emit(OpCodes.Br, callPbkdf2Label);
+
+        // sha512 case
+        il.MarkLabel(sha512Label);
+        il.Emit(OpCodes.Call, typeof(HashAlgorithmName).GetProperty("SHA512")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, hashLocal);
+        il.Emit(OpCodes.Br, callPbkdf2Label);
+
+        // md5 case
+        il.MarkLabel(md5Label);
+        il.Emit(OpCodes.Call, typeof(HashAlgorithmName).GetProperty("MD5")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, hashLocal);
+        il.Emit(OpCodes.Br, callPbkdf2Label);
+
+        // throw case
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "Unsupported digest algorithm");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        // Call Rfc2898DeriveBytes.Pbkdf2
+        il.MarkLabel(callPbkdf2Label);
+        il.Emit(OpCodes.Ldarg_0);  // password
+        il.Emit(OpCodes.Ldarg_1);  // salt
+        il.Emit(OpCodes.Ldarg_2);  // iterations
+        il.Emit(OpCodes.Ldloc, hashLocal);  // hashAlgorithm
+        il.Emit(OpCodes.Ldarg_3);  // keylen
+        il.Emit(OpCodes.Call, typeof(Rfc2898DeriveBytes).GetMethod("Pbkdf2",
+            [typeof(byte[]), typeof(byte[]), typeof(int), typeof(HashAlgorithmName), typeof(int)])!);
+
+        // Return new $Buffer(derivedKey)
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoScryptSync(byte[] password, byte[] salt, int keylen, object? options)
+    /// Returns a $Buffer containing the derived key.
+    /// </summary>
+    private void EmitCryptoScryptSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoScryptSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte), _types.Int32, _types.Object]);
+        runtime.CryptoScryptSync = method;
+
+        // Define a helper method that does the actual scrypt computation
+        EmitScryptHelper(typeBuilder, runtime);
+
+        // Define a helper method to extract option value
+        var getOptionMethod = EmitScryptGetOption(typeBuilder, runtime);
+
+        var il = method.GetILGenerator();
+
+        // Default parameters
+        var NLocal = il.DeclareLocal(_types.Int32);
+        var rLocal = il.DeclareLocal(_types.Int32);
+        var pLocal = il.DeclareLocal(_types.Int32);
+
+        // N = 16384 (default)
+        il.Emit(OpCodes.Ldc_I4, 16384);
+        il.Emit(OpCodes.Stloc, NLocal);
+
+        // r = 8 (default)
+        il.Emit(OpCodes.Ldc_I4, 8);
+        il.Emit(OpCodes.Stloc, rLocal);
+
+        // p = 1 (default)
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, pLocal);
+
+        // Check if options is not null
+        var noOptionsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, noOptionsLabel);
+
+        // Try to get N from options
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "N");
+        il.Emit(OpCodes.Ldloc, NLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, NLocal);
+
+        // Try to get cost (alias for N)
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "cost");
+        il.Emit(OpCodes.Ldloc, NLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, NLocal);
+
+        // Try to get r from options
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "r");
+        il.Emit(OpCodes.Ldloc, rLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, rLocal);
+
+        // Try to get blockSize (alias for r)
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "blockSize");
+        il.Emit(OpCodes.Ldloc, rLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, rLocal);
+
+        // Try to get p from options
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "p");
+        il.Emit(OpCodes.Ldloc, pLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, pLocal);
+
+        // Try to get parallelization (alias for p)
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldstr, "parallelization");
+        il.Emit(OpCodes.Ldloc, pLocal);
+        il.Emit(OpCodes.Call, getOptionMethod);
+        il.Emit(OpCodes.Stloc, pLocal);
+
+        il.MarkLabel(noOptionsLabel);
+
+        // Call scrypt helper: ScryptDeriveBytes(password, salt, N, r, p, keylen)
+        il.Emit(OpCodes.Ldarg_0);  // password
+        il.Emit(OpCodes.Ldarg_1);  // salt
+        il.Emit(OpCodes.Ldloc, NLocal);  // N
+        il.Emit(OpCodes.Ldloc, rLocal);  // r
+        il.Emit(OpCodes.Ldloc, pLocal);  // p
+        il.Emit(OpCodes.Ldarg_2);  // keylen
+        il.Emit(OpCodes.Call, runtime.ScryptDeriveBytes);
+
+        // Return new $Buffer(derivedKey)
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits a helper method to extract an int option from an object.
+    /// Signature: int GetScryptOption(object options, string name, int defaultValue)
+    /// Handles both $Object and Dictionary&lt;string, object&gt; types.
+    /// </summary>
+    private MethodBuilder EmitScryptGetOption(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "GetScryptOption",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32,
+            [_types.Object, _types.String, _types.Int32]);
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var returnDefaultLabel = il.DefineLabel();
+        var tryDictionaryLabel = il.DefineLabel();
+        var checkValueLabel = il.DefineLabel();
+
+        // Check if options is $Object
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, tryDictionaryLabel);
+
+        // It's $Object - call GetProperty
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, checkValueLabel);
+
+        // Try Dictionary<string, object>
+        il.MarkLabel(tryDictionaryLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
+
+        // It's Dictionary - call TryGetValue
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
+
+        // Check if value is double
+        il.MarkLabel(checkValueLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
+
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, returnDefaultLabel);
+
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ret);
+
+        // returnDefault:
+        il.MarkLabel(returnDefaultLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ret);
+
+        return method;
+    }
+
+    /// <summary>
+    /// Emits the scrypt key derivation helper method.
+    /// This is a simplified implementation that delegates to a static helper class.
+    /// </summary>
+    private void EmitScryptHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ScryptDeriveBytes",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.MakeArrayType(_types.Byte),
+            [_types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte),
+             _types.Int32, _types.Int32, _types.Int32, _types.Int32]);
+        runtime.ScryptDeriveBytes = method;
+
+        var il = method.GetILGenerator();
+
+        // Call the static ScryptImpl.DeriveBytes method from our runtime
+        il.Emit(OpCodes.Ldarg_0);  // password
+        il.Emit(OpCodes.Ldarg_1);  // salt
+        il.Emit(OpCodes.Ldarg_2);  // N
+        il.Emit(OpCodes.Ldarg_3);  // r
+        il.Emit(OpCodes.Ldarg, 4); // p
+        il.Emit(OpCodes.Ldarg, 5); // dkLen
+        il.Emit(OpCodes.Call, typeof(ScryptImpl).GetMethod("DeriveBytes",
+            [typeof(byte[]), typeof(byte[]), typeof(int), typeof(int), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Ret);
+    }
+}
+
+/// <summary>
+/// Static implementation of scrypt key derivation (RFC 7914).
+/// Used by both interpreter and compiled code.
+/// </summary>
+public static class ScryptImpl
+{
+    /// <summary>
+    /// Derives a key with options parsing (for compiled mode).
+    /// </summary>
+    public static byte[] DeriveWithOptions(byte[] password, byte[] salt, int dkLen, object? options)
+    {
+        // Default scrypt parameters (Node.js defaults)
+        int N = 16384;  // cost parameter (must be power of 2)
+        int r = 8;      // block size
+        int p = 1;      // parallelization
+
+        // Parse options if provided
+        if (options != null)
+        {
+            N = GetOptionInt(options, "N", N);
+            N = GetOptionInt(options, "cost", N);
+            r = GetOptionInt(options, "r", r);
+            r = GetOptionInt(options, "blockSize", r);
+            p = GetOptionInt(options, "p", p);
+            p = GetOptionInt(options, "parallelization", p);
+        }
+
+        // Validate N is a power of 2
+        if (N < 2 || (N & (N - 1)) != 0)
+            throw new ArgumentException("scryptSync: N must be a power of 2 greater than 1");
+
+        return DeriveBytes(password, salt, N, r, p, dkLen);
+    }
+
+    /// <summary>
+    /// Gets an integer option from an object (supports both SharpTSObject and $Object).
+    /// </summary>
+    private static int GetOptionInt(object options, string name, int defaultValue)
+    {
+        var type = options.GetType();
+
+        // Try GetProperty method first (for $Object)
+        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
+        if (getPropertyMethod != null)
+        {
+            var value = getPropertyMethod.Invoke(options, [name]);
+            if (value is double d)
+                return (int)d;
+            return defaultValue;
+        }
+
+        // Try Fields property (for SharpTSObject)
+        var fieldsProperty = type.GetProperty("Fields");
+        if (fieldsProperty != null)
+        {
+            var fields = fieldsProperty.GetValue(options) as System.Collections.Generic.IReadOnlyDictionary<string, object?>;
+            if (fields != null && fields.TryGetValue(name, out var val) && val is double dVal)
+                return (int)dVal;
+        }
+
+        return defaultValue;
+    }
+
+    /// <summary>
+    /// Derives a key using the scrypt key derivation function.
+    /// </summary>
+    public static byte[] DeriveBytes(byte[] password, byte[] salt, int N, int r, int p, int dkLen)
+    {
+        // Validate parameters
+        if (N < 2 || (N & (N - 1)) != 0)
+            throw new ArgumentException("N must be a power of 2 greater than 1", nameof(N));
+        if (r < 1)
+            throw new ArgumentException("r must be at least 1", nameof(r));
+        if (p < 1)
+            throw new ArgumentException("p must be at least 1", nameof(p));
+
+        // Step 1: Generate initial data B using PBKDF2-HMAC-SHA256
+        int blockSize = 128 * r;
+        byte[] B = Rfc2898DeriveBytes.Pbkdf2(password, salt, 1, HashAlgorithmName.SHA256, p * blockSize);
+
+        // Step 2: Apply scryptROMix to each block
+        for (int i = 0; i < p; i++)
+        {
+            byte[] block = new byte[blockSize];
+            Array.Copy(B, i * blockSize, block, 0, blockSize);
+            ScryptROMix(block, N, r);
+            Array.Copy(block, 0, B, i * blockSize, blockSize);
+        }
+
+        // Step 3: Derive final key using PBKDF2-HMAC-SHA256
+        return Rfc2898DeriveBytes.Pbkdf2(password, B, 1, HashAlgorithmName.SHA256, dkLen);
+    }
+
+    private static void ScryptROMix(byte[] B, int N, int r)
+    {
+        int blockSize = 128 * r;
+        byte[][] V = new byte[N][];
+
+        // Step 1: Store intermediate values in V
+        for (int i = 0; i < N; i++)
+        {
+            V[i] = (byte[])B.Clone();
+            ScryptBlockMix(B, r);
+        }
+
+        // Step 2: Mix with random lookups
+        for (int i = 0; i < N; i++)
+        {
+            // Get last 64 bits as little-endian integer mod N
+            long j = BitConverter.ToInt64(B, blockSize - 64) & (N - 1);
+            if (j < 0) j += N;
+
+            // XOR B with V[j]
+            for (int k = 0; k < blockSize; k++)
+                B[k] ^= V[j][k];
+
+            ScryptBlockMix(B, r);
+        }
+    }
+
+    private static void ScryptBlockMix(byte[] B, int r)
+    {
+        int blockSize = 128 * r;
+        byte[] X = new byte[64];
+        byte[] Y = new byte[blockSize];
+
+        // Copy last 64-byte block to X
+        Array.Copy(B, blockSize - 64, X, 0, 64);
+
+        // Process 2r blocks
+        for (int i = 0; i < 2 * r; i++)
+        {
+            // XOR X with current block
+            for (int j = 0; j < 64; j++)
+                X[j] ^= B[i * 64 + j];
+
+            // Apply Salsa20/8 core
+            Salsa20Core(X);
+
+            // Copy to Y (even blocks first, then odd blocks)
+            int destOffset = (i / 2) * 64 + (i % 2) * r * 64;
+            Array.Copy(X, 0, Y, destOffset, 64);
+        }
+
+        Array.Copy(Y, 0, B, 0, blockSize);
+    }
+
+    private static void Salsa20Core(byte[] block)
+    {
+        // Convert bytes to uint32 array (little-endian)
+        uint[] x = new uint[16];
+        for (int i = 0; i < 16; i++)
+            x[i] = BitConverter.ToUInt32(block, i * 4);
+
+        uint[] original = (uint[])x.Clone();
+
+        // 8 rounds (4 double-rounds)
+        for (int i = 0; i < 4; i++)
+        {
+            // Column round
+            x[4] ^= RotateLeft(x[0] + x[12], 7);
+            x[8] ^= RotateLeft(x[4] + x[0], 9);
+            x[12] ^= RotateLeft(x[8] + x[4], 13);
+            x[0] ^= RotateLeft(x[12] + x[8], 18);
+
+            x[9] ^= RotateLeft(x[5] + x[1], 7);
+            x[13] ^= RotateLeft(x[9] + x[5], 9);
+            x[1] ^= RotateLeft(x[13] + x[9], 13);
+            x[5] ^= RotateLeft(x[1] + x[13], 18);
+
+            x[14] ^= RotateLeft(x[10] + x[6], 7);
+            x[2] ^= RotateLeft(x[14] + x[10], 9);
+            x[6] ^= RotateLeft(x[2] + x[14], 13);
+            x[10] ^= RotateLeft(x[6] + x[2], 18);
+
+            x[3] ^= RotateLeft(x[15] + x[11], 7);
+            x[7] ^= RotateLeft(x[3] + x[15], 9);
+            x[11] ^= RotateLeft(x[7] + x[3], 13);
+            x[15] ^= RotateLeft(x[11] + x[7], 18);
+
+            // Row round
+            x[1] ^= RotateLeft(x[0] + x[3], 7);
+            x[2] ^= RotateLeft(x[1] + x[0], 9);
+            x[3] ^= RotateLeft(x[2] + x[1], 13);
+            x[0] ^= RotateLeft(x[3] + x[2], 18);
+
+            x[6] ^= RotateLeft(x[5] + x[4], 7);
+            x[7] ^= RotateLeft(x[6] + x[5], 9);
+            x[4] ^= RotateLeft(x[7] + x[6], 13);
+            x[5] ^= RotateLeft(x[4] + x[7], 18);
+
+            x[11] ^= RotateLeft(x[10] + x[9], 7);
+            x[8] ^= RotateLeft(x[11] + x[10], 9);
+            x[9] ^= RotateLeft(x[8] + x[11], 13);
+            x[10] ^= RotateLeft(x[9] + x[8], 18);
+
+            x[12] ^= RotateLeft(x[15] + x[14], 7);
+            x[13] ^= RotateLeft(x[12] + x[15], 9);
+            x[14] ^= RotateLeft(x[13] + x[12], 13);
+            x[15] ^= RotateLeft(x[14] + x[13], 18);
+        }
+
+        // Add original to result
+        for (int i = 0; i < 16; i++)
+            x[i] += original[i];
+
+        // Convert back to bytes
+        for (int i = 0; i < 16; i++)
+        {
+            byte[] bytes = BitConverter.GetBytes(x[i]);
+            Array.Copy(bytes, 0, block, i * 4, 4);
+        }
+    }
+
+    private static uint RotateLeft(uint value, int count)
+    {
+        return (value << count) | (value >> (32 - count));
     }
 }

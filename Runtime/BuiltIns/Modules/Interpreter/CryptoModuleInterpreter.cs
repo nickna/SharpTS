@@ -30,7 +30,9 @@ public static class CryptoModuleInterpreter
             ["createDecipheriv"] = new BuiltInMethod("createDecipheriv", 3, CreateDecipheriv),
             ["randomBytes"] = new BuiltInMethod("randomBytes", 1, RandomBytes),
             ["randomUUID"] = new BuiltInMethod("randomUUID", 0, RandomUUID),
-            ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt)
+            ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt),
+            ["pbkdf2Sync"] = new BuiltInMethod("pbkdf2Sync", 5, Pbkdf2Sync),
+            ["scryptSync"] = new BuiltInMethod("scryptSync", 3, 4, ScryptSync)
         };
     }
 
@@ -126,5 +128,81 @@ public static class CryptoModuleInterpreter
         }
 
         return (double)RandomNumberGenerator.GetInt32(min, max);
+    }
+
+    private static object? Pbkdf2Sync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        // pbkdf2Sync(password, salt, iterations, keylen, digest)
+        if (args.Count < 5)
+            throw new Exception("crypto.pbkdf2Sync requires password, salt, iterations, keylen, and digest arguments");
+
+        var password = ConvertToBytes(args[0]) ?? throw new Exception("crypto.pbkdf2Sync requires a password");
+        var salt = ConvertToBytes(args[1]) ?? throw new Exception("crypto.pbkdf2Sync requires a salt");
+        var iterations = args[2] is double d ? (int)d : throw new Exception("crypto.pbkdf2Sync iterations must be a number");
+        var keylen = args[3] is double k ? (int)k : throw new Exception("crypto.pbkdf2Sync keylen must be a number");
+        var digest = args[4] as string ?? throw new Exception("crypto.pbkdf2Sync digest must be a string");
+
+        if (iterations < 1)
+            throw new Exception("crypto.pbkdf2Sync iterations must be at least 1");
+        if (keylen < 0)
+            throw new Exception("crypto.pbkdf2Sync keylen must be non-negative");
+
+        var hashAlgorithm = digest.ToLowerInvariant() switch
+        {
+            "sha1" => HashAlgorithmName.SHA1,
+            "sha256" => HashAlgorithmName.SHA256,
+            "sha384" => HashAlgorithmName.SHA384,
+            "sha512" => HashAlgorithmName.SHA512,
+            // Note: MD5 is not supported for PBKDF2 in .NET - use SHA family instead
+            _ => throw new Exception($"crypto.pbkdf2Sync: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512")
+        };
+
+        var derivedKey = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, hashAlgorithm, keylen);
+        return new SharpTSBuffer(derivedKey);
+    }
+
+    private static object? ScryptSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        // scryptSync(password, salt, keylen[, options])
+        if (args.Count < 3)
+            throw new Exception("crypto.scryptSync requires password, salt, and keylen arguments");
+
+        var password = ConvertToBytes(args[0]) ?? throw new Exception("crypto.scryptSync requires a password");
+        var salt = ConvertToBytes(args[1]) ?? throw new Exception("crypto.scryptSync requires a salt");
+        var keylen = args[2] is double k ? (int)k : throw new Exception("crypto.scryptSync keylen must be a number");
+
+        if (keylen < 0)
+            throw new Exception("crypto.scryptSync keylen must be non-negative");
+
+        // Default scrypt parameters (Node.js defaults)
+        int N = 16384;  // cost parameter (must be power of 2)
+        int r = 8;      // block size
+        int p = 1;      // parallelization
+
+        // Parse options if provided
+        if (args.Count > 3 && args[3] is SharpTSObject options)
+        {
+            var fields = options.Fields;
+            if (fields.TryGetValue("N", out var costObj) && costObj is double costVal)
+                N = (int)costVal;
+            if (fields.TryGetValue("cost", out var cost2Obj) && cost2Obj is double cost2Val)
+                N = (int)cost2Val;
+            if (fields.TryGetValue("r", out var rObj) && rObj is double rVal)
+                r = (int)rVal;
+            if (fields.TryGetValue("blockSize", out var bsObj) && bsObj is double bsVal)
+                r = (int)bsVal;
+            if (fields.TryGetValue("p", out var pObj) && pObj is double pVal)
+                p = (int)pVal;
+            if (fields.TryGetValue("parallelization", out var parObj) && parObj is double parVal)
+                p = (int)parVal;
+        }
+
+        // Validate N is a power of 2
+        if (N < 2 || (N & (N - 1)) != 0)
+            throw new Exception("crypto.scryptSync: N must be a power of 2 greater than 1");
+
+        // Use shared scrypt implementation
+        var derivedKey = SharpTS.Compilation.ScryptImpl.DeriveBytes(password, salt, N, r, p, keylen);
+        return new SharpTSBuffer(derivedKey);
     }
 }

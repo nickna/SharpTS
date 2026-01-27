@@ -416,6 +416,7 @@ public static class BuiltInModuleTypes
         var stringType = new TypeInfo.String();
         var anyType = new TypeInfo.Any();
         var bufferType = new TypeInfo.Buffer();
+        var bufferOrStringType = new TypeInfo.Union([bufferType, stringType]);
 
         return new Dictionary<string, TypeInfo>
         {
@@ -425,16 +426,27 @@ public static class BuiltInModuleTypes
 
             // Cipher methods
             ["createCipheriv"] = new TypeInfo.Function(
-                [stringType, new TypeInfo.Union([bufferType, stringType]), new TypeInfo.Union([bufferType, stringType])],
+                [stringType, bufferOrStringType, bufferOrStringType],
                 anyType), // Returns Cipher object
             ["createDecipheriv"] = new TypeInfo.Function(
-                [stringType, new TypeInfo.Union([bufferType, stringType]), new TypeInfo.Union([bufferType, stringType])],
+                [stringType, bufferOrStringType, bufferOrStringType],
                 anyType), // Returns Decipher object
 
             // Random methods
             ["randomBytes"] = new TypeInfo.Function([numberType], bufferType),
             ["randomUUID"] = new TypeInfo.Function([], stringType),
-            ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1)
+            ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1),
+
+            // Key derivation functions
+            // pbkdf2Sync(password, salt, iterations, keylen, digest) -> Buffer
+            ["pbkdf2Sync"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType, numberType, numberType, stringType],
+                bufferType),
+            // scryptSync(password, salt, keylen, options?) -> Buffer
+            ["scryptSync"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType, numberType, anyType],
+                bufferType,
+                RequiredParams: 3)
         };
     }
 

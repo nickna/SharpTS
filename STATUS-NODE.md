@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-26 (Added zlib module with gzip, deflate, brotli, zstd support)
+**Last Updated:** 2026-01-26 (Added pbkdf2Sync and scryptSync key derivation functions)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash + HMAC + random; no cipher/sign/verify |
+| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt; no sign/verify |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -144,14 +144,23 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| **Hashing** | | |
 | `createHash` | ✅ | md5, sha1, sha256, sha384, sha512 |
 | `createHmac` | ✅ | md5, sha1, sha256, sha384, sha512 with string/Buffer keys |
+| **Random** | | |
 | `randomBytes` | ✅ | |
 | `randomUUID` | ✅ | |
 | `randomInt` | ✅ | |
-| `createCipher` / `createDecipher` | ❌ | |
+| **Cipher** | | |
+| `createCipheriv` | ✅ | AES-128/192/256-CBC and AES-128/192/256-GCM |
+| `createDecipheriv` | ✅ | AES-128/192/256-CBC and AES-128/192/256-GCM |
+| `createCipher` / `createDecipher` | ❌ | Deprecated in Node.js, use iv variants |
+| **Key Derivation** | | |
+| `pbkdf2Sync` | ✅ | sha1, sha256, sha384, sha512 (not md5) |
+| `scryptSync` | ✅ | With N/cost, r/blockSize, p/parallelization options |
+| `pbkdf2` / `scrypt` | ❌ | Async versions - use sync versions |
+| **Signing** | | |
 | `createSign` / `createVerify` | ❌ | |
-| `pbkdf2` / `scrypt` | ❌ | |
 | `generateKeyPair` | ❌ | |
 
 ---

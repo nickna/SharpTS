@@ -669,6 +669,11 @@ public class EmittedRuntime
     public MethodBuilder TSDecipherSetAuthTagMethod { get; set; } = null!;
     public MethodBuilder TSDecipherSetAADMethod { get; set; } = null!;
 
+    // PBKDF2 and scrypt key derivation
+    public MethodBuilder CryptoPbkdf2Sync { get; set; } = null!;
+    public MethodBuilder CryptoScryptSync { get; set; } = null!;
+    public MethodBuilder ScryptDeriveBytes { get; set; } = null!;
+
     // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
     public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
     public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;
