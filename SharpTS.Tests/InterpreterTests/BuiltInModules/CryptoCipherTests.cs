@@ -609,4 +609,66 @@ public class CryptoCipherTests
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
         Assert.Equal("true\n", output);
     }
+
+    // ============ INPUT ENCODING TESTS ============
+
+    [Fact]
+    public void Crypto_CreateCipheriv_HexInputEncoding()
+    {
+        // Test hex input encoding for cipher
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const key = crypto.randomBytes(32);
+                const iv = crypto.randomBytes(16);
+
+                // "Hello" in hex is "48656c6c6f"
+                const hexInput = '48656c6c6f';
+
+                const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+                let encrypted = cipher.update(hexInput, 'hex', 'hex');
+                encrypted += cipher.final('hex');
+
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+                decrypted += decipher.final('utf8');
+
+                console.log(decrypted === 'Hello');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Crypto_CreateCipheriv_Base64InputEncoding()
+    {
+        // Test base64 input encoding for cipher
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const key = crypto.randomBytes(32);
+                const iv = crypto.randomBytes(16);
+
+                // "Hello" in base64 is "SGVsbG8="
+                const base64Input = 'SGVsbG8=';
+
+                const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+                let encrypted = cipher.update(base64Input, 'base64', 'base64');
+                encrypted += cipher.final('base64');
+
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                let decrypted = decipher.update(encrypted, 'base64', 'utf8');
+                decrypted += decipher.final('utf8');
+
+                console.log(decrypted === 'Hello');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
 }

@@ -663,17 +663,23 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Helper to emit code that converts input data to byte array.
+    /// Supports string with encoding (hex, base64, utf8) or Buffer.
     /// </summary>
     private void EmitConvertToBytes(ILGenerator il, EmittedRuntime runtime, OpCode loadData, OpCode loadEncoding)
     {
-        // For simplicity, we assume the data is already a $Buffer and get its bytes
-        // A full implementation would check for string and convert based on encoding
         var dataLocal = il.DeclareLocal(_types.Object);
+        var encodingLocal = il.DeclareLocal(_types.String);
+
         il.Emit(loadData);
         il.Emit(OpCodes.Stloc, dataLocal);
+        il.Emit(loadEncoding);
+        il.Emit(OpCodes.Stloc, encodingLocal);
 
         var isBufferLabel = il.DefineLabel();
         var isStringLabel = il.DefineLabel();
+        var checkHexLabel = il.DefineLabel();
+        var checkBase64Label = il.DefineLabel();
+        var utf8DefaultLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
         // Check if Buffer
@@ -698,8 +704,49 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.TSBufferGetData);
         il.Emit(OpCodes.Br, doneLabel);
 
-        // String path - convert using UTF8 (simplified)
+        // String path - check encoding
         il.MarkLabel(isStringLabel);
+
+        // Check if encoding is null
+        il.Emit(OpCodes.Ldloc, encodingLocal);
+        il.Emit(OpCodes.Brfalse, utf8DefaultLabel);
+
+        // lowerEncoding = encoding.ToLowerInvariant()
+        il.Emit(OpCodes.Ldloc, encodingLocal);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Stloc, encodingLocal);
+
+        // Check "hex"
+        il.Emit(OpCodes.Ldloc, encodingLocal);
+        il.Emit(OpCodes.Ldstr, "hex");
+        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Brtrue, checkHexLabel);
+
+        // Check "base64"
+        il.Emit(OpCodes.Ldloc, encodingLocal);
+        il.Emit(OpCodes.Ldstr, "base64");
+        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Brtrue, checkBase64Label);
+
+        // Default UTF8
+        il.Emit(OpCodes.Br, utf8DefaultLabel);
+
+        // Hex decode
+        il.MarkLabel(checkHexLabel);
+        il.Emit(OpCodes.Ldloc, dataLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromHexString", [_types.String])!);
+        il.Emit(OpCodes.Br, doneLabel);
+
+        // Base64 decode
+        il.MarkLabel(checkBase64Label);
+        il.Emit(OpCodes.Ldloc, dataLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromBase64String", [_types.String])!);
+        il.Emit(OpCodes.Br, doneLabel);
+
+        // UTF8 default
+        il.MarkLabel(utf8DefaultLabel);
         il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Castclass, _types.String);
