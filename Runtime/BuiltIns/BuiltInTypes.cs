@@ -18,6 +18,7 @@ public static class BuiltInTypes
     private static readonly TypeInfo BooleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
     private static readonly TypeInfo VoidType = new TypeInfo.Void();
     private static readonly TypeInfo AnyType = new TypeInfo.Any();
+    private static readonly TypeInfo BigIntType = new TypeInfo.BigInt();
 
     public static TypeInfo? GetStringMemberType(string name)
     {
@@ -586,6 +587,53 @@ public static class BuiltInTypes
             "readUInt8" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
             "writeUInt8" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
             "toJSON" => new TypeInfo.Function([], AnyType),
+
+            // Multi-byte reads
+            "readInt8" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readUInt16LE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readUInt16BE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readUInt32LE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readUInt32BE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readInt16LE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readInt16BE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readInt32LE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readInt32BE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readFloatLE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readFloatBE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readDoubleLE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readDoubleBE" => new TypeInfo.Function([NumberType], NumberType, RequiredParams: 0),
+            "readBigInt64LE" => new TypeInfo.Function([NumberType], BigIntType, RequiredParams: 0),
+            "readBigInt64BE" => new TypeInfo.Function([NumberType], BigIntType, RequiredParams: 0),
+            "readBigUInt64LE" => new TypeInfo.Function([NumberType], BigIntType, RequiredParams: 0),
+            "readBigUInt64BE" => new TypeInfo.Function([NumberType], BigIntType, RequiredParams: 0),
+
+            // Multi-byte writes
+            "writeInt8" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeUInt16LE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeUInt16BE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeUInt32LE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeUInt32BE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeInt16LE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeInt16BE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeInt32LE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeInt32BE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeFloatLE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeFloatBE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeDoubleLE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeDoubleBE" => new TypeInfo.Function([NumberType, NumberType], NumberType, RequiredParams: 1),
+            "writeBigInt64LE" => new TypeInfo.Function([BigIntType, NumberType], NumberType, RequiredParams: 1),
+            "writeBigInt64BE" => new TypeInfo.Function([BigIntType, NumberType], NumberType, RequiredParams: 1),
+            "writeBigUInt64LE" => new TypeInfo.Function([BigIntType, NumberType], NumberType, RequiredParams: 1),
+            "writeBigUInt64BE" => new TypeInfo.Function([BigIntType, NumberType], NumberType, RequiredParams: 1),
+
+            // Search methods
+            "indexOf" => new TypeInfo.Function([AnyType, NumberType, StringType], NumberType, RequiredParams: 1),
+            "includes" => new TypeInfo.Function([AnyType, NumberType, StringType], BooleanType, RequiredParams: 1),
+
+            // Swap methods
+            "swap16" => new TypeInfo.Function([], bufferType),
+            "swap32" => new TypeInfo.Function([], bufferType),
+            "swap64" => new TypeInfo.Function([], bufferType),
 
             _ => null
         };

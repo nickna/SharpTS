@@ -673,6 +673,53 @@ public class EmittedRuntime
     public MethodBuilder TSBufferToJSON { get; set; } = null!;
     public MethodBuilder GetBufferMethod { get; set; } = null!;
 
+    // Multi-byte read methods
+    public MethodBuilder TSBufferReadInt8 { get; set; } = null!;
+    public MethodBuilder TSBufferReadUInt16LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadUInt16BE { get; set; } = null!;
+    public MethodBuilder TSBufferReadUInt32LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadUInt32BE { get; set; } = null!;
+    public MethodBuilder TSBufferReadInt16LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadInt16BE { get; set; } = null!;
+    public MethodBuilder TSBufferReadInt32LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadInt32BE { get; set; } = null!;
+    public MethodBuilder TSBufferReadFloatLE { get; set; } = null!;
+    public MethodBuilder TSBufferReadFloatBE { get; set; } = null!;
+    public MethodBuilder TSBufferReadDoubleLE { get; set; } = null!;
+    public MethodBuilder TSBufferReadDoubleBE { get; set; } = null!;
+    public MethodBuilder TSBufferReadBigInt64LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadBigInt64BE { get; set; } = null!;
+    public MethodBuilder TSBufferReadBigUInt64LE { get; set; } = null!;
+    public MethodBuilder TSBufferReadBigUInt64BE { get; set; } = null!;
+
+    // Multi-byte write methods
+    public MethodBuilder TSBufferWriteInt8 { get; set; } = null!;
+    public MethodBuilder TSBufferWriteUInt16LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteUInt16BE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteUInt32LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteUInt32BE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteInt16LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteInt16BE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteInt32LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteInt32BE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteFloatLE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteFloatBE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteDoubleLE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteDoubleBE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteBigInt64LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteBigInt64BE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteBigUInt64LE { get; set; } = null!;
+    public MethodBuilder TSBufferWriteBigUInt64BE { get; set; } = null!;
+
+    // Search methods
+    public MethodBuilder TSBufferIndexOf { get; set; } = null!;
+    public MethodBuilder TSBufferIncludes { get; set; } = null!;
+
+    // Swap methods
+    public MethodBuilder TSBufferSwap16 { get; set; } = null!;
+    public MethodBuilder TSBufferSwap32 { get; set; } = null!;
+    public MethodBuilder TSBufferSwap64 { get; set; } = null!;
+
     // Util module methods
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;

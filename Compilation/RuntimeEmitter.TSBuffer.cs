@@ -56,6 +56,53 @@ public partial class RuntimeEmitter
         EmitTSBufferWriteUInt8(typeBuilder, runtime);
         EmitTSBufferToJSON(typeBuilder, runtime);
 
+        // Multi-byte read methods
+        EmitTSBufferReadInt8(typeBuilder, runtime);
+        EmitTSBufferReadUInt16LE(typeBuilder, runtime);
+        EmitTSBufferReadUInt16BE(typeBuilder, runtime);
+        EmitTSBufferReadUInt32LE(typeBuilder, runtime);
+        EmitTSBufferReadUInt32BE(typeBuilder, runtime);
+        EmitTSBufferReadInt16LE(typeBuilder, runtime);
+        EmitTSBufferReadInt16BE(typeBuilder, runtime);
+        EmitTSBufferReadInt32LE(typeBuilder, runtime);
+        EmitTSBufferReadInt32BE(typeBuilder, runtime);
+        EmitTSBufferReadFloatLE(typeBuilder, runtime);
+        EmitTSBufferReadFloatBE(typeBuilder, runtime);
+        EmitTSBufferReadDoubleLE(typeBuilder, runtime);
+        EmitTSBufferReadDoubleBE(typeBuilder, runtime);
+        EmitTSBufferReadBigInt64LE(typeBuilder, runtime);
+        EmitTSBufferReadBigInt64BE(typeBuilder, runtime);
+        EmitTSBufferReadBigUInt64LE(typeBuilder, runtime);
+        EmitTSBufferReadBigUInt64BE(typeBuilder, runtime);
+
+        // Multi-byte write methods
+        EmitTSBufferWriteInt8(typeBuilder, runtime);
+        EmitTSBufferWriteUInt16LE(typeBuilder, runtime);
+        EmitTSBufferWriteUInt16BE(typeBuilder, runtime);
+        EmitTSBufferWriteUInt32LE(typeBuilder, runtime);
+        EmitTSBufferWriteUInt32BE(typeBuilder, runtime);
+        EmitTSBufferWriteInt16LE(typeBuilder, runtime);
+        EmitTSBufferWriteInt16BE(typeBuilder, runtime);
+        EmitTSBufferWriteInt32LE(typeBuilder, runtime);
+        EmitTSBufferWriteInt32BE(typeBuilder, runtime);
+        EmitTSBufferWriteFloatLE(typeBuilder, runtime);
+        EmitTSBufferWriteFloatBE(typeBuilder, runtime);
+        EmitTSBufferWriteDoubleLE(typeBuilder, runtime);
+        EmitTSBufferWriteDoubleBE(typeBuilder, runtime);
+        EmitTSBufferWriteBigInt64LE(typeBuilder, runtime);
+        EmitTSBufferWriteBigInt64BE(typeBuilder, runtime);
+        EmitTSBufferWriteBigUInt64LE(typeBuilder, runtime);
+        EmitTSBufferWriteBigUInt64BE(typeBuilder, runtime);
+
+        // Search methods
+        EmitTSBufferIndexOf(typeBuilder, runtime);
+        EmitTSBufferIncludes(typeBuilder, runtime);
+
+        // Swap methods
+        EmitTSBufferSwap16(typeBuilder, runtime);
+        EmitTSBufferSwap32(typeBuilder, runtime);
+        EmitTSBufferSwap64(typeBuilder, runtime);
+
         typeBuilder.CreateType();
     }
 
@@ -1485,4 +1532,1808 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ret);
     }
+
+    #region Multi-byte Read Methods
+
+    /// <summary>
+    /// Helper to emit bounds validation for multi-byte reads.
+    /// </summary>
+    private void EmitBoundsCheck(ILGenerator il, int byteCount)
+    {
+        // Calculate maxOffset = _data.Length - byteCount
+        // if (offset < 0 || offset > maxOffset) throw
+
+        var okLabel = il.DefineLabel();
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var maxOffsetLocal = il.DeclareLocal(_types.Int32);
+
+        // lenLocal = _data.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // maxOffset = len - byteCount
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldc_I4, byteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, maxOffsetLocal);
+
+        // if (offset >= 0 && offset <= maxOffset) goto ok
+        il.Emit(OpCodes.Ldarg_1);  // offset
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel(il, byteCount, maxOffsetLocal));
+
+        il.Emit(OpCodes.Ldarg_1);  // offset
+        il.Emit(OpCodes.Ldloc, maxOffsetLocal);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        // throw
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        Label throwLabel(ILGenerator ilGen, int bytes, LocalBuilder maxOff)
+        {
+            var lbl = ilGen.DefineLabel();
+            return lbl;
+        }
+    }
+
+    /// <summary>
+    /// Emits: public double ReadInt8(int offset)
+    /// </summary>
+    private void EmitTSBufferReadInt8(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadInt8",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadInt8 = method;
+
+        var il = method.GetILGenerator();
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Bounds check: if (offset < 0) throw
+        il.Emit(OpCodes.Ldarg_1);  // offset
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        // if (offset >= _data.Length) throw
+        il.Emit(OpCodes.Ldarg_1);  // offset
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        // return (double)(sbyte)_data[offset]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldelem_I1);  // Load as signed byte
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public double ReadUInt16LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadUInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadUInt16LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadUInt16LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 2, false, false, false);  // unsigned, little-endian, 16-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadUInt16BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadUInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadUInt16BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadUInt16BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 2, false, true, false);  // unsigned, big-endian, 16-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadUInt32LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadUInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadUInt32LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadUInt32LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, false, false, false);  // unsigned, little-endian, 32-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadUInt32BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadUInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadUInt32BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadUInt32BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, false, true, false);  // unsigned, big-endian, 32-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadInt16LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadInt16LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadInt16LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 2, true, false, false);  // signed, little-endian, 16-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadInt16BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadInt16BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadInt16BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 2, true, true, false);  // signed, big-endian, 16-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadInt32LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadInt32LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadInt32LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, true, false, false);  // signed, little-endian, 32-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadInt32BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadInt32BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadInt32BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, true, true, false);  // signed, big-endian, 32-bit
+    }
+
+    /// <summary>
+    /// Emits: public double ReadFloatLE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadFloatLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadFloatLE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadFloatLE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, true, false, true);  // float, little-endian
+    }
+
+    /// <summary>
+    /// Emits: public double ReadFloatBE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadFloatBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadFloatBE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadFloatBE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteRead(il, 4, true, true, true);  // float, big-endian
+    }
+
+    /// <summary>
+    /// Emits: public double ReadDoubleLE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadDoubleLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadDoubleLE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadDoubleLE = method;
+
+        var il = method.GetILGenerator();
+        EmitDoubleRead(il, false);  // little-endian
+    }
+
+    /// <summary>
+    /// Emits: public double ReadDoubleBE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadDoubleBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadDoubleBE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Int32]
+        );
+        runtime.TSBufferReadDoubleBE = method;
+
+        var il = method.GetILGenerator();
+        EmitDoubleRead(il, true);  // big-endian
+    }
+
+    /// <summary>
+    /// Emits: public BigInteger ReadBigInt64LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadBigInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadBigInt64LE",
+            MethodAttributes.Public,
+            typeof(System.Numerics.BigInteger),
+            [_types.Int32]
+        );
+        runtime.TSBufferReadBigInt64LE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntRead(il, true, false);  // signed, little-endian
+    }
+
+    /// <summary>
+    /// Emits: public BigInteger ReadBigInt64BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadBigInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadBigInt64BE",
+            MethodAttributes.Public,
+            typeof(System.Numerics.BigInteger),
+            [_types.Int32]
+        );
+        runtime.TSBufferReadBigInt64BE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntRead(il, true, true);  // signed, big-endian
+    }
+
+    /// <summary>
+    /// Emits: public BigInteger ReadBigUInt64LE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadBigUInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadBigUInt64LE",
+            MethodAttributes.Public,
+            typeof(System.Numerics.BigInteger),
+            [_types.Int32]
+        );
+        runtime.TSBufferReadBigUInt64LE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntRead(il, false, false);  // unsigned, little-endian
+    }
+
+    /// <summary>
+    /// Emits: public BigInteger ReadBigUInt64BE(int offset)
+    /// </summary>
+    private void EmitTSBufferReadBigUInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReadBigUInt64BE",
+            MethodAttributes.Public,
+            typeof(System.Numerics.BigInteger),
+            [_types.Int32]
+        );
+        runtime.TSBufferReadBigUInt64BE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntRead(il, false, true);  // unsigned, big-endian
+    }
+
+    /// <summary>
+    /// Helper to emit multi-byte read logic for 16/32-bit integers and floats.
+    /// </summary>
+    private void EmitMultiByteRead(ILGenerator il, int byteCount, bool signed, bool bigEndian, bool isFloat)
+    {
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Bounds check: offset < 0 || offset > _data.Length - byteCount
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, byteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        if (byteCount == 2)
+        {
+            // Read 2 bytes manually
+            EmitRead2Bytes(il, signed, bigEndian);
+        }
+        else if (byteCount == 4)
+        {
+            // Read 4 bytes manually
+            EmitRead4Bytes(il, signed, bigEndian, isFloat);
+        }
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitRead2Bytes(ILGenerator il, bool signed, bool bigEndian)
+    {
+        // byte0 = _data[offset], byte1 = _data[offset + 1]
+        // LE: result = byte0 | (byte1 << 8)
+        // BE: result = (byte0 << 8) | byte1
+
+        if (bigEndian)
+        {
+            // (byte0 << 8) | byte1
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Or);
+        }
+        else
+        {
+            // byte0 | (byte1 << 8)
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldelem_U1);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+        }
+
+        if (signed)
+        {
+            il.Emit(OpCodes.Conv_I2);  // Sign extend to short
+        }
+        il.Emit(OpCodes.Conv_R8);
+    }
+
+    private void EmitRead4Bytes(ILGenerator il, bool signed, bool bigEndian, bool isFloat)
+    {
+        // Read 4 bytes and combine
+        var b0Local = il.DeclareLocal(_types.Int32);
+        var b1Local = il.DeclareLocal(_types.Int32);
+        var b2Local = il.DeclareLocal(_types.Int32);
+        var b3Local = il.DeclareLocal(_types.Int32);
+        var resultLocal = il.DeclareLocal(_types.Int32);
+
+        // Load all 4 bytes
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, b0Local);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, b1Local);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, b2Local);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, b3Local);
+
+        // Combine based on endianness
+        if (bigEndian)
+        {
+            // (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
+            il.Emit(OpCodes.Ldloc, b0Local);
+            il.Emit(OpCodes.Ldc_I4, 24);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Ldloc, b1Local);
+            il.Emit(OpCodes.Ldc_I4, 16);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Ldloc, b2Local);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Ldloc, b3Local);
+            il.Emit(OpCodes.Or);
+        }
+        else
+        {
+            // b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+            il.Emit(OpCodes.Ldloc, b0Local);
+            il.Emit(OpCodes.Ldloc, b1Local);
+            il.Emit(OpCodes.Ldc_I4_8);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Ldloc, b2Local);
+            il.Emit(OpCodes.Ldc_I4, 16);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Ldloc, b3Local);
+            il.Emit(OpCodes.Ldc_I4, 24);
+            il.Emit(OpCodes.Shl);
+            il.Emit(OpCodes.Or);
+        }
+
+        if (isFloat)
+        {
+            // Convert int32 bits to float, then to double
+            il.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("Int32BitsToSingle", [typeof(int)])!);
+            il.Emit(OpCodes.Conv_R8);
+        }
+        else if (!signed)
+        {
+            // Unsigned 32-bit - convert to long first to avoid sign issues
+            il.Emit(OpCodes.Conv_U8);
+            il.Emit(OpCodes.Conv_R8);
+        }
+        else
+        {
+            il.Emit(OpCodes.Conv_R8);
+        }
+    }
+
+    private void EmitDoubleRead(ILGenerator il, bool bigEndian)
+    {
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Bounds check
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        // Read 8 bytes manually
+        var bytesLocal = new LocalBuilder[8];
+        for (int i = 0; i < 8; i++)
+        {
+            bytesLocal[i] = il.DeclareLocal(_types.Int64);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            if (i > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Add);
+            }
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stloc, bytesLocal[i]);
+        }
+
+        // Combine based on endianness
+        if (bigEndian)
+        {
+            il.Emit(OpCodes.Ldloc, bytesLocal[0]);
+            il.Emit(OpCodes.Ldc_I4, 56);
+            il.Emit(OpCodes.Shl);
+            for (int i = 1; i < 8; i++)
+            {
+                il.Emit(OpCodes.Ldloc, bytesLocal[i]);
+                il.Emit(OpCodes.Ldc_I4, 56 - i * 8);
+                il.Emit(OpCodes.Shl);
+                il.Emit(OpCodes.Or);
+            }
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloc, bytesLocal[0]);
+            for (int i = 1; i < 8; i++)
+            {
+                il.Emit(OpCodes.Ldloc, bytesLocal[i]);
+                il.Emit(OpCodes.Ldc_I4, i * 8);
+                il.Emit(OpCodes.Shl);
+                il.Emit(OpCodes.Or);
+            }
+        }
+
+        // Convert to double
+        il.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("Int64BitsToDouble", [typeof(long)])!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitBigIntRead(ILGenerator il, bool signed, bool bigEndian)
+    {
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // Bounds check
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        // Read 8 bytes and combine into int64/uint64
+        var bytesLocal = new LocalBuilder[8];
+        for (int i = 0; i < 8; i++)
+        {
+            bytesLocal[i] = il.DeclareLocal(_types.Int64);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_1);
+            if (i > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Add);
+            }
+            il.Emit(OpCodes.Ldelem_U1);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stloc, bytesLocal[i]);
+        }
+
+        // Combine based on endianness
+        if (bigEndian)
+        {
+            il.Emit(OpCodes.Ldloc, bytesLocal[0]);
+            il.Emit(OpCodes.Ldc_I4, 56);
+            il.Emit(OpCodes.Shl);
+            for (int i = 1; i < 8; i++)
+            {
+                il.Emit(OpCodes.Ldloc, bytesLocal[i]);
+                il.Emit(OpCodes.Ldc_I4, 56 - i * 8);
+                il.Emit(OpCodes.Shl);
+                il.Emit(OpCodes.Or);
+            }
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloc, bytesLocal[0]);
+            for (int i = 1; i < 8; i++)
+            {
+                il.Emit(OpCodes.Ldloc, bytesLocal[i]);
+                il.Emit(OpCodes.Ldc_I4, i * 8);
+                il.Emit(OpCodes.Shl);
+                il.Emit(OpCodes.Or);
+            }
+        }
+
+        // Convert to BigInteger
+        if (signed)
+        {
+            // new BigInteger(long)
+            il.Emit(OpCodes.Newobj, typeof(System.Numerics.BigInteger).GetConstructor([typeof(long)])!);
+        }
+        else
+        {
+            // new BigInteger(ulong)
+            il.Emit(OpCodes.Newobj, typeof(System.Numerics.BigInteger).GetConstructor([typeof(ulong)])!);
+        }
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region Multi-byte Write Methods
+
+    /// <summary>
+    /// Emits: public double WriteInt8(double value, int offset)
+    /// </summary>
+    private void EmitTSBufferWriteInt8(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteInt8",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteInt8 = method;
+
+        var il = method.GetILGenerator();
+        EmitWriteBoundsCheck(il, 1);
+
+        // _data[offset] = (byte)(sbyte)value
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldarg_2);  // offset
+        il.Emit(OpCodes.Ldarg_1);  // value
+        il.Emit(OpCodes.Conv_I1);  // to sbyte
+        il.Emit(OpCodes.Stelem_I1);
+
+        // return offset + 1
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitWriteBoundsCheck(ILGenerator il, int byteCount)
+    {
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // if (offset < 0) throw
+        il.Emit(OpCodes.Ldarg_2);  // offset is arg2 for write methods
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        // if (offset > _data.Length - byteCount) throw
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, byteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+    }
+
+    /// <summary>
+    /// Emits: public double WriteUInt16LE(double value, int offset)
+    /// </summary>
+    private void EmitTSBufferWriteUInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteUInt16LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteUInt16LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 2, false);  // 16-bit, little-endian
+    }
+
+    private void EmitTSBufferWriteUInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteUInt16BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteUInt16BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 2, true);  // 16-bit, big-endian
+    }
+
+    private void EmitTSBufferWriteUInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteUInt32LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteUInt32LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 4, false);  // 32-bit, little-endian
+    }
+
+    private void EmitTSBufferWriteUInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteUInt32BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteUInt32BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 4, true);  // 32-bit, big-endian
+    }
+
+    private void EmitTSBufferWriteInt16LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteInt16LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteInt16LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 2, false);  // 16-bit, little-endian
+    }
+
+    private void EmitTSBufferWriteInt16BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteInt16BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteInt16BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 2, true);  // 16-bit, big-endian
+    }
+
+    private void EmitTSBufferWriteInt32LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteInt32LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteInt32LE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 4, false);  // 32-bit, little-endian
+    }
+
+    private void EmitTSBufferWriteInt32BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteInt32BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteInt32BE = method;
+
+        var il = method.GetILGenerator();
+        EmitMultiByteWrite(il, 4, true);  // 32-bit, big-endian
+    }
+
+    private void EmitTSBufferWriteFloatLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteFloatLE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteFloatLE = method;
+
+        var il = method.GetILGenerator();
+        EmitFloatWrite(il, false);  // little-endian
+    }
+
+    private void EmitTSBufferWriteFloatBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteFloatBE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteFloatBE = method;
+
+        var il = method.GetILGenerator();
+        EmitFloatWrite(il, true);  // big-endian
+    }
+
+    private void EmitTSBufferWriteDoubleLE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteDoubleLE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteDoubleLE = method;
+
+        var il = method.GetILGenerator();
+        EmitDoubleWrite(il, false);  // little-endian
+    }
+
+    private void EmitTSBufferWriteDoubleBE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteDoubleBE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Double, _types.Int32]
+        );
+        runtime.TSBufferWriteDoubleBE = method;
+
+        var il = method.GetILGenerator();
+        EmitDoubleWrite(il, true);  // big-endian
+    }
+
+    private void EmitTSBufferWriteBigInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteBigInt64LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Object, _types.Int32]
+        );
+        runtime.TSBufferWriteBigInt64LE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntWrite(il, true, false);  // signed, little-endian
+    }
+
+    private void EmitTSBufferWriteBigInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteBigInt64BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Object, _types.Int32]
+        );
+        runtime.TSBufferWriteBigInt64BE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntWrite(il, true, true);  // signed, big-endian
+    }
+
+    private void EmitTSBufferWriteBigUInt64LE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteBigUInt64LE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Object, _types.Int32]
+        );
+        runtime.TSBufferWriteBigUInt64LE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntWrite(il, false, false);  // unsigned, little-endian
+    }
+
+    private void EmitTSBufferWriteBigUInt64BE(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "WriteBigUInt64BE",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Object, _types.Int32]
+        );
+        runtime.TSBufferWriteBigUInt64BE = method;
+
+        var il = method.GetILGenerator();
+        EmitBigIntWrite(il, false, true);  // unsigned, big-endian
+    }
+
+    private void EmitMultiByteWrite(ILGenerator il, int byteCount, bool bigEndian)
+    {
+        EmitWriteBoundsCheck(il, byteCount);
+
+        var valueLocal = il.DeclareLocal(_types.Int32);
+
+        // Convert value to int
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        if (byteCount == 2)
+        {
+            if (bigEndian)
+            {
+                // _data[offset] = (byte)(value >> 8)
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                il.Emit(OpCodes.Ldc_I4_8);
+                il.Emit(OpCodes.Shr);
+                il.Emit(OpCodes.Conv_U1);
+                il.Emit(OpCodes.Stelem_I1);
+
+                // _data[offset + 1] = (byte)value
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Add);
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                il.Emit(OpCodes.Conv_U1);
+                il.Emit(OpCodes.Stelem_I1);
+            }
+            else
+            {
+                // _data[offset] = (byte)value
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                il.Emit(OpCodes.Conv_U1);
+                il.Emit(OpCodes.Stelem_I1);
+
+                // _data[offset + 1] = (byte)(value >> 8)
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Add);
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                il.Emit(OpCodes.Ldc_I4_8);
+                il.Emit(OpCodes.Shr);
+                il.Emit(OpCodes.Conv_U1);
+                il.Emit(OpCodes.Stelem_I1);
+            }
+        }
+        else // byteCount == 4
+        {
+            int[] shifts = bigEndian ? [24, 16, 8, 0] : [0, 8, 16, 24];
+            for (int i = 0; i < 4; i++)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+                il.Emit(OpCodes.Ldarg_2);
+                if (i > 0)
+                {
+                    il.Emit(OpCodes.Ldc_I4, i);
+                    il.Emit(OpCodes.Add);
+                }
+                il.Emit(OpCodes.Ldloc, valueLocal);
+                if (shifts[i] > 0)
+                {
+                    il.Emit(OpCodes.Ldc_I4, shifts[i]);
+                    il.Emit(OpCodes.Shr);
+                }
+                il.Emit(OpCodes.Conv_U1);
+                il.Emit(OpCodes.Stelem_I1);
+            }
+        }
+
+        // return offset + byteCount
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4, byteCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitFloatWrite(ILGenerator il, bool bigEndian)
+    {
+        EmitWriteBoundsCheck(il, 4);
+
+        var valueLocal = il.DeclareLocal(_types.Int32);
+
+        // Convert double to float, then to int bits
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_R4);
+        il.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("SingleToInt32Bits", [typeof(float)])!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        int[] shifts = bigEndian ? [24, 16, 8, 0] : [0, 8, 16, 24];
+        for (int i = 0; i < 4; i++)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_2);
+            if (i > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Add);
+            }
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            if (shifts[i] > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, shifts[i]);
+                il.Emit(OpCodes.Shr);
+            }
+            il.Emit(OpCodes.Conv_U1);
+            il.Emit(OpCodes.Stelem_I1);
+        }
+
+        // return offset + 4
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitDoubleWrite(ILGenerator il, bool bigEndian)
+    {
+        EmitWriteBoundsCheck(il, 8);
+
+        var valueLocal = il.DeclareLocal(_types.Int64);
+
+        // Convert double to int64 bits
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(BitConverter).GetMethod("DoubleToInt64Bits", [typeof(double)])!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        int[] shifts = bigEndian ? [56, 48, 40, 32, 24, 16, 8, 0] : [0, 8, 16, 24, 32, 40, 48, 56];
+        for (int i = 0; i < 8; i++)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_2);
+            if (i > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Add);
+            }
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            if (shifts[i] > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, shifts[i]);
+                il.Emit(OpCodes.Shr);
+            }
+            il.Emit(OpCodes.Conv_U1);
+            il.Emit(OpCodes.Stelem_I1);
+        }
+
+        // return offset + 8
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitBigIntWrite(ILGenerator il, bool signed, bool bigEndian)
+    {
+        EmitBigIntWriteBoundsCheck(il);
+
+        var valueLocal = il.DeclareLocal(_types.Int64);
+
+        // Convert BigInteger or double to long
+        var isBigIntLabel = il.DefineLabel();
+        var afterConvertLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Brtrue, isBigIntLabel);
+
+        // It's a double, convert to long
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, afterConvertLabel);
+
+        il.MarkLabel(isBigIntLabel);
+        // It's a BigInteger, convert to long
+        // Find the specific op_Explicit that converts BigInteger to long (there are multiple overloads)
+        var bigIntToLongMethod = typeof(System.Numerics.BigInteger)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(m => m.Name == "op_Explicit" && m.ReturnType == typeof(long) &&
+                   m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, typeof(System.Numerics.BigInteger));
+        il.Emit(OpCodes.Call, bigIntToLongMethod);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        il.MarkLabel(afterConvertLabel);
+
+        int[] shifts = bigEndian ? [56, 48, 40, 32, 24, 16, 8, 0] : [0, 8, 16, 24, 32, 40, 48, 56];
+        for (int i = 0; i < 8; i++)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+            il.Emit(OpCodes.Ldarg_2);
+            if (i > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Add);
+            }
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            if (shifts[i] > 0)
+            {
+                il.Emit(OpCodes.Ldc_I4, shifts[i]);
+                il.Emit(OpCodes.Shr);
+            }
+            il.Emit(OpCodes.Conv_U1);
+            il.Emit(OpCodes.Stelem_I1);
+        }
+
+        // return offset + 8
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitBigIntWriteBoundsCheck(ILGenerator il)
+    {
+        var okLabel = il.DefineLabel();
+        var throwLabel = il.DefineLabel();
+
+        // BigInt writes have offset as arg2 (after object value)
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, throwLabel);
+
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, okLabel);
+
+        il.MarkLabel(throwLabel);
+        il.Emit(OpCodes.Ldstr, "offset");
+        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+    }
+
+    #endregion
+
+    #region Search Methods
+
+    /// <summary>
+    /// Emits: public double IndexOf(object value, int byteOffset, string encoding)
+    /// </summary>
+    private void EmitTSBufferIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "IndexOf",
+            MethodAttributes.Public,
+            _types.Double,
+            [_types.Object, _types.Int32, _types.String]
+        );
+        runtime.TSBufferIndexOf = method;
+
+        var il = method.GetILGenerator();
+
+        // Local variables
+        var searchBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));  // byte[]
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var innerIndexLocal = il.DeclareLocal(_types.Int32);
+        var foundLocal = il.DeclareLocal(_types.Boolean);
+
+        var returnMinusOne = il.DefineLabel();
+        var afterTypeCheck = il.DefineLabel();
+
+        // if (byteOffset < 0) byteOffset = 0
+        var offsetOkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, offsetOkLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Starg, 2);
+        il.MarkLabel(offsetOkLabel);
+
+        // len = _data.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // if (byteOffset >= len) return -1
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, returnMinusOne);
+
+        // Check if value is double (single byte)
+        var notDoubleLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, notDoubleLabel);
+
+        // searchBytes = new byte[] { (byte)(int)(double)value }
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Conv_U1);
+        il.Emit(OpCodes.Stelem_I1);
+        il.Emit(OpCodes.Stloc, searchBytesLocal);
+        il.Emit(OpCodes.Br, afterTypeCheck);
+
+        // Check if value is string
+        il.MarkLabel(notDoubleLabel);
+        var notStringLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringLabel);
+
+        // searchBytes = Encoding.UTF8.GetBytes((string)value)
+        // Use UTF8 for now (ignoring encoding parameter for simplicity)
+        il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, typeof(System.Text.Encoding).GetMethod("GetBytes", [typeof(string)])!);
+        il.Emit(OpCodes.Stloc, searchBytesLocal);
+        il.Emit(OpCodes.Br, afterTypeCheck);
+
+        // Check if value is $Buffer (this buffer type)
+        il.MarkLabel(notStringLabel);
+        var notBufferLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeBuilder);
+        il.Emit(OpCodes.Brfalse, notBufferLabel);
+
+        // searchBytes = (($Buffer)value)._data
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, typeBuilder);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Stloc, searchBytesLocal);
+        il.Emit(OpCodes.Br, afterTypeCheck);
+
+        // Unknown type - return -1
+        il.MarkLabel(notBufferLabel);
+        il.Emit(OpCodes.Br, returnMinusOne);
+
+        il.MarkLabel(afterTypeCheck);
+
+        // if (searchBytes.Length == 0) return byteOffset
+        var searchNotEmptyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, searchBytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, searchNotEmptyLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(searchNotEmptyLabel);
+
+        // if (searchBytes.Length > len - byteOffset) return -1
+        var searchFitsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, searchBytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ble, searchFitsLabel);
+        il.Emit(OpCodes.Br, returnMinusOne);
+
+        il.MarkLabel(searchFitsLabel);
+
+        // Outer loop: for (i = byteOffset; i <= len - searchBytes.Length; i++)
+        var outerLoopStart = il.DefineLabel();
+        var outerLoopEnd = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(outerLoopStart);
+        // Check: i <= len - searchBytes.Length
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, searchBytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Bgt, outerLoopEnd);
+
+        // found = true
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, foundLocal);
+
+        // Inner loop: for (j = 0; j < searchBytes.Length; j++)
+        var innerLoopStart = il.DefineLabel();
+        var innerLoopEnd = il.DefineLabel();
+        var innerLoopContinue = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, innerIndexLocal);
+
+        il.MarkLabel(innerLoopStart);
+        // Check: j < searchBytes.Length
+        il.Emit(OpCodes.Ldloc, innerIndexLocal);
+        il.Emit(OpCodes.Ldloc, searchBytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, innerLoopEnd);
+
+        // if (_data[i + j] != searchBytes[j]) { found = false; break; }
+        var matchContinueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, innerIndexLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldloc, searchBytesLocal);
+        il.Emit(OpCodes.Ldloc, innerIndexLocal);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Beq, matchContinueLabel);
+
+        // Not equal - found = false and break
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, foundLocal);
+        il.Emit(OpCodes.Br, innerLoopEnd);
+
+        il.MarkLabel(matchContinueLabel);
+        // j++
+        il.Emit(OpCodes.Ldloc, innerIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, innerIndexLocal);
+        il.Emit(OpCodes.Br, innerLoopStart);
+
+        il.MarkLabel(innerLoopEnd);
+
+        // if (found) return i
+        var notFoundContinueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, foundLocal);
+        il.Emit(OpCodes.Brfalse, notFoundContinueLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notFoundContinueLabel);
+        // i++
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, outerLoopStart);
+
+        il.MarkLabel(outerLoopEnd);
+        il.MarkLabel(returnMinusOne);
+        il.Emit(OpCodes.Ldc_R8, -1.0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public bool Includes(object value, int byteOffset, string encoding)
+    /// </summary>
+    private void EmitTSBufferIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Includes",
+            MethodAttributes.Public,
+            _types.Boolean,
+            [_types.Object, _types.Int32, _types.String]
+        );
+        runtime.TSBufferIncludes = method;
+
+        var il = method.GetILGenerator();
+
+        // return IndexOf(value, byteOffset, encoding) != -1
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.TSBufferIndexOf);
+        il.Emit(OpCodes.Ldc_R8, -1.0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);  // !(result == -1)
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region Swap Methods
+
+    /// <summary>
+    /// Emits: public $Buffer Swap16()
+    /// </summary>
+    private void EmitTSBufferSwap16(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Swap16",
+            MethodAttributes.Public,
+            typeBuilder,
+            Type.EmptyTypes
+        );
+        runtime.TSBufferSwap16 = method;
+
+        var il = method.GetILGenerator();
+
+        // Check length is multiple of 2
+        var okLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Brfalse, okLabel);
+
+        il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 16-bits");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var tempLocal = il.DeclareLocal(_types.Byte);
+
+        // len = _data.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // for (i = 0; i < len; i += 2)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // Swap _data[i] and _data[i+1]
+        // temp = _data[i]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, tempLocal);
+
+        // _data[i] = _data[i+1]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stelem_I1);
+
+        // _data[i+1] = temp
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, tempLocal);
+        il.Emit(OpCodes.Stelem_I1);
+
+        // i += 2
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+
+        // return this
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public $Buffer Swap32()
+    /// </summary>
+    private void EmitTSBufferSwap32(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Swap32",
+            MethodAttributes.Public,
+            typeBuilder,
+            Type.EmptyTypes
+        );
+        runtime.TSBufferSwap32 = method;
+
+        var il = method.GetILGenerator();
+
+        // Check length is multiple of 4
+        var okLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Brfalse, okLabel);
+
+        il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 32-bits");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var temp0Local = il.DeclareLocal(_types.Byte);
+        var temp1Local = il.DeclareLocal(_types.Byte);
+
+        // len = _data.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // for (i = 0; i < len; i += 4)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // Swap _data[i] <-> _data[i+3]
+        EmitSwapBytes(il, indexLocal, 0, 3, temp0Local);
+
+        // Swap _data[i+1] <-> _data[i+2]
+        EmitSwapBytes(il, indexLocal, 1, 2, temp0Local);
+
+        // i += 4
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+
+        // return this
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public $Buffer Swap64()
+    /// </summary>
+    private void EmitTSBufferSwap64(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Swap64",
+            MethodAttributes.Public,
+            typeBuilder,
+            Type.EmptyTypes
+        );
+        runtime.TSBufferSwap64 = method;
+
+        var il = method.GetILGenerator();
+
+        // Check length is multiple of 8
+        var okLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Brfalse, okLabel);
+
+        il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 64-bits");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(okLabel);
+
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var tempLocal = il.DeclareLocal(_types.Byte);
+
+        // len = _data.Length
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // for (i = 0; i < len; i += 8)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // Swap bytes: 0<->7, 1<->6, 2<->5, 3<->4
+        EmitSwapBytes(il, indexLocal, 0, 7, tempLocal);
+        EmitSwapBytes(il, indexLocal, 1, 6, tempLocal);
+        EmitSwapBytes(il, indexLocal, 2, 5, tempLocal);
+        EmitSwapBytes(il, indexLocal, 3, 4, tempLocal);
+
+        // i += 8
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+
+        // return this
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitSwapBytes(ILGenerator il, LocalBuilder indexLocal, int offset1, int offset2, LocalBuilder tempLocal)
+    {
+        // temp = _data[index + offset1]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        if (offset1 > 0)
+        {
+            il.Emit(OpCodes.Ldc_I4, offset1);
+            il.Emit(OpCodes.Add);
+        }
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stloc, tempLocal);
+
+        // _data[index + offset1] = _data[index + offset2]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        if (offset1 > 0)
+        {
+            il.Emit(OpCodes.Ldc_I4, offset1);
+            il.Emit(OpCodes.Add);
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4, offset2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Stelem_I1);
+
+        // _data[index + offset2] = temp
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsBufferDataField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4, offset2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, tempLocal);
+        il.Emit(OpCodes.Stelem_I1);
+    }
+
+    #endregion
 }
