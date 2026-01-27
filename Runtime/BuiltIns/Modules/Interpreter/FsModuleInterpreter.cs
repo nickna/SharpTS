@@ -83,6 +83,18 @@ public static class FsModuleInterpreter
             ["readlinkSync"] = new BuiltInMethod("readlinkSync", 1, 1, ReadlinkSync),
             ["realpathSync"] = new BuiltInMethod("realpathSync", 1, 1, RealpathSync),
             ["utimesSync"] = new BuiltInMethod("utimesSync", 3, 3, UtimesSync),
+            // File descriptor APIs
+            ["openSync"] = new BuiltInMethod("openSync", 2, 3, OpenSync),
+            ["closeSync"] = new BuiltInMethod("closeSync", 1, 1, CloseSync),
+            ["readSync"] = new BuiltInMethod("readSync", 5, 5, ReadSync),
+            ["writeSync"] = new BuiltInMethod("writeSync", 2, 5, WriteSync),
+            ["fstatSync"] = new BuiltInMethod("fstatSync", 1, 1, FstatSync),
+            ["ftruncateSync"] = new BuiltInMethod("ftruncateSync", 1, 2, FtruncateSync),
+            // Directory utilities
+            ["mkdtempSync"] = new BuiltInMethod("mkdtempSync", 1, 1, MkdtempSync),
+            ["opendirSync"] = new BuiltInMethod("opendirSync", 1, 1, OpendirSync),
+            // Hard links
+            ["linkSync"] = new BuiltInMethod("linkSync", 2, 2, LinkSync),
             ["constants"] = CreateConstants()
         };
     }
@@ -210,16 +222,21 @@ public static class FsModuleInterpreter
     {
         var path = args[0]?.ToString() ?? "";
         var withFileTypes = false;
+        var recursive = false;
 
         if (args.Count > 1 && args[1] is SharpTSObject options)
         {
             var wft = options.GetProperty("withFileTypes");
             withFileTypes = wft is true || (wft is double d && d != 0);
+
+            var rec = options.GetProperty("recursive");
+            recursive = rec is true || (rec is double rd && rd != 0);
         }
 
         return WrapFsOperation("readdir", path, () =>
         {
-            var entries = Directory.GetFileSystemEntries(path);
+            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var entries = Directory.GetFileSystemEntries(path, "*", searchOption);
             var list = new List<object?>();
 
             if (withFileTypes)
@@ -233,7 +250,15 @@ public static class FsModuleInterpreter
             {
                 foreach (var entry in entries)
                 {
-                    list.Add(Path.GetFileName(entry));
+                    // For recursive, return relative paths; for non-recursive, just the filename
+                    if (recursive)
+                    {
+                        list.Add(Path.GetRelativePath(path, entry));
+                    }
+                    else
+                    {
+                        list.Add(Path.GetFileName(entry));
+                    }
                 }
             }
 
@@ -626,4 +651,202 @@ public static class FsModuleInterpreter
         }
         throw new ArgumentException("Invalid Date object");
     }
+
+    #region File Descriptor APIs
+
+    /// <summary>
+    /// Static file descriptor table for interpreter mode.
+    /// </summary>
+    private static readonly FileDescriptorTable _fdTable = FileDescriptorTable.Instance;
+
+    private static object? OpenSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var flags = args[1]; // string ('r', 'w', etc.) or number
+        // mode parameter is ignored on Windows, used on Unix for permissions
+
+        return WrapFsOperation("open", path, () =>
+        {
+            var (fileMode, fileAccess, fileShare) = FsFlags.Parse(flags);
+            var fd = _fdTable.Open(path, fileMode, fileAccess, fileShare);
+            return (double)fd;
+        });
+    }
+
+    private static object? CloseSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var fd = Convert.ToInt32(args[0]);
+
+        WrapFsOperation("close", null, () =>
+        {
+            _fdTable.Close(fd);
+        });
+        return null;
+    }
+
+    private static object? ReadSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var fd = Convert.ToInt32(args[0]);
+        var buffer = args[1] as SharpTSBuffer ?? throw new NodeError("ERR_INVALID_ARG_TYPE", "buffer must be a Buffer", "read", null);
+        var offset = Convert.ToInt32(args[2]);
+        var length = Convert.ToInt32(args[3]);
+        var position = args[4]; // null means use current position
+
+        return WrapFsOperation("read", null, () =>
+        {
+            var stream = _fdTable.Get(fd);
+
+            // Handle position parameter
+            if (position != null && position is not SharpTSUndefined)
+            {
+                var pos = Convert.ToInt64(position);
+                stream.Seek(pos, SeekOrigin.Begin);
+            }
+
+            // Read into buffer
+            var data = buffer.Data;
+            var bytesRead = stream.Read(data, offset, length);
+            return (double)bytesRead;
+        });
+    }
+
+    private static object? WriteSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var fd = Convert.ToInt32(args[0]);
+        var data = args[1];
+
+        // writeSync can be called with:
+        // (fd, buffer, offset, length, position) - Buffer write
+        // (fd, string, position, encoding) - String write
+        if (data is SharpTSBuffer buffer)
+        {
+            var offset = args.Count > 2 && args[2] != null ? Convert.ToInt32(args[2]) : 0;
+            var length = args.Count > 3 && args[3] != null ? Convert.ToInt32(args[3]) : buffer.Length;
+            var position = args.Count > 4 ? args[4] : null;
+
+            return WrapFsOperation("write", null, () =>
+            {
+                var stream = _fdTable.Get(fd);
+
+                if (position != null && position is not SharpTSUndefined)
+                {
+                    var pos = Convert.ToInt64(position);
+                    stream.Seek(pos, SeekOrigin.Begin);
+                }
+
+                stream.Write(buffer.Data, offset, length);
+                return (double)length;
+            });
+        }
+        else
+        {
+            // String write
+            var str = data?.ToString() ?? "";
+            var position = args.Count > 2 ? args[2] : null;
+            var bytes = System.Text.Encoding.UTF8.GetBytes(str);
+
+            return WrapFsOperation("write", null, () =>
+            {
+                var stream = _fdTable.Get(fd);
+
+                if (position != null && position is not SharpTSUndefined)
+                {
+                    var pos = Convert.ToInt64(position);
+                    stream.Seek(pos, SeekOrigin.Begin);
+                }
+
+                stream.Write(bytes, 0, bytes.Length);
+                return (double)bytes.Length;
+            });
+        }
+    }
+
+    private static object? FstatSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var fd = Convert.ToInt32(args[0]);
+
+        return WrapFsOperation("fstat", null, () =>
+        {
+            var stream = _fdTable.Get(fd);
+
+            return (object?)new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["isDirectory"] = false, // File descriptors are always files
+                ["isFile"] = true,
+                ["isSymbolicLink"] = false,
+                ["size"] = (double)stream.Length
+            });
+        });
+    }
+
+    private static object? FtruncateSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var fd = Convert.ToInt32(args[0]);
+        var len = args.Count > 1 && args[1] != null ? Convert.ToInt64(args[1]) : 0L;
+
+        WrapFsOperation("ftruncate", null, () =>
+        {
+            var stream = _fdTable.Get(fd);
+            stream.SetLength(len);
+        });
+        return null;
+    }
+
+    #endregion
+
+    #region Directory Utilities
+
+    private static object? MkdtempSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var prefix = args[0]?.ToString() ?? "";
+
+        return WrapFsOperation("mkdtemp", null, () =>
+        {
+            // Generate a unique directory name
+            var tempPath = Path.Combine(Path.GetTempPath(), prefix + Path.GetRandomFileName().Replace(".", ""));
+            Directory.CreateDirectory(tempPath);
+            return (object?)tempPath;
+        });
+    }
+
+    private static object? OpendirSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+
+        return WrapFsOperation("opendir", path, () =>
+        {
+            if (!Directory.Exists(path))
+            {
+                throw new DirectoryNotFoundException($"no such file or directory, opendir '{path}'");
+            }
+            return (object?)new SharpTSDir(path);
+        });
+    }
+
+    #endregion
+
+    #region Hard Links
+
+    private static object? LinkSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var existingPath = args[0]?.ToString() ?? "";
+        var newPath = args[1]?.ToString() ?? "";
+
+        WrapFsOperation("link", newPath, () =>
+        {
+            if (!File.Exists(existingPath))
+            {
+                throw new FileNotFoundException("no such file or directory", existingPath);
+            }
+            if (File.Exists(newPath))
+            {
+                throw new IOException($"EEXIST: file already exists, link '{existingPath}' -> '{newPath}'");
+            }
+
+            LibC.CreateHardLink(existingPath, newPath);
+        });
+        return null;
+    }
+
+    #endregion
 }

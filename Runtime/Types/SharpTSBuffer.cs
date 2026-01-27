@@ -26,9 +26,9 @@ public class SharpTSBuffer
     public int Length => _data.Length;
 
     /// <summary>
-    /// Gets the underlying byte array (internal access for performance).
+    /// Gets the underlying byte array.
     /// </summary>
-    internal byte[] Data => _data;
+    public byte[] Data => _data;
 
     /// <summary>
     /// Creates a new Buffer wrapping the specified byte array.

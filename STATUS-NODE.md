@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added timingSafeEqual constant-time comparison)
+**Last Updated:** 2026-01-27 (Added file descriptor APIs, directory utilities, hard links)
 
 ## Legend
 - ✅ Implemented
@@ -50,14 +50,34 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `copyFileSync` | ✅ | |
 | `renameSync` | ✅ | |
 | `unlinkSync` | ✅ | |
+| `truncateSync` | ✅ | Truncate file to specified length |
 | **Directory Operations** | | |
 | `mkdirSync` | ✅ | Supports `recursive` option |
 | `rmdirSync` | ✅ | |
-| `readdirSync` | ✅ | |
+| `readdirSync` | ✅ | Supports `recursive` and `withFileTypes` options |
+| `mkdtempSync` | ✅ | Create unique temp directory |
+| `opendirSync` | ✅ | Returns Dir object with readSync/closeSync |
 | **File Info** | | |
 | `statSync` | ✅ | Returns Stats object |
-| `lstatSync` | ✅ | |
-| `accessSync` | ✅ | |
+| `lstatSync` | ✅ | Stats without following symlinks |
+| `accessSync` | ✅ | Check file access permissions |
+| `realpathSync` | ✅ | Resolve canonical path |
+| **File Descriptor APIs** | | |
+| `openSync` | ✅ | Open file, returns fd (flags: r, w, a, r+, w+, a+, etc.) |
+| `closeSync` | ✅ | Close file descriptor |
+| `readSync` | ✅ | Read into Buffer at offset/position |
+| `writeSync` | ✅ | Write Buffer or string to fd |
+| `fstatSync` | ✅ | Stats for open file descriptor |
+| `ftruncateSync` | ✅ | Truncate open file descriptor |
+| **Links** | | |
+| `linkSync` | ✅ | Create hard link (cross-platform) |
+| `symlinkSync` | ✅ | Create symbolic link |
+| `readlinkSync` | ✅ | Read symbolic link target |
+| **Permissions** | | |
+| `chmodSync` | ✅ | Change file mode/permissions |
+| `chownSync` | ✅ | Change file owner (Unix only) |
+| `lchownSync` | ✅ | Change symlink owner (Unix only) |
+| `utimesSync` | ✅ | Update file access/modification times |
 | **Async APIs** | | |
 | `readFile` | ❌ | Use `readFileSync` |
 | `writeFile` | ❌ | Use `writeFileSync` |
@@ -66,8 +86,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `createReadStream` | ❌ | No stream support |
 | `createWriteStream` | ❌ | No stream support |
 | `watch` / `watchFile` | ❌ | |
-| `chmod` / `chown` | ❌ | |
-| **Error Codes** | ✅ | ENOENT, EACCES, EEXIST, EISDIR, ENOTDIR, ENOTEMPTY, etc. |
+| **Error Codes** | ✅ | ENOENT, EACCES, EEXIST, EISDIR, ENOTDIR, ENOTEMPTY, EBADF, EXDEV, etc. |
 
 ---
 
@@ -368,7 +387,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ## Summary
 
-SharpTS provides solid support for file system operations (sync), path manipulation, OS information, process management, basic crypto, URL parsing, and binary data handling via Buffer. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, basic crypto, URL parsing, and binary data handling via Buffer. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
 - No EventEmitter pattern (blocks event-based APIs)

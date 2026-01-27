@@ -616,6 +616,23 @@ public class EmittedRuntime
     public MethodBuilder FsGetConstants { get; set; } = null!;
     public MethodBuilder FsCreateDirent { get; set; } = null!;
 
+    // File descriptor APIs
+    public MethodBuilder FsOpenSync { get; set; } = null!;
+    public MethodBuilder FsCloseSync { get; set; } = null!;
+    public MethodBuilder FsReadSync { get; set; } = null!;
+    public MethodBuilder FsWriteSyncBuffer { get; set; } = null!;
+    public MethodBuilder FsWriteSyncString { get; set; } = null!;
+    public MethodBuilder FsFstatSync { get; set; } = null!;
+    public MethodBuilder FsFtruncateSync { get; set; } = null!;
+    public FieldBuilder FsFileDescriptorTable { get; set; } = null!;
+
+    // Directory utilities
+    public MethodBuilder FsMkdtempSync { get; set; } = null!;
+    public MethodBuilder FsOpendirSync { get; set; } = null!;
+
+    // Hard links
+    public MethodBuilder FsLinkSync { get; set; } = null!;
+
     // NodeError conversion helpers
     public MethodBuilder ConvertToNodeError { get; set; } = null!;
     public MethodBuilder ThrowNodeError { get; set; } = null!;

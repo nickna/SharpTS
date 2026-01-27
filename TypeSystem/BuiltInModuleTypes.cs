@@ -293,6 +293,45 @@ public static class BuiltInModuleTypes
                 voidType
             ),
 
+            // File descriptor APIs
+            // openSync(path, flags, mode?) -> fd (number)
+            ["openSync"] = new TypeInfo.Function(
+                [stringType, anyType, numberType],
+                numberType,
+                RequiredParams: 2
+            ),
+            // closeSync(fd) -> void
+            ["closeSync"] = new TypeInfo.Function([numberType], voidType),
+            // readSync(fd, buffer, offset, length, position) -> bytesRead
+            ["readSync"] = new TypeInfo.Function(
+                [numberType, new TypeInfo.Buffer(), numberType, numberType, anyType],
+                numberType
+            ),
+            // writeSync(fd, buffer, offset?, length?, position?) -> bytesWritten
+            ["writeSync"] = new TypeInfo.Function(
+                [numberType, new TypeInfo.Union([new TypeInfo.Buffer(), stringType]), numberType, numberType, anyType],
+                numberType,
+                RequiredParams: 2
+            ),
+            // fstatSync(fd) -> Stats
+            ["fstatSync"] = new TypeInfo.Function([numberType], statsType),
+            // ftruncateSync(fd, len?) -> void
+            ["ftruncateSync"] = new TypeInfo.Function(
+                [numberType, numberType],
+                voidType,
+                RequiredParams: 1
+            ),
+
+            // Directory utilities
+            // mkdtempSync(prefix) -> string
+            ["mkdtempSync"] = new TypeInfo.Function([stringType], stringType),
+            // opendirSync(path) -> Dir
+            ["opendirSync"] = new TypeInfo.Function([stringType], anyType),
+
+            // Hard links
+            // linkSync(existingPath, newPath) -> void
+            ["linkSync"] = new TypeInfo.Function([stringType, stringType], voidType),
+
             // Constants object
             ["constants"] = constantsType
         };

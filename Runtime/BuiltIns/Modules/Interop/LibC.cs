@@ -6,7 +6,7 @@ namespace SharpTS.Runtime.BuiltIns.Modules.Interop;
 /// P/Invoke declarations for libc functions used by the fs module.
 /// These are only available on Unix-like systems (Linux, macOS).
 /// </summary>
-internal static partial class LibC
+public static partial class LibC
 {
     /// <summary>
     /// Changes the owner and group of a file.
@@ -33,6 +33,17 @@ internal static partial class LibC
         [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
         int owner,
         int group);
+
+    /// <summary>
+    /// Creates a hard link (Unix only).
+    /// </summary>
+    /// <param name="existingPath">Path to the existing file.</param>
+    /// <param name="newPath">Path to the new hard link.</param>
+    /// <returns>0 on success, -1 on error (check errno).</returns>
+    [LibraryImport("libc", SetLastError = true)]
+    internal static partial int link(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string existingPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath);
 
     /// <summary>
     /// Maps errno values to Node.js error codes.
@@ -65,4 +76,30 @@ internal static partial class LibC
         40 => "too many symbolic links",
         _ => $"unknown error ({errno})"
     };
+
+    /// <summary>
+    /// Creates a hard link cross-platform.
+    /// </summary>
+    /// <param name="existingPath">Path to the existing file.</param>
+    /// <param name="newPath">Path to the new hard link.</param>
+    public static void CreateHardLink(string existingPath, string newPath)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            if (!Kernel32.CreateHardLink(newPath, existingPath, IntPtr.Zero))
+            {
+                var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                throw new IOException($"{Kernel32.GetErrorCode(error)}: {Kernel32.GetErrorMessage(error)}, link '{existingPath}' -> '{newPath}'");
+            }
+        }
+        else
+        {
+            var result = link(existingPath, newPath);
+            if (result != 0)
+            {
+                var errno = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+                throw new IOException($"{GetErrnoCode(errno)}: {GetErrnoMessage(errno)}, link '{existingPath}' -> '{newPath}'");
+            }
+        }
+    }
 }

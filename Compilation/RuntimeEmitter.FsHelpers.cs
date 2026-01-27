@@ -35,6 +35,21 @@ public partial class RuntimeEmitter
         EmitFsRealpathSync(typeBuilder, runtime);
         EmitFsUtimesSync(typeBuilder, runtime);
         EmitFsGetConstants(typeBuilder, runtime);
+
+        // File descriptor APIs
+        EmitFsOpenSync(typeBuilder, runtime);
+        EmitFsCloseSync(typeBuilder, runtime);
+        EmitFsReadSync(typeBuilder, runtime);
+        EmitFsWriteSync(typeBuilder, runtime);
+        EmitFsFstatSync(typeBuilder, runtime);
+        EmitFsFtruncateSync(typeBuilder, runtime);
+
+        // Directory utilities
+        EmitFsMkdtempSync(typeBuilder, runtime);
+        EmitFsOpendirSync(typeBuilder, runtime);
+
+        // Hard links
+        EmitFsLinkSync(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -386,10 +401,12 @@ public partial class RuntimeEmitter
 
         // Check if withFileTypes option is set
         var withFileTypesLocal = il.DeclareLocal(_types.Boolean);
-        var checkOptionsLabel = il.DefineLabel();
+        var recursiveLocal = il.DeclareLocal(_types.Boolean);
         var afterOptionsLabel = il.DefineLabel();
+        var checkRecursiveLabel = il.DefineLabel();
+        var afterRecursiveLabel = il.DefineLabel();
 
-        // If options is null, withFileTypes = false
+        // If options is null, withFileTypes = false, recursive = false
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, afterOptionsLabel);
 
@@ -404,21 +421,59 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, wftValueLocal);
         il.Emit(OpCodes.Call, runtime.IsTruthy);
         il.Emit(OpCodes.Stloc, withFileTypesLocal);
-        il.Emit(OpCodes.Br, checkOptionsLabel);
+
+        // Check if options has recursive property
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "recursive");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        var recValueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, recValueLocal);
+
+        // Check if value is truthy
+        il.Emit(OpCodes.Ldloc, recValueLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Stloc, recursiveLocal);
+        il.Emit(OpCodes.Br, afterRecursiveLabel);
 
         il.MarkLabel(afterOptionsLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, withFileTypesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, recursiveLocal);
 
-        il.MarkLabel(checkOptionsLabel);
+        il.MarkLabel(afterRecursiveLabel);
 
         EmitWithFsErrorHandling(il, runtime, pathLocal, "readdir", afterTry =>
         {
-            // Get entries: Directory.GetFileSystemEntries(path)
-            il.Emit(OpCodes.Ldloc, pathLocal);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "GetFileSystemEntries", _types.String));
+            // Get entries based on recursive option
+            // Directory.GetFileSystemEntries(path, "*", SearchOption)
+            var searchOptionType = typeof(SearchOption);
+            var getEntriesMethod = _types.Directory.GetMethod("GetFileSystemEntries", [_types.String, _types.String, searchOptionType])!;
             var entriesLocal = il.DeclareLocal(_types.StringArray);
+
+            var nonRecursiveLabel = il.DefineLabel();
+            var afterGetEntriesLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldloc, recursiveLocal);
+            il.Emit(OpCodes.Brfalse, nonRecursiveLabel);
+
+            // Recursive: use SearchOption.AllDirectories
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldstr, "*");
+            il.Emit(OpCodes.Ldc_I4_1); // SearchOption.AllDirectories = 1
+            il.Emit(OpCodes.Call, getEntriesMethod);
             il.Emit(OpCodes.Stloc, entriesLocal);
+            il.Emit(OpCodes.Br, afterGetEntriesLabel);
+
+            // Non-recursive: use SearchOption.TopDirectoryOnly
+            il.MarkLabel(nonRecursiveLabel);
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldstr, "*");
+            il.Emit(OpCodes.Ldc_I4_0); // SearchOption.TopDirectoryOnly = 0
+            il.Emit(OpCodes.Call, getEntriesMethod);
+            il.Emit(OpCodes.Stloc, entriesLocal);
+
+            il.MarkLabel(afterGetEntriesLabel);
 
             // Create result list
             il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
@@ -461,11 +516,30 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
             il.Emit(OpCodes.Br, afterAddLabel);
 
-            // withFileTypes = false: add just filename
+            // withFileTypes = false: add filename or relative path
             il.MarkLabel(addFilenameLabel);
             il.Emit(OpCodes.Ldloc, listLocal);
+
+            // Check if recursive - if so, use relative path; otherwise just filename
+            var useFilenameLabel = il.DefineLabel();
+            var afterPathLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldloc, recursiveLocal);
+            il.Emit(OpCodes.Brfalse, useFilenameLabel);
+
+            // Recursive: use Path.GetRelativePath(basePath, entryPath)
+            var getRelativePathMethod = _types.Path.GetMethod("GetRelativePath", [_types.String, _types.String])!;
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldloc, entryPathLocal);
+            il.Emit(OpCodes.Call, getRelativePathMethod);
+            il.Emit(OpCodes.Br, afterPathLabel);
+
+            // Non-recursive: use Path.GetFileName
+            il.MarkLabel(useFilenameLabel);
             il.Emit(OpCodes.Ldloc, entryPathLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetFileName", _types.String));
+
+            il.MarkLabel(afterPathLabel);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
             il.MarkLabel(afterAddLabel);
@@ -2077,4 +2151,732 @@ public partial class RuntimeEmitter
         // Register the wrapper for named imports
         runtime.RegisterBuiltInModuleMethod("fs", methodName, method);
     }
+
+    #region File Descriptor APIs
+
+    /// <summary>
+    /// Emits: public static double FsOpenSync(object path, object flags, object mode)
+    /// Opens a file and returns a file descriptor.
+    /// </summary>
+    private void EmitFsOpenSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsOpenSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.Object, _types.Object, _types.Object]
+        );
+        runtime.FsOpenSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Convert path to string
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        var resultLocal = il.DeclareLocal(_types.Double);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "open", afterTry =>
+        {
+            // Parse flags using FsFlags.Parse
+            var fsFlagsType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FsFlags);
+            var parseMethod = fsFlagsType.GetMethod("Parse", [typeof(object)])!;
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var openMethod = fdTableType.GetMethod("Open", [typeof(string), typeof(FileMode), typeof(FileAccess), typeof(FileShare)])!;
+
+            // FsFlags.Parse(flags)
+            il.Emit(OpCodes.Ldarg_1); // flags
+            il.Emit(OpCodes.Call, parseMethod);
+
+            // The tuple is on the stack, decompose it
+            var tupleType = typeof(ValueTuple<FileMode, FileAccess, FileShare>);
+            var tupleLocal = il.DeclareLocal(tupleType);
+            il.Emit(OpCodes.Stloc, tupleLocal);
+
+            // Call FileDescriptorTable.Instance.Open(path, mode, access, share)
+            il.Emit(OpCodes.Ldsfld, instanceField); // Get instance
+            il.Emit(OpCodes.Ldloc, pathLocal); // path
+            il.Emit(OpCodes.Ldloca, tupleLocal);
+            il.Emit(OpCodes.Ldfld, tupleType.GetField("Item1")!); // FileMode
+            il.Emit(OpCodes.Ldloca, tupleLocal);
+            il.Emit(OpCodes.Ldfld, tupleType.GetField("Item2")!); // FileAccess
+            il.Emit(OpCodes.Ldloca, tupleLocal);
+            il.Emit(OpCodes.Ldfld, tupleType.GetField("Item3")!); // FileShare
+            il.Emit(OpCodes.Callvirt, openMethod);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static void FsCloseSync(object fd)
+    /// Closes a file descriptor.
+    /// </summary>
+    private void EmitFsCloseSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsCloseSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object]
+        );
+        runtime.FsCloseSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Convert fd to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var fdLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, fdLocal);
+
+        // Create a null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "close", afterTry =>
+        {
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var closeMethod = fdTableType.GetMethod("Close")!;
+
+            il.Emit(OpCodes.Ldsfld, instanceField);
+            il.Emit(OpCodes.Ldloc, fdLocal);
+            il.Emit(OpCodes.Callvirt, closeMethod);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static double FsReadSync(object fd, object buffer, object offset, object length, object position)
+    /// Reads from a file descriptor into a buffer.
+    /// </summary>
+    private void EmitFsReadSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsReadSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]
+        );
+        runtime.FsReadSync = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Double);
+
+        // Convert fd to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var fdLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, fdLocal);
+
+        // Convert offset to int
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var offsetLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, offsetLocal);
+
+        // Convert length to int
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var lengthLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+
+        // Create null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "read", afterTry =>
+        {
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var getMethod = fdTableType.GetMethod("Get")!;
+            var fileStreamReadMethod = typeof(FileStream).GetMethod("Read", [typeof(byte[]), typeof(int), typeof(int)])!;
+            var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
+
+            // Get FileStream from fd table
+            il.Emit(OpCodes.Ldsfld, instanceField);
+            il.Emit(OpCodes.Ldloc, fdLocal);
+            il.Emit(OpCodes.Callvirt, getMethod);
+            var streamLocal = il.DeclareLocal(typeof(FileStream));
+            il.Emit(OpCodes.Stloc, streamLocal);
+
+            // Handle position (if not null, seek to it)
+            var skipSeekLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Brfalse, skipSeekLabel);
+            // Check for undefined
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Isinst, typeof(SharpTS.Runtime.Types.SharpTSUndefined));
+            il.Emit(OpCodes.Brtrue, skipSeekLabel);
+
+            // Seek to position
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Ldc_I4_0); // SeekOrigin.Begin
+            il.Emit(OpCodes.Callvirt, fileStreamSeekMethod);
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(skipSeekLabel);
+
+            // Get buffer data - cast to compiled $Buffer type and call GetData()
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
+            il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            var dataLocal = il.DeclareLocal(typeof(byte[]));
+            il.Emit(OpCodes.Stloc, dataLocal);
+
+            // Read from stream
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Ldloc, offsetLocal);
+            il.Emit(OpCodes.Ldloc, lengthLocal);
+            il.Emit(OpCodes.Callvirt, fileStreamReadMethod);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static double FsWriteSync(object fd, object data, object offset, object length, object position)
+    /// Writes to a file descriptor from a buffer or string.
+    /// </summary>
+    private void EmitFsWriteSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsWriteSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]
+        );
+        runtime.FsWriteSyncBuffer = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Double);
+
+        // Convert fd to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var fdLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, fdLocal);
+
+        // Create null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "write", afterTry =>
+        {
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var getMethod = fdTableType.GetMethod("Get")!;
+            var fileStreamWriteMethod = typeof(FileStream).GetMethod("Write", [typeof(byte[]), typeof(int), typeof(int)])!;
+            var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
+
+            // Get FileStream from fd table
+            il.Emit(OpCodes.Ldsfld, instanceField);
+            il.Emit(OpCodes.Ldloc, fdLocal);
+            il.Emit(OpCodes.Callvirt, getMethod);
+            var streamLocal = il.DeclareLocal(typeof(FileStream));
+            il.Emit(OpCodes.Stloc, streamLocal);
+
+            // Handle position (if not null and not undefined, seek to it)
+            var skipSeekLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Brfalse, skipSeekLabel);
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Isinst, typeof(SharpTS.Runtime.Types.SharpTSUndefined));
+            il.Emit(OpCodes.Brtrue, skipSeekLabel);
+
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, fileStreamSeekMethod);
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(skipSeekLabel);
+
+            // Check if data is a buffer or string
+            var isBufferLabel = il.DefineLabel();
+            var afterDataLabel = il.DefineLabel();
+            var dataLocal = il.DeclareLocal(typeof(byte[]));
+            var offsetLocal = il.DeclareLocal(_types.Int32);
+            var lengthLocal = il.DeclareLocal(_types.Int32);
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+            il.Emit(OpCodes.Brtrue, isBufferLabel);
+
+            // String case - convert to UTF8 bytes
+            // Stack: [] -> [Encoding] -> [Encoding, string] -> [byte[]]
+            il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetMethod!);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.Stringify);
+            il.Emit(OpCodes.Callvirt, typeof(System.Text.Encoding).GetMethod("GetBytes", [typeof(string)])!);
+            il.Emit(OpCodes.Stloc, dataLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, offsetLocal);
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stloc, lengthLocal);
+            il.Emit(OpCodes.Br, afterDataLabel);
+
+            // Buffer case - use compiled $Buffer type
+            il.MarkLabel(isBufferLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, runtime.TSBufferType);
+            il.Emit(OpCodes.Callvirt, runtime.TSBufferGetData);
+            il.Emit(OpCodes.Stloc, dataLocal);
+
+            // Offset: use arg2 if provided, else 0
+            var useDefaultOffsetLabel = il.DefineLabel();
+            var afterOffsetLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Brfalse, useDefaultOffsetLabel);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stloc, offsetLocal);
+            il.Emit(OpCodes.Br, afterOffsetLabel);
+            il.MarkLabel(useDefaultOffsetLabel);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, offsetLocal);
+            il.MarkLabel(afterOffsetLabel);
+
+            // Length: use arg3 if provided, else buffer.Length (via data array length)
+            var useDefaultLengthLabel = il.DefineLabel();
+            var afterLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, useDefaultLengthLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stloc, lengthLocal);
+            il.Emit(OpCodes.Br, afterLengthLabel);
+            il.MarkLabel(useDefaultLengthLabel);
+            // Use data array length instead of calling buffer.Length
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stloc, lengthLocal);
+            il.MarkLabel(afterLengthLabel);
+
+            il.MarkLabel(afterDataLabel);
+
+            // Write to stream
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Ldloc, offsetLocal);
+            il.Emit(OpCodes.Ldloc, lengthLocal);
+            il.Emit(OpCodes.Callvirt, fileStreamWriteMethod);
+            il.Emit(OpCodes.Ldloc, lengthLocal);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object FsFstatSync(object fd)
+    /// Returns stats for an open file descriptor.
+    /// </summary>
+    private void EmitFsFstatSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsFstatSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.FsFstatSync = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Object);
+
+        // Convert fd to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var fdLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, fdLocal);
+
+        // Create null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "fstat", afterTry =>
+        {
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var getMethod = fdTableType.GetMethod("Get")!;
+            var lengthGetter = typeof(FileStream).GetProperty("Length")!.GetMethod!;
+
+            // Get FileStream from fd table
+            il.Emit(OpCodes.Ldsfld, instanceField);
+            il.Emit(OpCodes.Ldloc, fdLocal);
+            il.Emit(OpCodes.Callvirt, getMethod);
+            var streamLocal = il.DeclareLocal(typeof(FileStream));
+            il.Emit(OpCodes.Stloc, streamLocal);
+
+            // Create stats dictionary
+            var dictType = _types.DictionaryStringObject;
+            var dictCtor = _types.GetDefaultConstructor(dictType);
+            var addMethod = _types.GetMethod(dictType, "Add", _types.String, _types.Object);
+
+            il.Emit(OpCodes.Newobj, dictCtor);
+            var dictLocal = il.DeclareLocal(dictType);
+            il.Emit(OpCodes.Stloc, dictLocal);
+
+            // isDirectory: false (fds are always files)
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isDirectory");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
+
+            // isFile: true
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isFile");
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
+
+            // isSymbolicLink: false
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "isSymbolicLink");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Call, addMethod);
+
+            // size: stream.Length
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "size");
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Callvirt, lengthGetter);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, addMethod);
+
+            // Wrap in SharpTSObject
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, runtime.CreateObject);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static void FsFtruncateSync(object fd, object len)
+    /// Truncates an open file descriptor to the specified length.
+    /// </summary>
+    private void EmitFsFtruncateSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsFtruncateSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object]
+        );
+        runtime.FsFtruncateSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Convert fd to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        var fdLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, fdLocal);
+
+        // Convert len to long (default 0)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I8);
+        var lenLocal = il.DeclareLocal(_types.Int64);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // Create null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "ftruncate", afterTry =>
+        {
+            var fdTableType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.FileDescriptorTable);
+            var instanceField = fdTableType.GetField("Instance")!;
+            var getMethod = fdTableType.GetMethod("Get")!;
+            var setLengthMethod = typeof(FileStream).GetMethod("SetLength")!;
+
+            // Get FileStream from fd table
+            il.Emit(OpCodes.Ldsfld, instanceField);
+            il.Emit(OpCodes.Ldloc, fdLocal);
+            il.Emit(OpCodes.Callvirt, getMethod);
+            var streamLocal = il.DeclareLocal(typeof(FileStream));
+            il.Emit(OpCodes.Stloc, streamLocal);
+
+            // SetLength
+            il.Emit(OpCodes.Ldloc, streamLocal);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Callvirt, setLengthMethod);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region Directory Utilities
+
+    /// <summary>
+    /// Emits: public static object FsMkdtempSync(object prefix)
+    /// Creates a unique temporary directory.
+    /// </summary>
+    private void EmitFsMkdtempSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsMkdtempSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.FsMkdtempSync = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.String);
+
+        // Convert prefix to string
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        var prefixLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, prefixLocal);
+
+        // Create null path local for error handling
+        il.Emit(OpCodes.Ldnull);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "mkdtemp", afterTry =>
+        {
+            // Path.GetTempPath()
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetTempPath"));
+
+            // Path.GetRandomFileName()
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetRandomFileName"));
+
+            // Remove the dot from the random filename
+            il.Emit(OpCodes.Ldstr, ".");
+            il.Emit(OpCodes.Ldstr, "");
+            il.Emit(OpCodes.Callvirt, _types.String.GetMethod("Replace", [typeof(string), typeof(string)])!);
+
+            // Combine prefix + randomFileName
+            il.Emit(OpCodes.Ldloc, prefixLocal);
+            var tempFileNameLocal = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Stloc, tempFileNameLocal);
+
+            // string.Concat(tempPath, prefix + randomFileName)
+            var tempPathLocal = il.DeclareLocal(_types.String);
+            // We need to re-emit GetTempPath
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "GetTempPath"));
+            il.Emit(OpCodes.Stloc, tempPathLocal);
+
+            il.Emit(OpCodes.Ldloc, prefixLocal);
+            il.Emit(OpCodes.Ldloc, tempFileNameLocal);
+            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string)])!);
+            var suffixLocal = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Stloc, suffixLocal);
+
+            // Path.Combine(tempPath, prefix + random)
+            il.Emit(OpCodes.Ldloc, tempPathLocal);
+            il.Emit(OpCodes.Ldloc, suffixLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Path, "Combine", _types.String, _types.String));
+            il.Emit(OpCodes.Stloc, resultLocal);
+
+            // Directory.CreateDirectory
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "CreateDirectory", _types.String));
+            il.Emit(OpCodes.Pop);
+
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object FsOpendirSync(object path)
+    /// Opens a directory for iteration.
+    /// </summary>
+    private void EmitFsOpendirSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsOpendirSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.FsOpendirSync = method;
+
+        var il = method.GetILGenerator();
+        var resultLocal = il.DeclareLocal(_types.Object);
+
+        // Convert path to string
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        var pathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, pathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, pathLocal, "opendir", afterTry =>
+        {
+            var dirType = typeof(SharpTS.Runtime.Types.SharpTSDir);
+            var dirCtor = dirType.GetConstructor([typeof(string)])!;
+
+            // Check if directory exists
+            var existsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Directory, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, existsLabel);
+
+            // Throw DirectoryNotFoundException
+            il.Emit(OpCodes.Ldstr, "no such file or directory, opendir '");
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Ldstr, "'");
+            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Newobj, typeof(DirectoryNotFoundException).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Throw);
+
+            il.MarkLabel(existsLabel);
+
+            // Create new SharpTSDir(path)
+            il.Emit(OpCodes.Ldloc, pathLocal);
+            il.Emit(OpCodes.Newobj, dirCtor);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region Hard Links
+
+    /// <summary>
+    /// Emits: public static void FsLinkSync(object existingPath, object newPath)
+    /// Creates a hard link.
+    /// </summary>
+    private void EmitFsLinkSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "FsLinkSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object]
+        );
+        runtime.FsLinkSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Convert paths to strings
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        var existingPathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, existingPathLocal);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        var newPathLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, newPathLocal);
+
+        EmitWithFsErrorHandling(il, runtime, newPathLocal, "link", afterTry =>
+        {
+            var libCType = typeof(SharpTS.Runtime.BuiltIns.Modules.Interop.LibC);
+            var createHardLinkMethod = libCType.GetMethod("CreateHardLink", [typeof(string), typeof(string)])!;
+
+            // Check if source exists
+            var existsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, existingPathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
+            il.Emit(OpCodes.Brtrue, existsLabel);
+
+            // Throw FileNotFoundException
+            il.Emit(OpCodes.Ldstr, "no such file or directory");
+            il.Emit(OpCodes.Ldloc, existingPathLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FileNotFoundException, _types.String, _types.String));
+            il.Emit(OpCodes.Throw);
+
+            il.MarkLabel(existsLabel);
+
+            // Check if destination already exists
+            var notExistsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, newPathLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.File, "Exists", _types.String));
+            il.Emit(OpCodes.Brfalse, notExistsLabel);
+
+            // Throw IOException for EEXIST
+            // Use Concat overload that takes string array
+            il.Emit(OpCodes.Ldc_I4_5);
+            il.Emit(OpCodes.Newarr, _types.String);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldstr, "EEXIST: file already exists, link '");
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldloc, existingPathLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Ldstr, "' -> '");
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_3);
+            il.Emit(OpCodes.Ldloc, newPathLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_4);
+            il.Emit(OpCodes.Ldstr, "'");
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string[])])!);
+            il.Emit(OpCodes.Newobj, typeof(IOException).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Throw);
+
+            il.MarkLabel(notExistsLabel);
+
+            // LibC.CreateHardLink(existingPath, newPath)
+            il.Emit(OpCodes.Ldloc, existingPathLocal);
+            il.Emit(OpCodes.Ldloc, newPathLocal);
+            il.Emit(OpCodes.Call, createHardLinkMethod);
+            il.Emit(OpCodes.Leave, afterTry);
+        });
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
 }

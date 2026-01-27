@@ -19,6 +19,12 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         "statSync", "lstatSync", "renameSync", "copyFileSync", "accessSync",
         "chmodSync", "chownSync", "lchownSync", "truncateSync",
         "symlinkSync", "readlinkSync", "realpathSync", "utimesSync",
+        // File descriptor APIs
+        "openSync", "closeSync", "readSync", "writeSync", "fstatSync", "ftruncateSync",
+        // Directory utilities
+        "mkdtempSync", "opendirSync",
+        // Hard links
+        "linkSync",
         "constants"
     ];
 
@@ -49,6 +55,18 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
             "readlinkSync" => EmitReadlinkSync(emitter, arguments),
             "realpathSync" => EmitRealpathSync(emitter, arguments),
             "utimesSync" => EmitUtimesSync(emitter, arguments),
+            // File descriptor APIs
+            "openSync" => EmitOpenSync(emitter, arguments),
+            "closeSync" => EmitCloseSync(emitter, arguments),
+            "readSync" => EmitReadSync(emitter, arguments),
+            "writeSync" => EmitWriteSync(emitter, arguments),
+            "fstatSync" => EmitFstatSync(emitter, arguments),
+            "ftruncateSync" => EmitFtruncateSync(emitter, arguments),
+            // Directory utilities
+            "mkdtempSync" => EmitMkdtempSync(emitter, arguments),
+            "opendirSync" => EmitOpendirSync(emitter, arguments),
+            // Hard links
+            "linkSync" => EmitLinkSync(emitter, arguments),
             _ => false
         };
     }
@@ -631,4 +649,288 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Ldnull); // undefined return
         return true;
     }
+
+    #region File Descriptor APIs
+
+    private static bool EmitOpenSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit path
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit flags
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Emit mode (optional, default 0o666 = 438)
+        if (arguments.Count >= 3)
+        {
+            emitter.EmitExpression(arguments[2]);
+            emitter.EmitBoxIfNeeded(arguments[2]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_R8, 438.0); // 0o666
+            il.Emit(OpCodes.Box, ctx.Types.Double);
+        }
+
+        // Call runtime helper: FsOpenSync(object path, object flags, object mode) -> double
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsOpenSync);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitCloseSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit fd
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper: FsCloseSync(object fd)
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsCloseSync);
+        il.Emit(OpCodes.Ldnull); // undefined return
+        return true;
+    }
+
+    private static bool EmitReadSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 5)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit fd
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Emit offset
+        emitter.EmitExpression(arguments[2]);
+        emitter.EmitBoxIfNeeded(arguments[2]);
+
+        // Emit length
+        emitter.EmitExpression(arguments[3]);
+        emitter.EmitBoxIfNeeded(arguments[3]);
+
+        // Emit position
+        emitter.EmitExpression(arguments[4]);
+        emitter.EmitBoxIfNeeded(arguments[4]);
+
+        // Call runtime helper: FsReadSync(object fd, object buffer, object offset, object length, object position) -> double
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsReadSync);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitWriteSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit fd
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer/string
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Emit offset (or null)
+        if (arguments.Count >= 3)
+        {
+            emitter.EmitExpression(arguments[2]);
+            emitter.EmitBoxIfNeeded(arguments[2]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit length (or null)
+        if (arguments.Count >= 4)
+        {
+            emitter.EmitExpression(arguments[3]);
+            emitter.EmitBoxIfNeeded(arguments[3]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit position (or null)
+        if (arguments.Count >= 5)
+        {
+            emitter.EmitExpression(arguments[4]);
+            emitter.EmitBoxIfNeeded(arguments[4]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // We need separate methods for buffer and string as they have different signatures
+        // Use a generic one that handles both at runtime
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsWriteSyncBuffer);
+        il.Emit(OpCodes.Box, ctx.Types.Double);
+        return true;
+    }
+
+    private static bool EmitFstatSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit fd
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper: FsFstatSync(object fd) -> object
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsFstatSync);
+        return true;
+    }
+
+    private static bool EmitFtruncateSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit fd
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit length (default 0)
+        if (arguments.Count >= 2)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Box, ctx.Types.Double);
+        }
+
+        // Call runtime helper: FsFtruncateSync(object fd, object len)
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsFtruncateSync);
+        il.Emit(OpCodes.Ldnull); // undefined return
+        return true;
+    }
+
+    #endregion
+
+    #region Directory Utilities
+
+    private static bool EmitMkdtempSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit prefix
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper: FsMkdtempSync(object prefix) -> string
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsMkdtempSync);
+        return true;
+    }
+
+    private static bool EmitOpendirSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit path
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper: FsOpendirSync(object path) -> object (Dir)
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsOpendirSync);
+        return true;
+    }
+
+    #endregion
+
+    #region Hard Links
+
+    private static bool EmitLinkSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldnull);
+            return true;
+        }
+
+        // Emit existingPath
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit newPath
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Call runtime helper: FsLinkSync(object existingPath, object newPath)
+        il.Emit(OpCodes.Call, ctx.Runtime!.FsLinkSync);
+        il.Emit(OpCodes.Ldnull); // undefined return
+        return true;
+    }
+
+    #endregion
 }
