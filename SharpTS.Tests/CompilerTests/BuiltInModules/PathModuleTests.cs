@@ -220,4 +220,288 @@ public class PathModuleTests
         var output = TestHarness.RunModulesCompiled(files, "main.ts");
         Assert.Contains("true", output.ToLower());
     }
+
+    #region POSIX Path Tests
+
+    [Fact]
+    public void Path_Posix_Sep_ReturnsForwardSlash()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.sep);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("/\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_Delimiter_ReturnsColon()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.delimiter);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal(":\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_Join_UsesForwardSlash()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.join('foo', 'bar', 'baz'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("foo/bar/baz\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_IsAbsolute_ChecksPosixPaths()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.isAbsolute('/foo'));
+                console.log(path.posix.isAbsolute('foo'));
+                console.log(path.posix.isAbsolute('C:\\foo'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("true", lines[0]);  // /foo is absolute in POSIX
+        Assert.Equal("false", lines[1]); // foo is relative
+        Assert.Equal("false", lines[2]); // C:\foo is NOT absolute in POSIX
+    }
+
+    [Fact]
+    public void Path_Posix_Basename_ReturnsFilename()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.basename('/foo/bar/file.txt'));
+                console.log(path.posix.basename('/foo/bar/file.txt', '.txt'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Contains("file.txt\n", output);
+        Assert.Contains("file\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_Dirname_ReturnsDirectory()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.dirname('/foo/bar/baz.txt'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("/foo/bar\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_Normalize_NormalizesPosixPath()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.posix.normalize('/foo/bar/../baz'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("/foo/baz\n", output);
+    }
+
+    [Fact]
+    public void Path_Posix_Parse_ParsesPosixPath()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                const parsed = path.posix.parse('/home/user/file.txt');
+                console.log(parsed.root);
+                console.log(parsed.dir);
+                console.log(parsed.base);
+                console.log(parsed.name);
+                console.log(parsed.ext);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("/", lines[0]);           // root
+        Assert.Equal("/home/user", lines[1]);  // dir
+        Assert.Equal("file.txt", lines[2]);    // base
+        Assert.Equal("file", lines[3]);        // name
+        Assert.Equal(".txt", lines[4]);        // ext
+    }
+
+    #endregion
+
+    #region Win32 Path Tests
+
+    [Fact]
+    public void Path_Win32_Sep_ReturnsBackslash()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.sep);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("\\\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_Delimiter_ReturnsSemicolon()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.delimiter);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal(";\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_Join_UsesBackslash()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.join('foo', 'bar', 'baz'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("foo\\bar\\baz\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_IsAbsolute_ChecksWin32Paths()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.isAbsolute('C:\\foo'));
+                console.log(path.win32.isAbsolute('\\\\server\\share'));
+                console.log(path.win32.isAbsolute('/foo'));
+                console.log(path.win32.isAbsolute('foo'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("true", lines[0]);  // C:\foo is absolute in Win32
+        Assert.Equal("true", lines[1]);  // \\server\share is UNC path, absolute
+        Assert.Equal("false", lines[2]); // /foo is NOT absolute in Win32 (no drive letter)
+        Assert.Equal("false", lines[3]); // foo is relative
+    }
+
+    [Fact]
+    public void Path_Win32_Basename_ReturnsFilename()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.basename('C:\\foo\\bar\\file.txt'));
+                console.log(path.win32.basename('C:\\foo\\bar\\file.txt', '.txt'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Contains("file.txt\n", output);
+        Assert.Contains("file\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_Dirname_ReturnsDirectory()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.dirname('C:\\foo\\bar\\baz.txt'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("C:\\foo\\bar\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_Normalize_NormalizesWin32Path()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                console.log(path.win32.normalize('C:\\foo\\bar\\..\\baz'));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("C:\\foo\\baz\n", output);
+    }
+
+    [Fact]
+    public void Path_Win32_Parse_ParsesWin32Path()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as path from 'path';
+                const parsed = path.win32.parse('C:\\Users\\user\\file.txt');
+                console.log(parsed.root);
+                console.log(parsed.dir);
+                console.log(parsed.base);
+                console.log(parsed.name);
+                console.log(parsed.ext);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("C:\\", lines[0]);              // root
+        Assert.Equal("C:\\Users\\user", lines[1]);   // dir
+        Assert.Equal("file.txt", lines[2]);          // base
+        Assert.Equal("file", lines[3]);              // name
+        Assert.Equal(".txt", lines[4]);              // ext
+    }
+
+    #endregion
 }

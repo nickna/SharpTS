@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added RSA encrypt/decrypt, HKDF, KeyObject API)
+**Last Updated:** 2026-01-27 (Added path.posix and path.win32 platform-specific variants)
 
 ## Legend
 - ✅ Implemented
@@ -106,7 +106,8 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `format` | ✅ | |
 | `sep` | ✅ | Platform path separator |
 | `delimiter` | ✅ | Platform path list delimiter |
-| `posix` / `win32` | ❌ | No platform-specific variants |
+| `posix` | ✅ | POSIX-style path methods (always uses `/`) |
+| `win32` | ✅ | Windows-style path methods (always uses `\`) |
 
 ---
 
