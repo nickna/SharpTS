@@ -284,7 +284,8 @@ public class ManualBundler : IBundler
         }
         else
         {
-            var paths = new[] { "/usr/share/dotnet", "/usr/local/share/dotnet", "/opt/dotnet" };
+            var homeDotnet = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dotnet");
+            var paths = new[] { "/usr/share/dotnet", "/usr/local/share/dotnet", "/opt/dotnet", homeDotnet };
             foreach (var path in paths)
             {
                 if (Directory.Exists(path)) return path;
