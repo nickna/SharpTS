@@ -41,7 +41,18 @@ public static class CryptoModuleInterpreter
             ["generateKeyPairSync"] = new BuiltInMethod("generateKeyPairSync", 1, 2, GenerateKeyPairSync),
             ["createDiffieHellman"] = new BuiltInMethod("createDiffieHellman", 1, 2, CreateDiffieHellman),
             ["getDiffieHellman"] = new BuiltInMethod("getDiffieHellman", 1, GetDiffieHellman),
-            ["createECDH"] = new BuiltInMethod("createECDH", 1, CreateECDH)
+            ["createECDH"] = new BuiltInMethod("createECDH", 1, CreateECDH),
+            // RSA encryption/decryption
+            ["publicEncrypt"] = new BuiltInMethod("publicEncrypt", 2, PublicEncrypt),
+            ["privateDecrypt"] = new BuiltInMethod("privateDecrypt", 2, PrivateDecrypt),
+            ["privateEncrypt"] = new BuiltInMethod("privateEncrypt", 2, PrivateEncrypt),
+            ["publicDecrypt"] = new BuiltInMethod("publicDecrypt", 2, PublicDecrypt),
+            // HKDF key derivation
+            ["hkdfSync"] = new BuiltInMethod("hkdfSync", 5, HkdfSync),
+            // KeyObject API
+            ["createSecretKey"] = new BuiltInMethod("createSecretKey", 1, 2, CreateSecretKey),
+            ["createPublicKey"] = new BuiltInMethod("createPublicKey", 1, CreatePublicKey),
+            ["createPrivateKey"] = new BuiltInMethod("createPrivateKey", 1, CreatePrivateKey)
         };
     }
 
@@ -367,4 +378,244 @@ public static class CryptoModuleInterpreter
 
         return new SharpTSECDH(curveName);
     }
+
+    #region RSA Encryption/Decryption
+
+    /// <summary>
+    /// Encrypts data using a public key with RSA-OAEP padding (SHA-1 by default, matching Node.js).
+    /// </summary>
+    private static object? PublicEncrypt(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("crypto.publicEncrypt requires key and buffer arguments");
+
+        var keyPem = ExtractKeyPem(args[0]);
+        var data = ConvertToBytes(args[1]) ?? throw new Exception("crypto.publicEncrypt: buffer must be a Buffer or string");
+
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+
+        // Node.js default is OAEP with SHA-1
+        var encrypted = rsa.Encrypt(data, RSAEncryptionPadding.OaepSHA1);
+        return new SharpTSBuffer(encrypted);
+    }
+
+    /// <summary>
+    /// Decrypts data using a private key with RSA-OAEP padding (SHA-1 by default, matching Node.js).
+    /// </summary>
+    private static object? PrivateDecrypt(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("crypto.privateDecrypt requires key and buffer arguments");
+
+        var keyPem = ExtractKeyPem(args[0]);
+        var data = ConvertToBytes(args[1]) ?? throw new Exception("crypto.privateDecrypt: buffer must be a Buffer or string");
+
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+
+        // Node.js default is OAEP with SHA-1
+        var decrypted = rsa.Decrypt(data, RSAEncryptionPadding.OaepSHA1);
+        return new SharpTSBuffer(decrypted);
+    }
+
+    /// <summary>
+    /// Encrypts data using a private key with PKCS#1 v1.5 padding (signing primitive).
+    /// This is the inverse of publicDecrypt and is used for digital signatures.
+    /// </summary>
+    private static object? PrivateEncrypt(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("crypto.privateEncrypt requires key and buffer arguments");
+
+        var keyPem = ExtractKeyPem(args[0]);
+        var data = ConvertToBytes(args[1]) ?? throw new Exception("crypto.privateEncrypt: buffer must be a Buffer or string");
+
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+
+        // privateEncrypt uses PKCS#1 v1.5 padding (raw RSA operation with padding)
+        // In .NET, we can use Decrypt with Pkcs1 padding as a workaround
+        // This performs: result = data^d mod n (the private key operation)
+        var encrypted = rsa.Decrypt(data, RSAEncryptionPadding.Pkcs1);
+        return new SharpTSBuffer(encrypted);
+    }
+
+    /// <summary>
+    /// Decrypts data using a public key with PKCS#1 v1.5 padding (verification primitive).
+    /// This is the inverse of privateEncrypt and is used for digital signatures.
+    /// </summary>
+    private static object? PublicDecrypt(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("crypto.publicDecrypt requires key and buffer arguments");
+
+        var keyPem = ExtractKeyPem(args[0]);
+        var data = ConvertToBytes(args[1]) ?? throw new Exception("crypto.publicDecrypt: buffer must be a Buffer or string");
+
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+
+        // publicDecrypt uses PKCS#1 v1.5 padding (raw RSA operation with padding)
+        // In .NET, we can use Encrypt with Pkcs1 padding as a workaround
+        // This performs: result = data^e mod n (the public key operation)
+        var decrypted = rsa.Encrypt(data, RSAEncryptionPadding.Pkcs1);
+        return new SharpTSBuffer(decrypted);
+    }
+
+    /// <summary>
+    /// Extracts PEM key string from various input formats.
+    /// </summary>
+    private static string ExtractKeyPem(object? key)
+    {
+        return key switch
+        {
+            string pem => pem,
+            SharpTSKeyObject keyObj => keyObj.RsaKey != null
+                ? (keyObj.Type == KeyObjectType.Private
+                    ? keyObj.RsaKey.ExportPkcs8PrivateKeyPem()
+                    : keyObj.RsaKey.ExportSubjectPublicKeyInfoPem())
+                : throw new Exception("KeyObject must contain an RSA key"),
+            SharpTSObject obj when obj.Fields.TryGetValue("key", out var k) && k is string keyStr => keyStr,
+            _ => throw new Exception("Key must be a PEM string, KeyObject, or object with 'key' property")
+        };
+    }
+
+    #endregion
+
+    #region HKDF Key Derivation
+
+    /// <summary>
+    /// Synchronous HKDF key derivation (RFC 5869).
+    /// </summary>
+    private static object? HkdfSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        // hkdfSync(digest, ikm, salt, info, keylen)
+        if (args.Count < 5)
+            throw new Exception("crypto.hkdfSync requires digest, ikm, salt, info, and keylen arguments");
+
+        var digest = args[0] as string ?? throw new Exception("crypto.hkdfSync: digest must be a string");
+        var ikm = ConvertToBytes(args[1]) ?? throw new Exception("crypto.hkdfSync: ikm must be a Buffer or string");
+        var salt = ConvertToBytes(args[2]) ?? []; // Empty salt is valid
+        var info = ConvertToBytes(args[3]) ?? []; // Empty info is valid
+        var keylen = args[4] is double k ? (int)k : throw new Exception("crypto.hkdfSync: keylen must be a number");
+
+        if (keylen < 0)
+            throw new Exception("crypto.hkdfSync: keylen must be non-negative");
+
+        // Handle zero key length specially - .NET doesn't allow 0 but Node.js does
+        if (keylen == 0)
+            return new SharpTSBuffer([]);
+
+        var hashAlgorithm = digest.ToLowerInvariant() switch
+        {
+            "sha1" => HashAlgorithmName.SHA1,
+            "sha256" => HashAlgorithmName.SHA256,
+            "sha384" => HashAlgorithmName.SHA384,
+            "sha512" => HashAlgorithmName.SHA512,
+            _ => throw new Exception($"crypto.hkdfSync: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512")
+        };
+
+        var derivedKey = HKDF.DeriveKey(hashAlgorithm, ikm, keylen, salt, info);
+        return new SharpTSBuffer(derivedKey);
+    }
+
+    #endregion
+
+    #region KeyObject API
+
+    /// <summary>
+    /// Creates a secret (symmetric) KeyObject from a key buffer.
+    /// </summary>
+    private static object? CreateSecretKey(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("crypto.createSecretKey requires a key argument");
+
+        byte[] keyBytes;
+
+        if (args[0] is string keyStr)
+        {
+            // If encoding is provided, use it; otherwise default to utf8
+            var encoding = args.Count > 1 && args[1] is string enc ? enc : "utf8";
+            keyBytes = encoding.ToLowerInvariant() switch
+            {
+                "utf8" or "utf-8" => System.Text.Encoding.UTF8.GetBytes(keyStr),
+                "hex" => Convert.FromHexString(keyStr),
+                "base64" => Convert.FromBase64String(keyStr),
+                "latin1" or "binary" => System.Text.Encoding.Latin1.GetBytes(keyStr),
+                _ => throw new Exception($"crypto.createSecretKey: unsupported encoding '{encoding}'")
+            };
+        }
+        else
+        {
+            keyBytes = ConvertToBytes(args[0]) ?? throw new Exception("crypto.createSecretKey: key must be a Buffer or string");
+        }
+
+        return new SharpTSKeyObject(keyBytes);
+    }
+
+    /// <summary>
+    /// Creates a public KeyObject from a PEM-encoded public key.
+    /// </summary>
+    private static object? CreatePublicKey(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("crypto.createPublicKey requires a key argument");
+
+        string pem;
+
+        if (args[0] is string keyStr)
+        {
+            pem = keyStr;
+        }
+        else if (args[0] is SharpTSObject obj && obj.Fields.TryGetValue("key", out var keyVal) && keyVal is string keyPem)
+        {
+            pem = keyPem;
+        }
+        else if (args[0] is SharpTSBuffer buf)
+        {
+            // PEM as buffer
+            pem = System.Text.Encoding.UTF8.GetString(buf.Data);
+        }
+        else
+        {
+            throw new Exception("crypto.createPublicKey: key must be a PEM string, Buffer, or object with 'key' property");
+        }
+
+        return SharpTSKeyObject.CreatePublicKey(pem);
+    }
+
+    /// <summary>
+    /// Creates a private KeyObject from a PEM-encoded private key.
+    /// </summary>
+    private static object? CreatePrivateKey(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("crypto.createPrivateKey requires a key argument");
+
+        string pem;
+
+        if (args[0] is string keyStr)
+        {
+            pem = keyStr;
+        }
+        else if (args[0] is SharpTSObject obj && obj.Fields.TryGetValue("key", out var keyVal) && keyVal is string keyPem)
+        {
+            pem = keyPem;
+        }
+        else if (args[0] is SharpTSBuffer buf)
+        {
+            // PEM as buffer
+            pem = System.Text.Encoding.UTF8.GetString(buf.Data);
+        }
+        else
+        {
+            throw new Exception("crypto.createPrivateKey: key must be a PEM string, Buffer, or object with 'key' property");
+        }
+
+        return SharpTSKeyObject.CreatePrivateKey(pem);
+    }
+
+    #endregion
 }

@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -53,7 +55,7 @@ public partial class RuntimeEmitter
     {
         // GetFieldsProperty(object obj, string name) -> object
         // Uses reflection to access _fields dictionary on class instances
-        // IMPORTANT: Check for getter methods (get_<name>) first, then fall back to _fields
+        // IMPORTANT: Check for ISharpTSPropertyAccessor first, then getter methods, then _fields
         // Walks up the type hierarchy to find fields in parent classes
         var method = typeBuilder.DefineMethod(
             "GetFieldsProperty",
@@ -67,6 +69,7 @@ public partial class RuntimeEmitter
         var nullLabel = il.DefineLabel();
         var tryMethodLabel = il.DefineLabel();
         var tryFieldsLabel = il.DefineLabel();
+        var tryGetterLabel = il.DefineLabel();
 
         // Declare locals upfront
         var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
@@ -75,12 +78,45 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
         var getterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var currentTypeLocal = il.DeclareLocal(_types.Type);
+        var propertyAccessorLocal = il.DeclareLocal(typeof(ISharpTSPropertyAccessor));
 
         // if (obj == null) return null;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check for getter method first: var getterMethod = obj.GetType().GetMethod("get_" + ToPascalCase(name));
+        // Check for ISharpTSPropertyAccessor first
+        // var accessor = obj as ISharpTSPropertyAccessor;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(ISharpTSPropertyAccessor));
+        il.Emit(OpCodes.Stloc, propertyAccessorLocal);
+
+        // if (accessor == null) goto tryGetter;
+        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        il.Emit(OpCodes.Brfalse, tryGetterLabel);
+
+        // var propValue = accessor.GetProperty(name);
+        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(ISharpTSPropertyAccessor).GetMethod("GetProperty")!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        // If propValue is null, fall through to try getter/method
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Brfalse, tryGetterLabel);
+
+        // If propValue is a BuiltInMethod (interpreter-only), fall through to find actual method
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, typeof(SharpTS.Runtime.BuiltIns.BuiltInMethod));
+        il.Emit(OpCodes.Brtrue, tryMethodLabel);
+
+        // Return the property value
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        // tryGetter: Check for getter method
+        il.MarkLabel(tryGetterLabel);
+
+        // Check for getter method: var getterMethod = obj.GetType().GetMethod("get_" + ToPascalCase(name));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "get_");
@@ -233,7 +269,7 @@ public partial class RuntimeEmitter
     {
         // SetFieldsProperty(object obj, string name, object value) -> void
         // Uses reflection to access _fields dictionary on class instances
-        // IMPORTANT: Check for setter methods (set_<name>) first, then fall back to _fields
+        // IMPORTANT: Check for ISharpTSPropertyAccessor first, then setter methods, then _fields
         var method = typeBuilder.DefineMethod(
             "SetFieldsProperty",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -245,6 +281,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var endLabel = il.DefineLabel();
         var tryFieldsLabel = il.DefineLabel();
+        var trySetterLabel = il.DefineLabel();
 
         // Declare locals upfront
         var fieldsFieldLocal = il.DeclareLocal(_types.FieldInfo);
@@ -252,12 +289,33 @@ public partial class RuntimeEmitter
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
+        var propertyAccessorLocal = il.DeclareLocal(typeof(ISharpTSPropertyAccessor));
 
         // if (obj == null) return;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
 
-        // Check for setter method first: var setterMethod = obj.GetType().GetMethod("set_" + ToPascalCase(name));
+        // Check for ISharpTSPropertyAccessor first
+        // var accessor = obj as ISharpTSPropertyAccessor;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(ISharpTSPropertyAccessor));
+        il.Emit(OpCodes.Stloc, propertyAccessorLocal);
+
+        // if (accessor == null) goto trySetter;
+        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        il.Emit(OpCodes.Brfalse, trySetterLabel);
+
+        // accessor.SetProperty(name, value); return;
+        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, typeof(ISharpTSPropertyAccessor).GetMethod("SetProperty")!);
+        il.Emit(OpCodes.Ret);
+
+        // trySetter: Check for setter method
+        il.MarkLabel(trySetterLabel);
+
+        // Check for setter method: var setterMethod = obj.GetType().GetMethod("set_" + ToPascalCase(name));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "set_");

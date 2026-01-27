@@ -627,7 +627,48 @@ public static class BuiltInModuleTypes
 
             // Elliptic curve Diffie-Hellman
             // createECDH(curveName) -> ECDH object
-            ["createECDH"] = new TypeInfo.Function([stringType], anyType)
+            ["createECDH"] = new TypeInfo.Function([stringType], anyType),
+
+            // RSA encryption/decryption
+            // publicEncrypt(key, buffer) -> Buffer
+            ["publicEncrypt"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType],
+                bufferType),
+            // privateDecrypt(key, buffer) -> Buffer
+            ["privateDecrypt"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType],
+                bufferType),
+            // privateEncrypt(key, buffer) -> Buffer (PKCS#1 v1.5)
+            ["privateEncrypt"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType],
+                bufferType),
+            // publicDecrypt(key, buffer) -> Buffer (PKCS#1 v1.5)
+            ["publicDecrypt"] = new TypeInfo.Function(
+                [bufferOrStringType, bufferOrStringType],
+                bufferType),
+
+            // HKDF key derivation
+            // hkdfSync(digest, ikm, salt, info, keylen) -> Buffer
+            ["hkdfSync"] = new TypeInfo.Function(
+                [stringType, bufferOrStringType, bufferOrStringType, bufferOrStringType, numberType],
+                bufferType),
+
+            // KeyObject factory methods
+            // createSecretKey(key, encoding?) -> KeyObject
+            ["createSecretKey"] = new TypeInfo.Function(
+                [bufferOrStringType, stringType],
+                anyType, // Returns KeyObject
+                RequiredParams: 1),
+            // createPublicKey(key) -> KeyObject
+            // Accepts string, Buffer, or object with 'key' property
+            ["createPublicKey"] = new TypeInfo.Function(
+                [anyType],
+                anyType), // Returns KeyObject
+            // createPrivateKey(key) -> KeyObject
+            // Accepts string, Buffer, or object with 'key' property
+            ["createPrivateKey"] = new TypeInfo.Function(
+                [anyType],
+                anyType) // Returns KeyObject
         };
     }
 

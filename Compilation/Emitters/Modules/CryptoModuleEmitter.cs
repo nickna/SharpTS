@@ -15,7 +15,9 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
     [
         "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
         "pbkdf2Sync", "scryptSync", "timingSafeEqual", "createSign", "createVerify",
-        "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH"
+        "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
+        "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
+        "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -42,6 +44,14 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "createDiffieHellman" => EmitCreateDiffieHellman(emitter, arguments),
             "getDiffieHellman" => EmitGetDiffieHellman(emitter, arguments),
             "createECDH" => EmitCreateECDH(emitter, arguments),
+            "publicEncrypt" => EmitPublicEncrypt(emitter, arguments),
+            "privateDecrypt" => EmitPrivateDecrypt(emitter, arguments),
+            "privateEncrypt" => EmitPrivateEncrypt(emitter, arguments),
+            "publicDecrypt" => EmitPublicDecrypt(emitter, arguments),
+            "hkdfSync" => EmitHkdfSync(emitter, arguments),
+            "createSecretKey" => EmitCreateSecretKey(emitter, arguments),
+            "createPublicKey" => EmitCreatePublicKey(emitter, arguments),
+            "createPrivateKey" => EmitCreatePrivateKey(emitter, arguments),
             _ => false
         };
     }
@@ -612,4 +622,243 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateECDH);
         return true;
     }
+
+    #region RSA Encryption/Decryption
+
+    private static bool EmitPublicEncrypt(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.publicEncrypt requires key and buffer arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPublicEncrypt);
+        return true;
+    }
+
+    private static bool EmitPrivateDecrypt(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.privateDecrypt requires key and buffer arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPrivateDecrypt);
+        return true;
+    }
+
+    private static bool EmitPrivateEncrypt(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.privateEncrypt requires key and buffer arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPrivateEncrypt);
+        return true;
+    }
+
+    private static bool EmitPublicDecrypt(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.publicDecrypt requires key and buffer arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit buffer argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoPublicDecrypt);
+        return true;
+    }
+
+    #endregion
+
+    #region HKDF
+
+    private static bool EmitHkdfSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 5)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.hkdfSync requires digest, ikm, salt, info, and keylen arguments");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit digest argument (convert to string)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+
+        // Emit ikm argument - convert to byte[]
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit salt argument - convert to byte[]
+        emitter.EmitExpression(arguments[2]);
+        emitter.EmitBoxIfNeeded(arguments[2]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit info argument - convert to byte[]
+        emitter.EmitExpression(arguments[3]);
+        emitter.EmitBoxIfNeeded(arguments[3]);
+        EmitConvertToByteArray(emitter);
+
+        // Emit keylen argument - convert to int
+        emitter.EmitExpressionAsDouble(arguments[4]);
+        il.Emit(OpCodes.Conv_I4);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoHkdfSync);
+        return true;
+    }
+
+    #endregion
+
+    #region KeyObject
+
+    private static bool EmitCreateSecretKey(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.createSecretKey requires a key argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit encoding argument (or null if not provided)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateSecretKey);
+        return true;
+    }
+
+    private static bool EmitCreatePublicKey(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.createPublicKey requires a key argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreatePublicKey);
+        return true;
+    }
+
+    private static bool EmitCreatePrivateKey(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "crypto.createPrivateKey requires a key argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit key argument (as object)
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreatePrivateKey);
+        return true;
+    }
+
+    #endregion
 }
