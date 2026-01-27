@@ -544,7 +544,13 @@ public static class BuiltInModuleTypes
             // timingSafeEqual(a, b) -> boolean
             ["timingSafeEqual"] = new TypeInfo.Function(
                 [bufferOrStringType, bufferOrStringType],
-                BooleanType)
+                BooleanType),
+
+            // Signing and verification
+            // createSign(algorithm) -> Sign object
+            ["createSign"] = new TypeInfo.Function([stringType], anyType),
+            // createVerify(algorithm) -> Verify object
+            ["createVerify"] = new TypeInfo.Function([stringType], anyType)
         };
     }
 

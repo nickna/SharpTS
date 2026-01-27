@@ -146,6 +146,8 @@ public sealed class BuiltInRegistry
         RegisterHmacType(registry);
         RegisterCipherType(registry);
         RegisterDecipherType(registry);
+        RegisterSignType(registry);
+        RegisterVerifyType(registry);
         RegisterErrorTypes(registry);
         RegisterReadlineInterfaceType(registry);
         RegisterGlobalThisType(registry);
@@ -432,6 +434,20 @@ public sealed class BuiltInRegistry
         // Decipher members accessed via property access (decipher.update, decipher.final, etc.)
         registry.RegisterInstanceType(typeof(SharpTSDecipher), (instance, name) =>
             ((SharpTSDecipher)instance).GetMember(name));
+    }
+
+    private static void RegisterSignType(BuiltInRegistry registry)
+    {
+        // Sign members accessed via property access (sign.update, sign.sign)
+        registry.RegisterInstanceType(typeof(SharpTSSign), (instance, name) =>
+            ((SharpTSSign)instance).GetMember(name));
+    }
+
+    private static void RegisterVerifyType(BuiltInRegistry registry)
+    {
+        // Verify members accessed via property access (verify.update, verify.verify)
+        registry.RegisterInstanceType(typeof(SharpTSVerify), (instance, name) =>
+            ((SharpTSVerify)instance).GetMember(name));
     }
 
     private static void RegisterReadlineInterfaceType(BuiltInRegistry registry)

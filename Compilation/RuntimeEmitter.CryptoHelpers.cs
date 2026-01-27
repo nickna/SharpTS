@@ -19,6 +19,8 @@ public partial class RuntimeEmitter
         EmitCryptoPbkdf2Sync(typeBuilder, runtime);
         EmitCryptoScryptSync(typeBuilder, runtime);
         EmitCryptoTimingSafeEqual(typeBuilder, runtime);
+        EmitCryptoCreateSign(typeBuilder, runtime);
+        EmitCryptoCreateVerify(typeBuilder, runtime);
 
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
@@ -170,6 +172,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             EmitObjectToKeyBytes(il);
             il.Emit(OpCodes.Call, runtime.CryptoTimingSafeEqual);
+        });
+
+        // createSign(algorithm) -> $Sign
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createSign", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateSign);
+        });
+
+        // createVerify(algorithm) -> $Verify
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createVerify", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);
+            il.Emit(OpCodes.Call, runtime.CryptoCreateVerify);
         });
     }
 
@@ -769,6 +787,46 @@ public partial class RuntimeEmitter
 
         // Box the result and return
         il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateSign(string algorithm)
+    /// </summary>
+    private void EmitCryptoCreateSign(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateSign",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoCreateSign = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Sign(algorithm) - use emitted type for standalone compatibility
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, runtime.TSSignCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateVerify(string algorithm)
+    /// </summary>
+    private void EmitCryptoCreateVerify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateVerify",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        runtime.CryptoCreateVerify = method;
+
+        var il = method.GetILGenerator();
+
+        // new $Verify(algorithm) - use emitted type for standalone compatibility
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, runtime.TSVerifyCtor);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added timingSafeEqual constant-time comparison)
+**Last Updated:** 2026-01-27 (Added createSign/createVerify for RSA/EC signatures)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt + timingSafeEqual; no sign/verify |
+| `crypto` | ⚠️ | Hash + HMAC + Cipher + PBKDF2 + scrypt + timingSafeEqual + Sign/Verify |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -162,7 +162,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | **Comparison** | | |
 | `timingSafeEqual` | ✅ | Constant-time buffer comparison (prevents timing attacks) |
 | **Signing** | | |
-| `createSign` / `createVerify` | ❌ | |
+| `createSign` / `createVerify` | ✅ | RSA and EC keys; SHA1/256/384/512; hex/base64/Buffer output |
 | `generateKeyPair` | ❌ | |
 
 ---

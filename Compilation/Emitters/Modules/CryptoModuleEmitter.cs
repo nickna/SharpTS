@@ -14,7 +14,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
     private static readonly string[] _exportedMembers =
     [
         "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
-        "pbkdf2Sync", "scryptSync", "timingSafeEqual"
+        "pbkdf2Sync", "scryptSync", "timingSafeEqual", "createSign", "createVerify"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -33,6 +33,8 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "pbkdf2Sync" => EmitPbkdf2Sync(emitter, arguments),
             "scryptSync" => EmitScryptSync(emitter, arguments),
             "timingSafeEqual" => EmitTimingSafeEqual(emitter, arguments),
+            "createSign" => EmitCreateSign(emitter, arguments),
+            "createVerify" => EmitCreateVerify(emitter, arguments),
             _ => false
         };
     }
@@ -424,6 +426,50 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoTimingSafeEqual);
+        return true;
+    }
+
+    private static bool EmitCreateSign(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // Default to sha256 if no algorithm specified
+            il.Emit(OpCodes.Ldstr, "sha256");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Call runtime helper to create Sign
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateSign);
+        return true;
+    }
+
+    private static bool EmitCreateVerify(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // Default to sha256 if no algorithm specified
+            il.Emit(OpCodes.Ldstr, "sha256");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Call runtime helper to create Verify
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoCreateVerify);
         return true;
     }
 }

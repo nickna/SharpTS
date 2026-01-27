@@ -33,8 +33,26 @@ public static class CryptoModuleInterpreter
             ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt),
             ["pbkdf2Sync"] = new BuiltInMethod("pbkdf2Sync", 5, Pbkdf2Sync),
             ["scryptSync"] = new BuiltInMethod("scryptSync", 3, 4, ScryptSync),
-            ["timingSafeEqual"] = new BuiltInMethod("timingSafeEqual", 2, TimingSafeEqual)
+            ["timingSafeEqual"] = new BuiltInMethod("timingSafeEqual", 2, TimingSafeEqual),
+            ["createSign"] = new BuiltInMethod("createSign", 1, CreateSign),
+            ["createVerify"] = new BuiltInMethod("createVerify", 1, CreateVerify)
         };
+    }
+
+    private static object? CreateSign(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not string algorithm)
+            throw new Exception("crypto.createSign requires an algorithm name");
+
+        return new SharpTSSign(algorithm);
+    }
+
+    private static object? CreateVerify(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not string algorithm)
+            throw new Exception("crypto.createVerify requires an algorithm name");
+
+        return new SharpTSVerify(algorithm);
     }
 
     private static object? CreateHash(Interp interpreter, object? receiver, List<object?> args)

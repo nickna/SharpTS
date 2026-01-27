@@ -100,6 +100,14 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDecipher
         EmitTSDecipherClass(moduleBuilder, runtime);
 
+        // Emit $Sign class for standalone crypto signing support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSign
+        EmitTSSignClass(moduleBuilder, runtime);
+
+        // Emit $Verify class for standalone crypto verification support
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSVerify
+        EmitTSVerifyClass(moduleBuilder, runtime);
+
         // Emit $TSTimeout class for timer support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTimeout
         EmitTSTimeoutClass(moduleBuilder, runtime);
