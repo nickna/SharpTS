@@ -329,4 +329,326 @@ public class FsModuleTests
         var output = TestHarness.RunModulesCompiled(files, "main.ts");
         Assert.Equal("false\n", output);
     }
+
+    [Fact]
+    public void Fs_Constants_ExportsAccessConstants()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                console.log(fs.constants.F_OK === 0);
+                console.log(fs.constants.R_OK === 4);
+                console.log(fs.constants.W_OK === 2);
+                console.log(fs.constants.X_OK === 1);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Fs_TruncateSync_TruncatesFile()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_truncate.txt';
+
+                fs.writeFileSync(testFile, 'Hello World!');
+                const beforeSize = fs.statSync(testFile).size;
+                console.log(beforeSize > 0);
+
+                fs.truncateSync(testFile, 5);
+                const afterSize = fs.statSync(testFile).size;
+                console.log(afterSize === 5);
+
+                const content = fs.readFileSync(testFile, 'utf8');
+                console.log(content === 'Hello');
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Fs_TruncateSync_ExtendsFileWithZeros()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_truncate_extend.txt';
+
+                fs.writeFileSync(testFile, 'Hi');
+                fs.truncateSync(testFile, 10);
+
+                const stat = fs.statSync(testFile);
+                console.log(stat.size === 10);
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_SymlinkSync_CreatesSymbolicLink()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_symlink_target.txt';
+                const linkPath = 'test_symlink_link.txt';
+
+                fs.writeFileSync(testFile, 'content');
+                fs.symlinkSync(testFile, linkPath);
+
+                console.log(fs.existsSync(linkPath));
+
+                // Cleanup
+                fs.unlinkSync(linkPath);
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_RealpathSync_ResolvesAbsolutePath()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_realpath.txt';
+
+                fs.writeFileSync(testFile, 'content');
+
+                const realPath = fs.realpathSync(testFile);
+                // realPath should be an absolute path
+                console.log(realPath.includes('test_realpath.txt'));
+                console.log(realPath.length > testFile.length);
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Fs_UtimesSync_SetsFileTimes()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_utimes.txt';
+
+                fs.writeFileSync(testFile, 'content');
+
+                // Set times to Unix epoch + 1000000 seconds
+                const timestamp = 1000000;
+                fs.utimesSync(testFile, timestamp, timestamp);
+
+                // File should still exist and be readable
+                console.log(fs.existsSync(testFile));
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_LstatSync_ReturnsSymlinkInfo()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_lstat_target.txt';
+                const linkPath = 'test_lstat_link.txt';
+
+                fs.writeFileSync(testFile, 'content');
+                fs.symlinkSync(testFile, linkPath);
+
+                const stat = fs.lstatSync(linkPath);
+                console.log(stat.isSymbolicLink === true);
+
+                // Cleanup
+                fs.unlinkSync(linkPath);
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_ReaddirSync_WithFileTypes_ReturnsDirentObjects()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testDir = 'test_readdir_dirent';
+
+                fs.mkdirSync(testDir);
+                fs.writeFileSync(testDir + '/file.txt', 'content');
+                fs.mkdirSync(testDir + '/subdir');
+
+                const entries: any = fs.readdirSync(testDir, { withFileTypes: true });
+                console.log(entries.length === 2);
+
+                // Find the file entry - check each entry manually
+                let fileEntry: any = null;
+                let dirEntry: any = null;
+                for (let i = 0; i < entries.length; i++) {
+                    const e = entries[i];
+                    if (e.name === 'file.txt') {
+                        fileEntry = e;
+                    }
+                    if (e.name === 'subdir') {
+                        dirEntry = e;
+                    }
+                }
+                console.log(fileEntry !== null);
+                console.log(fileEntry.isFile === true);
+                console.log(fileEntry.isDirectory === false);
+
+                console.log(dirEntry !== null);
+                console.log(dirEntry.isDirectory === true);
+
+                // Cleanup
+                fs.unlinkSync(testDir + '/file.txt');
+                fs.rmdirSync(testDir + '/subdir');
+                fs.rmdirSync(testDir);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Fs_ChmodSync_DoesNotThrowOnUnix()
+    {
+        // This test checks that chmodSync doesn't throw on Unix
+        // On Windows it's a no-op
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_chmod.txt';
+
+                fs.writeFileSync(testFile, 'content');
+
+                let threw = false;
+                try {
+                    fs.chmodSync(testFile, 420);
+                } catch (e) {
+                    threw = true;
+                }
+                console.log(threw === false);
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_ReadlinkSync_ThrowsForNonSymlink()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+                const testFile = 'test_readlink_regular.txt';
+
+                fs.writeFileSync(testFile, 'content');
+
+                let threw = false;
+                try {
+                    fs.readlinkSync(testFile);
+                } catch (e) {
+                    threw = true;
+                }
+                console.log(threw);
+
+                // Cleanup
+                fs.unlinkSync(testFile);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_TruncateSync_ThrowsForNonexistentFile()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+
+                let threw = false;
+                try {
+                    fs.truncateSync('nonexistent_truncate_test.txt', 0);
+                } catch (e) {
+                    threw = true;
+                }
+                console.log(threw);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Fs_RealpathSync_ThrowsForNonexistentFile()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as fs from 'fs';
+
+                let threw = false;
+                try {
+                    fs.realpathSync('nonexistent_realpath_test.txt');
+                } catch (e) {
+                    threw = true;
+                }
+                console.log(threw);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
 }

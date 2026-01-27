@@ -133,76 +133,168 @@ public static class BuiltInModuleTypes
     public static Dictionary<string, TypeInfo> GetFsModuleTypes()
     {
         var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var voidType = new TypeInfo.Void();
+        var anyType = new TypeInfo.Any();
 
         // Stats-like return type for statSync/lstatSync
         var statsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             ["isDirectory"] = BooleanType,
             ["isFile"] = BooleanType,
+            ["isSymbolicLink"] = BooleanType,
             ["size"] = numberType
+        }.ToFrozenDictionary());
+
+        // Dirent-like type for readdirSync with withFileTypes
+        var direntType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["name"] = stringType,
+            ["isFile"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isDirectory"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isSymbolicLink"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isBlockDevice"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isCharacterDevice"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isFIFO"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)]),
+            ["isSocket"] = new TypeInfo.Union([BooleanType, new TypeInfo.Function([], BooleanType)])
+        }.ToFrozenDictionary());
+
+        // fs.constants type
+        var constantsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["F_OK"] = numberType,
+            ["R_OK"] = numberType,
+            ["W_OK"] = numberType,
+            ["X_OK"] = numberType,
+            ["O_RDONLY"] = numberType,
+            ["O_WRONLY"] = numberType,
+            ["O_RDWR"] = numberType,
+            ["O_CREAT"] = numberType,
+            ["O_EXCL"] = numberType,
+            ["O_TRUNC"] = numberType,
+            ["O_APPEND"] = numberType,
+            ["COPYFILE_EXCL"] = numberType,
+            ["COPYFILE_FICLONE"] = numberType,
+            ["COPYFILE_FICLONE_FORCE"] = numberType,
+            ["S_IFMT"] = numberType,
+            ["S_IFREG"] = numberType,
+            ["S_IFDIR"] = numberType,
+            ["S_IFCHR"] = numberType,
+            ["S_IFBLK"] = numberType,
+            ["S_IFIFO"] = numberType,
+            ["S_IFLNK"] = numberType,
+            ["S_IFSOCK"] = numberType
         }.ToFrozenDictionary());
 
         return new Dictionary<string, TypeInfo>
         {
             // File check - returns false on error (doesn't throw)
-            ["existsSync"] = new TypeInfo.Function([new TypeInfo.String()], BooleanType),
+            ["existsSync"] = new TypeInfo.Function([stringType], BooleanType),
 
             // Read file - returns string if encoding provided, Buffer otherwise
             ["readFileSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Null()])],
-                new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Buffer()]),
+                [stringType, new TypeInfo.Union([stringType, new TypeInfo.Null()])],
+                new TypeInfo.Union([stringType, new TypeInfo.Buffer()]),
                 RequiredParams: 1
             ),
 
             // Write operations - return void
             ["writeFileSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.Union([new TypeInfo.String(), new TypeInfo.Array(numberType)])],
-                new TypeInfo.Void()
+                [stringType, new TypeInfo.Union([stringType, new TypeInfo.Array(numberType)])],
+                voidType
             ),
             ["appendFileSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.String()],
-                new TypeInfo.Void()
+                [stringType, stringType],
+                voidType
             ),
 
             // File/directory deletion
-            ["unlinkSync"] = new TypeInfo.Function([new TypeInfo.String()], new TypeInfo.Void()),
+            ["unlinkSync"] = new TypeInfo.Function([stringType], voidType),
             ["rmdirSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.Any()],
-                new TypeInfo.Void(),
+                [stringType, anyType],
+                voidType,
                 RequiredParams: 1
             ),
 
             // Directory operations
             ["mkdirSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.Any()],
-                new TypeInfo.Void(),
+                [stringType, anyType],
+                voidType,
                 RequiredParams: 1
             ),
             ["readdirSync"] = new TypeInfo.Function(
-                [new TypeInfo.String()],
-                new TypeInfo.Array(new TypeInfo.String())
+                [stringType, anyType],
+                new TypeInfo.Union([new TypeInfo.Array(stringType), new TypeInfo.Array(direntType)]),
+                RequiredParams: 1
             ),
 
             // File info
-            ["statSync"] = new TypeInfo.Function([new TypeInfo.String()], statsType),
-            ["lstatSync"] = new TypeInfo.Function([new TypeInfo.String()], statsType),
+            ["statSync"] = new TypeInfo.Function([stringType], statsType),
+            ["lstatSync"] = new TypeInfo.Function([stringType], statsType),
 
             // File move/copy
             ["renameSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.String()],
-                new TypeInfo.Void()
+                [stringType, stringType],
+                voidType
             ),
             ["copyFileSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), new TypeInfo.String()],
-                new TypeInfo.Void()
+                [stringType, stringType],
+                voidType
             ),
 
             // Access check - throws if not accessible
             ["accessSync"] = new TypeInfo.Function(
-                [new TypeInfo.String(), numberType],
-                new TypeInfo.Void(),
+                [stringType, numberType],
+                voidType,
                 RequiredParams: 1
-            )
+            ),
+
+            // Change file permissions (Unix-specific, no-op on Windows)
+            ["chmodSync"] = new TypeInfo.Function(
+                [stringType, numberType],
+                voidType
+            ),
+
+            // Change file ownership (Unix-specific, throws ENOSYS on Windows)
+            ["chownSync"] = new TypeInfo.Function(
+                [stringType, numberType, numberType],
+                voidType
+            ),
+
+            // Change symlink ownership (doesn't follow symlinks)
+            ["lchownSync"] = new TypeInfo.Function(
+                [stringType, numberType, numberType],
+                voidType
+            ),
+
+            // Truncate file to specified length
+            ["truncateSync"] = new TypeInfo.Function(
+                [stringType, numberType],
+                voidType,
+                RequiredParams: 1
+            ),
+
+            // Create symbolic link
+            ["symlinkSync"] = new TypeInfo.Function(
+                [stringType, stringType, stringType],
+                voidType,
+                RequiredParams: 2
+            ),
+
+            // Read symbolic link target
+            ["readlinkSync"] = new TypeInfo.Function([stringType], stringType),
+
+            // Resolve to absolute path (resolving symlinks)
+            ["realpathSync"] = new TypeInfo.Function([stringType], stringType),
+
+            // Set file access and modification times
+            ["utimesSync"] = new TypeInfo.Function(
+                [stringType, numberType, numberType],
+                voidType
+            ),
+
+            // Constants object
+            ["constants"] = constantsType
         };
     }
 

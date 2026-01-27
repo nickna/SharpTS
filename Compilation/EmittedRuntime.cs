@@ -601,9 +601,20 @@ public class EmittedRuntime
     public MethodBuilder FsRmdirSync { get; set; } = null!;
     public MethodBuilder FsReaddirSync { get; set; } = null!;
     public MethodBuilder FsStatSync { get; set; } = null!;
+    public MethodBuilder FsLstatSync { get; set; } = null!;
     public MethodBuilder FsRenameSync { get; set; } = null!;
     public MethodBuilder FsCopyFileSync { get; set; } = null!;
     public MethodBuilder FsAccessSync { get; set; } = null!;
+    public MethodBuilder FsChmodSync { get; set; } = null!;
+    public MethodBuilder FsChownSync { get; set; } = null!;
+    public MethodBuilder FsLchownSync { get; set; } = null!;
+    public MethodBuilder FsTruncateSync { get; set; } = null!;
+    public MethodBuilder FsSymlinkSync { get; set; } = null!;
+    public MethodBuilder FsReadlinkSync { get; set; } = null!;
+    public MethodBuilder FsRealpathSync { get; set; } = null!;
+    public MethodBuilder FsUtimesSync { get; set; } = null!;
+    public MethodBuilder FsGetConstants { get; set; } = null!;
+    public MethodBuilder FsCreateDirent { get; set; } = null!;
 
     // NodeError conversion helpers
     public MethodBuilder ConvertToNodeError { get; set; } = null!;
