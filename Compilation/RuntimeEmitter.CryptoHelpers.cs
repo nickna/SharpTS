@@ -28,6 +28,20 @@ public partial class RuntimeEmitter
         EmitCryptoGetDiffieHellman(typeBuilder, runtime);
         EmitCryptoCreateECDH(typeBuilder, runtime);
 
+        // RSA encryption/decryption
+        EmitCryptoPublicEncrypt(typeBuilder, runtime);
+        EmitCryptoPrivateDecrypt(typeBuilder, runtime);
+        EmitCryptoPrivateEncrypt(typeBuilder, runtime);
+        EmitCryptoPublicDecrypt(typeBuilder, runtime);
+
+        // HKDF key derivation
+        EmitCryptoHkdfSync(typeBuilder, runtime);
+
+        // KeyObject API
+        EmitCryptoCreateSecretKey(typeBuilder, runtime);
+        EmitCryptoCreatePublicKey(typeBuilder, runtime);
+        EmitCryptoCreatePrivateKey(typeBuilder, runtime);
+
         // Emit wrapper methods for named imports
         EmitCryptoMethodWrappers(typeBuilder, runtime);
     }
@@ -239,6 +253,80 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             EmitObjectToString(il);
             il.Emit(OpCodes.Call, runtime.CryptoCreateECDH);
+        });
+
+        // publicEncrypt(key, buffer) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "publicEncrypt", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);  // buffer as byte[]
+            il.Emit(OpCodes.Call, runtime.CryptoPublicEncrypt);
+        });
+
+        // privateDecrypt(key, buffer) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "privateDecrypt", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);  // buffer as byte[]
+            il.Emit(OpCodes.Call, runtime.CryptoPrivateDecrypt);
+        });
+
+        // privateEncrypt(key, buffer) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "privateEncrypt", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);  // buffer as byte[]
+            il.Emit(OpCodes.Call, runtime.CryptoPrivateEncrypt);
+        });
+
+        // publicDecrypt(key, buffer) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "publicDecrypt", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);  // buffer as byte[]
+            il.Emit(OpCodes.Call, runtime.CryptoPublicDecrypt);
+        });
+
+        // hkdfSync(digest, ikm, salt, info, keylen) -> Buffer
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "hkdfSync", 5, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            EmitObjectToString(il);  // digest
+            il.Emit(OpCodes.Ldarg_1);
+            EmitObjectToKeyBytes(il);  // ikm
+            il.Emit(OpCodes.Ldarg_2);
+            EmitObjectToKeyBytes(il);  // salt
+            il.Emit(OpCodes.Ldarg_3);
+            EmitObjectToKeyBytes(il);  // info
+            il.Emit(OpCodes.Ldarg, 4);
+            EmitObjectToInt32(il);  // keylen
+            il.Emit(OpCodes.Call, runtime.CryptoHkdfSync);
+        });
+
+        // createSecretKey(key, encoding?) -> KeyObject
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createSecretKey", 2, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Ldarg_1);  // encoding (can be null)
+            il.Emit(OpCodes.Call, runtime.CryptoCreateSecretKey);
+        });
+
+        // createPublicKey(key) -> KeyObject
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createPublicKey", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Call, runtime.CryptoCreatePublicKey);
+        });
+
+        // createPrivateKey(key) -> KeyObject
+        EmitCryptoMethodWrapper(typeBuilder, runtime, "createPrivateKey", 1, il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);  // key (as object)
+            il.Emit(OpCodes.Call, runtime.CryptoCreatePrivateKey);
         });
     }
 
@@ -1067,6 +1155,211 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(CryptoECDHHelper).GetMethod("CreateECDH")!);
         il.Emit(OpCodes.Ret);
     }
+
+    #region RSA Encryption/Decryption
+
+    /// <summary>
+    /// Emits: public static object CryptoPublicEncrypt(object key, byte[] buffer)
+    /// Encrypts data using RSA-OAEP with SHA-1.
+    /// </summary>
+    private void EmitCryptoPublicEncrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoPublicEncrypt",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoPublicEncrypt = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns byte[]
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Ldarg_1);  // buffer
+        il.Emit(OpCodes.Call, typeof(CryptoRsaHelper).GetMethod("PublicEncryptRaw")!);
+
+        // Wrap result in $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoPrivateDecrypt(object key, byte[] buffer)
+    /// Decrypts data using RSA-OAEP with SHA-1.
+    /// </summary>
+    private void EmitCryptoPrivateDecrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoPrivateDecrypt",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoPrivateDecrypt = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns byte[]
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Ldarg_1);  // buffer
+        il.Emit(OpCodes.Call, typeof(CryptoRsaHelper).GetMethod("PrivateDecryptRaw")!);
+
+        // Wrap result in $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoPrivateEncrypt(object key, byte[] buffer)
+    /// Encrypts data using private key (PKCS#1 v1.5 signing primitive).
+    /// </summary>
+    private void EmitCryptoPrivateEncrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoPrivateEncrypt",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoPrivateEncrypt = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns byte[]
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Ldarg_1);  // buffer
+        il.Emit(OpCodes.Call, typeof(CryptoRsaHelper).GetMethod("PrivateEncryptRaw")!);
+
+        // Wrap result in $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoPublicDecrypt(object key, byte[] buffer)
+    /// Decrypts data using public key (PKCS#1 v1.5 verification primitive).
+    /// </summary>
+    private void EmitCryptoPublicDecrypt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoPublicDecrypt",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.MakeArrayType(_types.Byte)]);
+        runtime.CryptoPublicDecrypt = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns byte[]
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Ldarg_1);  // buffer
+        il.Emit(OpCodes.Call, typeof(CryptoRsaHelper).GetMethod("PublicDecryptRaw")!);
+
+        // Wrap result in $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region HKDF
+
+    /// <summary>
+    /// Emits: public static object CryptoHkdfSync(string digest, byte[] ikm, byte[] salt, byte[] info, int keylen)
+    /// HKDF key derivation (RFC 5869).
+    /// </summary>
+    private void EmitCryptoHkdfSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoHkdfSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.MakeArrayType(_types.Byte), _types.MakeArrayType(_types.Byte),
+             _types.MakeArrayType(_types.Byte), _types.Int32]);
+        runtime.CryptoHkdfSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper that returns byte[]
+        il.Emit(OpCodes.Ldarg_0);  // digest
+        il.Emit(OpCodes.Ldarg_1);  // ikm
+        il.Emit(OpCodes.Ldarg_2);  // salt
+        il.Emit(OpCodes.Ldarg_3);  // info
+        il.Emit(OpCodes.Ldarg, 4); // keylen
+        il.Emit(OpCodes.Call, typeof(CryptoHkdfHelper).GetMethod("DeriveKeyRaw")!);
+
+        // Wrap result in $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
+
+    #region KeyObject
+
+    /// <summary>
+    /// Emits: public static object CryptoCreateSecretKey(object key, object? encoding)
+    /// Creates a secret (symmetric) KeyObject.
+    /// </summary>
+    private void EmitCryptoCreateSecretKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreateSecretKey",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+        runtime.CryptoCreateSecretKey = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Ldarg_1);  // encoding
+        il.Emit(OpCodes.Call, typeof(CryptoKeyObjectHelper).GetMethod("CreateSecretKey")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreatePublicKey(object key)
+    /// Creates a public KeyObject from PEM.
+    /// </summary>
+    private void EmitCryptoCreatePublicKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreatePublicKey",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.CryptoCreatePublicKey = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Call, typeof(CryptoKeyObjectHelper).GetMethod("CreatePublicKey")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoCreatePrivateKey(object key)
+    /// Creates a private KeyObject from PEM.
+    /// </summary>
+    private void EmitCryptoCreatePrivateKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoCreatePrivateKey",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.CryptoCreatePrivateKey = method;
+
+        var il = method.GetILGenerator();
+
+        // Call static helper
+        il.Emit(OpCodes.Ldarg_0);  // key
+        il.Emit(OpCodes.Call, typeof(CryptoKeyObjectHelper).GetMethod("CreatePrivateKey")!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -1494,5 +1787,259 @@ public static class CryptoECDHHelper
     public static object CreateECDH(string curveName)
     {
         return new SharpTS.Runtime.Types.SharpTSECDH(curveName);
+    }
+}
+
+/// <summary>
+/// Static helper for RSA encryption/decryption operations.
+/// Used by compiled code.
+/// </summary>
+public static class CryptoRsaHelper
+{
+    /// <summary>
+    /// Encrypts data using RSA-OAEP with SHA-1 (Node.js default).
+    /// Returns raw bytes for wrapping by the emitter.
+    /// </summary>
+    public static byte[] PublicEncryptRaw(object key, byte[] buffer)
+    {
+        var keyPem = ExtractKeyPem(key);
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+        return rsa.Encrypt(buffer, RSAEncryptionPadding.OaepSHA1);
+    }
+
+    /// <summary>
+    /// Decrypts data using RSA-OAEP with SHA-1 (Node.js default).
+    /// Returns raw bytes for wrapping by the emitter.
+    /// </summary>
+    public static byte[] PrivateDecryptRaw(object key, byte[] buffer)
+    {
+        var keyPem = ExtractKeyPem(key);
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+        return rsa.Decrypt(buffer, RSAEncryptionPadding.OaepSHA1);
+    }
+
+    /// <summary>
+    /// Encrypts data using private key with PKCS#1 v1.5 (signing primitive).
+    /// Returns raw bytes for wrapping by the emitter.
+    /// </summary>
+    public static byte[] PrivateEncryptRaw(object key, byte[] buffer)
+    {
+        var keyPem = ExtractKeyPem(key);
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+        // privateEncrypt uses Decrypt with Pkcs1 as a workaround for raw RSA operation
+        return rsa.Decrypt(buffer, RSAEncryptionPadding.Pkcs1);
+    }
+
+    /// <summary>
+    /// Decrypts data using public key with PKCS#1 v1.5 (verification primitive).
+    /// Returns raw bytes for wrapping by the emitter.
+    /// </summary>
+    public static byte[] PublicDecryptRaw(object key, byte[] buffer)
+    {
+        var keyPem = ExtractKeyPem(key);
+        using var rsa = RSA.Create();
+        rsa.ImportFromPem(keyPem);
+        // publicDecrypt uses Encrypt with Pkcs1 as a workaround for raw RSA operation
+        return rsa.Encrypt(buffer, RSAEncryptionPadding.Pkcs1);
+    }
+
+    private static string ExtractKeyPem(object key)
+    {
+        if (key is string pem)
+            return pem;
+
+        if (key is SharpTS.Runtime.Types.SharpTSKeyObject keyObj)
+        {
+            if (keyObj.RsaKey != null)
+            {
+                return keyObj.Type == SharpTS.Runtime.Types.KeyObjectType.Private
+                    ? keyObj.RsaKey.ExportPkcs8PrivateKeyPem()
+                    : keyObj.RsaKey.ExportSubjectPublicKeyInfoPem();
+            }
+            throw new ArgumentException("KeyObject must contain an RSA key");
+        }
+
+        // Check for object with 'key' property
+        var type = key.GetType();
+        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
+        if (getPropertyMethod != null)
+        {
+            var keyValue = getPropertyMethod.Invoke(key, ["key"]);
+            if (keyValue is string keyStr)
+                return keyStr;
+        }
+
+        var fieldsProperty = type.GetProperty("Fields");
+        if (fieldsProperty != null)
+        {
+            var fields = fieldsProperty.GetValue(key) as IReadOnlyDictionary<string, object?>;
+            if (fields != null && fields.TryGetValue("key", out var val) && val is string keyStr)
+                return keyStr;
+        }
+
+        throw new ArgumentException("Key must be a PEM string, KeyObject, or object with 'key' property");
+    }
+}
+
+/// <summary>
+/// Static helper for HKDF key derivation.
+/// Used by compiled code.
+/// </summary>
+public static class CryptoHkdfHelper
+{
+    /// <summary>
+    /// Derives a key using HKDF (RFC 5869).
+    /// Returns raw bytes for wrapping by the emitter.
+    /// </summary>
+    public static byte[] DeriveKeyRaw(string digest, byte[] ikm, byte[] salt, byte[] info, int keylen)
+    {
+        if (keylen < 0)
+            throw new ArgumentException("crypto.hkdfSync: keylen must be non-negative");
+
+        // Handle zero key length specially - .NET doesn't allow 0 but Node.js does
+        if (keylen == 0)
+            return [];
+
+        var hashAlgorithm = digest.ToLowerInvariant() switch
+        {
+            "sha1" => HashAlgorithmName.SHA1,
+            "sha256" => HashAlgorithmName.SHA256,
+            "sha384" => HashAlgorithmName.SHA384,
+            "sha512" => HashAlgorithmName.SHA512,
+            _ => throw new ArgumentException($"crypto.hkdfSync: unsupported digest algorithm '{digest}'. Supported: sha1, sha256, sha384, sha512")
+        };
+
+        return HKDF.DeriveKey(hashAlgorithm, ikm, keylen, salt, info);
+    }
+}
+
+/// <summary>
+/// Static helper for KeyObject creation.
+/// Used by compiled code.
+/// </summary>
+public static class CryptoKeyObjectHelper
+{
+    /// <summary>
+    /// Creates a secret (symmetric) KeyObject.
+    /// </summary>
+    public static object CreateSecretKey(object key, object? encoding)
+    {
+        byte[] keyBytes;
+
+        if (key is string keyStr)
+        {
+            var enc = encoding?.ToString() ?? "utf8";
+            keyBytes = enc.ToLowerInvariant() switch
+            {
+                "utf8" or "utf-8" => System.Text.Encoding.UTF8.GetBytes(keyStr),
+                "hex" => Convert.FromHexString(keyStr),
+                "base64" => Convert.FromBase64String(keyStr),
+                "latin1" or "binary" => System.Text.Encoding.Latin1.GetBytes(keyStr),
+                _ => throw new ArgumentException($"crypto.createSecretKey: unsupported encoding '{enc}'")
+            };
+        }
+        else if (key is SharpTS.Runtime.Types.SharpTSBuffer buf)
+        {
+            keyBytes = buf.Data;
+        }
+        else if (key is byte[] bytes)
+        {
+            keyBytes = bytes;
+        }
+        else
+        {
+            // Try to extract bytes from compiled $Buffer type
+            var extracted = ExtractBufferBytes(key);
+            if (extracted == null)
+                throw new ArgumentException("crypto.createSecretKey: key must be a Buffer or string");
+            keyBytes = extracted;
+        }
+
+        return new SharpTS.Runtime.Types.SharpTSKeyObject(keyBytes);
+    }
+
+    /// <summary>
+    /// Creates a public KeyObject from PEM.
+    /// </summary>
+    public static object CreatePublicKey(object key)
+    {
+        string pem = ExtractPem(key);
+        return SharpTS.Runtime.Types.SharpTSKeyObject.CreatePublicKey(pem);
+    }
+
+    /// <summary>
+    /// Creates a private KeyObject from PEM.
+    /// </summary>
+    public static object CreatePrivateKey(object key)
+    {
+        string pem = ExtractPem(key);
+        return SharpTS.Runtime.Types.SharpTSKeyObject.CreatePrivateKey(pem);
+    }
+
+    /// <summary>
+    /// Extracts bytes from a Buffer-like object (either SharpTSBuffer or compiled $Buffer).
+    /// </summary>
+    private static byte[]? ExtractBufferBytes(object obj)
+    {
+        if (obj is SharpTS.Runtime.Types.SharpTSBuffer buf)
+            return buf.Data;
+
+        if (obj is byte[] bytes)
+            return bytes;
+
+        var type = obj.GetType();
+
+        // Try to get Data property via reflection (for interpreter types)
+        var dataProperty = type.GetProperty("Data");
+        if (dataProperty != null && dataProperty.PropertyType == typeof(byte[]))
+        {
+            return dataProperty.GetValue(obj) as byte[];
+        }
+
+        // Try to call GetData() method via reflection (for compiled $Buffer)
+        var getDataMethod = type.GetMethod("GetData", Type.EmptyTypes);
+        if (getDataMethod != null && getDataMethod.ReturnType == typeof(byte[]))
+        {
+            return getDataMethod.Invoke(obj, null) as byte[];
+        }
+
+        return null;
+    }
+
+    private static string ExtractPem(object key)
+    {
+        if (key is string pem)
+            return pem;
+
+        if (key is SharpTS.Runtime.Types.SharpTSBuffer buf)
+            return System.Text.Encoding.UTF8.GetString(buf.Data);
+
+        // Try to get bytes from compiled $Buffer
+        var bytes = ExtractBufferBytes(key);
+        if (bytes != null)
+            return System.Text.Encoding.UTF8.GetString(bytes);
+
+        // Check for object with 'key' property
+        var type = key.GetType();
+        var getPropertyMethod = type.GetMethod("GetProperty", [typeof(string)]);
+        if (getPropertyMethod != null)
+        {
+            var keyValue = getPropertyMethod.Invoke(key, ["key"]);
+            if (keyValue is string keyStr)
+                return keyStr;
+        }
+
+        var fieldsProperty = type.GetProperty("Fields");
+        if (fieldsProperty != null)
+        {
+            var fields = fieldsProperty.GetValue(key) as IReadOnlyDictionary<string, object?>;
+            if (fields != null && fields.TryGetValue("key", out var val) && val is string keyStr)
+                return keyStr;
+        }
+
+        throw new ArgumentException("Key must be a PEM string, Buffer, or object with 'key' property");
     }
 }

@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added file descriptor APIs, directory utilities, hard links)
+**Last Updated:** 2026-01-27 (Added RSA encrypt/decrypt, HKDF, KeyObject API)
 
 ## Legend
 - ✅ Implemented
@@ -19,7 +19,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
-| `crypto` | ⚠️ | Hash, HMAC, Cipher, PBKDF2, scrypt, timingSafeEqual, Sign/Verify, DH/ECDH, KeyPair |
+| `crypto` | ⚠️ | Hash, HMAC, Cipher, PBKDF2, scrypt, HKDF, RSA encrypt/decrypt, Sign/Verify, DH/ECDH, KeyPair, KeyObject |
 | `url` | ✅ | WHATWG URL + legacy parse/format/resolve |
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
@@ -192,6 +192,23 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | **Discovery** | | |
 | `getHashes` | ✅ | Returns array of supported hash algorithms |
 | `getCiphers` | ✅ | Returns array of supported cipher algorithms |
+| **RSA Encryption** | | |
+| `publicEncrypt` | ✅ | RSA-OAEP encryption (SHA-1 default) |
+| `privateDecrypt` | ✅ | RSA-OAEP decryption |
+| `privateEncrypt` | ✅ | RSA PKCS#1 v1.5 signing primitive |
+| `publicDecrypt` | ✅ | RSA PKCS#1 v1.5 verification primitive |
+| **HKDF** | | |
+| `hkdfSync` | ✅ | HKDF key derivation (RFC 5869); sha256, sha384, sha512 |
+| `hkdf` | ❌ | Async version - use sync version |
+| **KeyObject** | | |
+| `createSecretKey` | ✅ | Create symmetric KeyObject from Buffer |
+| `createPublicKey` | ✅ | Create public KeyObject from PEM |
+| `createPrivateKey` | ✅ | Create private KeyObject from PEM |
+| `KeyObject.type` | ✅ | 'secret', 'public', or 'private' |
+| `KeyObject.asymmetricKeyType` | ✅ | 'rsa' or 'ec' (undefined for secret) |
+| `KeyObject.asymmetricKeyDetails` | ✅ | modulusLength/publicExponent for RSA, namedCurve for EC |
+| `KeyObject.symmetricKeySize` | ✅ | Byte length (secret keys only) |
+| `KeyObject.export()` | ✅ | Export to PEM string or Buffer |
 
 ---
 

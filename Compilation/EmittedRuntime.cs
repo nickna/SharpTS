@@ -745,6 +745,22 @@ public class EmittedRuntime
     public Type TSECDHType { get; set; } = null!;
     public ConstructorBuilder TSECDHCtor { get; set; } = null!;
 
+    // RSA encryption/decryption
+    public MethodBuilder CryptoPublicEncrypt { get; set; } = null!;
+    public MethodBuilder CryptoPrivateDecrypt { get; set; } = null!;
+    public MethodBuilder CryptoPrivateEncrypt { get; set; } = null!;
+    public MethodBuilder CryptoPublicDecrypt { get; set; } = null!;
+
+    // HKDF key derivation
+    public MethodBuilder CryptoHkdfSync { get; set; } = null!;
+
+    // KeyObject support
+    public MethodBuilder CryptoCreateSecretKey { get; set; } = null!;
+    public MethodBuilder CryptoCreatePublicKey { get; set; } = null!;
+    public MethodBuilder CryptoCreatePrivateKey { get; set; } = null!;
+    public Type TSKeyObjectType { get; set; } = null!;
+    public ConstructorBuilder TSKeyObjectCtorSecret { get; set; } = null!;
+
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
     public Type TSBufferType { get; set; } = null!;
