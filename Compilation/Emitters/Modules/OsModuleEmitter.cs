@@ -17,7 +17,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
     [
         "platform", "arch", "hostname", "homedir", "tmpdir",
         "type", "release", "cpus", "totalmem", "freemem",
-        "EOL", "userInfo"
+        "EOL", "userInfo", "loadavg", "networkInterfaces"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -40,6 +40,8 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
             "totalmem" => EmitTotalmem(emitter),
             "freemem" => EmitFreemem(emitter),
             "userInfo" => EmitUserInfo(emitter),
+            "loadavg" => EmitLoadavg(emitter),
+            "networkInterfaces" => EmitNetworkInterfaces(emitter),
             _ => false
         };
     }
@@ -353,6 +355,27 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         il.Emit(OpCodes.Call, typeof(Environment).GetProperty("NewLine")!.GetMethod!);
+        return true;
+    }
+
+    private static bool EmitLoadavg(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call the emitted OsLoadavg runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.OsLoadavg);
+        return true;
+    }
+
+    private static bool EmitNetworkInterfaces(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call the emitted OsNetworkInterfaces runtime helper and wrap in TSObject
+        il.Emit(OpCodes.Call, ctx.Runtime!.OsNetworkInterfaces);
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
         return true;
     }
 }

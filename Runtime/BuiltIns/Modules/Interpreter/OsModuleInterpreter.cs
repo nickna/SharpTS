@@ -1,3 +1,4 @@
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using SharpTS.Runtime.Types;
 using Interp = SharpTS.Execution.Interpreter;
@@ -32,6 +33,8 @@ public static class OsModuleInterpreter
             ["totalmem"] = new BuiltInMethod("totalmem", 0, 0, Totalmem),
             ["freemem"] = new BuiltInMethod("freemem", 0, 0, Freemem),
             ["userInfo"] = new BuiltInMethod("userInfo", 0, 0, UserInfo),
+            ["loadavg"] = new BuiltInMethod("loadavg", 0, 0, Loadavg),
+            ["networkInterfaces"] = new BuiltInMethod("networkInterfaces", 0, 0, NetworkInterfaces),
 
             // Properties
             ["EOL"] = Environment.NewLine
@@ -301,5 +304,190 @@ public static class OsModuleInterpreter
             ["shell"] = null,  // Not available on Windows
             ["homedir"] = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         });
+    }
+
+    /// <summary>
+    /// Returns the system load averages for 1, 5, and 15 minutes.
+    /// On Windows, returns [0, 0, 0] per Node.js specification.
+    /// </summary>
+    private static object? Loadavg(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var loadavg = GetLoadAverage();
+        return new SharpTSArray([loadavg[0], loadavg[1], loadavg[2]]);
+    }
+
+    /// <summary>
+    /// Gets the load average as an array of 3 doubles (1, 5, 15 minute averages).
+    /// </summary>
+    private static double[] GetLoadAverage()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // Windows does not have load averages, return [0, 0, 0] per Node.js behavior
+            return [0.0, 0.0, 0.0];
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return GetLinuxLoadAverage();
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return GetMacOSLoadAverage();
+        }
+
+        // Unknown platform, return zeros
+        return [0.0, 0.0, 0.0];
+    }
+
+    private static double[] GetLinuxLoadAverage()
+    {
+        try
+        {
+            // Parse /proc/loadavg: "0.50 0.60 0.70 1/234 12345"
+            var content = File.ReadAllText("/proc/loadavg");
+            var parts = content.Split(' ');
+            if (parts.Length >= 3)
+            {
+                return [
+                    double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture),
+                    double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
+                    double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture)
+                ];
+            }
+        }
+        catch
+        {
+            // Fall through to default
+        }
+        return [0.0, 0.0, 0.0];
+    }
+
+    private static double[] GetMacOSLoadAverage()
+    {
+        try
+        {
+            // Execute: sysctl -n vm.loadavg
+            // Output: "{ 0.50 0.60 0.70 }"
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "/usr/bin/sysctl",
+                Arguments = "-n vm.loadavg",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process == null) return [0.0, 0.0, 0.0];
+
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            // Parse "{ 0.50 0.60 0.70 }"
+            var trimmed = output.Trim().TrimStart('{').TrimEnd('}').Trim();
+            var parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 3)
+            {
+                return [
+                    double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture),
+                    double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
+                    double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture)
+                ];
+            }
+        }
+        catch
+        {
+            // Fall through to default
+        }
+        return [0.0, 0.0, 0.0];
+    }
+
+    /// <summary>
+    /// Returns network interface information as an object with interface names as keys.
+    /// </summary>
+    private static object? NetworkInterfaces(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var result = new Dictionary<string, object?>();
+
+        try
+        {
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces();
+            foreach (var nic in interfaces)
+            {
+                var addressList = new List<object?>();
+                var ipProps = nic.GetIPProperties();
+                var mac = nic.GetPhysicalAddress();
+                var macString = BitConverter.ToString(mac.GetAddressBytes()).Replace('-', ':').ToLowerInvariant();
+                if (string.IsNullOrEmpty(macString)) macString = "00:00:00:00:00:00";
+
+                var isInternal = nic.NetworkInterfaceType == NetworkInterfaceType.Loopback;
+
+                foreach (var unicast in ipProps.UnicastAddresses)
+                {
+                    var address = unicast.Address.ToString();
+                    var family = unicast.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                        ? "IPv4"
+                        : "IPv6";
+
+                    // Calculate netmask from prefix length
+                    var prefixLength = unicast.PrefixLength;
+                    var netmask = GetNetmaskFromPrefixLength(prefixLength, family);
+                    var cidr = $"{address}/{prefixLength}";
+
+                    addressList.Add(new SharpTSObject(new Dictionary<string, object?>
+                    {
+                        ["address"] = address,
+                        ["netmask"] = netmask,
+                        ["family"] = family,
+                        ["mac"] = macString,
+                        ["internal"] = isInternal,
+                        ["cidr"] = cidr
+                    }));
+                }
+
+                if (addressList.Count > 0)
+                {
+                    result[nic.Name] = new SharpTSArray(addressList);
+                }
+            }
+        }
+        catch
+        {
+            // Return empty object on error
+        }
+
+        return new SharpTSObject(result);
+    }
+
+    /// <summary>
+    /// Converts a prefix length to a netmask string.
+    /// </summary>
+    private static string GetNetmaskFromPrefixLength(int prefixLength, string family)
+    {
+        if (family == "IPv4")
+        {
+            if (prefixLength < 0 || prefixLength > 32) return "255.255.255.255";
+            uint mask = prefixLength == 0 ? 0 : 0xFFFFFFFF << (32 - prefixLength);
+            return $"{(mask >> 24) & 0xFF}.{(mask >> 16) & 0xFF}.{(mask >> 8) & 0xFF}.{mask & 0xFF}";
+        }
+        else
+        {
+            // IPv6 - return the prefix length representation
+            // Full netmask would be complex; Node.js typically uses the hex representation
+            if (prefixLength < 0 || prefixLength > 128) prefixLength = 128;
+
+            // Create IPv6 netmask
+            var bytes = new byte[16];
+            for (int i = 0; i < 16; i++)
+            {
+                int bitsInThisByte = Math.Min(8, Math.Max(0, prefixLength - i * 8));
+                bytes[i] = (byte)(0xFF << (8 - bitsInThisByte));
+            }
+
+            // Format as IPv6 address
+            return string.Format("{0:x2}{1:x2}:{2:x2}{3:x2}:{4:x2}{5:x2}:{6:x2}{7:x2}:{8:x2}{9:x2}:{10:x2}{11:x2}:{12:x2}{13:x2}:{14:x2}{15:x2}",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
+        }
     }
 }

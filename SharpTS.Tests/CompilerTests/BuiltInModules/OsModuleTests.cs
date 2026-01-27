@@ -376,4 +376,92 @@ public class OsModuleTests
         var output = TestHarness.RunModulesCompiled(files, "main.ts");
         Assert.Equal("true\n", output);
     }
+
+    // ============ LOADAVG TESTS ============
+
+    [Fact]
+    public void Os_Loadavg_ReturnsArrayOfThreeNumbers()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as os from 'os';
+                const loadavg = os.loadavg();
+                console.log(Array.isArray(loadavg));
+                console.log(loadavg.length === 3);
+                console.log(typeof loadavg[0] === 'number');
+                console.log(typeof loadavg[1] === 'number');
+                console.log(typeof loadavg[2] === 'number');
+                console.log(loadavg[0] >= 0);
+                console.log(loadavg[1] >= 0);
+                console.log(loadavg[2] >= 0);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Os_Loadavg_WindowsReturnsZeros()
+    {
+        // On Windows, loadavg should return [0, 0, 0]
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as os from 'os';
+                const platform = os.platform();
+                const loadavg = os.loadavg();
+                if (platform === 'win32') {
+                    console.log(loadavg[0] === 0 && loadavg[1] === 0 && loadavg[2] === 0);
+                } else {
+                    // On other platforms, just verify it's valid numbers
+                    console.log(loadavg[0] >= 0 && loadavg[1] >= 0 && loadavg[2] >= 0);
+                }
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    // ============ NETWORKINTERFACES TESTS ============
+
+    [Fact]
+    public void Os_NetworkInterfaces_ReturnsObject()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as os from 'os';
+                const interfaces = os.networkInterfaces();
+                console.log(typeof interfaces === 'object');
+                console.log(interfaces !== null);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Os_NetworkInterfaces_IsValidObject()
+    {
+        // In compiled mode, networkInterfaces returns an empty object
+        // This test verifies the function is callable and returns a valid object
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as os from 'os';
+                const interfaces = os.networkInterfaces();
+                console.log(typeof interfaces === 'object');
+                console.log(interfaces !== null);
+                const keys = Object.keys(interfaces);
+                console.log(Array.isArray(keys));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
 }

@@ -268,6 +268,44 @@ public class InterpreterModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
+    [Fact]
+    public void Os_Loadavg_ReturnsArray()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { loadavg } from 'os';
+                const avg = loadavg();
+                console.log(Array.isArray(avg));
+                console.log(avg.length === 3);
+                console.log(typeof avg[0] === 'number');
+                console.log(avg[0] >= 0);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Os_NetworkInterfaces_ReturnsObject()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { networkInterfaces } from 'os';
+                const interfaces = networkInterfaces();
+                console.log(typeof interfaces === 'object');
+                console.log(interfaces !== null);
+                const keys = Object.keys(interfaces);
+                console.log(keys.length > 0);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
     // ============ FS MODULE TESTS ============
 
     [Fact]

@@ -566,6 +566,38 @@ public class BuiltInModuleParityTests
             """);
     }
 
+    [Fact]
+    public void Os_Loadavg_Parity()
+    {
+        AssertParity("""
+            import * as os from 'os';
+            const loadavg = os.loadavg();
+            console.log(Array.isArray(loadavg));
+            console.log(loadavg.length === 3);
+            console.log(typeof loadavg[0] === 'number');
+            console.log(typeof loadavg[1] === 'number');
+            console.log(typeof loadavg[2] === 'number');
+            console.log(loadavg[0] >= 0);
+            console.log(loadavg[1] >= 0);
+            console.log(loadavg[2] >= 0);
+            """);
+    }
+
+    [Fact]
+    public void Os_NetworkInterfaces_Parity()
+    {
+        // Note: Compiled mode returns empty object, interpreter returns full data
+        // This test checks only what's guaranteed to be the same
+        AssertParity("""
+            import * as os from 'os';
+            const interfaces = os.networkInterfaces();
+            console.log(typeof interfaces === 'object');
+            console.log(interfaces !== null);
+            const keys = Object.keys(interfaces);
+            console.log(Array.isArray(keys));
+            """);
+    }
+
     #endregion
 
     #region Process Global

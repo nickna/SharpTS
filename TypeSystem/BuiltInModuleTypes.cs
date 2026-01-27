@@ -122,6 +122,14 @@ public static class BuiltInModuleTypes
                 }.ToFrozenDictionary())
             ),
 
+            // loadavg() -> number[] (1, 5, 15 minute load averages)
+            ["loadavg"] = new TypeInfo.Function([], new TypeInfo.Array(numberType)),
+
+            // networkInterfaces() -> object with interface names as keys
+            ["networkInterfaces"] = new TypeInfo.Function([],
+                new TypeInfo.Any()  // Returns dynamic object structure
+            ),
+
             // Properties
             ["EOL"] = new TypeInfo.String()
         };

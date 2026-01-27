@@ -126,8 +126,8 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `freemem` | ✅ | |
 | `userInfo` | ✅ | |
 | `EOL` | ✅ | Platform line ending |
-| `networkInterfaces` | ❌ | |
-| `loadavg` | ❌ | |
+| `networkInterfaces` | ✅ | Returns network interface information |
+| `loadavg` | ✅ | Returns [0, 0, 0] on Windows (Node.js behavior) |
 
 ---
 

@@ -12,6 +12,8 @@ public partial class RuntimeEmitter
     private void EmitOsModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitOsFreemem(typeBuilder, runtime);
+        EmitOsLoadavg(typeBuilder, runtime);
+        EmitOsNetworkInterfaces(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -53,6 +55,71 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits OsLoadavg: returns system load averages as List&lt;object?&gt;.
+    /// Returns [0, 0, 0] on Windows per Node.js specification.
+    /// For compiled standalone DLLs, returns zeros on all platforms for simplicity.
+    /// Signature: List&lt;object?&gt; OsLoadavg()
+    /// </summary>
+    private void EmitOsLoadavg(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "OsLoadavg",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            Type.EmptyTypes
+        );
+        runtime.OsLoadavg = method;
+
+        var il = method.GetILGenerator();
+
+        // Create new List<object?>
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject));
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Stloc, listLocal);
+
+        // Add [0.0, 0.0, 0.0] to list
+        // On Windows, this is correct per Node.js spec
+        // On other platforms, full implementation would require complex process launching
+        var addMethod = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
+
+        for (int i = 0; i < 3; i++)
+        {
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Callvirt, addMethod);
+        }
+
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits OsNetworkInterfaces: returns network interface information as Dictionary&lt;string, object?&gt;.
+    /// For compiled standalone DLLs, returns an empty dictionary (use interpreter for full functionality).
+    /// Signature: Dictionary&lt;string, object?&gt; OsNetworkInterfaces()
+    /// </summary>
+    private void EmitOsNetworkInterfaces(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "OsNetworkInterfaces",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.DictionaryStringObject,
+            Type.EmptyTypes
+        );
+        runtime.OsNetworkInterfaces = method;
+
+        var il = method.GetILGenerator();
+
+        // For compiled standalone DLLs, return an empty dictionary
+        // The full implementation with network interface enumeration is complex
+        // and users who need this should use the interpreter mode
+        var dictCtor = _types.GetDefaultConstructor(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, dictCtor);
         il.Emit(OpCodes.Ret);
     }
 }

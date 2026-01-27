@@ -587,6 +587,8 @@ public class EmittedRuntime
 
     // OS module methods
     public MethodBuilder OsFreemem { get; set; } = null!;
+    public MethodBuilder OsLoadavg { get; set; } = null!;
+    public MethodBuilder OsNetworkInterfaces { get; set; } = null!;
 
     // Path module methods
     public MethodBuilder PathFormat { get; set; } = null!;
