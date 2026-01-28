@@ -1,4 +1,9 @@
+using System.Diagnostics;
+using SharpTS.Compilation;
+using SharpTS.Modules;
+using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests.BuiltInModules;
@@ -354,6 +359,631 @@ public class UtilModuleCompiledTests
 
         var output = TestHarness.RunModulesCompiled(files, "main.ts");
         Assert.Equal("true\n", output);
+    }
+
+    #endregion
+
+    #region util.isDeepStrictEqual
+
+    [Fact]
+    public void Compiled_Util_IsDeepStrictEqual_Primitives()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(1, 1));
+                console.log(util.isDeepStrictEqual('hello', 'hello'));
+                console.log(util.isDeepStrictEqual(1, 2));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\ntrue\nfalse\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_IsDeepStrictEqual_Arrays()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual([1, 2, 3], [1, 2, 3]));
+                console.log(util.isDeepStrictEqual([1, 2], [1, 2, 3]));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\nfalse\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_IsDeepStrictEqual_Objects()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual({ a: 1 }, { a: 1 }));
+                console.log(util.isDeepStrictEqual({ a: 1 }, { a: 2 }));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\nfalse\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_IsDeepStrictEqual_NaN()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(NaN, NaN));
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    #endregion
+
+    #region util.parseArgs
+
+    [Fact]
+    public void Compiled_Util_ParseArgs_BooleanOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--verbose'],
+                    options: {
+                        verbose: { type: 'boolean' }
+                    }
+                });
+                console.log(result.values.verbose === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ParseArgs_StringOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--output', 'file.txt'],
+                    options: {
+                        output: { type: 'string' }
+                    }
+                });
+                console.log(result.values.output === 'file.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ParseArgs_ShortOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['-v'],
+                    options: {
+                        verbose: { type: 'boolean', short: 'v' }
+                    }
+                });
+                console.log(result.values.verbose === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ParseArgs_Positionals()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['file1.txt', 'file2.txt'],
+                    options: {},
+                    allowPositionals: true
+                });
+                console.log(result.positionals.length === 2);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    #endregion
+
+    #region util.toUSVString
+
+    [Fact]
+    public void Compiled_Util_ToUSVString_RegularString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.toUSVString('hello') === 'hello');
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ToUSVString_Emoji()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const emoji = '😀';
+                console.log(util.toUSVString(emoji) === emoji);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ToUSVString_LoneSurrogate()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const loneHigh = '\uD83D';
+                const result = util.toUSVString(loneHigh);
+                console.log(result === '\uFFFD');
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_ToUSVString_Standalone_WithoutSharpTSDll()
+    {
+        // This test verifies that toUSVString is truly self-contained
+        // by compiling and running WITHOUT copying SharpTS.dll
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Write test file
+            var mainPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(mainPath, """
+                import * as util from 'util';
+                const input = 'hello';
+                const result = util.toUSVString(input);
+                console.log(result === 'hello');
+                const emoji = '\uD83D\uDE00';
+                console.log(util.toUSVString(emoji) === emoji);
+                const lone = '\uD83D';
+                console.log(util.toUSVString(lone) === '\uFFFD');
+                """);
+
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var resolver = new ModuleResolver(mainPath);
+            var entryModule = resolver.LoadModule(mainPath);
+            var allModules = resolver.GetModulesInOrder(entryModule);
+            var checker = new TypeChecker();
+            var typeMap = checker.CheckModules(allModules, resolver);
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("test");
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Write runtimeconfig.json (required for dotnet to run)
+            File.WriteAllText(Path.Combine(tempDir, "test.runtimeconfig.json"), """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // NOTE: We intentionally do NOT copy SharpTS.dll here
+            // If toUSVString were not self-contained, this would fail
+
+            // Execute
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(30000);
+
+            // The test will fail if SharpTS.dll is required but not present
+            // If toUSVString is self-contained, it should work
+            Assert.Equal("true\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Compiled_Util_Format_Standalone_WithoutSharpTSDll()
+    {
+        // This test verifies that util.format is truly self-contained
+        // by compiling and running WITHOUT copying SharpTS.dll
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_format_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Write test file
+            var mainPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(mainPath, """
+                import * as util from 'util';
+                console.log(util.format('Hello %s', 'world') === 'Hello world');
+                console.log(util.format('%d + %d = %d', 1, 2, 3) === '1 + 2 = 3');
+                console.log(util.format('Value: %f', 3.14).startsWith('Value: 3.14'));
+                console.log(util.format('%%s is a format') === '%s is a format');
+                """);
+
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var resolver = new ModuleResolver(mainPath);
+            var entryModule = resolver.LoadModule(mainPath);
+            var allModules = resolver.GetModulesInOrder(entryModule);
+            var checker = new TypeChecker();
+            var typeMap = checker.CheckModules(allModules, resolver);
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("test");
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Write runtimeconfig.json (required for dotnet to run)
+            File.WriteAllText(Path.Combine(tempDir, "test.runtimeconfig.json"), """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // NOTE: We intentionally do NOT copy SharpTS.dll here
+            // If format were not self-contained, this would fail
+
+            // Execute
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(30000);
+
+            // The test will fail if SharpTS.dll is required but not present
+            // If format is self-contained, it should work
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Compiled_Util_Inspect_Standalone_WithoutSharpTSDll()
+    {
+        // This test verifies that util.inspect is truly self-contained
+        // by compiling and running WITHOUT copying SharpTS.dll
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_inspect_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Write test file
+            var mainPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(mainPath, """
+                import * as util from 'util';
+                console.log(util.inspect('hello') === "'hello'");
+                console.log(util.inspect(42) === '42');
+                console.log(util.inspect(true) === 'true');
+                console.log(util.inspect(null) === 'null');
+                """);
+
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var resolver = new ModuleResolver(mainPath);
+            var entryModule = resolver.LoadModule(mainPath);
+            var allModules = resolver.GetModulesInOrder(entryModule);
+            var checker = new TypeChecker();
+            var typeMap = checker.CheckModules(allModules, resolver);
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("test");
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Write runtimeconfig.json (required for dotnet to run)
+            File.WriteAllText(Path.Combine(tempDir, "test.runtimeconfig.json"), """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // NOTE: We intentionally do NOT copy SharpTS.dll here
+            // If inspect were not self-contained, this would fail
+
+            // Execute
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(30000);
+
+            // The test will fail if SharpTS.dll is required but not present
+            // If inspect is self-contained, it should work
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Compiled_Util_IsDeepStrictEqual_Standalone_WithoutSharpTSDll()
+    {
+        // This test verifies that util.isDeepStrictEqual is truly self-contained
+        // by compiling and running WITHOUT copying SharpTS.dll
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_deepeq_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Write test file
+            var mainPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(mainPath, """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(1, 1));
+                console.log(util.isDeepStrictEqual([1, 2], [1, 2]));
+                console.log(util.isDeepStrictEqual({ a: 1 }, { a: 1 }));
+                console.log(util.isDeepStrictEqual({ a: [1, 2] }, { a: [1, 2] }));
+                """);
+
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var resolver = new ModuleResolver(mainPath);
+            var entryModule = resolver.LoadModule(mainPath);
+            var allModules = resolver.GetModulesInOrder(entryModule);
+            var checker = new TypeChecker();
+            var typeMap = checker.CheckModules(allModules, resolver);
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("test");
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Write runtimeconfig.json (required for dotnet to run)
+            File.WriteAllText(Path.Combine(tempDir, "test.runtimeconfig.json"), """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // NOTE: We intentionally do NOT copy SharpTS.dll here
+            // If isDeepStrictEqual were not self-contained, this would fail
+
+            // Execute
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(30000);
+
+            // The test will fail if SharpTS.dll is required but not present
+            // If isDeepStrictEqual is self-contained, it should work
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Compiled_Util_ParseArgs_Standalone_WithoutSharpTSDll()
+    {
+        // This test verifies that util.parseArgs is truly self-contained
+        // by compiling and running WITHOUT copying SharpTS.dll
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_parseargs_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            // Write test file that exercises various parseArgs features:
+            // - Boolean options (--verbose)
+            // - String options (--output)
+            // - Short options (-v)
+            // - Positionals
+            // - Option terminator (--)
+            var mainPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(mainPath, """
+                import * as util from 'util';
+
+                // Test 1: Boolean option
+                const r1 = util.parseArgs({
+                    args: ['--verbose'],
+                    options: { verbose: { type: 'boolean' } }
+                });
+                console.log(r1.values.verbose === true);
+
+                // Test 2: String option
+                const r2 = util.parseArgs({
+                    args: ['--output', 'file.txt'],
+                    options: { output: { type: 'string' } }
+                });
+                console.log(r2.values.output === 'file.txt');
+
+                // Test 3: Short option
+                const r3 = util.parseArgs({
+                    args: ['-v'],
+                    options: { verbose: { type: 'boolean', short: 'v' } }
+                });
+                console.log(r3.values.verbose === true);
+
+                // Test 4: Positionals
+                const r4 = util.parseArgs({
+                    args: ['file1.txt', 'file2.txt'],
+                    options: {},
+                    allowPositionals: true
+                });
+                console.log(r4.positionals.length === 2);
+
+                // Test 5: Option terminator
+                const r5 = util.parseArgs({
+                    args: ['--verbose', '--', '--not-an-option'],
+                    options: { verbose: { type: 'boolean' } },
+                    allowPositionals: true
+                });
+                console.log(r5.values.verbose === true);
+                console.log(r5.positionals.length === 1);
+                console.log(r5.positionals[0] === '--not-an-option');
+                """);
+
+            var dllPath = Path.Combine(tempDir, "test.dll");
+
+            // Compile
+            var resolver = new ModuleResolver(mainPath);
+            var entryModule = resolver.LoadModule(mainPath);
+            var allModules = resolver.GetModulesInOrder(entryModule);
+            var checker = new TypeChecker();
+            var typeMap = checker.CheckModules(allModules, resolver);
+            var deadCodeAnalyzer = new DeadCodeAnalyzer(typeMap);
+            var deadCodeInfo = deadCodeAnalyzer.Analyze(allModules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("test");
+            compiler.CompileModules(allModules, resolver, typeMap, deadCodeInfo);
+            compiler.Save(dllPath);
+
+            // Write runtimeconfig.json (required for dotnet to run)
+            File.WriteAllText(Path.Combine(tempDir, "test.runtimeconfig.json"), """
+                {
+                  "runtimeOptions": {
+                    "tfm": "net10.0",
+                    "framework": {
+                      "name": "Microsoft.NETCore.App",
+                      "version": "10.0.0"
+                    }
+                  }
+                }
+                """);
+
+            // NOTE: We intentionally do NOT copy SharpTS.dll here
+            // If parseArgs were not self-contained, this would fail
+
+            // Execute
+            var psi = new ProcessStartInfo("dotnet", dllPath)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                WorkingDirectory = tempDir
+            };
+
+            using var process = Process.Start(psi)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            process.WaitForExit(30000);
+
+            // The test will fail if SharpTS.dll is required but not present
+            // If parseArgs is self-contained, it should work
+            Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { }
+        }
     }
 
     #endregion

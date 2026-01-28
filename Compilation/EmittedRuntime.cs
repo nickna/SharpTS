@@ -854,6 +854,9 @@ public class EmittedRuntime
     // Util module methods
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;
+    public MethodBuilder UtilIsDeepStrictEqual { get; set; } = null!;
+    public MethodBuilder UtilParseArgs { get; set; } = null!;
+    public MethodBuilder UtilToUSVString { get; set; } = null!;
 
     // util.types.* methods
     public MethodBuilder UtilTypesIsArray { get; set; } = null!;
@@ -903,6 +906,16 @@ public class EmittedRuntime
     public MethodBuilder UtilInspectValue { get; set; } = null!;
     public MethodBuilder UtilInspectArray { get; set; } = null!;
     public MethodBuilder UtilInspectObject { get; set; } = null!;
+
+    // Util isDeepStrictEqual helper method (emitted for standalone)
+    public MethodBuilder UtilDeepEqualImpl { get; set; } = null!;
+
+    // ParseArgs helper methods (emitted for standalone)
+    public MethodBuilder UtilParseArgsGetArgsArray { get; set; } = null!;
+    public MethodBuilder UtilParseArgsGetOptionsDef { get; set; } = null!;
+    public MethodBuilder UtilParseArgsGetBoolOption { get; set; } = null!;
+    public MethodBuilder UtilParseLongOption { get; set; } = null!;
+    public MethodBuilder UtilParseShortOptions { get; set; } = null!;
 
     // Readline module methods
     public MethodBuilder ReadlineQuestionSync { get; set; } = null!;

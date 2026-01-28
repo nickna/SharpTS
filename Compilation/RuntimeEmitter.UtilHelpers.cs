@@ -32,9 +32,37 @@ public partial class RuntimeEmitter
         // Emit util.inherits
         EmitUtilInherits(typeBuilder, runtime);
 
-        // Emit util.format and util.inspect (these still call UtilHelpers for complex logic)
-        EmitUtilFormat(typeBuilder, runtime);
-        EmitUtilInspect(typeBuilder, runtime);
+        // Emit util.toUSVString (already standalone)
+        EmitUtilToUSVString(typeBuilder, runtime);
+
+        // Define method signatures for format, inspect, isDeepStrictEqual, parseArgs
+        // (bodies will be emitted by EmitUtilStandaloneMethods)
+        runtime.UtilFormat = typeBuilder.DefineMethod(
+            "UtilFormat",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.ObjectArray]);
+
+        runtime.UtilInspect = typeBuilder.DefineMethod(
+            "UtilInspect",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object, _types.Object]);
+
+        runtime.UtilIsDeepStrictEqual = typeBuilder.DefineMethod(
+            "UtilIsDeepStrictEqual",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]);
+
+        runtime.UtilParseArgs = typeBuilder.DefineMethod(
+            "UtilParseArgs",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+
+        // Emit standalone helper method bodies
+        EmitUtilStandaloneMethods(typeBuilder, runtime);
     }
 
     /// <summary>
@@ -547,6 +575,226 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Inspect))!);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits: public static bool UtilIsDeepStrictEqual(object a, object b)
+    /// Calls into UtilHelpers.IsDeepStrictEqual for proper deep comparison.
+    /// </summary>
+    private void EmitUtilIsDeepStrictEqual(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilIsDeepStrictEqual",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]);
+        runtime.UtilIsDeepStrictEqual = method;
+
+        var il = method.GetILGenerator();
+
+        // Call UtilHelpers.IsDeepStrictEqual(a, b)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.IsDeepStrictEqual))!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object UtilParseArgs(object config)
+    /// Calls into UtilHelpers.ParseArgs for argument parsing.
+    /// </summary>
+    private void EmitUtilParseArgs(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilParseArgs",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.UtilParseArgs = method;
+
+        var il = method.GetILGenerator();
+
+        // Call UtilHelpers.ParseArgs(config)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.ParseArgs))!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static string UtilToUSVString(object value)
+    /// Self-contained implementation - emits full IL without calling UtilHelpers.
+    /// Converts a string to a well-formed Unicode string by replacing lone surrogates with U+FFFD.
+    /// </summary>
+    private void EmitUtilToUSVString(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilToUSVString",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object]);
+        runtime.UtilToUSVString = method;
+
+        var il = method.GetILGenerator();
+
+        // Local variables
+        var inputLocal = il.DeclareLocal(_types.String);        // loc.0: string input
+        var sbLocal = il.DeclareLocal(typeof(StringBuilder));   // loc.1: StringBuilder sb
+        var iLocal = il.DeclareLocal(_types.Int32);             // loc.2: int i
+        var cLocal = il.DeclareLocal(_types.Char);              // loc.3: char c
+        var lengthLocal = il.DeclareLocal(_types.Int32);        // loc.4: int length
+
+        // Labels
+        var returnEmptyLabel = il.DefineLabel();
+        var processLoopLabel = il.DefineLabel();
+        var loopStartLabel = il.DefineLabel();
+        var loopConditionLabel = il.DefineLabel();
+        var highSurrogateLabel = il.DefineLabel();
+        var lowSurrogateLabel = il.DefineLabel();
+        var regularCharLabel = il.DefineLabel();
+        var appendReplacementLabel = il.DefineLabel();
+        var appendBothLabel = il.DefineLabel();
+        var loopEndLabel = il.DefineLabel();
+        var returnResultLabel = il.DefineLabel();
+
+        // --- Convert input to string ---
+        // if (value == null) return "";
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, returnEmptyLabel);
+
+        // input = value.ToString() ?? ""
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.Object.GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue_S, processLoopLabel);
+        il.Emit(OpCodes.Pop);
+
+        // Return empty string for null ToString result
+        il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(processLoopLabel);
+        il.Emit(OpCodes.Stloc, inputLocal);
+
+        // length = input.Length
+        il.Emit(OpCodes.Ldloc, inputLocal);
+        il.Emit(OpCodes.Callvirt, _types.String.GetProperty("Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+
+        // if (length == 0) return input
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Brfalse, returnResultLabel);
+
+        // sb = new StringBuilder(length)
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Stloc, sbLocal);
+
+        // i = 0
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.Emit(OpCodes.Br, loopConditionLabel);
+
+        // --- Loop body ---
+        il.MarkLabel(loopStartLabel);
+
+        // c = input[i]
+        il.Emit(OpCodes.Ldloc, inputLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
+        il.Emit(OpCodes.Stloc, cLocal);
+
+        // if (char.IsHighSurrogate(c)) goto highSurrogateLabel
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsHighSurrogate", [typeof(char)])!);
+        il.Emit(OpCodes.Brtrue, highSurrogateLabel);
+
+        // if (char.IsLowSurrogate(c)) goto lowSurrogateLabel
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsLowSurrogate", [typeof(char)])!);
+        il.Emit(OpCodes.Brtrue, lowSurrogateLabel);
+
+        // Regular character - append and continue
+        il.MarkLabel(regularCharLabel);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Pop); // Discard StringBuilder return value
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // --- High surrogate handling ---
+        il.MarkLabel(highSurrogateLabel);
+
+        // Check if i + 1 < length && char.IsLowSurrogate(input[i + 1])
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Bge, appendReplacementLabel); // if (i + 1 >= length) append replacement
+
+        // Check if next char is low surrogate
+        il.Emit(OpCodes.Ldloc, inputLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
+        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsLowSurrogate", [typeof(char)])!);
+        il.Emit(OpCodes.Brfalse, appendReplacementLabel); // if not low surrogate, append replacement
+
+        // Valid surrogate pair - append both
+        il.MarkLabel(appendBothLabel);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Pop);
+
+        // Append the low surrogate
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldloc, inputLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Pop);
+
+        // i++ (skip the low surrogate in next iteration)
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // --- Low surrogate or lone high surrogate - append U+FFFD ---
+        il.MarkLabel(lowSurrogateLabel);
+        il.MarkLabel(appendReplacementLabel);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldc_I4, 0xFFFD); // U+FFFD replacement character
+        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // --- Loop increment and condition ---
+        il.MarkLabel(loopEndLabel);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        il.MarkLabel(loopConditionLabel);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Blt, loopStartLabel);
+
+        // Return sb.ToString()
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ret);
+
+        // Return input (for empty string case)
+        il.MarkLabel(returnResultLabel);
+        il.Emit(OpCodes.Ldloc, inputLocal);
+        il.Emit(OpCodes.Ret);
+    }
 }
 
 /// <summary>
@@ -651,6 +899,520 @@ public static class UtilHelpers
     public static bool IsTypedArray(object? value) => value is SharpTS.Runtime.Types.SharpTSBuffer;
 
     /// <summary>
+    /// util.isDeepStrictEqual - performs deep strict equality comparison.
+    /// </summary>
+    public static bool IsDeepStrictEqual(object? a, object? b)
+    {
+        return DeepStrictEqualImpl(a, b, new HashSet<(object?, object?)>(ReferenceEqualityComparer.Instance));
+    }
+
+    /// <summary>
+    /// util.toUSVString - converts a string to a well-formed Unicode string by replacing
+    /// lone surrogates with the Unicode replacement character (U+FFFD).
+    /// </summary>
+    public static string ToUSVString(object? value)
+    {
+        var input = value?.ToString() ?? "";
+
+        if (string.IsNullOrEmpty(input))
+            return input;
+
+        var result = new StringBuilder(input.Length);
+
+        for (var i = 0; i < input.Length; i++)
+        {
+            var c = input[i];
+
+            if (char.IsHighSurrogate(c))
+            {
+                // Check if followed by a low surrogate
+                if (i + 1 < input.Length && char.IsLowSurrogate(input[i + 1]))
+                {
+                    // Valid surrogate pair - keep both
+                    result.Append(c);
+                    result.Append(input[i + 1]);
+                    i++; // Skip the low surrogate
+                }
+                else
+                {
+                    // Lone high surrogate - replace with U+FFFD
+                    result.Append('\uFFFD');
+                }
+            }
+            else if (char.IsLowSurrogate(c))
+            {
+                // Lone low surrogate (not preceded by high) - replace with U+FFFD
+                result.Append('\uFFFD');
+            }
+            else
+            {
+                // Regular character
+                result.Append(c);
+            }
+        }
+
+        return result.ToString();
+    }
+
+    private static bool DeepStrictEqualImpl(object? a, object? b, HashSet<(object?, object?)> seen)
+    {
+        // Same reference or both null
+        if (ReferenceEquals(a, b))
+            return true;
+
+        // One is null, other is not
+        if (a == null || b == null)
+            return false;
+
+        // Different types (strict equality) - but allow numeric comparison
+        var typeA = a.GetType();
+        var typeB = b.GetType();
+
+        // Primitives
+        if (a is string sa && b is string sb)
+            return sa == sb;
+
+        if (a is double d1 && b is double d2)
+        {
+            // NaN === NaN for deep strict equal
+            if (double.IsNaN(d1) && double.IsNaN(d2))
+                return true;
+            return d1 == d2;
+        }
+
+        if (a is bool ba && b is bool bb)
+            return ba == bb;
+
+        // Different non-primitive types
+        if (typeA != typeB)
+            return false;
+
+        // Circular reference detection
+        var pair = (a, b);
+        if (seen.Contains(pair))
+            return true;
+        seen.Add(pair);
+
+        // Arrays (IList<object?>)
+        if (a is IList<object?> listA && b is IList<object?> listB)
+        {
+            if (listA.Count != listB.Count)
+                return false;
+
+            for (int i = 0; i < listA.Count; i++)
+            {
+                if (!DeepStrictEqualImpl(listA[i], listB[i], seen))
+                    return false;
+            }
+            return true;
+        }
+
+        // Objects (IDictionary<string, object?>)
+        if (a is IDictionary<string, object?> dictA && b is IDictionary<string, object?> dictB)
+        {
+            if (dictA.Count != dictB.Count)
+                return false;
+
+            foreach (var key in dictA.Keys)
+            {
+                if (!dictB.ContainsKey(key))
+                    return false;
+                if (!DeepStrictEqualImpl(dictA[key], dictB[key], seen))
+                    return false;
+            }
+            return true;
+        }
+
+        // Buffers
+        if (a is SharpTS.Runtime.Types.SharpTSBuffer bufA && b is SharpTS.Runtime.Types.SharpTSBuffer bufB)
+        {
+            return bufA.Data.SequenceEqual(bufB.Data);
+        }
+
+        // Default: use Object.Equals
+        return Equals(a, b);
+    }
+
+    /// <summary>
+    /// Comparer for reference equality in HashSet (for cycle detection).
+    /// </summary>
+    private sealed class ReferenceEqualityComparer : IEqualityComparer<(object?, object?)>
+    {
+        public static readonly ReferenceEqualityComparer Instance = new();
+
+        public bool Equals((object?, object?) x, (object?, object?) y)
+            => ReferenceEquals(x.Item1, y.Item1) && ReferenceEquals(x.Item2, y.Item2);
+
+        public int GetHashCode((object?, object?) obj)
+            => HashCode.Combine(
+                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj.Item1),
+                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj.Item2));
+    }
+
+    /// <summary>
+    /// util.parseArgs - parses command-line arguments.
+    /// Returns an object with { values, positionals } properties.
+    /// </summary>
+    public static IDictionary<string, object?> ParseArgs(object? config)
+    {
+        var configDict = config as IDictionary<string, object?>;
+
+        // Extract config properties
+        var argsArray = GetArgsArray(configDict);
+        var optionsDef = GetOptionsDef(configDict);
+        var strict = GetBoolOption(configDict, "strict", true);
+        var allowPositionals = GetBoolOption(configDict, "allowPositionals", !strict);
+        var allowNegative = GetBoolOption(configDict, "allowNegative", false);
+        var returnTokens = GetBoolOption(configDict, "tokens", false);
+
+        // Initialize result
+        var values = new Dictionary<string, object?>();
+        var positionals = new List<object?>();
+        var tokens = new List<object?>();
+
+        // Apply defaults from options definitions
+        foreach (var (name, optDef) in optionsDef)
+        {
+            if (optDef.TryGetValue("default", out var defaultVal) && defaultVal != null)
+            {
+                values[name] = defaultVal;
+            }
+        }
+
+        // Parse arguments
+        var i = 0;
+        while (i < argsArray.Count)
+        {
+            var arg = argsArray[i]?.ToString() ?? "";
+
+            if (arg == "--")
+            {
+                // Option terminator
+                if (returnTokens)
+                {
+                    tokens.Add(new Dictionary<string, object?>
+                    {
+                        ["kind"] = "option-terminator",
+                        ["index"] = (double)i
+                    });
+                }
+                i++;
+                // Rest are positionals
+                while (i < argsArray.Count)
+                {
+                    var positional = argsArray[i]?.ToString() ?? "";
+                    if (!allowPositionals && strict)
+                        throw new Exception($"Unexpected argument: {positional}");
+                    positionals.Add(positional);
+                    if (returnTokens)
+                    {
+                        tokens.Add(new Dictionary<string, object?>
+                        {
+                            ["kind"] = "positional",
+                            ["index"] = (double)i,
+                            ["value"] = positional
+                        });
+                    }
+                    i++;
+                }
+                break;
+            }
+            else if (arg.StartsWith("--"))
+            {
+                i = ParseLongOptionCompiled(arg, i, argsArray, optionsDef, values, tokens, strict, allowNegative, returnTokens);
+            }
+            else if (arg.StartsWith("-") && arg.Length > 1)
+            {
+                i = ParseShortOptionsCompiled(arg, i, argsArray, optionsDef, values, tokens, strict, returnTokens);
+            }
+            else
+            {
+                if (!allowPositionals && strict)
+                    throw new Exception($"Unexpected argument: {arg}");
+                positionals.Add(arg);
+                if (returnTokens)
+                {
+                    tokens.Add(new Dictionary<string, object?>
+                    {
+                        ["kind"] = "positional",
+                        ["index"] = (double)i,
+                        ["value"] = arg
+                    });
+                }
+                i++;
+            }
+        }
+
+        // Build result object
+        var result = new Dictionary<string, object?>
+        {
+            ["values"] = values,
+            ["positionals"] = positionals
+        };
+
+        if (returnTokens)
+        {
+            result["tokens"] = tokens;
+        }
+
+        return result;
+    }
+
+    private static List<object?> GetArgsArray(IDictionary<string, object?>? config)
+    {
+        if (config != null && config.TryGetValue("args", out var argsVal) && argsVal is IList<object?> arr)
+        {
+            return arr.ToList();
+        }
+
+        // Default to empty - in compiled mode we don't have easy access to process.argv
+        return new List<object?>();
+    }
+
+    private static Dictionary<string, Dictionary<string, object?>> GetOptionsDef(IDictionary<string, object?>? config)
+    {
+        var result = new Dictionary<string, Dictionary<string, object?>>();
+
+        if (config == null || !config.TryGetValue("options", out var optionsVal))
+            return result;
+
+        if (optionsVal is not IDictionary<string, object?> options)
+            return result;
+
+        foreach (var (name, value) in options)
+        {
+            if (value is IDictionary<string, object?> optDef)
+            {
+                result[name] = new Dictionary<string, object?>(optDef);
+            }
+        }
+
+        return result;
+    }
+
+    private static bool GetBoolOption(IDictionary<string, object?>? config, string name, bool defaultValue)
+    {
+        if (config == null || !config.TryGetValue(name, out var val))
+            return defaultValue;
+
+        if (val is bool b)
+            return b;
+
+        return defaultValue;
+    }
+
+    private static int ParseLongOptionCompiled(
+        string arg,
+        int index,
+        List<object?> argsArray,
+        Dictionary<string, Dictionary<string, object?>> optionsDef,
+        Dictionary<string, object?> values,
+        List<object?> tokens,
+        bool strict,
+        bool allowNegative,
+        bool returnTokens)
+    {
+        var rawName = arg;
+        string name;
+        string? inlineValue = null;
+        var hasInlineValue = false;
+
+        var eqIndex = arg.IndexOf('=');
+        if (eqIndex > 0)
+        {
+            name = arg[2..eqIndex];
+            inlineValue = arg[(eqIndex + 1)..];
+            hasInlineValue = true;
+        }
+        else
+        {
+            name = arg[2..];
+        }
+
+        var isNegated = false;
+        var originalName = name;
+        if (allowNegative && name.StartsWith("no-"))
+        {
+            var positiveName = name[3..];
+            if (optionsDef.TryGetValue(positiveName, out var posDef) &&
+                posDef.TryGetValue("type", out var typeVal) &&
+                typeVal?.ToString() == "boolean")
+            {
+                name = positiveName;
+                isNegated = true;
+            }
+        }
+
+        if (!optionsDef.TryGetValue(name, out var optDef))
+        {
+            if (strict)
+                throw new Exception($"Unknown option '--{originalName}'");
+            values[name] = !isNegated;
+            return index + 1;
+        }
+
+        var optType = optDef.TryGetValue("type", out var t) ? t?.ToString() : "boolean";
+        var multiple = optDef.TryGetValue("multiple", out var m) && m is true;
+
+        object? value;
+
+        if (optType == "boolean")
+        {
+            if (hasInlineValue && strict)
+                throw new Exception($"Option '--{name}' does not take an argument");
+            value = !isNegated;
+            index++;
+        }
+        else
+        {
+            if (isNegated && strict)
+                throw new Exception($"Option '--{name}' cannot be negated");
+
+            if (hasInlineValue)
+            {
+                value = inlineValue;
+                index++;
+            }
+            else if (index + 1 < argsArray.Count)
+            {
+                value = argsArray[index + 1]?.ToString() ?? "";
+                index += 2;
+            }
+            else
+            {
+                if (strict)
+                    throw new Exception($"Option '--{name}' requires an argument");
+                value = "";
+                index++;
+            }
+        }
+
+        if (multiple)
+        {
+            if (!values.TryGetValue(name, out var existing) || existing is not IList<object?> existingList)
+            {
+                existingList = new List<object?>();
+                values[name] = existingList;
+            }
+            existingList.Add(value);
+        }
+        else
+        {
+            values[name] = value;
+        }
+
+        if (returnTokens)
+        {
+            tokens.Add(new Dictionary<string, object?>
+            {
+                ["kind"] = "option",
+                ["index"] = (double)(index - (optType == "string" && !hasInlineValue ? 2 : 1)),
+                ["name"] = name,
+                ["rawName"] = rawName.Split('=')[0],
+                ["value"] = optType == "string" ? value : null,
+                ["inlineValue"] = hasInlineValue
+            });
+        }
+
+        return index;
+    }
+
+    private static int ParseShortOptionsCompiled(
+        string arg,
+        int index,
+        List<object?> argsArray,
+        Dictionary<string, Dictionary<string, object?>> optionsDef,
+        Dictionary<string, object?> values,
+        List<object?> tokens,
+        bool strict,
+        bool returnTokens)
+    {
+        var shortOpts = arg[1..];
+
+        for (var j = 0; j < shortOpts.Length; j++)
+        {
+            var shortChar = shortOpts[j].ToString();
+            string? optName = null;
+            Dictionary<string, object?>? optDef = null;
+
+            foreach (var (name, def) in optionsDef)
+            {
+                if (def.TryGetValue("short", out var shortVal) && shortVal?.ToString() == shortChar)
+                {
+                    optName = name;
+                    optDef = def;
+                    break;
+                }
+            }
+
+            if (optName == null || optDef == null)
+            {
+                if (strict)
+                    throw new Exception($"Unknown option '-{shortChar}'");
+                continue;
+            }
+
+            var optType = optDef.TryGetValue("type", out var t) ? t?.ToString() : "boolean";
+            var multiple = optDef.TryGetValue("multiple", out var m) && m is true;
+
+            object? value;
+
+            if (optType == "boolean")
+            {
+                value = true;
+            }
+            else
+            {
+                if (j + 1 < shortOpts.Length)
+                {
+                    value = shortOpts[(j + 1)..];
+                    j = shortOpts.Length;
+                }
+                else if (index + 1 < argsArray.Count)
+                {
+                    value = argsArray[index + 1]?.ToString() ?? "";
+                    index++;
+                }
+                else
+                {
+                    if (strict)
+                        throw new Exception($"Option '-{shortChar}' requires an argument");
+                    value = "";
+                }
+            }
+
+            if (multiple)
+            {
+                if (!values.TryGetValue(optName, out var existing) || existing is not IList<object?> existingList)
+                {
+                    existingList = new List<object?>();
+                    values[optName] = existingList;
+                }
+                existingList.Add(value);
+            }
+            else
+            {
+                values[optName] = value;
+            }
+
+            if (returnTokens)
+            {
+                tokens.Add(new Dictionary<string, object?>
+                {
+                    ["kind"] = "option",
+                    ["index"] = (double)index,
+                    ["name"] = optName,
+                    ["rawName"] = $"-{shortChar}",
+                    ["value"] = optType == "string" ? value : null,
+                    ["inlineValue"] = j + 1 < shortOpts.Length && optType == "string"
+                });
+            }
+        }
+
+        return index + 1;
+    }
+
+    /// <summary>
     /// util.deprecate - wraps a function to log a deprecation warning on first call.
     /// Returns a DeprecatedFunction wrapper that can be invoked by compiled code.
     /// </summary>
@@ -734,9 +1496,7 @@ public static class UtilHelpers
             return "";
 
         var format = args[0]?.ToString() ?? "";
-        if (args.Length == 1)
-            return format;
-
+        // Note: We can't early-return here even with 1 arg because we need to process %% escapes
         var result = new StringBuilder();
         var argIndex = 1;
         var i = 0;

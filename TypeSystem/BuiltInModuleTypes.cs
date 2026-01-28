@@ -782,6 +782,9 @@ public static class BuiltInModuleTypes
             // Methods
             ["format"] = new TypeInfo.Function([anyType], stringType, HasRestParam: true),
             ["inspect"] = new TypeInfo.Function([anyType, anyType], stringType, RequiredParams: 1),
+            ["isDeepStrictEqual"] = new TypeInfo.Function([anyType, anyType], boolType),
+            ["parseArgs"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
+            ["toUSVString"] = new TypeInfo.Function([anyType], stringType),
             ["deprecate"] = new TypeInfo.Function([anyType, stringType, anyType], anyType, RequiredParams: 2),
             ["callbackify"] = new TypeInfo.Function([anyType], anyType),
             ["inherits"] = new TypeInfo.Function([anyType, anyType], voidType),

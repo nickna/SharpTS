@@ -12,7 +12,7 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "format", "inspect", "deprecate", "callbackify", "inherits", "TextEncoder", "TextDecoder", "types"
+        "format", "inspect", "isDeepStrictEqual", "parseArgs", "toUSVString", "deprecate", "callbackify", "inherits", "TextEncoder", "TextDecoder", "types"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -23,6 +23,9 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         {
             "format" => EmitFormat(emitter, arguments),
             "inspect" => EmitInspect(emitter, arguments),
+            "isDeepStrictEqual" => EmitIsDeepStrictEqual(emitter, arguments),
+            "parseArgs" => EmitParseArgs(emitter, arguments),
+            "toUSVString" => EmitToUSVString(emitter, arguments),
             // Handle util.types.* nested calls - use emitted methods for standalone execution
             "types.isArray" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsArray),
             "types.isFunction" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsFunction),
@@ -115,6 +118,85 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.UtilInspect);
+        return true;
+    }
+
+    private static bool EmitIsDeepStrictEqual(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit first argument (or null)
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit second argument (or null)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilIsDeepStrictEqual);
+
+        // Box the boolean result
+        il.Emit(OpCodes.Box, ctx.Types.Boolean);
+        return true;
+    }
+
+    private static bool EmitParseArgs(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit config argument (or null)
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilParseArgs);
+
+        return true;
+    }
+
+    private static bool EmitToUSVString(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit argument (or empty string)
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "");
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilToUSVString);
+
         return true;
     }
 

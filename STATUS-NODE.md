@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Expanded util module with types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder)
+**Last Updated:** 2026-01-27 (util.format, util.inspect, util.toUSVString, util.isDeepStrictEqual now compile to standalone IL; fixed %% escape bug)
 
 ## Legend
 - ✅ Implemented
@@ -24,7 +24,8 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
 | `child_process` | ⚠️ | Synchronous only (`execSync`, `spawnSync`) |
-| `util` | ⚠️ | format, inspect, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
+| `util` | ⚠️ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
+| `console` | ✅ | log, error, warn, info, debug, clear, time/timeEnd/timeLog, assert, count/countReset, table, dir, group/groupEnd, trace |
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
 | `stream` | ❌ | No Readable/Writable/Transform |

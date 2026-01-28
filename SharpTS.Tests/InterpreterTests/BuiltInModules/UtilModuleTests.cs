@@ -680,4 +680,745 @@ public class UtilModuleTests
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
         Assert.Equal("true\n", output);
     }
+
+    // ============ isDeepStrictEqual TESTS ============
+
+    [Fact]
+    public void IsDeepStrictEqual_PrimitivesEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(1, 1));
+                console.log(util.isDeepStrictEqual('hello', 'hello'));
+                console.log(util.isDeepStrictEqual(true, true));
+                console.log(util.isDeepStrictEqual(null, null));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_PrimitivesNotEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(1, 2));
+                console.log(util.isDeepStrictEqual('hello', 'world'));
+                console.log(util.isDeepStrictEqual(true, false));
+                console.log(util.isDeepStrictEqual(1, '1'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\nfalse\nfalse\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_NaNEqualsNaN()
+    {
+        // Unlike === operator, isDeepStrictEqual treats NaN as equal to NaN
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(NaN, NaN));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_ArraysEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual([1, 2, 3], [1, 2, 3]));
+                console.log(util.isDeepStrictEqual(['a', 'b'], ['a', 'b']));
+                console.log(util.isDeepStrictEqual([], []));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_ArraysNotEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual([1, 2, 3], [1, 2, 4]));
+                console.log(util.isDeepStrictEqual([1, 2], [1, 2, 3]));
+                console.log(util.isDeepStrictEqual([1, 2, 3], [1, 2]));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\nfalse\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_ObjectsEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual({ a: 1, b: 2 }, { a: 1, b: 2 }));
+                console.log(util.isDeepStrictEqual({ x: 'hello' }, { x: 'hello' }));
+                console.log(util.isDeepStrictEqual({}, {}));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_ObjectsNotEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual({ a: 1 }, { a: 2 }));
+                console.log(util.isDeepStrictEqual({ a: 1 }, { b: 1 }));
+                console.log(util.isDeepStrictEqual({ a: 1 }, { a: 1, b: 2 }));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\nfalse\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_NestedObjectsEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const obj1 = { a: { b: { c: 1 } } };
+                const obj2 = { a: { b: { c: 1 } } };
+                console.log(util.isDeepStrictEqual(obj1, obj2));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_NestedObjectsNotEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const obj1 = { a: { b: { c: 1 } } };
+                const obj2 = { a: { b: { c: 2 } } };
+                console.log(util.isDeepStrictEqual(obj1, obj2));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_ArraysWithObjectsEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const arr1 = [{ a: 1 }, { b: 2 }];
+                const arr2 = [{ a: 1 }, { b: 2 }];
+                console.log(util.isDeepStrictEqual(arr1, arr2));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_NullVsUndefined()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.isDeepStrictEqual(null, undefined));
+                console.log(util.isDeepStrictEqual(undefined, null));
+                console.log(util.isDeepStrictEqual(undefined, undefined));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\ntrue\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_SameReference()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const obj = { a: 1 };
+                console.log(util.isDeepStrictEqual(obj, obj));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_BuffersEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const buf1 = Buffer.from('hello');
+                const buf2 = Buffer.from('hello');
+                console.log(util.isDeepStrictEqual(buf1, buf2));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void IsDeepStrictEqual_BuffersNotEqual()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const buf1 = Buffer.from('hello');
+                const buf2 = Buffer.from('world');
+                console.log(util.isDeepStrictEqual(buf1, buf2));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\n", output);
+    }
+
+    // ============ parseArgs TESTS ============
+
+    [Fact]
+    public void ParseArgs_BooleanOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--verbose'],
+                    options: {
+                        verbose: { type: 'boolean' }
+                    }
+                });
+                console.log(result.values.verbose === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_StringOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--output', 'file.txt'],
+                    options: {
+                        output: { type: 'string' }
+                    }
+                });
+                console.log(result.values.output === 'file.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_StringOptionWithEquals()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--output=file.txt'],
+                    options: {
+                        output: { type: 'string' }
+                    }
+                });
+                console.log(result.values.output === 'file.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_ShortOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['-v'],
+                    options: {
+                        verbose: { type: 'boolean', short: 'v' }
+                    }
+                });
+                console.log(result.values.verbose === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_ShortStringOption()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['-o', 'output.txt'],
+                    options: {
+                        output: { type: 'string', short: 'o' }
+                    }
+                });
+                console.log(result.values.output === 'output.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_MultipleOptions()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--verbose', '--output', 'file.txt'],
+                    options: {
+                        verbose: { type: 'boolean' },
+                        output: { type: 'string' }
+                    }
+                });
+                console.log(result.values.verbose === true);
+                console.log(result.values.output === 'file.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_DefaultValue()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: [],
+                    options: {
+                        output: { type: 'string', default: 'default.txt' }
+                    }
+                });
+                console.log(result.values.output === 'default.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_Positionals()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['file1.txt', 'file2.txt'],
+                    options: {},
+                    allowPositionals: true
+                });
+                console.log(result.positionals.length === 2);
+                console.log(result.positionals[0] === 'file1.txt');
+                console.log(result.positionals[1] === 'file2.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_MixedOptionsAndPositionals()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--verbose', 'file.txt'],
+                    options: {
+                        verbose: { type: 'boolean' }
+                    },
+                    allowPositionals: true
+                });
+                console.log(result.values.verbose === true);
+                console.log(result.positionals[0] === 'file.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_OptionTerminator()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--verbose', '--', '--not-an-option'],
+                    options: {
+                        verbose: { type: 'boolean' }
+                    },
+                    allowPositionals: true
+                });
+                console.log(result.values.verbose === true);
+                console.log(result.positionals[0] === '--not-an-option');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_MultipleValues()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--file', 'a.txt', '--file', 'b.txt'],
+                    options: {
+                        file: { type: 'string', multiple: true }
+                    }
+                });
+                console.log(Array.isArray(result.values.file));
+                console.log(result.values.file.length === 2);
+                console.log(result.values.file[0] === 'a.txt');
+                console.log(result.values.file[1] === 'b.txt');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_CombinedShortOptions()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['-abc'],
+                    options: {
+                        alpha: { type: 'boolean', short: 'a' },
+                        beta: { type: 'boolean', short: 'b' },
+                        charlie: { type: 'boolean', short: 'c' }
+                    }
+                });
+                console.log(result.values.alpha === true);
+                console.log(result.values.beta === true);
+                console.log(result.values.charlie === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_AllowNegative()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--no-verbose'],
+                    options: {
+                        verbose: { type: 'boolean' }
+                    },
+                    allowNegative: true
+                });
+                console.log(result.values.verbose === false);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_StrictModeThrowsOnUnknown()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                try {
+                    util.parseArgs({
+                        args: ['--unknown'],
+                        options: {},
+                        strict: true
+                    });
+                    console.log('no error');
+                } catch (e) {
+                    console.log('error thrown');
+                }
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("error thrown\n", output);
+    }
+
+    [Fact]
+    public void ParseArgs_NonStrictAllowsUnknown()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.parseArgs({
+                    args: ['--unknown'],
+                    options: {},
+                    strict: false
+                });
+                console.log(result.values.unknown === true);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    // ============ toUSVString TESTS ============
+
+    [Fact]
+    public void ToUSVString_RegularString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.toUSVString('hello') === 'hello');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_EmptyString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.toUSVString('') === '');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_UnicodeEmoji()
+    {
+        // Emoji (surrogate pair) should be preserved
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const emoji = '😀';
+                console.log(util.toUSVString(emoji) === emoji);
+                console.log(util.toUSVString(emoji).length === 2);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_ValidSurrogatePair()
+    {
+        // Valid surrogate pair should be preserved
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                // U+1F600 (😀) = D83D DE00 in UTF-16
+                const str = '\uD83D\uDE00';
+                const result = util.toUSVString(str);
+                console.log(result === str);
+                console.log(result.length === 2);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_LoneHighSurrogate()
+    {
+        // Lone high surrogate should be replaced with U+FFFD
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const loneHigh = '\uD83D';
+                const result = util.toUSVString(loneHigh);
+                console.log(result === '\uFFFD');
+                console.log(result.length === 1);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_LoneLowSurrogate()
+    {
+        // Lone low surrogate should be replaced with U+FFFD
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const loneLow = '\uDE00';
+                const result = util.toUSVString(loneLow);
+                console.log(result === '\uFFFD');
+                console.log(result.length === 1);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_MixedContent()
+    {
+        // Mix of regular chars, valid pairs, and lone surrogates
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                // 'a' + lone high + 'b' + valid pair + 'c' + lone low
+                const input = 'a\uD83Db\uD83D\uDE00c\uDE00';
+                const result = util.toUSVString(input);
+                // Should become: 'a' + FFFD + 'b' + valid pair + 'c' + FFFD
+                console.log(result.length === 7);
+                console.log(result.charAt(0) === 'a');
+                console.log(result.charAt(1) === '\uFFFD');
+                console.log(result.charAt(2) === 'b');
+                console.log(result.charAt(5) === 'c');
+                console.log(result.charAt(6) === '\uFFFD');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_ConvertsNonStringToString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.toUSVString(123) === '123');
+                // Numbers convert to string representation
+                console.log(util.toUSVString(3.14).startsWith('3.14'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void ToUSVString_ChineseCharacters()
+    {
+        // Regular CJK characters (not surrogates) should be preserved
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const chinese = '你好世界';
+                console.log(util.toUSVString(chinese) === chinese);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
 }
