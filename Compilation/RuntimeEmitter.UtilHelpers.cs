@@ -7,17 +7,506 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
-    /// Emits util module helper methods.
+    /// Emits util module helper methods into $Runtime for standalone execution.
     /// </summary>
     private void EmitUtilMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        // Emit util.types.* methods
+        EmitUtilTypesIsArray(typeBuilder, runtime);
+        EmitUtilTypesIsFunction(typeBuilder, runtime);
+        EmitUtilTypesIsNull(typeBuilder, runtime);
+        EmitUtilTypesIsUndefined(typeBuilder, runtime);
+        EmitUtilTypesIsDate(typeBuilder, runtime);
+        EmitUtilTypesIsPromise(typeBuilder, runtime);
+        EmitUtilTypesIsRegExp(typeBuilder, runtime);
+        EmitUtilTypesIsMap(typeBuilder, runtime);
+        EmitUtilTypesIsSet(typeBuilder, runtime);
+        EmitUtilTypesIsTypedArray(typeBuilder, runtime);
+
+        // Emit util.deprecate
+        EmitUtilDeprecate(typeBuilder, runtime);
+
+        // Emit util.callbackify
+        EmitUtilCallbackify(typeBuilder, runtime);
+
+        // Emit util.inherits
+        EmitUtilInherits(typeBuilder, runtime);
+
+        // Emit util.format and util.inspect (these still call UtilHelpers for complex logic)
         EmitUtilFormat(typeBuilder, runtime);
         EmitUtilInspect(typeBuilder, runtime);
     }
 
     /// <summary>
+    /// Emits: public static bool UtilTypesIsArray(object value)
+    /// </summary>
+    private void EmitUtilTypesIsArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsArray",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsArray = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for IList<object?>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObjectNullable);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for $Array
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsFunction(object value)
+    /// </summary>
+    private void EmitUtilTypesIsFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsFunction",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsFunction = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for Delegate
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Delegate));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for $TSFunction
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for $BoundTSFunction
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsNull(object value)
+    /// </summary>
+    private void EmitUtilTypesIsNull(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsNull",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsNull = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsUndefined(object value)
+    /// </summary>
+    private void EmitUtilTypesIsUndefined(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsUndefined",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsUndefined = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+
+        // Check for $Undefined
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsDate(object value)
+    /// </summary>
+    private void EmitUtilTypesIsDate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsDate",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsDate = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for DateTime
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(DateTime));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for $TSDate
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsPromise(object value)
+    /// </summary>
+    private void EmitUtilTypesIsPromise(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsPromise",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsPromise = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for $Promise
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for Task
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(System.Threading.Tasks.Task));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsRegExp(object value)
+    /// </summary>
+    private void EmitUtilTypesIsRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsRegExp",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsRegExp = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for Regex
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(System.Text.RegularExpressions.Regex));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for $RegExp
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsMap(object value)
+    /// Uses reflection to check for generic Dictionary type.
+    /// </summary>
+    private void EmitUtilTypesIsMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsMap",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsMap = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+        var checkGenericLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for Dictionary<object, object?> (direct check)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryObjectObject);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for generic Dictionary<,> via reflection
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        var typeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Ldtoken, typeof(Dictionary<,>));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsSet(object value)
+    /// Uses reflection to check for generic HashSet type.
+    /// </summary>
+    private void EmitUtilTypesIsSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsSet",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsSet = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for HashSet<object> (direct check)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(HashSet<object>));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for generic HashSet<> via reflection
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        var typeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Ldtoken, typeof(HashSet<>));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsTypedArray(object value)
+    /// </summary>
+    private void EmitUtilTypesIsTypedArray(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsTypedArray",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsTypedArray = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for $Buffer
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static $DeprecatedFunction UtilDeprecate(object fn, string message)
+    /// </summary>
+    private void EmitUtilDeprecate(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilDeprecate",
+            MethodAttributes.Public | MethodAttributes.Static,
+            runtime.TSDeprecatedFunctionType,
+            [_types.Object, _types.String]);
+        runtime.UtilDeprecate = method;
+
+        var il = method.GetILGenerator();
+        // return new $DeprecatedFunction(fn, message)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Newobj, runtime.TSDeprecatedFunctionCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object UtilCallbackify(object fn)
+    /// For now, returns the function as-is (callbackify is rarely used in compiled mode).
+    /// </summary>
+    private void EmitUtilCallbackify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilCallbackify",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.UtilCallbackify = method;
+
+        var il = method.GetILGenerator();
+        // For simplicity, just return the function as-is
+        // Full callbackify implementation would require significant IL
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static void UtilInherits(object ctor, object superCtor)
+    /// </summary>
+    private void EmitUtilInherits(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilInherits",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object]);
+        runtime.UtilInherits = method;
+
+        var il = method.GetILGenerator();
+        var endLabel = il.DefineLabel();
+        var notDictLabel = il.DefineLabel();
+
+        // if (ctor is IDictionary<string, object?> dict) dict["super_"] = superCtor
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notDictLabel);
+
+        il.Emit(OpCodes.Ldstr, "super_");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(notDictLabel);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits: public static string UtilFormat(object[] args)
     /// Calls into UtilHelpers.Format for proper format specifier handling.
+    /// TODO: Emit full implementation for truly standalone execution.
     /// </summary>
     private void EmitUtilFormat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -30,7 +519,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Call UtilHelpers.Format(args)
+        // Call UtilHelpers.Format(args) - still uses helper for complex string parsing
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Format))!);
         il.Emit(OpCodes.Ret);
@@ -39,6 +528,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static string UtilInspect(object obj, object options)
     /// Calls into UtilHelpers.Inspect for proper formatting.
+    /// TODO: Emit full implementation for truly standalone execution.
     /// </summary>
     private void EmitUtilInspect(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -51,7 +541,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Call UtilHelpers.Inspect(obj, options)
+        // Call UtilHelpers.Inspect(obj, options) - still uses helper for complex recursion
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Inspect))!);

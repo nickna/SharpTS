@@ -135,6 +135,13 @@ public partial class RuntimeEmitter
         EmitFunctionCallWrapperClass(moduleBuilder, runtime);
         EmitFunctionApplyWrapperClass(moduleBuilder, runtime);
 
+        // Emit util module types for standalone execution
+        // Must come after $Buffer (TextEncoder returns $Buffer)
+        EmitTSDeprecatedFunctionClass(moduleBuilder, runtime);
+        EmitTSTextEncoderClass(moduleBuilder, runtime);
+        EmitTSTextDecoderClass(moduleBuilder, runtime);
+        EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 

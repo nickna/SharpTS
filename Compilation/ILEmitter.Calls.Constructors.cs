@@ -137,6 +137,18 @@ public partial class ILEmitter
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
 
+        // Special case: new util.TextEncoder() or new util.TextDecoder() (module-qualified)
+        if (namespaceParts.Count == 1 && className == "TextEncoder")
+        {
+            EmitNewTextEncoder();
+            return;
+        }
+        if (namespaceParts.Count == 1 && className == "TextDecoder")
+        {
+            EmitNewTextDecoder(n.Arguments);
+            return;
+        }
+
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
         if (namespaceParts.Count > 0)
@@ -459,8 +471,8 @@ public partial class ILEmitter
     private void EmitNewTextEncoder()
     {
         // new TextEncoder() - no arguments (always UTF-8)
-        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.CreateTextEncoder))!;
-        IL.Emit(OpCodes.Call, method);
+        // Use the emitted $TextEncoder constructor for standalone execution
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSTextEncoderCtor);
         SetStackUnknown();
     }
 
@@ -470,6 +482,8 @@ public partial class ILEmitter
     private void EmitNewTextDecoder(List<Expr> arguments)
     {
         // new TextDecoder(encoding?, options?)
+        // Use the emitted $TextDecoder constructor for standalone execution
+
         // Encoding
         if (arguments.Count > 0)
         {
@@ -491,8 +505,7 @@ public partial class ILEmitter
         // TODO: Parse options object for fatal and ignoreBOM if provided
         // For now, just use defaults
 
-        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.CreateTextDecoder))!;
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSTextDecoderCtor);
         SetStackUnknown();
     }
 }

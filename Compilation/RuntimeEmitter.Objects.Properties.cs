@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
     {
         // GetFieldsProperty(object obj, string name) -> object
         // Uses reflection to access _fields dictionary on class instances
-        // IMPORTANT: Check for ISharpTSPropertyAccessor first, then getter methods, then _fields
+        // Check getter methods first (for standalone execution), then _fields dictionary
         // Walks up the type hierarchy to find fields in parent classes
         var method = typeBuilder.DefineMethod(
             "GetFieldsProperty",
@@ -78,42 +78,69 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
         var getterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var currentTypeLocal = il.DeclareLocal(_types.Type);
-        var propertyAccessorLocal = il.DeclareLocal(typeof(ISharpTSPropertyAccessor));
+        var interfaceLocal = il.DeclareLocal(_types.Type);
 
         // if (obj == null) return null;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check for ISharpTSPropertyAccessor first
-        // var accessor = obj as ISharpTSPropertyAccessor;
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(ISharpTSPropertyAccessor));
-        il.Emit(OpCodes.Stloc, propertyAccessorLocal);
+        // Try ISharpTSPropertyAccessor interface FIRST (for interpreter runtime types like SharpTSKeyObject)
+        // Types implementing this interface may have custom property handling (e.g., enum to string conversion)
+        // Uses reflection to avoid hard reference to SharpTS.dll for standalone execution
 
-        // if (accessor == null) goto tryGetter;
-        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        // var iface = obj.GetType().GetInterface("ISharpTSPropertyAccessor");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "ISharpTSPropertyAccessor");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetInterface", _types.String));
+        il.Emit(OpCodes.Stloc, interfaceLocal);
+
+        // if (iface == null) goto tryGetter;
+        il.Emit(OpCodes.Ldloc, interfaceLocal);
         il.Emit(OpCodes.Brfalse, tryGetterLabel);
 
-        // var propValue = accessor.GetProperty(name);
-        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        // var getPropertyMethod = iface.GetMethod("GetProperty");
+        var getPropertyMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Ldloc, interfaceLocal);
+        il.Emit(OpCodes.Ldstr, "GetProperty");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Stloc, getPropertyMethodLocal);
+
+        // if (getPropertyMethod == null) goto tryGetter;
+        il.Emit(OpCodes.Ldloc, getPropertyMethodLocal);
+        il.Emit(OpCodes.Brfalse, tryGetterLabel);
+
+        // var value = getPropertyMethod.Invoke(obj, new object[] { name });
+        il.Emit(OpCodes.Ldloc, getPropertyMethodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(ISharpTSPropertyAccessor).GetMethod("GetProperty")!);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Stloc, valueLocal);
 
-        // If propValue is null, fall through to try getter/method
+        // if (value == null) goto tryGetter;
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Brfalse, tryGetterLabel);
 
-        // If propValue is a BuiltInMethod (interpreter-only), fall through to find actual method
+        // if (value is BuiltInMethod) goto tryMethod; (skip interpreter-only wrappers)
+        // Check by type name to avoid hard reference
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, typeof(SharpTS.Runtime.BuiltIns.BuiltInMethod));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "BuiltInMethod");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Equals", _types.String));
         il.Emit(OpCodes.Brtrue, tryMethodLabel);
 
-        // Return the property value
+        // return value;
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
 
-        // tryGetter: Check for getter method
+        // tryGetter: Check for CLR getter method (for emitted types like $TextEncoder, $TextDecoder)
+        // This ensures standalone execution works for types without ISharpTSPropertyAccessor
         il.MarkLabel(tryGetterLabel);
 
         // Check for getter method: var getterMethod = obj.GetType().GetMethod("get_" + ToPascalCase(name));
@@ -269,7 +296,7 @@ public partial class RuntimeEmitter
     {
         // SetFieldsProperty(object obj, string name, object value) -> void
         // Uses reflection to access _fields dictionary on class instances
-        // IMPORTANT: Check for ISharpTSPropertyAccessor first, then setter methods, then _fields
+        // Check setter methods first (for standalone execution), then _fields dictionary
         var method = typeBuilder.DefineMethod(
             "SetFieldsProperty",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -289,30 +316,57 @@ public partial class RuntimeEmitter
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
-        var propertyAccessorLocal = il.DeclareLocal(typeof(ISharpTSPropertyAccessor));
+        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // if (obj == null) return;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
 
-        // Check for ISharpTSPropertyAccessor first
-        // var accessor = obj as ISharpTSPropertyAccessor;
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeof(ISharpTSPropertyAccessor));
-        il.Emit(OpCodes.Stloc, propertyAccessorLocal);
+        // Try ISharpTSPropertyAccessor interface FIRST (for interpreter runtime types)
+        // Types implementing this interface may have custom property handling
+        var interfaceLocal = il.DeclareLocal(_types.Type);
 
-        // if (accessor == null) goto trySetter;
-        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        // var iface = obj.GetType().GetInterface("ISharpTSPropertyAccessor");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "ISharpTSPropertyAccessor");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetInterface", _types.String));
+        il.Emit(OpCodes.Stloc, interfaceLocal);
+
+        // if (iface == null) goto trySetter;
+        il.Emit(OpCodes.Ldloc, interfaceLocal);
         il.Emit(OpCodes.Brfalse, trySetterLabel);
 
-        // accessor.SetProperty(name, value); return;
-        il.Emit(OpCodes.Ldloc, propertyAccessorLocal);
+        // var setPropertyMethod = iface.GetMethod("SetProperty");
+        var setPropertyMethodLocal = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Ldloc, interfaceLocal);
+        il.Emit(OpCodes.Ldstr, "SetProperty");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Stloc, setPropertyMethodLocal);
+
+        // if (setPropertyMethod == null) goto trySetter;
+        il.Emit(OpCodes.Ldloc, setPropertyMethodLocal);
+        il.Emit(OpCodes.Brfalse, trySetterLabel);
+
+        // setPropertyMethod.Invoke(obj, new object[] { name, value }); return;
+        il.Emit(OpCodes.Ldloc, setPropertyMethodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, typeof(ISharpTSPropertyAccessor).GetMethod("SetProperty")!);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
 
-        // trySetter: Check for setter method
+        // trySetter: Check for CLR setter method (for emitted types like $TextEncoder, $TextDecoder)
+        // This ensures standalone execution works for types without ISharpTSPropertyAccessor
         il.MarkLabel(trySetterLabel);
 
         // Check for setter method: var setterMethod = obj.GetType().GetMethod("set_" + ToPascalCase(name));
@@ -348,9 +402,6 @@ public partial class RuntimeEmitter
 
         // Try _fields dictionary - walk up type hierarchy to find non-null _fields
         il.MarkLabel(tryFieldsLabel);
-
-        // Add currentType local
-        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // currentType = obj.GetType();
         il.Emit(OpCodes.Ldarg_0);
@@ -442,6 +493,7 @@ public partial class RuntimeEmitter
         var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
         var frozenCheckLocal = il.DeclareLocal(_types.Object);
+        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // if (obj == null) return;
         il.Emit(OpCodes.Ldarg_0);
@@ -502,9 +554,6 @@ public partial class RuntimeEmitter
 
         // Try _fields dictionary - walk up type hierarchy to find non-null _fields
         il.MarkLabel(tryFieldsLabel);
-
-        // Add currentType local
-        var currentTypeLocal = il.DeclareLocal(_types.Type);
 
         // currentType = obj.GetType();
         il.Emit(OpCodes.Ldarg_0);

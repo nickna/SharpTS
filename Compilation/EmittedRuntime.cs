@@ -840,6 +840,55 @@ public class EmittedRuntime
     public MethodBuilder UtilFormat { get; set; } = null!;
     public MethodBuilder UtilInspect { get; set; } = null!;
 
+    // util.types.* methods
+    public MethodBuilder UtilTypesIsArray { get; set; } = null!;
+    public MethodBuilder UtilTypesIsFunction { get; set; } = null!;
+    public MethodBuilder UtilTypesIsNull { get; set; } = null!;
+    public MethodBuilder UtilTypesIsUndefined { get; set; } = null!;
+    public MethodBuilder UtilTypesIsDate { get; set; } = null!;
+    public MethodBuilder UtilTypesIsPromise { get; set; } = null!;
+    public MethodBuilder UtilTypesIsRegExp { get; set; } = null!;
+    public MethodBuilder UtilTypesIsMap { get; set; } = null!;
+    public MethodBuilder UtilTypesIsSet { get; set; } = null!;
+    public MethodBuilder UtilTypesIsTypedArray { get; set; } = null!;
+
+    // util.deprecate support
+    public MethodBuilder UtilDeprecate { get; set; } = null!;
+    public TypeBuilder TSDeprecatedFunctionType { get; set; } = null!;
+    public ConstructorBuilder TSDeprecatedFunctionCtor { get; set; } = null!;
+    public MethodBuilder TSDeprecatedFunctionInvoke { get; set; } = null!;
+
+    // util.callbackify support
+    public MethodBuilder UtilCallbackify { get; set; } = null!;
+
+    // util.inherits support
+    public MethodBuilder UtilInherits { get; set; } = null!;
+
+    // $TextEncoder type - emitted for standalone util support
+    public TypeBuilder TSTextEncoderType { get; set; } = null!;
+    public ConstructorBuilder TSTextEncoderCtor { get; set; } = null!;
+    public MethodBuilder TSTextEncoderEncodingGetter { get; set; } = null!;
+    public MethodBuilder TSTextEncoderEncode { get; set; } = null!;
+    public MethodBuilder TSTextEncoderEncodeInto { get; set; } = null!;
+
+    // $TextDecoder type - emitted for standalone util support
+    public TypeBuilder TSTextDecoderType { get; set; } = null!;
+    public ConstructorBuilder TSTextDecoderCtor { get; set; } = null!;
+    public MethodBuilder TSTextDecoderEncodingGetter { get; set; } = null!;
+    public MethodBuilder TSTextDecoderFatalGetter { get; set; } = null!;
+    public MethodBuilder TSTextDecoderIgnoreBOMGetter { get; set; } = null!;
+    public MethodBuilder TSTextDecoderDecode { get; set; } = null!;
+
+    // $TextDecoderDecodeMethod wrapper - callable by compiled code
+    public TypeBuilder TSTextDecoderDecodeMethodType { get; set; } = null!;
+    public ConstructorBuilder TSTextDecoderDecodeMethodCtor { get; set; } = null!;
+    public MethodBuilder TSTextDecoderDecodeMethodInvoke { get; set; } = null!;
+
+    // Util format helper methods (emitted for standalone)
+    public MethodBuilder UtilInspectValue { get; set; } = null!;
+    public MethodBuilder UtilInspectArray { get; set; } = null!;
+    public MethodBuilder UtilInspectObject { get; set; } = null!;
+
     // Readline module methods
     public MethodBuilder ReadlineQuestionSync { get; set; } = null!;
     public MethodBuilder ReadlineCreateInterface { get; set; } = null!;

@@ -23,17 +23,17 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         {
             "format" => EmitFormat(emitter, arguments),
             "inspect" => EmitInspect(emitter, arguments),
-            // Handle util.types.* nested calls
-            "types.isArray" => EmitTypesIsArray(emitter, arguments),
-            "types.isFunction" => EmitTypesIsFunction(emitter, arguments),
-            "types.isNull" => EmitTypesIsNull(emitter, arguments),
-            "types.isUndefined" => EmitTypesIsUndefined(emitter, arguments),
-            "types.isDate" => EmitTypesIsDate(emitter, arguments),
-            "types.isPromise" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsPromise)),
-            "types.isRegExp" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsRegExp)),
-            "types.isMap" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsMap)),
-            "types.isSet" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsSet)),
-            "types.isTypedArray" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsTypedArray)),
+            // Handle util.types.* nested calls - use emitted methods for standalone execution
+            "types.isArray" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsArray),
+            "types.isFunction" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsFunction),
+            "types.isNull" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsNull),
+            "types.isUndefined" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsUndefined),
+            "types.isDate" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsDate),
+            "types.isPromise" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsPromise),
+            "types.isRegExp" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsRegExp),
+            "types.isMap" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsMap),
+            "types.isSet" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsSet),
+            "types.isTypedArray" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsTypedArray),
             "deprecate" => EmitDeprecate(emitter, arguments),
             "callbackify" => EmitCallbackify(emitter, arguments),
             "inherits" => EmitInherits(emitter, arguments),
@@ -118,32 +118,10 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         return true;
     }
 
-    private static bool EmitTypesIsArray(IEmitterContext emitter, List<Expr> arguments)
-    {
-        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsArray));
-    }
-
-    private static bool EmitTypesIsFunction(IEmitterContext emitter, List<Expr> arguments)
-    {
-        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsFunction));
-    }
-
-    private static bool EmitTypesIsNull(IEmitterContext emitter, List<Expr> arguments)
-    {
-        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsNull));
-    }
-
-    private static bool EmitTypesIsUndefined(IEmitterContext emitter, List<Expr> arguments)
-    {
-        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsUndefined));
-    }
-
-    private static bool EmitTypesIsDate(IEmitterContext emitter, List<Expr> arguments)
-    {
-        return EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsDate));
-    }
-
-    private static bool EmitTypesCheck(IEmitterContext emitter, List<Expr> arguments, string methodName)
+    /// <summary>
+    /// Emits a call to one of the util.types.* methods using the emitted $Runtime method.
+    /// </summary>
+    private static bool EmitTypesCall(IEmitterContext emitter, List<Expr> arguments, Func<CompilationContext, System.Reflection.Emit.MethodBuilder> getMethod)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -159,8 +137,8 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
 
-        // Call UtilHelpers.IsXxx(value)
-        var method = typeof(UtilHelpers).GetMethod(methodName)!;
+        // Call the emitted $Runtime method
+        var method = getMethod(ctx);
         il.Emit(OpCodes.Call, method);
 
         // Box the boolean result
@@ -191,11 +169,10 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         var toStringMethod = ctx.Types.Object.GetMethod("ToString", Type.EmptyTypes)!;
         il.Emit(OpCodes.Callvirt, toStringMethod);
 
-        // Call UtilHelpers.Deprecate(fn, message) - returns DeprecatedFunction (reference type)
-        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Deprecate))!;
-        il.Emit(OpCodes.Call, method);
+        // Call emitted $Runtime.UtilDeprecate(fn, message) - returns $DeprecatedFunction
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilDeprecate);
 
-        // No boxing needed - DeprecatedFunction is a reference type
+        // No boxing needed - $DeprecatedFunction is a reference type
         return true;
     }
 
@@ -213,12 +190,10 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[0]);
         emitter.EmitBoxIfNeeded(arguments[0]);
 
-        // Call UtilHelpers.Callbackify(fn)
-        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Callbackify))!;
-        il.Emit(OpCodes.Call, method);
+        // Call emitted $Runtime.UtilCallbackify(fn)
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilCallbackify);
 
-        // Box the result
-        il.Emit(OpCodes.Box, method.ReturnType);
+        // Result is already object type, no boxing needed
         return true;
     }
 
@@ -240,9 +215,8 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
 
-        // Call UtilHelpers.Inherits(ctor, superCtor)
-        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Inherits))!;
-        il.Emit(OpCodes.Call, method);
+        // Call emitted $Runtime.UtilInherits(ctor, superCtor)
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilInherits);
 
         // inherits returns void, push null for consistency
         il.Emit(OpCodes.Ldnull);
