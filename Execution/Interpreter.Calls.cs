@@ -21,12 +21,16 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the return value of the called function.</returns>
     private async ValueTask<object?> EvaluateCallCore(IEvaluationContext ctx, Expr.Call call)
     {
-        // Handle console.log special case
-        if (call.Callee is Expr.Variable v && v.Name.Lexeme == "console.log")
+        // Handle console.* methods
+        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
         {
-            List<object?> arguments = await ctx.EvaluateAllAsync(call.Arguments);
-            Console.WriteLine(string.Join(" ", arguments.Select(Stringify)));
-            return null;
+            var methodName = v.Name.Lexeme["console.".Length..];
+            var method = BuiltInRegistry.Instance.GetStaticMethod("console", methodName);
+            if (method != null)
+            {
+                List<object?> arguments = await ctx.EvaluateAllAsync(call.Arguments);
+                return method.Call(this, arguments);
+            }
         }
 
         // Handle globalThis.console.* calls

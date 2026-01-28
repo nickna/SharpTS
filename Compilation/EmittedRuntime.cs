@@ -54,6 +54,21 @@ public class EmittedRuntime
     public MethodBuilder ConsoleTimeLog { get; set; } = null!;
     public FieldBuilder ConsoleTimersField { get; set; } = null!;
 
+    // Phase 2 console methods
+    public MethodBuilder ConsoleAssert { get; set; } = null!;
+    public MethodBuilder ConsoleAssertMultiple { get; set; } = null!;
+    public MethodBuilder ConsoleCount { get; set; } = null!;
+    public MethodBuilder ConsoleCountReset { get; set; } = null!;
+    public MethodBuilder ConsoleTable { get; set; } = null!;
+    public MethodBuilder ConsoleDir { get; set; } = null!;
+    public MethodBuilder ConsoleGroup { get; set; } = null!;
+    public MethodBuilder ConsoleGroupMultiple { get; set; } = null!;
+    public MethodBuilder ConsoleGroupEnd { get; set; } = null!;
+    public MethodBuilder ConsoleTrace { get; set; } = null!;
+    public MethodBuilder ConsoleTraceMultiple { get; set; } = null!;
+    public FieldBuilder ConsoleCountsField { get; set; } = null!;
+    public FieldBuilder ConsoleGroupLevelField { get; set; } = null!;
+
     // Union type marker interface (for fast union type detection)
     public Type IUnionTypeInterface { get; set; } = null!;
     public MethodInfo IUnionTypeValueGetter { get; set; } = null!;

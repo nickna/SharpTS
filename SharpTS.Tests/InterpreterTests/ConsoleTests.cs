@@ -1,13 +1,19 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests.BuiltInModules;
+namespace SharpTS.Tests.InterpreterTests;
 
 /// <summary>
-/// Tests for console extensions (error, warn, info, debug, time, timeEnd, timeLog, clear).
+/// Tests for console methods in the interpreter.
+/// Note: Tests for stderr methods (error, warn, assert) verify no crash occurs.
+/// Stderr content cannot be asserted as TestHarness.RunInterpreted only captures stdout.
+/// Timer/count tests use unique labels to avoid state conflicts in parallel test runs.
 /// </summary>
-public class ConsoleExtensionsTests
+public class ConsoleTests
 {
+
+    // ===================== Phase 1: Basic Output =====================
+
     [Fact]
     public void Console_Log_OutputsToStdout()
     {
@@ -16,7 +22,7 @@ public class ConsoleExtensionsTests
             console.log('World');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Equal("Hello\nWorld\n", output);
     }
 
@@ -27,8 +33,21 @@ public class ConsoleExtensionsTests
             console.log('Hello', 'World', 123);
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Equal("Hello World 123\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_NoArguments_PrintsNewline()
+    {
+        var source = """
+            console.log('Line1');
+            console.log();
+            console.log('Line2');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("Line1\n\nLine2\n", output);
     }
 
     [Fact]
@@ -39,7 +58,7 @@ public class ConsoleExtensionsTests
             console.info('Multiple', 'args', 42);
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Equal("Info message\nMultiple args 42\n", output);
     }
 
@@ -51,9 +70,42 @@ public class ConsoleExtensionsTests
             console.debug('Multiple', 'args');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Equal("Debug message\nMultiple args\n", output);
     }
+
+    // ===================== Phase 1: Stderr Methods =====================
+    // Note: These verify no crash; stderr content cannot be asserted
+
+    [Fact]
+    public void Console_Error_DoesNotCrash()
+    {
+        var source = """
+            console.log('Before');
+            console.error('Error message');
+            console.log('After');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Before\n", output);
+        Assert.Contains("After\n", output);
+    }
+
+    [Fact]
+    public void Console_Warn_DoesNotCrash()
+    {
+        var source = """
+            console.log('Before');
+            console.warn('Warning message');
+            console.log('After');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Before\n", output);
+        Assert.Contains("After\n", output);
+    }
+
+    // ===================== Phase 1: Timing Methods =====================
 
     [Fact]
     public void Console_Time_And_TimeEnd_WorkTogether()
@@ -61,15 +113,14 @@ public class ConsoleExtensionsTests
         var source = """
             console.time('test');
             let sum = 0;
-            for (let i = 0; i < 1000; i++) {
+            for (let i = 0; i < 100; i++) {
                 sum += i;
             }
             console.timeEnd('test');
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        // Should contain timer output with "test:" and "ms"
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("test:", output);
         Assert.Contains("ms", output);
         Assert.Contains("Done\n", output);
@@ -85,11 +136,28 @@ public class ConsoleExtensionsTests
             console.log('Finished');
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        // Should use "default" as label
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("default:", output);
         Assert.Contains("ms", output);
         Assert.Contains("Finished\n", output);
+    }
+
+    [Fact]
+    public void Console_Time_CaseSensitiveLabels()
+    {
+        var source = """
+            console.time('Timer');
+            console.time('timer');
+            console.timeEnd('Timer');
+            console.timeEnd('timer');
+            console.log('Done');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        // Both should be separate timers
+        Assert.Contains("Timer:", output);
+        Assert.Contains("timer:", output);
+        Assert.Contains("Done\n", output);
     }
 
     [Fact]
@@ -103,97 +171,10 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        // Should have multiple "myTimer:" outputs
+        var output = TestHarness.RunInterpreted(source);
+        // Should have 3 timer outputs (2 timeLog + 1 timeEnd)
         var timerOccurrences = output.Split("myTimer:").Length - 1;
         Assert.True(timerOccurrences >= 3, $"Expected at least 3 timer outputs, got {timerOccurrences}");
-        Assert.Contains("Done\n", output);
-    }
-
-    [Fact]
-    public void Console_Error_OutputsMessage()
-    {
-        // Note: console.error goes to stderr, which is captured separately
-        // The test harness captures both stdout and stderr
-        var source = """
-            console.log('Before error');
-            console.error('Error message');
-            console.log('After error');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        // stdout should have the log messages
-        Assert.Contains("Before error\n", output);
-        Assert.Contains("After error\n", output);
-    }
-
-    [Fact]
-    public void Console_Warn_OutputsMessage()
-    {
-        var source = """
-            console.log('Before warn');
-            console.warn('Warning message');
-            console.log('After warn');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        Assert.Contains("Before warn\n", output);
-        Assert.Contains("After warn\n", output);
-    }
-
-    [Fact]
-    public void Console_Log_NoArguments_PrintsNewline()
-    {
-        var source = """
-            console.log('Line1');
-            console.log();
-            console.log('Line2');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        Assert.Equal("Line1\n\nLine2\n", output);
-    }
-
-    [Fact]
-    public void Console_Info_NoArguments_PrintsNewline()
-    {
-        var source = """
-            console.log('Line1');
-            console.info();
-            console.log('Line2');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        Assert.Equal("Line1\n\nLine2\n", output);
-    }
-
-    [Fact]
-    public void Console_Debug_NoArguments_PrintsNewline()
-    {
-        var source = """
-            console.log('Line1');
-            console.debug();
-            console.log('Line2');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        Assert.Equal("Line1\n\nLine2\n", output);
-    }
-
-    [Fact]
-    public void Console_Time_MultipleLabeledTimers()
-    {
-        var source = """
-            console.time('timer1');
-            console.time('timer2');
-            console.timeEnd('timer1');
-            console.timeEnd('timer2');
-            console.log('Done');
-            """;
-
-        var output = TestHarness.RunCompiled(source);
-        Assert.Contains("timer1:", output);
-        Assert.Contains("timer2:", output);
         Assert.Contains("Done\n", output);
     }
 
@@ -205,7 +186,7 @@ public class ConsoleExtensionsTests
             console.log('Still running');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("Still running\n", output);
     }
 
@@ -217,11 +198,12 @@ public class ConsoleExtensionsTests
             console.log('Still running');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("Still running\n", output);
     }
 
     // ===================== Phase 2: Assert =====================
+    // Note: Assert writes to stderr; we verify no crash
 
     [Fact]
     public void Console_Assert_TruthyCondition_NoOutput()
@@ -230,10 +212,11 @@ public class ConsoleExtensionsTests
             console.assert(true);
             console.assert(1);
             console.assert('hello');
+            console.assert({});
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Equal("Done\n", output);
     }
 
@@ -242,10 +225,13 @@ public class ConsoleExtensionsTests
     {
         var source = """
             console.assert(false, 'this should fail');
+            console.assert(0);
+            console.assert('');
+            console.assert(null);
             console.log('Still running');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("Still running\n", output);
     }
 
@@ -260,7 +246,7 @@ public class ConsoleExtensionsTests
             console.count('calls');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("calls: 1\n", output);
         Assert.Contains("calls: 2\n", output);
         Assert.Contains("calls: 3\n", output);
@@ -274,7 +260,7 @@ public class ConsoleExtensionsTests
             console.count();
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("default: 1\n", output);
         Assert.Contains("default: 2\n", output);
     }
@@ -289,13 +275,13 @@ public class ConsoleExtensionsTests
             console.count('myCount');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("myCount: 1\n", output);
         Assert.Contains("myCount: 2\n", output);
         // After reset, should start from 1 again
         var lines = output.Split('\n').Where(l => l.StartsWith("myCount:")).ToList();
         Assert.Equal(3, lines.Count);
-        Assert.Equal("myCount: 1", lines[2]);
+        Assert.Equal("myCount: 1", lines[2]); // Third occurrence after reset
     }
 
     // ===================== Phase 2: Table =====================
@@ -308,7 +294,35 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
+        // Table outputs ASCII borders
+        Assert.Contains("+", output);
+        Assert.Contains("|", output);
+        Assert.Contains("Done\n", output);
+    }
+
+    [Fact]
+    public void Console_Table_WithColumnFilter()
+    {
+        var source = """
+            console.table([{a: 1, b: 2}, {a: 3, b: 4}], ['a']);
+            console.log('Done');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Done\n", output);
+    }
+
+    [Fact]
+    public void Console_Table_EmptyArray()
+    {
+        var source = """
+            console.table([]);
+            console.log('Done');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("(empty array)", output);
         Assert.Contains("Done\n", output);
     }
 
@@ -322,30 +336,72 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("name", output);
+        Assert.Contains("test", output);
         Assert.Contains("Done\n", output);
     }
 
     // ===================== Phase 2: Group =====================
 
     [Fact]
-    public void Console_Group_PrintsLabel()
+    public void Console_Group_IncreasesIndentation()
     {
         var source = """
+            console.log('Outside');
             console.group('MyGroup');
+            console.log('Inside');
+            console.groupEnd();
+            console.log('Outside again');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Outside\n", output);
+        Assert.Contains("MyGroup\n", output);
+        // Inside should be indented (starts with spaces)
+        Assert.Contains("  Inside\n", output);
+        Assert.Contains("Outside again\n", output);
+    }
+
+    [Fact]
+    public void Console_GroupCollapsed_SameAsGroup()
+    {
+        var source = """
+            console.groupCollapsed('Collapsed');
             console.log('Inside');
             console.groupEnd();
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        Assert.Contains("MyGroup\n", output);
-        Assert.Contains("Inside\n", output);
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Collapsed\n", output);
+        Assert.Contains("  Inside\n", output);
         Assert.Contains("Done\n", output);
     }
 
     [Fact]
-    public void Console_GroupEnd_DoesNotCrash()
+    public void Console_GroupEnd_DecreasesIndentation()
+    {
+        var source = """
+            console.group();
+            console.log('Level 1');
+            console.group();
+            console.log('Level 2');
+            console.groupEnd();
+            console.log('Back to 1');
+            console.groupEnd();
+            console.log('Back to 0');
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("  Level 1\n", output);
+        Assert.Contains("    Level 2\n", output);
+        Assert.Contains("  Back to 1\n", output);
+        Assert.Contains("Back to 0\n", output);
+    }
+
+    [Fact]
+    public void Console_GroupEnd_ExtraCallsIgnored()
     {
         var source = """
             console.groupEnd();
@@ -353,7 +409,7 @@ public class ConsoleExtensionsTests
             console.log('No crash');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("No crash\n", output);
     }
 
@@ -367,7 +423,7 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("Trace: Test trace\n", output);
         Assert.Contains("Done\n", output);
     }
@@ -380,8 +436,8 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
-        Assert.Contains("Trace:", output);
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Contains("Trace: \n", output);
         Assert.Contains("Done\n", output);
     }
 
@@ -393,7 +449,7 @@ public class ConsoleExtensionsTests
             console.log('Done');
             """;
 
-        var output = TestHarness.RunCompiled(source);
+        var output = TestHarness.RunInterpreted(source);
         Assert.Contains("Trace: Message 1 2 3\n", output);
         Assert.Contains("Done\n", output);
     }

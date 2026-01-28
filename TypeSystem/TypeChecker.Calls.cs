@@ -16,10 +16,16 @@ public partial class TypeChecker
 {
     private TypeInfo CheckCall(Expr.Call call)
     {
-        if (call.Callee is Expr.Variable v && v.Name.Lexeme == "console.log")
+        // Handle all console.* methods
+        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
         {
-             foreach(var arg in call.Arguments) CheckExpr(arg);
-             return new TypeInfo.Void();
+            var methodName = v.Name.Lexeme["console.".Length..];
+            var methodType = BuiltInTypes.GetConsoleStaticMethodType(methodName);
+            if (methodType is TypeInfo.Function)
+            {
+                foreach (var arg in call.Arguments) CheckExpr(arg);
+                return new TypeInfo.Void();
+            }
         }
 
         // Handle Symbol() constructor - creates unique symbols

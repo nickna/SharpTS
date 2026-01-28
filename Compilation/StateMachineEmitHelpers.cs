@@ -1157,9 +1157,230 @@ public class StateMachineEmitHelpers
                 SetStackUnknown();
                 return true;
 
+            // Phase 2 methods
+            case "assert":
+                EmitConsoleAssert(call, emitArgumentBoxed, runtime);
+                return true;
+
+            case "count":
+                if (call.Arguments.Count >= 1)
+                {
+                    emitArgumentBoxed(call.Arguments[0]);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, runtime.ConsoleCount);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "countReset":
+                if (call.Arguments.Count >= 1)
+                {
+                    emitArgumentBoxed(call.Arguments[0]);
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Call, runtime.ConsoleCountReset);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "table":
+                EmitConsoleTable(call, emitArgumentBoxed, runtime);
+                return true;
+
+            case "dir":
+                EmitConsoleDir(call, emitArgumentBoxed, runtime);
+                return true;
+
+            case "group":
+            case "groupCollapsed":
+                EmitConsoleGroup(call, emitArgumentBoxed, runtime);
+                return true;
+
+            case "groupEnd":
+                _il.Emit(OpCodes.Call, runtime.ConsoleGroupEnd);
+                _il.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                return true;
+
+            case "trace":
+                EmitConsoleTrace(call, emitArgumentBoxed, runtime);
+                return true;
+
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Emits console.assert(condition, ...data) call.
+    /// </summary>
+    private void EmitConsoleAssert(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            // No condition - assertion always fails with no message
+            _il.Emit(OpCodes.Ldc_I4_0); // false condition
+            _il.Emit(OpCodes.Ldnull);   // null message args
+            _il.Emit(OpCodes.Call, runtime.ConsoleAssert);
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            // Just condition
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Ldnull); // null message args
+            _il.Emit(OpCodes.Call, runtime.ConsoleAssert);
+        }
+        else
+        {
+            // Condition + message args
+            emitArgumentBoxed(call.Arguments[0]);
+            // Build array of remaining args
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count - 1);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 1; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i - 1);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, runtime.ConsoleAssertMultiple);
+        }
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits console.table(data, columns?) call.
+    /// </summary>
+    private void EmitConsoleTable(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        if (call.Arguments.Count >= 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+
+        if (call.Arguments.Count >= 2)
+        {
+            emitArgumentBoxed(call.Arguments[1]);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+        _il.Emit(OpCodes.Call, runtime.ConsoleTable);
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits console.dir(obj, options?) call.
+    /// </summary>
+    private void EmitConsoleDir(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        if (call.Arguments.Count >= 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+        _il.Emit(OpCodes.Call, runtime.ConsoleDir);
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits console.group(label?) or console.groupCollapsed(label?) call.
+    /// </summary>
+    private void EmitConsoleGroup(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Call, runtime.ConsoleGroup);
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, runtime.ConsoleGroup);
+        }
+        else
+        {
+            // Multiple arguments - build array
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 0; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, runtime.ConsoleGroupMultiple);
+        }
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits console.trace(message?, ...data) call.
+    /// </summary>
+    private void EmitConsoleTrace(
+        SharpTS.Parsing.Expr.Call call,
+        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        EmittedRuntime runtime)
+    {
+        if (call.Arguments.Count == 0)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Call, runtime.ConsoleTrace);
+        }
+        else if (call.Arguments.Count == 1)
+        {
+            emitArgumentBoxed(call.Arguments[0]);
+            _il.Emit(OpCodes.Call, runtime.ConsoleTrace);
+        }
+        else
+        {
+            // Multiple arguments - build array
+            _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+            _il.Emit(OpCodes.Newarr, _types.Object);
+            for (int i = 0; i < call.Arguments.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                emitArgumentBoxed(call.Arguments[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+            _il.Emit(OpCodes.Call, runtime.ConsoleTraceMultiple);
+        }
+        _il.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
     }
 
     /// <summary>

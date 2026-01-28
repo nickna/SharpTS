@@ -204,22 +204,11 @@ public sealed class BuiltInRegistry
 
     private static void RegisterConsoleNamespace(BuiltInRegistry registry)
     {
-        // console.log is handled as a special case in the interpreter,
-        // but we register it here for consistency and potential future use
         registry.RegisterNamespace(new BuiltInNamespace(
             Name: "console",
             IsSingleton: false,
             SingletonFactory: null,
-            GetMethod: name => name switch
-            {
-                "log" => new BuiltInMethod("log", 0, int.MaxValue, (_, _, args) =>
-                {
-                    // This implementation is for completeness; interpreter uses its own
-                    Console.WriteLine(string.Join(" ", args.Select(Stringify)));
-                    return null;
-                }),
-                _ => null
-            }
+            GetMethod: name => ConsoleBuiltIns.GetMember(name) as BuiltInMethod
         ));
     }
 

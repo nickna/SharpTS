@@ -714,4 +714,52 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for static methods on the console namespace.
+    /// All console methods are variadic and return void.
+    /// </summary>
+    public static TypeInfo? GetConsoleStaticMethodType(string name)
+    {
+        return name switch
+        {
+            // Phase 1: Output methods (variadic, return void)
+            "log" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "info" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "debug" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "error" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "warn" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+
+            // Clear (no args)
+            "clear" => new TypeInfo.Function([], VoidType),
+
+            // Timing methods
+            "time" => new TypeInfo.Function([StringType], VoidType, RequiredParams: 0),
+            "timeEnd" => new TypeInfo.Function([StringType], VoidType, RequiredParams: 0),
+            "timeLog" => new TypeInfo.Function([StringType, new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+
+            // Phase 2: Assertion
+            "assert" => new TypeInfo.Function([AnyType, new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+
+            // Counting
+            "count" => new TypeInfo.Function([StringType], VoidType, RequiredParams: 0),
+            "countReset" => new TypeInfo.Function([StringType], VoidType, RequiredParams: 0),
+
+            // Table (data required, columns optional)
+            "table" => new TypeInfo.Function([AnyType, new TypeInfo.Array(StringType)], VoidType, RequiredParams: 1),
+
+            // Dir (object required, options optional)
+            "dir" => new TypeInfo.Function([AnyType, AnyType], VoidType, RequiredParams: 1),
+
+            // Grouping
+            "group" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "groupCollapsed" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+            "groupEnd" => new TypeInfo.Function([], VoidType),
+
+            // Trace
+            "trace" => new TypeInfo.Function([new TypeInfo.Array(AnyType)], VoidType, RequiredParams: 0, HasRestParam: true),
+
+            _ => null
+        };
+    }
 }
