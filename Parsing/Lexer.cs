@@ -418,20 +418,81 @@ public class Lexer(string source)
                 if (!IsAtEnd())
                 {
                     char escaped = Advance();
-                    sb.Append(escaped switch
+                    switch (escaped)
                     {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '"' => '"',
-                        '\'' => '\'',
-                        '0' => '\0',
-                        'b' => '\b',
-                        'f' => '\f',
-                        'v' => '\v',
-                        _ => escaped // unrecognized escape, keep as-is
-                    });
+                        case 'n': sb.Append('\n'); break;
+                        case 't': sb.Append('\t'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '"': sb.Append('"'); break;
+                        case '\'': sb.Append('\''); break;
+                        case '0': sb.Append('\0'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'v': sb.Append('\v'); break;
+                        case 'u':
+                            // Unicode escape: \uXXXX (4 hex digits) or \u{XXXX} (1-6 hex digits)
+                            if (Peek() == '{')
+                            {
+                                Advance(); // consume '{'
+                                var hex = new System.Text.StringBuilder();
+                                while (Peek() != '}' && !IsAtEnd() && hex.Length < 6)
+                                {
+                                    if (IsHexDigit(Peek()))
+                                        hex.Append(Advance());
+                                    else
+                                        break;
+                                }
+                                if (Peek() == '}') Advance(); // consume '}'
+                                if (hex.Length > 0 && int.TryParse(hex.ToString(), System.Globalization.NumberStyles.HexNumber, null, out int codePoint))
+                                {
+                                    sb.Append(char.ConvertFromUtf32(codePoint));
+                                }
+                            }
+                            else
+                            {
+                                // \uXXXX - exactly 4 hex digits
+                                var hex = new System.Text.StringBuilder();
+                                for (int i = 0; i < 4 && !IsAtEnd() && IsHexDigit(Peek()); i++)
+                                {
+                                    hex.Append(Advance());
+                                }
+                                if (hex.Length == 4 && int.TryParse(hex.ToString(), System.Globalization.NumberStyles.HexNumber, null, out int codePoint))
+                                {
+                                    sb.Append((char)codePoint);
+                                }
+                                else
+                                {
+                                    // Invalid escape, keep original
+                                    sb.Append('u');
+                                    sb.Append(hex);
+                                }
+                            }
+                            break;
+                        case 'x':
+                            // Hex escape: \xXX (2 hex digits)
+                            {
+                                var hex = new System.Text.StringBuilder();
+                                for (int i = 0; i < 2 && !IsAtEnd() && IsHexDigit(Peek()); i++)
+                                {
+                                    hex.Append(Advance());
+                                }
+                                if (hex.Length == 2 && int.TryParse(hex.ToString(), System.Globalization.NumberStyles.HexNumber, null, out int value))
+                                {
+                                    sb.Append((char)value);
+                                }
+                                else
+                                {
+                                    // Invalid escape, keep original
+                                    sb.Append('x');
+                                    sb.Append(hex);
+                                }
+                            }
+                            break;
+                        default:
+                            sb.Append(escaped); // unrecognized escape, keep as-is
+                            break;
+                    }
                 }
             }
             else
@@ -666,6 +727,8 @@ public class Lexer(string source)
     }
 
     private static bool IsRegexFlag(char c) => c is 'g' or 'i' or 'm' or 's' or 'u' or 'y';
+
+    private static bool IsHexDigit(char c) => char.IsAsciiHexDigit(c);
 
     private void TemplateLiteral()
     {

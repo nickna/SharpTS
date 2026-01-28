@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (Added path.posix and path.win32 platform-specific variants)
+**Last Updated:** 2026-01-27 (Expanded util module with types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder)
 
 ## Legend
 - ✅ Implemented
@@ -24,9 +24,9 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
 | `child_process` | ⚠️ | Synchronous only (`execSync`, `spawnSync`) |
-| `util` | ⚠️ | format, inspect, types helpers |
+| `util` | ⚠️ | format, inspect, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
 | `readline` | ⚠️ | Basic synchronous I/O |
-| `events` | ❌ | EventEmitter not implemented |
+| `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
 | `stream` | ❌ | No Readable/Writable/Transform |
 | `buffer` | ✅ | Full Buffer class with multi-byte LE/BE, float/double, BigInt, search, swap |
 | `http` / `https` | ❌ | No network server/client |
@@ -312,12 +312,18 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `EventEmitter` class | ❌ | |
-| `on()` / `addListener()` | ❌ | |
-| `once()` | ❌ | |
-| `emit()` | ❌ | |
-| `removeListener()` | ❌ | |
-| `removeAllListeners()` | ❌ | |
+| `EventEmitter` class | ✅ | Full implementation |
+| `on()` / `addListener()` | ✅ | |
+| `once()` | ✅ | |
+| `emit()` | ✅ | |
+| `removeListener()` / `off()` | ✅ | |
+| `removeAllListeners()` | ✅ | |
+| `listenerCount()` | ✅ | |
+| `listeners()` | ✅ | |
+| `eventNames()` | ✅ | |
+| `prependListener()` | ✅ | |
+| `prependOnceListener()` | ✅ | |
+| `defaultMaxListeners` | ✅ | Static property |
 
 ---
 
@@ -414,10 +420,9 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, basic crypto, URL parsing, and binary data handling via Buffer. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, basic crypto, URL parsing, binary data handling via Buffer, and EventEmitter for event-driven patterns. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
-- No EventEmitter pattern (blocks event-based APIs)
 - No Stream classes (limits file/network streaming)
 - No async fs operations (sync-only workaround)
 - No network modules (http, net, dns)
@@ -432,7 +437,6 @@ SharpTS provides comprehensive support for file system operations (sync), includ
 
 Priority features to implement for broader Node.js compatibility:
 
-1. **EventEmitter** - Foundation for many Node APIs (medium effort)
-2. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-3. **Streams API** - Needed for large file handling (higher effort)
-4. **http module** - Basic HTTP server/client (higher effort)
+1. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
+2. **Streams API** - Needed for large file handling (higher effort)
+3. **http module** - Basic HTTP server/client (higher effort)

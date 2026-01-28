@@ -12,7 +12,7 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "format", "inspect", "types"
+        "format", "inspect", "deprecate", "callbackify", "inherits", "TextEncoder", "TextDecoder", "types"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -29,14 +29,38 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
             "types.isNull" => EmitTypesIsNull(emitter, arguments),
             "types.isUndefined" => EmitTypesIsUndefined(emitter, arguments),
             "types.isDate" => EmitTypesIsDate(emitter, arguments),
+            "types.isPromise" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsPromise)),
+            "types.isRegExp" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsRegExp)),
+            "types.isMap" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsMap)),
+            "types.isSet" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsSet)),
+            "types.isTypedArray" => EmitTypesCheck(emitter, arguments, nameof(UtilHelpers.IsTypedArray)),
+            "deprecate" => EmitDeprecate(emitter, arguments),
+            "callbackify" => EmitCallbackify(emitter, arguments),
+            "inherits" => EmitInherits(emitter, arguments),
             _ => false
         };
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // util.types is a nested object - handled via nested call pattern in BuiltInModuleHandler
-        return false;
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        return propertyName switch
+        {
+            "TextEncoder" => EmitPlaceholder(il, "[TextEncoder]"),
+            "TextDecoder" => EmitPlaceholder(il, "[TextDecoder]"),
+            // util.types is a nested object - handled via nested call pattern in BuiltInModuleHandler
+            _ => false
+        };
+    }
+
+    private static bool EmitPlaceholder(ILGenerator il, string marker)
+    {
+        // Emit a placeholder string marker for constructor access.
+        // The actual construction happens via the TypeEmitterRegistry.
+        il.Emit(OpCodes.Ldstr, marker);
+        return true;
     }
 
     private static bool EmitFormat(IEmitterContext emitter, List<Expr> arguments)
@@ -141,6 +165,87 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
         // Box the boolean result
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
+        return true;
+    }
+
+    private static bool EmitDeprecate(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            // util.deprecate requires at least 2 arguments
+            return false;
+        }
+
+        // Emit the function argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit the message argument
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Convert message to string
+        var toStringMethod = ctx.Types.Object.GetMethod("ToString", Type.EmptyTypes)!;
+        il.Emit(OpCodes.Callvirt, toStringMethod);
+
+        // Call UtilHelpers.Deprecate(fn, message) - returns DeprecatedFunction (reference type)
+        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Deprecate))!;
+        il.Emit(OpCodes.Call, method);
+
+        // No boxing needed - DeprecatedFunction is a reference type
+        return true;
+    }
+
+    private static bool EmitCallbackify(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 1)
+        {
+            return false;
+        }
+
+        // Emit the function argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call UtilHelpers.Callbackify(fn)
+        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Callbackify))!;
+        il.Emit(OpCodes.Call, method);
+
+        // Box the result
+        il.Emit(OpCodes.Box, method.ReturnType);
+        return true;
+    }
+
+    private static bool EmitInherits(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            return false;
+        }
+
+        // Emit the constructor argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit the superConstructor argument
+        emitter.EmitExpression(arguments[1]);
+        emitter.EmitBoxIfNeeded(arguments[1]);
+
+        // Call UtilHelpers.Inherits(ctor, superCtor)
+        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Inherits))!;
+        il.Emit(OpCodes.Call, method);
+
+        // inherits returns void, push null for consistency
+        il.Emit(OpCodes.Ldnull);
         return true;
     }
 }

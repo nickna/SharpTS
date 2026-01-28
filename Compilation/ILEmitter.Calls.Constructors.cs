@@ -120,6 +120,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new TextEncoder() constructor
+        if (isSimpleName && simpleClassName == "TextEncoder")
+        {
+            EmitNewTextEncoder();
+            return;
+        }
+
+        // Special case: new TextDecoder(...) constructor
+        if (isSimpleName && simpleClassName == "TextDecoder")
+        {
+            EmitNewTextDecoder(n.Arguments);
+            return;
+        }
+
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
 
@@ -436,6 +450,49 @@ public partial class ILEmitter
     {
         // new EventEmitter() - no arguments
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSEventEmitterCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new TextEncoder() construction.
+    /// </summary>
+    private void EmitNewTextEncoder()
+    {
+        // new TextEncoder() - no arguments (always UTF-8)
+        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.CreateTextEncoder))!;
+        IL.Emit(OpCodes.Call, method);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new TextDecoder(...) construction.
+    /// </summary>
+    private void EmitNewTextDecoder(List<Expr> arguments)
+    {
+        // new TextDecoder(encoding?, options?)
+        // Encoding
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        // Fatal option (default: false)
+        IL.Emit(OpCodes.Ldc_I4_0);
+
+        // IgnoreBOM option (default: false)
+        IL.Emit(OpCodes.Ldc_I4_0);
+
+        // TODO: Parse options object for fatal and ignoreBOM if provided
+        // For now, just use defaults
+
+        var method = typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.CreateTextDecoder))!;
+        IL.Emit(OpCodes.Call, method);
         SetStackUnknown();
     }
 }

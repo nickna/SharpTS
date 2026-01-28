@@ -19,6 +19,11 @@ public static class UtilModuleInterpreter
         {
             ["format"] = new BuiltInMethod("format", 0, int.MaxValue, Format),
             ["inspect"] = new BuiltInMethod("inspect", 1, 2, Inspect),
+            ["deprecate"] = new BuiltInMethod("deprecate", 2, 3, Deprecate),
+            ["callbackify"] = new BuiltInMethod("callbackify", 1, Callbackify),
+            ["inherits"] = new BuiltInMethod("inherits", 2, Inherits),
+            ["TextEncoder"] = new BuiltInMethod("TextEncoder", 0, CreateTextEncoder),
+            ["TextDecoder"] = new BuiltInMethod("TextDecoder", 0, 2, CreateTextDecoder),
             ["types"] = CreateTypesObject()
         };
     }
@@ -31,7 +36,12 @@ public static class UtilModuleInterpreter
             ["isDate"] = new BuiltInMethod("isDate", 1, IsDate),
             ["isFunction"] = new BuiltInMethod("isFunction", 1, IsFunction),
             ["isNull"] = new BuiltInMethod("isNull", 1, IsNull),
-            ["isUndefined"] = new BuiltInMethod("isUndefined", 1, IsUndefined)
+            ["isUndefined"] = new BuiltInMethod("isUndefined", 1, IsUndefined),
+            ["isPromise"] = new BuiltInMethod("isPromise", 1, IsPromise),
+            ["isRegExp"] = new BuiltInMethod("isRegExp", 1, IsRegExp),
+            ["isMap"] = new BuiltInMethod("isMap", 1, IsMap),
+            ["isSet"] = new BuiltInMethod("isSet", 1, IsSet),
+            ["isTypedArray"] = new BuiltInMethod("isTypedArray", 1, IsTypedArray)
         });
     }
 
@@ -201,4 +211,112 @@ public static class UtilModuleInterpreter
 
     private static object? IsUndefined(Interp interpreter, object? receiver, List<object?> args)
         => args.Count > 0 && args[0] is SharpTSUndefined;
+
+    private static object? IsPromise(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSPromise;
+
+    private static object? IsRegExp(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSRegExp;
+
+    private static object? IsMap(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSMap;
+
+    private static object? IsSet(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSSet;
+
+    private static object? IsTypedArray(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSBuffer;
+
+    private static object? Deprecate(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("util.deprecate requires at least 2 arguments: fn, message");
+
+        var fn = args[0];
+        var message = args[1]?.ToString() ?? "";
+
+        if (fn is ISharpTSCallable callable)
+        {
+            return new SharpTSDeprecatedFunction(callable, message);
+        }
+
+        if (fn is BuiltInMethod method)
+        {
+            return new SharpTSDeprecatedFunction(method, message);
+        }
+
+        throw new Exception("util.deprecate: first argument must be a function");
+    }
+
+    private static object? Callbackify(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 1)
+            throw new Exception("util.callbackify requires 1 argument: fn");
+
+        var fn = args[0];
+
+        if (fn is ISharpTSCallable callable)
+        {
+            return new SharpTSCallbackifiedFunction(callable);
+        }
+
+        if (fn is BuiltInMethod method)
+        {
+            return new SharpTSCallbackifiedFunction(method);
+        }
+
+        throw new Exception("util.callbackify: argument must be a function");
+    }
+
+    private static object? Inherits(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 2)
+            throw new Exception("util.inherits requires 2 arguments: constructor, superConstructor");
+
+        var ctor = args[0];
+        var superCtor = args[1];
+
+        // Set constructor.super_ = superConstructor
+        if (ctor is SharpTSClass ctorClass)
+        {
+            ctorClass.SetStaticProperty("super_", superCtor);
+        }
+        else if (ctor is SharpTSFunction ctorFunc)
+        {
+            // For plain functions, we can't easily add properties
+            // This is a limitation - real Node.js modifies the prototype chain
+        }
+
+        return null;
+    }
+
+    private static object? CreateTextEncoder(Interp interpreter, object? receiver, List<object?> args)
+    {
+        return new SharpTSTextEncoder();
+    }
+
+    private static object? CreateTextDecoder(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var encoding = "utf-8";
+        var fatal = false;
+        var ignoreBOM = false;
+
+        if (args.Count > 0 && args[0] != null)
+        {
+            encoding = args[0]!.ToString() ?? "utf-8";
+        }
+
+        if (args.Count > 1 && args[1] is SharpTSObject options)
+        {
+            var fatalVal = options.GetProperty("fatal");
+            if (fatalVal is true)
+                fatal = true;
+
+            var ignoreBOMVal = options.GetProperty("ignoreBOM");
+            if (ignoreBOMVal is true)
+                ignoreBOM = true;
+        }
+
+        return new SharpTSTextDecoder(encoding, fatal, ignoreBOM);
+    }
 }

@@ -102,6 +102,140 @@ public static class UtilHelpers
     public static bool IsDate(object? value) => value is DateTime or DateTimeOffset;
 
     /// <summary>
+    /// util.types.isPromise - checks if value is a Promise.
+    /// Supports both interpreter (SharpTSPromise) and compiled (Task) modes.
+    /// </summary>
+    public static bool IsPromise(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSPromise) return true;
+        // In compiled mode, promises are represented as Task<object?> or Task
+        var type = value.GetType();
+        return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(System.Threading.Tasks.Task<>)
+            || value is System.Threading.Tasks.Task;
+    }
+
+    /// <summary>
+    /// util.types.isRegExp - checks if value is a RegExp.
+    /// Supports both interpreter (SharpTSRegExp) and compiled ($RegExp or Regex) modes.
+    /// </summary>
+    public static bool IsRegExp(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSRegExp) return true;
+        if (value is System.Text.RegularExpressions.Regex) return true;
+        // In compiled mode, regex is represented as $RegExp emitted type
+        var typeName = value.GetType().Name;
+        return typeName == "$RegExp";
+    }
+
+    /// <summary>
+    /// util.types.isMap - checks if value is a Map.
+    /// Supports both interpreter (SharpTSMap) and compiled (Dictionary) modes.
+    /// </summary>
+    public static bool IsMap(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSMap) return true;
+        // In compiled mode, maps are represented as Dictionary<object, object?>
+        var type = value.GetType();
+        return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Dictionary<,>);
+    }
+
+    /// <summary>
+    /// util.types.isSet - checks if value is a Set.
+    /// Supports both interpreter (SharpTSSet) and compiled (HashSet) modes.
+    /// </summary>
+    public static bool IsSet(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSSet) return true;
+        // In compiled mode, sets are represented as HashSet<object>
+        var type = value.GetType();
+        return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(HashSet<>);
+    }
+
+    /// <summary>
+    /// util.types.isTypedArray - checks if value is a typed array (Buffer).
+    /// </summary>
+    public static bool IsTypedArray(object? value) => value is SharpTS.Runtime.Types.SharpTSBuffer;
+
+    /// <summary>
+    /// util.deprecate - wraps a function to log a deprecation warning on first call.
+    /// Returns a DeprecatedFunction wrapper that can be invoked by compiled code.
+    /// </summary>
+    public static DeprecatedFunction Deprecate(object fn, string message)
+    {
+        return new DeprecatedFunction(fn, message);
+    }
+
+    /// <summary>
+    /// util.callbackify - wraps a function to use callback-style error handling.
+    /// The returned function takes original args + a callback as the last argument.
+    /// Callback is called with (error, result).
+    /// </summary>
+    public static Func<object?[], object?> Callbackify(Delegate fn)
+    {
+        return args =>
+        {
+            if (args.Length == 0)
+                throw new Exception("callbackified function requires at least a callback argument");
+
+            // Last argument is the callback
+            var callback = args[^1] as Delegate
+                ?? throw new Exception("Last argument to callbackified function must be a callback");
+
+            // Get original args (all except last)
+            var originalArgs = args.Take(args.Length - 1).ToArray();
+
+            try
+            {
+                var result = fn.DynamicInvoke(originalArgs);
+                callback.DynamicInvoke(new object?[] { new object?[] { null, result } });
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = ex.InnerException?.Message ?? ex.Message;
+                callback.DynamicInvoke(new object?[] { new object?[] { errorMessage, null } });
+            }
+
+            return null;
+        };
+    }
+
+    /// <summary>
+    /// util.inherits - sets constructor.super_ = superConstructor.
+    /// This is a legacy Node.js pattern for pseudo-classical inheritance.
+    /// </summary>
+    public static void Inherits(object ctor, object superCtor)
+    {
+        // In compiled mode, we use a dictionary to track the super_ property
+        // This is a no-op for actual prototype chain manipulation
+        // Real classes in .NET don't use this pattern
+        if (ctor is IDictionary<string, object?> dict)
+        {
+            dict["super_"] = superCtor;
+        }
+    }
+
+    /// <summary>
+    /// Creates a new TextEncoder instance.
+    /// TextEncoder always uses UTF-8 encoding.
+    /// </summary>
+    public static SharpTS.Runtime.Types.SharpTSTextEncoder CreateTextEncoder()
+    {
+        return new SharpTS.Runtime.Types.SharpTSTextEncoder();
+    }
+
+    /// <summary>
+    /// Creates a new TextDecoder instance with the specified options.
+    /// </summary>
+    public static SharpTS.Runtime.Types.SharpTSTextDecoder CreateTextDecoder(string? encoding = null, bool fatal = false, bool ignoreBOM = false)
+    {
+        return new SharpTS.Runtime.Types.SharpTSTextDecoder(encoding ?? "utf-8", fatal, ignoreBOM);
+    }
+
+    /// <summary>
     /// Implements util.format() with proper format specifier handling.
     /// </summary>
     public static string Format(object?[] args)
@@ -237,4 +371,59 @@ public static class UtilHelpers
         var props = obj.Select(kv => $"{kv.Key}: {InspectValue(kv.Value, depth, currentDepth + 1)}");
         return $"{{ {string.Join(", ", props)} }}";
     }
+}
+
+/// <summary>
+/// Wrapper for deprecated functions that logs a warning on first invocation.
+/// Used by util.deprecate() in compiled mode.
+/// Has an Invoke method that can be called by the compiled code's InvokeValue.
+/// </summary>
+public class DeprecatedFunction
+{
+    private readonly object _wrapped;
+    private readonly string _message;
+    private bool _warned;
+
+    public DeprecatedFunction(object fn, string message)
+    {
+        _wrapped = fn ?? throw new ArgumentNullException(nameof(fn));
+        _message = message ?? "";
+        _warned = false;
+    }
+
+    /// <summary>
+    /// Invoke the wrapped function, logging a deprecation warning on first call.
+    /// This method signature matches what InvokeValue looks for via reflection.
+    /// </summary>
+    public object? Invoke(params object?[] args)
+    {
+        if (!_warned)
+        {
+            _warned = true;
+            Console.Error.WriteLine($"DeprecationWarning: {_message}");
+        }
+
+        // Handle different callable types
+        if (_wrapped is TSFunction tsFunc)
+        {
+            return tsFunc.Invoke(args);
+        }
+
+        if (_wrapped is Delegate del)
+        {
+            return del.DynamicInvoke(new object?[] { args });
+        }
+
+        // Try to find an Invoke method via reflection (for $TSFunction and other callable types)
+        var invokeMethod = _wrapped.GetType().GetMethod("Invoke");
+        if (invokeMethod != null)
+        {
+            // Call Invoke(args) on the wrapped object
+            return invokeMethod.Invoke(_wrapped, [args]);
+        }
+
+        throw new InvalidOperationException($"Cannot invoke deprecated function: wrapped value is not callable ({_wrapped.GetType().Name})");
+    }
+
+    public override string ToString() => "[Function: deprecated]";
 }

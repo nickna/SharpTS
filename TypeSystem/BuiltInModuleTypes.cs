@@ -753,21 +753,95 @@ public static class BuiltInModuleTypes
     {
         var stringType = new TypeInfo.String();
         var anyType = new TypeInfo.Any();
+        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var voidType = new TypeInfo.Void();
+
+        // TextEncoder type: { encoding: string, encode(string): Uint8Array, encodeInto(string, Uint8Array): { read: number, written: number } }
+        var textEncoderType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["encoding"] = stringType,
+            ["encode"] = new TypeInfo.Function([stringType], anyType), // Returns Uint8Array
+            ["encodeInto"] = new TypeInfo.Function([stringType, anyType], new TypeInfo.Record(new Dictionary<string, TypeInfo>
+            {
+                ["read"] = new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
+                ["written"] = new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+            }.ToFrozenDictionary()))
+        }.ToFrozenDictionary());
+
+        // TextDecoder type: { encoding: string, fatal: boolean, ignoreBOM: boolean, decode(buffer): string }
+        var textDecoderType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["encoding"] = stringType,
+            ["fatal"] = boolType,
+            ["ignoreBOM"] = boolType,
+            ["decode"] = new TypeInfo.Function([anyType], stringType)
+        }.ToFrozenDictionary());
 
         return new Dictionary<string, TypeInfo>
         {
             // Methods
             ["format"] = new TypeInfo.Function([anyType], stringType, HasRestParam: true),
             ["inspect"] = new TypeInfo.Function([anyType, anyType], stringType, RequiredParams: 1),
+            ["deprecate"] = new TypeInfo.Function([anyType, stringType, anyType], anyType, RequiredParams: 2),
+            ["callbackify"] = new TypeInfo.Function([anyType], anyType),
+            ["inherits"] = new TypeInfo.Function([anyType, anyType], voidType),
+
+            // TextEncoder/TextDecoder constructors - use Interface with constructor signatures
+            ["TextEncoder"] = new TypeInfo.Interface(
+                Name: "TextEncoder",
+                Members: new Dictionary<string, TypeInfo>
+                {
+                    ["encoding"] = stringType,
+                    ["encode"] = new TypeInfo.Function([stringType], anyType),
+                    ["encodeInto"] = new TypeInfo.Function([stringType, anyType], anyType)
+                }.ToFrozenDictionary(),
+                OptionalMembers: FrozenSet<string>.Empty,
+                ConstructorSignatures:
+                [
+                    new TypeInfo.ConstructorSignature(
+                        TypeParams: null,
+                        ParamTypes: [],
+                        ReturnType: textEncoderType) // new TextEncoder()
+                ]),
+            ["TextDecoder"] = new TypeInfo.Interface(
+                Name: "TextDecoder",
+                Members: new Dictionary<string, TypeInfo>
+                {
+                    ["encoding"] = stringType,
+                    ["fatal"] = boolType,
+                    ["ignoreBOM"] = boolType,
+                    ["decode"] = new TypeInfo.Function([anyType], stringType)
+                }.ToFrozenDictionary(),
+                OptionalMembers: FrozenSet<string>.Empty,
+                ConstructorSignatures:
+                [
+                    new TypeInfo.ConstructorSignature(
+                        TypeParams: null,
+                        ParamTypes: [],
+                        ReturnType: textDecoderType), // new TextDecoder()
+                    new TypeInfo.ConstructorSignature(
+                        TypeParams: null,
+                        ParamTypes: [stringType],
+                        ReturnType: textDecoderType), // new TextDecoder(encoding)
+                    new TypeInfo.ConstructorSignature(
+                        TypeParams: null,
+                        ParamTypes: [stringType, anyType],
+                        ReturnType: textDecoderType) // new TextDecoder(encoding, options)
+                ]),
 
             // util.types namespace
             ["types"] = new TypeInfo.Record(new Dictionary<string, TypeInfo>
             {
-                ["isArray"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
-                ["isDate"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
-                ["isFunction"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
-                ["isNull"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN)),
-                ["isUndefined"] = new TypeInfo.Function([anyType], new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN))
+                ["isArray"] = new TypeInfo.Function([anyType], boolType),
+                ["isDate"] = new TypeInfo.Function([anyType], boolType),
+                ["isFunction"] = new TypeInfo.Function([anyType], boolType),
+                ["isNull"] = new TypeInfo.Function([anyType], boolType),
+                ["isUndefined"] = new TypeInfo.Function([anyType], boolType),
+                ["isPromise"] = new TypeInfo.Function([anyType], boolType),
+                ["isRegExp"] = new TypeInfo.Function([anyType], boolType),
+                ["isMap"] = new TypeInfo.Function([anyType], boolType),
+                ["isSet"] = new TypeInfo.Function([anyType], boolType),
+                ["isTypedArray"] = new TypeInfo.Function([anyType], boolType)
             }.ToFrozenDictionary())
         };
     }
