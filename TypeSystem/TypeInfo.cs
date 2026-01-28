@@ -734,6 +734,15 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a Node.js-compatible EventEmitter type.
+    /// EventEmitter is the foundation for event-driven programming in Node.js.
+    /// </summary>
+    public record EventEmitter() : TypeInfo
+    {
+        public override string ToString() => "EventEmitter";
+    }
+
+    /// <summary>
     /// Represents a module namespace type returned by dynamic import.
     /// Contains the exported members and optional default export.
     /// Used for typeof import('./path') type inference.

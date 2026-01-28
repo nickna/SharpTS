@@ -673,4 +673,45 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    /// <summary>
+    /// Type signatures for instance members on EventEmitter objects.
+    /// </summary>
+    public static TypeInfo? GetEventEmitterMemberType(string name)
+    {
+        var eventEmitterType = new TypeInfo.EventEmitter();
+        var listenerType = new TypeInfo.Function([AnyType], VoidType);
+
+        return name switch
+        {
+            // Core event methods - all return 'this' for chaining (EventEmitter)
+            "on" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "addListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "once" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "off" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "removeListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "emit" => new TypeInfo.Function(
+                [StringType, new TypeInfo.Array(AnyType)],
+                BooleanType,
+                RequiredParams: 1,
+                HasRestParam: true), // eventName required, ...args variadic
+            "removeAllListeners" => new TypeInfo.Function([StringType], eventEmitterType, RequiredParams: 0),
+
+            // Listener inspection
+            "listeners" => new TypeInfo.Function([StringType], new TypeInfo.Array(listenerType)),
+            "rawListeners" => new TypeInfo.Function([StringType], new TypeInfo.Array(listenerType)),
+            "listenerCount" => new TypeInfo.Function([StringType], NumberType),
+            "eventNames" => new TypeInfo.Function([], new TypeInfo.Array(StringType)),
+
+            // Prepend methods
+            "prependListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "prependOnceListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+
+            // Max listeners
+            "setMaxListeners" => new TypeInfo.Function([NumberType], eventEmitterType),
+            "getMaxListeners" => new TypeInfo.Function([], NumberType),
+
+            _ => null
+        };
+    }
 }

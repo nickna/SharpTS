@@ -104,8 +104,22 @@ public partial class Interpreter
             return ErrorBuiltIns.CreateError(simpleClassName, args);
         }
 
+        // Handle new EventEmitter() constructor for simple identifier
+        if (isSimpleName && simpleClassName == "EventEmitter")
+        {
+            return new SharpTSEventEmitter();
+        }
+
         // Evaluate the callee expression to get the class/constructor
         object? klass = await ctx.EvaluateExprAsync(newExpr.Callee);
+
+        // Handle callable constructors (like SharpTSEventEmitterConstructor)
+        // These implement ISharpTSCallable and are used for module-imported types
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        {
+            List<object?> ctorArgs = await ctx.EvaluateAllAsync(newExpr.Arguments);
+            return callable.Call(this, ctorArgs);
+        }
 
         // Bound functions cannot be used as constructors (JS spec compliance)
         if (klass is BoundFunction)

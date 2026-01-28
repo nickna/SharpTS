@@ -560,6 +560,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(new ArrayEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Buffer>(new BufferEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.EventEmitter>(new EventEmitterEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(new DateEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Map>(new MapEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Set>(new SetEmitter());
@@ -595,6 +596,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ZlibModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new EventsModuleEmitter());
     }
 
     #endregion

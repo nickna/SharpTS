@@ -124,6 +124,11 @@ public partial class RuntimeEmitter
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvokeWithThis)
         EmitBoundTSFunctionClass(moduleBuilder, runtime);
 
+        // Emit $EventEmitter class for standalone event emitter support
+        // NOTE: Must come after BoundTSFunction (uses TSFunctionType, BoundTSFunctionType)
+        // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSEventEmitter
+        EmitTSEventEmitterClass(moduleBuilder, runtime);
+
         // Emit function method wrapper classes for bind/call/apply
         // Must come after TSFunction and BoundTSFunction
         EmitFunctionBindWrapperClass(moduleBuilder, runtime);

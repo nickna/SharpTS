@@ -588,6 +588,13 @@ public partial class TypeChecker
             if (memberType != null) return memberType;
             throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'Buffer'.");
         }
+        // Handle EventEmitter instance methods and properties
+        if (objType is TypeInfo.EventEmitter)
+        {
+            var memberType = BuiltInTypes.GetEventEmitterMemberType(memberName.Lexeme);
+            if (memberType != null) return memberType;
+            throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on type 'EventEmitter'.");
+        }
 
         // Handle Any type
         if (objType is TypeInfo.Any)

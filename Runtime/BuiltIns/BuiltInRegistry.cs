@@ -157,6 +157,7 @@ public sealed class BuiltInRegistry
         RegisterFunctionTypes(registry);
         RegisterBufferNamespace(registry);
         RegisterBufferType(registry);
+        RegisterEventEmitterType(registry);
 
         return registry;
     }
@@ -532,6 +533,17 @@ public sealed class BuiltInRegistry
         // Register Buffer constructor member lookup
         registry.RegisterInstanceType(typeof(SharpTSBufferConstructor), (instance, name) =>
             ((SharpTSBufferConstructor)instance).GetProperty(name));
+    }
+
+    private static void RegisterEventEmitterType(BuiltInRegistry registry)
+    {
+        // Register EventEmitter instance member lookup (on, off, emit, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSEventEmitter), (instance, name) =>
+            ((SharpTSEventEmitter)instance).GetMember(name));
+
+        // Register EventEmitter constructor member lookup (defaultMaxListeners)
+        registry.RegisterInstanceType(typeof(SharpTSEventEmitterConstructor), (instance, name) =>
+            ((SharpTSEventEmitterConstructor)instance).GetProperty(name));
     }
 
     private static void RegisterDiffieHellmanType(BuiltInRegistry registry)

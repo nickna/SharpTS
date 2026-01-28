@@ -113,6 +113,13 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new EventEmitter() constructor
+        if (isSimpleName && simpleClassName == "EventEmitter")
+        {
+            EmitNewEventEmitter();
+            return;
+        }
+
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
 
@@ -421,4 +428,14 @@ public partial class ILEmitter
     /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
     private static bool IsErrorTypeName(string name) => ErrorBuiltIns.IsErrorTypeName(name);
+
+    /// <summary>
+    /// Emits code for new EventEmitter() construction.
+    /// </summary>
+    private void EmitNewEventEmitter()
+    {
+        // new EventEmitter() - no arguments
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSEventEmitterCtor);
+        SetStackUnknown();
+    }
 }

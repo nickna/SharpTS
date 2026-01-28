@@ -33,6 +33,7 @@ public static class BuiltInModuleValues
             "child_process" => ChildProcessModuleInterpreter.GetExports(),
             "buffer" => BufferModuleInterpreter.GetExports(),
             "zlib" => ZlibModuleInterpreter.GetExports(),
+            "events" => EventsModuleInterpreter.GetExports(),
             _ => throw new Exception($"Unknown built-in module: {moduleName}")
         };
     }
@@ -44,6 +45,6 @@ public static class BuiltInModuleValues
     {
         return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url"
             or "process" or "crypto" or "util" or "readline" or "child_process" or "buffer"
-            or "zlib";
+            or "zlib" or "events";
     }
 }

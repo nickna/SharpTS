@@ -36,6 +36,7 @@ public static class TypeCategoryResolver
         TypeInfo.Promise => TypeCategory.Promise,
         TypeInfo.Timeout => TypeCategory.Timeout,
         TypeInfo.Buffer => TypeCategory.Buffer,
+        TypeInfo.EventEmitter => TypeCategory.EventEmitter,
         TypeInfo.Iterator => TypeCategory.Iterator,
         TypeInfo.Generator => TypeCategory.Generator,
         TypeInfo.AsyncGenerator => TypeCategory.AsyncGenerator,

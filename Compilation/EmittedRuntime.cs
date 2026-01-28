@@ -866,6 +866,26 @@ public class EmittedRuntime
     public MethodBuilder ZlibUnzipSync { get; set; } = null!;
     public MethodBuilder ZlibGetConstants { get; set; } = null!;
 
+    // $EventEmitter type - emitted for standalone event emitter support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSEventEmitter
+    public Type TSEventEmitterType { get; set; } = null!;
+    public ConstructorBuilder TSEventEmitterCtor { get; set; } = null!;
+    public ConstructorBuilder TSListenerWrapperCtor { get; set; } = null!;
+    public FieldBuilder TSEventEmitterDefaultMaxListeners { get; set; } = null!;
+    public MethodBuilder TSEventEmitterOn { get; set; } = null!;
+    public MethodBuilder TSEventEmitterOnce { get; set; } = null!;
+    public MethodBuilder TSEventEmitterOff { get; set; } = null!;
+    public MethodBuilder TSEventEmitterEmit { get; set; } = null!;
+    public MethodBuilder TSEventEmitterRemoveAllListeners { get; set; } = null!;
+    public MethodBuilder TSEventEmitterListeners { get; set; } = null!;
+    public MethodBuilder TSEventEmitterListenerCount { get; set; } = null!;
+    public MethodBuilder TSEventEmitterEventNames { get; set; } = null!;
+    public MethodBuilder TSEventEmitterPrependListener { get; set; } = null!;
+    public MethodBuilder TSEventEmitterPrependOnceListener { get; set; } = null!;
+    public MethodBuilder TSEventEmitterSetMaxListeners { get; set; } = null!;
+    public MethodBuilder TSEventEmitterGetMaxListeners { get; set; } = null!;
+    public MethodBuilder TSEventEmitterAddListenerInternal { get; set; } = null!;
+
     // Assert module - emitted $AssertionError type for standalone assemblies
     // NOTE: Must stay in sync with AssertionError in AssertModuleInterpreter.cs
     public TypeBuilder TSAssertionErrorType { get; set; } = null!;

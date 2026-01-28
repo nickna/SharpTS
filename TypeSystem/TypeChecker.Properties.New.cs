@@ -249,6 +249,18 @@ public partial class TypeChecker
             return new TypeInfo.WeakSet(elementType);
         }
 
+        // Handle new EventEmitter() constructor
+        if (isSimpleName && simpleClassName == "EventEmitter")
+        {
+            // EventEmitter() accepts 0 arguments
+            if (newExpr.Arguments.Count > 0)
+            {
+                throw new TypeCheckException(" EventEmitter constructor does not accept arguments.");
+            }
+
+            return new TypeInfo.EventEmitter();
+        }
+
         // Handle new Error(...) and error subtype constructors
         if (isSimpleName && simpleClassName != null && IsErrorTypeName(simpleClassName))
         {
