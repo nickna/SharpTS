@@ -16,7 +16,7 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
     [
         "join", "resolve", "basename", "dirname", "extname",
         "normalize", "isAbsolute", "relative", "parse", "format",
-        "sep", "delimiter"
+        "sep", "delimiter", "posix", "win32"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -28,6 +28,7 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
 
         return methodName switch
         {
+            // Default platform path methods
             "join" => EmitJoin(emitter, arguments),
             "resolve" => EmitResolve(emitter, arguments),
             "basename" => EmitBasename(emitter, arguments),
@@ -38,6 +39,31 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
             "relative" => EmitRelative(emitter, arguments),
             "parse" => EmitParse(emitter, arguments),
             "format" => EmitFormat(emitter, arguments),
+
+            // POSIX path methods (path.posix.*)
+            "posix.join" => EmitPosixJoin(emitter, arguments),
+            "posix.resolve" => EmitPosixResolve(emitter, arguments),
+            "posix.basename" => EmitPosixBasename(emitter, arguments),
+            "posix.dirname" => EmitPosixDirname(emitter, arguments),
+            "posix.extname" => EmitExtname(emitter, arguments), // Same for all platforms
+            "posix.normalize" => EmitPosixNormalize(emitter, arguments),
+            "posix.isAbsolute" => EmitPosixIsAbsolute(emitter, arguments),
+            "posix.relative" => EmitPosixRelative(emitter, arguments),
+            "posix.parse" => EmitPosixParse(emitter, arguments),
+            "posix.format" => EmitPosixFormat(emitter, arguments),
+
+            // Win32 path methods (path.win32.*)
+            "win32.join" => EmitWin32Join(emitter, arguments),
+            "win32.resolve" => EmitWin32Resolve(emitter, arguments),
+            "win32.basename" => EmitWin32Basename(emitter, arguments),
+            "win32.dirname" => EmitWin32Dirname(emitter, arguments),
+            "win32.extname" => EmitExtname(emitter, arguments), // Same for all platforms
+            "win32.normalize" => EmitWin32Normalize(emitter, arguments),
+            "win32.isAbsolute" => EmitWin32IsAbsolute(emitter, arguments),
+            "win32.relative" => EmitWin32Relative(emitter, arguments),
+            "win32.parse" => EmitWin32Parse(emitter, arguments),
+            "win32.format" => EmitWin32Format(emitter, arguments),
+
             _ => false
         };
     }
@@ -51,6 +77,8 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
         {
             "sep" => EmitSep(emitter),
             "delimiter" => EmitDelimiter(emitter),
+            "posix" => EmitPosixObject(emitter),
+            "win32" => EmitWin32Object(emitter),
             _ => false
         };
     }
@@ -390,6 +418,104 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
         return true;
     }
 
+    private static bool EmitPosixObject(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Create dictionary with posix properties and methods
+        var dictType = ctx.Types.DictionaryStringObject;
+        var dictCtor = ctx.Types.GetDefaultConstructor(dictType);
+        var addMethod = ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object);
+
+        il.Emit(OpCodes.Newobj, dictCtor);
+
+        // Add sep = "/"
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "sep");
+        il.Emit(OpCodes.Ldstr, "/");
+        il.Emit(OpCodes.Callvirt, addMethod);
+
+        // Add delimiter = ":"
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "delimiter");
+        il.Emit(OpCodes.Ldstr, ":");
+        il.Emit(OpCodes.Callvirt, addMethod);
+
+        // Add method wrappers using TSFunction
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "join", nameof(PathHelpers.PosixJoin), true);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "resolve", nameof(PathHelpers.PosixResolve), true);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "basename", nameof(PathHelpers.PosixBasename), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "dirname", nameof(PathHelpers.PosixDirname), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "extname", "Extname", false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "normalize", nameof(PathHelpers.PosixNormalize), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "isAbsolute", nameof(PathHelpers.PosixIsAbsolute), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "relative", nameof(PathHelpers.PosixRelative), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "parse", nameof(PathHelpers.PosixParse), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "format", nameof(PathHelpers.PosixFormat), false);
+
+        // Wrap in SharpTSObject
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        return true;
+    }
+
+    private static bool EmitWin32Object(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Create dictionary with win32 properties and methods
+        var dictType = ctx.Types.DictionaryStringObject;
+        var dictCtor = ctx.Types.GetDefaultConstructor(dictType);
+        var addMethod = ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object);
+
+        il.Emit(OpCodes.Newobj, dictCtor);
+
+        // Add sep = "\\"
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "sep");
+        il.Emit(OpCodes.Ldstr, "\\");
+        il.Emit(OpCodes.Callvirt, addMethod);
+
+        // Add delimiter = ";"
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "delimiter");
+        il.Emit(OpCodes.Ldstr, ";");
+        il.Emit(OpCodes.Callvirt, addMethod);
+
+        // Add method wrappers using TSFunction
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "join", nameof(PathHelpers.Win32Join), true);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "resolve", nameof(PathHelpers.Win32Resolve), true);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "basename", nameof(PathHelpers.Win32Basename), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "dirname", nameof(PathHelpers.Win32Dirname), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "extname", "Extname", false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "normalize", nameof(PathHelpers.Win32Normalize), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "isAbsolute", nameof(PathHelpers.Win32IsAbsolute), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "relative", nameof(PathHelpers.Win32Relative), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "parse", nameof(PathHelpers.Win32Parse), false);
+        EmitPathSubObjectMethod(emitter, dictType, addMethod, "format", nameof(PathHelpers.Win32Format), false);
+
+        // Wrap in SharpTSObject
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        return true;
+    }
+
+    private static void EmitPathSubObjectMethod(IEmitterContext emitter, Type dictType, MethodInfo addMethod,
+        string methodName, string helperMethodName, bool isVarArgs)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, methodName);
+
+        // Create TSFunction that wraps the helper method
+        // For now, store null - the methods are handled via the nested call pattern in BuiltInModuleHandler
+        // The actual method calls go through TryEmitMethodCall with "posix.join", "win32.join" etc.
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, addMethod);
+    }
+
     private static void EmitToString(IEmitterContext emitter, Expr expr)
     {
         var ctx = emitter.Context;
@@ -445,4 +571,352 @@ public sealed class PathModuleEmitter : IBuiltInModuleEmitter
 
         il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
     }
+
+    #region POSIX Path Methods
+
+    private static bool EmitPosixJoin(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Build array of arguments
+        EmitArgsArray(emitter, arguments);
+
+        // Call PathHelpers.PosixJoin(args)
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixJoin))!);
+        return true;
+    }
+
+    private static bool EmitPosixResolve(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        EmitArgsArray(emitter, arguments);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixResolve))!);
+        return true;
+    }
+
+    private static bool EmitPosixBasename(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+
+        if (arguments.Count >= 2)
+        {
+            emitter.EmitExpression(arguments[1]);
+            EmitToString(emitter, arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixBasename))!);
+        return true;
+    }
+
+    private static bool EmitPosixDirname(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, ".");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixDirname))!);
+        return true;
+    }
+
+    private static bool EmitPosixNormalize(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, ".");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixNormalize))!);
+        return true;
+    }
+
+    private static bool EmitPosixIsAbsolute(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, ctx.Types.Boolean);
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixIsAbsolute))!);
+        il.Emit(OpCodes.Box, ctx.Types.Boolean);
+        return true;
+    }
+
+    private static bool EmitPosixRelative(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        emitter.EmitExpression(arguments[1]);
+        EmitToString(emitter, arguments[1]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixRelative))!);
+        return true;
+    }
+
+    private static bool EmitPosixParse(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            EmitToString(emitter, arguments[0]);
+        }
+
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixParse))!);
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        return true;
+    }
+
+    private static bool EmitPosixFormat(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.PosixFormat))!);
+        return true;
+    }
+
+    #endregion
+
+    #region Win32 Path Methods
+
+    private static bool EmitWin32Join(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        EmitArgsArray(emitter, arguments);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Join))!);
+        return true;
+    }
+
+    private static bool EmitWin32Resolve(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        EmitArgsArray(emitter, arguments);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Resolve))!);
+        return true;
+    }
+
+    private static bool EmitWin32Basename(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+
+        if (arguments.Count >= 2)
+        {
+            emitter.EmitExpression(arguments[1]);
+            EmitToString(emitter, arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Basename))!);
+        return true;
+    }
+
+    private static bool EmitWin32Dirname(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, ".");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Dirname))!);
+        return true;
+    }
+
+    private static bool EmitWin32Normalize(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, ".");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Normalize))!);
+        return true;
+    }
+
+    private static bool EmitWin32IsAbsolute(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, ctx.Types.Boolean);
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32IsAbsolute))!);
+        il.Emit(OpCodes.Box, ctx.Types.Boolean);
+        return true;
+    }
+
+    private static bool EmitWin32Relative(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 2)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        EmitToString(emitter, arguments[0]);
+        emitter.EmitExpression(arguments[1]);
+        EmitToString(emitter, arguments[1]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Relative))!);
+        return true;
+    }
+
+    private static bool EmitWin32Parse(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+        }
+        else
+        {
+            emitter.EmitExpression(arguments[0]);
+            EmitToString(emitter, arguments[0]);
+        }
+
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Parse))!);
+        il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);
+        return true;
+    }
+
+    private static bool EmitWin32Format(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldstr, "");
+            return true;
+        }
+
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+        il.Emit(OpCodes.Call, typeof(PathHelpers).GetMethod(nameof(PathHelpers.Win32Format))!);
+        return true;
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Create object?[] array
+        il.Emit(OpCodes.Ldc_I4, arguments.Count);
+        il.Emit(OpCodes.Newarr, ctx.Types.Object);
+
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4, i);
+            emitter.EmitExpression(arguments[i]);
+            emitter.EmitBoxIfNeeded(arguments[i]);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+    }
+
+    #endregion
 }
