@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-27 (util.format, util.inspect, util.toUSVString, util.isDeepStrictEqual now compile to standalone IL; fixed %% escape bug)
+**Last Updated:** 2026-01-28 (Added stripVTControlCharacters, getSystemErrorName, getSystemErrorMap to util module)
 
 ## Legend
 - ✅ Implemented
@@ -24,7 +24,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
 | `child_process` | ⚠️ | Synchronous only (`execSync`, `spawnSync`) |
-| `util` | ⚠️ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
+| `util` | ⚠️ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, stripVTControlCharacters, getSystemErrorName, getSystemErrorMap, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
 | `console` | ✅ | log, error, warn, info, debug, clear, time/timeEnd/timeLog, assert, count/countReset, table, dir, group/groupEnd, trace |
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
@@ -241,7 +241,56 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 9. MODULE SYSTEM
+## 9. UTIL
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Formatting** | | |
+| `format()` | ✅ | Placeholders: %s, %d, %i, %f, %j, %o, %O, %% |
+| `inspect()` | ✅ | Object stringification with depth option |
+| `stripVTControlCharacters()` | ✅ | Remove ANSI escape sequences |
+| **Comparison** | | |
+| `isDeepStrictEqual()` | ✅ | Deep equality (NaN equals NaN) |
+| **CLI Parsing** | | |
+| `parseArgs()` | ✅ | Boolean/string options, short/long flags, negation |
+| **String Utilities** | | |
+| `toUSVString()` | ✅ | Replace lone surrogates with replacement char |
+| **System Errors** | | |
+| `getSystemErrorName()` | ✅ | POSIX errno to name (70+ codes) |
+| `getSystemErrorMap()` | ✅ | Map of errno to [name, description] |
+| **Function Utilities** | | |
+| `deprecate()` | ✅ | Wrap function with deprecation warning |
+| `callbackify()` | ✅ | Convert Promise function to callback style |
+| `inherits()` | ✅ | Set up prototype chain (sets super_) |
+| **TextEncoder** | | |
+| `new TextEncoder()` | ✅ | UTF-8 encoder |
+| `encode()` | ✅ | String to Uint8Array |
+| `encodeInto()` | ✅ | Encode into existing buffer |
+| **TextDecoder** | | |
+| `new TextDecoder()` | ✅ | Supports utf-8, latin1, utf-16le |
+| `decode()` | ✅ | Buffer to string |
+| **util.types** | | |
+| `types.isArray()` | ✅ | Array check |
+| `types.isDate()` | ✅ | Date check |
+| `types.isFunction()` | ✅ | Function check |
+| `types.isNull()` | ✅ | Null check (not undefined) |
+| `types.isUndefined()` | ✅ | Undefined check (not null) |
+| `types.isPromise()` | ✅ | Promise check |
+| `types.isRegExp()` | ✅ | RegExp check |
+| `types.isMap()` | ✅ | Map check |
+| `types.isSet()` | ✅ | Set check |
+| `types.isTypedArray()` | ✅ | Buffer/TypedArray check |
+| `types.isNativeError()` | ✅ | Error check |
+| `types.isBoxedPrimitive()` | ✅ | Always false (no boxed primitives) |
+| `types.isWeakMap()` | ✅ | WeakMap check |
+| `types.isWeakSet()` | ✅ | WeakSet check |
+| `types.isArrayBuffer()` | ✅ | ArrayBuffer check |
+| **Async/Promisify** | | |
+| `promisify()` | ❌ | Not implemented |
+
+---
+
+## 10. MODULE SYSTEM
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -275,7 +324,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 10. GLOBALS
+## 11. GLOBALS
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -294,7 +343,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 11. STREAMS
+## 12. STREAMS
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -309,7 +358,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 12. EVENTS
+## 13. EVENTS
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -328,7 +377,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 13. ZLIB (Compression)
+## 14. ZLIB (Compression)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -366,7 +415,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 14. BUFFER
+## 15. BUFFER
 
 | Feature | Status | Notes |
 |---------|--------|-------|
