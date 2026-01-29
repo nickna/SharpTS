@@ -889,6 +889,9 @@ public class EmittedRuntime
     // util.callbackify support
     public MethodBuilder UtilCallbackify { get; set; } = null!;
 
+    // util.promisify support
+    public MethodBuilder UtilPromisify { get; set; } = null!;
+
     // util.inherits support
     public MethodBuilder UtilInherits { get; set; } = null!;
 

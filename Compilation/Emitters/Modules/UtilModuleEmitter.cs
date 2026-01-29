@@ -13,7 +13,7 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
     private static readonly string[] _exportedMembers =
     [
         "format", "inspect", "isDeepStrictEqual", "parseArgs", "toUSVString", "stripVTControlCharacters",
-        "getSystemErrorName", "getSystemErrorMap", "deprecate", "callbackify", "inherits",
+        "getSystemErrorName", "getSystemErrorMap", "deprecate", "callbackify", "promisify", "inherits",
         "TextEncoder", "TextDecoder", "types"
     ];
 
@@ -49,6 +49,7 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
             "types.isArrayBuffer" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsArrayBuffer),
             "deprecate" => EmitDeprecate(emitter, arguments),
             "callbackify" => EmitCallbackify(emitter, arguments),
+            "promisify" => EmitPromisify(emitter, arguments),
             "inherits" => EmitInherits(emitter, arguments),
             _ => false
         };
@@ -284,6 +285,27 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
         // Call emitted $Runtime.UtilCallbackify(fn)
         il.Emit(OpCodes.Call, ctx.Runtime!.UtilCallbackify);
+
+        // Result is already object type, no boxing needed
+        return true;
+    }
+
+    private static bool EmitPromisify(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count < 1)
+        {
+            return false;
+        }
+
+        // Emit the function argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call emitted $Runtime.UtilPromisify(fn)
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilPromisify);
 
         // Result is already object type, no boxing needed
         return true;

@@ -34,6 +34,9 @@ public partial class RuntimeEmitter
         // Emit util.callbackify
         EmitUtilCallbackify(typeBuilder, runtime);
 
+        // Emit util.promisify
+        EmitUtilPromisify(typeBuilder, runtime);
+
         // Emit util.inherits
         EmitUtilInherits(typeBuilder, runtime);
 
@@ -762,6 +765,25 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits: public static PromisifiedFunction UtilPromisify(object fn)
+    /// </summary>
+    private void EmitUtilPromisify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilPromisify",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(PromisifiedFunction),
+            [_types.Object]);
+        runtime.UtilPromisify = method;
+
+        var il = method.GetILGenerator();
+        // return UtilHelpers.Promisify(fn)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Promisify))!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits: public static void UtilInherits(object ctor, object superCtor)
     /// </summary>
     private void EmitUtilInherits(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1092,6 +1114,11 @@ public static class UtilHelpers
     /// util.types.isNull - checks if value is null.
     /// </summary>
     public static bool IsNull(object? value) => value is null;
+
+    /// <summary>
+    /// util.promisify - wraps a callback-style function to return a Promise (Task).
+    /// </summary>
+    public static PromisifiedFunction Promisify(object fn) => new PromisifiedFunction(fn);
 
     /// <summary>
     /// util.types.isUndefined - checks if value is undefined (null in SharpTS).
@@ -2210,4 +2237,116 @@ public class DeprecatedFunction
     }
 
     public override string ToString() => "[Function: deprecated]";
+}
+
+/// <summary>
+/// Wrapper for util.promisify - converts callback-style functions to Promise-returning.
+/// </summary>
+public class PromisifiedFunction
+{
+    private readonly object _wrapped;
+
+    public PromisifiedFunction(object fn)
+    {
+        _wrapped = fn ?? throw new ArgumentNullException(nameof(fn));
+    }
+
+    /// <summary>
+    /// Invoke the wrapped function, passing args plus a callback, and return a Task.
+    /// </summary>
+    public Task<object?> Invoke(params object?[] args)
+    {
+        var tcs = new TaskCompletionSource<object?>();
+        var callback = new PromisifyCallback(tcs);
+
+        // Create args array with callback appended
+        var argsWithCallback = new object?[(args?.Length ?? 0) + 1];
+        if (args != null)
+        {
+            Array.Copy(args, argsWithCallback, args.Length);
+        }
+        argsWithCallback[^1] = callback;
+
+        try
+        {
+            // Handle different callable types
+            if (_wrapped is TSFunction tsFunc)
+            {
+                tsFunc.Invoke(argsWithCallback);
+            }
+            else if (_wrapped is Delegate del)
+            {
+                del.DynamicInvoke(new object?[] { argsWithCallback });
+            }
+            else
+            {
+                // Try to find an Invoke method via reflection
+                var invokeMethod = _wrapped.GetType().GetMethod("Invoke");
+                if (invokeMethod != null)
+                {
+                    invokeMethod.Invoke(_wrapped, [argsWithCallback]);
+                }
+                else
+                {
+                    tcs.TrySetException(new InvalidOperationException(
+                        $"Cannot invoke promisified function: wrapped value is not callable ({_wrapped.GetType().Name})"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // If the function throws synchronously, reject the promise
+            tcs.TrySetException(ex);
+        }
+
+        return tcs.Task;
+    }
+
+    public override string ToString() => "[Function: promisified]";
+}
+
+/// <summary>
+/// Internal callback used by PromisifiedFunction to resolve/reject the Task.
+/// </summary>
+public class PromisifyCallback
+{
+    private readonly TaskCompletionSource<object?> _tcs;
+
+    public PromisifyCallback(TaskCompletionSource<object?> tcs)
+    {
+        _tcs = tcs;
+    }
+
+    /// <summary>
+    /// Called with (err, value) - resolves or rejects the Task accordingly.
+    /// </summary>
+    public object? Invoke(params object?[] args)
+    {
+        var err = args?.Length > 0 ? args[0] : null;
+        var value = args?.Length > 1 ? args[1] : null;
+
+        // Check if err is truthy
+        bool hasError = err switch
+        {
+            null => false,
+            false => false,
+            "" => false,
+            0.0 => false,
+            0 => false,
+            _ => true
+        };
+
+        if (hasError)
+        {
+            _tcs.TrySetException(new Exception(err?.ToString() ?? "Unknown error"));
+        }
+        else
+        {
+            _tcs.TrySetResult(value);
+        }
+
+        return null;
+    }
+
+    public override string ToString() => "[Function: promisify callback]";
 }

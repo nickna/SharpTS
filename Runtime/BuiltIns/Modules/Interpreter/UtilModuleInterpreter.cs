@@ -29,6 +29,7 @@ public static class UtilModuleInterpreter
             ["getSystemErrorMap"] = new BuiltInMethod("getSystemErrorMap", 0, GetSystemErrorMap),
             ["deprecate"] = new BuiltInMethod("deprecate", 2, 3, Deprecate),
             ["callbackify"] = new BuiltInMethod("callbackify", 1, Callbackify),
+            ["promisify"] = new BuiltInMethod("promisify", 1, Promisify),
             ["inherits"] = new BuiltInMethod("inherits", 2, Inherits),
             ["TextEncoder"] = new BuiltInMethod("TextEncoder", 0, CreateTextEncoder),
             ["TextDecoder"] = new BuiltInMethod("TextDecoder", 0, 2, CreateTextDecoder),
@@ -1174,6 +1175,26 @@ public static class UtilModuleInterpreter
         }
 
         throw new Exception("util.callbackify: argument must be a function");
+    }
+
+    private static object? Promisify(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count < 1)
+            throw new Exception("util.promisify requires 1 argument: fn");
+
+        var fn = args[0];
+
+        if (fn is ISharpTSCallable callable)
+        {
+            return new SharpTSPromisifiedFunction(callable);
+        }
+
+        if (fn is BuiltInMethod method)
+        {
+            return new SharpTSPromisifiedFunction(method);
+        }
+
+        throw new Exception("util.promisify: argument must be a function");
     }
 
     private static object? Inherits(Interp interpreter, object? receiver, List<object?> args)

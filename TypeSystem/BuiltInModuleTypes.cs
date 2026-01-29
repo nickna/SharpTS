@@ -790,6 +790,7 @@ public static class BuiltInModuleTypes
             ["getSystemErrorMap"] = new TypeInfo.Function([], anyType), // Returns Map<number, [string, string]>
             ["deprecate"] = new TypeInfo.Function([anyType, stringType, anyType], anyType, RequiredParams: 2),
             ["callbackify"] = new TypeInfo.Function([anyType], anyType),
+            ["promisify"] = new TypeInfo.Function([anyType], anyType),
             ["inherits"] = new TypeInfo.Function([anyType, anyType], voidType),
 
             // TextEncoder/TextDecoder constructors - use Interface with constructor signatures

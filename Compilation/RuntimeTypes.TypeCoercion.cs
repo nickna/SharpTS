@@ -80,6 +80,8 @@ public static partial class RuntimeTypes
             string => "string",
             TSFunction => "function",
             Delegate => "function",
+            PromisifiedFunction => "function",
+            DeprecatedFunction => "function",
             _ => "object"
         };
     }

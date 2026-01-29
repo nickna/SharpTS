@@ -233,6 +233,87 @@ public class UtilModuleCompiledTests
 
     #endregion
 
+    #region Promisify
+
+    [Fact]
+    public void Compiled_Util_Promisify_ReturnsFunction()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+
+                function callbackFn(callback: (err: any, result: string) => void) {
+                    callback(null, 'success');
+                }
+
+                const promiseFn = util.promisify(callbackFn);
+                console.log(typeof promiseFn);
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Contains("function", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_Promisify_ResolvesWithValue()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+
+                function callbackFn(x: number, callback: (err: any, result: number) => void) {
+                    callback(null, x * 2);
+                }
+
+                const promiseFn = util.promisify(callbackFn);
+
+                async function main() {
+                    const result = await promiseFn(5);
+                    console.log(result);
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Contains("10", output);
+    }
+
+    [Fact]
+    public void Compiled_Util_Promisify_RejectsOnError()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+
+                function callbackFn(callback: (err: any, result: any) => void) {
+                    callback(new Error('test error'), null);
+                }
+
+                const promiseFn = util.promisify(callbackFn);
+
+                async function main() {
+                    try {
+                        await promiseFn();
+                        console.log('no error');
+                    } catch (e) {
+                        console.log('caught error');
+                    }
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        Assert.Contains("caught error", output);
+    }
+
+    #endregion
+
     #region TextEncoder
 
     [Fact]

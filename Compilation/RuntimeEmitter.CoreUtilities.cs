@@ -416,6 +416,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Delegate);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
+        // PromisifiedFunction => "function"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(PromisifiedFunction));
+        il.Emit(OpCodes.Brtrue, functionLabel);
+
+        // DeprecatedFunction => "function"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(DeprecatedFunction));
+        il.Emit(OpCodes.Brtrue, functionLabel);
+
         // BigInteger => "bigint"
         var bigintLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

@@ -713,11 +713,14 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Module Phase 7: Emit arrow function bodies.
+    /// Module Phase 7: Emit arrow function bodies and async/generator state machine bodies.
     /// </summary>
     private void ModulePhase7_EmitArrowBodies()
     {
         EmitArrowFunctionBodies();
+        EmitAsyncStateMachineBodies();
+        EmitGeneratorStateMachineBodies();
+        EmitAsyncGeneratorStateMachineBodies();
     }
 
     /// <summary>

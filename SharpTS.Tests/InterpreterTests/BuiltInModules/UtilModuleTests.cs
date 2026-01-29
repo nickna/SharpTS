@@ -515,6 +515,101 @@ public class UtilModuleTests
         Assert.Equal("true\ntrue\n", output);
     }
 
+    // ============ util.promisify TESTS ============
+
+    [Fact]
+    public void Promisify_ReturnsPromise()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                function callbackFn(callback: (err: any, result: string) => void) {
+                    callback(null, 'success');
+                }
+                const promiseFn = util.promisify(callbackFn);
+                const result = promiseFn();
+                console.log(util.types.isPromise(result));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public async Task Promisify_ResolvesWithValue()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                function callbackFn(callback: (err: any, result: string) => void) {
+                    callback(null, 'hello world');
+                }
+                const promiseFn = util.promisify(callbackFn);
+                async function main() {
+                    const result = await promiseFn();
+                    console.log(result);
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("hello world\n", output);
+    }
+
+    [Fact]
+    public async Task Promisify_RejectsOnError()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                function callbackFn(callback: (err: any, result: any) => void) {
+                    callback(new Error('something went wrong'), null);
+                }
+                const promiseFn = util.promisify(callbackFn);
+                async function main() {
+                    try {
+                        await promiseFn();
+                        console.log('no error');
+                    } catch (e) {
+                        console.log('caught error');
+                    }
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("caught error\n", output);
+    }
+
+    [Fact]
+    public async Task Promisify_PassesArgumentsToOriginalFunction()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                function callbackFn(a: number, b: number, callback: (err: any, result: number) => void) {
+                    callback(null, a + b);
+                }
+                const promiseFn = util.promisify(callbackFn);
+                async function main() {
+                    const result = await promiseFn(3, 4);
+                    console.log(result);
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("7\n", output);
+    }
+
     // ============ util.inherits TESTS ============
 
     [Fact]

@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-28 (Added stripVTControlCharacters, getSystemErrorName, getSystemErrorMap to util module)
+**Last Updated:** 2026-01-28 (Added util.promisify; util module now fully implemented)
 
 ## Legend
 - ✅ Implemented
@@ -24,7 +24,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `querystring` | ✅ | parse, stringify, escape, unescape |
 | `assert` | ✅ | Full testing utilities |
 | `child_process` | ⚠️ | Synchronous only (`execSync`, `spawnSync`) |
-| `util` | ⚠️ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, stripVTControlCharacters, getSystemErrorName, getSystemErrorMap, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
+| `util` | ✅ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, stripVTControlCharacters, getSystemErrorName, getSystemErrorMap, promisify, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
 | `console` | ✅ | log, error, warn, info, debug, clear, time/timeEnd/timeLog, assert, count/countReset, table, dir, group/groupEnd, trace |
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
@@ -286,7 +286,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `types.isWeakSet()` | ✅ | WeakSet check |
 | `types.isArrayBuffer()` | ✅ | ArrayBuffer check |
 | **Async/Promisify** | | |
-| `promisify()` | ❌ | Not implemented |
+| `promisify()` | ✅ | Converts callback-style to Promise-returning |
 
 ---
 
