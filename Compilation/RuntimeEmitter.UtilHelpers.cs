@@ -22,6 +22,11 @@ public partial class RuntimeEmitter
         EmitUtilTypesIsMap(typeBuilder, runtime);
         EmitUtilTypesIsSet(typeBuilder, runtime);
         EmitUtilTypesIsTypedArray(typeBuilder, runtime);
+        EmitUtilTypesIsNativeError(typeBuilder, runtime);
+        EmitUtilTypesIsBoxedPrimitive(typeBuilder, runtime);
+        EmitUtilTypesIsWeakMap(typeBuilder, runtime);
+        EmitUtilTypesIsWeakSet(typeBuilder, runtime);
+        EmitUtilTypesIsArrayBuffer(typeBuilder, runtime);
 
         // Emit util.deprecate
         EmitUtilDeprecate(typeBuilder, runtime);
@@ -34,6 +39,13 @@ public partial class RuntimeEmitter
 
         // Emit util.toUSVString (already standalone)
         EmitUtilToUSVString(typeBuilder, runtime);
+
+        // Emit util.stripVTControlCharacters
+        EmitUtilStripVTControlCharacters(typeBuilder, runtime);
+
+        // Emit util.getSystemErrorName and getSystemErrorMap
+        EmitUtilGetSystemErrorName(typeBuilder, runtime);
+        EmitUtilGetSystemErrorMap(typeBuilder, runtime);
 
         // Define method signatures for format, inspect, isDeepStrictEqual, parseArgs
         // (bodies will be emitted by EmitUtilStandaloneMethods)
@@ -454,6 +466,258 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(trueLabel);
         il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsNativeError(object value)
+    /// </summary>
+    private void EmitUtilTypesIsNativeError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsNativeError",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsNativeError = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for $Error
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for Exception
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(Exception));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsBoxedPrimitive(object value)
+    /// Always returns false in SharpTS since we don't have boxed primitive types.
+    /// </summary>
+    private void EmitUtilTypesIsBoxedPrimitive(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsBoxedPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsBoxedPrimitive = method;
+
+        var il = method.GetILGenerator();
+        // Always return false - we don't have explicit boxed primitive types
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsWeakMap(object value)
+    /// </summary>
+    private void EmitUtilTypesIsWeakMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsWeakMap",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsWeakMap = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for System.Runtime.CompilerServices.ConditionalWeakTable (underlying WeakMap implementation)
+        // In compiled mode, WeakMap is backed by ConditionalWeakTable
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        var typeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        // Check type name contains "WeakMap" (for interpreter SharpTSWeakMap)
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "WeakMap");
+        il.Emit(OpCodes.Call, _types.String.GetMethod("Contains", [typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for ConditionalWeakTable generic type
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetGenericTypeDefinition"));
+        il.Emit(OpCodes.Ldtoken, typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", _types.Type, _types.Type));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsWeakSet(object value)
+    /// </summary>
+    private void EmitUtilTypesIsWeakSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsWeakSet",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsWeakSet = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check type name contains "WeakSet" (for interpreter SharpTSWeakSet)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "WeakSet");
+        il.Emit(OpCodes.Call, _types.String.GetMethod("Contains", [typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool UtilTypesIsArrayBuffer(object value)
+    /// </summary>
+    private void EmitUtilTypesIsArrayBuffer(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilTypesIsArrayBuffer",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.UtilTypesIsArrayBuffer = method;
+
+        var il = method.GetILGenerator();
+        var trueLabel = il.DefineLabel();
+        var falseLabel = il.DefineLabel();
+
+        // Check for null
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check for $Buffer (which backs ArrayBuffer in SharpTS)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Check for byte[]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(byte[]));
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static string UtilStripVTControlCharacters(object value)
+    /// Strips ANSI escape codes from the input string.
+    /// </summary>
+    private void EmitUtilStripVTControlCharacters(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilStripVTControlCharacters",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object]);
+        runtime.UtilStripVTControlCharacters = method;
+
+        var il = method.GetILGenerator();
+
+        // Call UtilHelpers.StripVTControlCharacters(value)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.StripVTControlCharacters))!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static string UtilGetSystemErrorName(object errno)
+    /// Returns the POSIX error name for the given error code.
+    /// </summary>
+    private void EmitUtilGetSystemErrorName(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilGetSystemErrorName",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object]);
+        runtime.UtilGetSystemErrorName = method;
+
+        var il = method.GetILGenerator();
+
+        // Call UtilHelpers.GetSystemErrorName(errno)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.GetSystemErrorName))!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object UtilGetSystemErrorMap()
+    /// Returns a Map of error codes to [name, description] tuples.
+    /// Calls RuntimeTypes.CreateSystemErrorMap() which builds the dictionary properly.
+    /// </summary>
+    private void EmitUtilGetSystemErrorMap(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UtilGetSystemErrorMap",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        runtime.UtilGetSystemErrorMap = method;
+
+        var il = method.GetILGenerator();
+
+        // Call RuntimeTypes.CreateSystemErrorMap()
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(nameof(RuntimeTypes.CreateSystemErrorMap))!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -897,6 +1161,276 @@ public static class UtilHelpers
     /// util.types.isTypedArray - checks if value is a typed array (Buffer).
     /// </summary>
     public static bool IsTypedArray(object? value) => value is SharpTS.Runtime.Types.SharpTSBuffer;
+
+    /// <summary>
+    /// util.types.isNativeError - checks if value is an Error instance.
+    /// </summary>
+    public static bool IsNativeError(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSError) return true;
+        if (value is Exception) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// util.types.isBoxedPrimitive - checks if value is a boxed primitive.
+    /// Always returns false in SharpTS since we don't have explicit boxed primitive types.
+    /// </summary>
+    public static bool IsBoxedPrimitive(object? value) => false;
+
+    /// <summary>
+    /// util.types.isWeakMap - checks if value is a WeakMap.
+    /// </summary>
+    public static bool IsWeakMap(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSWeakMap) return true;
+        // Check type name for compiled WeakMap
+        var typeName = value.GetType().Name;
+        return typeName.Contains("WeakMap");
+    }
+
+    /// <summary>
+    /// util.types.isWeakSet - checks if value is a WeakSet.
+    /// </summary>
+    public static bool IsWeakSet(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSWeakSet) return true;
+        // Check type name for compiled WeakSet
+        var typeName = value.GetType().Name;
+        return typeName.Contains("WeakSet");
+    }
+
+    /// <summary>
+    /// util.types.isArrayBuffer - checks if value is an ArrayBuffer.
+    /// In SharpTS, this is equivalent to Buffer.
+    /// </summary>
+    public static bool IsArrayBuffer(object? value)
+    {
+        if (value is null) return false;
+        if (value is SharpTS.Runtime.Types.SharpTSBuffer) return true;
+        if (value is byte[]) return true;
+        return false;
+    }
+
+    // ===================== stripVTControlCharacters =====================
+
+    /// <summary>
+    /// Regex pattern to match ANSI escape sequences.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex _ansiEscapeRegex = new(
+        @"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[PX^_][^\x1b]*\x1b\\|\x1b\[[0-9;]*m",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// util.stripVTControlCharacters - strips ANSI escape codes from strings.
+    /// </summary>
+    public static string StripVTControlCharacters(object? value)
+    {
+        var input = value?.ToString() ?? "";
+        return _ansiEscapeRegex.Replace(input, "");
+    }
+
+    // ===================== getSystemErrorName and getSystemErrorMap =====================
+
+    /// <summary>
+    /// Mapping of POSIX error codes to their names.
+    /// </summary>
+    private static readonly Dictionary<int, string> _posixErrorNames = new()
+    {
+        [-1] = "EPERM",
+        [-2] = "ENOENT",
+        [-3] = "ESRCH",
+        [-4] = "EINTR",
+        [-5] = "EIO",
+        [-6] = "ENXIO",
+        [-7] = "E2BIG",
+        [-8] = "ENOEXEC",
+        [-9] = "EBADF",
+        [-10] = "ECHILD",
+        [-11] = "EAGAIN",
+        [-12] = "ENOMEM",
+        [-13] = "EACCES",
+        [-14] = "EFAULT",
+        [-16] = "EBUSY",
+        [-17] = "EEXIST",
+        [-18] = "EXDEV",
+        [-19] = "ENODEV",
+        [-20] = "ENOTDIR",
+        [-21] = "EISDIR",
+        [-22] = "EINVAL",
+        [-23] = "ENFILE",
+        [-24] = "EMFILE",
+        [-25] = "ENOTTY",
+        [-26] = "ETXTBSY",
+        [-27] = "EFBIG",
+        [-28] = "ENOSPC",
+        [-29] = "ESPIPE",
+        [-30] = "EROFS",
+        [-31] = "EMLINK",
+        [-32] = "EPIPE",
+        [-33] = "EDOM",
+        [-34] = "ERANGE",
+        [-35] = "EDEADLK",
+        [-36] = "ENAMETOOLONG",
+        [-37] = "ENOLCK",
+        [-38] = "ENOSYS",
+        [-39] = "ENOTEMPTY",
+        [-40] = "ELOOP",
+        [-42] = "ENOMSG",
+        [-43] = "EIDRM",
+        [-60] = "ENOSTR",
+        [-61] = "ENODATA",
+        [-62] = "ETIME",
+        [-63] = "ENOSR",
+        [-71] = "EPROTO",
+        [-74] = "EBADMSG",
+        [-75] = "EOVERFLOW",
+        [-88] = "ENOTSOCK",
+        [-89] = "EDESTADDRREQ",
+        [-90] = "EMSGSIZE",
+        [-91] = "EPROTOTYPE",
+        [-92] = "ENOPROTOOPT",
+        [-93] = "EPROTONOSUPPORT",
+        [-95] = "EOPNOTSUPP",
+        [-97] = "EAFNOSUPPORT",
+        [-98] = "EADDRINUSE",
+        [-99] = "EADDRNOTAVAIL",
+        [-100] = "ENETDOWN",
+        [-101] = "ENETUNREACH",
+        [-102] = "ENETRESET",
+        [-103] = "ECONNABORTED",
+        [-104] = "ECONNRESET",
+        [-105] = "ENOBUFS",
+        [-106] = "EISCONN",
+        [-107] = "ENOTCONN",
+        [-110] = "ETIMEDOUT",
+        [-111] = "ECONNREFUSED",
+        [-112] = "EHOSTDOWN",
+        [-113] = "EHOSTUNREACH",
+        [-114] = "EALREADY",
+        [-115] = "EINPROGRESS",
+        [-116] = "ESTALE",
+        [-122] = "EDQUOT",
+        [-125] = "ECANCELED",
+    };
+
+    /// <summary>
+    /// Mapping of error names to their descriptions.
+    /// </summary>
+    private static readonly Dictionary<string, string> _errorDescriptions = new()
+    {
+        ["EPERM"] = "operation not permitted",
+        ["ENOENT"] = "no such file or directory",
+        ["ESRCH"] = "no such process",
+        ["EINTR"] = "interrupted system call",
+        ["EIO"] = "i/o error",
+        ["ENXIO"] = "no such device or address",
+        ["E2BIG"] = "argument list too long",
+        ["ENOEXEC"] = "exec format error",
+        ["EBADF"] = "bad file descriptor",
+        ["ECHILD"] = "no child processes",
+        ["EAGAIN"] = "resource temporarily unavailable",
+        ["ENOMEM"] = "not enough memory",
+        ["EACCES"] = "permission denied",
+        ["EFAULT"] = "bad address",
+        ["EBUSY"] = "resource busy or locked",
+        ["EEXIST"] = "file already exists",
+        ["EXDEV"] = "cross-device link not permitted",
+        ["ENODEV"] = "no such device",
+        ["ENOTDIR"] = "not a directory",
+        ["EISDIR"] = "illegal operation on a directory",
+        ["EINVAL"] = "invalid argument",
+        ["ENFILE"] = "file table overflow",
+        ["EMFILE"] = "too many open files",
+        ["ENOTTY"] = "inappropriate ioctl for device",
+        ["ETXTBSY"] = "text file is busy",
+        ["EFBIG"] = "file too large",
+        ["ENOSPC"] = "no space left on device",
+        ["ESPIPE"] = "invalid seek",
+        ["EROFS"] = "read-only file system",
+        ["EMLINK"] = "too many links",
+        ["EPIPE"] = "broken pipe",
+        ["EDOM"] = "argument out of domain",
+        ["ERANGE"] = "result too large",
+        ["EDEADLK"] = "resource deadlock avoided",
+        ["ENAMETOOLONG"] = "name too long",
+        ["ENOLCK"] = "no locks available",
+        ["ENOSYS"] = "function not implemented",
+        ["ENOTEMPTY"] = "directory not empty",
+        ["ELOOP"] = "too many symbolic links encountered",
+        ["ENOMSG"] = "no message of desired type",
+        ["EIDRM"] = "identifier removed",
+        ["ENOSTR"] = "device not a stream",
+        ["ENODATA"] = "no data available",
+        ["ETIME"] = "timer expired",
+        ["ENOSR"] = "out of streams resources",
+        ["EPROTO"] = "protocol error",
+        ["EBADMSG"] = "bad message",
+        ["EOVERFLOW"] = "value too large for defined data type",
+        ["ENOTSOCK"] = "socket operation on non-socket",
+        ["EDESTADDRREQ"] = "destination address required",
+        ["EMSGSIZE"] = "message too long",
+        ["EPROTOTYPE"] = "protocol wrong type for socket",
+        ["ENOPROTOOPT"] = "protocol not available",
+        ["EPROTONOSUPPORT"] = "protocol not supported",
+        ["EOPNOTSUPP"] = "operation not supported on socket",
+        ["EAFNOSUPPORT"] = "address family not supported",
+        ["EADDRINUSE"] = "address already in use",
+        ["EADDRNOTAVAIL"] = "address not available",
+        ["ENETDOWN"] = "network is down",
+        ["ENETUNREACH"] = "network is unreachable",
+        ["ENETRESET"] = "connection reset by network",
+        ["ECONNABORTED"] = "connection aborted",
+        ["ECONNRESET"] = "connection reset by peer",
+        ["ENOBUFS"] = "no buffer space available",
+        ["EISCONN"] = "socket is connected",
+        ["ENOTCONN"] = "socket is not connected",
+        ["ETIMEDOUT"] = "connection timed out",
+        ["ECONNREFUSED"] = "connection refused",
+        ["EHOSTDOWN"] = "host is down",
+        ["EHOSTUNREACH"] = "host is unreachable",
+        ["EALREADY"] = "connection already in progress",
+        ["EINPROGRESS"] = "operation in progress",
+        ["ESTALE"] = "stale file handle",
+        ["EDQUOT"] = "disk quota exceeded",
+        ["ECANCELED"] = "operation canceled",
+    };
+
+    /// <summary>
+    /// util.getSystemErrorName - returns the error name for a POSIX error code.
+    /// </summary>
+    public static string GetSystemErrorName(object? errno)
+    {
+        if (errno is not double d)
+            throw new Exception("The value of \"err\" is out of range");
+
+        var errorCode = (int)d;
+        if (_posixErrorNames.TryGetValue(errorCode, out var name))
+            return name;
+
+        return $"Unknown system error {errorCode}";
+    }
+
+    /// <summary>
+    /// util.getSystemErrorMap - returns a Map of error codes to [name, description] tuples.
+    /// Returns a Dictionary compatible with the compiled Map type.
+    /// Note: We don't use ReferenceEqualityComparer here because keys are value types (doubles).
+    /// </summary>
+    public static object GetSystemErrorMap()
+    {
+        // Use a regular Dictionary without ReferenceEqualityComparer since keys are value types
+        var map = new Dictionary<object, object?>();
+        foreach (var (code, name) in _posixErrorNames)
+        {
+            var description = _errorDescriptions.TryGetValue(name, out var desc) ? desc : "";
+            var entry = new List<object?> { name, description };
+            map[(double)code] = entry;
+        }
+        return map;
+    }
 
     /// <summary>
     /// util.isDeepStrictEqual - performs deep strict equality comparison.

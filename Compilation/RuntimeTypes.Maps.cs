@@ -12,6 +12,29 @@ public static partial class RuntimeTypes
     public static object CreateMap() => new Dictionary<object, object?>(SharpTS.Runtime.Types.ReferenceEqualityComparer.Instance);
 
     /// <summary>
+    /// Creates the system error map for util.getSystemErrorMap().
+    /// Returns a proper Map (Dictionary&lt;object, object?&gt;) with numeric keys.
+    /// </summary>
+    public static object CreateSystemErrorMap()
+    {
+        // Create a proper Map - runtime dispatch now handles Map operations on any-typed values
+        var map = new Dictionary<object, object?>();
+
+        // Add error codes as boxed double keys (JavaScript numbers)
+        map[(double)-2] = new List<object?> { "ENOENT", "no such file or directory" };
+        map[(double)-1] = new List<object?> { "EPERM", "operation not permitted" };
+        map[(double)-13] = new List<object?> { "EACCES", "permission denied" };
+        map[(double)-17] = new List<object?> { "EEXIST", "file already exists" };
+        map[(double)-22] = new List<object?> { "EINVAL", "invalid argument" };
+        map[(double)-28] = new List<object?> { "ENOSPC", "no space left on device" };
+        map[(double)-39] = new List<object?> { "ENOTEMPTY", "directory not empty" };
+        map[(double)-110] = new List<object?> { "ETIMEDOUT", "connection timed out" };
+        map[(double)-111] = new List<object?> { "ECONNREFUSED", "connection refused" };
+
+        return map;
+    }
+
+    /// <summary>
     /// Creates a Map from an array of [key, value] entries.
     /// </summary>
     public static object CreateMapFromEntries(object? entries)

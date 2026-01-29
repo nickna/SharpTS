@@ -12,7 +12,9 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "format", "inspect", "isDeepStrictEqual", "parseArgs", "toUSVString", "deprecate", "callbackify", "inherits", "TextEncoder", "TextDecoder", "types"
+        "format", "inspect", "isDeepStrictEqual", "parseArgs", "toUSVString", "stripVTControlCharacters",
+        "getSystemErrorName", "getSystemErrorMap", "deprecate", "callbackify", "inherits",
+        "TextEncoder", "TextDecoder", "types"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -26,6 +28,9 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
             "isDeepStrictEqual" => EmitIsDeepStrictEqual(emitter, arguments),
             "parseArgs" => EmitParseArgs(emitter, arguments),
             "toUSVString" => EmitToUSVString(emitter, arguments),
+            "stripVTControlCharacters" => EmitStripVTControlCharacters(emitter, arguments),
+            "getSystemErrorName" => EmitGetSystemErrorName(emitter, arguments),
+            "getSystemErrorMap" => EmitGetSystemErrorMap(emitter, arguments),
             // Handle util.types.* nested calls - use emitted methods for standalone execution
             "types.isArray" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsArray),
             "types.isFunction" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsFunction),
@@ -37,6 +42,11 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
             "types.isMap" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsMap),
             "types.isSet" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsSet),
             "types.isTypedArray" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsTypedArray),
+            "types.isNativeError" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsNativeError),
+            "types.isBoxedPrimitive" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsBoxedPrimitive),
+            "types.isWeakMap" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsWeakMap),
+            "types.isWeakSet" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsWeakSet),
+            "types.isArrayBuffer" => EmitTypesCall(emitter, arguments, ctx => ctx.Runtime!.UtilTypesIsArrayBuffer),
             "deprecate" => EmitDeprecate(emitter, arguments),
             "callbackify" => EmitCallbackify(emitter, arguments),
             "inherits" => EmitInherits(emitter, arguments),
@@ -302,6 +312,60 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
 
         // inherits returns void, push null for consistency
         il.Emit(OpCodes.Ldnull);
+        return true;
+    }
+
+    private static bool EmitStripVTControlCharacters(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit argument (or empty string)
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "");
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilStripVTControlCharacters);
+        return true;
+    }
+
+    private static bool EmitGetSystemErrorName(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // No argument provided - throw error at runtime
+            il.Emit(OpCodes.Ldstr, "getSystemErrorName requires an error code argument");
+            il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit the error code argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilGetSystemErrorName);
+        return true;
+    }
+
+    private static bool EmitGetSystemErrorMap(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Call runtime helper (no arguments)
+        il.Emit(OpCodes.Call, ctx.Runtime!.UtilGetSystemErrorMap);
         return true;
     }
 }

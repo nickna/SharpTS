@@ -785,6 +785,9 @@ public static class BuiltInModuleTypes
             ["isDeepStrictEqual"] = new TypeInfo.Function([anyType, anyType], boolType),
             ["parseArgs"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
             ["toUSVString"] = new TypeInfo.Function([anyType], stringType),
+            ["stripVTControlCharacters"] = new TypeInfo.Function([anyType], stringType),
+            ["getSystemErrorName"] = new TypeInfo.Function([new TypeInfo.Primitive(TokenType.TYPE_NUMBER)], stringType),
+            ["getSystemErrorMap"] = new TypeInfo.Function([], anyType), // Returns Map<number, [string, string]>
             ["deprecate"] = new TypeInfo.Function([anyType, stringType, anyType], anyType, RequiredParams: 2),
             ["callbackify"] = new TypeInfo.Function([anyType], anyType),
             ["inherits"] = new TypeInfo.Function([anyType, anyType], voidType),
@@ -844,7 +847,12 @@ public static class BuiltInModuleTypes
                 ["isRegExp"] = new TypeInfo.Function([anyType], boolType),
                 ["isMap"] = new TypeInfo.Function([anyType], boolType),
                 ["isSet"] = new TypeInfo.Function([anyType], boolType),
-                ["isTypedArray"] = new TypeInfo.Function([anyType], boolType)
+                ["isTypedArray"] = new TypeInfo.Function([anyType], boolType),
+                ["isNativeError"] = new TypeInfo.Function([anyType], boolType),
+                ["isBoxedPrimitive"] = new TypeInfo.Function([anyType], boolType),
+                ["isWeakMap"] = new TypeInfo.Function([anyType], boolType),
+                ["isWeakSet"] = new TypeInfo.Function([anyType], boolType),
+                ["isArrayBuffer"] = new TypeInfo.Function([anyType], boolType)
             }.ToFrozenDictionary())
         };
     }

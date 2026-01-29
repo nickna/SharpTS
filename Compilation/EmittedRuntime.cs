@@ -869,6 +869,16 @@ public class EmittedRuntime
     public MethodBuilder UtilTypesIsMap { get; set; } = null!;
     public MethodBuilder UtilTypesIsSet { get; set; } = null!;
     public MethodBuilder UtilTypesIsTypedArray { get; set; } = null!;
+    public MethodBuilder UtilTypesIsNativeError { get; set; } = null!;
+    public MethodBuilder UtilTypesIsBoxedPrimitive { get; set; } = null!;
+    public MethodBuilder UtilTypesIsWeakMap { get; set; } = null!;
+    public MethodBuilder UtilTypesIsWeakSet { get; set; } = null!;
+    public MethodBuilder UtilTypesIsArrayBuffer { get; set; } = null!;
+
+    // util module additional methods
+    public MethodBuilder UtilStripVTControlCharacters { get; set; } = null!;
+    public MethodBuilder UtilGetSystemErrorName { get; set; } = null!;
+    public MethodBuilder UtilGetSystemErrorMap { get; set; } = null!;
 
     // util.deprecate support
     public MethodBuilder UtilDeprecate { get; set; } = null!;

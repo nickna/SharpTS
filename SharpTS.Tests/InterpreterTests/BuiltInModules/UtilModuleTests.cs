@@ -1421,4 +1421,341 @@ public class UtilModuleTests
         var output = TestHarness.RunModulesInterpreted(files, "main.ts");
         Assert.Equal("true\n", output);
     }
+
+    // ============ stripVTControlCharacters TESTS ============
+
+    [Fact]
+    public void StripVTControlCharacters_RemovesAnsiColors()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const colored = '\x1b[31mRed\x1b[0m';
+                console.log(util.stripVTControlCharacters(colored) === 'Red');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void StripVTControlCharacters_RemovesBoldAndReset()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const bold = '\x1b[1mBold\x1b[0m';
+                console.log(util.stripVTControlCharacters(bold) === 'Bold');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void StripVTControlCharacters_PreservesPlainText()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const plain = 'Hello, World!';
+                console.log(util.stripVTControlCharacters(plain) === plain);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void StripVTControlCharacters_EmptyString()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.stripVTControlCharacters('') === '');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void StripVTControlCharacters_MultipleEscapeSequences()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const multi = '\x1b[31mRed\x1b[0m and \x1b[32mGreen\x1b[0m';
+                console.log(util.stripVTControlCharacters(multi) === 'Red and Green');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    // ============ getSystemErrorName TESTS ============
+
+    [Fact]
+    public void GetSystemErrorName_ReturnsENOENT()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.getSystemErrorName(-2) === 'ENOENT');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void GetSystemErrorName_ReturnsEACCES()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.getSystemErrorName(-13) === 'EACCES');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void GetSystemErrorName_ReturnsEPERM()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.getSystemErrorName(-1) === 'EPERM');
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void GetSystemErrorName_UnknownCode()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const result = util.getSystemErrorName(-999);
+                console.log(result.includes('Unknown'));
+                console.log(result.includes('-999'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    // ============ getSystemErrorMap TESTS ============
+
+    [Fact]
+    public void GetSystemErrorMap_ReturnsMap()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const map = util.getSystemErrorMap();
+                // Check that it's a Map-like object
+                console.log(typeof map === 'object');
+                console.log(map !== null);
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void GetSystemErrorMap_ContainsENOENT()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                const map = util.getSystemErrorMap();
+                const entry = map.get(-2);
+                console.log(entry !== undefined);
+                console.log(entry[0] === 'ENOENT');
+                console.log(entry[1].includes('no such file'));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    // ============ util.types.isNativeError TESTS ============
+
+    [Fact]
+    public void Types_IsNativeError_ReturnsTrueForError()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isNativeError(new Error('test')));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Types_IsNativeError_ReturnsFalseForNonError()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isNativeError('not an error'));
+                console.log(util.types.isNativeError({}));
+                console.log(util.types.isNativeError(null));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\nfalse\n", output);
+    }
+
+    // ============ util.types.isBoxedPrimitive TESTS ============
+
+    [Fact]
+    public void Types_IsBoxedPrimitive_ReturnsFalse()
+    {
+        // In SharpTS, we don't have explicit boxed primitives, so this always returns false
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isBoxedPrimitive(42));
+                console.log(util.types.isBoxedPrimitive('hello'));
+                console.log(util.types.isBoxedPrimitive(true));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\nfalse\n", output);
+    }
+
+    // ============ util.types.isWeakMap TESTS ============
+
+    [Fact]
+    public void Types_IsWeakMap_ReturnsTrueForWeakMap()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isWeakMap(new WeakMap()));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Types_IsWeakMap_ReturnsFalseForMap()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isWeakMap(new Map()));
+                console.log(util.types.isWeakMap({}));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\n", output);
+    }
+
+    // ============ util.types.isWeakSet TESTS ============
+
+    [Fact]
+    public void Types_IsWeakSet_ReturnsTrueForWeakSet()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isWeakSet(new WeakSet()));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Types_IsWeakSet_ReturnsFalseForSet()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isWeakSet(new Set()));
+                console.log(util.types.isWeakSet({}));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\n", output);
+    }
+
+    // ============ util.types.isArrayBuffer TESTS ============
+
+    [Fact]
+    public void Types_IsArrayBuffer_ReturnsTrueForBuffer()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isArrayBuffer(Buffer.alloc(10)));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Types_IsArrayBuffer_ReturnsFalseForNonBuffer()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as util from 'util';
+                console.log(util.types.isArrayBuffer([]));
+                console.log(util.types.isArrayBuffer({}));
+                """
+        };
+
+        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        Assert.Equal("false\nfalse\n", output);
+    }
 }

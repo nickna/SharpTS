@@ -674,7 +674,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
-        // Dictionary
+        // Map (Dictionary<object, object>) - check for "size" property
+        var mapLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryObjectObject);
+        il.Emit(OpCodes.Brtrue, mapLabel);
+
+        // Dictionary (regular object)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
@@ -794,6 +800,25 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notTSFunction);
         il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Map (Dictionary<object, object>) handler - check for "size" property
+        il.MarkLabel(mapLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "size");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notMapSizeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notMapSizeLabel);
+        // Return map.Count as double
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryObjectObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notMapSizeLabel);
+        // For other Map properties, return null (methods like get, set, has are handled by direct calls)
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);

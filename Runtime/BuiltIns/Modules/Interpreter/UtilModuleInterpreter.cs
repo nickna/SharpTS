@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SharpTS.Runtime.Types;
 using Interp = SharpTS.Execution.Interpreter;
 
@@ -23,6 +24,9 @@ public static class UtilModuleInterpreter
             ["isDeepStrictEqual"] = new BuiltInMethod("isDeepStrictEqual", 2, IsDeepStrictEqual),
             ["parseArgs"] = new BuiltInMethod("parseArgs", 0, 1, ParseArgs),
             ["toUSVString"] = new BuiltInMethod("toUSVString", 1, ToUSVString),
+            ["stripVTControlCharacters"] = new BuiltInMethod("stripVTControlCharacters", 1, StripVTControlCharacters),
+            ["getSystemErrorName"] = new BuiltInMethod("getSystemErrorName", 1, GetSystemErrorName),
+            ["getSystemErrorMap"] = new BuiltInMethod("getSystemErrorMap", 0, GetSystemErrorMap),
             ["deprecate"] = new BuiltInMethod("deprecate", 2, 3, Deprecate),
             ["callbackify"] = new BuiltInMethod("callbackify", 1, Callbackify),
             ["inherits"] = new BuiltInMethod("inherits", 2, Inherits),
@@ -45,7 +49,12 @@ public static class UtilModuleInterpreter
             ["isRegExp"] = new BuiltInMethod("isRegExp", 1, IsRegExp),
             ["isMap"] = new BuiltInMethod("isMap", 1, IsMap),
             ["isSet"] = new BuiltInMethod("isSet", 1, IsSet),
-            ["isTypedArray"] = new BuiltInMethod("isTypedArray", 1, IsTypedArray)
+            ["isTypedArray"] = new BuiltInMethod("isTypedArray", 1, IsTypedArray),
+            ["isNativeError"] = new BuiltInMethod("isNativeError", 1, IsNativeError),
+            ["isBoxedPrimitive"] = new BuiltInMethod("isBoxedPrimitive", 1, IsBoxedPrimitive),
+            ["isWeakMap"] = new BuiltInMethod("isWeakMap", 1, IsWeakMap),
+            ["isWeakSet"] = new BuiltInMethod("isWeakSet", 1, IsWeakSet),
+            ["isArrayBuffer"] = new BuiltInMethod("isArrayBuffer", 1, IsArrayBuffer)
         });
     }
 
@@ -879,6 +888,252 @@ public static class UtilModuleInterpreter
 
     private static object? IsTypedArray(Interp interpreter, object? receiver, List<object?> args)
         => args.Count > 0 && args[0] is SharpTSBuffer;
+
+    private static object? IsNativeError(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSError;
+
+    private static object? IsBoxedPrimitive(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0) return false;
+        var value = args[0];
+        // In JavaScript, boxed primitives are objects created with new String(), new Number(), new Boolean()
+        // In SharpTS, we don't have explicit boxed primitive types, so this is always false
+        // unless we encounter specific wrapper types in the future
+        return false;
+    }
+
+    private static object? IsWeakMap(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSWeakMap;
+
+    private static object? IsWeakSet(Interp interpreter, object? receiver, List<object?> args)
+        => args.Count > 0 && args[0] is SharpTSWeakSet;
+
+    private static object? IsArrayBuffer(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0) return false;
+        // ArrayBuffer is essentially the backing store for typed arrays
+        // In SharpTS, we don't have a separate ArrayBuffer type, but Buffer has a backing array
+        return args[0] is SharpTSBuffer;
+    }
+
+    // ===================== stripVTControlCharacters Implementation =====================
+
+    /// <summary>
+    /// Regex pattern to match ANSI escape sequences.
+    /// Matches:
+    /// - CSI sequences: ESC [ ... letter
+    /// - OSC sequences: ESC ] ... BEL or ESC ] ... ESC \
+    /// - Other escape sequences: ESC P, ESC X, ESC ^, ESC _ followed by content and ST
+    /// </summary>
+    private static readonly Regex _ansiEscapeRegex = new(
+        @"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[PX^_][^\x1b]*\x1b\\|\x1b\[[0-9;]*m",
+        RegexOptions.Compiled);
+
+    private static object? StripVTControlCharacters(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            return "";
+
+        var input = args[0]?.ToString() ?? "";
+        return _ansiEscapeRegex.Replace(input, "");
+    }
+
+    // ===================== getSystemErrorName and getSystemErrorMap Implementation =====================
+
+    /// <summary>
+    /// Mapping of POSIX error codes to their names.
+    /// Based on common Unix/Linux errno values (libuv uses these conventions).
+    /// </summary>
+    private static readonly Dictionary<int, string> _posixErrorNames = new()
+    {
+        [-1] = "EPERM",        // Operation not permitted
+        [-2] = "ENOENT",       // No such file or directory
+        [-3] = "ESRCH",        // No such process
+        [-4] = "EINTR",        // Interrupted system call
+        [-5] = "EIO",          // I/O error
+        [-6] = "ENXIO",        // No such device or address
+        [-7] = "E2BIG",        // Argument list too long
+        [-8] = "ENOEXEC",      // Exec format error
+        [-9] = "EBADF",        // Bad file number
+        [-10] = "ECHILD",      // No child processes
+        [-11] = "EAGAIN",      // Try again (same as EWOULDBLOCK)
+        [-12] = "ENOMEM",      // Out of memory
+        [-13] = "EACCES",      // Permission denied
+        [-14] = "EFAULT",      // Bad address
+        [-16] = "EBUSY",       // Device or resource busy
+        [-17] = "EEXIST",      // File exists
+        [-18] = "EXDEV",       // Cross-device link
+        [-19] = "ENODEV",      // No such device
+        [-20] = "ENOTDIR",     // Not a directory
+        [-21] = "EISDIR",      // Is a directory
+        [-22] = "EINVAL",      // Invalid argument
+        [-23] = "ENFILE",      // File table overflow
+        [-24] = "EMFILE",      // Too many open files
+        [-25] = "ENOTTY",      // Not a typewriter
+        [-26] = "ETXTBSY",     // Text file busy
+        [-27] = "EFBIG",       // File too large
+        [-28] = "ENOSPC",      // No space left on device
+        [-29] = "ESPIPE",      // Illegal seek
+        [-30] = "EROFS",       // Read-only file system
+        [-31] = "EMLINK",      // Too many links
+        [-32] = "EPIPE",       // Broken pipe
+        [-33] = "EDOM",        // Math argument out of domain
+        [-34] = "ERANGE",      // Math result not representable
+        [-35] = "EDEADLK",     // Resource deadlock would occur
+        [-36] = "ENAMETOOLONG", // File name too long
+        [-37] = "ENOLCK",      // No record locks available
+        [-38] = "ENOSYS",      // Function not implemented
+        [-39] = "ENOTEMPTY",   // Directory not empty
+        [-40] = "ELOOP",       // Too many symbolic links
+        [-42] = "ENOMSG",      // No message of desired type
+        [-43] = "EIDRM",       // Identifier removed
+        [-60] = "ENOSTR",      // Device not a stream
+        [-61] = "ENODATA",     // No data available
+        [-62] = "ETIME",       // Timer expired
+        [-63] = "ENOSR",       // Out of streams resources
+        [-71] = "EPROTO",      // Protocol error
+        [-74] = "EBADMSG",     // Bad message
+        [-75] = "EOVERFLOW",   // Value too large for data type
+        [-88] = "ENOTSOCK",    // Socket operation on non-socket
+        [-89] = "EDESTADDRREQ", // Destination address required
+        [-90] = "EMSGSIZE",    // Message too long
+        [-91] = "EPROTOTYPE",  // Protocol wrong type for socket
+        [-92] = "ENOPROTOOPT", // Protocol not available
+        [-93] = "EPROTONOSUPPORT", // Protocol not supported
+        [-95] = "EOPNOTSUPP",  // Operation not supported
+        [-97] = "EAFNOSUPPORT", // Address family not supported
+        [-98] = "EADDRINUSE",  // Address already in use
+        [-99] = "EADDRNOTAVAIL", // Cannot assign requested address
+        [-100] = "ENETDOWN",   // Network is down
+        [-101] = "ENETUNREACH", // Network is unreachable
+        [-102] = "ENETRESET",  // Network dropped connection on reset
+        [-103] = "ECONNABORTED", // Software caused connection abort
+        [-104] = "ECONNRESET", // Connection reset by peer
+        [-105] = "ENOBUFS",    // No buffer space available
+        [-106] = "EISCONN",    // Transport endpoint is already connected
+        [-107] = "ENOTCONN",   // Transport endpoint is not connected
+        [-110] = "ETIMEDOUT",  // Connection timed out
+        [-111] = "ECONNREFUSED", // Connection refused
+        [-112] = "EHOSTDOWN",  // Host is down
+        [-113] = "EHOSTUNREACH", // No route to host
+        [-114] = "EALREADY",   // Operation already in progress
+        [-115] = "EINPROGRESS", // Operation now in progress
+        [-116] = "ESTALE",     // Stale file handle
+        [-122] = "EDQUOT",     // Disk quota exceeded
+        [-125] = "ECANCELED",  // Operation canceled
+    };
+
+    /// <summary>
+    /// Mapping of error names to their descriptions.
+    /// </summary>
+    private static readonly Dictionary<string, string> _errorDescriptions = new()
+    {
+        ["EPERM"] = "operation not permitted",
+        ["ENOENT"] = "no such file or directory",
+        ["ESRCH"] = "no such process",
+        ["EINTR"] = "interrupted system call",
+        ["EIO"] = "i/o error",
+        ["ENXIO"] = "no such device or address",
+        ["E2BIG"] = "argument list too long",
+        ["ENOEXEC"] = "exec format error",
+        ["EBADF"] = "bad file descriptor",
+        ["ECHILD"] = "no child processes",
+        ["EAGAIN"] = "resource temporarily unavailable",
+        ["ENOMEM"] = "not enough memory",
+        ["EACCES"] = "permission denied",
+        ["EFAULT"] = "bad address",
+        ["EBUSY"] = "resource busy or locked",
+        ["EEXIST"] = "file already exists",
+        ["EXDEV"] = "cross-device link not permitted",
+        ["ENODEV"] = "no such device",
+        ["ENOTDIR"] = "not a directory",
+        ["EISDIR"] = "illegal operation on a directory",
+        ["EINVAL"] = "invalid argument",
+        ["ENFILE"] = "file table overflow",
+        ["EMFILE"] = "too many open files",
+        ["ENOTTY"] = "inappropriate ioctl for device",
+        ["ETXTBSY"] = "text file is busy",
+        ["EFBIG"] = "file too large",
+        ["ENOSPC"] = "no space left on device",
+        ["ESPIPE"] = "invalid seek",
+        ["EROFS"] = "read-only file system",
+        ["EMLINK"] = "too many links",
+        ["EPIPE"] = "broken pipe",
+        ["EDOM"] = "argument out of domain",
+        ["ERANGE"] = "result too large",
+        ["EDEADLK"] = "resource deadlock avoided",
+        ["ENAMETOOLONG"] = "name too long",
+        ["ENOLCK"] = "no locks available",
+        ["ENOSYS"] = "function not implemented",
+        ["ENOTEMPTY"] = "directory not empty",
+        ["ELOOP"] = "too many symbolic links encountered",
+        ["ENOMSG"] = "no message of desired type",
+        ["EIDRM"] = "identifier removed",
+        ["ENOSTR"] = "device not a stream",
+        ["ENODATA"] = "no data available",
+        ["ETIME"] = "timer expired",
+        ["ENOSR"] = "out of streams resources",
+        ["EPROTO"] = "protocol error",
+        ["EBADMSG"] = "bad message",
+        ["EOVERFLOW"] = "value too large for defined data type",
+        ["ENOTSOCK"] = "socket operation on non-socket",
+        ["EDESTADDRREQ"] = "destination address required",
+        ["EMSGSIZE"] = "message too long",
+        ["EPROTOTYPE"] = "protocol wrong type for socket",
+        ["ENOPROTOOPT"] = "protocol not available",
+        ["EPROTONOSUPPORT"] = "protocol not supported",
+        ["EOPNOTSUPP"] = "operation not supported on socket",
+        ["EAFNOSUPPORT"] = "address family not supported",
+        ["EADDRINUSE"] = "address already in use",
+        ["EADDRNOTAVAIL"] = "address not available",
+        ["ENETDOWN"] = "network is down",
+        ["ENETUNREACH"] = "network is unreachable",
+        ["ENETRESET"] = "connection reset by network",
+        ["ECONNABORTED"] = "connection aborted",
+        ["ECONNRESET"] = "connection reset by peer",
+        ["ENOBUFS"] = "no buffer space available",
+        ["EISCONN"] = "socket is connected",
+        ["ENOTCONN"] = "socket is not connected",
+        ["ETIMEDOUT"] = "connection timed out",
+        ["ECONNREFUSED"] = "connection refused",
+        ["EHOSTDOWN"] = "host is down",
+        ["EHOSTUNREACH"] = "host is unreachable",
+        ["EALREADY"] = "connection already in progress",
+        ["EINPROGRESS"] = "operation in progress",
+        ["ESTALE"] = "stale file handle",
+        ["EDQUOT"] = "disk quota exceeded",
+        ["ECANCELED"] = "operation canceled",
+    };
+
+    private static object? GetSystemErrorName(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("getSystemErrorName requires an error code argument");
+
+        var errno = args[0];
+        if (errno is not double d)
+            throw new Exception("The value of \"err\" is out of range");
+
+        var errorCode = (int)d;
+        if (_posixErrorNames.TryGetValue(errorCode, out var name))
+            return name;
+
+        // For unknown error codes, return generic name
+        return $"Unknown system error {errorCode}";
+    }
+
+    private static object? GetSystemErrorMap(Interp interpreter, object? receiver, List<object?> args)
+    {
+        // Return a Map containing [errorCode] -> [name, description] entries
+        var map = new SharpTSMap();
+        foreach (var (code, name) in _posixErrorNames)
+        {
+            var description = _errorDescriptions.TryGetValue(name, out var desc) ? desc : "";
+            var entry = new SharpTSArray(new List<object?> { name, description });
+            map.Set((double)code, entry);
+        }
+        return map;
+    }
 
     private static object? Deprecate(Interp interpreter, object? receiver, List<object?> args)
     {

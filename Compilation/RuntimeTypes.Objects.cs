@@ -38,6 +38,19 @@ public static partial class RuntimeTypes
         return null;
     }
 
+    // Helper to check if object is a Map (Dictionary<object, object>)
+    // Maps use object keys, while regular JS objects use string keys (Dictionary<string, object?>)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsMapDictionary(object obj)
+    {
+        var type = obj.GetType();
+        if (!type.IsGenericType) return false;
+        if (type.GetGenericTypeDefinition() != typeof(Dictionary<,>)) return false;
+        var args = type.GetGenericArguments();
+        // Map: Dictionary<object, object> (key is object, not string)
+        return args[0] == typeof(object) && args[1] == typeof(object);
+    }
+
     public static void MergeIntoObject(Dictionary<string, object?> target, object? source)
     {
         if (TryGetDictionary(source, out var dict))
@@ -78,6 +91,19 @@ public static partial class RuntimeTypes
         if (obj is SharpTSNamespace ns)
         {
             return ns.Get(name);
+        }
+
+        // Map (Dictionary<object, object>) - check before Dictionary<string, object?>
+        // This handles cases where Map is accessed through 'any' typed variable
+        // Note: Use runtime type check since pattern matching with nullable types can be tricky
+        if (IsMapDictionary(obj))
+        {
+            var mapDict = (System.Collections.IDictionary)obj;
+            return name switch
+            {
+                "size" => (double)mapDict.Count,
+                _ => null // Map methods (get, set, has, etc.) are handled via method calls
+            };
         }
 
         // Dictionary (object literal)
