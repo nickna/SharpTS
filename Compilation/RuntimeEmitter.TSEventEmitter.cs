@@ -34,10 +34,10 @@ public partial class RuntimeEmitter
         // First, emit the ListenerWrapper nested type
         EmitListenerWrapperType(moduleBuilder, runtime);
 
-        // Define class: public sealed class $EventEmitter
+        // Define class: public class $EventEmitter (not sealed - stream types inherit from it)
         var typeBuilder = moduleBuilder.DefineType(
             "$EventEmitter",
-            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            TypeAttributes.Public | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
         runtime.TSEventEmitterType = typeBuilder;

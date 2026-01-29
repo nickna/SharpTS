@@ -156,6 +156,7 @@ public class TypeProvider
     public Type ListOpen => Resolve("System.Collections.Generic.List`1");
     public Type DictionaryOpen => Resolve("System.Collections.Generic.Dictionary`2");
     public Type HashSetOpen => Resolve("System.Collections.Generic.HashSet`1");
+    public Type QueueOpen => Resolve("System.Collections.Generic.Queue`1");
     public Type IEnumerableOpen => Resolve("System.Collections.Generic.IEnumerable`1");
     public Type IEnumeratorOpen => Resolve("System.Collections.Generic.IEnumerator`1");
     public Type ICollectionOpen => Resolve("System.Collections.Generic.ICollection`1");

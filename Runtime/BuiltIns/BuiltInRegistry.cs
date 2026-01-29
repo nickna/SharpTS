@@ -160,6 +160,7 @@ public sealed class BuiltInRegistry
         RegisterBufferType(registry);
         RegisterEventEmitterType(registry);
         RegisterStringDecoderType(registry);
+        RegisterStreamTypes(registry);
 
         return registry;
     }
@@ -556,6 +557,41 @@ public sealed class BuiltInRegistry
         // ECDH members accessed via property access (ecdh.generateKeys, ecdh.computeSecret, etc.)
         registry.RegisterInstanceType(typeof(SharpTSECDH), (instance, name) =>
             ((SharpTSECDH)instance).GetMember(name));
+    }
+
+    private static void RegisterStreamTypes(BuiltInRegistry registry)
+    {
+        // Readable stream members accessed via property access (read, push, pipe, on, emit, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSReadable), (instance, name) =>
+            ((SharpTSReadable)instance).GetMember(name));
+
+        // Writable stream members accessed via property access (write, end, on, emit, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSWritable), (instance, name) =>
+            ((SharpTSWritable)instance).GetMember(name));
+
+        // Duplex stream members (combines Readable and Writable)
+        registry.RegisterInstanceType(typeof(SharpTSDuplex), (instance, name) =>
+            ((SharpTSDuplex)instance).GetMember(name));
+
+        // Transform stream members (extends Duplex)
+        registry.RegisterInstanceType(typeof(SharpTSTransform), (instance, name) =>
+            ((SharpTSTransform)instance).GetMember(name));
+
+        // PassThrough stream members (extends Transform)
+        registry.RegisterInstanceType(typeof(SharpTSPassThrough), (instance, name) =>
+            ((SharpTSPassThrough)instance).GetMember(name));
+
+        // Stream constructors
+        registry.RegisterInstanceType(typeof(SharpTSReadableConstructor), (instance, name) =>
+            ((SharpTSReadableConstructor)instance).GetProperty(name));
+        registry.RegisterInstanceType(typeof(SharpTSWritableConstructor), (instance, name) =>
+            ((SharpTSWritableConstructor)instance).GetProperty(name));
+        registry.RegisterInstanceType(typeof(SharpTSDuplexConstructor), (instance, name) =>
+            ((SharpTSDuplexConstructor)instance).GetProperty(name));
+        registry.RegisterInstanceType(typeof(SharpTSTransformConstructor), (instance, name) =>
+            ((SharpTSTransformConstructor)instance).GetProperty(name));
+        registry.RegisterInstanceType(typeof(SharpTSPassThroughConstructor), (instance, name) =>
+            ((SharpTSPassThroughConstructor)instance).GetProperty(name));
     }
 
     private static string Stringify(object? obj)

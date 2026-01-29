@@ -25,7 +25,8 @@ public static class BuiltInModuleRegistry
         "events",
         "timers",
         "string_decoder",
-        "perf_hooks"
+        "perf_hooks",
+        "stream"
     ];
 
     /// <summary>

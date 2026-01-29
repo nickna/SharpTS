@@ -1041,6 +1041,49 @@ public class EmittedRuntime
     public FieldBuilder PerfHooksStartTicks { get; set; } = null!;
     public FieldBuilder PerfHooksTicksPerMs { get; set; } = null!;
 
+    // $Readable type - emitted for standalone stream support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadable
+    public Type TSReadableType { get; set; } = null!;
+    public ConstructorBuilder TSReadableCtor { get; set; } = null!;
+    public MethodBuilder TSReadableRead { get; set; } = null!;
+    public MethodBuilder TSReadablePush { get; set; } = null!;
+    public MethodBuilder TSReadablePipe { get; set; } = null!;
+    public MethodBuilder TSReadableUnpipe { get; set; } = null!;
+    public MethodBuilder TSReadableSetEncoding { get; set; } = null!;
+    public MethodBuilder TSReadableDestroy { get; set; } = null!;
+    public MethodBuilder TSReadableUnshift { get; set; } = null!;
+    public MethodBuilder TSReadablePause { get; set; } = null!;
+    public MethodBuilder TSReadableResume { get; set; } = null!;
+    public MethodBuilder TSReadableIsPaused { get; set; } = null!;
+
+    // $Writable type - emitted for standalone stream support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWritable
+    public Type TSWritableType { get; set; } = null!;
+    public ConstructorBuilder TSWritableCtor { get; set; } = null!;
+    public MethodBuilder TSWritableWrite { get; set; } = null!;
+    public MethodBuilder TSWritableEnd { get; set; } = null!;
+    public MethodBuilder TSWritableCork { get; set; } = null!;
+    public MethodBuilder TSWritableUncork { get; set; } = null!;
+    public MethodBuilder TSWritableDestroy { get; set; } = null!;
+    public MethodBuilder TSWritableSetDefaultEncoding { get; set; } = null!;
+
+    // $Duplex type - emitted for standalone stream support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDuplex
+    public Type TSDuplexType { get; set; } = null!;
+    public ConstructorBuilder TSDuplexCtor { get; set; } = null!;
+    public MethodBuilder TSDuplexWrite { get; set; } = null!;
+    public MethodBuilder TSDuplexEnd { get; set; } = null!;
+
+    // $Transform type - emitted for standalone stream support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTransform
+    public Type TSTransformType { get; set; } = null!;
+    public ConstructorBuilder TSTransformCtor { get; set; } = null!;
+
+    // $PassThrough type - emitted for standalone stream support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPassThrough
+    public Type TSPassThroughType { get; set; } = null!;
+    public ConstructorBuilder TSPassThroughCtor { get; set; } = null!;
+
     // Built-in module methods (module name -> method name -> MethodBuilder)
     // Used for creating TSFunction wrappers when importing named exports
     private readonly Dictionary<string, Dictionary<string, MethodBuilder>> _builtInModuleMethods = new();

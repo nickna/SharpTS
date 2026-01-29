@@ -1092,6 +1092,7 @@ public static class BuiltInModuleTypes
             "timers" => GetTimersModuleTypes(),
             "string_decoder" => GetStringDecoderModuleTypes(),
             "perf_hooks" => GetPerfHooksModuleTypes(),
+            "stream" => GetStreamModuleTypes(),
             _ => null
         };
     }
@@ -1191,6 +1192,166 @@ public static class BuiltInModuleTypes
         return new Dictionary<string, TypeInfo>
         {
             ["performance"] = performanceType
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the stream module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetStreamModuleTypes()
+    {
+        var anyType = new TypeInfo.Any();
+        var stringType = new TypeInfo.String();
+        var boolType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var voidType = new TypeInfo.Void();
+
+        // Stream instance type (shared members for all stream types)
+        var streamInstanceType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            // EventEmitter methods
+            ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["off"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["emit"] = new TypeInfo.Function([stringType, anyType], boolType, HasRestParam: true),
+            ["removeAllListeners"] = new TypeInfo.Function([stringType], anyType, RequiredParams: 0),
+            ["listeners"] = new TypeInfo.Function([stringType], new TypeInfo.Array(anyType)),
+            ["listenerCount"] = new TypeInfo.Function([stringType], numberType),
+            ["eventNames"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+            ["setMaxListeners"] = new TypeInfo.Function([numberType], anyType),
+            ["getMaxListeners"] = new TypeInfo.Function([], numberType),
+
+            // Readable methods
+            ["read"] = new TypeInfo.Function([numberType], anyType, RequiredParams: 0),
+            ["push"] = new TypeInfo.Function([anyType], boolType),
+            ["pipe"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 1),
+            ["unpipe"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
+            ["setEncoding"] = new TypeInfo.Function([stringType], anyType),
+            ["destroy"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
+            ["unshift"] = new TypeInfo.Function([anyType], anyType),
+            ["pause"] = new TypeInfo.Function([], anyType),
+            ["resume"] = new TypeInfo.Function([], anyType),
+            ["isPaused"] = new TypeInfo.Function([], boolType),
+
+            // Readable properties
+            ["readable"] = boolType,
+            ["readableEnded"] = boolType,
+            ["readableLength"] = numberType,
+            ["readableEncoding"] = stringType,
+            ["destroyed"] = boolType,
+
+            // Writable methods
+            ["write"] = new TypeInfo.Function([anyType, stringType, anyType], boolType, RequiredParams: 1),
+            ["end"] = new TypeInfo.Function([anyType, stringType, anyType], anyType, RequiredParams: 0),
+            ["cork"] = new TypeInfo.Function([], voidType),
+            ["uncork"] = new TypeInfo.Function([], voidType),
+            ["setDefaultEncoding"] = new TypeInfo.Function([stringType], anyType),
+
+            // Writable properties
+            ["writable"] = boolType,
+            ["writableEnded"] = boolType,
+            ["writableFinished"] = boolType,
+            ["writableLength"] = numberType,
+            ["writableCorked"] = numberType
+        }.ToFrozenDictionary());
+
+        // Readable constructor
+        var readableConstructorType = new TypeInfo.Interface(
+            Name: "Readable",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [],
+                    ReturnType: streamInstanceType),
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [anyType],
+                    ReturnType: streamInstanceType)
+            ]
+        );
+
+        // Writable constructor
+        var writableConstructorType = new TypeInfo.Interface(
+            Name: "Writable",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [],
+                    ReturnType: streamInstanceType),
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [anyType],
+                    ReturnType: streamInstanceType)
+            ]
+        );
+
+        // Duplex constructor
+        var duplexConstructorType = new TypeInfo.Interface(
+            Name: "Duplex",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [],
+                    ReturnType: streamInstanceType),
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [anyType],
+                    ReturnType: streamInstanceType)
+            ]
+        );
+
+        // Transform constructor
+        var transformConstructorType = new TypeInfo.Interface(
+            Name: "Transform",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [],
+                    ReturnType: streamInstanceType),
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [anyType],
+                    ReturnType: streamInstanceType)
+            ]
+        );
+
+        // PassThrough constructor
+        var passThroughConstructorType = new TypeInfo.Interface(
+            Name: "PassThrough",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [],
+                    ReturnType: streamInstanceType),
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [anyType],
+                    ReturnType: streamInstanceType)
+            ]
+        );
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["Readable"] = readableConstructorType,
+            ["Writable"] = writableConstructorType,
+            ["Duplex"] = duplexConstructorType,
+            ["Transform"] = transformConstructorType,
+            ["PassThrough"] = passThroughConstructorType
         };
     }
 }

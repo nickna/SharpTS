@@ -120,6 +120,41 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new Readable(...) constructor
+        if (isSimpleName && simpleClassName == "Readable")
+        {
+            EmitNewReadable(n.Arguments);
+            return;
+        }
+
+        // Special case: new Writable(...) constructor
+        if (isSimpleName && simpleClassName == "Writable")
+        {
+            EmitNewWritable(n.Arguments);
+            return;
+        }
+
+        // Special case: new Duplex(...) constructor
+        if (isSimpleName && simpleClassName == "Duplex")
+        {
+            EmitNewDuplex(n.Arguments);
+            return;
+        }
+
+        // Special case: new Transform(...) constructor
+        if (isSimpleName && simpleClassName == "Transform")
+        {
+            EmitNewTransform(n.Arguments);
+            return;
+        }
+
+        // Special case: new PassThrough(...) constructor
+        if (isSimpleName && simpleClassName == "PassThrough")
+        {
+            EmitNewPassThrough(n.Arguments);
+            return;
+        }
+
         // Special case: new TextEncoder() constructor
         if (isSimpleName && simpleClassName == "TextEncoder")
         {
@@ -543,6 +578,196 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSStringDecoderCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Readable(...) construction.
+    /// </summary>
+    private void EmitNewReadable(List<Expr> arguments)
+    {
+        // new Readable(options?) - options are ignored for now
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSReadableCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Writable(...) construction.
+    /// </summary>
+    private void EmitNewWritable(List<Expr> arguments)
+    {
+        // new Writable(options?)
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSWritableCtor);
+
+        // If options provided with write callback, set it
+        if (arguments.Count > 0)
+        {
+            var optionsLabel = IL.DefineLabel();
+            var endLabel = IL.DefineLabel();
+
+            // Store instance
+            var instanceLocal = IL.DeclareLocal(_ctx.Runtime!.TSWritableType);
+            IL.Emit(OpCodes.Stloc, instanceLocal);
+
+            // Emit options and check for write callback
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+
+            // If options is null, skip
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brfalse, optionsLabel);
+
+            // Try to get 'write' property: $Runtime.GetProperty(options, "write")
+            IL.Emit(OpCodes.Ldstr, "write");
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+
+            // Store write callback
+            var writeCallbackLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, writeCallbackLocal);
+
+            // If write callback is not null, set it on the instance
+            IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
+            IL.Emit(OpCodes.Brfalse, endLabel);
+
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+            IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
+            var setWriteCallback = _ctx.Runtime!.TSWritableType.GetMethod("SetWriteCallback");
+            IL.Emit(OpCodes.Callvirt, setWriteCallback!);
+            IL.Emit(OpCodes.Br, endLabel);
+
+            IL.MarkLabel(optionsLabel);
+            IL.Emit(OpCodes.Pop); // Pop the null options
+
+            IL.MarkLabel(endLabel);
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+        }
+
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Duplex(...) construction.
+    /// </summary>
+    private void EmitNewDuplex(List<Expr> arguments)
+    {
+        // new Duplex(options?)
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSDuplexCtor);
+
+        // If options provided with write callback, set it
+        if (arguments.Count > 0)
+        {
+            var optionsLabel = IL.DefineLabel();
+            var endLabel = IL.DefineLabel();
+
+            var instanceLocal = IL.DeclareLocal(_ctx.Runtime!.TSDuplexType);
+            IL.Emit(OpCodes.Stloc, instanceLocal);
+
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brfalse, optionsLabel);
+
+            IL.Emit(OpCodes.Ldstr, "write");
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+
+            var writeCallbackLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, writeCallbackLocal);
+
+            IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
+            IL.Emit(OpCodes.Brfalse, endLabel);
+
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+            IL.Emit(OpCodes.Ldloc, writeCallbackLocal);
+            var setWriteCallback = _ctx.Runtime!.TSDuplexType.GetMethod("SetWriteCallback");
+            IL.Emit(OpCodes.Callvirt, setWriteCallback!);
+            IL.Emit(OpCodes.Br, endLabel);
+
+            IL.MarkLabel(optionsLabel);
+            IL.Emit(OpCodes.Pop);
+
+            IL.MarkLabel(endLabel);
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+        }
+
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Transform(...) construction.
+    /// </summary>
+    private void EmitNewTransform(List<Expr> arguments)
+    {
+        // new Transform(options?)
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSTransformCtor);
+
+        // If options provided with transform callback, set it
+        if (arguments.Count > 0)
+        {
+            var optionsLabel = IL.DefineLabel();
+            var afterTransformLabel = IL.DefineLabel();
+            var endLabel = IL.DefineLabel();
+
+            var instanceLocal = IL.DeclareLocal(_ctx.Runtime!.TSTransformType);
+            IL.Emit(OpCodes.Stloc, instanceLocal);
+
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brfalse, optionsLabel);
+
+            // Get 'transform' property
+            IL.Emit(OpCodes.Dup); // Keep options on stack for flush
+            IL.Emit(OpCodes.Ldstr, "transform");
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+
+            var transformCallbackLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, transformCallbackLocal);
+
+            IL.Emit(OpCodes.Ldloc, transformCallbackLocal);
+            IL.Emit(OpCodes.Brfalse, afterTransformLabel);
+
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+            IL.Emit(OpCodes.Ldloc, transformCallbackLocal);
+            var setTransformCallback = _ctx.Runtime!.TSTransformType.GetMethod("SetTransformCallback");
+            IL.Emit(OpCodes.Callvirt, setTransformCallback!);
+
+            IL.MarkLabel(afterTransformLabel);
+
+            // Get 'flush' property (options still on stack)
+            IL.Emit(OpCodes.Ldstr, "flush");
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
+
+            var flushCallbackLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, flushCallbackLocal);
+
+            IL.Emit(OpCodes.Ldloc, flushCallbackLocal);
+            IL.Emit(OpCodes.Brfalse, endLabel);
+
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+            IL.Emit(OpCodes.Ldloc, flushCallbackLocal);
+            var setFlushCallback = _ctx.Runtime!.TSTransformType.GetMethod("SetFlushCallback");
+            IL.Emit(OpCodes.Callvirt, setFlushCallback!);
+            IL.Emit(OpCodes.Br, endLabel);
+
+            IL.MarkLabel(optionsLabel);
+            IL.Emit(OpCodes.Pop);
+
+            IL.MarkLabel(endLabel);
+            IL.Emit(OpCodes.Ldloc, instanceLocal);
+        }
+
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new PassThrough(...) construction.
+    /// </summary>
+    private void EmitNewPassThrough(List<Expr> arguments)
+    {
+        // new PassThrough(options?) - options are ignored, just passes through
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSPassThroughCtor);
         SetStackUnknown();
     }
 }

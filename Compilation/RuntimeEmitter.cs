@@ -134,6 +134,26 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSEventEmitter
         EmitTSEventEmitterClass(moduleBuilder, runtime);
 
+        // Emit stream classes for standalone stream support
+        // NOTE: Must come after EventEmitter (stream types extend $EventEmitter)
+        // Order matters due to inheritance and cross-references:
+        // - Writable is standalone
+        // - Readable's Pipe() method needs to reference Duplex (for piping to Duplex streams)
+        // - Duplex extends Readable
+        // - Transform extends Duplex
+        // - PassThrough extends Transform
+        //
+        // Two-phase approach to resolve circular reference:
+        // Phase 1: Define types, fields, and most methods (no CreateType)
+        // Phase 2: Add methods that need cross-references, then CreateType
+        EmitTSWritableClass(moduleBuilder, runtime);
+        EmitTSReadableTypeDefinition(moduleBuilder, runtime);  // Phase 1: type, fields, most methods
+        EmitTSDuplexTypeDefinition(moduleBuilder, runtime);    // Phase 1: type, fields, all methods
+        EmitTSReadableMethods(runtime);                        // Phase 2: Pipe method + CreateType
+        EmitTSDuplexFinalize(runtime);                         // Phase 2: CreateType
+        EmitTSTransformClass(moduleBuilder, runtime);
+        EmitTSPassThroughClass(moduleBuilder, runtime);
+
         // Emit function method wrapper classes for bind/call/apply
         // Must come after TSFunction and BoundTSFunction
         EmitFunctionBindWrapperClass(moduleBuilder, runtime);
