@@ -647,6 +647,11 @@ public static class BuiltInModuleTypes
 
             // Random methods
             ["randomBytes"] = new TypeInfo.Function([numberType], bufferType),
+            // randomFillSync(buffer, offset?, size?) -> Buffer
+            ["randomFillSync"] = new TypeInfo.Function(
+                [bufferType, numberType, numberType],
+                bufferType,
+                RequiredParams: 1),
             ["randomUUID"] = new TypeInfo.Function([], stringType),
             ["randomInt"] = new TypeInfo.Function([numberType, numberType], numberType, RequiredParams: 1),
 
@@ -1084,7 +1089,108 @@ public static class BuiltInModuleTypes
             "buffer" => GetBufferModuleTypes(),
             "zlib" => GetZlibModuleTypes(),
             "events" => GetEventsModuleTypes(),
+            "timers" => GetTimersModuleTypes(),
+            "string_decoder" => GetStringDecoderModuleTypes(),
+            "perf_hooks" => GetPerfHooksModuleTypes(),
             _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the timers module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetTimersModuleTypes()
+    {
+        var timeoutType = new TypeInfo.Any(); // Timeout handle type
+        var callbackType = new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.Void(), HasRestParam: true);
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["setTimeout"] = new TypeInfo.Function(
+                [callbackType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER), new TypeInfo.Any()],
+                timeoutType,
+                RequiredParams: 1,
+                HasRestParam: true
+            ),
+            ["clearTimeout"] = new TypeInfo.Function(
+                [timeoutType],
+                new TypeInfo.Void(),
+                RequiredParams: 0
+            ),
+            ["setInterval"] = new TypeInfo.Function(
+                [callbackType, new TypeInfo.Primitive(TokenType.TYPE_NUMBER), new TypeInfo.Any()],
+                timeoutType,
+                RequiredParams: 1,
+                HasRestParam: true
+            ),
+            ["clearInterval"] = new TypeInfo.Function(
+                [timeoutType],
+                new TypeInfo.Void(),
+                RequiredParams: 0
+            ),
+            ["setImmediate"] = new TypeInfo.Function(
+                [callbackType, new TypeInfo.Any()],
+                timeoutType,
+                RequiredParams: 1,
+                HasRestParam: true
+            ),
+            ["clearImmediate"] = new TypeInfo.Function(
+                [timeoutType],
+                new TypeInfo.Void(),
+                RequiredParams: 0
+            )
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the string_decoder module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetStringDecoderModuleTypes()
+    {
+        // StringDecoder instance type (what new StringDecoder() returns)
+        var stringDecoderInstanceType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["encoding"] = new TypeInfo.String(),
+            ["write"] = new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.String()),
+            ["end"] = new TypeInfo.Function([new TypeInfo.Any()], new TypeInfo.String(), RequiredParams: 0)
+        }.ToFrozenDictionary());
+
+        // StringDecoder is an interface with a constructor signature
+        // This allows `new StringDecoder()` to type check
+        var stringDecoderConstructorType = new TypeInfo.Interface(
+            Name: "StringDecoder",
+            Members: new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            OptionalMembers: FrozenSet<string>.Empty,
+            ConstructorSignatures:
+            [
+                new TypeInfo.ConstructorSignature(
+                    TypeParams: null,
+                    ParamTypes: [new TypeInfo.String()],
+                    ReturnType: stringDecoderInstanceType,
+                    RequiredParams: 0) // Encoding is optional
+            ]
+        );
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["StringDecoder"] = stringDecoderConstructorType
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the perf_hooks module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetPerfHooksModuleTypes()
+    {
+        var performanceType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["now"] = new TypeInfo.Function([], new TypeInfo.Primitive(TokenType.TYPE_NUMBER)),
+            ["timeOrigin"] = new TypeInfo.Primitive(TokenType.TYPE_NUMBER)
+        }.ToFrozenDictionary());
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["performance"] = performanceType
         };
     }
 }

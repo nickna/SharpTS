@@ -34,6 +34,9 @@ public static class BuiltInModuleValues
             "buffer" => BufferModuleInterpreter.GetExports(),
             "zlib" => ZlibModuleInterpreter.GetExports(),
             "events" => EventsModuleInterpreter.GetExports(),
+            "timers" => TimersModuleInterpreter.GetExports(),
+            "string_decoder" => StringDecoderModuleInterpreter.GetExports(),
+            "perf_hooks" => PerfHooksModuleInterpreter.GetExports(),
             _ => throw new Exception($"Unknown built-in module: {moduleName}")
         };
     }
@@ -45,6 +48,6 @@ public static class BuiltInModuleValues
     {
         return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url"
             or "process" or "crypto" or "util" or "readline" or "child_process" or "buffer"
-            or "zlib" or "events";
+            or "zlib" or "events" or "timers" or "string_decoder" or "perf_hooks";
     }
 }

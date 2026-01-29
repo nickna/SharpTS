@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
         EmitCryptoCreateCipheriv(typeBuilder, runtime);
         EmitCryptoCreateDecipheriv(typeBuilder, runtime);
         EmitCryptoRandomBytes(typeBuilder, runtime);
+        EmitCryptoRandomFillSync(typeBuilder, runtime);
         EmitCryptoPbkdf2Sync(typeBuilder, runtime);
         EmitCryptoScryptSync(typeBuilder, runtime);
         EmitCryptoTimingSafeEqual(typeBuilder, runtime);
@@ -551,6 +552,73 @@ public partial class RuntimeEmitter
 
         // Return new $Buffer(bytes)
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoRandomFillSync(object buffer, int offset, int size)
+    /// Fills the buffer with random bytes in-place and returns the buffer.
+    /// If size is -1, fills from offset to end of buffer.
+    /// </summary>
+    private void EmitCryptoRandomFillSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoRandomFillSync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Int32, _types.Int32]);
+        runtime.CryptoRandomFillSync = method;
+
+        var il = method.GetILGenerator();
+
+        // Local for buffer's byte[] data
+        var dataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+        var sizeLocal = il.DeclareLocal(_types.Int32);
+        var randomBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+
+        // Get buffer.Data (assume arg0 is $Buffer with Data property)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
+        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Stloc, dataLocal);
+
+        // Calculate actual size: if size == -1, use data.Length - offset
+        var sizeCalculatedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2); // size
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Bne_Un, sizeCalculatedLabel);
+
+        // size = data.Length - offset
+        il.Emit(OpCodes.Ldloc, dataLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_1); // offset
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, sizeLocal);
+        var continueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Br, continueLabel);
+
+        il.MarkLabel(sizeCalculatedLabel);
+        il.Emit(OpCodes.Ldarg_2); // size
+        il.Emit(OpCodes.Stloc, sizeLocal);
+
+        il.MarkLabel(continueLabel);
+
+        // Generate random bytes: RandomNumberGenerator.GetBytes(size)
+        il.Emit(OpCodes.Ldloc, sizeLocal);
+        il.Emit(OpCodes.Call, typeof(RandomNumberGenerator).GetMethod("GetBytes", [typeof(int)])!);
+        il.Emit(OpCodes.Stloc, randomBytesLocal);
+
+        // Array.Copy(randomBytes, 0, data, offset, size)
+        il.Emit(OpCodes.Ldloc, randomBytesLocal); // sourceArray
+        il.Emit(OpCodes.Ldc_I4_0);                // sourceIndex
+        il.Emit(OpCodes.Ldloc, dataLocal);        // destinationArray
+        il.Emit(OpCodes.Ldarg_1);                 // destinationIndex (offset)
+        il.Emit(OpCodes.Ldloc, sizeLocal);        // length
+        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+
+        // Return the buffer
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
 

@@ -276,6 +276,7 @@ public class EmittedRuntime
     // Timer support ($TSTimeout type and global functions)
     public TypeBuilder TSTimeoutType { get; set; } = null!;
     public ConstructorBuilder TSTimeoutCtor { get; set; } = null!;
+    public FieldBuilder TSTimeoutVirtualTimerField { get; set; } = null!;
     public MethodBuilder TSTimeoutCancel { get; set; } = null!;
     public MethodBuilder TSTimeoutRef { get; set; } = null!;
     public MethodBuilder TSTimeoutUnref { get; set; } = null!;
@@ -303,6 +304,23 @@ public class EmittedRuntime
     // Interval methods
     public MethodBuilder SetInterval { get; set; } = null!;
     public MethodBuilder ClearInterval { get; set; } = null!;
+
+    // Virtual timer infrastructure (for single-threaded timer semantics)
+    public Type VirtualTimerType { get; set; } = null!;
+    public ConstructorBuilder VirtualTimerCtor { get; set; } = null!;
+    public FieldBuilder VirtualTimerCallback { get; set; } = null!;
+    public FieldBuilder VirtualTimerArgs { get; set; } = null!;
+    public FieldBuilder VirtualTimerScheduledTime { get; set; } = null!;
+    public FieldBuilder VirtualTimerIsCancelled { get; set; } = null!;
+    public FieldBuilder VirtualTimerIsInterval { get; set; } = null!;
+    public FieldBuilder VirtualTimerIntervalMs { get; set; } = null!;
+    public FieldBuilder TimerQueue { get; set; } = null!;
+    public FieldBuilder TimerStartTicks { get; set; } = null!;
+    public FieldBuilder TimerInitialized { get; set; } = null!;
+    public MethodBuilder EnsureTimerInitialized { get; set; } = null!;
+    public MethodBuilder GetCurrentTimeMs { get; set; } = null!;
+    public MethodBuilder ProcessPendingTimers { get; set; } = null!;
+    public MethodBuilder AddVirtualTimer { get; set; } = null!;
 
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;
@@ -676,6 +694,7 @@ public class EmittedRuntime
     // Crypto module methods
     public MethodBuilder CryptoCreateHash { get; set; } = null!;
     public MethodBuilder CryptoRandomBytes { get; set; } = null!;
+    public MethodBuilder CryptoRandomFillSync { get; set; } = null!;
 
     // $Hash type - emitted for standalone crypto support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
@@ -1007,6 +1026,20 @@ public class EmittedRuntime
     public MethodBuilder UrlParse { get; set; } = null!;
     public MethodBuilder UrlFormat { get; set; } = null!;
     public MethodBuilder UrlResolve { get; set; } = null!;
+
+    // string_decoder module - $StringDecoder type
+    public Type TSStringDecoderType { get; set; } = null!;
+    public ConstructorBuilder TSStringDecoderCtor { get; set; } = null!;
+    public MethodBuilder TSStringDecoderEncodingGetter { get; set; } = null!;
+    public MethodBuilder TSStringDecoderWrite { get; set; } = null!;
+    public MethodBuilder TSStringDecoderEnd { get; set; } = null!;
+    public MethodBuilder StringDecoderGetConstructor { get; set; } = null!;
+
+    // perf_hooks module methods
+    public MethodBuilder PerfHooksGetPerformance { get; set; } = null!;
+    public MethodBuilder PerfHooksPerformanceNow { get; set; } = null!;
+    public FieldBuilder PerfHooksStartTicks { get; set; } = null!;
+    public FieldBuilder PerfHooksTicksPerMs { get; set; } = null!;
 
     // Built-in module methods (module name -> method name -> MethodBuilder)
     // Used for creating TSFunction wrappers when importing named exports

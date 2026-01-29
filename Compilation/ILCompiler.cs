@@ -597,6 +597,9 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new ZlibModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new EventsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new TimersModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new StringDecoderModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new PerfHooksModuleEmitter());
     }
 
     #endregion

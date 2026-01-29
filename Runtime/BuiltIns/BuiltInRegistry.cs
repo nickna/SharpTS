@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -158,6 +159,7 @@ public sealed class BuiltInRegistry
         RegisterBufferNamespace(registry);
         RegisterBufferType(registry);
         RegisterEventEmitterType(registry);
+        RegisterStringDecoderType(registry);
 
         return registry;
     }
@@ -533,6 +535,13 @@ public sealed class BuiltInRegistry
         // Register EventEmitter constructor member lookup (defaultMaxListeners)
         registry.RegisterInstanceType(typeof(SharpTSEventEmitterConstructor), (instance, name) =>
             ((SharpTSEventEmitterConstructor)instance).GetProperty(name));
+    }
+
+    private static void RegisterStringDecoderType(BuiltInRegistry registry)
+    {
+        // StringDecoder members accessed via property access (decoder.write, decoder.end, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSStringDecoder), (instance, name) =>
+            SharpTSStringDecoder.GetMember((SharpTSStringDecoder)instance, name));
     }
 
     private static void RegisterDiffieHellmanType(BuiltInRegistry registry)

@@ -134,6 +134,13 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new StringDecoder(...) constructor
+        if (isSimpleName && simpleClassName == "StringDecoder")
+        {
+            EmitNewStringDecoder(n.Arguments);
+            return;
+        }
+
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
 
@@ -146,6 +153,12 @@ public partial class ILEmitter
         if (namespaceParts.Count == 1 && className == "TextDecoder")
         {
             EmitNewTextDecoder(n.Arguments);
+            return;
+        }
+        // Special case: new sd.StringDecoder() (module-qualified)
+        if (namespaceParts.Count == 1 && className == "StringDecoder")
+        {
+            EmitNewStringDecoder(n.Arguments);
             return;
         }
 
@@ -506,6 +519,30 @@ public partial class ILEmitter
         // For now, just use defaults
 
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSTextDecoderCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new StringDecoder(...) construction.
+    /// </summary>
+    private void EmitNewStringDecoder(List<Expr> arguments)
+    {
+        // new StringDecoder(encoding?)
+        // Use the emitted $StringDecoder constructor for standalone execution
+
+        // Encoding (default: "utf8")
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldstr, "utf8");
+        }
+
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSStringDecoderCtor);
         SetStackUnknown();
     }
 }

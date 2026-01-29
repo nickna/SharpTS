@@ -13,7 +13,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomUUID", "randomInt",
+        "createHash", "createHmac", "createCipheriv", "createDecipheriv", "randomBytes", "randomFillSync", "randomUUID", "randomInt",
         "pbkdf2Sync", "scryptSync", "timingSafeEqual", "createSign", "createVerify",
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
@@ -31,6 +31,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             "createCipheriv" => EmitCreateCipheriv(emitter, arguments),
             "createDecipheriv" => EmitCreateDecipheriv(emitter, arguments),
             "randomBytes" => EmitRandomBytes(emitter, arguments),
+            "randomFillSync" => EmitRandomFillSync(emitter, arguments),
             "randomUUID" => EmitRandomUUID(emitter),
             "randomInt" => EmitRandomInt(emitter, arguments),
             "pbkdf2Sync" => EmitPbkdf2Sync(emitter, arguments),
@@ -275,6 +276,51 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.CryptoRandomBytes);
+        return true;
+    }
+
+    private static bool EmitRandomFillSync(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        if (arguments.Count == 0)
+        {
+            // Error - requires at least a buffer
+            il.Emit(OpCodes.Ldstr, "crypto.randomFillSync requires a Buffer argument");
+            il.Emit(OpCodes.Newobj, ctx.Types.ArgumentException.GetConstructor([ctx.Types.String])!);
+            il.Emit(OpCodes.Throw);
+            return true;
+        }
+
+        // Emit buffer argument
+        emitter.EmitExpression(arguments[0]);
+        emitter.EmitBoxIfNeeded(arguments[0]);
+
+        // Emit offset (default 0)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpressionAsDouble(arguments[1]);
+            il.Emit(OpCodes.Conv_I4);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+
+        // Emit size (default -1 meaning "rest of buffer")
+        if (arguments.Count > 2)
+        {
+            emitter.EmitExpressionAsDouble(arguments[2]);
+            il.Emit(OpCodes.Conv_I4);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_I4_M1);
+        }
+
+        // Call runtime helper
+        il.Emit(OpCodes.Call, ctx.Runtime!.CryptoRandomFillSync);
         return true;
     }
 

@@ -29,6 +29,7 @@ public static class CryptoModuleInterpreter
             ["createCipheriv"] = new BuiltInMethod("createCipheriv", 3, CreateCipheriv),
             ["createDecipheriv"] = new BuiltInMethod("createDecipheriv", 3, CreateDecipheriv),
             ["randomBytes"] = new BuiltInMethod("randomBytes", 1, RandomBytes),
+            ["randomFillSync"] = new BuiltInMethod("randomFillSync", 1, 3, RandomFillSync),
             ["randomUUID"] = new BuiltInMethod("randomUUID", 0, RandomUUID),
             ["randomInt"] = new BuiltInMethod("randomInt", 1, 2, RandomInt),
             ["pbkdf2Sync"] = new BuiltInMethod("pbkdf2Sync", 5, Pbkdf2Sync),
@@ -136,6 +137,45 @@ public static class CryptoModuleInterpreter
 
         // Return as Buffer (matching Node.js behavior)
         return new SharpTSBuffer(bytes);
+    }
+
+    private static object? RandomFillSync(Interp interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0 || args[0] is not SharpTSBuffer buffer)
+            throw new Exception("crypto.randomFillSync requires a Buffer argument");
+
+        var data = buffer.Data;
+
+        // Optional offset and size parameters
+        int offset = 0;
+        int size = data.Length;
+
+        if (args.Count > 1 && args[1] is double offsetArg)
+        {
+            offset = (int)offsetArg;
+            if (offset < 0 || offset > data.Length)
+                throw new Exception($"crypto.randomFillSync: offset out of range (0-{data.Length})");
+        }
+
+        if (args.Count > 2 && args[2] is double sizeArg)
+        {
+            size = (int)sizeArg;
+        }
+        else if (args.Count > 1)
+        {
+            // If only offset is provided, size is rest of buffer
+            size = data.Length - offset;
+        }
+
+        if (size < 0 || offset + size > data.Length)
+            throw new Exception($"crypto.randomFillSync: size out of range");
+
+        // Fill the specified range with random bytes
+        var randomBytes = RandomNumberGenerator.GetBytes(size);
+        Array.Copy(randomBytes, 0, data, offset, size);
+
+        // Return the buffer (same reference)
+        return buffer;
     }
 
     private static object? RandomUUID(Interp interpreter, object? receiver, List<object?> args)

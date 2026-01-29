@@ -402,7 +402,7 @@ public partial class Interpreter
         string => "string",
         SharpTSSymbol => "symbol",
         SharpTSBigInt or System.Numerics.BigInteger => "bigint",
-        SharpTSFunction or SharpTSArrowFunction or SharpTSClass or BuiltInMethod => "function",
+        SharpTSFunction or SharpTSArrowFunction or SharpTSClass or BuiltInMethod or ISharpTSCallable => "function",
         _ => "object"
     };
 

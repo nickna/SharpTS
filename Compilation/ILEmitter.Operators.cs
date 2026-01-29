@@ -313,6 +313,34 @@ public partial class ILEmitter
             return;
         }
 
+        // For += with unknown right-hand side types, use runtime Add (handles both string concat and numeric add)
+        if (ca.Operator.Type == TokenType.PLUS_EQUAL)
+        {
+            // Load current value as object
+            EmitVariable(new Expr.Variable(ca.Name));
+            EmitBoxIfNeeded(new Expr.Variable(ca.Name));
+
+            // Load right side as object
+            EmitExpression(ca.Value);
+            EmitBoxIfNeeded(ca.Value);
+
+            // Use runtime Add which handles both string concatenation and numeric addition
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
+            IL.Emit(OpCodes.Dup);
+
+            // Store result
+            if (local != null)
+            {
+                IL.Emit(OpCodes.Stloc, local);
+            }
+            else if (topLevelField != null)
+            {
+                IL.Emit(OpCodes.Stsfld, topLevelField);
+            }
+            SetStackUnknown();
+            return;
+        }
+
         // Numeric compound assignment
         bool isBitwise = CompoundOperatorHelper.IsBitwise(ca.Operator.Type);
 
@@ -877,10 +905,19 @@ public partial class ILEmitter
 
         if (opType == TokenType.PLUS_EQUAL && IsStringExpression(value))
         {
-            // String concatenation
+            // String concatenation - we know right side is a string at compile time
             EmitExpression(value);
             EmitBoxIfNeeded(value);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat", _ctx.Types.Object, _ctx.Types.Object));
+            return;
+        }
+
+        // For += with unknown types, use runtime Add which handles both string concat and numeric add
+        if (opType == TokenType.PLUS_EQUAL)
+        {
+            EmitExpression(value);
+            EmitBoxIfNeeded(value);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
             return;
         }
 

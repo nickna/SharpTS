@@ -22,7 +22,10 @@ public static class BuiltInModuleRegistry
         "child_process",
         "buffer",
         "zlib",
-        "events"
+        "events",
+        "timers",
+        "string_decoder",
+        "perf_hooks"
     ];
 
     /// <summary>

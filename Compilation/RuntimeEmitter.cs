@@ -108,6 +108,11 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSVerify
         EmitTSVerifyClass(moduleBuilder, runtime);
 
+        // Emit $VirtualTimer class for virtual timer support (single-threaded semantics)
+        // Must come after TSFunction (uses TSFunctionType)
+        // Must come BEFORE TSTimeoutClass (TSTimeout references VirtualTimer)
+        EmitVirtualTimerClass(moduleBuilder, runtime);
+
         // Emit $TSTimeout class for timer support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTimeout
         EmitTSTimeoutClass(moduleBuilder, runtime);
@@ -141,6 +146,10 @@ public partial class RuntimeEmitter
         EmitTSTextEncoderClass(moduleBuilder, runtime);
         EmitTSTextDecoderClass(moduleBuilder, runtime);
         EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime);
+
+        // Emit $StringDecoder class for string_decoder module
+        // Must come after $Buffer (StringDecoder works with Buffer)
+        EmitTSStringDecoderClass(moduleBuilder, runtime);
 
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
@@ -1479,6 +1488,10 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
         cctorIL.Emit(OpCodes.Stsfld, sealedObjectsField);
 
+        // Initialize perf_hooks timing fields (must be called after fields are defined)
+        // Note: Fields will be defined by EmitPerfHooksMethods, so we defer this initialization
+        // The initialization is done inline in EmitPerfHooksMethods instead
+
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods - these are now in partial class files
@@ -1614,6 +1627,8 @@ public partial class RuntimeEmitter
         EmitPromiseMethods(typeBuilder, runtime);
         // Number methods
         EmitNumberMethods(typeBuilder, runtime);
+        // Virtual timer infrastructure (must come before DateMethods which calls ProcessPendingTimers)
+        EmitTimerQueueInfrastructure(typeBuilder, runtime);
         // Date methods
         EmitDateMethods(typeBuilder, runtime);
         // RegExp methods
@@ -1666,8 +1681,14 @@ public partial class RuntimeEmitter
         EmitClearTimeoutMethod(typeBuilder, runtime);
         EmitSetIntervalMethod(typeBuilder, runtime);
         EmitClearIntervalMethod(typeBuilder, runtime);
+        // Timer module wrappers for namespace imports (import * as timers from 'timers')
+        EmitTimerModuleWrappers(typeBuilder, runtime);
         // Zlib module methods
         EmitZlibMethods(typeBuilder, runtime);
+        // perf_hooks module methods
+        EmitPerfHooksMethods(typeBuilder, runtime);
+        // string_decoder module constructor helper
+        EmitStringDecoderGetConstructor(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-28 (Added util.promisify; util module now fully implemented)
+**Last Updated:** 2026-01-28 (Added timers, string_decoder, perf_hooks modules; crypto.randomFillSync)
 
 ## Legend
 - ✅ Implemented
@@ -30,6 +30,9 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
 | `stream` | ❌ | No Readable/Writable/Transform |
 | `buffer` | ✅ | Full Buffer class with multi-byte LE/BE, float/double, BigInt, search, swap |
+| `timers` | ✅ | setTimeout, setInterval, setImmediate + clear variants (module import) |
+| `string_decoder` | ✅ | StringDecoder class for multi-byte character handling |
+| `perf_hooks` | ✅ | performance.now(), performance.timeOrigin |
 | `http` / `https` | ❌ | No network server/client |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ❌ | No DNS resolution |
@@ -170,6 +173,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `createHmac` | ✅ | md5, sha1, sha256, sha384, sha512 with string/Buffer keys |
 | **Random** | | |
 | `randomBytes` | ✅ | |
+| `randomFillSync` | ✅ | Fill buffer with random bytes in-place |
 | `randomUUID` | ✅ | |
 | `randomInt` | ✅ | |
 | **Cipher** | | |
@@ -415,7 +419,63 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 15. BUFFER
+## 15. TIMERS
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Timeout** | | |
+| `setTimeout()` | ✅ | Schedule callback after delay |
+| `clearTimeout()` | ✅ | Cancel scheduled timeout |
+| **Interval** | | |
+| `setInterval()` | ✅ | Schedule repeating callback |
+| `clearInterval()` | ✅ | Cancel interval |
+| **Immediate** | | |
+| `setImmediate()` | ✅ | Schedule callback for next tick |
+| `clearImmediate()` | ✅ | Cancel immediate |
+| **Module Import** | | |
+| `import { setTimeout } from 'timers'` | ✅ | Named imports |
+| `import * as timers from 'timers'` | ✅ | Namespace import |
+
+---
+
+## 16. STRING_DECODER
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Constructor** | | |
+| `new StringDecoder()` | ✅ | Default encoding: utf8 |
+| `new StringDecoder(encoding)` | ✅ | utf8, utf-8, utf16le, ucs2, latin1, ascii |
+| **Methods** | | |
+| `write(buffer)` | ✅ | Decode buffer, handle partial sequences |
+| `end()` | ✅ | Flush remaining bytes |
+| `end(buffer)` | ✅ | Write final buffer and flush |
+| **Properties** | | |
+| `encoding` | ✅ | Returns normalized encoding name |
+| **Multi-byte Handling** | | |
+| UTF-8 sequences | ✅ | Properly buffers incomplete sequences |
+| UTF-16LE pairs | ✅ | Handles byte alignment |
+
+---
+
+## 17. PERF_HOOKS
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **performance** | | |
+| `performance.now()` | ✅ | High-resolution monotonic timestamp |
+| `performance.timeOrigin` | ✅ | Unix timestamp when process started |
+| **Import** | | |
+| `import { performance } from 'perf_hooks'` | ✅ | Named import |
+| `import * as perf from 'perf_hooks'` | ✅ | Namespace import |
+| **Not Implemented** | | |
+| `PerformanceObserver` | ❌ | |
+| `performance.mark()` | ❌ | |
+| `performance.measure()` | ❌ | |
+| `performance.getEntries()` | ❌ | |
+
+---
+
+## 18. BUFFER
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -470,7 +530,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, basic crypto, URL parsing, binary data handling via Buffer, and EventEmitter for event-driven patterns. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, and high-resolution performance timing. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
 - No Stream classes (limits file/network streaming)

@@ -350,6 +350,27 @@ public class Lexer(string source)
 
     private void NumberLiteral()
     {
+        // Check for hex (0x), binary (0b), or octal (0o) literals
+        if (_source[_start] == '0' && _current < _source.Length)
+        {
+            char next = Peek();
+            if (next == 'x' || next == 'X')
+            {
+                HexLiteral();
+                return;
+            }
+            else if (next == 'b' || next == 'B')
+            {
+                BinaryLiteral();
+                return;
+            }
+            else if (next == 'o' || next == 'O')
+            {
+                OctalLiteral();
+                return;
+            }
+        }
+
         // Consume digits and numeric separators (underscores)
         while (char.IsDigit(Peek()) || Peek() == '_')
         {
@@ -404,6 +425,159 @@ public class Lexer(string source)
 
         string numberStr = _source[_start.._current].Replace("_", "");
         AddToken(TokenType.NUMBER, double.Parse(numberStr));
+    }
+
+    /// <summary>
+    /// Parses a hexadecimal literal (0x... or 0X...)
+    /// </summary>
+    private void HexLiteral()
+    {
+        Advance(); // consume 'x' or 'X'
+
+        if (!IsHexDigit(Peek()))
+        {
+            throw new Exception($"Invalid hexadecimal literal at line {_line}");
+        }
+
+        // Consume hex digits and numeric separators
+        while (IsHexDigit(Peek()) || Peek() == '_')
+        {
+            if (Peek() == '_')
+            {
+                char prev = _source[_current - 1];
+                char next = PeekNext();
+                if (!IsHexDigit(prev) || !IsHexDigit(next))
+                {
+                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                }
+            }
+            Advance();
+        }
+
+        // Check for bigint suffix
+        if (Peek() == 'n')
+        {
+            string hexStr = _source[(_start + 2).._current].Replace("_", "");
+            Advance(); // consume 'n'
+            AddToken(TokenType.BIGINT_LITERAL, BigInteger.Parse(hexStr, System.Globalization.NumberStyles.HexNumber));
+            return;
+        }
+
+        string numStr = _source[(_start + 2).._current].Replace("_", "");
+        long value = Convert.ToInt64(numStr, 16);
+        AddToken(TokenType.NUMBER, (double)value);
+    }
+
+    /// <summary>
+    /// Parses a binary literal (0b... or 0B...)
+    /// </summary>
+    private void BinaryLiteral()
+    {
+        Advance(); // consume 'b' or 'B'
+
+        if (!IsBinaryDigit(Peek()))
+        {
+            throw new Exception($"Invalid binary literal at line {_line}");
+        }
+
+        // Consume binary digits and numeric separators
+        while (IsBinaryDigit(Peek()) || Peek() == '_')
+        {
+            if (Peek() == '_')
+            {
+                char prev = _source[_current - 1];
+                char next = PeekNext();
+                if (!IsBinaryDigit(prev) || !IsBinaryDigit(next))
+                {
+                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                }
+            }
+            Advance();
+        }
+
+        // Check for bigint suffix
+        if (Peek() == 'n')
+        {
+            string binStr = _source[(_start + 2).._current].Replace("_", "");
+            Advance(); // consume 'n'
+            AddToken(TokenType.BIGINT_LITERAL, BinaryStringToBigInteger(binStr));
+            return;
+        }
+
+        string numStr = _source[(_start + 2).._current].Replace("_", "");
+        long value = Convert.ToInt64(numStr, 2);
+        AddToken(TokenType.NUMBER, (double)value);
+    }
+
+    /// <summary>
+    /// Parses an octal literal (0o... or 0O...)
+    /// </summary>
+    private void OctalLiteral()
+    {
+        Advance(); // consume 'o' or 'O'
+
+        if (!IsOctalDigit(Peek()))
+        {
+            throw new Exception($"Invalid octal literal at line {_line}");
+        }
+
+        // Consume octal digits and numeric separators
+        while (IsOctalDigit(Peek()) || Peek() == '_')
+        {
+            if (Peek() == '_')
+            {
+                char prev = _source[_current - 1];
+                char next = PeekNext();
+                if (!IsOctalDigit(prev) || !IsOctalDigit(next))
+                {
+                    throw new Exception($"Numeric separator must be between digits at line {_line}");
+                }
+            }
+            Advance();
+        }
+
+        // Check for bigint suffix
+        if (Peek() == 'n')
+        {
+            string octStr = _source[(_start + 2).._current].Replace("_", "");
+            Advance(); // consume 'n'
+            AddToken(TokenType.BIGINT_LITERAL, OctalStringToBigInteger(octStr));
+            return;
+        }
+
+        string numStr = _source[(_start + 2).._current].Replace("_", "");
+        long value = Convert.ToInt64(numStr, 8);
+        AddToken(TokenType.NUMBER, (double)value);
+    }
+
+    private static bool IsOctalDigit(char c)
+    {
+        return c >= '0' && c <= '7';
+    }
+
+    private static bool IsBinaryDigit(char c)
+    {
+        return c == '0' || c == '1';
+    }
+
+    private static BigInteger BinaryStringToBigInteger(string binary)
+    {
+        BigInteger result = 0;
+        foreach (char c in binary)
+        {
+            result = result * 2 + (c - '0');
+        }
+        return result;
+    }
+
+    private static BigInteger OctalStringToBigInteger(string octal)
+    {
+        BigInteger result = 0;
+        foreach (char c in octal)
+        {
+            result = result * 8 + (c - '0');
+        }
+        return result;
     }
 
     private void StringLiteral(char delimiter)
