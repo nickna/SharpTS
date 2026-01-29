@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-28 (Added timers, string_decoder, perf_hooks modules; crypto.randomFillSync)
+**Last Updated:** 2026-01-29 (Added stream module with Readable, Writable, Duplex, Transform, PassThrough)
 
 ## Legend
 - ✅ Implemented
@@ -28,7 +28,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `console` | ✅ | log, error, warn, info, debug, clear, time/timeEnd/timeLog, assert, count/countReset, table, dir, group/groupEnd, trace |
 | `readline` | ⚠️ | Basic synchronous I/O |
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
-| `stream` | ❌ | No Readable/Writable/Transform |
+| `stream` | ✅ | Readable, Writable, Duplex, Transform, PassThrough (sync mode) |
 | `buffer` | ✅ | Full Buffer class with multi-byte LE/BE, float/double, BigInt, search, swap |
 | `timers` | ✅ | setTimeout, setInterval, setImmediate + clear variants (module import) |
 | `string_decoder` | ✅ | StringDecoder class for multi-byte character handling |
@@ -351,14 +351,43 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `Readable` class | ❌ | |
-| `Writable` class | ❌ | |
-| `Transform` class | ❌ | |
-| `Duplex` class | ❌ | |
-| `pipe()` method | ❌ | |
+| **Readable** | | |
+| `new Readable()` | ✅ | Constructor with options |
+| `push(chunk)` | ✅ | Add data to buffer; null signals EOF |
+| `read()` | ✅ | Read from buffer |
+| `pipe(dest)` | ✅ | Pipe to Writable/Duplex, returns destination |
+| `unpipe(dest)` | ✅ | Remove pipe destination |
+| `readable` | ✅ | Property: stream is readable |
+| `readableEnded` | ✅ | Property: EOF reached |
+| `readableLength` | ✅ | Property: buffer size |
+| `'end'` event | ✅ | Emitted when EOF reached |
+| **Writable** | | |
+| `new Writable()` | ✅ | Constructor with write callback option |
+| `write(chunk)` | ✅ | Write data, invokes write callback |
+| `end()` | ✅ | Signal end of writes |
+| `cork()` / `uncork()` | ✅ | Buffer writes |
+| `writable` | ✅ | Property: stream is writable |
+| `writableEnded` | ✅ | Property: end() called |
+| `writableFinished` | ✅ | Property: all data flushed |
+| `'finish'` event | ✅ | Emitted when all writes complete |
+| **Duplex** | | |
+| `new Duplex()` | ✅ | Readable + Writable combined |
+| All Readable methods | ✅ | Inherited |
+| All Writable methods | ✅ | Added |
+| **Transform** | | |
+| `new Transform()` | ✅ | Constructor with transform callback |
+| `transform(chunk, enc, cb)` | ✅ | Transform callback; cb(null, data) pushes |
+| All Duplex methods | ✅ | Inherited |
+| **PassThrough** | | |
+| `new PassThrough()` | ✅ | Transform that passes data unchanged |
+| **Process Streams** | | |
 | `process.stdout.write()` | ✅ | Basic only |
 | `process.stderr.write()` | ✅ | Basic only |
 | `process.stdin` events | ❌ | No event-based input |
+| **Not Implemented** | | |
+| Flowing mode | ❌ | Sync push/pull only |
+| Object mode | ❌ | Buffer/string chunks only |
+| Backpressure | ❌ | No highWaterMark handling |
 
 ---
 
@@ -530,12 +559,12 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, and high-resolution performance timing. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, and stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
-- No Stream classes (limits file/network streaming)
 - No async fs operations (sync-only workaround)
 - No network modules (http, net, dns)
+- No flowing/async stream mode (sync push/pull only)
 
 **Recommended Workarounds:**
 - Use `*Sync` versions of fs methods
@@ -548,5 +577,5 @@ SharpTS provides comprehensive support for file system operations (sync), includ
 Priority features to implement for broader Node.js compatibility:
 
 1. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-2. **Streams API** - Needed for large file handling (higher effort)
-3. **http module** - Basic HTTP server/client (higher effort)
+2. **http module** - Basic HTTP server/client (higher effort)
+3. **Flowing stream mode** - Event-based async streaming (higher effort)
