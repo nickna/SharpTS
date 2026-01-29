@@ -719,7 +719,7 @@ public class UtilModuleCompiledTests
 
             // The test will fail if SharpTS.dll is required but not present
             // If toUSVString is self-contained, it should work
-            Assert.Equal("true\ntrue\ntrue\n", output);
+            Assert.Equal("true\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
         finally
         {
@@ -794,7 +794,7 @@ public class UtilModuleCompiledTests
 
             // The test will fail if SharpTS.dll is required but not present
             // If format is self-contained, it should work
-            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
         finally
         {
@@ -869,7 +869,7 @@ public class UtilModuleCompiledTests
 
             // The test will fail if SharpTS.dll is required but not present
             // If inspect is self-contained, it should work
-            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
         finally
         {
@@ -944,7 +944,7 @@ public class UtilModuleCompiledTests
 
             // The test will fail if SharpTS.dll is required but not present
             // If isDeepStrictEqual is self-contained, it should work
-            Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+            Assert.Equal("true\ntrue\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
         finally
         {
@@ -1059,7 +1059,7 @@ public class UtilModuleCompiledTests
 
             // The test will fail if SharpTS.dll is required but not present
             // If parseArgs is self-contained, it should work
-            Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+            Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output.Replace("\r\n", "\n"));
         }
         finally
         {
