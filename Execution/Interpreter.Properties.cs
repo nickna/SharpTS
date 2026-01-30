@@ -110,6 +110,18 @@ public partial class Interpreter
             return new SharpTSEventEmitter();
         }
 
+        // Handle new Promise((resolve, reject) => { ... }) constructor
+        if (isSimpleName && simpleClassName == "Promise")
+        {
+            if (newExpr.Arguments.Count != 1)
+            {
+                throw new InterpreterException($"Promise constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+            }
+
+            object? executor = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
+            return CreatePromiseFromExecutor(executor);
+        }
+
         // Evaluate the callee expression to get the class/constructor
         object? klass = await ctx.EvaluateExprAsync(newExpr.Callee);
 

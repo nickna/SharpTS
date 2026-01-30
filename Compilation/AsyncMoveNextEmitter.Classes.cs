@@ -41,6 +41,16 @@ public partial class AsyncMoveNextEmitter
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
+        // Handle built-in type constructors first
+        bool isSimpleName = namespaceParts.Count == 0 && n.Callee is Expr.Variable;
+
+        // Special case: new Promise((resolve, reject) => { ... }) constructor
+        if (isSimpleName && className == "Promise")
+        {
+            EmitNewPromise(n.Arguments);
+            return;
+        }
+
         // Resolve class name (may be qualified for namespace classes or multi-module compilation)
         string resolvedClassName;
         if (namespaceParts.Count > 0)
@@ -149,5 +159,24 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Ldnull);
             SetStackType(StackType.Null);
         }
+    }
+
+    /// <summary>
+    /// Emits code for new Promise((resolve, reject) => { ... }) construction in async context.
+    /// </summary>
+    private void EmitNewPromise(List<Expr> arguments)
+    {
+        if (arguments.Count != 1)
+        {
+            throw new InvalidOperationException("Promise constructor requires exactly 1 argument (executor function).");
+        }
+
+        // Emit the executor argument
+        EmitExpression(arguments[0]);
+        EnsureBoxed();
+
+        // Call runtime PromiseFromExecutor(executor)
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.PromiseFromExecutor);
+        SetStackUnknown();
     }
 }

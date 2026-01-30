@@ -261,6 +261,39 @@ public partial class TypeChecker
             return new TypeInfo.EventEmitter();
         }
 
+        // Handle new Promise<T>((resolve, reject) => { ... }) constructor
+        if (isSimpleName && simpleClassName == "Promise")
+        {
+            // Promise constructor requires exactly 1 argument (the executor function)
+            if (newExpr.Arguments.Count != 1)
+            {
+                throw new TypeCheckException($" Promise constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+            }
+
+            // Determine the Promise value type from type arguments or default to any
+            TypeInfo valueType = new TypeInfo.Any();
+            if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count == 1)
+            {
+                valueType = ToTypeInfo(newExpr.TypeArgs[0]);
+            }
+            else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count > 1)
+            {
+                throw new TypeCheckException(" Promise requires exactly 1 type argument: Promise<T>");
+            }
+
+            // Check the executor argument type
+            var executorType = CheckExpr(newExpr.Arguments[0]);
+
+            // The executor should be a function: (resolve: (value?: T) => void, reject: (reason?: any) => void) => void
+            // We're lenient here - just check it's callable (function type)
+            if (executorType is not TypeInfo.Function && executorType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($" Promise executor must be a function, got '{executorType}'.");
+            }
+
+            return new TypeInfo.Promise(valueType);
+        }
+
         // Handle new Error(...) and error subtype constructors
         if (isSimpleName && simpleClassName != null && IsErrorTypeName(simpleClassName))
         {

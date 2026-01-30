@@ -457,5 +457,159 @@ public static partial class RuntimeTypes
         }
     }
 
+    /// <summary>
+    /// Creates a Promise from an executor function: new Promise((resolve, reject) => { ... })
+    /// </summary>
+    public static Task<object?> PromiseFromExecutor(object? executor)
+    {
+        if (executor == null)
+        {
+            throw new Exception("Runtime Error: Promise executor must be a function.");
+        }
+
+        var tcs = new TaskCompletionSource<object?>();
+        bool settled = false;
+        object settledLock = new();
+
+        // Create resolve callback
+        var resolveCallback = new PromiseResolveCallbackCompiled((value) =>
+        {
+            lock (settledLock)
+            {
+                if (settled) return;
+                settled = true;
+            }
+
+            // Handle promise flattening - if value is a Task, wait for it
+            if (value is Task<object?> innerTask)
+            {
+                innerTask.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        tcs.TrySetException(t.Exception!.InnerException ?? t.Exception);
+                    else
+                        tcs.TrySetResult(t.Result);
+                }, TaskScheduler.Default);
+            }
+            else
+            {
+                tcs.TrySetResult(value);
+            }
+        });
+
+        // Create reject callback
+        var rejectCallback = new PromiseRejectCallbackCompiled((reason) =>
+        {
+            lock (settledLock)
+            {
+                if (settled) return;
+                settled = true;
+            }
+            tcs.TrySetException(new Exception(Stringify(reason)));
+        });
+
+        // Call the executor synchronously with resolve and reject callbacks
+        try
+        {
+            if (!TryInvokeFunction2Args(executor, resolveCallback, rejectCallback, out _))
+            {
+                throw new Exception("Runtime Error: Promise executor must be callable.");
+            }
+        }
+        catch (Exception ex)
+        {
+            // If executor throws, reject the promise
+            lock (settledLock)
+            {
+                if (!settled)
+                {
+                    settled = true;
+                    tcs.TrySetException(new Exception(ex.Message));
+                }
+            }
+        }
+
+        return tcs.Task;
+    }
+
+    /// <summary>
+    /// Invokes a function-like object with two arguments (for executor callbacks).
+    /// </summary>
+    private static bool TryInvokeFunction2Args(object? func, object? arg1, object? arg2, out object? result)
+    {
+        result = null;
+
+        if (func == null)
+            return false;
+
+        // Check for SharpTS.Compilation.TSFunction
+        if (func is TSFunction tsFunc)
+        {
+            result = tsFunc.Invoke(arg1, arg2);
+            return true;
+        }
+
+        // Check for emitted $TSFunction or any type with an Invoke method
+        var invokeMethod = func.GetType().GetMethod("Invoke");
+        if (invokeMethod != null)
+        {
+            var parameters = invokeMethod.GetParameters();
+            // Handle params array signature: Invoke(params object?[] args)
+            if (parameters.Length == 1 && parameters[0].ParameterType == typeof(object[]))
+            {
+                result = invokeMethod.Invoke(func, [new object?[] { arg1, arg2 }]);
+            }
+            else
+            {
+                result = invokeMethod.Invoke(func, [arg1, arg2]);
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Callback for Promise resolve function in compiled code.
+    /// Has an Invoke method compatible with TryInvokeFunction.
+    /// </summary>
+    public class PromiseResolveCallbackCompiled
+    {
+        private readonly Action<object?> _resolve;
+
+        public PromiseResolveCallbackCompiled(Action<object?> resolve)
+        {
+            _resolve = resolve;
+        }
+
+        public object? Invoke(params object?[] args)
+        {
+            var value = args.Length > 0 ? args[0] : null;
+            _resolve(value);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Callback for Promise reject function in compiled code.
+    /// Has an Invoke method compatible with TryInvokeFunction.
+    /// </summary>
+    public class PromiseRejectCallbackCompiled
+    {
+        private readonly Action<object?> _reject;
+
+        public PromiseRejectCallbackCompiled(Action<object?> reject)
+        {
+            _reject = reject;
+        }
+
+        public object? Invoke(params object?[] args)
+        {
+            var reason = args.Length > 0 ? args[0] : null;
+            _reject(reason);
+            return null;
+        }
+    }
+
     #endregion
 }

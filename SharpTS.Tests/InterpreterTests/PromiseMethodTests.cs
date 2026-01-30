@@ -676,4 +676,197 @@ public class PromiseMethodTests
     }
 
     #endregion
+
+    #region Promise Executor Constructor Tests
+
+    [Fact]
+    public void ExecutorConstructor_ImmediateResolve()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    resolve(42);
+                });
+                let result = await p;
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("42\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ImmediateReject()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    reject("something went wrong");
+                });
+                try {
+                    await p;
+                    console.log("should not reach");
+                } catch (e) {
+                    console.log("caught");
+                }
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("caught\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ResolveWithObject()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<{name: string}>((resolve, reject) => {
+                    resolve({ name: "test" });
+                });
+                let result = await p;
+                console.log(result.name);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("test\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ResolveWithUndefined()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<void>((resolve, reject) => {
+                    resolve();
+                });
+                let result = await p;
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("null\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ExecutorThrows()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    throw new Error("executor error");
+                });
+                try {
+                    await p;
+                    console.log("should not reach");
+                } catch (e) {
+                    console.log("caught executor error");
+                }
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("caught executor error\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_OnlyFirstSettlementCounts()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    resolve(1);
+                    resolve(2);
+                    reject("error");
+                });
+                let result = await p;
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("1\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ChainWithThen()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    resolve(10);
+                });
+                let result = await p.then((x: number): number => x * 2);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("20\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_ChainWithCatch()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p = new Promise<number>((resolve, reject) => {
+                    reject("error");
+                });
+                let result = await p.catch((e: string): number => 99);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("99\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_UseInPromiseAll()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p1 = new Promise<number>((resolve, reject) => resolve(1));
+                let p2 = new Promise<number>((resolve, reject) => resolve(2));
+                let p3 = new Promise<number>((resolve, reject) => resolve(3));
+                let results = await Promise.all([p1, p2, p3]);
+                console.log(results[0] + results[1] + results[2]);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("6\n", output);
+    }
+
+    [Fact]
+    public void ExecutorConstructor_UseInPromiseRace()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                let p1 = new Promise<string>((resolve, reject) => resolve("first"));
+                let p2 = new Promise<string>((resolve, reject) => resolve("second"));
+                let result = await Promise.race([p1, p2]);
+                console.log(result);
+            }
+            main();
+            """;
+
+        var output = TestHarness.RunInterpreted(source);
+        Assert.Equal("first\n", output);
+    }
+
+    #endregion
 }

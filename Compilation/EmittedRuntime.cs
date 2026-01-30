@@ -265,6 +265,11 @@ public class EmittedRuntime
     public MethodBuilder PromiseFinally { get; set; } = null!;
     public MethodBuilder PromiseAllSettled { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
+    public MethodBuilder PromiseFromExecutor { get; set; } = null!;
+    public TypeBuilder PromiseResolveCallbackType { get; set; } = null!;
+    public ConstructorBuilder PromiseResolveCallbackCtor { get; set; } = null!;
+    public TypeBuilder PromiseRejectCallbackType { get; set; } = null!;
+    public ConstructorBuilder PromiseRejectCallbackCtor { get; set; } = null!;
 
     // Promise callback helpers (direct $TSFunction.Invoke without reflection)
     public MethodBuilder InvokeCallback { get; set; } = null!;

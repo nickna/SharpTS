@@ -120,6 +120,13 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new Promise((resolve, reject) => { ... }) constructor
+        if (isSimpleName && simpleClassName == "Promise")
+        {
+            EmitNewPromise(n.Arguments);
+            return;
+        }
+
         // Special case: new Readable(...) constructor
         if (isSimpleName && simpleClassName == "Readable")
         {
@@ -510,6 +517,25 @@ public partial class ILEmitter
     {
         // new EventEmitter() - no arguments
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSEventEmitterCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Promise((resolve, reject) => { ... }) construction.
+    /// </summary>
+    private void EmitNewPromise(List<Expr> arguments)
+    {
+        if (arguments.Count != 1)
+        {
+            throw new InvalidOperationException("Promise constructor requires exactly 1 argument (executor function).");
+        }
+
+        // Emit the executor argument
+        EmitExpression(arguments[0]);
+        EmitBoxIfNeeded(arguments[0]);
+
+        // Call runtime PromiseFromExecutor(executor)
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseFromExecutor);
         SetStackUnknown();
     }
 

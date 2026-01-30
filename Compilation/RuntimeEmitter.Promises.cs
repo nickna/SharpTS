@@ -343,6 +343,9 @@ public partial class RuntimeEmitter
         EmitPromiseFinallyWrapper(finallyMethod.GetILGenerator(), promiseFinallySM);
         EmitPromiseFinallyMoveNext(promiseFinallySM, runtime);
         promiseFinallySM.Type.CreateType();
+
+        // PromiseFromExecutor - emitted in RuntimeEmitter.Promises.Executor.cs
+        EmitPromiseExecutorSupport(typeBuilder, runtime, moduleBuilder);
     }
 
     /// <summary>

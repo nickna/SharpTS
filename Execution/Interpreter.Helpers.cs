@@ -321,4 +321,83 @@ public partial class Interpreter
     }
 
     #endregion
+
+    #region Promise Helpers
+
+    /// <summary>
+    /// Creates a Promise from an executor function following the JavaScript Promise constructor pattern.
+    /// The executor is called immediately with (resolve, reject) callbacks.
+    /// </summary>
+    /// <param name="executor">The executor function that receives resolve and reject callbacks.</param>
+    /// <returns>A SharpTSPromise that will be resolved or rejected based on the executor's behavior.</returns>
+    private SharpTSPromise CreatePromiseFromExecutor(object? executor)
+    {
+        if (executor is not ISharpTSCallable callable)
+        {
+            throw new InterpreterException("Promise executor must be callable.");
+        }
+
+        var tcs = new TaskCompletionSource<object?>();
+        bool settled = false;
+        object settledLock = new();
+
+        // Create the resolve callback
+        var resolveCallback = new PromiseResolveCallback((value) =>
+        {
+            lock (settledLock)
+            {
+                if (settled) return;
+                settled = true;
+            }
+
+            // Handle promise flattening - if value is a Promise, wait for it
+            if (value is SharpTSPromise innerPromise)
+            {
+                innerPromise.Task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                        tcs.TrySetException(t.Exception!.InnerException ?? t.Exception);
+                    else
+                        tcs.TrySetResult(t.Result);
+                }, TaskScheduler.Default);
+            }
+            else
+            {
+                tcs.TrySetResult(value);
+            }
+        });
+
+        // Create the reject callback
+        var rejectCallback = new PromiseRejectCallback((reason) =>
+        {
+            lock (settledLock)
+            {
+                if (settled) return;
+                settled = true;
+            }
+            tcs.TrySetException(new SharpTSPromiseRejectedException(reason));
+        });
+
+        // Call the executor synchronously with resolve and reject callbacks
+        try
+        {
+            callable.Call(this, [resolveCallback, rejectCallback]);
+        }
+        catch (Exception ex)
+        {
+            // If executor throws, reject the promise
+            lock (settledLock)
+            {
+                if (!settled)
+                {
+                    settled = true;
+                    tcs.TrySetException(new SharpTSPromiseRejectedException(ex.Message));
+                }
+            }
+        }
+
+        return new SharpTSPromise(tcs.Task);
+    }
+
+    #endregion
 }
