@@ -122,6 +122,7 @@ public static class BuiltInTypes
                 NumberType),
             "toReversed" => new TypeInfo.Function([], new TypeInfo.Array(elementType)),
             "with" => new TypeInfo.Function([NumberType, elementType], new TypeInfo.Array(elementType)),
+            "at" => new TypeInfo.Function([NumberType], elementType),
             _ => null
         };
     }

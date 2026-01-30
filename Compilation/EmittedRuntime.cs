@@ -127,6 +127,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayFindLastIndex { get; set; } = null!;
     public MethodBuilder ArrayToReversed { get; set; } = null!;
     public MethodBuilder ArrayWith { get; set; } = null!;
+    public MethodBuilder ArrayAt { get; set; } = null!;
 
     // String methods
     public MethodBuilder StringCharAt { get; set; } = null!;

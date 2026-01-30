@@ -36,6 +36,7 @@ public static class ArrayBuiltIns
             .Method("findLastIndex", 1, FindLastIndex)
             .Method("toReversed", 0, ToReversed)
             .Method("with", 2, With)
+            .Method("at", 1, At)
             .Build();
 
     public static object? GetMember(SharpTSArray receiver, string name)
@@ -752,6 +753,16 @@ public static class ArrayBuiltIns
         var result = new List<object?>(arr.Elements);
         result[actualIndex] = args[1];
         return new SharpTSArray(result);
+    }
+
+    private static object? At(Interpreter _, SharpTSArray arr, List<object?> args)
+    {
+        int len = arr.Elements.Count;
+        int index = ToIntegerOrInfinity(args[0], 0);
+        int actualIndex = index < 0 ? len + index : index;
+        if (actualIndex < 0 || actualIndex >= len)
+            return null;
+        return arr.Elements[actualIndex];
     }
 
     private static bool IsUndefined(object? obj)

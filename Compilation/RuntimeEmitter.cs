@@ -1610,6 +1610,7 @@ public partial class RuntimeEmitter
         EmitArrayToSpliced(typeBuilder, runtime);
         EmitArrayToReversed(typeBuilder, runtime);
         EmitArrayWith(typeBuilder, runtime);
+        EmitArrayAt(typeBuilder, runtime);
         // String methods
         EmitStringCharAt(typeBuilder, runtime);
         EmitStringSubstring(typeBuilder, runtime);

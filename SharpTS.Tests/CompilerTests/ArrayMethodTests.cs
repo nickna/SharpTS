@@ -586,4 +586,72 @@ public class ArrayMethodTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("3\n99\n", output);
     }
+
+    // ES2022: at
+    [Fact]
+    public void Array_At_PositiveIndex()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            console.log(nums.at(0));
+            console.log(nums.at(2));
+            console.log(nums.at(4));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n3\n5\n", output);
+    }
+
+    [Fact]
+    public void Array_At_NegativeIndex()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3, 4, 5];
+            console.log(nums.at(-1));
+            console.log(nums.at(-2));
+            console.log(nums.at(-5));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n4\n1\n", output);
+    }
+
+    [Fact]
+    public void Array_At_OutOfBoundsReturnsNull()
+    {
+        var source = """
+            let nums: number[] = [1, 2, 3];
+            console.log(nums.at(10) === null);
+            console.log(nums.at(-10) === null);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Array_At_EmptyArray()
+    {
+        var source = """
+            let nums: number[] = [];
+            console.log(nums.at(0) === null);
+            console.log(nums.at(-1) === null);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void Array_At_SingleElement()
+    {
+        var source = """
+            let nums: number[] = [42];
+            console.log(nums.at(0));
+            console.log(nums.at(-1));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("42\n42\n", output);
+    }
 }

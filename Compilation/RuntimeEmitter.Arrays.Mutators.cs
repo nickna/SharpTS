@@ -1324,6 +1324,83 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitArrayAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // ArrayAt(List<object> list, object? indexArg) -> object?
+        // Returns element at index (supports negative indices), or null if out of bounds
+        var method = typeBuilder.DefineMethod(
+            "ArrayAt",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.ListOfObject, _types.Object]
+        );
+        runtime.ArrayAt = method;
+
+        var il = method.GetILGenerator();
+
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var actualIndexLocal = il.DeclareLocal(_types.Int32);
+
+        // len = list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        // index = ToIntegerOrInfinity(indexArg, 0)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        // actualIndex = index < 0 ? len + index : index
+        var indexNotNegative = il.DefineLabel();
+        var indexDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, indexNotNegative);
+
+        // Negative: len + index
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, actualIndexLocal);
+        il.Emit(OpCodes.Br, indexDone);
+
+        il.MarkLabel(indexNotNegative);
+        // Non-negative: use index directly
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Stloc, actualIndexLocal);
+
+        il.MarkLabel(indexDone);
+
+        // if (actualIndex < 0 || actualIndex >= len) return null
+        var returnNull = il.DefineLabel();
+        var validIndex = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, returnNull);
+
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, returnNull);
+        il.Emit(OpCodes.Br, validIndex);
+
+        // Return null for out of bounds
+        il.MarkLabel(returnNull);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(validIndex);
+
+        // return list[actualIndex]
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, actualIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayToSpliced(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayToSpliced(List<object> list, object[] args) -> List<object>
