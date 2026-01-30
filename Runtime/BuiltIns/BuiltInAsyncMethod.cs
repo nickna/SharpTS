@@ -1,6 +1,7 @@
 using SharpTS.Execution;
 using SharpTS.Runtime.Types;
 using SharpTS.Runtime.Exceptions;
+using System.Runtime.CompilerServices;
 
 namespace SharpTS.Runtime.BuiltIns;
 
@@ -32,6 +33,9 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
     private readonly Func<Interpreter, object?, List<object?>, Task<object?>> _implementation;
     private object? _receiver;
 
+    // Cache for bound methods - uses weak references to avoid memory leaks
+    private ConditionalWeakTable<object, BuiltInAsyncMethod>? _boundMethodCache;
+
     public BuiltInAsyncMethod(
         string name,
         int arity,
@@ -50,14 +54,50 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable
         _implementation = implementation;
     }
 
+    // Private constructor for creating bound instances
+    private BuiltInAsyncMethod(
+        string name,
+        int minArity,
+        int maxArity,
+        Func<Interpreter, object?, List<object?>, Task<object?>> implementation,
+        object? receiver)
+    {
+        _name = name;
+        _minArity = minArity;
+        _maxArity = maxArity;
+        _implementation = implementation;
+        _receiver = receiver;
+    }
+
     public int Arity() => _minArity;
 
     public BuiltInAsyncMethod Bind(object? receiver)
     {
-        return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation)
+        // Null receivers don't need caching
+        if (receiver == null)
         {
-            _receiver = receiver
-        };
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, null);
+        }
+
+        // Value types can't be cached efficiently
+        if (receiver.GetType().IsValueType)
+        {
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, receiver);
+        }
+
+        // Initialize cache lazily
+        _boundMethodCache ??= new ConditionalWeakTable<object, BuiltInAsyncMethod>();
+
+        // Try to get cached bound method
+        if (_boundMethodCache.TryGetValue(receiver, out var cached))
+        {
+            return cached;
+        }
+
+        // Create new bound method and cache it
+        var bound = new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, receiver);
+        _boundMethodCache.AddOrUpdate(receiver, bound);
+        return bound;
     }
 
     /// <summary>

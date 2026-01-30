@@ -47,19 +47,72 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Checks type compatibility with memoization.
-    /// Uses structural equality of TypeInfo records for cache key matching.
+    /// Fast identity-based cache for type compatibility.
+    /// Uses reference equality for O(1) lookup when the same TypeInfo instances are used.
+    /// Falls back to structural equality cache when reference equality misses.
+    /// </summary>
+    private sealed class IdentityCompatibilityCacheKey(TypeInfo expected, TypeInfo actual)
+    {
+        public readonly TypeInfo Expected = expected;
+        public readonly TypeInfo Actual = actual;
+    }
+
+    private sealed class IdentityCacheKeyComparer : IEqualityComparer<IdentityCompatibilityCacheKey>
+    {
+        public static readonly IdentityCacheKeyComparer Instance = new();
+
+        public bool Equals(IdentityCompatibilityCacheKey? x, IdentityCompatibilityCacheKey? y)
+        {
+            if (x == null || y == null) return x == y;
+            // Use reference equality for fast comparison
+            return ReferenceEquals(x.Expected, y.Expected) && ReferenceEquals(x.Actual, y.Actual);
+        }
+
+        public int GetHashCode(IdentityCompatibilityCacheKey obj)
+        {
+            // Use RuntimeHelpers.GetHashCode for identity-based hash
+            return HashCode.Combine(
+                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj.Expected),
+                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj.Actual)
+            );
+        }
+    }
+
+    // Fast identity-based cache (first level)
+    private Dictionary<IdentityCompatibilityCacheKey, bool>? _identityCompatibilityCache;
+
+    /// <summary>
+    /// Checks type compatibility with two-level memoization.
+    /// Level 1: Fast identity-based cache using reference equality (O(1) for same instances)
+    /// Level 2: Structural equality cache for different instances with same structure
     /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
     {
+        // Level 1: Fast identity-based cache (reference equality)
+        _identityCompatibilityCache ??= new(IdentityCacheKeyComparer.Instance);
+        var identityKey = new IdentityCompatibilityCacheKey(expected, actual);
+
+        if (_identityCompatibilityCache.TryGetValue(identityKey, out var identityCached))
+            return identityCached;
+
+        // Level 2: Structural equality cache (for different instances with same structure)
         _compatibilityCache ??= new(CompatibilityCacheKeyComparer.Instance);
-        var key = (expected, actual);
+        var structuralKey = (expected, actual);
 
-        if (_compatibilityCache.TryGetValue(key, out var cached))
-            return cached;
+        if (_compatibilityCache.TryGetValue(structuralKey, out var structuralCached))
+        {
+            // Store in identity cache for future fast lookups
+            _identityCompatibilityCache[identityKey] = structuralCached;
+            return structuralCached;
+        }
 
+        // Cache miss - compute result
         var result = IsCompatibleCore(expected, actual);
-        _compatibilityCache[key] = result;
+
+        // Store in both caches
+        _compatibilityCache[structuralKey] = result;
+        _identityCompatibilityCache[identityKey] = result;
+
         return result;
     }
 

@@ -5,6 +5,7 @@ using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
+using System.Buffers;
 
 namespace SharpTS.Execution;
 
@@ -12,6 +13,30 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
+    /// <summary>
+    /// Calls a built-in method with pooled argument list to reduce allocations.
+    /// The pooled list is automatically returned to the pool after the call.
+    /// </summary>
+    private async ValueTask<object?> CallBuiltInWithPooledArgs(
+        IEvaluationContext ctx,
+        ISharpTSCallable method,
+        IReadOnlyList<Expr> arguments)
+    {
+        var pooledList = ArgumentListPool.Rent();
+        try
+        {
+            foreach (var arg in arguments)
+            {
+                pooledList.Add(await ctx.EvaluateExprAsync(arg));
+            }
+            return method.Call(this, pooledList);
+        }
+        finally
+        {
+            ArgumentListPool.Return(pooledList);
+        }
+    }
+
     /// <summary>
     /// Core implementation for evaluating function/method calls, shared between sync and async paths.
     /// Handles all special cases: console.log, built-in methods, Symbol, BigInt, Date, Error, timers, etc.
@@ -28,8 +53,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod("console", methodName);
             if (method != null)
             {
-                List<object?> arguments = await ctx.EvaluateAllAsync(call.Arguments);
-                return method.Call(this, arguments);
+                return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
 
@@ -43,8 +67,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod("console", chainedGet.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
-                return method.Call(this, args);
+                return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
 
@@ -57,8 +80,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(gtInnerGet.Name.Lexeme, gtChainedGet.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
-                return method.Call(this, args);
+                return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
 
@@ -69,8 +91,7 @@ public partial class Interpreter
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
-                List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
-                return method.Call(this, args);
+                return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
 
@@ -125,8 +146,19 @@ public partial class Interpreter
         // Handle Error() and error subtypes called without 'new' - still creates an error object
         if (call.Callee is Expr.Variable errorVar && IsErrorType(errorVar.Name.Lexeme))
         {
-            List<object?> args = await ctx.EvaluateAllAsync(call.Arguments);
-            return ErrorBuiltIns.CreateError(errorVar.Name.Lexeme, args);
+            var pooledArgs = ArgumentListPool.Rent();
+            try
+            {
+                foreach (var arg in call.Arguments)
+                {
+                    pooledArgs.Add(await ctx.EvaluateExprAsync(arg));
+                }
+                return ErrorBuiltIns.CreateError(errorVar.Name.Lexeme, pooledArgs);
+            }
+            finally
+            {
+                ArgumentListPool.Return(pooledArgs);
+            }
         }
 
         // Handle global parseInt()
