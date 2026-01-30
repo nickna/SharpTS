@@ -34,8 +34,15 @@ namespace SharpTS.Execution;
 /// </remarks>
 /// <seealso cref="RuntimeEnvironment"/>
 /// <seealso cref="ILCompiler"/>
-public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisitor<ExecutionResult>
+public partial class Interpreter : IDisposable
 {
+    /// <summary>
+    /// Static registry containing handlers for all AST node types.
+    /// Initialized once at startup and validated for exhaustiveness.
+    /// </summary>
+    private static readonly NodeRegistry<Interpreter, object?, ExecutionResult> _registry =
+        InterpreterRegistry.Create();
+
     private RuntimeEnvironment _environment = new();
     private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
     private TypeMap? _typeMap;
@@ -875,7 +882,7 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
     internal Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt) => ExecuteAsync(stmt);
 
     /// <summary>
-    /// Dispatches a statement to the appropriate execution handler using the visitor pattern.
+    /// Dispatches a statement to the appropriate execution handler using the registry.
     /// </summary>
     /// <param name="stmt">The statement AST node to execute.</param>
     /// <remarks>
@@ -885,18 +892,18 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
     /// </remarks>
     private ExecutionResult Execute(Stmt stmt)
     {
-        return Stmt.Accept(stmt, this);
+        return _registry.DispatchStmt(stmt, this);
     }
 
-    // IStmtVisitor<ExecutionResult> implementation
+    // Statement handlers - called by the registry
 
-    public ExecutionResult VisitBlock(Stmt.Block block) =>
+    internal ExecutionResult VisitBlock(Stmt.Block block) =>
         ExecuteBlock(block.Statements, new RuntimeEnvironment(_environment));
 
-    public ExecutionResult VisitLabeledStatement(Stmt.LabeledStatement labeledStmt) =>
+    internal ExecutionResult VisitLabeledStatement(Stmt.LabeledStatement labeledStmt) =>
         ExecuteLabeledStatement(labeledStmt);
 
-    public ExecutionResult VisitSequence(Stmt.Sequence seq)
+    internal ExecutionResult VisitSequence(Stmt.Sequence seq)
     {
         // Execute in current scope (no new environment)
         foreach (var s in seq.Statements)
@@ -907,13 +914,13 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitExpression(Stmt.Expression exprStmt)
+    internal ExecutionResult VisitExpression(Stmt.Expression exprStmt)
     {
         Evaluate(exprStmt.Expr);
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitIf(Stmt.If ifStmt)
+    internal ExecutionResult VisitIf(Stmt.If ifStmt)
     {
         if (IsTruthy(Evaluate(ifStmt.Condition)))
         {
@@ -926,12 +933,12 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitWhile(Stmt.While whileStmt) =>
+    internal ExecutionResult VisitWhile(Stmt.While whileStmt) =>
         ExecuteWhileCore(
             () => IsTruthy(Evaluate(whileStmt.Condition)),
             () => Execute(whileStmt.Body));
 
-    public ExecutionResult VisitDoWhile(Stmt.DoWhile doWhileStmt)
+    internal ExecutionResult VisitDoWhile(Stmt.DoWhile doWhileStmt)
     {
         do
         {
@@ -946,7 +953,7 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitFor(Stmt.For forStmt)
+    internal ExecutionResult VisitFor(Stmt.For forStmt)
     {
         // Execute initializer once
         if (forStmt.Initializer != null)
@@ -975,24 +982,24 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitForOf(Stmt.ForOf forOf) => ExecuteForOf(forOf);
+    internal ExecutionResult VisitForOf(Stmt.ForOf forOf) => ExecuteForOf(forOf);
 
-    public ExecutionResult VisitForIn(Stmt.ForIn forIn) => ExecuteForIn(forIn);
+    internal ExecutionResult VisitForIn(Stmt.ForIn forIn) => ExecuteForIn(forIn);
 
-    public ExecutionResult VisitBreak(Stmt.Break breakStmt) =>
+    internal ExecutionResult VisitBreak(Stmt.Break breakStmt) =>
         ExecutionResult.Break(breakStmt.Label?.Lexeme);
 
-    public ExecutionResult VisitContinue(Stmt.Continue continueStmt) =>
+    internal ExecutionResult VisitContinue(Stmt.Continue continueStmt) =>
         ExecutionResult.Continue(continueStmt.Label?.Lexeme);
 
-    public ExecutionResult VisitSwitch(Stmt.Switch switchStmt) => ExecuteSwitch(switchStmt);
+    internal ExecutionResult VisitSwitch(Stmt.Switch switchStmt) => ExecuteSwitch(switchStmt);
 
-    public ExecutionResult VisitTryCatch(Stmt.TryCatch tryCatch) => ExecuteTryCatch(tryCatch);
+    internal ExecutionResult VisitTryCatch(Stmt.TryCatch tryCatch) => ExecuteTryCatch(tryCatch);
 
-    public ExecutionResult VisitThrow(Stmt.Throw throwStmt) =>
+    internal ExecutionResult VisitThrow(Stmt.Throw throwStmt) =>
         ExecutionResult.Throw(Evaluate(throwStmt.Value));
 
-    public ExecutionResult VisitVar(Stmt.Var varStmt)
+    internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {
         object? value = null;
         if (varStmt.Initializer != null)
@@ -1003,7 +1010,7 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitConst(Stmt.Const constStmt)
+    internal ExecutionResult VisitConst(Stmt.Const constStmt)
     {
         // Const declarations always have an initializer (enforced by parser)
         object? constValue = Evaluate(constStmt.Initializer);
@@ -1011,7 +1018,7 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitFunction(Stmt.Function functionStmt)
+    internal ExecutionResult VisitFunction(Stmt.Function functionStmt)
     {
         // Skip overload signatures (no body) - they're type-checking only
         if (functionStmt.Body == null) return ExecutionResult.Success();
@@ -1041,7 +1048,7 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitClass(Stmt.Class classStmt)
+    internal ExecutionResult VisitClass(Stmt.Class classStmt)
     {
         object? superclass = null;
         if (classStmt.Superclass != null)
@@ -1279,81 +1286,81 @@ public partial class Interpreter : IDisposable, IExprVisitor<object?>, IStmtVisi
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitTypeAlias(Stmt.TypeAlias typeAlias) =>
+    internal ExecutionResult VisitTypeAlias(Stmt.TypeAlias typeAlias) =>
         // Type-only declarations - compile-time only, no runtime effect
         ExecutionResult.Success();
 
-    public ExecutionResult VisitInterface(Stmt.Interface iface) =>
+    internal ExecutionResult VisitInterface(Stmt.Interface iface) =>
         // Type-only declarations - compile-time only, no runtime effect
         ExecutionResult.Success();
 
-    public ExecutionResult VisitFileDirective(Stmt.FileDirective fileDirective) =>
+    internal ExecutionResult VisitFileDirective(Stmt.FileDirective fileDirective) =>
         // Type-only declarations - compile-time only, no runtime effect
         ExecutionResult.Success();
 
-    public ExecutionResult VisitField(Stmt.Field field) =>
+    internal ExecutionResult VisitField(Stmt.Field field) =>
         // Class member declarations - handled within class processing, not executed directly
         ExecutionResult.Success();
 
-    public ExecutionResult VisitAccessor(Stmt.Accessor accessor) =>
+    internal ExecutionResult VisitAccessor(Stmt.Accessor accessor) =>
         // Class member declarations - handled within class processing, not executed directly
         ExecutionResult.Success();
 
-    public ExecutionResult VisitAutoAccessor(Stmt.AutoAccessor autoAccessor) =>
+    internal ExecutionResult VisitAutoAccessor(Stmt.AutoAccessor autoAccessor) =>
         // Class member declarations - handled within class processing, not executed directly
         ExecutionResult.Success();
 
-    public ExecutionResult VisitStaticBlock(Stmt.StaticBlock staticBlock) =>
+    internal ExecutionResult VisitStaticBlock(Stmt.StaticBlock staticBlock) =>
         // Class member declarations - handled within class processing, not executed directly
         ExecutionResult.Success();
 
-    public ExecutionResult VisitEnum(Stmt.Enum enumStmt)
+    internal ExecutionResult VisitEnum(Stmt.Enum enumStmt)
     {
         ExecuteEnumDeclaration(enumStmt);
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitNamespace(Stmt.Namespace ns) => ExecuteNamespace(ns);
+    internal ExecutionResult VisitNamespace(Stmt.Namespace ns) => ExecuteNamespace(ns);
 
-    public ExecutionResult VisitImportAlias(Stmt.ImportAlias importAlias) => ExecuteImportAlias(importAlias);
+    internal ExecutionResult VisitImportAlias(Stmt.ImportAlias importAlias) => ExecuteImportAlias(importAlias);
 
-    public ExecutionResult VisitReturn(Stmt.Return returnStmt)
+    internal ExecutionResult VisitReturn(Stmt.Return returnStmt)
     {
         object? returnValue = null;
         if (returnStmt.Value != null) returnValue = Evaluate(returnStmt.Value);
         return ExecutionResult.Return(returnValue);
     }
 
-    public ExecutionResult VisitPrint(Stmt.Print printStmt)
+    internal ExecutionResult VisitPrint(Stmt.Print printStmt)
     {
         Console.WriteLine(Stringify(Evaluate(printStmt.Expr)));
         return ExecutionResult.Success();
     }
 
-    public ExecutionResult VisitImport(Stmt.Import import) =>
+    internal ExecutionResult VisitImport(Stmt.Import import) =>
         // Imports are handled in BindModuleImports before execution
         // In single-file mode, imports are a no-op (type checker would have errored)
         ExecutionResult.Success();
 
-    public ExecutionResult VisitImportRequire(Stmt.ImportRequire importReq) => ExecuteImportRequire(importReq);
+    internal ExecutionResult VisitImportRequire(Stmt.ImportRequire importReq) => ExecuteImportRequire(importReq);
 
-    public ExecutionResult VisitExport(Stmt.Export exportStmt) => ExecuteExport(exportStmt);
+    internal ExecutionResult VisitExport(Stmt.Export exportStmt) => ExecuteExport(exportStmt);
 
-    public ExecutionResult VisitDirective(Stmt.Directive directive) =>
+    internal ExecutionResult VisitDirective(Stmt.Directive directive) =>
         // Directives are processed at the start of interpretation for their side effects (strict mode)
         // When encountered during execution, they are a no-op
         ExecutionResult.Success();
 
-    public ExecutionResult VisitDeclareModule(Stmt.DeclareModule declareModule) =>
+    internal ExecutionResult VisitDeclareModule(Stmt.DeclareModule declareModule) =>
         // Module/global augmentations and ambient declarations are type-only
         // No runtime effect - types were merged during type checking
         ExecutionResult.Success();
 
-    public ExecutionResult VisitDeclareGlobal(Stmt.DeclareGlobal declareGlobal) =>
+    internal ExecutionResult VisitDeclareGlobal(Stmt.DeclareGlobal declareGlobal) =>
         // Module/global augmentations and ambient declarations are type-only
         // No runtime effect - types were merged during type checking
         ExecutionResult.Success();
 
-    public ExecutionResult VisitUsing(Stmt.Using usingStmt) => ExecuteUsingDeclaration(usingStmt);
+    internal ExecutionResult VisitUsing(Stmt.Using usingStmt) => ExecuteUsingDeclaration(usingStmt);
 
 }

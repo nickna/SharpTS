@@ -23,30 +23,30 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
-    /// Type-checks a statement. Dispatches to the appropriate Visit* method via <see cref="Stmt.Accept{TResult}"/>.
+    /// Type-checks a statement. Dispatches to the appropriate Visit* method via the registry.
     /// </summary>
     /// <param name="stmt">The statement AST node to type-check.</param>
     private void CheckStmt(Stmt stmt)
     {
-        Stmt.Accept(stmt, this);
+        _registry.DispatchStmt(stmt, this);
     }
 
-    // IStmtVisitor<VoidResult> implementation - dispatched via Stmt.Accept
+    // Statement handlers - called by the registry
 
-    public VoidResult VisitBlock(Stmt.Block stmt)
+    internal VoidResult VisitBlock(Stmt.Block stmt)
     {
         CheckBlock(stmt.Statements, new TypeEnvironment(_environment));
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitSequence(Stmt.Sequence stmt)
+    internal VoidResult VisitSequence(Stmt.Sequence stmt)
     {
         foreach (var s in stmt.Statements)
             CheckStmt(s);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitLabeledStatement(Stmt.LabeledStatement stmt)
+    internal VoidResult VisitLabeledStatement(Stmt.LabeledStatement stmt)
     {
         string labelName = stmt.Label.Lexeme;
 
@@ -82,13 +82,13 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitInterface(Stmt.Interface stmt)
+    internal VoidResult VisitInterface(Stmt.Interface stmt)
     {
         CheckInterfaceDeclaration(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitTypeAlias(Stmt.TypeAlias stmt)
+    internal VoidResult VisitTypeAlias(Stmt.TypeAlias stmt)
     {
         if (stmt.TypeParameters != null && stmt.TypeParameters.Count > 0)
         {
@@ -103,31 +103,31 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitEnum(Stmt.Enum stmt)
+    internal VoidResult VisitEnum(Stmt.Enum stmt)
     {
         CheckEnumDeclaration(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitNamespace(Stmt.Namespace stmt)
+    internal VoidResult VisitNamespace(Stmt.Namespace stmt)
     {
         CheckNamespace(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitImportAlias(Stmt.ImportAlias stmt)
+    internal VoidResult VisitImportAlias(Stmt.ImportAlias stmt)
     {
         CheckImportAlias(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitClass(Stmt.Class stmt)
+    internal VoidResult VisitClass(Stmt.Class stmt)
     {
         CheckClassDeclaration(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitVar(Stmt.Var stmt)
+    internal VoidResult VisitVar(Stmt.Var stmt)
     {
         TypeInfo? declaredType = null;
         if (stmt.TypeAnnotation != null)
@@ -200,7 +200,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitConst(Stmt.Const stmt)
+    internal VoidResult VisitConst(Stmt.Const stmt)
     {
         TypeInfo constDeclaredType;
 
@@ -244,13 +244,13 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitFunction(Stmt.Function stmt)
+    internal VoidResult VisitFunction(Stmt.Function stmt)
     {
         CheckFunctionDeclaration(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitReturn(Stmt.Return stmt)
+    internal VoidResult VisitReturn(Stmt.Return stmt)
     {
         if (_inStaticBlock)
         {
@@ -292,7 +292,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitExpression(Stmt.Expression stmt)
+    internal VoidResult VisitExpression(Stmt.Expression stmt)
     {
         CheckExpr(stmt.Expr);
         if (stmt.Expr is Expr.Call assertCall)
@@ -302,7 +302,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitIf(Stmt.If stmt)
+    internal VoidResult VisitIf(Stmt.If stmt)
     {
         CheckExpr(stmt.Condition);
 
@@ -348,7 +348,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitWhile(Stmt.While stmt)
+    internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
         _loopDepth++;
@@ -357,7 +357,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitDoWhile(Stmt.DoWhile stmt)
+    internal VoidResult VisitDoWhile(Stmt.DoWhile stmt)
     {
         _loopDepth++;
         try { CheckStmt(stmt.Body); }
@@ -366,7 +366,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitFor(Stmt.For stmt)
+    internal VoidResult VisitFor(Stmt.For stmt)
     {
         if (stmt.Initializer != null)
             CheckStmt(stmt.Initializer);
@@ -380,7 +380,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitForOf(Stmt.ForOf stmt)
+    internal VoidResult VisitForOf(Stmt.ForOf stmt)
     {
         TypeInfo iterableType = CheckExpr(stmt.Iterable);
         TypeInfo elementType = new TypeInfo.Any();
@@ -409,7 +409,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitForIn(Stmt.ForIn stmt)
+    internal VoidResult VisitForIn(Stmt.ForIn stmt)
     {
         TypeInfo objType = CheckExpr(stmt.Object);
         TypeInfo keyType = new TypeInfo.String();
@@ -434,7 +434,7 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitBreak(Stmt.Break stmt)
+    internal VoidResult VisitBreak(Stmt.Break stmt)
     {
         if (stmt.Label != null)
         {
@@ -454,25 +454,25 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitSwitch(Stmt.Switch stmt)
+    internal VoidResult VisitSwitch(Stmt.Switch stmt)
     {
         CheckSwitch(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitTryCatch(Stmt.TryCatch stmt)
+    internal VoidResult VisitTryCatch(Stmt.TryCatch stmt)
     {
         CheckTryCatch(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitThrow(Stmt.Throw stmt)
+    internal VoidResult VisitThrow(Stmt.Throw stmt)
     {
         CheckExpr(stmt.Value);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitContinue(Stmt.Continue stmt)
+    internal VoidResult VisitContinue(Stmt.Continue stmt)
     {
         if (stmt.Label != null)
         {
@@ -496,13 +496,13 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitPrint(Stmt.Print stmt)
+    internal VoidResult VisitPrint(Stmt.Print stmt)
     {
         CheckExpr(stmt.Expr);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitImport(Stmt.Import stmt)
+    internal VoidResult VisitImport(Stmt.Import stmt)
     {
         if (_currentModule == null)
         {
@@ -512,48 +512,48 @@ public partial class TypeChecker
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitImportRequire(Stmt.ImportRequire stmt)
+    internal VoidResult VisitImportRequire(Stmt.ImportRequire stmt)
     {
         CheckImportRequire(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitExport(Stmt.Export stmt)
+    internal VoidResult VisitExport(Stmt.Export stmt)
     {
         CheckExportStatement(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitFileDirective(Stmt.FileDirective stmt)
+    internal VoidResult VisitFileDirective(Stmt.FileDirective stmt)
     {
         ValidateFileDirective(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitDirective(Stmt.Directive stmt) => VoidResult.Instance;
-    public VoidResult VisitStaticBlock(Stmt.StaticBlock stmt) => VoidResult.Instance;
+    internal VoidResult VisitDirective(Stmt.Directive stmt) => VoidResult.Instance;
+    internal VoidResult VisitStaticBlock(Stmt.StaticBlock stmt) => VoidResult.Instance;
 
-    public VoidResult VisitDeclareModule(Stmt.DeclareModule stmt)
+    internal VoidResult VisitDeclareModule(Stmt.DeclareModule stmt)
     {
         CheckDeclareModuleStatement(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitDeclareGlobal(Stmt.DeclareGlobal stmt)
+    internal VoidResult VisitDeclareGlobal(Stmt.DeclareGlobal stmt)
     {
         CheckDeclareGlobalStatement(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitUsing(Stmt.Using stmt)
+    internal VoidResult VisitUsing(Stmt.Using stmt)
     {
         CheckUsingDeclaration(stmt);
         return VoidResult.Instance;
     }
 
-    public VoidResult VisitField(Stmt.Field stmt) => VoidResult.Instance;
-    public VoidResult VisitAccessor(Stmt.Accessor stmt) => VoidResult.Instance;
-    public VoidResult VisitAutoAccessor(Stmt.AutoAccessor stmt) => VoidResult.Instance;
+    internal VoidResult VisitField(Stmt.Field stmt) => VoidResult.Instance;
+    internal VoidResult VisitAccessor(Stmt.Accessor stmt) => VoidResult.Instance;
+    internal VoidResult VisitAutoAccessor(Stmt.AutoAccessor stmt) => VoidResult.Instance;
 
     /// <summary>
     /// Type checks a 'using' or 'await using' declaration.

@@ -17,77 +17,77 @@ public partial class TypeChecker
 {
     /// <summary>
     /// Type-checks an expression and returns its resolved type.
-    /// Dispatches to the appropriate Visit* method via <see cref="Expr.Accept{TResult}"/>.
+    /// Dispatches to the appropriate Visit* method via the registry.
     /// </summary>
     /// <param name="expr">The expression AST node to type-check.</param>
     /// <returns>The resolved TypeInfo for the expression.</returns>
     private TypeInfo CheckExpr(Expr expr)
     {
-        TypeInfo result = Expr.Accept(expr, this);
+        TypeInfo result = _registry.DispatchExpr(expr, this);
         _typeMap.Set(expr, result);
         return result;
     }
 
-    // IExprVisitor<TypeInfo> implementation - dispatched via Expr.Accept
+    // Expression handlers - called by the registry
     // Simple expressions are implemented inline, complex ones delegate to Check* methods
 
-    public TypeInfo VisitLiteral(Expr.Literal expr) => GetLiteralType(expr.Value);
-    public TypeInfo VisitVariable(Expr.Variable expr) => LookupVariable(expr.Name);
-    public TypeInfo VisitGrouping(Expr.Grouping expr) => CheckExpr(expr.Expression);
-    public TypeInfo VisitRegexLiteral(Expr.RegexLiteral expr) => new TypeInfo.RegExp();
-    public TypeInfo VisitAwait(Expr.Await expr) => CheckAwait(expr);
-    public TypeInfo VisitDynamicImport(Expr.DynamicImport expr) => CheckDynamicImport(expr);
-    public TypeInfo VisitImportMeta(Expr.ImportMeta expr) => CheckImportMeta(expr);
-    public TypeInfo VisitYield(Expr.Yield expr) => CheckYield(expr);
-    public TypeInfo VisitTypeAssertion(Expr.TypeAssertion expr) => CheckTypeAssertion(expr);
-    public TypeInfo VisitSatisfies(Expr.Satisfies expr) => CheckSatisfies(expr);
-    public TypeInfo VisitNonNullAssertion(Expr.NonNullAssertion expr) => CheckNonNullAssertion(expr);
-    public TypeInfo VisitTemplateLiteral(Expr.TemplateLiteral expr) => CheckTemplateLiteral(expr);
-    public TypeInfo VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral expr) => CheckTaggedTemplateLiteral(expr);
-    public TypeInfo VisitObjectLiteral(Expr.ObjectLiteral expr) => CheckObject(expr);
-    public TypeInfo VisitArrayLiteral(Expr.ArrayLiteral expr) => CheckArray(expr);
-    public TypeInfo VisitSpread(Expr.Spread expr) => CheckSpread(expr);
-    public TypeInfo VisitArrowFunction(Expr.ArrowFunction expr) => CheckArrowFunction(expr);
-    public TypeInfo VisitAssign(Expr.Assign expr) => CheckAssign(expr);
-    public TypeInfo VisitClassExpr(Expr.ClassExpr expr) => CheckClassExpression(expr);
+    internal TypeInfo VisitLiteral(Expr.Literal expr) => GetLiteralType(expr.Value);
+    internal TypeInfo VisitVariable(Expr.Variable expr) => LookupVariable(expr.Name);
+    internal TypeInfo VisitGrouping(Expr.Grouping expr) => CheckExpr(expr.Expression);
+    internal TypeInfo VisitRegexLiteral(Expr.RegexLiteral expr) => new TypeInfo.RegExp();
+    internal TypeInfo VisitAwait(Expr.Await expr) => CheckAwait(expr);
+    internal TypeInfo VisitDynamicImport(Expr.DynamicImport expr) => CheckDynamicImport(expr);
+    internal TypeInfo VisitImportMeta(Expr.ImportMeta expr) => CheckImportMeta(expr);
+    internal TypeInfo VisitYield(Expr.Yield expr) => CheckYield(expr);
+    internal TypeInfo VisitTypeAssertion(Expr.TypeAssertion expr) => CheckTypeAssertion(expr);
+    internal TypeInfo VisitSatisfies(Expr.Satisfies expr) => CheckSatisfies(expr);
+    internal TypeInfo VisitNonNullAssertion(Expr.NonNullAssertion expr) => CheckNonNullAssertion(expr);
+    internal TypeInfo VisitTemplateLiteral(Expr.TemplateLiteral expr) => CheckTemplateLiteral(expr);
+    internal TypeInfo VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral expr) => CheckTaggedTemplateLiteral(expr);
+    internal TypeInfo VisitObjectLiteral(Expr.ObjectLiteral expr) => CheckObject(expr);
+    internal TypeInfo VisitArrayLiteral(Expr.ArrayLiteral expr) => CheckArray(expr);
+    internal TypeInfo VisitSpread(Expr.Spread expr) => CheckSpread(expr);
+    internal TypeInfo VisitArrowFunction(Expr.ArrowFunction expr) => CheckArrowFunction(expr);
+    internal TypeInfo VisitAssign(Expr.Assign expr) => CheckAssign(expr);
+    internal TypeInfo VisitClassExpr(Expr.ClassExpr expr) => CheckClassExpression(expr);
 
     // The following Visit* methods delegate to Check* methods in other partial files
     // (TypeChecker.Properties.cs, TypeChecker.Operators.cs, TypeChecker.Calls.cs)
 
     // Binary/logical operators (TypeChecker.Operators.cs)
-    public TypeInfo VisitBinary(Expr.Binary expr) => CheckBinary(expr);
-    public TypeInfo VisitLogical(Expr.Logical expr) => CheckLogical(expr);
-    public TypeInfo VisitNullishCoalescing(Expr.NullishCoalescing expr) => CheckNullishCoalescing(expr);
-    public TypeInfo VisitTernary(Expr.Ternary expr) => CheckTernary(expr);
-    public TypeInfo VisitUnary(Expr.Unary expr) => CheckUnary(expr);
-    public TypeInfo VisitDelete(Expr.Delete expr) => CheckDelete(expr);
+    internal TypeInfo VisitBinary(Expr.Binary expr) => CheckBinary(expr);
+    internal TypeInfo VisitLogical(Expr.Logical expr) => CheckLogical(expr);
+    internal TypeInfo VisitNullishCoalescing(Expr.NullishCoalescing expr) => CheckNullishCoalescing(expr);
+    internal TypeInfo VisitTernary(Expr.Ternary expr) => CheckTernary(expr);
+    internal TypeInfo VisitUnary(Expr.Unary expr) => CheckUnary(expr);
+    internal TypeInfo VisitDelete(Expr.Delete expr) => CheckDelete(expr);
 
     // Compound assignment operators (TypeChecker.Operators.cs)
-    public TypeInfo VisitCompoundAssign(Expr.CompoundAssign expr) => CheckCompoundAssign(expr);
-    public TypeInfo VisitCompoundSet(Expr.CompoundSet expr) => CheckCompoundSet(expr);
-    public TypeInfo VisitCompoundSetIndex(Expr.CompoundSetIndex expr) => CheckCompoundSetIndex(expr);
-    public TypeInfo VisitLogicalAssign(Expr.LogicalAssign expr) => CheckLogicalAssign(expr);
-    public TypeInfo VisitLogicalSet(Expr.LogicalSet expr) => CheckLogicalSet(expr);
-    public TypeInfo VisitLogicalSetIndex(Expr.LogicalSetIndex expr) => CheckLogicalSetIndex(expr);
-    public TypeInfo VisitPrefixIncrement(Expr.PrefixIncrement expr) => CheckPrefixIncrement(expr);
-    public TypeInfo VisitPostfixIncrement(Expr.PostfixIncrement expr) => CheckPostfixIncrement(expr);
+    internal TypeInfo VisitCompoundAssign(Expr.CompoundAssign expr) => CheckCompoundAssign(expr);
+    internal TypeInfo VisitCompoundSet(Expr.CompoundSet expr) => CheckCompoundSet(expr);
+    internal TypeInfo VisitCompoundSetIndex(Expr.CompoundSetIndex expr) => CheckCompoundSetIndex(expr);
+    internal TypeInfo VisitLogicalAssign(Expr.LogicalAssign expr) => CheckLogicalAssign(expr);
+    internal TypeInfo VisitLogicalSet(Expr.LogicalSet expr) => CheckLogicalSet(expr);
+    internal TypeInfo VisitLogicalSetIndex(Expr.LogicalSetIndex expr) => CheckLogicalSetIndex(expr);
+    internal TypeInfo VisitPrefixIncrement(Expr.PrefixIncrement expr) => CheckPrefixIncrement(expr);
+    internal TypeInfo VisitPostfixIncrement(Expr.PostfixIncrement expr) => CheckPostfixIncrement(expr);
 
     // Function calls (TypeChecker.Calls.cs)
-    public TypeInfo VisitCall(Expr.Call expr) => CheckCall(expr);
+    internal TypeInfo VisitCall(Expr.Call expr) => CheckCall(expr);
 
     // Property access (TypeChecker.Properties.cs)
-    public TypeInfo VisitGet(Expr.Get expr) => CheckGet(expr);
-    public TypeInfo VisitSet(Expr.Set expr) => CheckSet(expr);
-    public TypeInfo VisitGetPrivate(Expr.GetPrivate expr) => CheckGetPrivate(expr);
-    public TypeInfo VisitSetPrivate(Expr.SetPrivate expr) => CheckSetPrivate(expr);
-    public TypeInfo VisitCallPrivate(Expr.CallPrivate expr) => CheckCallPrivate(expr);
-    public TypeInfo VisitThis(Expr.This expr) => CheckThis(expr);
-    public TypeInfo VisitNew(Expr.New expr) => CheckNew(expr);
-    public TypeInfo VisitSuper(Expr.Super expr) => CheckSuper(expr);
+    internal TypeInfo VisitGet(Expr.Get expr) => CheckGet(expr);
+    internal TypeInfo VisitSet(Expr.Set expr) => CheckSet(expr);
+    internal TypeInfo VisitGetPrivate(Expr.GetPrivate expr) => CheckGetPrivate(expr);
+    internal TypeInfo VisitSetPrivate(Expr.SetPrivate expr) => CheckSetPrivate(expr);
+    internal TypeInfo VisitCallPrivate(Expr.CallPrivate expr) => CheckCallPrivate(expr);
+    internal TypeInfo VisitThis(Expr.This expr) => CheckThis(expr);
+    internal TypeInfo VisitNew(Expr.New expr) => CheckNew(expr);
+    internal TypeInfo VisitSuper(Expr.Super expr) => CheckSuper(expr);
 
     // Index access (TypeChecker.Properties.Index.cs)
-    public TypeInfo VisitGetIndex(Expr.GetIndex expr) => CheckGetIndex(expr);
-    public TypeInfo VisitSetIndex(Expr.SetIndex expr) => CheckSetIndex(expr);
+    internal TypeInfo VisitGetIndex(Expr.GetIndex expr) => CheckGetIndex(expr);
+    internal TypeInfo VisitSetIndex(Expr.SetIndex expr) => CheckSetIndex(expr);
 
     private TypeInfo CheckAwait(Expr.Await awaitExpr)
     {

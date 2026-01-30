@@ -50,8 +50,15 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 /// <seealso cref="TypeEnvironment"/>
 /// <seealso cref="TypeInfo"/>
-public partial class TypeChecker : IExprVisitor<TypeInfo>, IStmtVisitor<VoidResult>
+public partial class TypeChecker
 {
+    /// <summary>
+    /// Static registry containing handlers for all AST node types.
+    /// Initialized once at startup and validated for exhaustiveness.
+    /// </summary>
+    private static readonly NodeRegistry<TypeChecker, TypeInfo, VoidResult> _registry =
+        TypeCheckerRegistry.Create();
+
     private TypeEnvironment _environment = new();
     private TypeMap _typeMap = new();
 
