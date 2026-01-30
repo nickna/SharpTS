@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace SharpTS.Parsing.Visitors;
@@ -228,5 +229,101 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
         {
             throw new InvalidOperationException("Cannot register handlers after registry is frozen.");
         }
+    }
+
+    /// <summary>
+    /// Automatically registers handlers for all AST node types by discovering Visit* methods on TContext.
+    /// For each Expr.Xxx type, looks for a method named VisitXxx(Expr.Xxx) returning TExprResult.
+    /// For each Stmt.Xxx type, looks for a method named VisitXxx(Stmt.Xxx) returning TStmtResult.
+    /// </summary>
+    /// <returns>This registry for fluent chaining.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the registry is frozen or if a Visit method is missing.</exception>
+    public NodeRegistry<TContext, TExprResult, TStmtResult> AutoRegister()
+    {
+        ThrowIfFrozen();
+
+        var contextType = typeof(TContext);
+        var missingMethods = new List<string>();
+
+        // Register all expression types
+        var allExprTypes = typeof(Expr).GetNestedTypes(BindingFlags.Public)
+            .Where(t => typeof(Expr).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Expr))
+            .ToList();
+
+        foreach (var exprType in allExprTypes)
+        {
+            var methodName = $"Visit{exprType.Name}";
+            var method = contextType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, [exprType]);
+
+            if (method == null || method.ReturnType != typeof(TExprResult))
+            {
+                missingMethods.Add($"{contextType.Name}.{methodName}({exprType.Name}) -> {typeof(TExprResult).Name}");
+                continue;
+            }
+
+            var handler = CreateExprHandler(method, exprType);
+            _exprHandlers[exprType] = handler;
+        }
+
+        // Register all statement types
+        var allStmtTypes = typeof(Stmt).GetNestedTypes(BindingFlags.Public)
+            .Where(t => typeof(Stmt).IsAssignableFrom(t) && !t.IsAbstract && t != typeof(Stmt))
+            .ToList();
+
+        foreach (var stmtType in allStmtTypes)
+        {
+            var methodName = $"Visit{stmtType.Name}";
+            var method = contextType.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, [stmtType]);
+
+            if (method == null || method.ReturnType != typeof(TStmtResult))
+            {
+                missingMethods.Add($"{contextType.Name}.{methodName}({stmtType.Name}) -> {typeof(TStmtResult).Name}");
+                continue;
+            }
+
+            var handler = CreateStmtHandler(method, stmtType);
+            _stmtHandlers[stmtType] = handler;
+        }
+
+        if (missingMethods.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"AutoRegister failed. Missing or incorrectly typed Visit methods:\n" +
+                string.Join("\n", missingMethods.OrderBy(m => m)));
+        }
+
+        return this;
+    }
+
+    /// <summary>
+    /// Creates a compiled delegate for an expression handler method.
+    /// </summary>
+    private Func<Expr, TContext, TExprResult> CreateExprHandler(MethodInfo method, Type exprType)
+    {
+        // Build: (Expr expr, TContext ctx) => ctx.VisitXxx((Expr.Xxx)expr)
+        var exprParam = Expression.Parameter(typeof(Expr), "expr");
+        var ctxParam = Expression.Parameter(typeof(TContext), "ctx");
+
+        var castExpr = Expression.Convert(exprParam, exprType);
+        var callExpr = Expression.Call(ctxParam, method, castExpr);
+
+        var lambda = Expression.Lambda<Func<Expr, TContext, TExprResult>>(callExpr, exprParam, ctxParam);
+        return lambda.Compile();
+    }
+
+    /// <summary>
+    /// Creates a compiled delegate for a statement handler method.
+    /// </summary>
+    private Func<Stmt, TContext, TStmtResult> CreateStmtHandler(MethodInfo method, Type stmtType)
+    {
+        // Build: (Stmt stmt, TContext ctx) => ctx.VisitXxx((Stmt.Xxx)stmt)
+        var stmtParam = Expression.Parameter(typeof(Stmt), "stmt");
+        var ctxParam = Expression.Parameter(typeof(TContext), "ctx");
+
+        var castStmt = Expression.Convert(stmtParam, stmtType);
+        var callExpr = Expression.Call(ctxParam, method, castStmt);
+
+        var lambda = Expression.Lambda<Func<Stmt, TContext, TStmtResult>>(callExpr, stmtParam, ctxParam);
+        return lambda.Compile();
     }
 }
