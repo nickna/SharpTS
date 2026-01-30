@@ -47,7 +47,7 @@ public static class FetchHelpers
     /// Returns object[] { success (bool), status (double), statusText (string), ok (bool), url (string), headers (Dictionary), bodyBytes (byte[]), errorMessage (string?) }
     /// This is the main entry point for compiled fetch.
     /// </summary>
-    public static object[] PerformFetch(object? urlObj, object? optionsObj)
+    public static object?[] PerformFetch(object? urlObj, object? optionsObj)
     {
         try
         {
@@ -119,23 +119,23 @@ public static class FetchHelpers
             var responseHeaders = ExtractResponseHeaders(response);
 
             // Return array: [success, status, statusText, ok, url, headers, bodyBytes, null]
-            return [true, status, statusText, ok, url, responseHeaders, bodyBytes, null];
+            return new object?[] { true, status, statusText, ok, url, responseHeaders, bodyBytes, null };
         }
         catch (HttpRequestException ex)
         {
-            return [false, 0.0, "", false, "", null!, Array.Empty<byte>(), $"fetch failed: {ex.Message}"];
+            return new object?[] { false, 0.0, "", false, "", null, Array.Empty<byte>(), $"fetch failed: {ex.Message}" };
         }
         catch (TaskCanceledException)
         {
-            return [false, 0.0, "", false, "", null!, Array.Empty<byte>(), "fetch: request timeout"];
+            return new object?[] { false, 0.0, "", false, "", null, Array.Empty<byte>(), "fetch: request timeout" };
         }
         catch (UriFormatException ex)
         {
-            return [false, 0.0, "", false, "", null!, Array.Empty<byte>(), $"fetch: Invalid URL - {ex.Message}"];
+            return new object?[] { false, 0.0, "", false, "", null, Array.Empty<byte>(), $"fetch: Invalid URL - {ex.Message}" };
         }
         catch (Exception ex)
         {
-            return [false, 0.0, "", false, "", null!, Array.Empty<byte>(), $"fetch error: {ex.Message}"];
+            return new object?[] { false, 0.0, "", false, "", null, Array.Empty<byte>(), $"fetch error: {ex.Message}" };
         }
     }
 
