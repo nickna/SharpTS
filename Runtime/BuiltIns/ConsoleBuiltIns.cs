@@ -103,6 +103,193 @@ public static class ConsoleBuiltIns
     }
 
     /// <summary>
+    /// Formats a string with printf-style specifiers (%s, %d, %i, %o, %O, %j).
+    /// </summary>
+    /// <param name="format">The format string</param>
+    /// <param name="args">The substitution arguments</param>
+    /// <param name="argIndex">Starting index in args (typically 1 if format is args[0])</param>
+    /// <returns>Formatted string plus any remaining unsubstituted arguments</returns>
+    private static string FormatString(string format, List<object?> args, int argIndex)
+    {
+        var result = new StringBuilder();
+        int currentArg = argIndex;
+        int i = 0;
+
+        while (i < format.Length)
+        {
+            if (format[i] == '%' && i + 1 < format.Length)
+            {
+                char specifier = format[i + 1];
+
+                // Handle escaped %% -> %
+                if (specifier == '%')
+                {
+                    result.Append('%');
+                    i += 2;
+                    continue;
+                }
+
+                // Handle format specifiers if we have remaining args
+                if (currentArg < args.Count)
+                {
+                    var arg = args[currentArg];
+                    switch (specifier)
+                    {
+                        case 's': // String
+                            result.Append(Stringify(arg));
+                            currentArg++;
+                            i += 2;
+                            continue;
+                        case 'd': // Integer
+                        case 'i':
+                            result.Append(FormatAsInteger(arg));
+                            currentArg++;
+                            i += 2;
+                            continue;
+                        case 'f': // Float
+                            result.Append(FormatAsFloat(arg));
+                            currentArg++;
+                            i += 2;
+                            continue;
+                        case 'o': // Object (expandable)
+                        case 'O': // Object (generic)
+                            result.Append(Stringify(arg));
+                            currentArg++;
+                            i += 2;
+                            continue;
+                        case 'j': // JSON
+                            result.Append(FormatAsJson(arg));
+                            currentArg++;
+                            i += 2;
+                            continue;
+                    }
+                }
+
+                // Unknown specifier or no more args - output literally
+                result.Append(format[i]);
+                i++;
+            }
+            else
+            {
+                result.Append(format[i]);
+                i++;
+            }
+        }
+
+        // Append any remaining arguments not consumed by format specifiers
+        while (currentArg < args.Count)
+        {
+            result.Append(' ');
+            result.Append(Stringify(args[currentArg]));
+            currentArg++;
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Formats a value as an integer for %d/%i specifier.
+    /// </summary>
+    private static string FormatAsInteger(object? value)
+    {
+        if (value == null) return "NaN";
+        if (value is SharpTSUndefined) return "NaN";
+        if (value is double d)
+        {
+            if (double.IsNaN(d) || double.IsInfinity(d)) return "NaN";
+            return ((long)d).ToString();
+        }
+        if (value is bool b) return b ? "1" : "0";
+        if (value is string s)
+        {
+            if (double.TryParse(s, out double parsed))
+            {
+                if (double.IsNaN(parsed) || double.IsInfinity(parsed)) return "NaN";
+                return ((long)parsed).ToString();
+            }
+            return "NaN";
+        }
+        return "NaN";
+    }
+
+    /// <summary>
+    /// Formats a value as a float for %f specifier.
+    /// </summary>
+    private static string FormatAsFloat(object? value)
+    {
+        if (value == null) return "NaN";
+        if (value is SharpTSUndefined) return "NaN";
+        if (value is double d)
+        {
+            if (double.IsNaN(d)) return "NaN";
+            if (double.IsPositiveInfinity(d)) return "Infinity";
+            if (double.IsNegativeInfinity(d)) return "-Infinity";
+            return d.ToString();
+        }
+        if (value is bool b) return b ? "1" : "0";
+        if (value is string s)
+        {
+            if (double.TryParse(s, out double parsed))
+            {
+                if (double.IsNaN(parsed)) return "NaN";
+                if (double.IsPositiveInfinity(parsed)) return "Infinity";
+                if (double.IsNegativeInfinity(parsed)) return "-Infinity";
+                return parsed.ToString();
+            }
+            return "NaN";
+        }
+        return "NaN";
+    }
+
+    /// <summary>
+    /// Formats a value as JSON for %j specifier.
+    /// </summary>
+    private static string FormatAsJson(object? value)
+    {
+        if (value == null) return "null";
+        if (value is SharpTSUndefined) return "undefined";
+        if (value is double d)
+        {
+            if (double.IsNaN(d)) return "null"; // JSON doesn't support NaN
+            if (double.IsInfinity(d)) return "null"; // JSON doesn't support Infinity
+            return d.ToString();
+        }
+        if (value is bool b) return b ? "true" : "false";
+        if (value is string s) return $"\"{s.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+        if (value is SharpTSArray arr)
+        {
+            return "[" + string.Join(",", arr.Elements.Select(FormatAsJson)) + "]";
+        }
+        if (value is SharpTSObject obj)
+        {
+            var pairs = obj.Fields.Select(kv => $"\"{kv.Key}\":{FormatAsJson(kv.Value)}");
+            return "{" + string.Join(",", pairs) + "}";
+        }
+        return Stringify(value);
+    }
+
+    /// <summary>
+    /// Checks if a string contains format specifiers (including %% escape sequence).
+    /// </summary>
+    private static bool HasFormatSpecifiers(string str)
+    {
+        for (int i = 0; i < str.Length - 1; i++)
+        {
+            if (str[i] == '%')
+            {
+                char next = str[i + 1];
+                // Include %% (escape sequence) and actual format specifiers
+                if (next == '%' || next == 's' || next == 'd' || next == 'i' || next == 'f' ||
+                    next == 'o' || next == 'O' || next == 'j')
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Determines if a value is truthy (for console.assert).
     /// </summary>
     private static bool IsTruthy(object? value)
@@ -138,6 +325,11 @@ public static class ConsoleBuiltIns
         if (args.Count == 0)
         {
             WriteOutput("");
+        }
+        else if (args.Count >= 1 && args[0] is string format && HasFormatSpecifiers(format))
+        {
+            // First argument is a format string with specifiers
+            WriteOutput(FormatString(format, args, 1));
         }
         else
         {

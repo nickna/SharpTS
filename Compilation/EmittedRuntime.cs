@@ -80,6 +80,14 @@ public class EmittedRuntime
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
 
+    // Console format specifier methods
+    public MethodBuilder HasFormatSpecifiers { get; set; } = null!;
+    public MethodBuilder FormatConsoleArgs { get; set; } = null!;
+    public MethodBuilder FormatSingleArg { get; set; } = null!;
+    public MethodBuilder FormatAsInteger { get; set; } = null!;
+    public MethodBuilder FormatAsFloat { get; set; } = null!;
+    public MethodBuilder FormatAsJson { get; set; } = null!;
+
     // Operator methods
     public MethodBuilder Add { get; set; } = null!;
     public new MethodBuilder Equals { get; set; } = null!;

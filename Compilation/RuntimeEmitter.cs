@@ -1518,6 +1518,13 @@ public partial class RuntimeEmitter
         // Emit all methods - these are now in partial class files
         // Core utilities
         EmitStringify(typeBuilder, runtime);
+        // Format specifier helpers (must be emitted before ConsoleLog/ConsoleLogMultiple which call them)
+        EmitHasFormatSpecifiers(typeBuilder, runtime);
+        EmitFormatSingleArg(typeBuilder, runtime);
+        EmitFormatAsInteger(typeBuilder, runtime);
+        EmitFormatAsFloat(typeBuilder, runtime);
+        EmitFormatAsJson(typeBuilder, runtime);
+        EmitFormatConsoleArgs(typeBuilder, runtime);
         EmitConsoleLog(typeBuilder, runtime);
         EmitConsoleLogMultiple(typeBuilder, runtime);
         EmitToNumber(typeBuilder, runtime);

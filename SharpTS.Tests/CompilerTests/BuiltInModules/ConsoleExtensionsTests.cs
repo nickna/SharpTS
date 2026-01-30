@@ -397,4 +397,110 @@ public class ConsoleExtensionsTests
         Assert.Contains("Trace: Message 1 2 3\n", output);
         Assert.Contains("Done\n", output);
     }
+
+    // ===================== Format Specifiers =====================
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_String()
+    {
+        var source = """
+            console.log('Hello %s!', 'World');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello World!\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_Integer()
+    {
+        var source = """
+            console.log('Value: %d', 42.7);
+            console.log('Negative: %i', -3.9);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Contains("Value: 42\n", output);
+        Assert.Contains("Negative: -3\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_Object()
+    {
+        var source = """
+            console.log('Object: %o', {a: 1});
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // Compiler uses different object representation
+        Assert.Contains("Object:", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_Float()
+    {
+        var source = """
+            console.log('Float: %f', 3.14159);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Contains("Float: 3.14159\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_MultipleSpecifiers()
+    {
+        var source = """
+            console.log('Name: %s, Age: %d, Score: %f', 'Alice', 30, 95.5);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Name: Alice, Age: 30, Score: 95.5\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_EscapedPercent()
+    {
+        var source = """
+            console.log('100%% complete');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("100% complete\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_ExtraArgs()
+    {
+        var source = """
+            console.log('Value: %s', 'one', 'two', 'three');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Value: one two three\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_MissingArgs()
+    {
+        var source = """
+            console.log('Hello %s %s', 'World');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // Missing specifiers are output literally
+        Assert.Equal("Hello World %s\n", output);
+    }
+
+    [Fact]
+    public void Console_Log_FormatSpecifier_NoSpecifiers_NoFormatting()
+    {
+        // Ensure strings without format specifiers are not treated as format strings
+        var source = """
+            console.log('Hello', 'World');
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello World\n", output);
+    }
 }
