@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -7,8 +8,9 @@ namespace SharpTS.TypeSystem;
 /// Statement type checking - CheckStmt and the main dispatch switch.
 /// </summary>
 /// <remarks>
-/// Contains the main statement dispatch (CheckStmt) and inline handling for simple statements.
-/// Complex statement handlers are split into separate partial files:
+/// Contains the main statement dispatch (CheckStmt) via <see cref="IStmtVisitor{TResult}"/>
+/// and inline handling for simple statements. Complex statement handlers are split into
+/// separate partial files:
 /// <list type="bullet">
 ///   <item><description><c>TypeChecker.Statements.Classes.cs</c> - Class declaration checking</description></item>
 ///   <item><description><c>TypeChecker.Statements.Interfaces.cs</c> - Interface declaration checking</description></item>
@@ -20,577 +22,538 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    /// <summary>
+    /// Type-checks a statement. Dispatches to the appropriate Visit* method via <see cref="Stmt.Accept{TResult}"/>.
+    /// </summary>
+    /// <param name="stmt">The statement AST node to type-check.</param>
     private void CheckStmt(Stmt stmt)
     {
-        switch (stmt)
+        Stmt.Accept(stmt, this);
+    }
+
+    // IStmtVisitor<VoidResult> implementation - dispatched via Stmt.Accept
+
+    public VoidResult VisitBlock(Stmt.Block stmt)
+    {
+        CheckBlock(stmt.Statements, new TypeEnvironment(_environment));
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitSequence(Stmt.Sequence stmt)
+    {
+        foreach (var s in stmt.Statements)
+            CheckStmt(s);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitLabeledStatement(Stmt.LabeledStatement stmt)
+    {
+        string labelName = stmt.Label.Lexeme;
+
+        // Check for label shadowing
+        if (_activeLabels.ContainsKey(labelName))
         {
-            case Stmt.Block block:
-                CheckBlock(block.Statements, new TypeEnvironment(_environment));
-                break;
-            case Stmt.Sequence seq:
-                // Execute in current scope (no new environment)
-                foreach (var s in seq.Statements)
-                    CheckStmt(s);
-                break;
+            throw new TypeCheckException($"Label '{labelName}' already declared in this scope");
+        }
 
-            case Stmt.LabeledStatement labeledStmt:
-                {
-                    string labelName = labeledStmt.Label.Lexeme;
+        // Determine if this label is on a loop (for continue validation)
+        bool isOnLoop = stmt.Statement is Stmt.While
+                     or Stmt.For
+                     or Stmt.DoWhile
+                     or Stmt.ForOf
+                     or Stmt.ForIn
+                     or Stmt.LabeledStatement; // Allow chained labels
 
-                    // Check for label shadowing
-                    if (_activeLabels.ContainsKey(labelName))
-                    {
-                        throw new TypeCheckException($"Label '{labelName}' already declared in this scope");
-                    }
+        // If chained label, inherit loop status from inner
+        if (stmt.Statement is Stmt.LabeledStatement)
+        {
+            isOnLoop = true;
+        }
 
-                    // Determine if this label is on a loop (for continue validation)
-                    bool isOnLoop = labeledStmt.Statement is Stmt.While
-                                 or Stmt.For
-                                 or Stmt.DoWhile
-                                 or Stmt.ForOf
-                                 or Stmt.ForIn
-                                 or Stmt.LabeledStatement; // Allow chained labels
+        _activeLabels[labelName] = isOnLoop;
+        try
+        {
+            CheckStmt(stmt.Statement);
+        }
+        finally
+        {
+            _activeLabels.Remove(labelName);
+        }
+        return VoidResult.Instance;
+    }
 
-                    // If chained label, inherit loop status from inner
-                    if (labeledStmt.Statement is Stmt.LabeledStatement innerLabeled)
-                    {
-                        // We need to peek ahead - for now, mark as potentially a loop
-                        // The inner labeled statement will be checked recursively
-                        isOnLoop = true;
-                    }
+    public VoidResult VisitInterface(Stmt.Interface stmt)
+    {
+        CheckInterfaceDeclaration(stmt);
+        return VoidResult.Instance;
+    }
 
-                    _activeLabels[labelName] = isOnLoop;
-                    try
-                    {
-                        CheckStmt(labeledStmt.Statement);
-                    }
-                    finally
-                    {
-                        _activeLabels.Remove(labelName);
-                    }
-                }
-                break;
+    public VoidResult VisitTypeAlias(Stmt.TypeAlias stmt)
+    {
+        if (stmt.TypeParameters != null && stmt.TypeParameters.Count > 0)
+        {
+            var typeParamNames = stmt.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+            ValidateTypeAliasSpreadConstraints(stmt);
+            _environment.DefineGenericTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition, typeParamNames);
+        }
+        else
+        {
+            _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition);
+        }
+        return VoidResult.Instance;
+    }
 
-            case Stmt.Interface interfaceStmt:
-                CheckInterfaceDeclaration(interfaceStmt);
-                break;
+    public VoidResult VisitEnum(Stmt.Enum stmt)
+    {
+        CheckEnumDeclaration(stmt);
+        return VoidResult.Instance;
+    }
 
-            case Stmt.TypeAlias typeAlias:
-                if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
-                {
-                    // Generic type alias: type Foo<T, U> = ...
-                    var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
+    public VoidResult VisitNamespace(Stmt.Namespace stmt)
+    {
+        CheckNamespace(stmt);
+        return VoidResult.Instance;
+    }
 
-                    // Validate spread constraints: any ...T in the definition must have T constrained to array type
-                    ValidateTypeAliasSpreadConstraints(typeAlias);
+    public VoidResult VisitImportAlias(Stmt.ImportAlias stmt)
+    {
+        CheckImportAlias(stmt);
+        return VoidResult.Instance;
+    }
 
-                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
-                }
-                else
-                {
-                    // Simple type alias: type Foo = ...
-                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
-                }
-                break;
+    public VoidResult VisitClass(Stmt.Class stmt)
+    {
+        CheckClassDeclaration(stmt);
+        return VoidResult.Instance;
+    }
 
-            case Stmt.Enum enumStmt:
-                CheckEnumDeclaration(enumStmt);
-                break;
+    public VoidResult VisitVar(Stmt.Var stmt)
+    {
+        TypeInfo? declaredType = null;
+        if (stmt.TypeAnnotation != null)
+        {
+            declaredType = ToTypeInfo(stmt.TypeAnnotation);
+        }
 
-            case Stmt.Namespace ns:
-                CheckNamespace(ns);
-                break;
+        if (stmt.HasDefiniteAssignmentAssertion)
+        {
+            _environment.Define(stmt.Name.Lexeme, declaredType!);
+            return VoidResult.Instance;
+        }
 
-            case Stmt.ImportAlias importAlias:
-                CheckImportAlias(importAlias);
-                break;
+        if (stmt.Initializer != null)
+        {
+            var provisionalType = declaredType ?? new TypeInfo.Any();
+            _environment.Define(stmt.Name.Lexeme, provisionalType);
 
-            case Stmt.Class classStmt:
-                CheckClassDeclaration(classStmt);
-                break;
-
-            case Stmt.Var varStmt:
-                TypeInfo? declaredType = null;
-                if (varStmt.TypeAnnotation != null)
-                {
-                    declaredType = ToTypeInfo(varStmt.TypeAnnotation);
-                }
-
-                // Definite assignment assertion: let x!: number;
-                // The parser ensures ! always has a type annotation and no initializer.
-                // Use the declared type - the assertion means "trust me, it will be assigned".
-                if (varStmt.HasDefiniteAssignmentAssertion)
-                {
-                    // declaredType is already set from the type annotation (parser guarantees this)
-                    _environment.Define(varStmt.Name.Lexeme, declaredType!);
-                    break;
-                }
-
-                if (varStmt.Initializer != null)
-                {
-                    // Pre-define the variable with a provisional type BEFORE checking the initializer.
-                    // This allows self-referential patterns like: let t = setInterval(() => clearInterval(t), 100)
-                    // where the callback references the variable being declared.
-                    // If there's a type annotation, use it; otherwise use Any as a placeholder.
-                    var provisionalType = declaredType ?? new TypeInfo.Any();
-                    _environment.Define(varStmt.Name.Lexeme, provisionalType);
-
-                    // Special case: array literal assigned to tuple type (contextual typing)
-                    if (declaredType is TypeInfo.Tuple tupleType && varStmt.Initializer is Expr.ArrayLiteral arrayLit)
-                    {
-                        CheckArrayLiteralAgainstTuple(arrayLit, tupleType, varStmt.Name.Lexeme);
-                    }
-                    else
-                    {
-                        // Mark object literals as fresh if directly assigned with type annotation
-                        Expr initializer = varStmt.Initializer;
-                        bool checkExcessProps = false;
-
-                        if (declaredType != null && initializer is Expr.ObjectLiteral objLit)
-                        {
-                            initializer = objLit with { IsFresh = true };
-                            checkExcessProps = true;
-                        }
-
-                        // Pass contextual type to arrow functions for parameter type inference
-                        TypeInfo initializerType;
-                        if (declaredType != null && initializer is Expr.ArrowFunction arrowFn)
-                        {
-                            initializerType = CheckArrowFunction(arrowFn, declaredType);
-                        }
-                        else
-                        {
-                            initializerType = CheckExpr(initializer);
-                        }
-
-                        if (declaredType != null)
-                        {
-                            // Perform excess property check for fresh object literals
-                            if (checkExcessProps && initializerType is TypeInfo.Record actualRecord)
-                            {
-                                CheckExcessProperties(actualRecord, declaredType, varStmt.Initializer);
-                            }
-
-                            if (!IsCompatible(declaredType, initializerType))
-                            {
-                                throw new TypeMismatchException(declaredType, initializerType, varStmt.Name.Line);
-                            }
-                        }
-                        else
-                        {
-                            // No type annotation - widen literal types for inference
-                            initializerType = WidenLiteralType(initializerType);
-                            // Update the variable's type from provisional Any to the actual inferred type
-                            declaredType = initializerType;
-                            _environment.Define(varStmt.Name.Lexeme, declaredType);
-                        }
-
-                        declaredType ??= initializerType;
-                    }
-                    break;
-                }
-
-                declaredType ??= new TypeInfo.Any();
-                _environment.Define(varStmt.Name.Lexeme, declaredType);
-                break;
-
-            case Stmt.Const constStmt:
+            if (declaredType is TypeInfo.Tuple tupleType && stmt.Initializer is Expr.ArrayLiteral arrayLit)
             {
-                TypeInfo constDeclaredType;
+                CheckArrayLiteralAgainstTuple(arrayLit, tupleType, stmt.Name.Lexeme);
+            }
+            else
+            {
+                Expr initializer = stmt.Initializer;
+                bool checkExcessProps = false;
 
-                if (constStmt.TypeAnnotation == "unique symbol")
+                if (declaredType != null && initializer is Expr.ObjectLiteral objLit)
                 {
-                    // Validate initializer is Symbol() call
-                    if (constStmt.Initializer is not Expr.Call call ||
-                        call.Callee is not Expr.Variable v ||
-                        v.Name.Lexeme != "Symbol")
-                    {
-                        throw new TypeCheckException(
-                            $"'unique symbol' must be initialized with Symbol() at line {constStmt.Name.Line}.");
-                    }
-                    // Validate Symbol() argument if present
-                    if (call.Arguments.Count > 0)
-                    {
-                        var argType = CheckExpr(call.Arguments[0]);
-                        if (argType is not TypeInfo.String && argType is not TypeInfo.StringLiteral && argType is not TypeInfo.Any)
-                            throw new TypeCheckException($"Symbol() description must be a string.");
-                    }
-                    // Create unique symbol type for this declaration
-                    constDeclaredType = new TypeInfo.UniqueSymbol(
-                        constStmt.Name.Lexeme,
-                        $"typeof {constStmt.Name.Lexeme}");
+                    initializer = objLit with { IsFresh = true };
+                    checkExcessProps = true;
                 }
-                else if (constStmt.TypeAnnotation != null)
+
+                TypeInfo initializerType;
+                if (declaredType != null && initializer is Expr.ArrowFunction arrowFn)
                 {
-                    constDeclaredType = ToTypeInfo(constStmt.TypeAnnotation);
-                    // Pre-define with declared type to allow self-referential callbacks
-                    _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
-                    var initType = CheckExpr(constStmt.Initializer);
-                    if (!IsCompatible(constDeclaredType, initType))
+                    initializerType = CheckArrowFunction(arrowFn, declaredType);
+                }
+                else
+                {
+                    initializerType = CheckExpr(initializer);
+                }
+
+                if (declaredType != null)
+                {
+                    if (checkExcessProps && initializerType is TypeInfo.Record actualRecord)
                     {
-                        throw new TypeMismatchException(constDeclaredType, initType, constStmt.Name.Line);
+                        CheckExcessProperties(actualRecord, declaredType, stmt.Initializer);
+                    }
+
+                    if (!IsCompatible(declaredType, initializerType))
+                    {
+                        throw new TypeMismatchException(declaredType, initializerType, stmt.Name.Line);
                     }
                 }
                 else
                 {
-                    // No type annotation - pre-define with Any to allow self-referential callbacks,
-                    // then infer actual type from initializer
-                    _environment.Define(constStmt.Name.Lexeme, new TypeInfo.Any());
-                    constDeclaredType = CheckExpr(constStmt.Initializer);
-                    // Update with the actual inferred type
-                    _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
+                    initializerType = WidenLiteralType(initializerType);
+                    declaredType = initializerType;
+                    _environment.Define(stmt.Name.Lexeme, declaredType);
                 }
 
-                _environment.Define(constStmt.Name.Lexeme, constDeclaredType);
-                break;
+                declaredType ??= initializerType;
+            }
+            return VoidResult.Instance;
+        }
+
+        declaredType ??= new TypeInfo.Any();
+        _environment.Define(stmt.Name.Lexeme, declaredType);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitConst(Stmt.Const stmt)
+    {
+        TypeInfo constDeclaredType;
+
+        if (stmt.TypeAnnotation == "unique symbol")
+        {
+            if (stmt.Initializer is not Expr.Call call ||
+                call.Callee is not Expr.Variable v ||
+                v.Name.Lexeme != "Symbol")
+            {
+                throw new TypeCheckException(
+                    $"'unique symbol' must be initialized with Symbol() at line {stmt.Name.Line}.");
+            }
+            if (call.Arguments.Count > 0)
+            {
+                var argType = CheckExpr(call.Arguments[0]);
+                if (argType is not TypeInfo.String && argType is not TypeInfo.StringLiteral && argType is not TypeInfo.Any)
+                    throw new TypeCheckException($"Symbol() description must be a string.");
+            }
+            constDeclaredType = new TypeInfo.UniqueSymbol(
+                stmt.Name.Lexeme,
+                $"typeof {stmt.Name.Lexeme}");
+        }
+        else if (stmt.TypeAnnotation != null)
+        {
+            constDeclaredType = ToTypeInfo(stmt.TypeAnnotation);
+            _environment.Define(stmt.Name.Lexeme, constDeclaredType);
+            var initType = CheckExpr(stmt.Initializer);
+            if (!IsCompatible(constDeclaredType, initType))
+            {
+                throw new TypeMismatchException(constDeclaredType, initType, stmt.Name.Line);
+            }
+        }
+        else
+        {
+            _environment.Define(stmt.Name.Lexeme, new TypeInfo.Any());
+            constDeclaredType = CheckExpr(stmt.Initializer);
+            _environment.Define(stmt.Name.Lexeme, constDeclaredType);
+        }
+
+        _environment.Define(stmt.Name.Lexeme, constDeclaredType);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitFunction(Stmt.Function stmt)
+    {
+        CheckFunctionDeclaration(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitReturn(Stmt.Return stmt)
+    {
+        if (_inStaticBlock)
+        {
+            throw new TypeCheckException("Return statements are not allowed in static blocks.");
+        }
+        if (_currentFunctionReturnType != null)
+        {
+            if (_currentFunctionReturnType is TypeInfo.Tuple tupleRetType &&
+                stmt.Value is Expr.ArrayLiteral arrayLitRet)
+            {
+                CheckArrayLiteralAgainstTuple(arrayLitRet, tupleRetType, "return value");
+            }
+            else
+            {
+                TypeInfo actualReturnType = stmt.Value != null
+                    ? CheckExpr(stmt.Value)
+                    : new TypeInfo.Void();
+
+                TypeInfo expectedReturnType = _currentFunctionReturnType;
+                if (_inAsyncFunction && expectedReturnType is TypeInfo.Promise promiseType)
+                {
+                    expectedReturnType = promiseType.ValueType;
+                }
+
+                if (_inGeneratorFunction && expectedReturnType is TypeInfo.Void)
+                {
+                    // Allow any return value in generators with no explicit return type
+                }
+                else if (!IsCompatible(expectedReturnType, actualReturnType))
+                {
+                    throw new TypeMismatchException(_currentFunctionReturnType, actualReturnType, stmt.Keyword.Line);
+                }
+            }
+        }
+        else if (stmt.Value != null)
+        {
+            CheckExpr(stmt.Value);
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitExpression(Stmt.Expression stmt)
+    {
+        CheckExpr(stmt.Expr);
+        if (stmt.Expr is Expr.Call assertCall)
+        {
+            ApplyAssertionNarrowing(assertCall);
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitIf(Stmt.If stmt)
+    {
+        CheckExpr(stmt.Condition);
+
+        var guard = AnalyzeTypeGuard(stmt.Condition);
+        if (guard.VarName != null)
+        {
+            var thenEnv = new TypeEnvironment(_environment);
+            thenEnv.Define(guard.VarName, guard.NarrowedType!);
+            using (new EnvironmentScope(this, thenEnv))
+            {
+                CheckStmt(stmt.ThenBranch);
             }
 
-            case Stmt.Function funcStmt:
-                CheckFunctionDeclaration(funcStmt);
-                break;
-
-            case Stmt.Return returnStmt:
-                // Validate: return statements are not allowed in static blocks
-                if (_inStaticBlock)
+            if (stmt.ElseBranch != null && guard.ExcludedType != null)
+            {
+                var elseEnv = new TypeEnvironment(_environment);
+                elseEnv.Define(guard.VarName, guard.ExcludedType);
+                using (new EnvironmentScope(this, elseEnv))
                 {
-                    throw new TypeCheckException("Return statements are not allowed in static blocks.");
+                    CheckStmt(stmt.ElseBranch);
                 }
-                if (_currentFunctionReturnType != null)
-                {
-                    // Special case: array literal returned to tuple return type (contextual typing)
-                    if (_currentFunctionReturnType is TypeInfo.Tuple tupleRetType &&
-                        returnStmt.Value is Expr.ArrayLiteral arrayLitRet)
-                    {
-                        CheckArrayLiteralAgainstTuple(arrayLitRet, tupleRetType, "return value");
-                    }
-                    else
-                    {
-                        TypeInfo actualReturnType = returnStmt.Value != null
-                            ? CheckExpr(returnStmt.Value)
-                            : new TypeInfo.Void();
+            }
+            else if (stmt.ElseBranch != null)
+            {
+                CheckStmt(stmt.ElseBranch);
+            }
 
-                        // For async functions, the return type is Promise<T> but we can return T directly
-                        // (the runtime automatically wraps it in a Promise)
-                        TypeInfo expectedReturnType = _currentFunctionReturnType;
-                        if (_inAsyncFunction && expectedReturnType is TypeInfo.Promise promiseType)
-                        {
-                            expectedReturnType = promiseType.ValueType;
-                        }
-
-                        // For generator functions, the return value becomes the final iterator result value.
-                        // If no explicit return type is declared (void), allow any return value.
-                        // The return type in generators is separate from the yield type.
-                        if (_inGeneratorFunction && expectedReturnType is TypeInfo.Void)
-                        {
-                            // Allow any return value in generators with no explicit return type
-                        }
-                        else if (!IsCompatible(expectedReturnType, actualReturnType))
-                        {
-                             throw new TypeMismatchException(_currentFunctionReturnType, actualReturnType, returnStmt.Keyword.Line);
-                        }
-                    }
-                }
-                else if (returnStmt.Value != null)
-                {
-                    CheckExpr(returnStmt.Value);
-                }
-                break;
-
-            case Stmt.Expression exprStmt:
-                CheckExpr(exprStmt.Expr);
-                // Apply assertion narrowing for calls to assertion functions
-                if (exprStmt.Expr is Expr.Call assertCall)
-                {
-                    ApplyAssertionNarrowing(assertCall);
-                }
-                break;
-
-            case Stmt.If ifStmt:
-                CheckExpr(ifStmt.Condition);
-
-                var guard = AnalyzeTypeGuard(ifStmt.Condition);
-                if (guard.VarName != null)
-                {
-                    // Then branch with narrowed type
-                    var thenEnv = new TypeEnvironment(_environment);
-                    thenEnv.Define(guard.VarName, guard.NarrowedType!);
-                    using (new EnvironmentScope(this, thenEnv))
-                    {
-                        CheckStmt(ifStmt.ThenBranch);
-                    }
-
-                    // Else branch with excluded type
-                    if (ifStmt.ElseBranch != null && guard.ExcludedType != null)
-                    {
-                        var elseEnv = new TypeEnvironment(_environment);
-                        elseEnv.Define(guard.VarName, guard.ExcludedType);
-                        using (new EnvironmentScope(this, elseEnv))
-                        {
-                            CheckStmt(ifStmt.ElseBranch);
-                        }
-                    }
-                    else if (ifStmt.ElseBranch != null)
-                    {
-                        CheckStmt(ifStmt.ElseBranch);
-                    }
-
-                    // Control flow narrowing: if then-branch terminates and no else branch,
-                    // subsequent code in the same scope sees the excluded type
-                    if (ifStmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(ifStmt.ThenBranch))
-                    {
-                        _environment.Define(guard.VarName, guard.ExcludedType);
-                    }
-                    // If else-branch terminates and then-branch doesn't,
-                    // subsequent code sees the narrowed type
-                    else if (ifStmt.ElseBranch != null && guard.NarrowedType != null &&
-                             AlwaysTerminates(ifStmt.ElseBranch) && !AlwaysTerminates(ifStmt.ThenBranch))
-                    {
-                        _environment.Define(guard.VarName, guard.NarrowedType);
-                    }
-                }
-                else
-                {
-                    CheckStmt(ifStmt.ThenBranch);
-                    if (ifStmt.ElseBranch != null) CheckStmt(ifStmt.ElseBranch);
-                }
-                break;
-
-            case Stmt.While whileStmt:
-                CheckExpr(whileStmt.Condition);
-                _loopDepth++;
-                try
-                {
-                    CheckStmt(whileStmt.Body);
-                }
-                finally
-                {
-                    _loopDepth--;
-                }
-                break;
-
-            case Stmt.DoWhile doWhileStmt:
-                _loopDepth++;
-                try
-                {
-                    CheckStmt(doWhileStmt.Body);
-                }
-                finally
-                {
-                    _loopDepth--;
-                }
-                CheckExpr(doWhileStmt.Condition);
-                break;
-
-            case Stmt.For forStmt:
-                if (forStmt.Initializer != null)
-                    CheckStmt(forStmt.Initializer);
-                if (forStmt.Condition != null)
-                    CheckExpr(forStmt.Condition);
-                _loopDepth++;
-                try
-                {
-                    CheckStmt(forStmt.Body);
-                }
-                finally
-                {
-                    _loopDepth--;
-                }
-                if (forStmt.Increment != null)
-                    CheckExpr(forStmt.Increment);
-                break;
-
-            case Stmt.ForOf forOf:
-                TypeInfo iterableType = CheckExpr(forOf.Iterable);
-                TypeInfo elementType = new TypeInfo.Any();
-
-                // Get element type from array
-                if (iterableType is TypeInfo.Array arr)
-                {
-                    elementType = arr.ElementType;
-                }
-                // Map iteration yields [key, value] tuples
-                else if (iterableType is TypeInfo.Map mapType)
-                {
-                    elementType = TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2);
-                }
-                // Set iteration yields values
-                else if (iterableType is TypeInfo.Set setType)
-                {
-                    elementType = setType.ElementType;
-                }
-                // Iterator yields its element type
-                else if (iterableType is TypeInfo.Iterator iterType)
-                {
-                    elementType = iterType.ElementType;
-                }
-
-                // Create new scope and define the loop variable
-                TypeEnvironment forOfEnv = new(_environment);
-                forOfEnv.Define(forOf.Variable.Lexeme, elementType);
-
-                TypeEnvironment prevForOfEnv = _environment;
-                _environment = forOfEnv;
-                _loopDepth++;
-                try
-                {
-                    CheckStmt(forOf.Body);
-                }
-                finally
-                {
-                    _loopDepth--;
-                    _environment = prevForOfEnv;
-                }
-                break;
-
-            case Stmt.ForIn forIn:
-                TypeInfo objType = CheckExpr(forIn.Object);
-
-                // for...in iterates over object keys, so element type is always string
-                TypeInfo keyType = new TypeInfo.String();
-
-                // Validate that the iterable is an object-like type
-                if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
-                {
-                    throw new TypeCheckException($"'for...in' requires an object, got {objType}");
-                }
-
-                // Create new scope and define the loop variable
-                TypeEnvironment forInEnv = new(_environment);
-                forInEnv.Define(forIn.Variable.Lexeme, keyType);
-
-                TypeEnvironment prevForInEnv = _environment;
-                _environment = forInEnv;
-                _loopDepth++;
-                try
-                {
-                    CheckStmt(forIn.Body);
-                }
-                finally
-                {
-                    _loopDepth--;
-                    _environment = prevForInEnv;
-                }
-                break;
-
-            case Stmt.Break breakStmt:
-                if (breakStmt.Label != null)
-                {
-                    // Labeled break: must target a valid label
-                    string labelName = breakStmt.Label.Lexeme;
-                    if (!_activeLabels.ContainsKey(labelName))
-                    {
-                        throw new TypeCheckException($"Label '{labelName}' not found");
-                    }
-                }
-                else
-                {
-                    // Unlabeled break: must be inside a loop or switch
-                    if (_loopDepth == 0 && _switchDepth == 0)
-                    {
-                        throw new TypeOperationException("'break' can only be used inside a loop or switch");
-                    }
-                }
-                break;
-
-            case Stmt.Switch switchStmt:
-                CheckSwitch(switchStmt);
-                break;
-
-            case Stmt.TryCatch tryCatch:
-                CheckTryCatch(tryCatch);
-                break;
-
-            case Stmt.Throw throwStmt:
-                CheckExpr(throwStmt.Value);
-                break;
-
-            case Stmt.Continue continueStmt:
-                if (continueStmt.Label != null)
-                {
-                    // Labeled continue: must target a valid label on a loop
-                    string labelName = continueStmt.Label.Lexeme;
-                    if (!_activeLabels.TryGetValue(labelName, out bool isOnLoop))
-                    {
-                        throw new TypeCheckException($"Label '{labelName}' not found");
-                    }
-                    if (!isOnLoop)
-                    {
-                        throw new TypeOperationException($"Cannot continue to non-loop label '{labelName}'");
-                    }
-                }
-                else
-                {
-                    // Unlabeled continue: must be inside a loop
-                    if (_loopDepth == 0)
-                    {
-                        throw new TypeOperationException("'continue' can only be used inside a loop");
-                    }
-                }
-                break;
-
-            case Stmt.Print printStmt:
-                CheckExpr(printStmt.Expr);
-                break;
-
-            case Stmt.Import importStmt:
-                // Imports are handled in CheckModules() during multi-module type checking.
-                // In single-file mode, imports are an error since there's no module to import from.
-                if (_currentModule == null)
-                {
-                    throw new TypeCheckException("Import statements require module mode. " +
-                                       "Use 'dotnet run -- --compile' with multi-file support", importStmt.Keyword.Line);
-                }
-                // When in module mode, imports are resolved and bound in BindModuleImports()
-                break;
-
-            case Stmt.ImportRequire importReq:
-                CheckImportRequire(importReq);
-                break;
-
-            case Stmt.Export exportStmt:
-                // Check the declaration or expression being exported
-                CheckExportStatement(exportStmt);
-                break;
-
-            case Stmt.FileDirective directive:
-                // Validate file-level directives like @Namespace
-                ValidateFileDirective(directive);
-                break;
-
-            case Stmt.Directive:
-                // Directives like "use strict" are processed at the start of type checking.
-                // They have no type checking side effects beyond setting strict mode.
-                break;
-
-            case Stmt.StaticBlock:
-                // Static blocks are type-checked in CheckClassDeclaration context.
-                // If encountered here, it's a no-op (block body already checked).
-                break;
-
-            case Stmt.DeclareModule declareModule:
-                // Module augmentation or ambient declaration - handled during module type checking
-                CheckDeclareModuleStatement(declareModule);
-                break;
-
-            case Stmt.DeclareGlobal declareGlobal:
-                // Global augmentation - handled during module type checking
-                CheckDeclareGlobalStatement(declareGlobal);
-                break;
-
-            case Stmt.Using usingStmt:
-                CheckUsingDeclaration(usingStmt);
-                break;
-
-            case Stmt.Field:
-            case Stmt.Accessor:
-            case Stmt.AutoAccessor:
-                // Class member declarations - handled within class type checking context
-                break;
-
-            default:
-                throw new InvalidOperationException($"Type Error: Unhandled statement type in TypeChecker: {stmt.GetType().Name}");
+            if (stmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
+            {
+                _environment.Define(guard.VarName, guard.ExcludedType);
+            }
+            else if (stmt.ElseBranch != null && guard.NarrowedType != null &&
+                     AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
+            {
+                _environment.Define(guard.VarName, guard.NarrowedType);
+            }
         }
+        else
+        {
+            CheckStmt(stmt.ThenBranch);
+            if (stmt.ElseBranch != null) CheckStmt(stmt.ElseBranch);
+        }
+        return VoidResult.Instance;
     }
+
+    public VoidResult VisitWhile(Stmt.While stmt)
+    {
+        CheckExpr(stmt.Condition);
+        _loopDepth++;
+        try { CheckStmt(stmt.Body); }
+        finally { _loopDepth--; }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitDoWhile(Stmt.DoWhile stmt)
+    {
+        _loopDepth++;
+        try { CheckStmt(stmt.Body); }
+        finally { _loopDepth--; }
+        CheckExpr(stmt.Condition);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitFor(Stmt.For stmt)
+    {
+        if (stmt.Initializer != null)
+            CheckStmt(stmt.Initializer);
+        if (stmt.Condition != null)
+            CheckExpr(stmt.Condition);
+        _loopDepth++;
+        try { CheckStmt(stmt.Body); }
+        finally { _loopDepth--; }
+        if (stmt.Increment != null)
+            CheckExpr(stmt.Increment);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitForOf(Stmt.ForOf stmt)
+    {
+        TypeInfo iterableType = CheckExpr(stmt.Iterable);
+        TypeInfo elementType = new TypeInfo.Any();
+
+        if (iterableType is TypeInfo.Array arr)
+            elementType = arr.ElementType;
+        else if (iterableType is TypeInfo.Map mapType)
+            elementType = TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2);
+        else if (iterableType is TypeInfo.Set setType)
+            elementType = setType.ElementType;
+        else if (iterableType is TypeInfo.Iterator iterType)
+            elementType = iterType.ElementType;
+
+        TypeEnvironment forOfEnv = new(_environment);
+        forOfEnv.Define(stmt.Variable.Lexeme, elementType);
+
+        TypeEnvironment prevForOfEnv = _environment;
+        _environment = forOfEnv;
+        _loopDepth++;
+        try { CheckStmt(stmt.Body); }
+        finally
+        {
+            _loopDepth--;
+            _environment = prevForOfEnv;
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitForIn(Stmt.ForIn stmt)
+    {
+        TypeInfo objType = CheckExpr(stmt.Object);
+        TypeInfo keyType = new TypeInfo.String();
+
+        if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
+        {
+            throw new TypeCheckException($"'for...in' requires an object, got {objType}");
+        }
+
+        TypeEnvironment forInEnv = new(_environment);
+        forInEnv.Define(stmt.Variable.Lexeme, keyType);
+
+        TypeEnvironment prevForInEnv = _environment;
+        _environment = forInEnv;
+        _loopDepth++;
+        try { CheckStmt(stmt.Body); }
+        finally
+        {
+            _loopDepth--;
+            _environment = prevForInEnv;
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitBreak(Stmt.Break stmt)
+    {
+        if (stmt.Label != null)
+        {
+            string labelName = stmt.Label.Lexeme;
+            if (!_activeLabels.ContainsKey(labelName))
+            {
+                throw new TypeCheckException($"Label '{labelName}' not found");
+            }
+        }
+        else
+        {
+            if (_loopDepth == 0 && _switchDepth == 0)
+            {
+                throw new TypeOperationException("'break' can only be used inside a loop or switch");
+            }
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitSwitch(Stmt.Switch stmt)
+    {
+        CheckSwitch(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitTryCatch(Stmt.TryCatch stmt)
+    {
+        CheckTryCatch(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitThrow(Stmt.Throw stmt)
+    {
+        CheckExpr(stmt.Value);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitContinue(Stmt.Continue stmt)
+    {
+        if (stmt.Label != null)
+        {
+            string labelName = stmt.Label.Lexeme;
+            if (!_activeLabels.TryGetValue(labelName, out bool isOnLoop))
+            {
+                throw new TypeCheckException($"Label '{labelName}' not found");
+            }
+            if (!isOnLoop)
+            {
+                throw new TypeOperationException($"Cannot continue to non-loop label '{labelName}'");
+            }
+        }
+        else
+        {
+            if (_loopDepth == 0)
+            {
+                throw new TypeOperationException("'continue' can only be used inside a loop");
+            }
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitPrint(Stmt.Print stmt)
+    {
+        CheckExpr(stmt.Expr);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitImport(Stmt.Import stmt)
+    {
+        if (_currentModule == null)
+        {
+            throw new TypeCheckException("Import statements require module mode. " +
+                               "Use 'dotnet run -- --compile' with multi-file support", stmt.Keyword.Line);
+        }
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitImportRequire(Stmt.ImportRequire stmt)
+    {
+        CheckImportRequire(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitExport(Stmt.Export stmt)
+    {
+        CheckExportStatement(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitFileDirective(Stmt.FileDirective stmt)
+    {
+        ValidateFileDirective(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitDirective(Stmt.Directive stmt) => VoidResult.Instance;
+    public VoidResult VisitStaticBlock(Stmt.StaticBlock stmt) => VoidResult.Instance;
+
+    public VoidResult VisitDeclareModule(Stmt.DeclareModule stmt)
+    {
+        CheckDeclareModuleStatement(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitDeclareGlobal(Stmt.DeclareGlobal stmt)
+    {
+        CheckDeclareGlobalStatement(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitUsing(Stmt.Using stmt)
+    {
+        CheckUsingDeclaration(stmt);
+        return VoidResult.Instance;
+    }
+
+    public VoidResult VisitField(Stmt.Field stmt) => VoidResult.Instance;
+    public VoidResult VisitAccessor(Stmt.Accessor stmt) => VoidResult.Instance;
+    public VoidResult VisitAutoAccessor(Stmt.AutoAccessor stmt) => VoidResult.Instance;
 
     /// <summary>
     /// Type checks a 'using' or 'await using' declaration.

@@ -2,6 +2,7 @@ using System.Collections.Frozen;
 using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -16,6 +17,10 @@ namespace SharpTS.TypeSystem;
 /// records for type representations. Supports both structural typing (interfaces) and nominal
 /// typing (classes). Type checking runs at compile-time, completely separate from runtime
 /// execution. Errors throw exceptions with "Type Error:" prefix.
+///
+/// Implements <see cref="IExprVisitor{TResult}"/> and <see cref="IStmtVisitor{TResult}"/> for
+/// exhaustive dispatch to all AST node types. The visitor pattern ensures compile-time safety
+/// when new expression or statement types are added.
 ///
 /// This class is split across partial files:
 /// <list type="bullet">
@@ -45,7 +50,7 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 /// <seealso cref="TypeEnvironment"/>
 /// <seealso cref="TypeInfo"/>
-public partial class TypeChecker
+public partial class TypeChecker : IExprVisitor<TypeInfo>, IStmtVisitor<VoidResult>
 {
     private TypeEnvironment _environment = new();
     private TypeMap _typeMap = new();

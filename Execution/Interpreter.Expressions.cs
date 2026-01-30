@@ -2,6 +2,7 @@ using System.IO;
 using System.Numerics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
@@ -14,7 +15,7 @@ namespace SharpTS.Execution;
 public partial class Interpreter
 {
     /// <summary>
-    /// Dispatches an expression to the appropriate evaluator using pattern matching.
+    /// Dispatches an expression to the appropriate evaluator using the visitor pattern.
     /// </summary>
     /// <param name="expr">The expression AST node to evaluate.</param>
     /// <returns>The runtime value produced by evaluating the expression.</returns>
@@ -25,55 +26,55 @@ public partial class Interpreter
     /// </remarks>
     internal object? Evaluate(Expr expr)
     {
-        return expr switch
-        {
-            Expr.Binary binary => EvaluateBinary(binary),
-            Expr.Logical logical => EvaluateLogical(logical),
-            Expr.NullishCoalescing nc => EvaluateNullishCoalescing(nc),
-            Expr.Ternary ternary => EvaluateTernary(ternary),
-            Expr.Grouping grouping => Evaluate(grouping.Expression),
-            Expr.Literal literal => EvaluateLiteral(literal),
-            Expr.Unary unary => EvaluateUnary(unary),
-            Expr.Delete delete => EvaluateDelete(delete),
-            Expr.Variable variable => EvaluateVariable(variable),
-            Expr.Assign assign => EvaluateAssign(assign),
-            Expr.Call call => EvaluateCall(call),
-            Expr.Get get => EvaluateGet(get),
-            Expr.Set set => EvaluateSet(set),
-            Expr.GetPrivate gp => EvaluateGetPrivate(gp),
-            Expr.SetPrivate sp => EvaluateSetPrivate(sp),
-            Expr.CallPrivate cp => EvaluateCallPrivate(cp),
-            Expr.This thisExpr => EvaluateThis(thisExpr),
-            Expr.New newExpr => EvaluateNew(newExpr),
-            Expr.ArrayLiteral array => EvaluateArray(array),
-            Expr.ObjectLiteral obj => EvaluateObject(obj),
-            Expr.GetIndex getIndex => EvaluateGetIndex(getIndex),
-            Expr.SetIndex setIndex => EvaluateSetIndex(setIndex),
-            Expr.Super super => EvaluateSuper(super),
-            Expr.CompoundAssign compound => EvaluateCompoundAssign(compound),
-            Expr.CompoundSet compoundSet => EvaluateCompoundSet(compoundSet),
-            Expr.CompoundSetIndex compoundSetIndex => EvaluateCompoundSetIndex(compoundSetIndex),
-            Expr.LogicalAssign logical => EvaluateLogicalAssign(logical),
-            Expr.LogicalSet logicalSet => EvaluateLogicalSet(logicalSet),
-            Expr.LogicalSetIndex logicalSetIndex => EvaluateLogicalSetIndex(logicalSetIndex),
-            Expr.PrefixIncrement prefix => EvaluatePrefixIncrement(prefix),
-            Expr.PostfixIncrement postfix => EvaluatePostfixIncrement(postfix),
-            Expr.ArrowFunction arrow => EvaluateArrowFunction(arrow),
-            Expr.TemplateLiteral template => EvaluateTemplateLiteral(template),
-            Expr.TaggedTemplateLiteral tagged => EvaluateTaggedTemplateLiteral(tagged),
-            Expr.Spread spread => Evaluate(spread.Expression), // Spread evaluates to its inner value
-            Expr.TypeAssertion ta => Evaluate(ta.Expression), // Type assertions are pass-through at runtime
-            Expr.Satisfies sat => Evaluate(sat.Expression), // Satisfies is pass-through at runtime
-            Expr.NonNullAssertion nna => Evaluate(nna.Expression), // Non-null assertions are pass-through at runtime
-            Expr.Await => throw new InterpreterException(" 'await' can only be used inside async functions."),
-            Expr.DynamicImport di => EvaluateDynamicImport(di),
-            Expr.ImportMeta im => EvaluateImportMeta(im),
-            Expr.Yield yieldExpr => EvaluateYield(yieldExpr),
-            Expr.RegexLiteral regex => new SharpTSRegExp(regex.Pattern, regex.Flags),
-            Expr.ClassExpr classExpr => EvaluateClassExpression(classExpr),
-            _ => throw new InvalidOperationException($"Runtime Error: Unhandled expression type in Interpreter: {expr.GetType().Name}")
-        };
+        return Expr.Accept(expr, this);
     }
+
+    // IExprVisitor<object?> implementation
+
+    public object? VisitBinary(Expr.Binary binary) => EvaluateBinary(binary);
+    public object? VisitLogical(Expr.Logical logical) => EvaluateLogical(logical);
+    public object? VisitNullishCoalescing(Expr.NullishCoalescing nc) => EvaluateNullishCoalescing(nc);
+    public object? VisitTernary(Expr.Ternary ternary) => EvaluateTernary(ternary);
+    public object? VisitGrouping(Expr.Grouping grouping) => Evaluate(grouping.Expression);
+    public object? VisitLiteral(Expr.Literal literal) => EvaluateLiteral(literal);
+    public object? VisitUnary(Expr.Unary unary) => EvaluateUnary(unary);
+    public object? VisitDelete(Expr.Delete delete) => EvaluateDelete(delete);
+    public object? VisitVariable(Expr.Variable variable) => EvaluateVariable(variable);
+    public object? VisitAssign(Expr.Assign assign) => EvaluateAssign(assign);
+    public object? VisitCall(Expr.Call call) => EvaluateCall(call);
+    public object? VisitGet(Expr.Get get) => EvaluateGet(get);
+    public object? VisitSet(Expr.Set set) => EvaluateSet(set);
+    public object? VisitGetPrivate(Expr.GetPrivate gp) => EvaluateGetPrivate(gp);
+    public object? VisitSetPrivate(Expr.SetPrivate sp) => EvaluateSetPrivate(sp);
+    public object? VisitCallPrivate(Expr.CallPrivate cp) => EvaluateCallPrivate(cp);
+    public object? VisitThis(Expr.This thisExpr) => EvaluateThis(thisExpr);
+    public object? VisitNew(Expr.New newExpr) => EvaluateNew(newExpr);
+    public object? VisitArrayLiteral(Expr.ArrayLiteral array) => EvaluateArray(array);
+    public object? VisitObjectLiteral(Expr.ObjectLiteral obj) => EvaluateObject(obj);
+    public object? VisitGetIndex(Expr.GetIndex getIndex) => EvaluateGetIndex(getIndex);
+    public object? VisitSetIndex(Expr.SetIndex setIndex) => EvaluateSetIndex(setIndex);
+    public object? VisitSuper(Expr.Super super) => EvaluateSuper(super);
+    public object? VisitCompoundAssign(Expr.CompoundAssign compound) => EvaluateCompoundAssign(compound);
+    public object? VisitCompoundSet(Expr.CompoundSet compoundSet) => EvaluateCompoundSet(compoundSet);
+    public object? VisitCompoundSetIndex(Expr.CompoundSetIndex compoundSetIndex) => EvaluateCompoundSetIndex(compoundSetIndex);
+    public object? VisitLogicalAssign(Expr.LogicalAssign logical) => EvaluateLogicalAssign(logical);
+    public object? VisitLogicalSet(Expr.LogicalSet logicalSet) => EvaluateLogicalSet(logicalSet);
+    public object? VisitLogicalSetIndex(Expr.LogicalSetIndex logicalSetIndex) => EvaluateLogicalSetIndex(logicalSetIndex);
+    public object? VisitPrefixIncrement(Expr.PrefixIncrement prefix) => EvaluatePrefixIncrement(prefix);
+    public object? VisitPostfixIncrement(Expr.PostfixIncrement postfix) => EvaluatePostfixIncrement(postfix);
+    public object? VisitArrowFunction(Expr.ArrowFunction arrow) => EvaluateArrowFunction(arrow);
+    public object? VisitTemplateLiteral(Expr.TemplateLiteral template) => EvaluateTemplateLiteral(template);
+    public object? VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged) => EvaluateTaggedTemplateLiteral(tagged);
+    public object? VisitSpread(Expr.Spread spread) => Evaluate(spread.Expression); // Spread evaluates to its inner value
+    public object? VisitTypeAssertion(Expr.TypeAssertion ta) => Evaluate(ta.Expression); // Type assertions are pass-through at runtime
+    public object? VisitSatisfies(Expr.Satisfies sat) => Evaluate(sat.Expression); // Satisfies is pass-through at runtime
+    public object? VisitNonNullAssertion(Expr.NonNullAssertion nna) => Evaluate(nna.Expression); // Non-null assertions are pass-through at runtime
+    public object? VisitAwait(Expr.Await awaitExpr) => throw new InterpreterException(" 'await' can only be used inside async functions.");
+    public object? VisitDynamicImport(Expr.DynamicImport di) => EvaluateDynamicImport(di);
+    public object? VisitImportMeta(Expr.ImportMeta im) => EvaluateImportMeta(im);
+    public object? VisitYield(Expr.Yield yieldExpr) => EvaluateYield(yieldExpr);
+    public object? VisitRegexLiteral(Expr.RegexLiteral regex) => new SharpTSRegExp(regex.Pattern, regex.Flags);
+    public object? VisitClassExpr(Expr.ClassExpr classExpr) => EvaluateClassExpression(classExpr);
 
     /// <summary>
     /// Asynchronously dispatches an expression to the appropriate evaluator.
