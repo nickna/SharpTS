@@ -719,6 +719,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, boundFunctionLabel);
 
+        // Task<object?> (Promise) - check for then/catch/finally
+        var promiseLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Brtrue, promiseLabel);
+
+        // $Promise type (used by fetch, etc.) - check for then/catch/finally
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Brtrue, promiseLabel);
+
         // Default - try to access _fields dictionary via reflection for class instances
         var classInstanceLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, classInstanceLabel);
@@ -763,6 +774,83 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
+        il.Emit(OpCodes.Ret);
+
+        // Promise (Task<object?> or $Promise) handler - return TSFunction wrappers for then/catch/finally
+        il.MarkLabel(promiseLabel);
+        // First, extract the underlying Task if this is a $Promise object
+        // Store the task in a local variable for use in creating TSFunction wrappers
+        var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var isTSPromiseLabel = il.DefineLabel();
+        var haveTaskLabel = il.DefineLabel();
+
+        // Check if obj is $Promise
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Brtrue, isTSPromiseLabel);
+
+        // It's a raw Task<object?>, use directly
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, taskLocal);
+        il.Emit(OpCodes.Br, haveTaskLabel);
+
+        // It's a $Promise, extract the Task property
+        il.MarkLabel(isTSPromiseLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
+        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Stloc, taskLocal);
+
+        il.MarkLabel(haveTaskLabel);
+
+        // Check for "then"
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "then");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notPromiseThenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notPromiseThenLabel);
+        // Return TSFunction wrapper for PromiseThen with the task as target
+        il.Emit(OpCodes.Ldloc, taskLocal);  // target (the underlying task)
+        il.Emit(OpCodes.Ldtoken, runtime.PromiseThen);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notPromiseThenLabel);
+
+        // Check for "catch"
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "catch");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notPromiseCatchLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notPromiseCatchLabel);
+        // Return TSFunction wrapper for PromiseCatch with the task as target
+        il.Emit(OpCodes.Ldloc, taskLocal);  // target (the underlying task)
+        il.Emit(OpCodes.Ldtoken, runtime.PromiseCatch);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notPromiseCatchLabel);
+
+        // Check for "finally"
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "finally");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notPromiseFinallyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notPromiseFinallyLabel);
+        // Return TSFunction wrapper for PromiseFinally with the task as target
+        il.Emit(OpCodes.Ldloc, taskLocal);  // target (the underlying task)
+        il.Emit(OpCodes.Ldtoken, runtime.PromiseFinally);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notPromiseFinallyLabel);
+
+        // Unknown promise property - return null
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);

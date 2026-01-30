@@ -82,6 +82,17 @@ public partial class ILEmitter
             return;
         }
 
+        // Global fetch function - wrap as TSFunction
+        if (name == "fetch")
+        {
+            IL.Emit(OpCodes.Ldnull); // target (static method)
+            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.Fetch);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
+            EmitNewobjUnknown(_ctx.Runtime!.TSFunctionCtor);
+            return;
+        }
+
         // Check for Node.js module globals (__dirname, __filename)
         if (name == "__filename")
         {

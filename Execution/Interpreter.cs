@@ -57,7 +57,8 @@ public partial class Interpreter : IDisposable
         {
             ["NaN"] = double.NaN,
             ["Infinity"] = double.PositiveInfinity,
-            ["undefined"] = Runtime.Types.SharpTSUndefined.Instance
+            ["undefined"] = Runtime.Types.SharpTSUndefined.Instance,
+            ["fetch"] = Runtime.BuiltIns.FetchBuiltIns.FetchMethod
         };
 
         // Add built-in singletons (Math, JSON, Object, etc.)

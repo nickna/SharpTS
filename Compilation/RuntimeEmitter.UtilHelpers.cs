@@ -765,21 +765,21 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public static PromisifiedFunction UtilPromisify(object fn)
+    /// Emits: public static $PromisifiedFunction UtilPromisify(object fn)
     /// </summary>
     private void EmitUtilPromisify(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
             "UtilPromisify",
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(PromisifiedFunction),
+            runtime.TSPromisifiedFunctionType,
             [_types.Object]);
         runtime.UtilPromisify = method;
 
         var il = method.GetILGenerator();
-        // return UtilHelpers.Promisify(fn)
+        // return new $PromisifiedFunction(fn)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(UtilHelpers).GetMethod(nameof(UtilHelpers.Promisify))!);
+        il.Emit(OpCodes.Newobj, runtime.TSPromisifiedFunctionCtor);
         il.Emit(OpCodes.Ret);
     }
 

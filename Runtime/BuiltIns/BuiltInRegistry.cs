@@ -177,6 +177,7 @@ public sealed class BuiltInRegistry
         RegisterEventEmitterType(registry);
         RegisterStringDecoderType(registry);
         RegisterStreamTypes(registry);
+        RegisterHttpTypes(registry);
 
         return registry;
     }
@@ -608,6 +609,23 @@ public sealed class BuiltInRegistry
             ((SharpTSTransformConstructor)instance).GetProperty(name));
         registry.RegisterInstanceType(typeof(SharpTSPassThroughConstructor), (instance, name) =>
             ((SharpTSPassThroughConstructor)instance).GetProperty(name));
+    }
+
+    private static void RegisterHttpTypes(BuiltInRegistry registry)
+    {
+        // Register fetch Response member lookup
+        registry.RegisterInstanceType(typeof(SharpTSFetchResponse), (instance, name) =>
+            ((SharpTSFetchResponse)instance).GetMember(name));
+
+        // Register HTTP server types
+        registry.RegisterInstanceType(typeof(SharpTSHttpServer), (instance, name) =>
+            ((SharpTSHttpServer)instance).GetMember(name));
+
+        registry.RegisterInstanceType(typeof(SharpTSHttpRequest), (instance, name) =>
+            ((SharpTSHttpRequest)instance).GetMember(name));
+
+        registry.RegisterInstanceType(typeof(SharpTSHttpResponse), (instance, name) =>
+            ((SharpTSHttpResponse)instance).GetMember(name));
     }
 
     private static string Stringify(object? obj)

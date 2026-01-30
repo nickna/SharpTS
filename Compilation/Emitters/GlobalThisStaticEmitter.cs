@@ -95,6 +95,11 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
                 return true;
 
+            case "fetch":
+                il.Emit(OpCodes.Ldstr, "fetch");
+                il.Emit(OpCodes.Call, ctx.Runtime!.GlobalThisGetProperty);
+                return true;
+
             case "undefined":
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;

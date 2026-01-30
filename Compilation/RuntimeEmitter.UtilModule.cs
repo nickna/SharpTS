@@ -398,6 +398,146 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits $PromisifiedFunction type for util.promisify support.
+    /// This wraps a callback-style function and converts it to return a Promise.
+    /// </summary>
+    internal void EmitTSPromisifiedFunctionClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$PromisifiedFunction",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object
+        );
+        runtime.TSPromisifiedFunctionType = typeBuilder;
+
+        // Field: _wrapped
+        var wrappedField = typeBuilder.DefineField("_wrapped", _types.Object, FieldAttributes.Private);
+
+        // Constructor(wrapped)
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.Object]
+        );
+        runtime.TSPromisifiedFunctionCtor = ctor;
+
+        var ctorIL = ctor.GetILGenerator();
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Stfld, wrappedField);
+        ctorIL.Emit(OpCodes.Ret);
+
+        // Method: Invoke(params object[] args) -> object (returns Task<object?>)
+        var invokeMethod = typeBuilder.DefineMethod(
+            "Invoke",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            _types.Object,
+            [_types.ObjectArray]
+        );
+        runtime.TSPromisifiedFunctionInvoke = invokeMethod;
+
+        var invokeIL = invokeMethod.GetILGenerator();
+
+        // var tcs = new TaskCompletionSource<object?>();
+        var tcsType = typeof(TaskCompletionSource<object?>);
+        var tcsLocal = invokeIL.DeclareLocal(tcsType);
+        invokeIL.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
+        invokeIL.Emit(OpCodes.Stloc, tcsLocal);
+
+        // var callback = new $PromisifyCallback(tcs);
+        // We need to emit the callback class too, but for simplicity let's use a delegate approach
+        // Create a callback that resolves the TaskCompletionSource
+
+        // Build args array with callback appended
+        // var newArgs = new object[args.Length + 1];
+        var newArgsLocal = invokeIL.DeclareLocal(_types.ObjectArray);
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        var arrayLengthMethod = typeof(Array).GetProperty("Length")!.GetGetMethod()!;
+        invokeIL.Emit(OpCodes.Callvirt, arrayLengthMethod);
+        invokeIL.Emit(OpCodes.Ldc_I4_1);
+        invokeIL.Emit(OpCodes.Add);
+        invokeIL.Emit(OpCodes.Newarr, _types.Object);
+        invokeIL.Emit(OpCodes.Stloc, newArgsLocal);
+
+        // Array.Copy(args, newArgs, args.Length);
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Ldloc, newArgsLocal);
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Callvirt, arrayLengthMethod);
+        var arrayCopyMethod = typeof(Array).GetMethod("Copy", [typeof(Array), typeof(Array), typeof(int)])!;
+        invokeIL.Emit(OpCodes.Call, arrayCopyMethod);
+
+        // Create callback function that resolves TCS
+        // newArgs[args.Length] = new PromisifyCallback(tcs);
+        invokeIL.Emit(OpCodes.Ldloc, newArgsLocal);
+        invokeIL.Emit(OpCodes.Ldarg_1);
+        invokeIL.Emit(OpCodes.Callvirt, arrayLengthMethod);
+        invokeIL.Emit(OpCodes.Ldloc, tcsLocal);
+        invokeIL.Emit(OpCodes.Newobj, typeof(PromisifyCallback).GetConstructor([tcsType])!);
+        invokeIL.Emit(OpCodes.Stelem_Ref);
+
+        // Call wrapped function via reflection (like $DeprecatedFunction does)
+        // var invokeMethod = _wrapped.GetType().GetMethod("Invoke");
+        var methodInfoLocal = invokeIL.DeclareLocal(_types.MethodInfo);
+        var noInvokeLabel = invokeIL.DefineLabel();
+        var afterInvokeLabel = invokeIL.DefineLabel();
+
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, wrappedField);
+        invokeIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        invokeIL.Emit(OpCodes.Ldstr, "Invoke");
+        invokeIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        invokeIL.Emit(OpCodes.Stloc, methodInfoLocal);
+
+        invokeIL.Emit(OpCodes.Ldloc, methodInfoLocal);
+        invokeIL.Emit(OpCodes.Brfalse, noInvokeLabel);
+
+        // invokeMethod.Invoke(_wrapped, new object[] { newArgs })
+        invokeIL.Emit(OpCodes.Ldloc, methodInfoLocal);
+        invokeIL.Emit(OpCodes.Ldarg_0);
+        invokeIL.Emit(OpCodes.Ldfld, wrappedField);
+        invokeIL.Emit(OpCodes.Ldc_I4_1);
+        invokeIL.Emit(OpCodes.Newarr, _types.Object);
+        invokeIL.Emit(OpCodes.Dup);
+        invokeIL.Emit(OpCodes.Ldc_I4_0);
+        invokeIL.Emit(OpCodes.Ldloc, newArgsLocal);
+        invokeIL.Emit(OpCodes.Stelem_Ref);
+        invokeIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+        invokeIL.Emit(OpCodes.Pop); // Discard return value
+        invokeIL.Emit(OpCodes.Br, afterInvokeLabel);
+
+        invokeIL.MarkLabel(noInvokeLabel);
+        // No Invoke method found - just resolve with null
+        invokeIL.Emit(OpCodes.Ldloc, tcsLocal);
+        invokeIL.Emit(OpCodes.Ldnull);
+        var setResultMethod = tcsType.GetMethod("SetResult", [typeof(object)])!;
+        invokeIL.Emit(OpCodes.Callvirt, setResultMethod);
+
+        invokeIL.MarkLabel(afterInvokeLabel);
+
+        // return tcs.Task;
+        invokeIL.Emit(OpCodes.Ldloc, tcsLocal);
+        var taskProperty = tcsType.GetProperty("Task")!.GetGetMethod()!;
+        invokeIL.Emit(OpCodes.Callvirt, taskProperty);
+        invokeIL.Emit(OpCodes.Ret);
+
+        // Override ToString
+        var toStringMethod = typeBuilder.DefineMethod(
+            "ToString",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.String,
+            Type.EmptyTypes
+        );
+        var toStringIL = toStringMethod.GetILGenerator();
+        toStringIL.Emit(OpCodes.Ldstr, "[Function: promisified]");
+        toStringIL.Emit(OpCodes.Ret);
+
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
     /// Emits $TextDecoderDecodeMethod wrapper for compiled mode decode calls.
     /// </summary>
     internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)

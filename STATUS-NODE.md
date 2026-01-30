@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-29 (Added stream module with Readable, Writable, Duplex, Transform, PassThrough)
+**Last Updated:** 2026-01-30 (Added fetch API with full request/response support)
 
 ## Legend
 - ✅ Implemented
@@ -33,7 +33,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `timers` | ✅ | setTimeout, setInterval, setImmediate + clear variants (module import) |
 | `string_decoder` | ✅ | StringDecoder class for multi-byte character handling |
 | `perf_hooks` | ✅ | performance.now(), performance.timeOrigin |
-| `http` / `https` | ❌ | No network server/client |
+| `http` / `https` | ❌ | No network server/client (use `fetch()` for client requests) |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ❌ | No DNS resolution |
 | `zlib` | ✅ | gzip, deflate, deflateRaw, brotli, zstd (sync APIs) |
@@ -557,18 +557,54 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
+## 19. WEB APIs
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **fetch()** | | |
+| `fetch(url)` | ✅ | Basic GET request |
+| `fetch(url, options)` | ✅ | With request configuration |
+| **Request Options** | | |
+| `method` | ✅ | GET, POST, PUT, DELETE, PATCH, etc. |
+| `headers` | ✅ | Custom request headers as object |
+| `body` | ✅ | String request body |
+| **Response Object** | | |
+| `status` | ✅ | HTTP status code |
+| `statusText` | ✅ | HTTP status message |
+| `ok` | ✅ | True if status 200-299 |
+| `url` | ✅ | Final URL after redirects |
+| `headers` | ✅ | Response headers as object |
+| **Response Methods** | | |
+| `json()` | ✅ | Parse body as JSON (returns Promise) |
+| `text()` | ✅ | Get body as string (returns Promise) |
+| `arrayBuffer()` | ✅ | Get body as ArrayBuffer (returns Promise) |
+| **Async Support** | | |
+| `await fetch(...)` | ✅ | Full async/await support |
+| Promise chaining | ✅ | `.then()` style |
+| **Not Implemented** | | |
+| `Request` class | ❌ | Use options object |
+| `Response` class | ❌ | Only from fetch() return |
+| `Headers` class | ❌ | Use plain objects |
+| Streaming body | ❌ | Body fully loaded |
+| `AbortController` | ❌ | No request cancellation |
+| `credentials` option | ❌ | No cookie handling |
+| `redirect` option | ❌ | Auto-follows redirects |
+
+---
+
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, and stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support, and the Web Fetch API for HTTP client requests. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
 - No async fs operations (sync-only workaround)
-- No network modules (http, net, dns)
+- No HTTP server module (http.createServer)
 - No flowing/async stream mode (sync push/pull only)
 
 **Recommended Workarounds:**
 - Use `*Sync` versions of fs methods
 - Use ES module syntax instead of `require()`
+- Use `fetch()` for HTTP client requests
 
 ---
 
@@ -577,5 +613,5 @@ SharpTS provides comprehensive support for file system operations (sync), includ
 Priority features to implement for broader Node.js compatibility:
 
 1. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-2. **http module** - Basic HTTP server/client (higher effort)
+2. **http.createServer** - HTTP server support (higher effort)
 3. **Flowing stream mode** - Event-based async streaming (higher effort)

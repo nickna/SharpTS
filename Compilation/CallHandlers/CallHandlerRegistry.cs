@@ -23,6 +23,7 @@ public class CallHandlerRegistry
             new DateStaticHandler(),         // Priority 35 - Date.now()
             new BuiltInModuleHandler(),      // Priority 40 - path, os, fs modules
             new TimerHandler(),              // Priority 45 - setTimeout, clearTimeout
+            new FetchHandler(),              // Priority 46 - fetch()
             new GlobalFunctionHandler(),     // Priority 50 - parseInt, parseFloat, isNaN, isFinite
             new BuiltInConstructorHandler(), // Priority 60 - Symbol, BigInt, Date()
         ];

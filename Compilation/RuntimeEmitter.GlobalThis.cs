@@ -38,12 +38,10 @@ public partial class RuntimeEmitter
         // 3. Return undefined if not found
 
         var selfRefLabel = il.DefineLabel();
-        var mathLabel = il.DefineLabel();
-        var consoleLabel = il.DefineLabel();
-        var processLabel = il.DefineLabel();
         var undefinedPropLabel = il.DefineLabel();
         var nanLabel = il.DefineLabel();
         var infinityLabel = il.DefineLabel();
+        var fetchLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
 
         // Check for "globalThis" (self-reference)
@@ -70,6 +68,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, infinityLabel);
 
+        // Check for "fetch"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "fetch");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, fetchLabel);
+
         // Default: return undefined
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
@@ -94,6 +98,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(infinityLabel);
         il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
         il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, returnLabel);
+
+        // fetch property - return fetch function wrapped as TSFunction
+        il.MarkLabel(fetchLabel);
+        il.Emit(OpCodes.Ldnull); // target (static method)
+        il.Emit(OpCodes.Ldtoken, runtime.Fetch);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(returnLabel);

@@ -163,6 +163,7 @@ public partial class RuntimeEmitter
         // Emit util module types for standalone execution
         // Must come after $Buffer (TextEncoder returns $Buffer)
         EmitTSDeprecatedFunctionClass(moduleBuilder, runtime);
+        EmitTSPromisifiedFunctionClass(moduleBuilder, runtime);
         EmitTSTextEncoderClass(moduleBuilder, runtime);
         EmitTSTextDecoderClass(moduleBuilder, runtime);
         EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime);
@@ -1534,6 +1535,11 @@ public partial class RuntimeEmitter
         EmitGetListProperty(typeBuilder, runtime);
         EmitSetFieldsProperty(typeBuilder, runtime);
         EmitSetFieldsPropertyStrict(typeBuilder, runtime);
+        // InvokeValue/InvokeMethodValue must come before Promise methods (needed by InvokeCallback)
+        EmitInvokeValue(typeBuilder, runtime);
+        EmitInvokeMethodValue(typeBuilder, runtime);
+        // Promise methods must come before GetProperty (which needs PromiseThen for typeof p.then)
+        EmitPromiseMethods(typeBuilder, runtime);
         EmitGetProperty(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
@@ -1546,8 +1552,6 @@ public partial class RuntimeEmitter
         EmitGetIndex(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitSetIndexStrict(typeBuilder, runtime);
-        EmitInvokeValue(typeBuilder, runtime);
-        EmitInvokeMethodValue(typeBuilder, runtime);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
@@ -1643,8 +1647,7 @@ public partial class RuntimeEmitter
         EmitBigIntArithmetic(typeBuilder, runtime);
         EmitBigIntComparison(typeBuilder, runtime);
         EmitBigIntBitwise(typeBuilder, runtime);
-        // Promise methods
-        EmitPromiseMethods(typeBuilder, runtime);
+        // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
         // Number methods
         EmitNumberMethods(typeBuilder, runtime);
         // Virtual timer infrastructure (must come before DateMethods which calls ProcessPendingTimers)
@@ -1678,14 +1681,16 @@ public partial class RuntimeEmitter
         EmitPathModulePropertyWrappers(typeBuilder, runtime);
         // Process global methods (env, argv)
         EmitProcessMethods(typeBuilder, runtime);
-        // globalThis methods (ES2020)
-        EmitGlobalThisMethods(typeBuilder, runtime);
         // Querystring module methods
         EmitQuerystringMethods(typeBuilder, runtime);
         // Assert module methods
         EmitAssertMethods(typeBuilder, runtime);
         // URL module methods
         EmitUrlMethods(typeBuilder, runtime);
+        // HTTP module methods (fetch, http.createServer, etc.) - must be before globalThis
+        EmitHttpModuleMethods(typeBuilder, runtime);
+        // globalThis methods (ES2020) - must be after HTTP for fetch reference
+        EmitGlobalThisMethods(typeBuilder, runtime);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
         // Crypto module methods

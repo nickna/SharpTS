@@ -601,6 +601,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new StringDecoderModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new PerfHooksModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new StreamModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
     }
 
     #endregion

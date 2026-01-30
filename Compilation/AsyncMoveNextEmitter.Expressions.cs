@@ -17,12 +17,33 @@ public partial class AsyncMoveNextEmitter
         var continueLabel = _il.DefineLabel();
         var awaiterField = _builder.AwaiterFields[stateNumber];
 
-        // 1. Emit the awaited expression (should produce Task<object>)
+        // 1. Emit the awaited expression (should produce Task<object> or $Promise)
         EmitExpression(a.Expression);
         EnsureBoxed();
 
-        // 2. Convert to Task<object> if needed
+        // 2. Convert to Task<object> - handle both $Promise and raw Task<object>
+        // If it's a $Promise, extract its Task property
+        var taskLocal = _il.DeclareLocal(typeof(Task<object>));
+        var isPromiseLabel = _il.DefineLabel();
+        var haveTaskLabel = _il.DefineLabel();
+
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.TSPromiseType);
+        _il.Emit(OpCodes.Brtrue, isPromiseLabel);
+
+        // Not a $Promise - assume it's a Task<object>
         _il.Emit(OpCodes.Castclass, typeof(Task<object>));
+        _il.Emit(OpCodes.Stloc, taskLocal);
+        _il.Emit(OpCodes.Br, haveTaskLabel);
+
+        // Is a $Promise - extract its Task property
+        _il.MarkLabel(isPromiseLabel);
+        _il.Emit(OpCodes.Castclass, _ctx.Runtime.TSPromiseType);
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.TSPromiseTaskGetter);
+        _il.Emit(OpCodes.Stloc, taskLocal);
+
+        _il.MarkLabel(haveTaskLabel);
+        _il.Emit(OpCodes.Ldloc, taskLocal);
 
         // 3. Get awaiter: task.GetAwaiter()
         _il.Emit(OpCodes.Call, _builder.GetTaskGetAwaiterMethod());
@@ -250,6 +271,13 @@ public partial class AsyncMoveNextEmitter
             arg => { EmitExpression(arg); EnsureBoxed(); },
             _ctx!.Runtime!.ConsoleLog))
         {
+            return;
+        }
+
+        // Handle fetch() - global async HTTP function
+        if (c.Callee is Expr.Variable fetchVar && fetchVar.Name.Lexeme == "fetch")
+        {
+            EmitFetchCall(c.Arguments);
             return;
         }
 
@@ -1079,6 +1107,42 @@ public partial class AsyncMoveNextEmitter
         }
 
         _il.MarkLabel(doneLabel);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits a fetch() call - the global async HTTP function.
+    /// Calls $Runtime.Fetch(url, options) which returns a Promise.
+    /// </summary>
+    private void EmitFetchCall(List<Expr> arguments)
+    {
+        // Emit URL - first argument (required)
+        if (arguments.Count > 0)
+        {
+            EmitExpression(arguments[0]);
+            EnsureBoxed();
+        }
+        else
+        {
+            // fetch() with no arguments should throw, but emit null and let runtime handle it
+            _il.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit options - second argument (optional)
+        if (arguments.Count > 1)
+        {
+            EmitExpression(arguments[1]);
+            EnsureBoxed();
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+
+        // Call $Runtime.Fetch(url, options) - returns Promise
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.Fetch);
+
+        // fetch returns a Promise, mark stack as reference type
         SetStackUnknown();
     }
 

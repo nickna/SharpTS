@@ -26,7 +26,8 @@ public static class BuiltInModuleRegistry
         "timers",
         "string_decoder",
         "perf_hooks",
-        "stream"
+        "stream",
+        "http"
     ];
 
     /// <summary>

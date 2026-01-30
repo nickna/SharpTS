@@ -1078,6 +1078,11 @@ public partial class TypeChecker
         if (name.Lexeme == "isNaN") return new TypeInfo.Any(); // Global isNaN function
         if (name.Lexeme == "isFinite") return new TypeInfo.Any(); // Global isFinite function
         if (name.Lexeme == "globalThis") return new TypeInfo.Any(); // globalThis ES2020
+        if (name.Lexeme == "fetch") return new TypeInfo.Any(); // fetch() global function
+        if (name.Lexeme == "setTimeout") return new TypeInfo.Any(); // setTimeout() global function
+        if (name.Lexeme == "setInterval") return new TypeInfo.Any(); // setInterval() global function
+        if (name.Lexeme == "clearTimeout") return new TypeInfo.Any(); // clearTimeout() global function
+        if (name.Lexeme == "clearInterval") return new TypeInfo.Any(); // clearInterval() global function
         if (name.Lexeme == "undefined") return new TypeInfo.Undefined(); // Global undefined
         if (name.Lexeme == "NaN") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global NaN
         if (name.Lexeme == "Infinity") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global Infinity

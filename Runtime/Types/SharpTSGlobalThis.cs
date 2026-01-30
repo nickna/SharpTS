@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// It contains references to all built-in globals (Math, console, JSON, etc.) and provides
 /// self-reference (globalThis.globalThis === globalThis).
 /// </remarks>
-public sealed class SharpTSGlobalThis
+public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
 {
     /// <summary>
     /// The singleton instance of globalThis.
@@ -68,6 +68,12 @@ public sealed class SharpTSGlobalThis
             return SharpTSBufferConstructor.Instance;
         }
 
+        // Global async functions
+        if (name == "fetch")
+        {
+            return BuiltIns.FetchBuiltIns.FetchMethod;
+        }
+
         // Built-in constants
         if (name == "undefined")
         {
@@ -111,7 +117,7 @@ public sealed class SharpTSGlobalThis
         if (singleton != null) return true;
 
         // Check global functions
-        if (name == "parseInt" || name == "parseFloat" || name == "isNaN" || name == "isFinite")
+        if (name == "parseInt" || name == "parseFloat" || name == "isNaN" || name == "isFinite" || name == "fetch")
         {
             return true;
         }
@@ -123,6 +129,34 @@ public sealed class SharpTSGlobalThis
     /// Gets all user-assigned property names.
     /// </summary>
     public IEnumerable<string> GetUserPropertyNames() => _properties.Keys;
+
+    /// <summary>
+    /// Gets all property names (ISharpTSPropertyAccessor).
+    /// Returns user-assigned properties plus some well-known built-in globals.
+    /// </summary>
+    public IEnumerable<string> PropertyNames
+    {
+        get
+        {
+            foreach (var key in _properties.Keys)
+                yield return key;
+            // Also include well-known globals
+            yield return "globalThis";
+            yield return "Math";
+            yield return "JSON";
+            yield return "console";
+            yield return "Object";
+            yield return "Array";
+            yield return "Number";
+            yield return "String";
+            yield return "Boolean";
+            yield return "Symbol";
+            yield return "Promise";
+            yield return "process";
+            yield return "Buffer";
+            yield return "fetch";
+        }
+    }
 
     public override string ToString() => "[object globalThis]";
 }

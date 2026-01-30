@@ -147,6 +147,7 @@ public class TypeProvider
     public Type BoolArray => MakeArrayType(Boolean);
     public Type DoubleArray => MakeArrayType(Double);
     public Type Int32Array => MakeArrayType(Int32);
+    public Type ByteArray => MakeArrayType(Byte);
     public Type StringSplitOptions => Resolve("System.StringSplitOptions");
 
     #endregion

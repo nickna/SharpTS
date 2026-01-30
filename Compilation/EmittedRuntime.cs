@@ -802,6 +802,19 @@ public class EmittedRuntime
     public Type TSKeyObjectType { get; set; } = null!;
     public ConstructorBuilder TSKeyObjectCtorSecret { get; set; } = null!;
 
+    // HTTP module methods
+    public MethodBuilder Fetch { get; set; } = null!;
+    public MethodBuilder HttpCreateServer { get; set; } = null!;
+    public MethodBuilder HttpRequest { get; set; } = null!;
+    public MethodBuilder HttpGet { get; set; } = null!;
+    public MethodBuilder HttpGetMethods { get; set; } = null!;
+    public MethodBuilder HttpGetStatusCodes { get; set; } = null!;
+    public MethodBuilder HttpGetGlobalAgent { get; set; } = null!;
+
+    // $FetchResponse type - emitted for standalone fetch support
+    public TypeBuilder TSFetchResponseType { get; set; } = null!;
+    public ConstructorBuilder TSFetchResponseCtor { get; set; } = null!;
+
     // $Buffer type - emitted for standalone buffer support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
     public Type TSBufferType { get; set; } = null!;
@@ -915,6 +928,9 @@ public class EmittedRuntime
 
     // util.promisify support
     public MethodBuilder UtilPromisify { get; set; } = null!;
+    public TypeBuilder TSPromisifiedFunctionType { get; set; } = null!;
+    public ConstructorBuilder TSPromisifiedFunctionCtor { get; set; } = null!;
+    public MethodBuilder TSPromisifiedFunctionInvoke { get; set; } = null!;
 
     // util.inherits support
     public MethodBuilder UtilInherits { get; set; } = null!;

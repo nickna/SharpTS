@@ -1093,7 +1093,58 @@ public static class BuiltInModuleTypes
             "string_decoder" => GetStringDecoderModuleTypes(),
             "perf_hooks" => GetPerfHooksModuleTypes(),
             "stream" => GetStreamModuleTypes(),
+            "http" => GetHttpModuleTypes(),
             _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the http module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetHttpModuleTypes()
+    {
+        var anyType = new TypeInfo.Any();
+        var stringType = new TypeInfo.String();
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var voidType = new TypeInfo.Void();
+        var callbackType = new TypeInfo.Function([anyType, anyType], voidType);
+
+        // Server type
+        var serverType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["listen"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
+            ["close"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
+            ["address"] = new TypeInfo.Function([], anyType),
+            ["listening"] = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            ["on"] = new TypeInfo.Function([stringType, anyType], anyType)
+        }.ToFrozenDictionary());
+
+        // STATUS_CODES type - with string index signature for dynamic property access
+        var statusCodesType = new TypeInfo.Record(
+            new Dictionary<string, TypeInfo>().ToFrozenDictionary(),
+            StringIndexType: stringType  // Allow any string key to return a string
+        );
+
+        // METHODS type - array of strings
+        var methodsType = new TypeInfo.Array(stringType);
+
+        // globalAgent type
+        var agentType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["maxSockets"] = numberType,
+            ["maxFreeSockets"] = numberType,
+            ["keepAlive"] = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+            ["keepAliveMsecs"] = numberType
+        }.ToFrozenDictionary());
+
+        return new Dictionary<string, TypeInfo>
+        {
+            ["createServer"] = new TypeInfo.Function([callbackType], serverType, RequiredParams: 0),
+            ["request"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 1),
+            ["get"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 1),
+            ["METHODS"] = methodsType,
+            ["STATUS_CODES"] = statusCodesType,
+            ["globalAgent"] = agentType
         };
     }
 
