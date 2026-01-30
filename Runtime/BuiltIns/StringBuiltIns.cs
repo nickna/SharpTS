@@ -304,7 +304,7 @@ public static class StringBuiltIns
 
         // First argument should have a 'raw' property
         object? stringsArg = args[0];
-        List<object?>? rawStrings = null;
+        IList<object?>? rawStrings = null;
 
         if (stringsArg is SharpTSTemplateStringsArray tsa)
         {

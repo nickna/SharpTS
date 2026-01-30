@@ -64,9 +64,7 @@ public static class ArrayBuiltIns
             return null;
         }
         if (arr.Elements.Count == 0) return null;
-        var last = arr.Elements[^1];
-        arr.Elements.RemoveAt(arr.Elements.Count - 1);
-        return last;
+        return arr.Elements.RemoveLast();  // O(1) with Deque
     }
 
     private static object? Shift(Interpreter _, SharpTSArray arr, List<object?> args)
@@ -77,9 +75,7 @@ public static class ArrayBuiltIns
             return null;
         }
         if (arr.Elements.Count == 0) return null;
-        var first = arr.Elements[0];
-        arr.Elements.RemoveAt(0);
-        return first;
+        return arr.Elements.RemoveFirst();  // O(1) with Deque
     }
 
     private static object? Unshift(Interpreter _, SharpTSArray arr, List<object?> args)
@@ -89,7 +85,7 @@ public static class ArrayBuiltIns
         {
             return (double)arr.Elements.Count;
         }
-        arr.Elements.Insert(0, args[0]);
+        arr.Elements.AddFirst(args[0]);  // O(1) with Deque
         return (double)arr.Elements.Count;
     }
 
@@ -106,7 +102,7 @@ public static class ArrayBuiltIns
         if (end <= start) return new SharpTSArray([]);
 
         var sliced = arr.Elements.GetRange(start, end - start);
-        return new SharpTSArray(new List<object?>(sliced));
+        return new SharpTSArray(new Deque<object?>(sliced));
     }
 
     private static object? Map(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -426,7 +422,7 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static void FlattenRecursive(List<object?> source, List<object?> result, int depth)
+    private static void FlattenRecursive(IEnumerable<object?> source, List<object?> result, int depth)
     {
         foreach (var item in source)
         {

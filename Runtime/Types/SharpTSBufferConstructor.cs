@@ -94,14 +94,14 @@ public sealed class SharpTSBufferConstructor
         if (args.Count == 0)
             return new SharpTSBuffer(0);
 
-        List<object?> buffers;
+        ICollection<object?> buffers;
         if (args[0] is SharpTSArray arr)
         {
             buffers = arr.Elements;
         }
-        else if (args[0] is List<object?> list)
+        else if (args[0] is ICollection<object?> coll)
         {
-            buffers = list;
+            buffers = coll;
         }
         else
         {

@@ -73,7 +73,7 @@ public class SharpTSBuffer
     /// <summary>
     /// Creates a Buffer from an array of numbers.
     /// </summary>
-    public static SharpTSBuffer FromArray(List<object?> array)
+    public static SharpTSBuffer FromArray(IList<object?> array)
     {
         if (array == null)
             throw new ArgumentNullException(nameof(array));
@@ -138,7 +138,7 @@ public class SharpTSBuffer
     /// <summary>
     /// Concatenates a list of Buffers into a single Buffer.
     /// </summary>
-    public static SharpTSBuffer Concat(List<object?> buffers, int? totalLength = null)
+    public static SharpTSBuffer Concat(ICollection<object?> buffers, int? totalLength = null)
     {
         if (buffers == null || buffers.Count == 0)
             return new SharpTSBuffer(0);

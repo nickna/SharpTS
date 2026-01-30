@@ -575,7 +575,7 @@ public static class UtilModuleInterpreter
         return new SharpTSObject(result);
     }
 
-    private static List<object?> GetArgsArray(SharpTSObject? config)
+    private static IList<object?> GetArgsArray(SharpTSObject? config)
     {
         if (config != null)
         {
@@ -630,7 +630,7 @@ public static class UtilModuleInterpreter
     private static int ParseLongOption(
         string arg,
         int index,
-        List<object?> argsArray,
+        IList<object?> argsArray,
         Dictionary<string, Dictionary<string, object?>> optionsDef,
         Dictionary<string, object?> values,
         List<object?> tokens,
@@ -762,7 +762,7 @@ public static class UtilModuleInterpreter
     private static int ParseShortOptions(
         string arg,
         int index,
-        List<object?> argsArray,
+        IList<object?> argsArray,
         Dictionary<string, Dictionary<string, object?>> optionsDef,
         Dictionary<string, object?> values,
         List<object?> tokens,

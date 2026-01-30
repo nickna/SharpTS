@@ -232,7 +232,7 @@ public static class ObjectBuiltIns
     /// Creates a new object with all properties from source except those in excludeKeys.
     /// Used for object rest patterns: const { x, ...rest } = obj;
     /// </summary>
-    public static SharpTSObject ObjectRest(object? source, List<object?> excludeKeys)
+    public static SharpTSObject ObjectRest(object? source, IEnumerable<object?> excludeKeys)
     {
         HashSet<string> excludeSet = new(excludeKeys.Where(k => k != null).Select(k => k!.ToString()!));
         Dictionary<string, object?> result = [];

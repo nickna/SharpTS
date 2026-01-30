@@ -4,15 +4,26 @@ namespace SharpTS.Runtime.Types;
 /// Runtime wrapper for TypeScript arrays.
 /// </summary>
 /// <remarks>
-/// Wraps a <c>List&lt;object?&gt;</c> to represent TypeScript arrays at runtime.
+/// Wraps a <c>Deque&lt;object?&gt;</c> to represent TypeScript arrays at runtime.
+/// Uses a circular buffer for O(1) shift/unshift operations.
 /// Provides indexed Get/Set access with bounds checking.
 /// Used by <see cref="Interpreter"/> when evaluating array literals and array operations
 /// (e.g., indexing, push, pop, map, filter).
 /// </remarks>
 /// <seealso cref="SharpTSObject"/>
-public class SharpTSArray(List<object?> elements)
+public class SharpTSArray(Deque<object?> elements)
 {
-    public List<object?> Elements { get; } = elements;
+    public Deque<object?> Elements { get; } = elements;
+
+    /// <summary>
+    /// Creates a SharpTSArray from any enumerable collection.
+    /// </summary>
+    public SharpTSArray(IEnumerable<object?> elements) : this(new Deque<object?>(elements)) { }
+
+    /// <summary>
+    /// Creates an empty SharpTSArray.
+    /// </summary>
+    public SharpTSArray() : this(new Deque<object?>()) { }
 
     /// <summary>
     /// Whether this array is frozen (no element additions, removals, or modifications).
@@ -161,7 +172,7 @@ public class SharpTSArray(List<object?> elements)
     }
 
     /// <summary>
-    /// Removes the first element. Respects frozen/sealed state.
+    /// Removes the first element. Respects frozen/sealed state. O(1) with Deque.
     /// </summary>
     /// <returns>The removed element, or null if blocked or empty.</returns>
     public object? TryShift()
@@ -170,13 +181,11 @@ public class SharpTSArray(List<object?> elements)
         {
             return null;
         }
-        var first = Elements[0];
-        Elements.RemoveAt(0);
-        return first;
+        return Elements.RemoveFirst();
     }
 
     /// <summary>
-    /// Removes the first element with strict mode behavior.
+    /// Removes the first element with strict mode behavior. O(1) with Deque.
     /// In strict mode, throws TypeError for removals from frozen/sealed arrays.
     /// </summary>
     public object? TryShiftStrict(bool strictMode)
@@ -193,13 +202,11 @@ public class SharpTSArray(List<object?> elements)
         {
             return null;
         }
-        var first = Elements[0];
-        Elements.RemoveAt(0);
-        return first;
+        return Elements.RemoveFirst();
     }
 
     /// <summary>
-    /// Adds an element to the beginning. Respects frozen/sealed state.
+    /// Adds an element to the beginning. Respects frozen/sealed state. O(1) with Deque.
     /// </summary>
     /// <returns>True if the element was added, false if blocked.</returns>
     public bool TryUnshift(object? value)
@@ -208,12 +215,12 @@ public class SharpTSArray(List<object?> elements)
         {
             return false;
         }
-        Elements.Insert(0, value);
+        Elements.AddFirst(value);
         return true;
     }
 
     /// <summary>
-    /// Adds an element to the beginning with strict mode behavior.
+    /// Adds an element to the beginning with strict mode behavior. O(1) with Deque.
     /// In strict mode, throws TypeError for additions to frozen/sealed arrays.
     /// </summary>
     public bool TryUnshiftStrict(object? value, bool strictMode)
@@ -226,7 +233,7 @@ public class SharpTSArray(List<object?> elements)
             }
             return false;
         }
-        Elements.Insert(0, value);
+        Elements.AddFirst(value);
         return true;
     }
 
