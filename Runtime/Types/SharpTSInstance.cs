@@ -1,5 +1,6 @@
 using SharpTS.Parsing;
 using SharpTS.Execution;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
 
@@ -14,7 +15,7 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSClass"/>
 /// <seealso cref="SharpTSObject"/>
-public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
+public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly SharpTSClass _klass = klass;
 
@@ -23,6 +24,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor
     /// Used for ES2022 private field brand checking.
     /// </summary>
     public SharpTSClass RuntimeClass => _klass;
+
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Instance;
     private readonly Dictionary<string, object?> _fields = [];
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Interpreter? _interpreter;

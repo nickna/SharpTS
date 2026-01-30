@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 
@@ -31,8 +32,11 @@ public class SharpTSClass(
     Dictionary<string, object?>? staticPrivateFields = null,
     Dictionary<string, SharpTSFunction>? staticPrivateMethods = null,
     List<Stmt.AutoAccessor>? instanceAutoAccessors = null,
-    Dictionary<string, object?>? staticAutoAccessors = null) : ISharpTSCallable
+    Dictionary<string, object?>? staticAutoAccessors = null) : ISharpTSCallable, ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Class;
+
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
     public bool IsAbstract { get; } = isAbstract;

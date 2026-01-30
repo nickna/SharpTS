@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -11,8 +13,11 @@ namespace SharpTS.Runtime.Types;
 /// (e.g., indexing, push, pop, map, filter).
 /// </remarks>
 /// <seealso cref="SharpTSObject"/>
-public class SharpTSArray(Deque<object?> elements)
+public class SharpTSArray(Deque<object?> elements) : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Array;
+
     public Deque<object?> Elements { get; } = elements;
 
     /// <summary>

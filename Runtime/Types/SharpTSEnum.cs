@@ -11,8 +11,11 @@ namespace SharpTS.Runtime.Types;
 /// for numeric enums, enabling <c>MyEnum[0]</c> syntax to retrieve member names.
 /// Handles numeric, string, and heterogeneous (mixed) enum types via <see cref="EnumKind"/>.
 /// </remarks>
-public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKind kind)
+public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKind kind) : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Enum;
+
     public string Name { get; } = name;
     public EnumKind Kind { get; } = kind;
     private readonly FrozenDictionary<string, object> _members = members.ToFrozenDictionary();

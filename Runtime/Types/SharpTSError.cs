@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -7,8 +9,11 @@ namespace SharpTS.Runtime.Types;
 /// Follows JavaScript Error semantics with name, message, and stack properties.
 /// Can be thrown and caught in try/catch blocks.
 /// </remarks>
-public class SharpTSError
+public class SharpTSError : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Error;
+
     /// <summary>
     /// The name of the error type (e.g., "Error", "TypeError", "RangeError").
     /// </summary>

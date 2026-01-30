@@ -83,50 +83,31 @@ public static class TypeCategoryResolver
 
     /// <summary>
     /// Classifies a runtime object (for Interpreter).
+    /// Fast path: checks ITypeCategorized first for objects that cache their category.
     /// </summary>
-    public static TypeCategory ClassifyRuntime(object? obj) => obj switch
+    public static TypeCategory ClassifyRuntime(object? obj)
     {
-        null => TypeCategory.Null,
-        SharpTSUndefined => TypeCategory.Undefined,
+        // Fast path: objects that implement ITypeCategorized have their category cached
+        if (obj is ITypeCategorized categorized)
+        {
+            return categorized.RuntimeCategory;
+        }
 
-        // Primitives (C# types that map to TS primitives)
-        string => TypeCategory.String,
-        double or int or long or float => TypeCategory.Number,
-        bool => TypeCategory.Boolean,
-        SharpTSBigInt => TypeCategory.BigInt,
-        SharpTSSymbol => TypeCategory.Symbol,
+        // Fallback to pattern matching for primitives and uncached types
+        return obj switch
+        {
+            null => TypeCategory.Null,
+            SharpTSUndefined => TypeCategory.Undefined,
 
-        // Built-in object types
-        SharpTSArray => TypeCategory.Array,
-        SharpTSMap => TypeCategory.Map,
-        SharpTSSet => TypeCategory.Set,
-        SharpTSWeakMap => TypeCategory.WeakMap,
-        SharpTSWeakSet => TypeCategory.WeakSet,
-        SharpTSDate => TypeCategory.Date,
-        SharpTSRegExp => TypeCategory.RegExp,
-        SharpTSError => TypeCategory.Error,
-        SharpTSPromise => TypeCategory.Promise,
-        SharpTSTimeout => TypeCategory.Timeout,
-        SharpTSBuffer => TypeCategory.Buffer,
-        SharpTSIterator => TypeCategory.Iterator,
-        SharpTSGenerator => TypeCategory.Generator,
-        SharpTSAsyncGenerator => TypeCategory.AsyncGenerator,
+            // Primitives (C# types that map to TS primitives)
+            string => TypeCategory.String,
+            double or int or long or float => TypeCategory.Number,
+            bool => TypeCategory.Boolean,
 
-        // User-defined types
-        SharpTSClass => TypeCategory.Class,
-        SharpTSInstance => TypeCategory.Instance,
-        SharpTSObject => TypeCategory.Record,
-        SharpTSEnum => TypeCategory.Enum,
-        ConstEnumValues => TypeCategory.Enum,
-        SharpTSNamespace => TypeCategory.Namespace,
-
-        // Function types
-        SharpTSFunction or SharpTSArrowFunction or SharpTSAsyncFunction => TypeCategory.Function,
-        SharpTSGeneratorFunction or SharpTSAsyncGeneratorFunction => TypeCategory.Function,
-
-        // Default fallback
-        _ => TypeCategory.Unknown
-    };
+            // Default fallback
+            _ => TypeCategory.Unknown
+        };
+    }
 
     /// <summary>
     /// Checks if a category represents a built-in type with explicit member validation.

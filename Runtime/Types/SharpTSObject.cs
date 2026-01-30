@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -11,12 +13,15 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 /// <seealso cref="SharpTSInstance"/>
 /// <seealso cref="SharpTSArray"/>
-public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor
+public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
+
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Record;
 
     /// <summary>
     /// Whether this object is frozen (no property additions, removals, or modifications).

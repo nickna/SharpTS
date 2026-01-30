@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -9,8 +11,11 @@ namespace SharpTS.Runtime.Types;
 /// - Object values are compared by reference (same object identity)
 /// Methods match the JavaScript Set API: add, has, delete, clear, keys, values, entries, forEach.
 /// </remarks>
-public class SharpTSSet
+public class SharpTSSet : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Set;
+
     private readonly HashSet<object> _set;
 
     public SharpTSSet()

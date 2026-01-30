@@ -2,6 +2,7 @@ using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Execution;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
 
@@ -30,8 +31,11 @@ public interface ISharpTSCallable
 /// </remarks>
 /// <seealso cref="SharpTSArrowFunction"/>
 /// <seealso cref="RuntimeEnvironment"/>
-public class SharpTSFunction : ISharpTSCallable
+public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Function;
+
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
@@ -115,8 +119,11 @@ public class SharpTSFunction : ISharpTSCallable
 /// For function expressions and object method shorthand (<c>HasOwnThis=true</c>), <c>this</c> is bound at call time.
 /// </remarks>
 /// <seealso cref="SharpTSFunction"/>
-public class SharpTSArrowFunction : ISharpTSCallable
+public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Function;
+
     private readonly Expr.ArrowFunction _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;

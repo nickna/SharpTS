@@ -45,16 +45,35 @@ public partial class Interpreter : IDisposable
         InterpreterRegistry.Create();
 
     /// <summary>
-    /// Frozen dictionary of global constants for fast lookup.
-    /// Avoids repeated string comparisons in LookupVariable.
+    /// Frozen dictionary of global constants and built-in singletons for fast lookup.
+    /// Combines global constants (NaN, Infinity, undefined) with built-in namespaces
+    /// (Math, JSON, Object, etc.) into a single lookup to minimize dictionary operations.
     /// </summary>
-    private static readonly FrozenDictionary<string, object> _globalConstants =
-        new Dictionary<string, object>
+    private static readonly FrozenDictionary<string, object> _globalConstants = CreateGlobalsLookup();
+
+    private static FrozenDictionary<string, object> CreateGlobalsLookup()
+    {
+        var globals = new Dictionary<string, object>
         {
             ["NaN"] = double.NaN,
             ["Infinity"] = double.PositiveInfinity,
             ["undefined"] = Runtime.Types.SharpTSUndefined.Instance
-        }.ToFrozenDictionary();
+        };
+
+        // Add built-in singletons (Math, JSON, Object, etc.)
+        // These are namespaces that resolve to singleton instances when accessed as variables
+        var singletonNames = new[] { "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "console", "process", "globalThis", "Reflect", "Promise" };
+        foreach (var name in singletonNames)
+        {
+            var singleton = BuiltInRegistry.Instance.GetSingleton(name);
+            if (singleton != null)
+            {
+                globals[name] = singleton;
+            }
+        }
+
+        return globals.ToFrozenDictionary();
+    }
 
     private RuntimeEnvironment _environment = new();
     private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
@@ -245,25 +264,21 @@ public partial class Interpreter : IDisposable
 
     private object? LookupVariable(Token name, Expr expr)
     {
+        // Fast path: resolved locals with known depth
         if (_locals.TryGetValue(expr, out int distance))
         {
             return _environment.GetAt(distance, name.Lexeme);
         }
 
-        // Single-pass scope chain traversal (more efficient than IsDefined + Get)
+        // Scope chain traversal for user-defined variables
+        // User variables can shadow built-in globals, so check environment first
         if (_environment.TryGet(name.Lexeme, out object? value))
         {
             return value;
         }
 
-        // Check for built-in singleton namespaces (e.g., Math, process)
-        var singleton = BuiltInRegistry.Instance.GetSingleton(name.Lexeme);
-        if (singleton != null)
-        {
-            return singleton;
-        }
-
-        // Check for global constants (NaN, Infinity, undefined) using frozen dictionary lookup
+        // Check global constants and built-in singletons (single frozen dictionary lookup)
+        // This handles: NaN, Infinity, undefined, Math, JSON, Object, console, process, etc.
         if (_globalConstants.TryGetValue(name.Lexeme, out var constant))
         {
             return constant;

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
 
@@ -14,8 +15,11 @@ namespace SharpTS.Runtime.Types;
 /// handles flattening. Direct constructor calls with Task&lt;SharpTSPromise&gt; will
 /// trigger a debug assertion.
 /// </remarks>
-public class SharpTSPromise
+public class SharpTSPromise : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Promise;
+
     private readonly Task<object?> _task;
 
     /// <summary>

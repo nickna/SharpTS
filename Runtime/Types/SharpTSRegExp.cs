@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
 
@@ -11,8 +12,11 @@ namespace SharpTS.Runtime.Types;
 /// Supports global (g), ignoreCase (i), and multiline (m) flags.
 /// Maintains lastIndex for global matching.
 /// </remarks>
-public class SharpTSRegExp
+public class SharpTSRegExp : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.RegExp;
+
     private readonly Regex _regex;
     private readonly string _source;
     private readonly string _flags;

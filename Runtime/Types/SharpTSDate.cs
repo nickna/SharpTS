@@ -1,4 +1,5 @@
 using System.Globalization;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
 
@@ -9,8 +10,11 @@ namespace SharpTS.Runtime.Types;
 /// Stores time internally as UTC DateTime, converts to local time for getters/setters.
 /// Follows JavaScript Date semantics including 0-indexed months and mutable setters.
 /// </remarks>
-public class SharpTSDate
+public class SharpTSDate : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Date;
+
     private DateTime _utcDateTime;
     private bool _isInvalid;
 

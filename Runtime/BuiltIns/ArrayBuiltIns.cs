@@ -620,8 +620,8 @@ public static class ArrayBuiltIns
             actualDeleteCount = Math.Max(0, Math.Min(dc, len - actualStart));
         }
 
-        // Collect deleted elements
-        var deleted = arr.Elements.GetRange(actualStart, actualDeleteCount);
+        // Collect deleted elements directly into a Deque (single allocation)
+        var deleted = new Deque<object?>(arr.Elements.GetRange(actualStart, actualDeleteCount));
 
         // Remove then insert
         arr.Elements.RemoveRange(actualStart, actualDeleteCount);
@@ -631,7 +631,7 @@ public static class ArrayBuiltIns
             arr.Elements.InsertRange(actualStart, itemsToInsert);
         }
 
-        return new SharpTSArray(new List<object?>(deleted));
+        return new SharpTSArray(deleted);
     }
 
     private static object? ToSpliced(Interpreter _, SharpTSArray arr, List<object?> args)

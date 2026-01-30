@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -8,8 +10,11 @@ namespace SharpTS.Runtime.Types;
 /// This wrapper exists for SharpTS interpreter support but does not support reverse mapping.
 /// For IL compilation, const enum values are fully inlined at compile time.
 /// </remarks>
-public class ConstEnumValues(string name, Dictionary<string, object> members)
+public class ConstEnumValues(string name, Dictionary<string, object> members) : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Enum;
+
     public string Name { get; } = name;
     private readonly Dictionary<string, object> _members = members;
 

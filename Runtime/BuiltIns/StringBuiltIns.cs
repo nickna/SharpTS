@@ -216,7 +216,18 @@ public static class StringBuiltIns
         var count = (int)(double)args[0]!;
         if (count < 0) throw new Exception("Runtime Error: Invalid count value for repeat()");
         if (count == 0 || str.Length == 0) return "";
-        return string.Concat(Enumerable.Repeat(str, count));
+        if (count == 1) return str;
+
+        // Use string.Create with Span for efficient repetition
+        return string.Create(str.Length * count, (str, count), static (span, state) =>
+        {
+            var (s, c) = state;
+            var srcSpan = s.AsSpan();
+            for (int i = 0; i < c; i++)
+            {
+                srcSpan.CopyTo(span.Slice(i * s.Length, s.Length));
+            }
+        });
     }
 
     private static object? PadStart(Interpreter _, string str, List<object?> args)
@@ -227,10 +238,22 @@ public static class StringBuiltIns
         if (targetLength <= str.Length || padString.Length == 0) return str;
 
         var padLength = targetLength - str.Length;
-        var fullPads = padLength / padString.Length;
-        var remainder = padLength % padString.Length;
-        var padding = string.Concat(Enumerable.Repeat(padString, fullPads)) + padString.Substring(0, remainder);
-        return padding + str;
+        // Use string.Create with Span to build result efficiently
+        return string.Create(targetLength, (str, padString, padLength), static (span, state) =>
+        {
+            var (s, pad, pLen) = state;
+            var padSpan = pad.AsSpan();
+            int pos = 0;
+            // Fill padding
+            while (pos < pLen)
+            {
+                int copyLen = Math.Min(pad.Length, pLen - pos);
+                padSpan.Slice(0, copyLen).CopyTo(span.Slice(pos, copyLen));
+                pos += copyLen;
+            }
+            // Copy original string
+            s.AsSpan().CopyTo(span.Slice(pLen));
+        });
     }
 
     private static object? PadEnd(Interpreter _, string str, List<object?> args)
@@ -241,10 +264,22 @@ public static class StringBuiltIns
         if (targetLength <= str.Length || padString.Length == 0) return str;
 
         var padLength = targetLength - str.Length;
-        var fullPads = padLength / padString.Length;
-        var remainder = padLength % padString.Length;
-        var padding = string.Concat(Enumerable.Repeat(padString, fullPads)) + padString.Substring(0, remainder);
-        return str + padding;
+        // Use string.Create with Span to build result efficiently
+        return string.Create(targetLength, (str, padString, padLength), static (span, state) =>
+        {
+            var (s, pad, pLen) = state;
+            // Copy original string first
+            s.AsSpan().CopyTo(span);
+            // Fill padding after
+            var padSpan = pad.AsSpan();
+            int pos = s.Length;
+            while (pos < span.Length)
+            {
+                int copyLen = Math.Min(pad.Length, span.Length - pos);
+                padSpan.Slice(0, copyLen).CopyTo(span.Slice(pos, copyLen));
+                pos += copyLen;
+            }
+        });
     }
 
     private static object? CharCodeAt(Interpreter _, string str, List<object?> args)
@@ -256,12 +291,16 @@ public static class StringBuiltIns
 
     private static object? Concat(Interpreter _, string str, List<object?> args)
     {
-        var parts = new List<string> { str };
+        if (args.Count == 0) return str;
+        if (args.Count == 1) return string.Concat(str, args[0]?.ToString() ?? "");
+
+        // Use StringBuilder for multiple concatenations to avoid intermediate allocations
+        var sb = new StringBuilder(str);
         foreach (var arg in args)
         {
-            parts.Add(arg?.ToString() ?? "");
+            sb.Append(arg?.ToString() ?? "");
         }
-        return string.Concat(parts);
+        return sb.ToString();
     }
 
     private static object? LastIndexOf(Interpreter _, string str, List<object?> args)

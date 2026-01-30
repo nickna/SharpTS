@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -9,8 +11,11 @@ namespace SharpTS.Runtime.Types;
 /// - Object keys are compared by reference (same object identity)
 /// Methods match the JavaScript Map API: get, set, has, delete, clear, keys, values, entries, forEach.
 /// </remarks>
-public class SharpTSMap
+public class SharpTSMap : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Map;
+
     private readonly Dictionary<object, object?> _map;
 
     public SharpTSMap()

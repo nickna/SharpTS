@@ -1,3 +1,5 @@
+using SharpTS.TypeSystem;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -9,8 +11,11 @@ namespace SharpTS.Runtime.Types;
 /// Supports declaration merging via the Merge method.
 /// NOTE: Changes here must be mirrored in RuntimeEmitter.EmitTSNamespaceClass() for compiled assemblies.
 /// </remarks>
-public class SharpTSNamespace
+public class SharpTSNamespace : ITypeCategorized
 {
+    /// <inheritdoc />
+    public TypeCategory RuntimeCategory => TypeCategory.Namespace;
+
     public string Name { get; }
     private readonly Dictionary<string, object?> _members = [];
 
