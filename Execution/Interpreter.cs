@@ -8,6 +8,7 @@ using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
+using System.Collections.Frozen;
 
 namespace SharpTS.Execution;
 
@@ -42,6 +43,18 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private static readonly NodeRegistry<Interpreter, object?, ExecutionResult> _registry =
         InterpreterRegistry.Create();
+
+    /// <summary>
+    /// Frozen dictionary of global constants for fast lookup.
+    /// Avoids repeated string comparisons in LookupVariable.
+    /// </summary>
+    private static readonly FrozenDictionary<string, object> _globalConstants =
+        new Dictionary<string, object>
+        {
+            ["NaN"] = double.NaN,
+            ["Infinity"] = double.PositiveInfinity,
+            ["undefined"] = Runtime.Types.SharpTSUndefined.Instance
+        }.ToFrozenDictionary();
 
     private RuntimeEnvironment _environment = new();
     private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
@@ -96,6 +109,7 @@ public partial class Interpreter : IDisposable
         public int IntervalMs { get; }
         public Action Callback { get; }
         public bool IsCancelled { get; set; }
+        public bool IsExpired { get; set; }  // For one-shot timers that have fired
         public bool IsInterval { get; }
 
         public VirtualTimer(long fireTimeMs, int intervalMs, Action callback, bool isInterval)
@@ -152,15 +166,15 @@ public partial class Interpreter : IDisposable
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         List<VirtualTimer>? toExecute = null;
+        bool needsCleanup = false;
 
         lock (_virtualTimersLock)
         {
-            for (int i = _virtualTimers.Count - 1; i >= 0; i--)
+            foreach (var timer in _virtualTimers)
             {
-                var timer = _virtualTimers[i];
                 if (timer.IsCancelled)
                 {
-                    _virtualTimers.RemoveAt(i);
+                    needsCleanup = true;
                     continue;
                 }
                 if (timer.FireTimeMs <= now)
@@ -174,10 +188,17 @@ public partial class Interpreter : IDisposable
                     }
                     else
                     {
-                        // Remove one-shot timer
-                        _virtualTimers.RemoveAt(i);
+                        // Mark for cleanup - will be removed after execution
+                        timer.IsExpired = true;
+                        needsCleanup = true;
                     }
                 }
+            }
+
+            // Single O(n) cleanup pass using RemoveAll instead of multiple O(n) RemoveAt calls
+            if (needsCleanup)
+            {
+                _virtualTimers.RemoveAll(t => t.IsCancelled || t.IsExpired);
             }
         }
 
@@ -242,10 +263,11 @@ public partial class Interpreter : IDisposable
             return singleton;
         }
 
-        // Check for global constants (NaN, Infinity, undefined)
-        if (name.Lexeme == "NaN") return double.NaN;
-        if (name.Lexeme == "Infinity") return double.PositiveInfinity;
-        if (name.Lexeme == "undefined") return Runtime.Types.SharpTSUndefined.Instance;
+        // Check for global constants (NaN, Infinity, undefined) using frozen dictionary lookup
+        if (_globalConstants.TryGetValue(name.Lexeme, out var constant))
+        {
+            return constant;
+        }
 
         // Check for Node.js module globals (__dirname, __filename)
         if (name.Lexeme == "__filename") return _currentModule?.Path ?? "";

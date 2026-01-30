@@ -77,6 +77,22 @@ public sealed class BuiltInRegistry
     }
 
     /// <summary>
+    /// Gets an instance member and whether the type is a known built-in type in a single lookup.
+    /// Avoids the need for separate GetInstanceMember + HasInstanceMembers calls.
+    /// </summary>
+    /// <param name="instance">The runtime object</param>
+    /// <param name="memberName">The member name</param>
+    /// <returns>Tuple of (member or null, isBuiltInType)</returns>
+    public (object? Member, bool IsBuiltInType) TryGetInstanceMember(object instance, string memberName)
+    {
+        if (_instanceTypes.TryGetValue(instance.GetType(), out var getMember))
+        {
+            return (getMember(instance, memberName), true);
+        }
+        return (null, false);
+    }
+
+    /// <summary>
     /// Checks if a type has built-in instance members registered.
     /// </summary>
     public bool HasInstanceMembers(object instance)

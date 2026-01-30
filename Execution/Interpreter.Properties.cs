@@ -361,7 +361,8 @@ public partial class Interpreter
         // Handle built-in instance members: strings, arrays, Math, Promise
         if (obj != null)
         {
-            var member = BuiltInRegistry.Instance.GetInstanceMember(obj, memberName);
+            // Single registry lookup - TryGetInstanceMember returns both member and whether type is known
+            var (member, isBuiltInType) = BuiltInRegistry.Instance.TryGetInstanceMember(obj, memberName);
             if (member != null)
             {
                 // Bind methods to their receiver, return properties directly
@@ -371,7 +372,7 @@ public partial class Interpreter
             }
 
             // If we have a built-in type but didn't find the member, throw a specific error
-            if (BuiltInRegistry.Instance.HasInstanceMembers(obj))
+            if (isBuiltInType)
             {
                 string typeName = GetRuntimeTypeName(obj);
                 throw new Exception($"Runtime Error: Property '{memberName}' does not exist on {typeName}.");

@@ -43,6 +43,13 @@ public class SharpTSClass(
     private readonly FrozenDictionary<string, SharpTSFunction> _setters = setters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly List<Stmt.Field> _instanceFields = instanceFields ?? [];
 
+    // Method lookup cache - avoids repeated inheritance chain walks
+    // Key: method name, Value: method (null means not found in entire chain)
+    private readonly Dictionary<string, SharpTSFunction?> _methodCache = [];
+    private readonly Dictionary<string, SharpTSFunction?> _staticMethodCache = [];
+    private readonly Dictionary<string, SharpTSFunction?> _getterCache = [];
+    private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
+
     // ES2022 Private class elements
     // Instance private storage - ConditionalWeakTable for GC-friendly per-instance storage
     private readonly ConditionalWeakTable<object, Dictionary<string, object?>> _privateFieldStorage = new();
@@ -116,22 +123,44 @@ public class SharpTSClass(
 
     public SharpTSFunction? FindMethod(string name)
     {
+        // Check cache first
+        if (_methodCache.TryGetValue(name, out SharpTSFunction? cached))
+        {
+            return cached;
+        }
+
+        // Look up in this class's methods
         if (_methods.TryGetValue(name, out SharpTSFunction? method))
         {
+            _methodCache[name] = method;
             return method;
         }
 
-        return Superclass?.FindMethod(name);
+        // Look up in superclass chain
+        var result = Superclass?.FindMethod(name);
+        _methodCache[name] = result;
+        return result;
     }
 
     public SharpTSFunction? FindStaticMethod(string name)
     {
+        // Check cache first
+        if (_staticMethodCache.TryGetValue(name, out SharpTSFunction? cached))
+        {
+            return cached;
+        }
+
+        // Look up in this class's static methods
         if (_staticMethods.TryGetValue(name, out SharpTSFunction? method))
         {
+            _staticMethodCache[name] = method;
             return method;
         }
 
-        return Superclass?.FindStaticMethod(name);
+        // Look up in superclass chain
+        var result = Superclass?.FindStaticMethod(name);
+        _staticMethodCache[name] = result;
+        return result;
     }
 
     public object? GetStaticProperty(string name)
@@ -161,22 +190,44 @@ public class SharpTSClass(
 
     public SharpTSFunction? FindGetter(string name)
     {
+        // Check cache first
+        if (_getterCache.TryGetValue(name, out SharpTSFunction? cached))
+        {
+            return cached;
+        }
+
+        // Look up in this class's getters
         if (_getters.TryGetValue(name, out SharpTSFunction? getter))
         {
+            _getterCache[name] = getter;
             return getter;
         }
 
-        return Superclass?.FindGetter(name);
+        // Look up in superclass chain
+        var result = Superclass?.FindGetter(name);
+        _getterCache[name] = result;
+        return result;
     }
 
     public SharpTSFunction? FindSetter(string name)
     {
+        // Check cache first
+        if (_setterCache.TryGetValue(name, out SharpTSFunction? cached))
+        {
+            return cached;
+        }
+
+        // Look up in this class's setters
         if (_setters.TryGetValue(name, out SharpTSFunction? setter))
         {
+            _setterCache[name] = setter;
             return setter;
         }
 
-        return Superclass?.FindSetter(name);
+        // Look up in superclass chain
+        var result = Superclass?.FindSetter(name);
+        _setterCache[name] = result;
+        return result;
     }
 
     public bool HasGetter(string name) => _getters.ContainsKey(name) || (Superclass?.HasGetter(name) ?? false);
