@@ -116,8 +116,11 @@ public partial class Interpreter : IDisposable
 
     // Virtual timer system - timers are checked and executed on the main thread during loop iterations.
     // This avoids thread scheduling issues on macOS where background threads may not get CPU time.
-    private readonly List<VirtualTimer> _virtualTimers = new();
+    // Uses PriorityQueue for O(log n) insert and O(log n) extraction of due timers.
+    private readonly PriorityQueue<VirtualTimer, long> _virtualTimerQueue = new();
     private readonly object _virtualTimersLock = new();
+    // Volatile flag for O(1) "queue empty" check without acquiring lock
+    private volatile bool _hasScheduledTimers;
 
     /// <summary>
     /// Represents a scheduled timer callback that will be executed by the main thread.
@@ -167,10 +170,12 @@ public partial class Interpreter : IDisposable
     internal VirtualTimer ScheduleTimer(int delayMs, int intervalMs, Action callback, bool isInterval)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var timer = new VirtualTimer(now + delayMs, intervalMs, callback, isInterval);
+        var fireTime = now + delayMs;
+        var timer = new VirtualTimer(fireTime, intervalMs, callback, isInterval);
         lock (_virtualTimersLock)
         {
-            _virtualTimers.Add(timer);
+            _virtualTimerQueue.Enqueue(timer, fireTime);
+            _hasScheduledTimers = true;
         }
         return timer;
     }
@@ -178,47 +183,55 @@ public partial class Interpreter : IDisposable
     /// <summary>
     /// Processes all due virtual timers. Called during loop iterations to execute
     /// timer callbacks without relying on background thread scheduling.
+    /// Uses priority queue for O(log n) timer extraction.
     /// </summary>
     internal void ProcessPendingCallbacks()
     {
-        if (_isDisposed) return;
+        // Quick checks before acquiring lock
+        if (_isDisposed || !_hasScheduledTimers) return;
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         List<VirtualTimer>? toExecute = null;
-        bool needsCleanup = false;
+        List<VirtualTimer>? toReschedule = null;
 
         lock (_virtualTimersLock)
         {
-            foreach (var timer in _virtualTimers)
+            // Dequeue all due timers - PriorityQueue is min-heap, so lowest fireTime comes first
+            while (_virtualTimerQueue.TryPeek(out var timer, out var fireTime))
             {
-                if (timer.IsCancelled)
+                // If the next timer isn't due yet, stop processing
+                if (fireTime > now) break;
+
+                // Remove the timer from queue
+                _virtualTimerQueue.Dequeue();
+
+                // Skip cancelled timers
+                if (timer.IsCancelled) continue;
+
+                // Collect for execution
+                toExecute ??= new List<VirtualTimer>();
+                toExecute.Add(timer);
+
+                // Collect interval timers for rescheduling
+                if (timer.IsInterval)
                 {
-                    needsCleanup = true;
-                    continue;
-                }
-                if (timer.FireTimeMs <= now)
-                {
-                    toExecute ??= new List<VirtualTimer>();
-                    toExecute.Add(timer);
-                    if (timer.IsInterval)
-                    {
-                        // Reschedule interval timer (use += to avoid cumulative drift)
-                        timer.FireTimeMs += timer.IntervalMs;
-                    }
-                    else
-                    {
-                        // Mark for cleanup - will be removed after execution
-                        timer.IsExpired = true;
-                        needsCleanup = true;
-                    }
+                    timer.FireTimeMs += timer.IntervalMs;
+                    toReschedule ??= new List<VirtualTimer>();
+                    toReschedule.Add(timer);
                 }
             }
 
-            // Single O(n) cleanup pass using RemoveAll instead of multiple O(n) RemoveAt calls
-            if (needsCleanup)
+            // Re-enqueue interval timers with updated fire times
+            if (toReschedule != null)
             {
-                _virtualTimers.RemoveAll(t => t.IsCancelled || t.IsExpired);
+                foreach (var timer in toReschedule)
+                {
+                    _virtualTimerQueue.Enqueue(timer, timer.FireTimeMs);
+                }
             }
+
+            // Update flag - only clear if queue is truly empty
+            _hasScheduledTimers = _virtualTimerQueue.Count > 0;
         }
 
         // Execute callbacks outside the lock to avoid deadlocks
@@ -251,7 +264,8 @@ public partial class Interpreter : IDisposable
         // Clear virtual timers to prevent memory leaks
         lock (_virtualTimersLock)
         {
-            _virtualTimers.Clear();
+            _virtualTimerQueue.Clear();
+            _hasScheduledTimers = false;
         }
 
         GC.SuppressFinalize(this);

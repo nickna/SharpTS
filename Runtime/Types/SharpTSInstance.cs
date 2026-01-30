@@ -35,6 +35,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private readonly Dictionary<string, PropertyResolution> _lookupCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
 
+    // Bound method cache to avoid repeated Bind() allocations
+    // Key is the method name (since we already resolved the method via _lookupCache)
+    private readonly Dictionary<string, SharpTSFunction> _boundMethodCache = [];
+
     /// <summary>
     /// Whether this instance is frozen (no property additions, removals, or modifications).
     /// </summary>
@@ -138,10 +142,24 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             ResolutionType.AutoAccessor => _klass.GetAutoAccessorValue(this, propName),
             ResolutionType.Getter => resolution.Function!.Bind(this).Call(_interpreter!, []),
             ResolutionType.Field => _fields[propName],
-            ResolutionType.Method => resolution.Function!.Bind(this),
+            ResolutionType.Method => GetOrCreateBoundMethod(propName, resolution.Function!),
             ResolutionType.NotFound => throw new Exception($"Undefined property '{propName}'."),
             _ => throw new InvalidOperationException("Unknown resolution type")
         };
+    }
+
+    /// <summary>
+    /// Gets a cached bound method or creates and caches a new one.
+    /// Avoids repeated Bind() allocations for frequently accessed methods.
+    /// </summary>
+    private SharpTSFunction GetOrCreateBoundMethod(string methodName, SharpTSFunction method)
+    {
+        if (!_boundMethodCache.TryGetValue(methodName, out var boundMethod))
+        {
+            boundMethod = method.Bind(this);
+            _boundMethodCache[methodName] = boundMethod;
+        }
+        return boundMethod;
     }
 
     public void Set(Token name, object? value)
@@ -193,10 +211,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         _fields[propName] = value;
 
         // Ensure property is in lookup cache as a field for dynamic property addition
-        if (!_lookupCache.ContainsKey(propName))
-        {
-            _lookupCache[propName] = new PropertyResolution { Type = ResolutionType.Field };
-        }
+        _lookupCache.TryAdd(propName, new PropertyResolution { Type = ResolutionType.Field });
     }
 
     /// <summary>
@@ -254,10 +269,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
         _fields[propName] = value;
 
-        if (!_lookupCache.ContainsKey(propName))
-        {
-            _lookupCache[propName] = new PropertyResolution { Type = ResolutionType.Field };
-        }
+        _lookupCache.TryAdd(propName, new PropertyResolution { Type = ResolutionType.Field });
     }
 
     public bool HasProperty(string name)

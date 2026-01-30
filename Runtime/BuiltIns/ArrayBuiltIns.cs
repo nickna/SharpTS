@@ -379,8 +379,8 @@ public static class ArrayBuiltIns
     {
         var separator = args.Count > 0 ? Stringify(args[0]) : ",";
 
-        var parts = arr.Elements.Select(e => Stringify(e));
-        return string.Join(separator, parts);
+        // Pass enumerable directly to string.Join - no intermediate collection needed
+        return string.Join(separator, arr.Elements.Select(Stringify));
     }
 
     private static object? Concat(Interpreter _, SharpTSArray arr, List<object?> args)
@@ -627,8 +627,8 @@ public static class ArrayBuiltIns
         arr.Elements.RemoveRange(actualStart, actualDeleteCount);
         if (args.Count > 2)
         {
-            var itemsToInsert = args.Skip(2).ToList();
-            arr.Elements.InsertRange(actualStart, itemsToInsert);
+            // InsertRange accepts IEnumerable - no need to materialize to list
+            arr.Elements.InsertRange(actualStart, args.Skip(2));
         }
 
         return new SharpTSArray(deleted);
@@ -662,11 +662,22 @@ public static class ArrayBuiltIns
         }
 
         // Build new array: before + items + after
-        var result = new List<object?>();
-        result.AddRange(arr.Elements.Take(actualStart));
-        if (args.Count > 2)
-            result.AddRange(args.Skip(2));
-        result.AddRange(arr.Elements.Skip(actualStart + actualSkipCount));
+        // Pre-size to avoid reallocations: before(actualStart) + inserted(args.Count-2) + after(len - actualStart - actualSkipCount)
+        int insertCount = args.Count > 2 ? args.Count - 2 : 0;
+        int afterCount = len - actualStart - actualSkipCount;
+        var result = new List<object?>(actualStart + insertCount + afterCount);
+
+        // Add elements before splice point
+        for (int i = 0; i < actualStart; i++)
+            result.Add(arr.Elements[i]);
+
+        // Add inserted elements
+        for (int i = 2; i < args.Count; i++)
+            result.Add(args[i]);
+
+        // Add elements after splice point
+        for (int i = actualStart + actualSkipCount; i < len; i++)
+            result.Add(arr.Elements[i]);
 
         return new SharpTSArray(result);
     }
@@ -676,15 +687,25 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: findLast requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = arr.Elements.Count - 1; i >= 0; i--)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            if (IsTruthy(callback.Call(interp, callbackArgs)))
-                return arr.Elements[i];
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = arr.Elements.Count - 1; i >= 0; i--)
+            {
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                if (IsTruthy(callback.Call(interp, callbackArgs)))
+                    return arr.Elements[i];
+            }
+            return null;
         }
-        return null;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? FindLastIndex(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -692,15 +713,25 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: findLastIndex requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = arr.Elements.Count - 1; i >= 0; i--)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            if (IsTruthy(callback.Call(interp, callbackArgs)))
-                return (double)i;
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = arr.Elements.Count - 1; i >= 0; i--)
+            {
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                if (IsTruthy(callback.Call(interp, callbackArgs)))
+                    return (double)i;
+            }
+            return -1.0;
         }
-        return -1.0;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? ToReversed(Interpreter _, SharpTSArray arr, List<object?> args)
