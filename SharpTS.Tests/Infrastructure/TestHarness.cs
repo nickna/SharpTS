@@ -89,7 +89,10 @@ public static class TestHarness
             {
                 var sw = new StringWriter();
                 var originalOut = Console.Out;
+                var originalError = Console.Error;
                 Console.SetOut(sw);
+                // Redirect stderr to suppress console.error/warn/assert output during tests
+                Console.SetError(TextWriter.Null);
 
                 try
                 {
@@ -112,6 +115,7 @@ public static class TestHarness
                 finally
                 {
                     Console.SetOut(originalOut);
+                    Console.SetError(originalError);
                 }
             }
         });
@@ -311,7 +315,10 @@ public static class TestHarness
         {
             var sw = new StringWriter();
             var originalOut = Console.Out;
+            var originalError = Console.Error;
             Console.SetOut(sw);
+            // Redirect stderr to suppress console.error/warn/assert output during tests
+            Console.SetError(TextWriter.Null);
 
             try
             {
@@ -324,6 +331,7 @@ public static class TestHarness
             finally
             {
                 Console.SetOut(originalOut);
+                Console.SetError(originalError);
             }
         }
     }
@@ -442,7 +450,10 @@ public static class TestHarness
             {
                 var sw = new StringWriter();
                 var originalOut = Console.Out;
+                var originalError = Console.Error;
                 Console.SetOut(sw);
+                // Redirect stderr to suppress console.error/warn/assert output during tests
+                Console.SetError(TextWriter.Null);
 
                 try
                 {
@@ -461,6 +472,7 @@ public static class TestHarness
                 finally
                 {
                     Console.SetOut(originalOut);
+                    Console.SetError(originalError);
                 }
             }
         }
