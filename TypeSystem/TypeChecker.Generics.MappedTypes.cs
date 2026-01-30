@@ -176,7 +176,7 @@ public partial class TypeChecker
                 for (int i = 0; i < gc.TypeParams.Count && i < ig.TypeArguments.Count; i++)
                     subs[gc.TypeParams[i].Name] = ig.TypeArguments[i];
 
-                return new TypeInfo.Class(
+                var substitutedCore = new ClassMetadataCore(
                     gc.Name,
                     gc.Superclass,
                     gc.Methods.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary(),
@@ -187,7 +187,16 @@ public partial class TypeChecker
                     gc.ReadonlyFields,
                     gc.Getters.Count > 0 ? gc.Getters.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty,
                     gc.Setters.Count > 0 ? gc.Setters.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty,
-                    gc.FieldTypes.Count > 0 ? gc.FieldTypes.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty);
+                    gc.FieldTypes.Count > 0 ? gc.FieldTypes.ToDictionary(kvp => kvp.Key, kvp => Substitute(kvp.Value, subs)).ToFrozenDictionary() : FrozenDictionary<string, TypeInfo>.Empty,
+                    gc.IsAbstract,
+                    gc.AbstractMethods,
+                    gc.AbstractGetters,
+                    gc.AbstractSetters,
+                    gc.PrivateFields,
+                    gc.PrivateMethods,
+                    gc.StaticPrivateFields,
+                    gc.StaticPrivateMethods);
+                return new TypeInfo.Class(substitutedCore);
         }
 
         return ig;

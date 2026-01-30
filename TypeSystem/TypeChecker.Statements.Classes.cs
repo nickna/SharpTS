@@ -370,28 +370,7 @@ public partial class TypeChecker
         TypeInfo.Class classTypeForBody;
         if (classTypeParams != null && classTypeParams.Count > 0)
         {
-            var genericClassType = new TypeInfo.GenericClass(
-                classStmt.Name.Lexeme,
-                classTypeParams,
-                superclass,
-                mutableClass.Methods.ToFrozenDictionary(),
-                mutableClass.StaticMethods.ToFrozenDictionary(),
-                mutableClass.StaticProperties.ToFrozenDictionary(),
-                mutableClass.MethodAccess.ToFrozenDictionary(),
-                mutableClass.FieldAccess.ToFrozenDictionary(),
-                mutableClass.ReadonlyFields.ToFrozenSet(),
-                mutableClass.Getters.ToFrozenDictionary(),
-                mutableClass.Setters.ToFrozenDictionary(),
-                mutableClass.FieldTypes.ToFrozenDictionary(),
-                classStmt.IsAbstract,
-                mutableClass.AbstractMethods.Count > 0 ? mutableClass.AbstractMethods.ToFrozenSet() : null,
-                mutableClass.AbstractGetters.Count > 0 ? mutableClass.AbstractGetters.ToFrozenSet() : null,
-                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null,
-                mutableClass.PrivateFields.Count > 0 ? mutableClass.PrivateFields.ToFrozenDictionary() : null,
-                mutableClass.PrivateMethods.Count > 0 ? mutableClass.PrivateMethods.ToFrozenDictionary() : null,
-                mutableClass.StaticPrivateFields.Count > 0 ? mutableClass.StaticPrivateFields.ToFrozenDictionary() : null,
-                mutableClass.StaticPrivateMethods.Count > 0 ? mutableClass.StaticPrivateMethods.ToFrozenDictionary() : null
-            );
+            var genericClassType = mutableClass.FreezeGeneric(classTypeParams);
             _environment.Define(classStmt.Name.Lexeme, genericClassType);
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();

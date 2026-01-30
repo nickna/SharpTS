@@ -1282,24 +1282,7 @@ public partial class TypeChecker
         TypeInfo.Class classTypeForBody;
         if (classTypeParams != null && classTypeParams.Count > 0)
         {
-            var genericClassType = new TypeInfo.GenericClass(
-                className,
-                classTypeParams,
-                superclass,
-                mutableClass.Methods.ToFrozenDictionary(),
-                mutableClass.StaticMethods.ToFrozenDictionary(),
-                mutableClass.StaticProperties.ToFrozenDictionary(),
-                mutableClass.MethodAccess.ToFrozenDictionary(),
-                mutableClass.FieldAccess.ToFrozenDictionary(),
-                mutableClass.ReadonlyFields.ToFrozenSet(),
-                mutableClass.Getters.ToFrozenDictionary(),
-                mutableClass.Setters.ToFrozenDictionary(),
-                mutableClass.FieldTypes.ToFrozenDictionary(),
-                classExpr.IsAbstract,
-                mutableClass.AbstractMethods.Count > 0 ? mutableClass.AbstractMethods.ToFrozenSet() : null,
-                mutableClass.AbstractGetters.Count > 0 ? mutableClass.AbstractGetters.ToFrozenSet() : null,
-                mutableClass.AbstractSetters.Count > 0 ? mutableClass.AbstractSetters.ToFrozenSet() : null
-            );
+            var genericClassType = mutableClass.FreezeGeneric(classTypeParams);
             // Store for later lookups - don't add to outer environment
             // For body check, freeze the mutable class (methods/fields have TypeParameter types)
             classTypeForBody = mutableClass.Freeze();

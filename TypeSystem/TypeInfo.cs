@@ -190,36 +190,38 @@ public abstract record TypeInfo
             $"<{string.Join(", ", TypeParams.Select(tp => tp.Name))}> overloaded ({Signatures.Count} signatures) => {Implementation.ReturnType}";
     }
 
-    public record Class(
-        string Name,
-        TypeInfo? Superclass,  // Can be Class or InstantiatedGeneric (for extends Box<number>)
-        FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
-        FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
-        FrozenDictionary<string, TypeInfo> StaticProperties,
-        FrozenDictionary<string, AccessModifier> MethodAccess,
-        FrozenDictionary<string, AccessModifier> FieldAccess,
-        FrozenSet<string> ReadonlyFields,
-        FrozenDictionary<string, TypeInfo> Getters,
-        FrozenDictionary<string, TypeInfo> Setters,
-        FrozenDictionary<string, TypeInfo> FieldTypes,
-        bool IsAbstract = false,
-        FrozenSet<string>? AbstractMethods = null,
-        FrozenSet<string>? AbstractGetters = null,
-        FrozenSet<string>? AbstractSetters = null,
-        FrozenDictionary<string, TypeInfo>? PrivateFields = null,
-        FrozenDictionary<string, TypeInfo>? PrivateMethods = null,
-        FrozenDictionary<string, TypeInfo>? StaticPrivateFields = null,
-        FrozenDictionary<string, TypeInfo>? StaticPrivateMethods = null) : TypeInfo
+    public record Class(ClassMetadataCore Core) : TypeInfo
     {
-        // Keep nullable with defaults for backward compatibility during migration
-        public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
-        public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
-        public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
-        // Private element accessors with empty dict fallback
-        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => PrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => PrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => StaticPrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => StaticPrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
+        // Delegating properties for backward compatibility
+        public string Name => Core.Name;
+        public TypeInfo? Superclass => Core.Superclass;
+        public FrozenDictionary<string, TypeInfo> Methods => Core.Methods;
+        public FrozenDictionary<string, TypeInfo> StaticMethods => Core.StaticMethods;
+        public FrozenDictionary<string, TypeInfo> StaticProperties => Core.StaticProperties;
+        public FrozenDictionary<string, AccessModifier> MethodAccess => Core.MethodAccess;
+        public FrozenDictionary<string, AccessModifier> FieldAccess => Core.FieldAccess;
+        public FrozenSet<string> ReadonlyFields => Core.ReadonlyFields;
+        public FrozenDictionary<string, TypeInfo> Getters => Core.Getters;
+        public FrozenDictionary<string, TypeInfo> Setters => Core.Setters;
+        public FrozenDictionary<string, TypeInfo> FieldTypes => Core.FieldTypes;
+        public bool IsAbstract => Core.IsAbstract;
+        public FrozenSet<string>? AbstractMethods => Core.AbstractMethods;
+        public FrozenSet<string>? AbstractGetters => Core.AbstractGetters;
+        public FrozenSet<string>? AbstractSetters => Core.AbstractSetters;
+        public FrozenDictionary<string, TypeInfo>? PrivateFields => Core.PrivateFields;
+        public FrozenDictionary<string, TypeInfo>? PrivateMethods => Core.PrivateMethods;
+        public FrozenDictionary<string, TypeInfo>? StaticPrivateFields => Core.StaticPrivateFields;
+        public FrozenDictionary<string, TypeInfo>? StaticPrivateMethods => Core.StaticPrivateMethods;
+
+        // Computed properties delegate to Core
+        public FrozenSet<string> AbstractMethodSet => Core.AbstractMethodSet;
+        public FrozenSet<string> AbstractGetterSet => Core.AbstractGetterSet;
+        public FrozenSet<string> AbstractSetterSet => Core.AbstractSetterSet;
+        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => Core.PrivateFieldTypes;
+        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => Core.PrivateMethodTypes;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => Core.StaticPrivateFieldTypes;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => Core.StaticPrivateMethodTypes;
+
         public override string ToString() => IsAbstract ? $"abstract class {Name}" : $"class {Name}";
     }
 
@@ -257,16 +259,16 @@ public abstract record TypeInfo
         public Dictionary<string, TypeInfo> StaticPrivateFields { get; } = [];
         public Dictionary<string, TypeInfo> StaticPrivateMethods { get; } = [];
 
+        private ClassMetadataCore? _frozenCore;
         private TypeInfo.Class? _frozen;
 
         /// <summary>
-        /// Freezes the mutable class into an immutable Class.
-        /// Idempotent - returns the same frozen instance on subsequent calls.
+        /// Creates the shared core metadata. Idempotent.
         /// </summary>
-        public TypeInfo.Class Freeze()
+        public ClassMetadataCore FreezeCore()
         {
-            if (_frozen != null) return _frozen;
-            _frozen = new TypeInfo.Class(
+            if (_frozenCore != null) return _frozenCore;
+            _frozenCore = new ClassMetadataCore(
                 Name, Superclass,
                 Methods.ToFrozenDictionary(),
                 StaticMethods.ToFrozenDictionary(),
@@ -285,8 +287,25 @@ public abstract record TypeInfo
                 PrivateMethods.Count > 0 ? PrivateMethods.ToFrozenDictionary() : null,
                 StaticPrivateFields.Count > 0 ? StaticPrivateFields.ToFrozenDictionary() : null,
                 StaticPrivateMethods.Count > 0 ? StaticPrivateMethods.ToFrozenDictionary() : null);
+            return _frozenCore;
+        }
+
+        /// <summary>
+        /// Freezes the mutable class into an immutable Class.
+        /// Idempotent - returns the same frozen instance on subsequent calls.
+        /// </summary>
+        public TypeInfo.Class Freeze()
+        {
+            if (_frozen != null) return _frozen;
+            _frozen = new TypeInfo.Class(FreezeCore());
             return _frozen;
         }
+
+        /// <summary>
+        /// Creates a GenericClass from this mutable class with the given type parameters.
+        /// </summary>
+        public TypeInfo.GenericClass FreezeGeneric(List<TypeParameter> typeParams)
+            => new(FreezeCore(), typeParams);
 
         /// <summary>Gets the frozen class if available, otherwise null.</summary>
         public TypeInfo.Class? Frozen => _frozen;
@@ -954,38 +973,38 @@ public abstract record TypeInfo
     }
 
     // Generic class (not yet instantiated)
-    public record GenericClass(
-        string Name,
-        List<TypeParameter> TypeParams,
-        TypeInfo? Superclass,  // Can be Class or InstantiatedGeneric (for extends Box<number>)
-        FrozenDictionary<string, TypeInfo> Methods,  // Can be Function or OverloadedFunction
-        FrozenDictionary<string, TypeInfo> StaticMethods,  // Can be Function or OverloadedFunction
-        FrozenDictionary<string, TypeInfo> StaticProperties,
-        FrozenDictionary<string, AccessModifier> MethodAccess,
-        FrozenDictionary<string, AccessModifier> FieldAccess,
-        FrozenSet<string> ReadonlyFields,
-        FrozenDictionary<string, TypeInfo> Getters,
-        FrozenDictionary<string, TypeInfo> Setters,
-        FrozenDictionary<string, TypeInfo> FieldTypes,
-        bool IsAbstract = false,
-        FrozenSet<string>? AbstractMethods = null,
-        FrozenSet<string>? AbstractGetters = null,
-        FrozenSet<string>? AbstractSetters = null,
-        FrozenDictionary<string, TypeInfo>? PrivateFields = null,
-        FrozenDictionary<string, TypeInfo>? PrivateMethods = null,
-        FrozenDictionary<string, TypeInfo>? StaticPrivateFields = null,
-        FrozenDictionary<string, TypeInfo>? StaticPrivateMethods = null
-    ) : TypeInfo
+    public record GenericClass(ClassMetadataCore Core, List<TypeParameter> TypeParams) : TypeInfo
     {
-        // Keep nullable with defaults for backward compatibility during migration
-        public FrozenSet<string> AbstractMethodSet => AbstractMethods ?? FrozenSet<string>.Empty;
-        public FrozenSet<string> AbstractGetterSet => AbstractGetters ?? FrozenSet<string>.Empty;
-        public FrozenSet<string> AbstractSetterSet => AbstractSetters ?? FrozenSet<string>.Empty;
-        // Private element accessors with empty dict fallback
-        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => PrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => PrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => StaticPrivateFields ?? FrozenDictionary<string, TypeInfo>.Empty;
-        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => StaticPrivateMethods ?? FrozenDictionary<string, TypeInfo>.Empty;
+        // Delegating properties for backward compatibility
+        public string Name => Core.Name;
+        public TypeInfo? Superclass => Core.Superclass;
+        public FrozenDictionary<string, TypeInfo> Methods => Core.Methods;
+        public FrozenDictionary<string, TypeInfo> StaticMethods => Core.StaticMethods;
+        public FrozenDictionary<string, TypeInfo> StaticProperties => Core.StaticProperties;
+        public FrozenDictionary<string, AccessModifier> MethodAccess => Core.MethodAccess;
+        public FrozenDictionary<string, AccessModifier> FieldAccess => Core.FieldAccess;
+        public FrozenSet<string> ReadonlyFields => Core.ReadonlyFields;
+        public FrozenDictionary<string, TypeInfo> Getters => Core.Getters;
+        public FrozenDictionary<string, TypeInfo> Setters => Core.Setters;
+        public FrozenDictionary<string, TypeInfo> FieldTypes => Core.FieldTypes;
+        public bool IsAbstract => Core.IsAbstract;
+        public FrozenSet<string>? AbstractMethods => Core.AbstractMethods;
+        public FrozenSet<string>? AbstractGetters => Core.AbstractGetters;
+        public FrozenSet<string>? AbstractSetters => Core.AbstractSetters;
+        public FrozenDictionary<string, TypeInfo>? PrivateFields => Core.PrivateFields;
+        public FrozenDictionary<string, TypeInfo>? PrivateMethods => Core.PrivateMethods;
+        public FrozenDictionary<string, TypeInfo>? StaticPrivateFields => Core.StaticPrivateFields;
+        public FrozenDictionary<string, TypeInfo>? StaticPrivateMethods => Core.StaticPrivateMethods;
+
+        // Computed properties delegate to Core
+        public FrozenSet<string> AbstractMethodSet => Core.AbstractMethodSet;
+        public FrozenSet<string> AbstractGetterSet => Core.AbstractGetterSet;
+        public FrozenSet<string> AbstractSetterSet => Core.AbstractSetterSet;
+        public FrozenDictionary<string, TypeInfo> PrivateFieldTypes => Core.PrivateFieldTypes;
+        public FrozenDictionary<string, TypeInfo> PrivateMethodTypes => Core.PrivateMethodTypes;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateFieldTypes => Core.StaticPrivateFieldTypes;
+        public FrozenDictionary<string, TypeInfo> StaticPrivateMethodTypes => Core.StaticPrivateMethodTypes;
+
         public override string ToString() => IsAbstract
             ? $"abstract class {Name}<{string.Join(", ", TypeParams)}>"
             : $"class {Name}<{string.Join(", ", TypeParams)}>";
