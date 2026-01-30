@@ -134,9 +134,52 @@ public class SharpTSPromiseRejectedException : Exception
 {
     public object? Reason { get; }
 
+    /// <summary>
+    /// Stack trace captured at the point of rejection.
+    /// If the reason is a SharpTSError, uses its stack; otherwise captures .NET stack.
+    /// </summary>
+    public string? RejectionStack { get; }
+
     public SharpTSPromiseRejectedException(object? reason)
-        : base(reason?.ToString() ?? "Promise rejected")
+        : base(FormatMessage(reason))
     {
         Reason = reason;
+        RejectionStack = CaptureStack(reason);
+    }
+
+    private static string FormatMessage(object? reason)
+    {
+        if (reason is SharpTSError error)
+            return $"{error.Name}: {error.Message}";
+        return reason?.ToString() ?? "Promise rejected";
+    }
+
+    private static string? CaptureStack(object? reason)
+    {
+        // If reason is already a SharpTSError, use its stack
+        if (reason is SharpTSError error)
+            return error.Stack;
+
+        // Otherwise capture .NET stack at rejection point
+        var stackTrace = new System.Diagnostics.StackTrace(skipFrames: 2, fNeedFileInfo: true);
+        var frames = stackTrace.GetFrames();
+        if (frames == null || frames.Length == 0) return null;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var frame in frames)
+        {
+            var method = frame.GetMethod();
+            if (method == null) continue;
+            var typeName = method.DeclaringType?.Name ?? "";
+            var methodName = method.Name;
+            var fileName = frame.GetFileName();
+            var line = frame.GetFileLineNumber();
+
+            sb.Append($"    at {typeName}.{methodName}");
+            if (!string.IsNullOrEmpty(fileName))
+                sb.Append($" ({fileName}:{line})");
+            sb.AppendLine();
+        }
+        return sb.ToString().TrimEnd();
     }
 }
