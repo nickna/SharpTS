@@ -22,7 +22,7 @@ public class SharpTSEventEmitter
     /// </summary>
     public static int DefaultMaxListeners { get; set; } = 10;
 
-    private readonly Dictionary<string, List<ListenerWrapper>> _events = [];
+    private readonly Dictionary<string, LinkedList<ListenerWrapper>> _events = [];
     private int _maxListeners = 0; // 0 means use DefaultMaxListeners
 
     /// <summary>
@@ -108,12 +108,15 @@ public class SharpTSEventEmitter
         if (_events.TryGetValue(eventName, out var listeners))
         {
             // Remove first matching listener (by reference equality)
-            var index = listeners.FindIndex(w => ReferenceEquals(w.Listener, listener));
-            if (index >= 0)
+            for (var node = listeners.First; node != null; node = node.Next)
             {
-                listeners.RemoveAt(index);
-                if (listeners.Count == 0)
-                    _events.Remove(eventName);
+                if (ReferenceEquals(node.Value.Listener, listener))
+                {
+                    listeners.Remove(node);
+                    if (listeners.Count == 0)
+                        _events.Remove(eventName);
+                    break;
+                }
             }
         }
 
@@ -134,7 +137,7 @@ public class SharpTSEventEmitter
             return false;
 
         // Snapshot the listeners to handle modifications during emit
-        var snapshot = listeners.ToList();
+        var snapshot = new List<ListenerWrapper>(listeners);
         var eventArgs = args.Count > 1 ? args.Skip(1).ToList() : [];
 
         foreach (var wrapper in snapshot)
@@ -142,12 +145,15 @@ public class SharpTSEventEmitter
             // Remove once listeners before calling
             if (wrapper.Once)
             {
-                var index = listeners.FindIndex(w => ReferenceEquals(w, wrapper));
-                if (index >= 0)
+                for (var node = listeners.First; node != null; node = node.Next)
                 {
-                    listeners.RemoveAt(index);
-                    if (listeners.Count == 0)
-                        _events.Remove(eventName);
+                    if (ReferenceEquals(node.Value, wrapper))
+                    {
+                        listeners.Remove(node);
+                        if (listeners.Count == 0)
+                            _events.Remove(eventName);
+                        break;
+                    }
                 }
             }
 
@@ -295,16 +301,16 @@ public class SharpTSEventEmitter
     {
         if (!_events.TryGetValue(eventName, out var listeners))
         {
-            listeners = [];
+            listeners = new LinkedList<ListenerWrapper>();
             _events[eventName] = listeners;
         }
 
         var wrapper = new ListenerWrapper(listener, once);
 
         if (prepend)
-            listeners.Insert(0, wrapper);
+            listeners.AddFirst(wrapper);  // O(1) with LinkedList
         else
-            listeners.Add(wrapper);
+            listeners.AddLast(wrapper);   // O(1) with LinkedList
 
         // Check max listeners warning (only when adding, not prepending a second time)
         if (listeners.Count > EffectiveMaxListeners && EffectiveMaxListeners > 0)

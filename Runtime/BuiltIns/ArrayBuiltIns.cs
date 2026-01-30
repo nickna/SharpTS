@@ -115,15 +115,25 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: map requires a function argument.");
 
         List<object?> result = [];
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var callResult = callback.Call(interp, callbackArgs);
-            result.Add(callResult);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
+            {
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var callResult = callback.Call(interp, callbackArgs);
+                result.Add(callResult);
+            }
+            return new SharpTSArray(result);
         }
-        return new SharpTSArray(result);
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Filter(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -132,18 +142,28 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: filter requires a function argument.");
 
         List<object?> result = [];
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var callResult = callback.Call(interp, callbackArgs);
-            if (IsTruthy(callResult))
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
             {
-                result.Add(arr.Elements[i]);
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var callResult = callback.Call(interp, callbackArgs);
+                if (IsTruthy(callResult))
+                {
+                    result.Add(arr.Elements[i]);
+                }
             }
+            return new SharpTSArray(result);
         }
-        return new SharpTSArray(result);
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? ForEach(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -151,14 +171,24 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: forEach requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            callback.Call(interp, callbackArgs);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
+            {
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                callback.Call(interp, callbackArgs);
+            }
+            return null;
         }
-        return null;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Find(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -166,18 +196,28 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: find requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var result = callback.Call(interp, callbackArgs);
-            if (IsTruthy(result))
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
             {
-                return arr.Elements[i];
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var result = callback.Call(interp, callbackArgs);
+                if (IsTruthy(result))
+                {
+                    return arr.Elements[i];
+                }
             }
+            return null;
         }
-        return null;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? FindIndex(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -185,18 +225,28 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: findIndex requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var result = callback.Call(interp, callbackArgs);
-            if (IsTruthy(result))
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
             {
-                return (double)i;
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var result = callback.Call(interp, callbackArgs);
+                if (IsTruthy(result))
+                {
+                    return (double)i;
+                }
             }
+            return -1.0;
         }
-        return -1.0;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Some(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -204,18 +254,28 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: some requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var result = callback.Call(interp, callbackArgs);
-            if (IsTruthy(result))
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
             {
-                return true;
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var result = callback.Call(interp, callbackArgs);
+                if (IsTruthy(result))
+                {
+                    return true;
+                }
             }
+            return false;
         }
-        return false;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Every(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -223,18 +283,28 @@ public static class ArrayBuiltIns
         var callback = args[0] as ISharpTSCallable
             ?? throw new Exception("Runtime Error: every requires a function argument.");
 
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var result = callback.Call(interp, callbackArgs);
-            if (!IsTruthy(result))
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
             {
-                return false;
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var result = callback.Call(interp, callbackArgs);
+                if (!IsTruthy(result))
+                {
+                    return false;
+                }
             }
+            return true;
         }
-        return true;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Reduce(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -259,15 +329,26 @@ public static class ArrayBuiltIns
             startIndex = 1;
         }
 
-        var callbackArgs = new List<object?>(4) { null, null, null, arr };
-        for (int i = startIndex; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = accumulator;
-            callbackArgs[1] = arr.Elements[i];
-            callbackArgs[2] = (double)i;
-            accumulator = callback.Call(interp, callbackArgs);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = startIndex; i < arr.Elements.Count; i++)
+            {
+                callbackArgs[0] = accumulator;
+                callbackArgs[1] = arr.Elements[i];
+                callbackArgs[2] = (double)i;
+                accumulator = callback.Call(interp, callbackArgs);
+            }
+            return accumulator;
         }
-        return accumulator;
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Includes(Interpreter _, SharpTSArray arr, List<object?> args)
@@ -366,24 +447,34 @@ public static class ArrayBuiltIns
             ?? throw new Exception("Runtime Error: flatMap requires a function argument.");
 
         var result = new List<object?>();
-        var callbackArgs = new List<object?>(3) { null, null, arr };
-        for (int i = 0; i < arr.Elements.Count; i++)
+        var callbackArgs = ArgumentListPool.Rent();
+        try
         {
-            callbackArgs[0] = arr.Elements[i];
-            callbackArgs[1] = (double)i;
-            var callResult = callback.Call(interp, callbackArgs);
+            callbackArgs.Add(null);
+            callbackArgs.Add(null);
+            callbackArgs.Add(arr);
+            for (int i = 0; i < arr.Elements.Count; i++)
+            {
+                callbackArgs[0] = arr.Elements[i];
+                callbackArgs[1] = (double)i;
+                var callResult = callback.Call(interp, callbackArgs);
 
-            // flatMap flattens by 1 level only
-            if (callResult is SharpTSArray mappedArray)
-            {
-                result.AddRange(mappedArray.Elements);
+                // flatMap flattens by 1 level only
+                if (callResult is SharpTSArray mappedArray)
+                {
+                    result.AddRange(mappedArray.Elements);
+                }
+                else
+                {
+                    result.Add(callResult);
+                }
             }
-            else
-            {
-                result.Add(callResult);
-            }
+            return new SharpTSArray(result);
         }
-        return new SharpTSArray(result);
+        finally
+        {
+            ArgumentListPool.Return(callbackArgs);
+        }
     }
 
     private static object? Sort(Interpreter interp, SharpTSArray arr, List<object?> args)

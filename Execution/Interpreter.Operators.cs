@@ -527,7 +527,14 @@ public partial class Interpreter
 
         if (obj is SharpTSArray array)
         {
-            return "[" + string.Join(", ", array.Elements.Select(Stringify)) + "]";
+            var sb = new System.Text.StringBuilder("[");
+            for (int i = 0; i < array.Elements.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append(Stringify(array.Elements[i]));
+            }
+            sb.Append(']');
+            return sb.ToString();
         }
 
         if (obj is SharpTSObject sharpObj)
