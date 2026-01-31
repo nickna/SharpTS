@@ -144,6 +144,7 @@ public sealed class BuiltInRegistry
         RegisterStringType(registry);
         RegisterArrayType(registry);
         RegisterMathType(registry);
+        RegisterObjectType(registry);
         RegisterPromiseType(registry);
         RegisterDoubleType(registry);
         RegisterDateType(registry);
@@ -197,8 +198,8 @@ public sealed class BuiltInRegistry
     {
         registry.RegisterNamespace(new BuiltInNamespace(
             Name: "Object",
-            IsSingleton: false,
-            SingletonFactory: null,
+            IsSingleton: true,
+            SingletonFactory: () => Types.SharpTSObjectNamespace.Instance,
             GetMethod: name => ObjectBuiltIns.GetStaticMethod(name) as BuiltInMethod
         ));
     }
@@ -253,6 +254,13 @@ public sealed class BuiltInRegistry
         // Math members accessed via property access (Math.PI, Math.abs)
         registry.RegisterInstanceType(typeof(SharpTSMath), (_, name) =>
             MathBuiltIns.GetMember(name));
+    }
+
+    private static void RegisterObjectType(BuiltInRegistry registry)
+    {
+        // Object members accessed via property access (Object.keys, Object.values)
+        registry.RegisterInstanceType(typeof(Types.SharpTSObjectNamespace), (_, name) =>
+            ObjectBuiltIns.GetStaticMethod(name));
     }
 
     private static void RegisterPromiseNamespace(BuiltInRegistry registry)

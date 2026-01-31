@@ -287,6 +287,53 @@ const arrow = () => 42;
             }
         )
     }
+
+    "web-server" = @{
+        File = "web-server.ts"
+        Tests = @(
+            @{
+                Name = "ShowHelp"
+                RequiresArgs = $true
+                Args = { @("--help") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "SharpTS Web Server Example" }
+                    @{ Type = "Contains"; Value = "Usage:" }
+                    @{ Type = "Contains"; Value = "GET /" }
+                    @{ Type = "Contains"; Value = "/api/time" }
+                    @{ Type = "Contains"; Value = "/api/echo" }
+                    @{ Type = "Contains"; Value = "/api/greet" }
+                    @{ Type = "Contains"; Value = "port" }
+                )
+            },
+            @{
+                Name = "ShowHelpShortFlag"
+                RequiresArgs = $true
+                Args = { @("-h") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "SharpTS Web Server Example" }
+                    @{ Type = "Contains"; Value = "Usage:" }
+                )
+            },
+            @{
+                Name = "InvalidPortNumber"
+                RequiresArgs = $true
+                Args = { @("invalid") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Invalid port number" }
+                    @{ Type = "Contains"; Value = "Using default port 3000" }
+                )
+            },
+            @{
+                Name = "PortOutOfRange"
+                RequiresArgs = $true
+                Args = { @("99999") }
+                Assertions = @(
+                    @{ Type = "Contains"; Value = "Invalid port number" }
+                    @{ Type = "Contains"; Value = "Using default port 3000" }
+                )
+            }
+        )
+    }
 }
 
 # ========== Fixture Functions ==========

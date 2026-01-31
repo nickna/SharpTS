@@ -239,7 +239,9 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitFor(Stmt.For stmt)
     {
-        // For loops create a scope for the loop variable
+        // For loops create a scope for the loop variable (ES6 let/const block scoping).
+        // The initializer defines the loop variable in this scope, and the condition,
+        // increment, and body all have access to it.
         BeginScope();
         if (stmt.Initializer != null)
             Visit(stmt.Initializer);
@@ -253,20 +255,26 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
+        // Resolve iterable BEFORE creating loop scope - matches interpreter behavior
+        // where Evaluate(forOf.Iterable) happens before the loop environment is created
+        Visit(stmt.Iterable);
+
         BeginScope();
         Declare(stmt.Variable.Lexeme);
         Define(stmt.Variable.Lexeme);
-        Visit(stmt.Iterable);
         Visit(stmt.Body);
         EndScope();
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
+        // Resolve object BEFORE creating loop scope - matches interpreter behavior
+        // where Evaluate(forIn.Object) happens before the loop environment is created
+        Visit(stmt.Object);
+
         BeginScope();
         Declare(stmt.Variable.Lexeme);
         Define(stmt.Variable.Lexeme);
-        Visit(stmt.Object);
         Visit(stmt.Body);
         EndScope();
     }

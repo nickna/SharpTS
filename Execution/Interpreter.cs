@@ -5,6 +5,7 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.BuiltIns.Modules;
 using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
+using SharpTS.Runtime.EventLoop;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
@@ -129,6 +130,9 @@ public partial class Interpreter : IDisposable
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
 
+    // Event loop for managing async handles (servers, timers, etc.)
+    private readonly EventLoop _eventLoop = new();
+
     // Virtual timer system - timers are checked and executed on the main thread during loop iterations.
     // This avoids thread scheduling issues on macOS where background threads may not get CPU time.
     // Uses PriorityQueue for O(log n) insert and O(log n) extraction of due timers.
@@ -193,6 +197,52 @@ public partial class Interpreter : IDisposable
             _hasScheduledTimers = true;
         }
         return timer;
+    }
+
+    /// <summary>
+    /// Registers an async handle with the interpreter's event loop.
+    /// The interpreter will keep running while this handle is active.
+    /// </summary>
+    internal void RegisterHandle(IAsyncHandle handle)
+    {
+        _eventLoop.Register(handle);
+    }
+
+    /// <summary>
+    /// Unregisters an async handle from the interpreter's event loop.
+    /// </summary>
+    internal void UnregisterHandle(IAsyncHandle handle)
+    {
+        _eventLoop.Unregister(handle);
+    }
+
+    /// <summary>
+    /// Runs the event loop, processing timers and keeping the process alive while there are active handles.
+    /// Uses efficient waiting via ManualResetEventSlim instead of polling.
+    /// </summary>
+    private void RunEventLoop()
+    {
+        // Check if there are scheduled timers - they also count as active handles
+        bool HasTimersOrHandles() => _hasScheduledTimers || _eventLoop.HasActiveHandles();
+
+        while (!_isDisposed && HasTimersOrHandles())
+        {
+            // Process any pending timer callbacks
+            ProcessPendingCallbacks();
+
+            // If only timers are active (no server handles), we need to continue the loop
+            // If there are active handles, the event loop will wait efficiently
+            if (_eventLoop.HasActiveHandles())
+            {
+                // Let the event loop wait for state changes (with timeout for timer processing)
+                _eventLoop.Run(ProcessPendingCallbacks);
+            }
+            else if (_hasScheduledTimers)
+            {
+                // Only timers active - sleep briefly then check again
+                Thread.Sleep(10);
+            }
+        }
     }
 
     /// <summary>
@@ -269,6 +319,9 @@ public partial class Interpreter : IDisposable
     public void Dispose()
     {
         _isDisposed = true;
+
+        // Dispose the event loop first to stop any waiting
+        _eventLoop.Dispose();
 
         // Cancel all pending timers to release resources immediately
         while (_pendingTimers.TryTake(out var timer))
@@ -377,6 +430,9 @@ public partial class Interpreter : IDisposable
 
             // After executing all statements, check for a main() function and call it
             TryCallMainWithExitCode(statements);
+
+            // Always run the event loop - servers/timers may have been registered
+            RunEventLoop();
         }
         catch (Exception error)
         {
@@ -414,10 +470,17 @@ public partial class Interpreter : IDisposable
             }
 
             // After executing all modules, check for main() in the entry module (last one)
+            // Note: main() may have already been called during module execution if there's
+            // a top-level main() call. TryCallMainWithExitCode handles exit codes but
+            // the event loop should run regardless of main().
             if (modules.Count > 0)
             {
                 TryCallMainWithExitCode(modules[^1].Statements);
             }
+
+            // Always run the event loop at the end - servers/timers may have been
+            // registered during module execution (even without a main function)
+            RunEventLoop();
         }
         catch (Exception error)
         {
@@ -488,8 +551,9 @@ public partial class Interpreter : IDisposable
         {
             if (stmt is Stmt.Function func && func.Name.Lexeme == "main" && func.Body != null)
             {
-                // Check signature: exactly one parameter (args: string[])
-                if (func.Parameters.Count == 1 && func.Parameters[0].Type == "string[]")
+                // Accept signatures: main() or main(args: string[])
+                var paramCount = func.Parameters.Count;
+                if (paramCount == 0 || (paramCount == 1 && func.Parameters[0].Type == "string[]"))
                 {
                     // Accept return types: void, null (implicit), number, Promise<void>, Promise<number>
                     var rt = func.ReturnType;
@@ -513,12 +577,15 @@ public partial class Interpreter : IDisposable
         if (mainValue is not SharpTSFunction mainFn)
             return;
 
-        // Call main with process.argv
+        // Call main with process.argv (pass args even if main() doesn't take them - JS allows this)
         var argv = ProcessBuiltIns.GetArgv();
         object? result;
         try
         {
-            result = mainFn.Call(this, [argv]);
+            // Pass argv only if main expects it
+            result = mainFunc.Parameters.Count == 0
+                ? mainFn.Call(this, [])
+                : mainFn.Call(this, [argv]);
         }
         catch (Runtime.Exceptions.ReturnException ret)
         {
@@ -536,6 +603,10 @@ public partial class Interpreter : IDisposable
         {
             System.Environment.Exit((int)exitCode);
         }
+
+        // Note: RunEventLoop is called by the caller (Interpret or InterpretModules)
+        // after this method returns, so handles registered during main() or module
+        // execution will keep the process alive.
     }
 
     /// <summary>
@@ -1021,31 +1092,37 @@ public partial class Interpreter : IDisposable
 
     internal ExecutionResult VisitFor(Stmt.For forStmt)
     {
-        // Execute initializer once
-        if (forStmt.Initializer != null)
-            Execute(forStmt.Initializer);
-        // Loop with proper continue handling - increment always runs
-        while (forStmt.Condition == null || IsTruthy(Evaluate(forStmt.Condition)))
+        // Create scope for loop variables (ES6 let/const block scoping)
+        // Variables declared with let/const in the initializer are scoped to the loop
+        RuntimeEnvironment loopEnv = new(_environment);
+        using (PushScope(loopEnv))
         {
-            var result = Execute(forStmt.Body);
-            if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-            // On continue, execute increment then continue the loop
-            if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+            // Execute initializer once (defines loop variable in loopEnv)
+            if (forStmt.Initializer != null)
+                Execute(forStmt.Initializer);
+            // Loop with proper continue handling - increment always runs
+            while (forStmt.Condition == null || IsTruthy(Evaluate(forStmt.Condition)))
             {
+                var result = Execute(forStmt.Body);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                // On continue, execute increment then continue the loop
+                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                {
+                    if (forStmt.Increment != null)
+                        Evaluate(forStmt.Increment);
+                    // Yield to allow timer callbacks and other threads to execute
+                    Thread.Sleep(0);
+                    continue;
+                }
+                if (result.IsAbrupt) return result;
+                // Normal completion: execute increment
                 if (forStmt.Increment != null)
                     Evaluate(forStmt.Increment);
-                // Yield to allow timer callbacks and other threads to execute
-                Thread.Sleep(0);
-                continue;
+                // Process any pending timer callbacks
+                ProcessPendingCallbacks();
             }
-            if (result.IsAbrupt) return result;
-            // Normal completion: execute increment
-            if (forStmt.Increment != null)
-                Evaluate(forStmt.Increment);
-            // Process any pending timer callbacks
-            ProcessPendingCallbacks();
+            return ExecutionResult.Success();
         }
-        return ExecutionResult.Success();
     }
 
     internal ExecutionResult VisitForOf(Stmt.ForOf forOf) => ExecuteForOf(forOf);

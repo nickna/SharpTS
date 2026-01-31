@@ -85,31 +85,38 @@ public partial class Interpreter
                 } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
                 return ExecutionResult.Success();
             case Stmt.For forStmt:
-                // Execute initializer once
-                if (forStmt.Initializer != null)
-                    await ExecuteAsync(forStmt.Initializer);
-                // Loop with proper continue handling - increment always runs
-                while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
+            {
+                // Create scope for loop variables (ES6 let/const block scoping)
+                RuntimeEnvironment loopEnv = new(_environment);
+                using (PushScope(loopEnv))
                 {
-                    var result = await ExecuteAsync(forStmt.Body);
-                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                    // On continue, execute increment then continue the loop
-                    if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                    // Execute initializer once (defines loop variable in loopEnv)
+                    if (forStmt.Initializer != null)
+                        await ExecuteAsync(forStmt.Initializer);
+                    // Loop with proper continue handling - increment always runs
+                    while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
                     {
+                        var result = await ExecuteAsync(forStmt.Body);
+                        if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                        // On continue, execute increment then continue the loop
+                        if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                        {
+                            if (forStmt.Increment != null)
+                                await EvaluateAsync(forStmt.Increment);
+                            // Yield to allow timer callbacks and other threads to execute
+                            await Task.Yield();
+                            continue;
+                        }
+                        if (result.IsAbrupt) return result;
+                        // Normal completion: execute increment
                         if (forStmt.Increment != null)
                             await EvaluateAsync(forStmt.Increment);
-                        // Yield to allow timer callbacks and other threads to execute
-                        await Task.Yield();
-                        continue;
+                        // Process any pending timer callbacks
+                        ProcessPendingCallbacks();
                     }
-                    if (result.IsAbrupt) return result;
-                    // Normal completion: execute increment
-                    if (forStmt.Increment != null)
-                        await EvaluateAsync(forStmt.Increment);
-                    // Process any pending timer callbacks
-                    ProcessPendingCallbacks();
+                    return ExecutionResult.Success();
                 }
-                return ExecutionResult.Success();
+            }
             case Stmt.ForOf forOf:
                 return await ExecuteForOfAsync(forOf);
             case Stmt.ForIn forIn:

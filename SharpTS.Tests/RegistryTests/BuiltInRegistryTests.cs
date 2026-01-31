@@ -42,7 +42,6 @@ public class BuiltInRegistryTests
     }
 
     [Theory]
-    [InlineData("Object")]
     [InlineData("Array")]
     [InlineData("JSON")]
     public void TryGetNamespace_StaticNamespaces_AreNotSingletons(string name)
@@ -67,11 +66,12 @@ public class BuiltInRegistryTests
     }
 
     [Fact]
-    public void GetSingleton_Object_ReturnsNull()
+    public void GetSingleton_Object_ReturnsSingleton()
     {
         var singleton = BuiltInRegistry.Instance.GetSingleton("Object");
 
-        Assert.Null(singleton);
+        Assert.NotNull(singleton);
+        Assert.IsType<SharpTS.Runtime.Types.SharpTSObjectNamespace>(singleton);
     }
 
     [Fact]
