@@ -1,3 +1,4 @@
+using SharpTS.Compilation;
 using SharpTS.Runtime.BuiltIns;
 using Interp = SharpTS.Execution.Interpreter;
 
@@ -321,4 +322,95 @@ public class SharpTSEventEmitter
     }
 
     public override string ToString() => "EventEmitter {}";
+
+    /// <summary>
+    /// Emits an event directly without requiring an interpreter.
+    /// Used by compiled code where TSFunction listeners can be invoked directly.
+    /// </summary>
+    /// <param name="eventName">The name of the event to emit.</param>
+    /// <param name="args">Arguments to pass to the event listeners.</param>
+    /// <returns>True if the event had listeners, false otherwise.</returns>
+    /// <remarks>
+    /// This method enables Worker communication in compiled code by directly invoking
+    /// TSFunction listeners instead of going through the interpreter. For interpreted
+    /// code, use the regular emit() method through the interpreter.
+    /// </remarks>
+    public bool EmitDirect(string eventName, params object?[] args)
+    {
+        if (!_events.TryGetValue(eventName, out var listeners) || listeners.Count == 0)
+            return false;
+
+        // Snapshot the listeners to handle modifications during emit
+        var snapshot = new List<ListenerWrapper>(listeners);
+
+        foreach (var wrapper in snapshot)
+        {
+            // Remove once listeners before calling
+            if (wrapper.Once)
+            {
+                for (var node = listeners.First; node != null; node = node.Next)
+                {
+                    if (ReferenceEquals(node.Value, wrapper))
+                    {
+                        listeners.Remove(node);
+                        if (listeners.Count == 0)
+                            _events.Remove(eventName);
+                        break;
+                    }
+                }
+            }
+
+            // Invoke the listener directly
+            InvokeListenerDirect(wrapper.Listener, args);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Invokes a listener directly without an interpreter.
+    /// </summary>
+    private static void InvokeListenerDirect(object listener, object?[] args)
+    {
+        // TSFunction from compiled code - can invoke directly
+        if (listener is TSFunction tsFunc)
+        {
+            tsFunc.Invoke(args);
+            return;
+        }
+
+        // BuiltInMethod - create minimal args list and invoke with null interpreter
+        // This works for methods that don't actually use the interpreter parameter
+        if (listener is BuiltInMethod builtIn)
+        {
+            builtIn.Call(null!, args.ToList());
+            return;
+        }
+
+        // ISharpTSCallable from interpreted code - cannot invoke without interpreter
+        // This is a limitation: interpreted callbacks won't work in compiled Worker context
+        if (listener is ISharpTSCallable)
+        {
+            // Log or silently skip - these listeners require interpreter
+            return;
+        }
+
+        // Action delegate (for internal use)
+        if (listener is Action<object?[]> action)
+        {
+            action(args);
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Adds a listener programmatically (for internal use in compiled code).
+    /// </summary>
+    /// <param name="eventName">The event name.</param>
+    /// <param name="listener">The listener function.</param>
+    /// <param name="once">Whether this is a one-time listener.</param>
+    public void AddListenerDirect(string eventName, object listener, bool once = false)
+    {
+        AddListenerInternal(eventName, listener, once, prepend: false);
+    }
 }

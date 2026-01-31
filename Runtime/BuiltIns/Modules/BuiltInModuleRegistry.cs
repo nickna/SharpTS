@@ -27,7 +27,8 @@ public static class BuiltInModuleRegistry
         "string_decoder",
         "perf_hooks",
         "stream",
-        "http"
+        "http",
+        "worker_threads"
     ];
 
     /// <summary>

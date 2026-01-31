@@ -314,6 +314,13 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: Global structuredClone()
+        if (c.Callee is Expr.Variable structuredCloneVar && structuredCloneVar.Name.Lexeme == "structuredClone")
+        {
+            EmitStructuredClone(c.Arguments);
+            return;
+        }
+
         // Special case: Static method call on external .NET type (e.g., Console.WriteLine())
         if (c.Callee is Expr.Get externalStaticGet &&
             externalStaticGet.Object is Expr.Variable externalClassVar &&

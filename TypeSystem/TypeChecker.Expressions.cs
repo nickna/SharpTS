@@ -1088,6 +1088,16 @@ public partial class TypeChecker
         if (name.Lexeme == "Infinity") return new TypeInfo.Primitive(TokenType.TYPE_NUMBER); // Global Infinity
         if (name.Lexeme == "__dirname") return new TypeInfo.Primitive(TokenType.TYPE_STRING); // Node.js __dirname
         if (name.Lexeme == "__filename") return new TypeInfo.Primitive(TokenType.TYPE_STRING); // Node.js __filename
+        // Worker Threads globals
+        if (name.Lexeme == "structuredClone") return new TypeInfo.Any(); // structuredClone() global function
+        if (name.Lexeme == "SharedArrayBuffer") return new TypeInfo.Any(); // SharedArrayBuffer constructor
+        if (name.Lexeme == "Atomics") return new TypeInfo.Any(); // Atomics static object
+        if (name.Lexeme == "MessageChannel") return new TypeInfo.Any(); // MessageChannel constructor
+        // TypedArray constructors
+        if (name.Lexeme is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
+            or "Int16Array" or "Uint16Array" or "Int32Array" or "Uint32Array"
+            or "Float32Array" or "Float64Array" or "BigInt64Array" or "BigUint64Array")
+            return new TypeInfo.Any(); // TypedArray constructor
 
         var type = _environment.Get(name.Lexeme);
         if (type == null)

@@ -58,12 +58,26 @@ public partial class Interpreter : IDisposable
             ["NaN"] = double.NaN,
             ["Infinity"] = double.PositiveInfinity,
             ["undefined"] = Runtime.Types.SharpTSUndefined.Instance,
-            ["fetch"] = Runtime.BuiltIns.FetchBuiltIns.FetchMethod
+            ["fetch"] = Runtime.BuiltIns.FetchBuiltIns.FetchMethod,
+
+            // SharedArrayBuffer and TypedArray constructors
+            ["SharedArrayBuffer"] = WorkerBuiltIns.SharedArrayBufferConstructor,
+            ["Int8Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int8Array"),
+            ["Uint8Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint8Array"),
+            ["Uint8ClampedArray"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint8ClampedArray"),
+            ["Int16Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int16Array"),
+            ["Uint16Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint16Array"),
+            ["Int32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int32Array"),
+            ["Uint32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint32Array"),
+            ["Float32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Float32Array"),
+            ["Float64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Float64Array"),
+            ["BigInt64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("BigInt64Array"),
+            ["BigUint64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("BigUint64Array"),
         };
 
         // Add built-in singletons (Math, JSON, Object, etc.)
         // These are namespaces that resolve to singleton instances when accessed as variables
-        var singletonNames = new[] { "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "console", "process", "globalThis", "Reflect", "Promise" };
+        var singletonNames = new[] { "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "console", "process", "globalThis", "Reflect", "Promise", "Atomics" };
         foreach (var name in singletonNames)
         {
             var singleton = BuiltInRegistry.Instance.GetSingleton(name);

@@ -97,6 +97,26 @@ public partial class Interpreter
             return new SharpTSWeakSet();
         }
 
+        // Handle new SharedArrayBuffer(byteLength) constructor
+        if (isSimpleName && simpleClassName == "SharedArrayBuffer")
+        {
+            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
+            return WorkerBuiltIns.SharedArrayBufferConstructor.Call(this, args);
+        }
+
+        // Handle new MessageChannel() constructor
+        if (isSimpleName && simpleClassName == "MessageChannel")
+        {
+            return WorkerBuiltIns.MessageChannelConstructor.Call(this, []);
+        }
+
+        // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
+        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
+        {
+            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
+            return WorkerBuiltIns.GetTypedArrayConstructor(simpleClassName).Call(this, args);
+        }
+
         // Handle new Error(...) and error subtype constructors
         if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
         {
@@ -557,6 +577,15 @@ public partial class Interpreter
     /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
     private static bool IsErrorType(string name) => ErrorBuiltIns.IsErrorTypeName(name);
+
+    private static bool IsTypedArrayName(string name)
+    {
+        return name is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
+            or "Int16Array" or "Uint16Array"
+            or "Int32Array" or "Uint32Array"
+            or "Float32Array" or "Float64Array"
+            or "BigInt64Array" or "BigUint64Array";
+    }
 
     #region ES2022 Private Class Elements
 

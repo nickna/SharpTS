@@ -212,6 +212,24 @@ public partial class Interpreter
             return false;
         }
 
+        // Handle global structuredClone(value, options?)
+        if (call.Callee is Expr.Variable structuredCloneVar && structuredCloneVar.Name.Lexeme == "structuredClone")
+        {
+            if (call.Arguments.Count < 1)
+                throw new InterpreterException(" structuredClone() requires at least one argument (value).");
+            var value = await ctx.EvaluateExprAsync(call.Arguments[0]);
+            SharpTSArray? transfer = null;
+            if (call.Arguments.Count > 1)
+            {
+                var options = await ctx.EvaluateExprAsync(call.Arguments[1]);
+                if (options is SharpTSObject optObj && optObj.Fields.TryGetValue("transfer", out var transferValue))
+                {
+                    transfer = transferValue as SharpTSArray;
+                }
+            }
+            return StructuredClone.Clone(value, transfer);
+        }
+
         // Handle setTimeout(callback, delay?, ...args)
         if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout")
         {

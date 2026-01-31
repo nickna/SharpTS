@@ -261,6 +261,100 @@ public partial class TypeChecker
             return new TypeInfo.EventEmitter();
         }
 
+        // Handle new SharedArrayBuffer(byteLength) constructor
+        if (isSimpleName && simpleClassName == "SharedArrayBuffer")
+        {
+            // SharedArrayBuffer accepts 1 argument (byteLength)
+            if (newExpr.Arguments.Count != 1)
+            {
+                throw new TypeCheckException(" SharedArrayBuffer constructor requires exactly 1 argument (byteLength).");
+            }
+
+            var byteLengthType = CheckExpr(newExpr.Arguments[0]);
+            if (!IsNumber(byteLengthType) && byteLengthType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($" SharedArrayBuffer byteLength must be a number, got '{byteLengthType}'.");
+            }
+
+            return new TypeInfo.SharedArrayBuffer();
+        }
+
+        // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
+        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
+        {
+            // TypedArray constructors accept:
+            // - new TypedArray(length)
+            // - new TypedArray(typedArray)
+            // - new TypedArray(buffer, byteOffset?, length?)
+            // - new TypedArray(iterable)
+            if (newExpr.Arguments.Count > 3)
+            {
+                throw new TypeCheckException($" {simpleClassName} constructor accepts at most 3 arguments.");
+            }
+
+            // Validate first argument if present
+            if (newExpr.Arguments.Count >= 1)
+            {
+                CheckExpr(newExpr.Arguments[0]);
+            }
+
+            // Validate optional byteOffset and length
+            for (int i = 1; i < newExpr.Arguments.Count; i++)
+            {
+                var argType = CheckExpr(newExpr.Arguments[i]);
+                if (!IsNumber(argType) && argType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($" {simpleClassName} constructor argument {i + 1} must be a number, got '{argType}'.");
+                }
+            }
+
+            // Extract element type prefix (e.g., "Int32" from "Int32Array")
+            var elementType = simpleClassName.EndsWith("Array")
+                ? simpleClassName[..^5]  // Remove "Array" suffix
+                : simpleClassName;
+            return new TypeInfo.TypedArray(elementType);
+        }
+
+        // Handle new Worker(filename, options?) constructor
+        if (isSimpleName && simpleClassName == "Worker")
+        {
+            // Worker accepts 1-2 arguments (filename, options?)
+            if (newExpr.Arguments.Count < 1)
+            {
+                throw new TypeCheckException(" Worker constructor requires at least 1 argument (filename).");
+            }
+            if (newExpr.Arguments.Count > 2)
+            {
+                throw new TypeCheckException(" Worker constructor accepts at most 2 arguments.");
+            }
+
+            var filenameType = CheckExpr(newExpr.Arguments[0]);
+            if (!IsString(filenameType) && filenameType is not TypeInfo.Any)
+            {
+                throw new TypeCheckException($" Worker filename must be a string, got '{filenameType}'.");
+            }
+
+            // Validate options if provided
+            if (newExpr.Arguments.Count == 2)
+            {
+                CheckExpr(newExpr.Arguments[1]);
+            }
+
+            return new TypeInfo.Worker();
+        }
+
+        // Handle new MessageChannel() constructor
+        if (isSimpleName && simpleClassName == "MessageChannel")
+        {
+            // MessageChannel accepts 0 arguments
+            if (newExpr.Arguments.Count > 0)
+            {
+                throw new TypeCheckException(" MessageChannel constructor does not accept arguments.");
+            }
+
+            return new TypeInfo.MessageChannel();
+        }
+
         // Handle new Promise<T>((resolve, reject) => { ... }) constructor
         if (isSimpleName && simpleClassName == "Promise")
         {
@@ -856,5 +950,17 @@ public partial class TypeChecker
         }
 
         return Substitute(ctorSig.ReturnType, inferred);
+    }
+
+    /// <summary>
+    /// Checks if a name is a TypedArray constructor name.
+    /// </summary>
+    private static bool IsTypedArrayName(string name)
+    {
+        return name is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
+            or "Int16Array" or "Uint16Array"
+            or "Int32Array" or "Uint32Array"
+            or "Float32Array" or "Float64Array"
+            or "BigInt64Array" or "BigUint64Array";
     }
 }

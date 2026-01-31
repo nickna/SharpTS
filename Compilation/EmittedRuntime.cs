@@ -1143,4 +1143,132 @@ public class EmittedRuntime
         }
         return null;
     }
+
+    // ============================================================
+    // Worker Threads Support
+    // ============================================================
+
+    // $SharedArrayBuffer type - emitted for standalone worker support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSharedArrayBuffer
+    public Type TSSharedArrayBufferType { get; set; } = null!;
+    public MethodBuilder TSSharedArrayBufferCtor { get; set; } = null!;
+    public MethodBuilder TSSharedArrayBufferByteLengthGetter { get; set; } = null!;
+    public MethodBuilder TSSharedArrayBufferSlice { get; set; } = null!;
+
+    // TypedArray base type and common methods
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTypedArray
+    public Type TSTypedArrayBaseType { get; set; } = null!;
+    public MethodBuilder TSTypedArrayLengthGetter { get; set; } = null!;
+    public MethodBuilder TSTypedArrayByteLengthGetter { get; set; } = null!;
+    public MethodBuilder TSTypedArrayByteOffsetGetter { get; set; } = null!;
+    public MethodBuilder TSTypedArrayBufferGetter { get; set; } = null!;
+    public MethodBuilder TSTypedArrayGet { get; set; } = null!;
+    public MethodBuilder TSTypedArraySet { get; set; } = null!;
+    public MethodBuilder TSTypedArraySubarray { get; set; } = null!;
+    public MethodBuilder TSTypedArraySlice { get; set; } = null!;
+    public MethodBuilder TSTypedArrayFill { get; set; } = null!;
+    public MethodBuilder TSTypedArrayCopyWithin { get; set; } = null!;
+
+    // TypedArray helper methods that avoid hard dependencies on SharpTS.dll
+    // These use reflection to work with TypedArrays without requiring SharpTS.dll at runtime
+    public MethodBuilder IsTypedArrayMethod { get; set; } = null!;
+    public MethodBuilder GetTypedArrayElementMethod { get; set; } = null!;
+    public MethodBuilder SetTypedArrayElementMethod { get; set; } = null!;
+
+    // Concrete TypedArray types
+    public Type TSInt8ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSInt8ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSInt8ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSUint8ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSUint8ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSUint8ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSUint8ClampedArrayType { get; set; } = null!;
+    public ConstructorBuilder TSUint8ClampedArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSUint8ClampedArrayCtorSAB { get; set; } = null!;
+
+    public Type TSInt16ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSInt16ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSInt16ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSUint16ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSUint16ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSUint16ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSInt32ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSInt32ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSInt32ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSUint32ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSUint32ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSUint32ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSFloat32ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSFloat32ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSFloat32ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSFloat64ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSFloat64ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSFloat64ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSBigInt64ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSBigInt64ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSBigInt64ArrayCtorSAB { get; set; } = null!;
+
+    public Type TSBigUint64ArrayType { get; set; } = null!;
+    public ConstructorBuilder TSBigUint64ArrayCtor { get; set; } = null!;
+    public ConstructorBuilder TSBigUint64ArrayCtorSAB { get; set; } = null!;
+
+    // TypedArray FromObject helpers (handles both length and SharedArrayBuffer arguments)
+    public Dictionary<string, MethodBuilder> TypedArrayFromObjectHelpers { get; } = [];
+
+    // Atomics static methods
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSAtomics
+    public MethodBuilder AtomicsLoad { get; set; } = null!;
+    public MethodBuilder AtomicsStore { get; set; } = null!;
+    public MethodBuilder AtomicsAdd { get; set; } = null!;
+    public MethodBuilder AtomicsSub { get; set; } = null!;
+    public MethodBuilder AtomicsAnd { get; set; } = null!;
+    public MethodBuilder AtomicsOr { get; set; } = null!;
+    public MethodBuilder AtomicsXor { get; set; } = null!;
+    public MethodBuilder AtomicsExchange { get; set; } = null!;
+    public MethodBuilder AtomicsCompareExchange { get; set; } = null!;
+    public MethodBuilder AtomicsWait { get; set; } = null!;
+    public MethodBuilder AtomicsNotify { get; set; } = null!;
+    public MethodBuilder AtomicsIsLockFree { get; set; } = null!;
+
+    // $MessagePort type - emitted for standalone worker support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
+    public Type TSMessagePortType { get; set; } = null!;
+    public ConstructorBuilder TSMessagePortCtor { get; set; } = null!;
+    public MethodBuilder TSMessagePortPostMessage { get; set; } = null!;
+    public MethodBuilder TSMessagePortStart { get; set; } = null!;
+    public MethodBuilder TSMessagePortClose { get; set; } = null!;
+
+    // $MessageChannel type - emitted for standalone worker support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessageChannel
+    public Type TSMessageChannelType { get; set; } = null!;
+    public MethodBuilder TSMessageChannelCtor { get; set; } = null!;
+    public MethodBuilder TSMessageChannelPort1Getter { get; set; } = null!;
+    public MethodBuilder TSMessageChannelPort2Getter { get; set; } = null!;
+
+    // $Worker type - emitted for standalone worker support
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWorker
+    public Type TSWorkerType { get; set; } = null!;
+    public MethodBuilder TSWorkerCtor { get; set; } = null!;
+    public MethodBuilder TSWorkerThreadIdGetter { get; set; } = null!;
+    public MethodBuilder TSWorkerPostMessage { get; set; } = null!;
+    public MethodBuilder TSWorkerTerminate { get; set; } = null!;
+    public MethodBuilder TSWorkerRef { get; set; } = null!;
+    public MethodBuilder TSWorkerUnref { get; set; } = null!;
+
+    // StructuredClone helper methods
+    // NOTE: Must stay in sync with SharpTS.Runtime.Types.StructuredClone
+    public MethodBuilder StructuredCloneClone { get; set; } = null!;
+
+    // worker_threads module methods
+    public MethodBuilder WorkerThreadsIsMainThread { get; set; } = null!;
+    public MethodBuilder WorkerThreadsThreadId { get; set; } = null!;
+    public MethodBuilder WorkerThreadsReceiveMessageOnPort { get; set; } = null!;
 }

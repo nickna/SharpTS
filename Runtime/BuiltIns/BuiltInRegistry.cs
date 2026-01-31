@@ -178,6 +178,7 @@ public sealed class BuiltInRegistry
         RegisterStringDecoderType(registry);
         RegisterStreamTypes(registry);
         RegisterHttpTypes(registry);
+        RegisterWorkerTypes(registry);
 
         return registry;
     }
@@ -626,6 +627,74 @@ public sealed class BuiltInRegistry
 
         registry.RegisterInstanceType(typeof(SharpTSHttpResponse), (instance, name) =>
             ((SharpTSHttpResponse)instance).GetMember(name));
+    }
+
+    private static void RegisterWorkerTypes(BuiltInRegistry registry)
+    {
+        // Register Atomics namespace
+        registry.RegisterNamespace(new BuiltInNamespace(
+            Name: "Atomics",
+            IsSingleton: true,
+            SingletonFactory: () => WorkerBuiltIns.Atomics,
+            GetMethod: name => WorkerBuiltIns.GetAtomicsMember(name) as BuiltInMethod
+        ));
+
+        // Register Worker instance members (postMessage, terminate, on, etc.)
+        registry.RegisterInstanceType(typeof(SharpTSWorker), (instance, name) =>
+            ((SharpTSWorker)instance).GetMember(name));
+
+        // Register MessagePort instance members
+        registry.RegisterInstanceType(typeof(SharpTSMessagePort), (instance, name) =>
+            ((SharpTSMessagePort)instance).GetMember(name));
+
+        // Register MessageChannel instance members
+        registry.RegisterInstanceType(typeof(SharpTSMessageChannel), (instance, name) =>
+            ((SharpTSMessageChannel)instance).GetMember(name));
+
+        // Register SharedArrayBuffer instance members
+        registry.RegisterInstanceType(typeof(SharpTSSharedArrayBuffer), (instance, name) =>
+        {
+            var sab = (SharpTSSharedArrayBuffer)instance;
+            return name switch
+            {
+                "byteLength" => (double)sab.ByteLength,
+                "slice" => new BuiltInMethod("slice", 1, 2, (interp, recv, args) =>
+                {
+                    int begin = args.Count > 0 && args[0] is double b ? (int)b : 0;
+                    int? end = args.Count > 1 && args[1] is double e ? (int)e : null;
+                    return sab.Slice(begin, end);
+                }),
+                _ => null
+            };
+        });
+
+        // Register TypedArray instance members
+        registry.RegisterInstanceType(typeof(SharpTSInt8Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSUint8Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSUint8ClampedArray), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSInt16Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSUint16Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSInt32Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSUint32Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSFloat32Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSFloat64Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSBigInt64Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+        registry.RegisterInstanceType(typeof(SharpTSBigUint64Array), (instance, name) =>
+            ((SharpTSTypedArray)instance).GetMember(name));
+
+        // Register Atomics singleton member lookup
+        registry.RegisterInstanceType(typeof(AtomicsSingleton), (instance, name) =>
+            ((AtomicsSingleton)instance).GetMember(name));
     }
 
     private static string Stringify(object? obj)

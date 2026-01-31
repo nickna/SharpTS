@@ -84,6 +84,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
+        // Special case: HashSet<object?>.size for compiled Sets
+        // Compiled code uses HashSet<object?> for Sets, and structuredClone returns the same type.
+        // When accessing .size, we need to return HashSet.Count.
+        var hashSetSizeLabel = il.DefineLabel();
+        var afterHashSetSizeLabel = il.DefineLabel();
+
+        // Check if obj is HashSet<object?> and name == "size"
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.HashSetOfObject);
+        il.Emit(OpCodes.Brfalse, afterHashSetSizeLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "size");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, afterHashSetSizeLabel);
+
+        // It's a HashSet and property is "size" - return Count as double
+        il.MarkLabel(hashSetSizeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.HashSetOfObject);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.HashSetOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(afterHashSetSizeLabel);
+
         // Try ISharpTSPropertyAccessor interface FIRST (for interpreter runtime types like SharpTSKeyObject)
         // Types implementing this interface may have custom property handling (e.g., enum to string conversion)
         // Uses reflection to avoid hard reference to SharpTS.dll for standalone execution

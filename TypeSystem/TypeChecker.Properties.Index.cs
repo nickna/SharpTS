@@ -136,6 +136,12 @@ public partial class TypeChecker
                 return arrayType.ElementType;
             }
 
+            // TypedArray index access returns number
+            if (objType is TypeInfo.TypedArray)
+            {
+                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+            }
+
             // Enum reverse mapping: Direction[0] returns "Up" (only for numeric enums)
             if (objType is TypeInfo.Enum enumType)
             {
@@ -250,6 +256,17 @@ public partial class TypeChecker
                 return valueType;
             }
 
+            // TypedArray index assignment
+            if (objType is TypeInfo.TypedArray typedArrayType)
+            {
+                // TypedArrays accept number values
+                if (!IsNumber(valueType) && valueType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to {typedArrayType.ElementType}Array.");
+                }
+                return valueType;
+            }
+
             // Number index signature on interface/record
             if (objType is TypeInfo.Interface itf2 && itf2.NumberIndexType != null)
             {
@@ -324,6 +341,9 @@ public partial class TypeChecker
         {
             if (objType is TypeInfo.Array arrayType)
                 return arrayType.ElementType;
+            // TypedArray index access returns number
+            if (objType is TypeInfo.TypedArray)
+                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
                 return itf3.NumberIndexType;
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)

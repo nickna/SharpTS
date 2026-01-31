@@ -1556,6 +1556,8 @@ public partial class RuntimeEmitter
         // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
         EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
         EmitIsSymbol(typeBuilder, runtime);
+        // TypedArray helpers must come BEFORE GetIndex/SetIndex since they use these helpers
+        EmitTypedArrayDetectionHelpers(typeBuilder, runtime);
         EmitGetIndex(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitSetIndexStrict(typeBuilder, runtime);
@@ -1722,6 +1724,9 @@ public partial class RuntimeEmitter
         EmitPerfHooksMethods(typeBuilder, runtime);
         // string_decoder module constructor helper
         EmitStringDecoderGetConstructor(typeBuilder, runtime);
+
+        // Worker Threads support (SharedArrayBuffer, TypedArrays, Atomics, MessagePort, Worker)
+        EmitWorkerHelpers(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }

@@ -183,6 +183,34 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: new SharedArrayBuffer(...) constructor
+        if (isSimpleName && simpleClassName == "SharedArrayBuffer")
+        {
+            EmitNewSharedArrayBuffer(n.Arguments);
+            return;
+        }
+
+        // Special case: new Worker(...) constructor
+        if (isSimpleName && simpleClassName == "Worker")
+        {
+            EmitNewWorker(n.Arguments);
+            return;
+        }
+
+        // Special case: new MessageChannel() constructor
+        if (isSimpleName && simpleClassName == "MessageChannel")
+        {
+            EmitNewMessageChannel();
+            return;
+        }
+
+        // Special case: TypedArray constructors
+        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
+        {
+            EmitNewTypedArray(simpleClassName, n.Arguments);
+            return;
+        }
+
         // Extract qualified name from callee expression
         var (namespaceParts, className) = ExtractQualifiedName(n.Callee);
 
@@ -794,6 +822,168 @@ public partial class ILEmitter
     {
         // new PassThrough(options?) - options are ignored, just passes through
         IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSPassThroughCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new SharedArrayBuffer(...) construction.
+    /// </summary>
+    private void EmitNewSharedArrayBuffer(List<Expr> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            IL.Emit(OpCodes.Ldc_R8, 0.0);
+        }
+        else
+        {
+            EmitExpressionAsDouble(arguments[0]);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSSharedArrayBufferCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new Worker(...) construction.
+    /// </summary>
+    private void EmitNewWorker(List<Expr> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            throw new InvalidOperationException("Worker constructor requires at least 1 argument (filename).");
+        }
+
+        // Emit filename
+        EmitExpression(arguments[0]);
+        EmitBoxIfNeeded(arguments[0]);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
+
+        // Emit options (or null)
+        if (arguments.Count > 1)
+        {
+            EmitExpression(arguments[1]);
+            EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        // Emit null for parentInterpreter (compiled code doesn't have interpreter)
+        IL.Emit(OpCodes.Ldnull);
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSWorkerCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits code for new MessageChannel() construction.
+    /// </summary>
+    private void EmitNewMessageChannel()
+    {
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSMessageChannelCtor);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Checks if a name is a TypedArray constructor name.
+    /// </summary>
+    private static bool IsTypedArrayName(string name)
+    {
+        return name is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
+            or "Int16Array" or "Uint16Array"
+            or "Int32Array" or "Uint32Array"
+            or "Float32Array" or "Float64Array"
+            or "BigInt64Array" or "BigUint64Array";
+    }
+
+    /// <summary>
+    /// Emits code for new TypedArray(...) construction.
+    /// </summary>
+    private void EmitNewTypedArray(string typeName, List<Expr> arguments)
+    {
+        // Get the TypedArray type
+        var arrayType = typeName switch
+        {
+            "Int8Array" => typeof(SharpTS.Runtime.Types.SharpTSInt8Array),
+            "Uint8Array" => typeof(SharpTS.Runtime.Types.SharpTSUint8Array),
+            "Uint8ClampedArray" => typeof(SharpTS.Runtime.Types.SharpTSUint8ClampedArray),
+            "Int16Array" => typeof(SharpTS.Runtime.Types.SharpTSInt16Array),
+            "Uint16Array" => typeof(SharpTS.Runtime.Types.SharpTSUint16Array),
+            "Int32Array" => typeof(SharpTS.Runtime.Types.SharpTSInt32Array),
+            "Uint32Array" => typeof(SharpTS.Runtime.Types.SharpTSUint32Array),
+            "Float32Array" => typeof(SharpTS.Runtime.Types.SharpTSFloat32Array),
+            "Float64Array" => typeof(SharpTS.Runtime.Types.SharpTSFloat64Array),
+            "BigInt64Array" => typeof(SharpTS.Runtime.Types.SharpTSBigInt64Array),
+            "BigUint64Array" => typeof(SharpTS.Runtime.Types.SharpTSBigUint64Array),
+            _ => throw new InvalidOperationException($"Unknown TypedArray type: {typeName}")
+        };
+
+        if (arguments.Count == 0)
+        {
+            // new TypedArray() - empty array of length 0
+            var ctor = arrayType.GetConstructor([typeof(int)])!;
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Newobj, ctor);
+        }
+        else if (arguments.Count == 1)
+        {
+            // Check if argument is a SharedArrayBuffer, another TypedArray, or a length
+            // Use runtime dispatch helper since we don't know the argument type at compile time
+            EmitExpression(arguments[0]);
+            EmitBoxIfNeeded(arguments[0]);
+
+            // Use the FromObject helper which handles both length and SharedArrayBuffer
+            if (_ctx.Runtime!.TypedArrayFromObjectHelpers.TryGetValue(typeName, out var helper))
+            {
+                IL.Emit(OpCodes.Call, helper);
+            }
+            else
+            {
+                // Fallback: assume it's a length
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                IL.Emit(OpCodes.Conv_I4);
+                var ctor = arrayType.GetConstructor([typeof(int)])!;
+                IL.Emit(OpCodes.Newobj, ctor);
+            }
+        }
+        else if (arguments.Count >= 2)
+        {
+            // new TypedArray(buffer, byteOffset?, length?)
+            // Assume first argument is SharedArrayBuffer
+            EmitExpression(arguments[0]);
+            IL.Emit(OpCodes.Castclass, typeof(SharpTS.Runtime.Types.SharpTSSharedArrayBuffer));
+
+            // byteOffset
+            if (arguments.Count > 1)
+            {
+                EmitExpressionAsDouble(arguments[1]);
+                IL.Emit(OpCodes.Conv_I4);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldc_I4_0);
+            }
+
+            // length (nullable)
+            if (arguments.Count > 2)
+            {
+                EmitExpressionAsDouble(arguments[2]);
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Newobj, typeof(int?).GetConstructor([typeof(int)])!);
+            }
+            else
+            {
+                var localNullableInt = IL.DeclareLocal(typeof(int?));
+                IL.Emit(OpCodes.Ldloca, localNullableInt);
+                IL.Emit(OpCodes.Initobj, typeof(int?));
+                IL.Emit(OpCodes.Ldloc, localNullableInt);
+            }
+
+            var ctor = arrayType.GetConstructor([typeof(SharpTS.Runtime.Types.SharpTSSharedArrayBuffer), typeof(int), typeof(int?)])!;
+            IL.Emit(OpCodes.Newobj, ctor);
+        }
+
         SetStackUnknown();
     }
 }

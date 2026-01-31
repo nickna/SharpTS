@@ -762,6 +762,61 @@ public abstract record TypeInfo
     }
 
     /// <summary>
+    /// Represents a Worker type from the worker_threads module.
+    /// Workers execute TypeScript code in separate threads with message passing.
+    /// </summary>
+    public record Worker() : TypeInfo
+    {
+        public override string ToString() => "Worker";
+    }
+
+    /// <summary>
+    /// Represents a MessagePort type for bidirectional communication.
+    /// </summary>
+    public record MessagePort() : TypeInfo
+    {
+        public override string ToString() => "MessagePort";
+    }
+
+    /// <summary>
+    /// Represents a MessageChannel type containing two connected ports.
+    /// </summary>
+    public record MessageChannel() : TypeInfo
+    {
+        public override string ToString() => "MessageChannel";
+    }
+
+    /// <summary>
+    /// Represents a SharedArrayBuffer type for shared memory across threads.
+    /// Unlike ArrayBuffer, SharedArrayBuffer is shared by reference across threads.
+    /// </summary>
+    /// <param name="ByteLength">Optional fixed byte length if known at compile time.</param>
+    public record SharedArrayBuffer(int? ByteLength = null) : TypeInfo
+    {
+        public override string ToString() => ByteLength.HasValue
+            ? $"SharedArrayBuffer({ByteLength})"
+            : "SharedArrayBuffer";
+    }
+
+    /// <summary>
+    /// Represents the Atomics global object for atomic operations.
+    /// </summary>
+    public record AtomicsNamespace() : TypeInfo
+    {
+        public override string ToString() => "typeof Atomics";
+    }
+
+    /// <summary>
+    /// Represents a TypedArray type with specific element type.
+    /// </summary>
+    /// <param name="ElementType">The element type name (e.g., "Int32", "Float64").</param>
+    /// <param name="IsShared">Whether the view is backed by a SharedArrayBuffer.</param>
+    public record TypedArray(string ElementType, bool IsShared = false) : TypeInfo
+    {
+        public override string ToString() => $"{ElementType}Array";
+    }
+
+    /// <summary>
     /// Represents a module namespace type returned by dynamic import.
     /// Contains the exported members and optional default export.
     /// Used for typeof import('./path') type inference.

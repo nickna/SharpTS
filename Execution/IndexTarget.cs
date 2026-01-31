@@ -12,6 +12,7 @@ public abstract record IndexTarget
 
     // Get/Set targets
     public sealed record Array(SharpTSArray Target, int Index) : IndexTarget;
+    public sealed record TypedArray(SharpTSTypedArray Target, int Index) : IndexTarget;
     public sealed record ObjectString(SharpTSObject Target, string Key) : IndexTarget;
     public sealed record ObjectSymbol(SharpTSObject Target, SharpTSSymbol Key) : IndexTarget;
     public sealed record InstanceString(SharpTSInstance Target, string Key) : IndexTarget;

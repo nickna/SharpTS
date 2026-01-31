@@ -24,6 +24,7 @@ public partial class RuntimeEmitter
         var dictNumericKeyLabel = il.DefineLabel();
         var symbolKeyLabel = il.DefineLabel();
         var classInstanceLabel = il.DefineLabel();
+        var typedArrayLabel = il.DefineLabel();
         var nullLabel = il.DefineLabel();
 
         // null check on obj
@@ -34,6 +35,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // TypedArray (check before List since TypedArray is more specific)
+        // Use type name check to avoid hard dependency on SharpTS.dll
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.IsTypedArrayMethod);
+        il.Emit(OpCodes.Brtrue, typedArrayLabel);
 
         // List
         il.Emit(OpCodes.Ldarg_0);
@@ -84,6 +91,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symbolFoundLabel);
         il.Emit(OpCodes.Ldloc, symbolValueLocal);
+        il.Emit(OpCodes.Ret);
+
+        // TypedArray handler: use helper to get element (avoids hard dependency on SharpTS.dll)
+        il.MarkLabel(typedArrayLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Call, runtime.GetTypedArrayElementMethod);
         il.Emit(OpCodes.Ret);
 
         // Class instance handler: use GetFieldsProperty(obj, index as string)
@@ -186,6 +201,7 @@ public partial class RuntimeEmitter
         var dictNumericKeyLabel = il.DefineLabel();
         var symbolKeyLabel = il.DefineLabel();
         var classInstanceLabel = il.DefineLabel();
+        var typedArraySetLabel = il.DefineLabel();
         var nullLabel = il.DefineLabel();
 
         // null check on obj
@@ -196,6 +212,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // TypedArray (check before List since TypedArray is more specific)
+        // Use type name check to avoid hard dependency on SharpTS.dll
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.IsTypedArrayMethod);
+        il.Emit(OpCodes.Brtrue, typedArraySetLabel);
 
         // List
         il.Emit(OpCodes.Ldarg_0);
@@ -224,6 +246,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+
+        // TypedArray handler: use helper to set element (avoids hard dependency on SharpTS.dll)
+        il.MarkLabel(typedArraySetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.SetTypedArrayElementMethod);
         il.Emit(OpCodes.Ret);
 
         // Class instance handler: use SetFieldsProperty(obj, index as string, value)

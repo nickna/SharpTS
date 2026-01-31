@@ -569,6 +569,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.RegExp>(new RegExpEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.AsyncGenerator>(new AsyncGeneratorEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Error>(new ErrorEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.SharedArrayBuffer>(new SharedArrayBufferEmitter());
 
         // Static type emitters
         _typeEmitterRegistry.RegisterStatic("Math", new MathStaticEmitter());
@@ -581,6 +582,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.RegisterStatic("Symbol", new SymbolStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("process", new ProcessStaticEmitter());
         _typeEmitterRegistry.RegisterStatic("globalThis", new GlobalThisStaticEmitter(_typeEmitterRegistry));
+        _typeEmitterRegistry.RegisterStatic("Atomics", new AtomicsStaticEmitter());
 
         // Built-in module emitters
         _builtInModuleEmitterRegistry.Register(new PathModuleEmitter());
@@ -602,6 +604,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new PerfHooksModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new StreamModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new WorkerThreadsModuleEmitter());
     }
 
     #endregion

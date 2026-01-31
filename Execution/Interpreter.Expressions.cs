@@ -569,6 +569,7 @@ public partial class Interpreter
     private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
     {
         (SharpTSArray array, double idx) => new IndexTarget.Array(array, (int)idx),
+        (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
         (ConstEnumValues constEnum, _) => new IndexTarget.ConstEnumError(constEnum),
         (SharpTSObject sharpObj, string strKey) => new IndexTarget.ObjectString(sharpObj, strKey),
@@ -597,6 +598,7 @@ public partial class Interpreter
         return ResolveIndexTarget(obj, index) switch
         {
             IndexTarget.Array t => t.Target.Get(t.Index),
+            IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
             IndexTarget.ConstEnumError t => throw new Exception(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
@@ -636,6 +638,10 @@ public partial class Interpreter
             case IndexTarget.Array t:
                 if (strictMode) t.Target.SetStrict(t.Index, value, strictMode);
                 else t.Target.Set(t.Index, value);
+                return value;
+
+            case IndexTarget.TypedArray t:
+                t.Target[t.Index] = value;
                 return value;
 
             case IndexTarget.ObjectString t:
