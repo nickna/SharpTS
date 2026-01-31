@@ -28,6 +28,20 @@ public class BlockScopingTests
     }
 
     [Fact]
+    public void ForLoop_LetVariable_ShadowsOuterVariable()
+    {
+        var source = """
+            let i = 100;
+            for (let i = 0; i < 3; i++) {
+                // inner i shadows outer
+            }
+            console.log(i); // Should be 100, not modified by loop
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("100\n", output);
+    }
+
+    [Fact]
     public void ForLoop_NestedLoops_IndependentScopes()
     {
         var source = """
@@ -58,6 +72,21 @@ public class BlockScopingTests
             """;
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("inside\n", output);
+    }
+
+    [Fact]
+    public void BlockStatement_LetVariable_ShadowsOuterVariable()
+    {
+        var source = """
+            let x = "outer";
+            {
+                let x = "inner";
+                console.log(x);
+            }
+            console.log(x);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("inner\nouter\n", output);
     }
 
     [Fact]

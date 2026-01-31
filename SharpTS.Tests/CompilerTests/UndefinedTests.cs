@@ -130,6 +130,28 @@ public class UndefinedTests
     }
 
     [Fact]
+    public void OptionalChaining_WithUndefined_ReturnsUndefined()
+    {
+        var source = """
+            let obj: { name: string } | undefined = undefined;
+            console.log(obj?.name);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("undefined\n", output);
+    }
+
+    [Fact]
+    public void OptionalChaining_WithValue_ReturnsProperty()
+    {
+        var source = """
+            let obj: { name: string } | undefined = { name: "test" };
+            console.log(obj?.name);
+            """;
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n", output);
+    }
+
+    [Fact]
     public void Undefined_NotEqualToFalsyValues()
     {
         var source = """

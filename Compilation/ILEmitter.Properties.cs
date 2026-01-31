@@ -207,19 +207,27 @@ public partial class ILEmitter
         if (g.Optional)
         {
             var builder = _ctx.ILBuilder;
-            var nullLabel = builder.DefineLabel("optional_null");
+            var nullishLabel = builder.DefineLabel("optional_nullish");
             var endLabel = builder.DefineLabel("optional_end");
 
+            // Check for null
             IL.Emit(OpCodes.Dup);
-            builder.Emit_Brfalse(nullLabel);
+            builder.Emit_Brfalse(nullishLabel);
 
+            // Check for undefined (non-null singleton $Undefined.Instance)
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+            builder.Emit_Brtrue(nullishLabel);
+
+            // Not nullish - proceed with property access
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
             builder.Emit_Br(endLabel);
 
-            builder.MarkLabel(nullLabel);
+            builder.MarkLabel(nullishLabel);
             IL.Emit(OpCodes.Pop);
-            IL.Emit(OpCodes.Ldnull);
+            // Optional chaining returns undefined (not null) when object is nullish
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
 
             builder.MarkLabel(endLabel);
         }
