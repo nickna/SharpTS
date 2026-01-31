@@ -103,9 +103,31 @@ public partial class TypeChecker
 
     private TypeInfo CheckLogical(Expr.Logical logical)
     {
-        CheckExpr(logical.Left);
-        CheckExpr(logical.Right);
-        return new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
+        TypeInfo leftType = CheckExpr(logical.Left);
+        TypeInfo rightType = CheckExpr(logical.Right);
+
+        // In JavaScript/TypeScript, || and && return one of their operands, not a boolean.
+        // - `a || b` returns `a` if truthy, otherwise `b`. Type is A | B.
+        // - `a && b` returns `a` if falsy, otherwise `b`. Type is A | B.
+
+        // If one type is `any`, return `any`
+        if (leftType is TypeInfo.Any || rightType is TypeInfo.Any)
+        {
+            return new TypeInfo.Any();
+        }
+
+        // If one is assignable to the other, return the broader type
+        if (IsCompatible(leftType, rightType))
+        {
+            return rightType;
+        }
+        if (IsCompatible(rightType, leftType))
+        {
+            return leftType;
+        }
+
+        // Otherwise, return the union of both types
+        return new TypeInfo.Union([leftType, rightType]);
     }
 
     private TypeInfo CheckNullishCoalescing(Expr.NullishCoalescing nc)
