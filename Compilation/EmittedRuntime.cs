@@ -209,6 +209,7 @@ public class EmittedRuntime
     // Exception methods
     public MethodBuilder CreateException { get; set; } = null!;
     public MethodBuilder WrapException { get; set; } = null!;
+    public MethodBuilder ThrowUndefinedVariable { get; set; } = null!;
 
     // Utility methods
     public MethodBuilder Random { get; set; } = null!;

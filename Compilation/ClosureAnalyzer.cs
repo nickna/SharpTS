@@ -183,18 +183,20 @@ public class ClosureAnalyzer : AstVisitorBase
 
     protected override void VisitForOf(Stmt.ForOf stmt)
     {
+        // Visit iterable BEFORE creating loop scope - matches interpreter/resolver behavior
+        Visit(stmt.Iterable);
         EnterScope();
         DeclareVariable(stmt.Variable.Lexeme);
-        Visit(stmt.Iterable);
         Visit(stmt.Body);
         ExitScope();
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
     {
+        // Visit object BEFORE creating loop scope - matches interpreter/resolver behavior
+        Visit(stmt.Object);
         EnterScope();
         DeclareVariable(stmt.Variable.Lexeme);
-        Visit(stmt.Object);
         Visit(stmt.Body);
         ExitScope();
     }

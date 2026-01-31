@@ -331,12 +331,16 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Emits a for loop with proper continue handling.
+    /// Emits a for loop with proper continue handling and ES6 block scoping.
     /// Continue jumps to the increment, not past it.
+    /// Variables declared with let/const in the initializer are scoped to the loop.
     /// </summary>
     protected virtual void EmitFor(Stmt.For f)
     {
-        // Emit initializer (once, outside the loop)
+        // Create scope for loop variables (ES6 let/const block scoping)
+        Ctx.Locals.EnterScope();
+
+        // Emit initializer (once, defines loop variable in current scope)
         if (f.Initializer != null)
             EmitStatement(f.Initializer);
 
@@ -370,6 +374,9 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
         IL.MarkLabel(endLabel);
         ExitLoop();
+
+        // Exit loop scope
+        Ctx.Locals.ExitScope();
     }
 
     /// <summary>

@@ -1642,6 +1642,7 @@ public partial class RuntimeEmitter
         EmitGetSuperMethod(typeBuilder, runtime);
         EmitCreateException(typeBuilder, runtime);
         EmitWrapException(typeBuilder, runtime);
+        EmitThrowUndefinedVariable(typeBuilder, runtime);
         EmitRandom(typeBuilder, runtime, randomField);
         EmitGetEnumMemberName(typeBuilder, runtime);
         EmitConcatTemplate(typeBuilder, runtime);

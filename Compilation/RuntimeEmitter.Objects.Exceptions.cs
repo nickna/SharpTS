@@ -165,5 +165,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits a helper method that throws a ReferenceError for undefined variables.
+    /// This is called when accessing a variable that is out of scope (e.g., after a for-loop exits).
+    /// </summary>
+    private void EmitThrowUndefinedVariable(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // public static void ThrowUndefinedVariable(string name)
+        var method = typeBuilder.DefineMethod(
+            "ThrowUndefinedVariable",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.String]
+        );
+        runtime.ThrowUndefinedVariable = method;
+
+        var il = method.GetILGenerator();
+
+        // Build error message: "Undefined variable '" + name + "'."
+        il.Emit(OpCodes.Ldstr, "Undefined variable '");
+        il.Emit(OpCodes.Ldarg_0);  // name
+        il.Emit(OpCodes.Ldstr, "'.");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+
+        // Create new $ReferenceError(message)
+        il.Emit(OpCodes.Newobj, runtime.TSReferenceErrorCtor);
+
+        // Wrap as System.Exception using CreateException helper (stores original value in Data["__tsValue"])
+        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Throw);
+    }
 }
 

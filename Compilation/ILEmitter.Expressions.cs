@@ -82,6 +82,25 @@ public partial class ILEmitter
             return;
         }
 
+        // JavaScript global constants
+        if (name == "NaN")
+        {
+            EmitDoubleConstant(double.NaN);
+            return;
+        }
+
+        if (name == "Infinity")
+        {
+            EmitDoubleConstant(double.PositiveInfinity);
+            return;
+        }
+
+        if (name == "undefined")
+        {
+            EmitUndefinedConstant();
+            return;
+        }
+
         // Global fetch function - wrap as TSFunction
         if (name == "fetch")
         {
@@ -147,7 +166,10 @@ public partial class ILEmitter
             return;
         }
 
-        // Unknown variable - push null
+        // Unknown variable - throw ReferenceError at runtime
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+        // Emit unreachable null to satisfy IL verification (method never returns but stack must balance)
         EmitNullConstant();
     }
 
