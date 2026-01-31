@@ -315,10 +315,7 @@ function handleRequest(req: any, res: any): void {
 
     // Parse the URL
     const parsedUrl = parse(url);
-    let pathname = '/';
-    if (parsedUrl.pathname) {
-        pathname = parsedUrl.pathname;
-    }
+    const pathname = parsedUrl.pathname || '/';
 
     // Parse query string
     let query: { [key: string]: string } = {};
