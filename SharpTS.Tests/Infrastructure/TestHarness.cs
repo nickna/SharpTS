@@ -26,6 +26,59 @@ public static class TestHarness
     internal static readonly object ConsoleLock = new();
 
     /// <summary>
+    /// Runs TypeScript source using the specified execution mode and captures console output.
+    /// This is the primary entry point for parameterized tests that should run against
+    /// both the interpreter and compiler.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="mode">Execution mode (Interpreted or Compiled)</param>
+    /// <returns>Captured console output</returns>
+    public static string Run(string source, ExecutionMode mode)
+    {
+        return mode switch
+        {
+            ExecutionMode.Interpreted => RunInterpreted(source),
+            ExecutionMode.Compiled => RunCompiled(source),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+    }
+
+    /// <summary>
+    /// Runs TypeScript source using the specified execution mode with decorator support.
+    /// </summary>
+    /// <param name="source">TypeScript source code</param>
+    /// <param name="mode">Execution mode (Interpreted or Compiled)</param>
+    /// <param name="decoratorMode">Decorator mode (None, Legacy, Stage3)</param>
+    /// <returns>Captured console output</returns>
+    public static string Run(string source, ExecutionMode mode, DecoratorMode decoratorMode)
+    {
+        return mode switch
+        {
+            ExecutionMode.Interpreted => RunInterpreted(source, decoratorMode),
+            ExecutionMode.Compiled => RunCompiled(source, decoratorMode),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+    }
+
+    /// <summary>
+    /// Runs TypeScript modules using the specified execution mode.
+    /// This is the primary entry point for parameterized module tests.
+    /// </summary>
+    /// <param name="files">Dictionary of file paths to file contents</param>
+    /// <param name="entryPoint">Path to the entry point module</param>
+    /// <param name="mode">Execution mode (Interpreted or Compiled)</param>
+    /// <returns>Captured console output</returns>
+    public static string RunModules(Dictionary<string, string> files, string entryPoint, ExecutionMode mode)
+    {
+        return mode switch
+        {
+            ExecutionMode.Interpreted => RunModulesInterpreted(files, entryPoint),
+            ExecutionMode.Compiled => RunModulesCompiled(files, entryPoint),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+    }
+
+    /// <summary>
     /// Parses TypeScript source code and returns the list of statements.
     /// Useful for testing AST structure without execution.
     /// </summary>

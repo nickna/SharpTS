@@ -1,0 +1,1241 @@
+using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem.Exceptions;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+/// <summary>
+/// Tests for TypeScript utility types: Partial, Required, Readonly, Record, Pick, Omit, etc.
+/// </summary>
+public class UtilityTypesTests
+{
+    #region Partial<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_AllPropertiesOptional_EmptyObjectValid(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; }
+            let p: Partial<Person> = {};
+            console.log("ok");
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ok\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_SomePropertiesProvided(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; }
+            let p: Partial<Person> = { name: "Alice" };
+            console.log(p.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_AllPropertiesProvided(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; }
+            let p: Partial<Person> = { name: "Bob", age: 30 };
+            console.log(p.name);
+            console.log(p.age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n30\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Partial<string, number> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Partial<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_OnRecord(ExecutionMode mode)
+    {
+        var source = """
+            type Config = { host: string; port: number; };
+            let c: Partial<Config> = { host: "localhost" };
+            console.log(c.host);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("localhost\n", output);
+    }
+
+    #endregion
+
+    #region Required<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Required_AllPropertiesRequired(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name?: string; debug?: boolean; }
+            let c: Required<Config> = { name: "app", debug: true };
+            console.log(c.name);
+            console.log(c.debug);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("app\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Required_MissingProperty_Throws(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name?: string; debug?: boolean; }
+            let c: Required<Config> = { name: "app" };
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("debug", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Required_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Required<string, number> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Required<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Readonly<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readonly_PropertiesAccessible(ExecutionMode mode)
+    {
+        var source = """
+            interface Point { x: number; y: number; }
+            let p: Readonly<Point> = { x: 10, y: 20 };
+            console.log(p.x);
+            console.log(p.y);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("10\n20\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readonly_PreservesOptionalProperties(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name: string; debug?: boolean; }
+            let c: Readonly<Config> = { name: "app" };
+            console.log(c.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("app\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readonly_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Readonly<string, number> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Readonly<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Record<K, V>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_StringLiteralKeys(ExecutionMode mode)
+    {
+        var source = """
+            type Status = "active" | "inactive";
+            let statuses: Record<Status, number> = { active: 1, inactive: 0 };
+            console.log(statuses.active);
+            console.log(statuses.inactive);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n0\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_SingleStringLiteral(ExecutionMode mode)
+    {
+        // Use type alias to avoid parser issue with string literal in generic type argument
+        var source = """
+            type Key = "key";
+            let obj: Record<Key, number> = { key: 42 };
+            console.log(obj.key);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_StringIndexSignature(ExecutionMode mode)
+    {
+        var source = """
+            let dict: Record<string, number> = { a: 1, b: 2, c: 3 };
+            console.log(dict.a);
+            console.log(dict.b);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Record<string> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Record<K, V> requires exactly 2 type arguments", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_MissingKey_Throws(ExecutionMode mode)
+    {
+        var source = """
+            type Keys = "a" | "b";
+            let obj: Record<Keys, number> = { a: 1 };
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("b", ex.Message);
+    }
+
+    #endregion
+
+    #region Pick<T, K>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_SelectsSingleKey(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let nameOnly: Pick<Person, "name"> = { name: "Bob" };
+            console.log(nameOnly.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_SelectsMultipleKeys(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let basic: Pick<Person, "name" | "age"> = { name: "Bob", age: 25 };
+            console.log(basic.name);
+            console.log(basic.age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_ExtraProperty_Throws(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let nameOnly: Pick<Person, "name"> = { name: "Bob", age: 25 };
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("age", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_PreservesOptional(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name: string; debug?: boolean; level: number; }
+            let picked: Pick<Config, "name" | "debug"> = { name: "app" };
+            console.log(picked.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("app\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Pick<string> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Pick<T, K> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Omit<T, K>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_ExcludesSingleKey(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let noEmail: Omit<Person, "email"> = { name: "Bob", age: 25 };
+            console.log(noEmail.name);
+            console.log(noEmail.age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_ExcludesMultipleKeys(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; phone: string; }
+            let basic: Omit<Person, "email" | "phone"> = { name: "Bob", age: 25 };
+            console.log(basic.name);
+            console.log(basic.age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_ExcludedKeyNotAllowed(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let noEmail: Omit<Person, "email"> = { name: "Bob", age: 25, email: "test@test.com" };
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("email", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_MissingRequiredKey_Throws(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let noEmail: Omit<Person, "email"> = { name: "Bob" };
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("age", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_PreservesOptional(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name: string; debug?: boolean; level: number; }
+            let omitted: Omit<Config, "level"> = { name: "app" };
+            console.log(omitted.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("app\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Omit<string> = {};
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Omit<T, K> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Composition
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_Readonly_Composed(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; }
+            let p: Partial<Readonly<Person>> = { name: "Test" };
+            console.log(p.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Test\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readonly_Partial_Composed(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; }
+            let p: Readonly<Partial<Person>> = { age: 25 };
+            console.log(p.age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_Then_Partial(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let p: Partial<Pick<Person, "name" | "age">> = { name: "Alice" };
+            console.log(p.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_Then_Required(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name?: string; debug?: boolean; level?: number; }
+            let c: Required<Omit<Config, "level">> = { name: "app", debug: true };
+            console.log(c.name);
+            console.log(c.debug);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("app\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TripleNestedGenerics_ClosingBrackets(ExecutionMode mode)
+    {
+        // Tests parsing of >>> which the lexer tokenizes as a single GREATER_GREATER_GREATER token
+        var source = """
+            interface Data { value: number; }
+            let x: Partial<Readonly<Required<Data>>> = { value: 42 };
+            console.log(x.value);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\n", output);
+    }
+
+    #endregion
+
+    #region With Classes
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_FromClass(ExecutionMode mode)
+    {
+        var source = """
+            class User {
+                name: string;
+                age: number;
+                constructor(n: string, a: number) {
+                    this.name = n;
+                    this.age = a;
+                }
+            }
+            let partial: Partial<User> = { name: "Alice" };
+            console.log(partial.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_FromClass(ExecutionMode mode)
+    {
+        var source = """
+            class User {
+                name: string;
+                age: number;
+                email: string;
+                constructor(n: string, a: number, e: string) {
+                    this.name = n;
+                    this.age = a;
+                    this.email = e;
+                }
+            }
+            let nameOnly: Pick<User, "name"> = { name: "Alice" };
+            console.log(nameOnly.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_FromClass(ExecutionMode mode)
+    {
+        var source = """
+            class User {
+                name: string;
+                age: number;
+                email: string;
+                constructor(n: string, a: number, e: string) {
+                    this.name = n;
+                    this.age = a;
+                    this.email = e;
+                }
+            }
+            let noEmail: Omit<User, "email"> = { name: "Alice", age: 30 };
+            console.log(noEmail.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n", output);
+    }
+
+    #endregion
+
+    #region Edge Cases
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_EmptyInterface(ExecutionMode mode)
+    {
+        var source = """
+            interface Empty { }
+            let e: Partial<Empty> = {};
+            console.log("ok");
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("ok\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_WithObjectValue(ExecutionMode mode)
+    {
+        var source = """
+            interface User { name: string; }
+            let users: Record<string, User> = {
+                alice: { name: "Alice" },
+                bob: { name: "Bob" }
+            };
+            console.log(users.alice.name);
+            console.log(users.bob.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\nBob\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_KeyofPattern(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            type NameAge = Pick<Person, "name" | "age">;
+            let p: NameAge = { name: "Test", age: 20 };
+            console.log(p.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Test\n", output);
+    }
+
+    #endregion
+
+    #region Array Suffix
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Item { name: string; value: number; }
+            let items: Partial<Item>[] = [
+                { name: "first" },
+                { value: 42 },
+                {}
+            ];
+            console.log(items.length);
+            console.log(items[0].name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("3\nfirst\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Partial_WithMultiDimensionalArray(ExecutionMode mode)
+    {
+        var source = """
+            interface Point { x: number; y: number; }
+            let grid: Partial<Point>[][] = [
+                [{ x: 1 }, { y: 2 }],
+                [{ x: 3, y: 4 }]
+            ];
+            console.log(grid.length);
+            console.log(grid[0].length);
+            console.log(grid[1][0].x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n2\n3\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NestedUtilityType_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { host: string; port: number; }
+            let configs: Partial<Readonly<Config>>[] = [
+                { host: "localhost" },
+                { port: 8080 }
+            ];
+            console.log(configs.length);
+            console.log(configs[0].host);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\nlocalhost\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Promise_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            async function getValue(): Promise<number> {
+                return 42;
+            }
+            let promises: Promise<number>[] = [getValue(), getValue()];
+            console.log(promises.length);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UserDefinedGeneric_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            class Box<T> {
+                value: T;
+                constructor(v: T) { this.value = v; }
+            }
+            let boxes: Box<number>[] = [new Box<number>(1), new Box<number>(2), new Box<number>(3)];
+            console.log(boxes.length);
+            console.log(boxes[0].value);
+            console.log(boxes[2].value);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("3\n1\n3\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Record_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            type StringMap = Record<string, number>;
+            let maps: StringMap[] = [
+                { a: 1, b: 2 },
+                { x: 10 }
+            ];
+            console.log(maps.length);
+            console.log(maps[0].a);
+            console.log(maps[1].x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n1\n10\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Pick_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let names: Pick<Person, "name">[] = [
+                { name: "Alice" },
+                { name: "Bob" }
+            ];
+            console.log(names.length);
+            console.log(names[1].name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\nBob\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Omit_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Person { name: string; age: number; email: string; }
+            let people: Omit<Person, "email">[] = [
+                { name: "Alice", age: 30 },
+                { name: "Bob", age: 25 }
+            ];
+            console.log(people.length);
+            console.log(people[0].name);
+            console.log(people[1].age);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\nAlice\n25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Required_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Config { name?: string; debug?: boolean; }
+            let configs: Required<Config>[] = [
+                { name: "app1", debug: true },
+                { name: "app2", debug: false }
+            ];
+            console.log(configs.length);
+            console.log(configs[0].name);
+            console.log(configs[1].debug);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\napp1\nfalse\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readonly_WithArraySuffix(ExecutionMode mode)
+    {
+        var source = """
+            interface Point { x: number; y: number; }
+            let points: Readonly<Point>[] = [
+                { x: 1, y: 2 },
+                { x: 3, y: 4 }
+            ];
+            console.log(points.length);
+            console.log(points[0].x);
+            console.log(points[1].y);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n1\n4\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void GenericArray_TypeErrorStillDetected(ExecutionMode mode)
+    {
+        var source = """
+            interface Item { name: string; }
+            let items: Partial<Item>[] = [{ name: 123 }];
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Type Error", ex.Message);
+    }
+
+    #endregion
+
+    #region ReturnType<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReturnType_ExtractsFromSimpleFunction(ExecutionMode mode)
+    {
+        var source = """
+            function greet(): string { return "hello"; }
+            type R = ReturnType<typeof greet>;
+            let x: R = "world";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("world\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReturnType_ExtractsFromFunctionType(ExecutionMode mode)
+    {
+        var source = """
+            type Fn = (x: number) => boolean;
+            type R = ReturnType<Fn>;
+            let result: R = true;
+            console.log(result);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReturnType_ExtractsFromArrowFunction(ExecutionMode mode)
+    {
+        var source = """
+            const add = (a: number, b: number): number => a + b;
+            type R = ReturnType<typeof add>;
+            let sum: R = 42;
+            console.log(sum);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReturnType_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: ReturnType<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("ReturnType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Parameters<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Parameters_ExtractsFromSimpleFunction(ExecutionMode mode)
+    {
+        var source = """
+            function add(a: number, b: number): number { return a + b; }
+            type P = Parameters<typeof add>;
+            let args: P = [1, 2];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Parameters_ExtractsFromFunctionType(ExecutionMode mode)
+    {
+        var source = """
+            type Fn = (name: string, age: number) => void;
+            type P = Parameters<Fn>;
+            let args: P = ["Alice", 30];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Alice\n30\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Parameters_EmptyForNoArgs(ExecutionMode mode)
+    {
+        var source = """
+            function noArgs(): void {}
+            type P = Parameters<typeof noArgs>;
+            let args: P = [];
+            console.log(args.length);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Parameters_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Parameters<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Parameters<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region ConstructorParameters<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ConstructorParameters_ExtractsFromClass(ExecutionMode mode)
+    {
+        var source = """
+            class Person {
+                constructor(public name: string, public age: number) {}
+            }
+            type CP = ConstructorParameters<typeof Person>;
+            let args: CP = ["Bob", 25];
+            console.log(args[0]);
+            console.log(args[1]);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Bob\n25\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ConstructorParameters_EmptyForNoArgs(ExecutionMode mode)
+    {
+        var source = """
+            class Empty {}
+            type CP = ConstructorParameters<typeof Empty>;
+            let args: CP = [];
+            console.log(args.length);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ConstructorParameters_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: ConstructorParameters<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("ConstructorParameters<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region InstanceType<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void InstanceType_ExtractsFromClass(ExecutionMode mode)
+    {
+        var source = """
+            class Animal {
+                name: string = "unknown";
+                speak(): string { return "..."; }
+            }
+            type I = InstanceType<typeof Animal>;
+            let a: I = new Animal();
+            console.log(a.name);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("unknown\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void InstanceType_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: InstanceType<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("InstanceType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region ThisType<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ThisType_AcceptsType(ExecutionMode mode)
+    {
+        // ThisType<T> is a marker type that just returns T
+        var source = """
+            type T = ThisType<string>;
+            let x: T = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ThisType_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: ThisType<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("ThisType<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Awaited<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Awaited_UnwrapsPromise(ExecutionMode mode)
+    {
+        var source = """
+            type A = Awaited<Promise<string>>;
+            let x: A = "resolved";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("resolved\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Awaited_UnwrapsNestedPromise(ExecutionMode mode)
+    {
+        var source = """
+            type A = Awaited<Promise<Promise<number>>>;
+            let x: A = 42;
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Awaited_PassesThroughNonPromise(ExecutionMode mode)
+    {
+        var source = """
+            type A = Awaited<string>;
+            let x: A = "direct";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("direct\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Awaited_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Awaited<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Awaited<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region NonNullable<T>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_RemovesNull(ExecutionMode mode)
+    {
+        var source = """
+            type NN = NonNullable<string | null>;
+            let x: NN = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_RemovesUndefined(ExecutionMode mode)
+    {
+        var source = """
+            type NN = NonNullable<number | undefined>;
+            let x: NN = 42;
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_RemovesBothNullAndUndefined(ExecutionMode mode)
+    {
+        var source = """
+            type NN = NonNullable<string | null | undefined>;
+            let x: NN = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("test\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_PassesThroughNonNullable(ExecutionMode mode)
+    {
+        var source = """
+            type NN = NonNullable<string>;
+            let x: NN = "direct";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("direct\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: NonNullable<string, number> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("NonNullable<T> requires exactly 1 type argument", ex.Message);
+    }
+
+    #endregion
+
+    #region Extract<T, U>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Extract_FiltersByType(ExecutionMode mode)
+    {
+        var source = """
+            type E = Extract<string | number | boolean, string | boolean>;
+            let x: E = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Extract_FiltersByLiteral(ExecutionMode mode)
+    {
+        var source = """
+            type Status = "pending" | "success" | "error";
+            type SuccessStatus = Extract<Status, "success">;
+            let x: SuccessStatus = "success";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("success\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Extract_CanExtractBoolean(ExecutionMode mode)
+    {
+        var source = """
+            type E = Extract<string | number | boolean, boolean>;
+            let x: E = true;
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Extract_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Extract<string> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Extract<T, U> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Exclude<T, U>
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Exclude_RemovesByType(ExecutionMode mode)
+    {
+        var source = """
+            type E = Exclude<string | number | boolean, boolean>;
+            let x: E = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Exclude_RemovesByLiteral(ExecutionMode mode)
+    {
+        var source = """
+            type Status = "pending" | "success" | "error";
+            type NonError = Exclude<Status, "error">;
+            let x: NonError = "pending";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("pending\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Exclude_RemovesNull(ExecutionMode mode)
+    {
+        var source = """
+            type E = Exclude<string | null, null>;
+            let x: E = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("test\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Exclude_WrongArgCount_Throws(ExecutionMode mode)
+    {
+        var source = """
+            let x: Exclude<string> = null;
+            """;
+        var ex = Assert.ThrowsAny<TypeCheckException>(() => TestHarness.Run(source, mode));
+        Assert.Contains("Exclude<T, U> requires exactly 2 type arguments", ex.Message);
+    }
+
+    #endregion
+
+    #region Utility Type Composition
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NonNullable_Extract_Composed(ExecutionMode mode)
+    {
+        var source = """
+            type Mixed = string | number | null | undefined;
+            type StringOnly = NonNullable<Extract<Mixed, string | null>>;
+            let x: StringOnly = "hello";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("hello\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Exclude_NonNullable_Composed(ExecutionMode mode)
+    {
+        var source = """
+            type Mixed = string | number | boolean | null;
+            type NoNullNoBoolean = NonNullable<Exclude<Mixed, boolean>>;
+            let x: NoNullNoBoolean = "test";
+            console.log(x);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("test\n", output);
+    }
+
+    #endregion
+}
