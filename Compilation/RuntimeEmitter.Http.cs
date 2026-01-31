@@ -986,7 +986,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static object HttpCreateServer(object? callback)
-    /// For now, returns a stub object since full server support is complex.
+    /// Creates a real SharpTSHttpServer instance with EventEmitter support.
     /// </summary>
     private void EmitHttpCreateServer(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1000,15 +1000,21 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Create a new dictionary for the server object
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        // Get the types and methods we need
+        var adapterType = typeof(SharpTS.Runtime.Types.TSFunctionCallableAdapter);
+        var wrapCallbackMethod = adapterType.GetMethod("WrapCallback",
+            BindingFlags.Public | BindingFlags.Static)!;
+        var serverType = typeof(SharpTS.Runtime.Types.SharpTSHttpServer);
+        var callableInterface = typeof(SharpTS.Runtime.Types.ISharpTSCallable);
+        var serverCtor = serverType.GetConstructor([callableInterface])!;
 
-        // Set listening=false
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldstr, "listening");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
+        // Wrap the callback to get an ISharpTSCallable
+        // ISharpTSCallable handler = TSFunctionCallableAdapter.WrapCallback(callback);
+        il.Emit(OpCodes.Ldarg_0);  // Load callback argument
+        il.Emit(OpCodes.Call, wrapCallbackMethod);
+
+        // Create new SharpTSHttpServer(handler)
+        il.Emit(OpCodes.Newobj, serverCtor);
 
         il.Emit(OpCodes.Ret);
     }

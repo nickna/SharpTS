@@ -10,17 +10,17 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 /// <remarks>
 /// Wraps HttpListener to provide the Node.js http.Server interface.
+/// Extends SharpTSEventEmitter for full event handling support (on, once, off, emit, etc.).
 /// Methods: listen(port, callback?), close(callback?)
-/// Events: on('request', callback), on('error', callback)
+/// Events: 'listening', 'request', 'error', 'close'
 /// </remarks>
-public class SharpTSHttpServer : ITypeCategorized, IDisposable
+public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IDisposable
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Record;
 
     private HttpListener? _listener;
     private readonly ISharpTSCallable _requestHandler;
-    private readonly List<(string Event, ISharpTSCallable Callback)> _listeners = new();
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
     private bool _isListening;
@@ -43,7 +43,7 @@ public class SharpTSHttpServer : ITypeCategorized, IDisposable
     /// <summary>
     /// Gets a member (property or method) by name.
     /// </summary>
-    public object? GetMember(string name)
+    public new object? GetMember(string name)
     {
         return name switch
         {
@@ -60,14 +60,9 @@ public class SharpTSHttpServer : ITypeCategorized, IDisposable
                     return server.Close(args);
                 return receiver;
             }).Bind(this),
-            "on" => new BuiltInMethod("on", 2, (interp, receiver, args) =>
-            {
-                if (receiver is SharpTSHttpServer server)
-                    return server.On(args);
-                return receiver;
-            }).Bind(this),
             "address" => GetAddress(),
-            _ => SharpTSUndefined.Instance
+            // Inherit EventEmitter methods for on, once, off, emit, removeAllListeners, etc.
+            _ => base.GetMember(name)
         };
     }
 
@@ -159,38 +154,17 @@ public class SharpTSHttpServer : ITypeCategorized, IDisposable
     }
 
     /// <summary>
-    /// Registers an event listener.
-    /// </summary>
-    private object? On(List<object?> args)
-    {
-        if (args.Count < 2)
-            throw new Exception("Runtime Error: on() requires event name and callback");
-
-        var eventName = args[0]?.ToString() ?? throw new Exception("Runtime Error: event name must be a string");
-        var callback = args[1] as ISharpTSCallable ?? throw new Exception("Runtime Error: callback must be a function");
-
-        _listeners.Add((eventName, callback));
-        return this;
-    }
-
-    /// <summary>
-    /// Emits an event to registered listeners.
+    /// Emits an event using the inherited EventEmitter mechanism.
     /// </summary>
     private void EmitEvent(string eventName, List<object?> eventArgs)
     {
         if (_interpreter == null) return;
 
-        foreach (var (evt, callback) in _listeners.Where(l => l.Event == eventName))
-        {
-            try
-            {
-                callback.Call(_interpreter, eventArgs);
-            }
-            catch
-            {
-                // Ignore errors in event handlers
-            }
-        }
+        // Use the inherited EventEmitter emit method
+        var emitMethod = base.GetMember("emit") as BuiltInMethod;
+        var args = new List<object?> { eventName };
+        args.AddRange(eventArgs);
+        emitMethod?.Call(_interpreter, args);
     }
 
     /// <summary>

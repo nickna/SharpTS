@@ -1164,14 +1164,31 @@ public static class BuiltInModuleTypes
         var voidType = new TypeInfo.Void();
         var callbackType = new TypeInfo.Function([anyType, anyType], voidType);
 
-        // Server type
+        // Server type with full EventEmitter support
         var serverType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
+            // Server-specific methods
             ["listen"] = new TypeInfo.Function([numberType, anyType], anyType, RequiredParams: 1),
             ["close"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
             ["address"] = new TypeInfo.Function([], anyType),
             ["listening"] = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
-            ["on"] = new TypeInfo.Function([stringType, anyType], anyType)
+
+            // EventEmitter methods
+            ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["addListener"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["off"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["removeListener"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["removeAllListeners"] = new TypeInfo.Function([stringType], anyType, RequiredParams: 0),
+            ["emit"] = new TypeInfo.Function([stringType, anyType], BooleanType, RequiredParams: 1, HasRestParam: true),
+            ["listenerCount"] = new TypeInfo.Function([stringType], numberType),
+            ["listeners"] = new TypeInfo.Function([stringType], new TypeInfo.Array(anyType)),
+            ["rawListeners"] = new TypeInfo.Function([stringType], new TypeInfo.Array(anyType)),
+            ["eventNames"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+            ["prependListener"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["prependOnceListener"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["setMaxListeners"] = new TypeInfo.Function([numberType], anyType),
+            ["getMaxListeners"] = new TypeInfo.Function([], numberType)
         }.ToFrozenDictionary());
 
         // STATUS_CODES type - with string index signature for dynamic property access
