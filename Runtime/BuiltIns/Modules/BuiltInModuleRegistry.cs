@@ -28,7 +28,8 @@ public static class BuiltInModuleRegistry
         "perf_hooks",
         "stream",
         "http",
-        "worker_threads"
+        "worker_threads",
+        "dns"
     ];
 
     /// <summary>

@@ -381,6 +381,15 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
 
+        // Create entry-point display class instance if there are captured top-level variables
+        if (_closures.EntryPointDisplayClass != null &&
+            _closures.EntryPointDisplayClassCtor != null &&
+            _closures.EntryPointDisplayClassStaticField != null)
+        {
+            il.Emit(OpCodes.Newobj, _closures.EntryPointDisplayClassCtor);
+            il.Emit(OpCodes.Stsfld, _closures.EntryPointDisplayClassStaticField);
+        }
+
         // Initialize module registry
         il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
 
@@ -493,7 +502,12 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
     }
 

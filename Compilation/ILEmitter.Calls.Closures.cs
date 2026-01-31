@@ -72,6 +72,33 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Newobj, displayCtor);
 
+        // Populate $entryPointDC field if this arrow captures top-level variables
+        if (_ctx.ArrowEntryPointDCFields?.TryGetValue(af, out var entryPointDCField) == true)
+        {
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                // In entry point method - use local variable
+                IL.Emit(OpCodes.Dup); // Keep display class on stack
+                IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                IL.Emit(OpCodes.Stfld, entryPointDCField);
+            }
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                // In arrow body - get from parent arrow's $entryPointDC field
+                IL.Emit(OpCodes.Dup); // Keep display class on stack
+                IL.Emit(OpCodes.Ldarg_0); // Load parent display class
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+                IL.Emit(OpCodes.Stfld, entryPointDCField);
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                // Fallback to static field
+                IL.Emit(OpCodes.Dup); // Keep display class on stack
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+                IL.Emit(OpCodes.Stfld, entryPointDCField);
+            }
+        }
+
         // Get captured variables for this arrow using the stored field mapping
         if (!_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
@@ -137,6 +164,24 @@ public partial class ILEmitter
                 // Variable is captured from outer closure
                 IL.Emit(OpCodes.Ldarg_0); // this (display class)
                 IL.Emit(OpCodes.Ldfld, capturedField);
+            }
+            else if (_ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
+                     _ctx.EntryPointDisplayClassFields?.TryGetValue(capturedVar, out var entryPointField) == true)
+            {
+                // Variable is a captured top-level var in entry-point display class
+                if (_ctx.EntryPointDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                }
+                else if (_ctx.EntryPointDisplayClassStaticField != null)
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+                IL.Emit(OpCodes.Ldfld, entryPointField);
             }
             else if (_ctx.TopLevelStaticVars != null && _ctx.TopLevelStaticVars.TryGetValue(capturedVar, out var topLevelField))
             {

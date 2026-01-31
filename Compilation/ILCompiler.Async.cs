@@ -474,7 +474,11 @@ public partial class ILCompiler
                 // Check for function-level "use strict" directive
                 IsStrictMode = _isStrictMode || CheckForUseStrict(func.Body),
                 // Registry services
-                ClassRegistry = GetClassRegistry()
+                ClassRegistry = GetClassRegistry(),
+                // Entry-point display class for captured top-level variables
+                EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+                CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+                EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
             };
 
             // Emit MoveNext body
@@ -550,7 +554,11 @@ public partial class ILCompiler
             ClassExprBuilders = parentCtx.ClassExprBuilders,
             IsStrictMode = parentCtx.IsStrictMode,
             // Registry services
-            ClassRegistry = parentCtx.ClassRegistry
+            ClassRegistry = parentCtx.ClassRegistry,
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClassFields = parentCtx.EntryPointDisplayClassFields,
+            CapturedTopLevelVars = parentCtx.CapturedTopLevelVars,
+            EntryPointDisplayClassStaticField = parentCtx.EntryPointDisplayClassStaticField
         };
 
         // Create arrow-specific emitter
@@ -799,7 +807,11 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
 
         // Emit MoveNext body

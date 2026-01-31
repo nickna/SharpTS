@@ -25,6 +25,7 @@ public static class ProcessBuiltIns
     private static readonly BuiltInMethod _hrtime = new("hrtime", 0, 1, Hrtime);
     private static readonly BuiltInMethod _uptime = new("uptime", 0, Uptime);
     private static readonly BuiltInMethod _memoryUsage = new("memoryUsage", 0, MemoryUsage);
+    private static readonly BuiltInMethod _nextTick = new("nextTick", 1, int.MaxValue, NextTick);
 
     // Lazily create env and argv objects
     private static SharpTSObject? _envObject;
@@ -69,6 +70,7 @@ public static class ProcessBuiltIns
             "hrtime" => _hrtime,
             "uptime" => _uptime,
             "memoryUsage" => _memoryUsage,
+            "nextTick" => _nextTick,
 
             _ => null
         };
@@ -285,5 +287,31 @@ public static class ProcessBuiltIns
     {
         Environment.ExitCode = code;
         return true;
+    }
+
+    /// <summary>
+    /// process.nextTick(callback, ...args) - schedules callback to run after the current operation.
+    /// </summary>
+    /// <remarks>
+    /// In Node.js, nextTick callbacks run before any I/O events. Since SharpTS uses a simplified
+    /// event loop, we implement this as a timer with 0 delay (similar to setImmediate).
+    /// </remarks>
+    private static object? NextTick(Interpreter interpreter, object? receiver, List<object?> args)
+    {
+        if (args.Count == 0)
+            throw new Exception("Runtime Error: process.nextTick requires at least 1 argument");
+
+        var callback = args[0] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: process.nextTick callback must be a function");
+
+        var callbackArgs = args.Count > 1
+            ? args.Skip(1).ToList()
+            : new List<object?>();
+
+        // Schedule as a timer with 0 delay (runs as soon as possible)
+        TimerBuiltIns.SetTimeout(interpreter, callback, 0, callbackArgs);
+
+        // nextTick returns undefined (void)
+        return null;
     }
 }

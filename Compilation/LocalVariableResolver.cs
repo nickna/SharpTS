@@ -72,7 +72,38 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(field.FieldType);
         }
 
-        // 4. Top-level static vars (captured by functions from entry point)
+        // 4. Entry-point display class fields (captured top-level vars)
+        if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
+        {
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                // Direct access from entry point - use the local
+                _il.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                _il.Emit(OpCodes.Ldfld, entryPointField);
+            }
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                // Access from arrow body - go through $entryPointDC field
+                _il.Emit(OpCodes.Ldarg_0); // Load display class instance
+                _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField); // Load entry-point display class
+                _il.Emit(OpCodes.Ldfld, entryPointField); // Load the variable field
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                // Access from module init method - use static field
+                _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+                _il.Emit(OpCodes.Ldfld, entryPointField);
+            }
+            else
+            {
+                // Fallback - shouldn't happen
+                return null;
+            }
+            return StackType.Unknown;
+        }
+
+        // 5. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Ldsfld, topLevelField);
@@ -112,7 +143,42 @@ public class LocalVariableResolver : IVariableResolver
             return true;
         }
 
-        // 4. Top-level static vars (captured by functions from entry point)
+        // 4. Entry-point display class fields (captured top-level vars)
+        if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
+        {
+            // Use temp local pattern for storing to fields
+            var temp = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, temp);
+
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                // Direct access from entry point - use the local
+                _il.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                // Access from arrow body - go through $entryPointDC field
+                _il.Emit(OpCodes.Ldarg_0); // Load display class instance
+                _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField); // Load entry-point display class
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                // Access from module init method - use static field
+                _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            }
+            else
+            {
+                // Fallback - shouldn't happen
+                return false;
+            }
+
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, entryPointField);
+            return true;
+        }
+
+        // 5. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Stsfld, topLevelField);

@@ -66,6 +66,10 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitMemoryUsage(emitter);
                 return true;
 
+            case "nextTick":
+                EmitNextTick(emitter, arguments);
+                return true;
+
             default:
                 return false;
         }
@@ -138,6 +142,12 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
             case "stderr":
                 il.Emit(OpCodes.Ldstr, "__$stderr$__");
+                return true;
+
+            // Methods accessible as properties (for typeof checks)
+            case "nextTick":
+                // Return a TSFunction wrapper for nextTick
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetNextTick);
                 return true;
 
             default:
@@ -223,5 +233,72 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
         // Call runtime helper
         il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
+    }
+
+    /// <summary>
+    /// Emits IL for process.nextTick(callback, ...args).
+    /// Schedules callback to run via SetTimeout with delay 0.
+    /// </summary>
+    private static void EmitNextTick(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit callback - first argument
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Delay is always 0 for nextTick
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+
+        // Emit args array - remaining arguments (starting from index 1)
+        EmitArgsArray(emitter, arguments, 1);
+
+        // Call $Runtime.SetTimeout(callback, 0, args)
+        il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeout);
+
+        // nextTick returns undefined, so pop the result and push null
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldnull);
+    }
+
+    /// <summary>
+    /// Emits an object[] array with remaining arguments starting from startIndex.
+    /// </summary>
+    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments, int startIndex)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        int extraArgCount = Math.Max(0, arguments.Count - startIndex);
+
+        if (extraArgCount > 0)
+        {
+            // Create array with remaining arguments
+            il.Emit(OpCodes.Ldc_I4, extraArgCount);
+            il.Emit(OpCodes.Newarr, ctx.Types.Object);
+
+            for (int i = startIndex; i < arguments.Count; i++)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4, i - startIndex);
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+                il.Emit(OpCodes.Stelem_Ref);
+            }
+        }
+        else
+        {
+            // Empty args array
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, ctx.Types.Object);
+        }
     }
 }

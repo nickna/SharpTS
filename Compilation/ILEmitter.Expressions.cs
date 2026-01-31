@@ -197,6 +197,44 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stfld, field);
             SetStackUnknown();
         }
+        else if (_ctx.CapturedTopLevelVars?.Contains(a.Name.Lexeme) == true &&
+                 _ctx.EntryPointDisplayClassFields?.TryGetValue(a.Name.Lexeme, out var entryPointField) == true)
+        {
+            // Captured top-level variable in entry-point display class
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
+            // Store to field: need temp since value is on top of stack
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                // Direct access from entry point
+                IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                // Access from arrow body - go through $entryPointDC field
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                // Access from module init method - use static field
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            }
+            else
+            {
+                // Fallback - just discard the temp and leave value on stack
+                IL.Emit(OpCodes.Pop);
+                SetStackUnknown();
+                return;
+            }
+
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, entryPointField);
+            SetStackUnknown();
+        }
         else if (_ctx.TopLevelStaticVars?.TryGetValue(a.Name.Lexeme, out var topLevelField) == true)
         {
             // Top-level static variable

@@ -692,6 +692,7 @@ public class EmittedRuntime
     public MethodBuilder ProcessHrtime { get; set; } = null!;
     public MethodBuilder ProcessUptime { get; set; } = null!;
     public MethodBuilder ProcessMemoryUsage { get; set; } = null!;
+    public MethodBuilder ProcessGetNextTick { get; set; } = null!;
 
     // Process stdin/stdout/stderr stream methods
     public MethodBuilder StdinRead { get; set; } = null!;
@@ -1271,4 +1272,10 @@ public class EmittedRuntime
     public MethodBuilder WorkerThreadsIsMainThread { get; set; } = null!;
     public MethodBuilder WorkerThreadsThreadId { get; set; } = null!;
     public MethodBuilder WorkerThreadsReceiveMessageOnPort { get; set; } = null!;
+
+    // DNS module methods
+    public MethodBuilder DnsLookup { get; set; } = null!;
+    public MethodBuilder DnsLookupService { get; set; } = null!;
+    public MethodBuilder DnsGetLookup { get; set; } = null!;
+    public MethodBuilder DnsGetLookupService { get; set; } = null!;
 }

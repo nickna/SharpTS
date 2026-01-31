@@ -30,7 +30,18 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
-        // Fallback: Check if it's a top-level variable captured from entry point
+        // Fallback: Check if it's a captured top-level variable in entry-point display class
+        if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
+            _ctx.EntryPointDisplayClassStaticField != null)
+        {
+            _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            _il.Emit(OpCodes.Ldfld, entryPointField);
+            SetStackUnknown();
+            return;
+        }
+
+        // Fallback: Check if it's a top-level variable (non-captured)
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Ldsfld, topLevelField);
@@ -51,7 +62,21 @@ public partial class AsyncArrowMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
 
-        // Check if it's a top-level variable captured from entry point
+        // Check if it's a captured top-level variable in entry-point display class
+        if (_ctx?.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
+            _ctx.EntryPointDisplayClassStaticField != null)
+        {
+            var temp = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, temp);
+            _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, entryPointField);
+            SetStackUnknown();
+            return;
+        }
+
+        // Check if it's a non-captured top-level variable
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Stsfld, topLevelField);

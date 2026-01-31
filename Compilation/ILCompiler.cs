@@ -521,6 +521,9 @@ public partial class ILCompiler
     {
         _unionGenerator?.FinalizeAllUnionTypes();
 
+        // Finalize entry-point display class first (needed by closures)
+        _closures.EntryPointDisplayClass?.CreateType();
+
         foreach (var tb in _closures.DisplayClasses.Values)
         {
             tb.CreateType();
@@ -605,6 +608,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new StreamModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new WorkerThreadsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new DnsModuleEmitter());
     }
 
     #endregion
@@ -795,6 +799,9 @@ public partial class ILCompiler
     {
         _unionGenerator?.FinalizeAllUnionTypes();
 
+        // Finalize entry-point display class first (needed by closures)
+        _closures.EntryPointDisplayClass?.CreateType();
+
         foreach (var tb in _closures.DisplayClasses.Values)
         {
             tb.CreateType();
@@ -876,17 +883,20 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Defines static fields for all top-level (module-level) variables.
-    /// These use static fields so all functions can access them regardless of
-    /// execution context (closures, async, nested calls, arrow functions, etc).
+    /// Defines storage for all top-level (module-level) variables.
+    /// Variables captured by closures use an entry-point display class for proper
+    /// by-reference semantics. Non-captured variables use static fields.
     /// </summary>
     /// <remarks>
-    /// In JavaScript/TypeScript, module-level variables have module scope - they persist
-    /// for the application lifetime and are accessible from any function. This maps
-    /// directly to static fields in .NET, which is the correct semantic representation.
+    /// When a top-level variable is captured by a closure, both the outer code and
+    /// the closure must reference the same storage location. We achieve this by storing
+    /// captured variables in a display class instance that's shared between the
+    /// entry point and all closures that capture those variables.
     /// </remarks>
     private void DefineTopLevelCapturedVariables(List<Stmt> statements)
     {
+        // First, identify all top-level variable names
+        var allTopLevelVars = new HashSet<string>();
         foreach (var stmt in statements)
         {
             string? varName = stmt switch
@@ -895,13 +905,65 @@ public partial class ILCompiler
                 Stmt.Const c => c.Name.Lexeme,
                 _ => null
             };
-
-            if (varName != null)
+            if (varName != null && !_topLevelStaticVars.ContainsKey(varName))
             {
-                // Skip if already defined (e.g., from built-in module imports)
-                if (_topLevelStaticVars.ContainsKey(varName))
-                    continue;
+                allTopLevelVars.Add(varName);
+            }
+        }
 
+        // Use ClosureAnalyzer to identify which variables are captured
+        foreach (var varName in allTopLevelVars)
+        {
+            if (_closures.Analyzer.IsVariableCaptured(varName))
+            {
+                _closures.CapturedTopLevelVars.Add(varName);
+            }
+        }
+
+        // Create entry-point display class if there are captured variables
+        if (_closures.CapturedTopLevelVars.Count > 0)
+        {
+            var displayClass = _moduleBuilder.DefineType(
+                "<>c__EntryPointDisplayClass",
+                TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+                _types.Object);
+
+            // Define fields for each captured variable
+            foreach (var varName in _closures.CapturedTopLevelVars)
+            {
+                var field = displayClass.DefineField(
+                    varName,
+                    _types.Object,
+                    FieldAttributes.Public);
+                _closures.EntryPointDisplayClassFields[varName] = field;
+            }
+
+            // Define default constructor
+            var ctor = displayClass.DefineConstructor(
+                MethodAttributes.Public,
+                CallingConventions.Standard,
+                Type.EmptyTypes);
+            var ctorIl = ctor.GetILGenerator();
+            ctorIl.Emit(OpCodes.Ldarg_0);
+            ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            ctorIl.Emit(OpCodes.Ret);
+
+            _closures.EntryPointDisplayClass = displayClass;
+            _closures.EntryPointDisplayClassCtor = ctor;
+
+            // Define a static field to hold the display class instance
+            // This allows module init methods to access the same display class
+            _closures.EntryPointDisplayClassStaticField = _programType.DefineField(
+                "$entryPointDC",
+                displayClass,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
+
+        // Define static fields for non-captured variables only
+        foreach (var varName in allTopLevelVars)
+        {
+            if (!_closures.CapturedTopLevelVars.Contains(varName))
+            {
                 var field = _programType.DefineField(
                     $"$topLevel_{varName}",
                     _types.Object,

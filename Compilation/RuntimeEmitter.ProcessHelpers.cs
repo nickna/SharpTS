@@ -15,6 +15,7 @@ public partial class RuntimeEmitter
         EmitProcessHrtime(typeBuilder, runtime);
         EmitProcessUptime(typeBuilder, runtime);
         EmitProcessMemoryUsage(typeBuilder, runtime);
+        EmitProcessGetNextTick(typeBuilder, runtime);
         EmitStdinMethods(typeBuilder, runtime);
         EmitStdoutMethods(typeBuilder, runtime);
         EmitStderrMethods(typeBuilder, runtime);
@@ -574,5 +575,135 @@ public partial class RuntimeEmitter
         isTtyIl.Emit(OpCodes.Ceq); // Negate
         isTtyIl.Emit(OpCodes.Box, _types.Boolean);
         isTtyIl.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object ProcessGetNextTick()
+    /// Returns a TSFunction wrapper for process.nextTick.
+    /// The returned function, when called, schedules its callback via SetTimeout with delay 0.
+    /// </summary>
+    private void EmitProcessGetNextTick(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // First, emit the implementation method that will be wrapped
+        // Use List<object> as the parameter type because TSFunction.AdjustArgs
+        // recognizes List<object> as a rest parameter and packs all args into it
+        var implMethod = typeBuilder.DefineMethod(
+            "ProcessNextTickImpl",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.ListOfObject]
+        );
+
+        var implIl = implMethod.GetILGenerator();
+
+        // ProcessNextTickImpl(List<object> args):
+        // - args[0] is the callback
+        // - args[1..] are the callback arguments
+        // We call SetTimeout(callback, 0, callbackArgs)
+
+        // Store callback in local first (needs casting to TSFunctionType)
+        var callbackLocal = implIl.DeclareLocal(runtime.TSFunctionType);
+        implIl.Emit(OpCodes.Ldarg_0);
+        implIl.Emit(OpCodes.Ldc_I4_0);
+        implIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        implIl.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        implIl.Emit(OpCodes.Stloc, callbackLocal);
+
+        // Create callback args array (args[1..])
+        // int extraArgCount = args.Count - 1
+        var argsLengthLocal = implIl.DeclareLocal(_types.Int32);
+        implIl.Emit(OpCodes.Ldarg_0);
+        implIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        implIl.Emit(OpCodes.Ldc_I4_1);
+        implIl.Emit(OpCodes.Sub);
+        implIl.Emit(OpCodes.Stloc, argsLengthLocal);
+
+        // Create new object[extraArgCount]
+        var extraArgsLocal = implIl.DeclareLocal(_types.ObjectArray);
+        var skipCopy = implIl.DefineLabel();
+        var afterCopy = implIl.DefineLabel();
+
+        // if (extraArgCount <= 0) create empty array
+        implIl.Emit(OpCodes.Ldloc, argsLengthLocal);
+        implIl.Emit(OpCodes.Ldc_I4_0);
+        implIl.Emit(OpCodes.Ble, skipCopy);
+
+        // Create and copy extra args
+        implIl.Emit(OpCodes.Ldloc, argsLengthLocal);
+        implIl.Emit(OpCodes.Newarr, _types.Object);
+        implIl.Emit(OpCodes.Stloc, extraArgsLocal);
+
+        // Copy loop: for (int i = 0; i < extraArgCount; i++) extraArgs[i] = args[i+1]
+        var indexLocal = implIl.DeclareLocal(_types.Int32);
+        implIl.Emit(OpCodes.Ldc_I4_0);
+        implIl.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = implIl.DefineLabel();
+        var loopEnd = implIl.DefineLabel();
+
+        implIl.MarkLabel(loopStart);
+        implIl.Emit(OpCodes.Ldloc, indexLocal);
+        implIl.Emit(OpCodes.Ldloc, argsLengthLocal);
+        implIl.Emit(OpCodes.Bge, loopEnd);
+
+        // extraArgs[i] = args[i + 1]
+        implIl.Emit(OpCodes.Ldloc, extraArgsLocal);
+        implIl.Emit(OpCodes.Ldloc, indexLocal);
+        implIl.Emit(OpCodes.Ldarg_0);
+        implIl.Emit(OpCodes.Ldloc, indexLocal);
+        implIl.Emit(OpCodes.Ldc_I4_1);
+        implIl.Emit(OpCodes.Add);
+        implIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        implIl.Emit(OpCodes.Stelem_Ref);
+
+        // i++
+        implIl.Emit(OpCodes.Ldloc, indexLocal);
+        implIl.Emit(OpCodes.Ldc_I4_1);
+        implIl.Emit(OpCodes.Add);
+        implIl.Emit(OpCodes.Stloc, indexLocal);
+        implIl.Emit(OpCodes.Br, loopStart);
+
+        implIl.MarkLabel(loopEnd);
+        implIl.Emit(OpCodes.Br, afterCopy);
+
+        // Skip copy: create empty array
+        implIl.MarkLabel(skipCopy);
+        implIl.Emit(OpCodes.Ldc_I4_0);
+        implIl.Emit(OpCodes.Newarr, _types.Object);
+        implIl.Emit(OpCodes.Stloc, extraArgsLocal);
+
+        implIl.MarkLabel(afterCopy);
+
+        // Now set up the call: SetTimeout(callback, delay, args)
+        implIl.Emit(OpCodes.Ldloc, callbackLocal);  // callback (TSFunctionType)
+        implIl.Emit(OpCodes.Ldc_R8, 0.0);           // delay = 0
+        implIl.Emit(OpCodes.Ldloc, extraArgsLocal); // args
+
+        // Call SetTimeout(callback, 0, extraArgs)
+        implIl.Emit(OpCodes.Call, runtime.SetTimeout);
+
+        // nextTick returns undefined
+        implIl.Emit(OpCodes.Pop);
+        implIl.Emit(OpCodes.Ldnull);
+        implIl.Emit(OpCodes.Ret);
+
+        // Now emit the getter method that returns a TSFunction wrapping the impl
+        var getterMethod = typeBuilder.DefineMethod(
+            "ProcessGetNextTick",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.ProcessGetNextTick = getterMethod;
+
+        var il = getterMethod.GetILGenerator();
+
+        // Create new TSFunction(null, implMethod)
+        il.Emit(OpCodes.Ldnull); // target (static method)
+        il.Emit(OpCodes.Ldtoken, implMethod);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
     }
 }

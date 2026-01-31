@@ -71,14 +71,36 @@ public partial class ILCompiler
                     _types.Object
                 );
 
-                // Add fields for captured variables
+                // Determine if any captured vars are top-level captured vars
+                bool needsEntryPointDC = _closures.EntryPointDisplayClass != null &&
+                    captures.Any(c => _closures.CapturedTopLevelVars.Contains(c));
+
+                // Add fields for captured variables (except top-level captured vars, which go through $entryPointDC)
                 Dictionary<string, FieldBuilder> fieldMap = [];
+                FieldBuilder? entryPointDCField = null;
+
+                if (needsEntryPointDC)
+                {
+                    // Add field to hold reference to entry-point display class
+                    entryPointDCField = displayClass.DefineField("$entryPointDC", _closures.EntryPointDisplayClass!, FieldAttributes.Public);
+                }
+
                 foreach (var capturedVar in captures)
                 {
+                    // Skip top-level captured vars - they'll be accessed through $entryPointDC
+                    if (_closures.CapturedTopLevelVars.Contains(capturedVar))
+                        continue;
+
                     var field = displayClass.DefineField(capturedVar, _types.Object, FieldAttributes.Public);
                     fieldMap[capturedVar] = field;
                 }
                 _closures.DisplayClassFields[arrow] = fieldMap;
+
+                // Track $entryPointDC field for this arrow
+                if (entryPointDCField != null)
+                {
+                    _closures.ArrowEntryPointDCFields[arrow] = entryPointDCField;
+                }
 
                 // Add default constructor
                 var ctorBuilder = displayClass.DefineConstructor(
@@ -447,7 +469,12 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for accessing captured top-level variables
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
 
         if (displayClass != null)
@@ -463,6 +490,12 @@ public partial class ILCompiler
             else
             {
                 ctx.CapturedFields = [];
+            }
+
+            // Set the $entryPointDC field if this arrow captures top-level variables
+            if (_closures.ArrowEntryPointDCFields.TryGetValue(arrow, out var entryPointDCField))
+            {
+                ctx.CurrentArrowEntryPointDCField = entryPointDCField;
             }
 
             // For object methods, __this is the first parameter after 'this' (display class)

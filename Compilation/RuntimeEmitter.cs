@@ -1682,15 +1682,14 @@ public partial class RuntimeEmitter
         EmitAsyncGeneratorAwaitContinueMethods(typeBuilder, moduleBuilder, runtime);
         // NodeError conversion helpers (must be before fs methods which use them)
         EmitNodeErrorHelpers(typeBuilder, runtime);
-        // Built-in module methods (path, fs, os)
+        // Built-in module methods (path, fs, os, dns)
         EmitPathModuleMethods(typeBuilder, runtime);
         EmitFsModuleMethods(typeBuilder, runtime);
         EmitOsModuleMethods(typeBuilder, runtime);
+        EmitDnsModuleMethods(typeBuilder, runtime);
         // Emit wrapper methods for named imports
         EmitFsModuleMethodWrappers(typeBuilder, runtime);
         EmitPathModulePropertyWrappers(typeBuilder, runtime);
-        // Process global methods (env, argv)
-        EmitProcessMethods(typeBuilder, runtime);
         // Querystring module methods
         EmitQuerystringMethods(typeBuilder, runtime);
         // Assert module methods
@@ -1718,8 +1717,12 @@ public partial class RuntimeEmitter
         EmitClearIntervalMethod(typeBuilder, runtime);
         // Timer module wrappers for namespace imports (import * as timers from 'timers')
         EmitTimerModuleWrappers(typeBuilder, runtime);
+        // Process global methods (env, argv, nextTick) - must be after timer methods for nextTick
+        EmitProcessMethods(typeBuilder, runtime);
         // Zlib module methods
         EmitZlibMethods(typeBuilder, runtime);
+        // DNS module methods
+        EmitDnsModuleMethods(typeBuilder, runtime);
         // perf_hooks module methods
         EmitPerfHooksMethods(typeBuilder, runtime);
         // string_decoder module constructor helper

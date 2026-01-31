@@ -40,6 +40,7 @@ public static class BuiltInModuleValues
             "stream" => StreamModuleInterpreter.GetExports(),
             "http" => HttpModuleInterpreter.GetExports(),
             "worker_threads" => WorkerThreadsModuleInterpreter.GetExports(),
+            "dns" => DnsModuleInterpreter.GetExports(),
             _ => throw new Exception($"Unknown built-in module: {moduleName}")
         };
     }
@@ -52,6 +53,6 @@ public static class BuiltInModuleValues
         return moduleName is "fs" or "path" or "os" or "querystring" or "assert" or "url"
             or "process" or "crypto" or "util" or "readline" or "child_process" or "buffer"
             or "zlib" or "events" or "timers" or "string_decoder" or "perf_hooks" or "stream"
-            or "http" or "worker_threads";
+            or "http" or "worker_threads" or "dns";
     }
 }

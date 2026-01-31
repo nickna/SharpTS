@@ -616,6 +616,14 @@ public static class BuiltInModuleTypes
                     ["external"] = numberType,
                     ["arrayBuffers"] = numberType
                 }.ToFrozenDictionary())
+            ),
+            // nextTick(callback, ...args) - schedules callback for next tick
+            // Use 'any' for callback to allow any function signature
+            ["nextTick"] = new TypeInfo.Function(
+                [anyType, anyType],
+                voidType,
+                RequiredParams: 1,
+                HasRestParam: true
             )
         };
     }
@@ -1094,7 +1102,54 @@ public static class BuiltInModuleTypes
             "perf_hooks" => GetPerfHooksModuleTypes(),
             "stream" => GetStreamModuleTypes(),
             "http" => GetHttpModuleTypes(),
+            "dns" => GetDnsModuleTypes(),
             _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the exported types for the dns module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetDnsModuleTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var anyType = new TypeInfo.Any();
+
+        // Result type for lookup: { address: string, family: number }
+        var lookupResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["address"] = stringType,
+            ["family"] = numberType
+        }.ToFrozenDictionary());
+
+        // Result type for lookupService: { hostname: string, service: string }
+        var lookupServiceResultType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["hostname"] = stringType,
+            ["service"] = stringType
+        }.ToFrozenDictionary());
+
+        return new Dictionary<string, TypeInfo>
+        {
+            // dns.lookup(hostname, [options]) -> { address, family }
+            ["lookup"] = new TypeInfo.Function(
+                [stringType, anyType],
+                lookupResultType,
+                RequiredParams: 1
+            ),
+
+            // dns.lookupService(address, port) -> { hostname, service }
+            ["lookupService"] = new TypeInfo.Function(
+                [stringType, numberType],
+                lookupServiceResultType,
+                RequiredParams: 2
+            ),
+
+            // Constants
+            ["ADDRCONFIG"] = numberType,
+            ["V4MAPPED"] = numberType,
+            ["ALL"] = numberType
         };
     }
 

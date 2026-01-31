@@ -105,8 +105,24 @@ public partial class ILCompiler
             var capturedField = smBuilder.CapturedVariables.GetValueOrDefault(capturedVar);
             if (capturedField == null) continue;
 
-            // Try to load from top-level static vars (module-level variables)
-            if (_topLevelStaticVars.TryGetValue(capturedVar, out var staticField))
+            // Try to load from entry-point display class (captured top-level variables)
+            if (_closures.CapturedTopLevelVars.Contains(capturedVar) &&
+                _closures.EntryPointDisplayClassFields.TryGetValue(capturedVar, out var entryPointField))
+            {
+                il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
+                if (_closures.EntryPointDisplayClassStaticField != null)
+                {
+                    il.Emit(OpCodes.Ldsfld, _closures.EntryPointDisplayClassStaticField);
+                    il.Emit(OpCodes.Ldfld, entryPointField);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldnull);
+                }
+                il.Emit(OpCodes.Stfld, capturedField);
+            }
+            // Try to load from top-level static vars (non-captured module-level variables)
+            else if (_topLevelStaticVars.TryGetValue(capturedVar, out var staticField))
             {
                 il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
                 il.Emit(OpCodes.Ldsfld, staticField);

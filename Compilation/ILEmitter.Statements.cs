@@ -11,6 +11,46 @@ public partial class ILEmitter
 {
     protected override void EmitVarDeclaration(Stmt.Var v)
     {
+        // Check if this is a captured top-level variable - use entry-point display class
+        if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var displayField) == true)
+        {
+            // Load the display class instance
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            }
+            else
+            {
+                // No access to display class - fall through to static field path
+                goto checkStaticField;
+            }
+
+            if (v.Initializer != null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+            }
+            else if (v.TypeAnnotation == "number")
+            {
+                // Typed number without initializer defaults to 0
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+            IL.Emit(OpCodes.Stfld, displayField);
+            return;
+        }
+
+        checkStaticField:
+
         // Check if this is a top-level variable - use static fields so all functions can access them
         if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var staticField) == true)
         {

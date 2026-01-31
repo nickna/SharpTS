@@ -16,7 +16,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     [
         "platform", "arch", "pid", "version", "env", "argv", "exitCode",
         "stdin", "stdout", "stderr",
-        "cwd", "chdir", "exit", "hrtime", "uptime", "memoryUsage"
+        "cwd", "chdir", "exit", "hrtime", "uptime", "memoryUsage", "nextTick"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -34,6 +34,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             "hrtime" => EmitHrtime(emitter, arguments),
             "uptime" => EmitUptime(emitter),
             "memoryUsage" => EmitMemoryUsage(emitter),
+            "nextTick" => EmitNextTick(emitter, arguments),
             _ => false
         };
     }
@@ -55,6 +56,7 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
             "stdin" => EmitStdin(emitter),
             "stdout" => EmitStdout(emitter),
             "stderr" => EmitStderr(emitter),
+            "nextTick" => EmitNextTickProperty(emitter),
             _ => false
         };
     }
@@ -135,6 +137,75 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
         il.Emit(OpCodes.Call, ctx.Runtime!.ProcessMemoryUsage);
         return true;
+    }
+
+    /// <summary>
+    /// Emits: process.nextTick(callback, ...args)
+    /// Implemented as setTimeout(callback, 0, ...args) - runs as soon as possible.
+    /// </summary>
+    private static bool EmitNextTick(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        // Emit callback - first argument
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+
+        // Delay is always 0 for nextTick
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+
+        // Emit args array - remaining arguments (starting from index 1)
+        EmitArgsArray(emitter, arguments, 1);
+
+        // Call $Runtime.SetTimeout(callback, 0, args)
+        il.Emit(OpCodes.Call, ctx.Runtime!.SetTimeout);
+
+        // nextTick returns undefined, so pop the result and push null
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldnull);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Emits an object[] array with remaining arguments starting from startIndex.
+    /// </summary>
+    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments, int startIndex)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        int extraArgCount = Math.Max(0, arguments.Count - startIndex);
+
+        if (extraArgCount > 0)
+        {
+            // Create array with remaining arguments
+            il.Emit(OpCodes.Ldc_I4, extraArgCount);
+            il.Emit(OpCodes.Newarr, ctx.Types.Object);
+
+            for (int i = startIndex; i < arguments.Count; i++)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4, i - startIndex);
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+                il.Emit(OpCodes.Stelem_Ref);
+            }
+        }
+        else
+        {
+            // Empty args array
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, ctx.Types.Object);
+        }
     }
 
     #endregion
@@ -241,6 +312,15 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
     {
         var il = emitter.Context.IL;
         il.Emit(OpCodes.Ldstr, "__$stderr$__");
+        return true;
+    }
+
+    private static bool EmitNextTickProperty(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        // Return a TSFunction wrapper for nextTick
+        il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetNextTick);
         return true;
     }
 

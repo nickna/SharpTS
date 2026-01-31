@@ -73,6 +73,21 @@ public partial class ILCompiler
         public Dictionary<Expr.ArrowFunction, ConstructorBuilder> DisplayClassConstructors { get; } = new(ReferenceEqualityComparer.Instance);
         public int ArrowMethodCounter { get; set; }
         public int DisplayClassCounter { get; set; }
+
+        // Entry-point display class for captured top-level variables
+        // When a top-level variable is captured by a closure, it's stored here
+        // so modifications in the closure are visible to the outer code
+        public TypeBuilder? EntryPointDisplayClass { get; set; }
+        public ConstructorBuilder? EntryPointDisplayClassCtor { get; set; }
+        public Dictionary<string, FieldBuilder> EntryPointDisplayClassFields { get; } = [];
+        public HashSet<string> CapturedTopLevelVars { get; } = [];
+
+        // Static field on $Program that holds the entry-point display class instance
+        // This allows module init methods to access the same display class
+        public FieldBuilder? EntryPointDisplayClassStaticField { get; set; }
+
+        // Maps arrow functions to their $entryPointDC field (if they capture top-level vars)
+        public Dictionary<Expr.ArrowFunction, FieldBuilder> ArrowEntryPointDCFields { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

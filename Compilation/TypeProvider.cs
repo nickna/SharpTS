@@ -104,6 +104,7 @@ public class TypeProvider
     public Type Delegate => Resolve("System.Delegate");
     public Type MulticastDelegate => Resolve("System.MulticastDelegate");
     public Type Attribute => Resolve("System.Attribute");
+    public Type ParamArrayAttribute => Resolve("System.ParamArrayAttribute");
     public Type Exception => Resolve("System.Exception");
     public Type NotSupportedException => Resolve("System.NotSupportedException");
     public Type ArgumentException => Resolve("System.ArgumentException");

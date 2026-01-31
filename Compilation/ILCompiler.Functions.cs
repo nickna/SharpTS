@@ -163,7 +163,11 @@ public partial class ILCompiler
             // Check for function-level "use strict" directive
             IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body),
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
 
         // Add generic type parameters to context if this is a generic function
@@ -325,8 +329,34 @@ public partial class ILCompiler
             PropertyTypes = _typedInterop.PropertyTypes,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClass = _closures.EntryPointDisplayClass,
+            EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
+
+        // Create entry-point display class instance if there are captured top-level variables
+        if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)
+        {
+            // Create instance and store in both local variable and static field
+            var displayLocal = il.DeclareLocal(_closures.EntryPointDisplayClass);
+            il.Emit(OpCodes.Newobj, _closures.EntryPointDisplayClassCtor);
+            il.Emit(OpCodes.Dup); // Keep copy for static field
+            il.Emit(OpCodes.Stloc, displayLocal);
+            if (_closures.EntryPointDisplayClassStaticField != null)
+            {
+                il.Emit(OpCodes.Stsfld, _closures.EntryPointDisplayClassStaticField);
+            }
+            else
+            {
+                il.Emit(OpCodes.Pop);
+            }
+            ctx.EntryPointDisplayClassLocal = displayLocal;
+        }
 
         // Initialize namespace static fields before any code that might reference them
         InitializeNamespaceFields(il);
@@ -459,8 +489,23 @@ public partial class ILCompiler
             UnionGenerator = _unionGenerator,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Entry-point display class for captured top-level variables
+            EntryPointDisplayClass = _closures.EntryPointDisplayClass,
+            EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null
         };
+
+        // Create entry-point display class instance if there are captured top-level variables
+        if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)
+        {
+            var displayLocal = il.DeclareLocal(_closures.EntryPointDisplayClass);
+            il.Emit(OpCodes.Newobj, _closures.EntryPointDisplayClassCtor);
+            il.Emit(OpCodes.Stloc, displayLocal);
+            ctx.EntryPointDisplayClassLocal = displayLocal;
+        }
 
         // Initialize namespace static fields before any code
         InitializeNamespaceFields(il);
