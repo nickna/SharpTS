@@ -117,4 +117,177 @@ public class AsConstTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("true\nfalse\n", output);
     }
+
+    #region Additional as const Tests
+
+    [Fact]
+    public void AsConst_DeeplyNestedObject_Works()
+    {
+        var source = """
+            const config = {
+                server: {
+                    host: "localhost",
+                    port: 8080
+                },
+                features: ["auth", "logging"]
+            } as const;
+            console.log(config.server.host);
+            console.log(config.server.port);
+            console.log(config.features[0]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("localhost\n8080\nauth\n", output);
+    }
+
+    [Fact]
+    public void AsConst_ArrayOfObjects_Works()
+    {
+        var source = """
+            const points = [
+                { x: 0, y: 0 },
+                { x: 10, y: 20 }
+            ] as const;
+            console.log(points[0].x);
+            console.log(points[1].y);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("0\n20\n", output);
+    }
+
+    [Fact]
+    public void AsConst_NullValue_Works()
+    {
+        var source = """
+            const nullable = [1, null, 3] as const;
+            console.log(nullable[0]);
+            console.log(nullable[1]);
+            console.log(nullable[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\nnull\n3\n", output);
+    }
+
+    [Fact]
+    public void AsConst_InFunctionReturn_Works()
+    {
+        var source = """
+            function getConfig(): { mode: string, fontSize: number } {
+                return { mode: "dark", fontSize: 14 } as const;
+            }
+            const cfg = getConfig();
+            console.log(cfg.mode);
+            console.log(cfg.fontSize);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("dark\n14\n", output);
+    }
+
+    [Fact]
+    public void AsConst_SpreadIntoArray_Works()
+    {
+        var source = """
+            const tuple = [1, 2, 3] as const;
+            const arr = [...tuple, 4, 5];
+            console.log(arr.length);
+            console.log(arr[0]);
+            console.log(arr[4]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n1\n5\n", output);
+    }
+
+    [Fact]
+    public void AsConst_SpreadIntoObject_Works()
+    {
+        var source = """
+            const base = { x: 1, y: 2 } as const;
+            const extended = { ...base, z: 3 };
+            console.log(extended.x);
+            console.log(extended.y);
+            console.log(extended.z);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n3\n", output);
+    }
+
+    [Fact(Skip = "Array.map not yet implemented for dynamic dispatch in compiler")]
+    public void AsConst_WithMethodCalls_Works()
+    {
+        var source = """
+            const nums = [3, 1, 2] as const;
+            const doubled = nums.map(n => n * 2);
+            console.log(doubled[0]);
+            console.log(doubled[1]);
+            console.log(doubled[2]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("6\n2\n4\n", output);
+    }
+
+    [Fact(Skip = "Array.filter not yet implemented for dynamic dispatch in compiler")]
+    public void AsConst_FilterOperation_Works()
+    {
+        var source = """
+            const values = [1, 2, 3, 4, 5] as const;
+            const evens = values.filter(v => v % 2 === 0);
+            console.log(evens.length);
+            console.log(evens[0]);
+            console.log(evens[1]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2\n2\n4\n", output);
+    }
+
+    [Fact(Skip = "Array.reduce not yet implemented for dynamic dispatch in compiler")]
+    public void AsConst_ReduceOperation_Works()
+    {
+        var source = """
+            const nums = [1, 2, 3, 4] as const;
+            const sum = nums.reduce((acc, n) => acc + n, 0);
+            console.log(sum);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n", output);
+    }
+
+    [Fact]
+    public void AsConst_IndexAccess_Works()
+    {
+        var source = """
+            const directions = ["north", "south", "east", "west"] as const;
+            let idx = 2;
+            console.log(directions[idx]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("east\n", output);
+    }
+
+    [Fact]
+    public void AsConst_ObjectWithArrayProperty_Works()
+    {
+        var source = """
+            const data = {
+                name: "test",
+                values: [100, 200, 300]
+            } as const;
+            console.log(data.name);
+            console.log(data.values.length);
+            console.log(data.values[1]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("test\n3\n200\n", output);
+    }
+
+    #endregion
 }

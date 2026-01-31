@@ -100,4 +100,316 @@ public class SymbolTests
         var output = TestHarness.RunCompiled(source);
         Assert.Equal("Symbol(func)\n", output);
     }
+
+    #region Symbol.for() and Symbol.keyFor() - Global Registry
+
+    [Fact(Skip = "Symbol.for() not yet implemented in compiler")]
+    public void SymbolFor_ReturnsSameSymbolForSameKey()
+    {
+        var source = """
+            let s1 = Symbol.for("shared");
+            let s2 = Symbol.for("shared");
+            console.log(s1 === s2);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact(Skip = "Symbol.for() not yet implemented in compiler")]
+    public void SymbolFor_ReturnsDifferentSymbolsForDifferentKeys()
+    {
+        var source = """
+            let s1 = Symbol.for("key1");
+            let s2 = Symbol.for("key2");
+            console.log(s1 === s2);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact(Skip = "Symbol.for() not yet implemented in compiler")]
+    public void SymbolFor_DifferentFromRegularSymbol()
+    {
+        var source = """
+            let global = Symbol.for("test");
+            let local = Symbol("test");
+            console.log(global === local);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\n", output);
+    }
+
+    [Fact(Skip = "Symbol.keyFor() not yet implemented in compiler")]
+    public void SymbolKeyFor_ReturnsKeyForGlobalSymbol()
+    {
+        var source = """
+            let s = Symbol.for("myKey");
+            console.log(Symbol.keyFor(s));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("myKey\n", output);
+    }
+
+    [Fact(Skip = "Symbol.keyFor() not yet implemented in compiler")]
+    public void SymbolKeyFor_ReturnsUndefinedForLocalSymbol()
+    {
+        var source = """
+            let s = Symbol("local");
+            console.log(Symbol.keyFor(s));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("undefined\n", output);
+    }
+
+    #endregion
+
+    #region Well-Known Symbols
+
+    [Fact(Skip = "Well-known symbols not accessible via Symbol.iterator in compiler")]
+    public void Symbol_Iterator_Exists()
+    {
+        var source = """
+            console.log(typeof Symbol.iterator);
+            console.log(Symbol.iterator !== undefined);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("symbol\ntrue\n", output);
+    }
+
+    [Fact(Skip = "Well-known symbols not accessible via Symbol.asyncIterator in compiler")]
+    public void Symbol_AsyncIterator_Exists()
+    {
+        var source = """
+            console.log(typeof Symbol.asyncIterator);
+            console.log(Symbol.asyncIterator !== undefined);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("symbol\ntrue\n", output);
+    }
+
+    [Fact(Skip = "Well-known symbols not accessible via Symbol.toStringTag in compiler")]
+    public void Symbol_ToStringTag_Exists()
+    {
+        var source = """
+            console.log(typeof Symbol.toStringTag);
+            console.log(Symbol.toStringTag !== undefined);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("symbol\ntrue\n", output);
+    }
+
+    [Fact(Skip = "Well-known symbols not accessible via Symbol.hasInstance in compiler")]
+    public void Symbol_HasInstance_Exists()
+    {
+        var source = """
+            console.log(typeof Symbol.hasInstance);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("symbol\n", output);
+    }
+
+    [Fact(Skip = "Well-known symbols not accessible via Symbol.toPrimitive in compiler")]
+    public void Symbol_ToPrimitive_Exists()
+    {
+        var source = """
+            console.log(typeof Symbol.toPrimitive);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("symbol\n", output);
+    }
+
+    [Fact(Skip = "Well-known symbols not accessible in compiler")]
+    public void Symbol_WellKnown_AreUnique()
+    {
+        var source = """
+            console.log(Symbol.iterator === Symbol.asyncIterator);
+            console.log(Symbol.iterator === Symbol.toStringTag);
+            console.log(Symbol.iterator === Symbol.iterator);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\nfalse\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region Symbol Description Property
+
+    [Fact(Skip = "Symbol.description property not yet implemented in compiler")]
+    public void Symbol_Description_ReturnsDescription()
+    {
+        var source = """
+            let s = Symbol("myDesc");
+            console.log(s.description);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("myDesc\n", output);
+    }
+
+    [Fact(Skip = "Symbol.description property not yet implemented in compiler")]
+    public void Symbol_Description_UndefinedWhenNoDescription()
+    {
+        var source = """
+            let s = Symbol();
+            console.log(s.description);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("undefined\n", output);
+    }
+
+    #endregion
+
+    #region Symbol Identity and Equality
+
+    [Fact]
+    public void Symbol_SameSymbolEqualsItself()
+    {
+        var source = """
+            let s = Symbol("test");
+            console.log(s === s);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Symbol_StoredInVariable_MaintainsIdentity()
+    {
+        var source = """
+            let s1 = Symbol("test");
+            let s2 = s1;
+            console.log(s1 === s2);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
+    public void Symbol_PassedToFunction_MaintainsIdentity()
+    {
+        var source = """
+            function check(a: symbol, b: symbol): boolean {
+                return a === b;
+            }
+            let s = Symbol("test");
+            console.log(check(s, s));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\n", output);
+    }
+
+    #endregion
+
+    #region Symbol as Object Key - Advanced
+
+    [Fact]
+    public void Symbol_ObjectKey_OverwriteValue()
+    {
+        var source = """
+            let sym = Symbol("key");
+            let obj: { [key: symbol]: number } = {};
+            obj[sym] = 10;
+            obj[sym] = 20;
+            console.log(obj[sym]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("20\n", output);
+    }
+
+    [Fact]
+    public void Symbol_ObjectKey_CoexistsWithStringKey()
+    {
+        var source = """
+            let sym = Symbol("name");
+            let obj: any = {};
+            obj["name"] = "string key";
+            obj[sym] = "symbol key";
+            console.log(obj["name"]);
+            console.log(obj[sym]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("string key\nsymbol key\n", output);
+    }
+
+    [Fact(Skip = "delete operator with symbol keys not fully working in compiler")]
+    public void Symbol_ObjectKey_DeleteProperty()
+    {
+        var source = """
+            let sym = Symbol("key");
+            let obj: { [key: symbol]: string } = {};
+            obj[sym] = "value";
+            console.log(obj[sym]);
+            delete obj[sym];
+            console.log(obj[sym]);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("value\nundefined\n", output);
+    }
+
+    [Fact(Skip = "'in' operator with symbol keys not yet implemented in compiler")]
+    public void Symbol_InOperator_Works()
+    {
+        var source = """
+            let sym = Symbol("key");
+            let obj: { [key: symbol]: string } = {};
+            console.log(sym in obj);
+            obj[sym] = "value";
+            console.log(sym in obj);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("false\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region Symbol in Classes
+
+    [Fact(Skip = "Computed property names with symbols in classes not yet supported")]
+    public void Symbol_AsClassPropertyKey()
+    {
+        var source = """
+            const mySymbol = Symbol("myProp");
+
+            class MyClass {
+                [mySymbol]: string = "initial";
+
+                getValue(): string {
+                    return this[mySymbol];
+                }
+
+                setValue(v: string): void {
+                    this[mySymbol] = v;
+                }
+            }
+
+            let obj = new MyClass();
+            console.log(obj.getValue());
+            obj.setValue("updated");
+            console.log(obj.getValue());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("initial\nupdated\n", output);
+    }
+
+    #endregion
 }
