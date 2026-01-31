@@ -274,32 +274,81 @@ Interop/
 
 ---
 
+### 8. Web Server (`web-server.ts`)
+
+**What it does:** A demonstration HTTP server with routing, static HTML pages, and dynamic JSON API endpoints. Showcases SharpTS's HTTP server capabilities.
+
+**Usage:**
+```bash
+# Start server on default port 3000
+sharpts Examples/web-server.ts
+
+# Start server on custom port
+sharpts Examples/web-server.ts 8080
+
+# Show help
+sharpts Examples/web-server.ts --help
+```
+
+**Demonstrates:**
+- `http` module: `createServer()`, server events (`on('listening')`, `on('error')`)
+- Request properties: `method`, `url`, `headers`, `socket`
+- Response methods: `writeHead()`, `end()`
+- `url` module: `parse()` for URL parsing
+- `querystring` module: `parse()` for query string parsing
+- Content-Type headers (text/html, application/json)
+- HTTP status codes (200, 404)
+- Path parameter extraction from URLs
+
+**Key Features:**
+- Multiple route handlers with pattern matching
+- Static HTML pages with inline CSS styling
+- Dynamic JSON API endpoints
+- Request logging to console
+- XSS prevention via HTML escaping
+- Personalized greetings with path parameters
+- Echo endpoint showing request details
+
+**Routes:**
+
+| Route | Method | Response | Description |
+|-------|--------|----------|-------------|
+| `/` | GET | HTML | Home page with navigation links |
+| `/about` | GET | HTML | About page with server info |
+| `/api/time` | GET | JSON | Current server timestamp |
+| `/api/echo` | GET | JSON | Echo request info (method, url, headers, query) |
+| `/api/greet/:name` | GET | JSON | Personalized greeting with path parameter |
+| `*` | ANY | HTML | 404 Not Found page |
+
+---
+
 ## Feature Matrix
 
 This table shows which SharpTS/TypeScript features each example demonstrates:
 
-| Feature | file-hasher | file-organizer | password-generator | system-info | url-toolkit | source-analyzer | interop |
-|---------|-------------|----------------|-----------------------|-------------|-------------|-----------------|---------|
-| Classes | | | | | | ✓ | ✓ |
-| Interfaces | | | | | | ✓ | |
-| Inheritance | | | | | | | ✓ |
-| For-of loops | ✓ | ✓ | | ✓ | ✓ | | |
-| While loops | | | | | ✓ | ✓ | |
-| Object literals | | ✓ | | | ✓ | | |
-| Arrays | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ |
-| String manipulation | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Type annotations | | | | | | ✓ | ✓ |
-| Functions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Modules (import) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| CLI arguments | ✓ | ✓ | ✓ | | ✓ | ✓ | |
-| File I/O | ✓ | ✓ | | | | ✓ | |
-| Crypto | ✓ | | ✓ | | | | |
-| User input | | | ✓ | | ✓ | | |
-| Process info | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| OS info | | | | ✓ | | | |
-| Path manipulation | ✓ | ✓ | | ✓ | | ✓ | |
-| URL parsing | | | | | ✓ | | |
-| C# interop | | | | | | | ✓ |
+| Feature | file-hasher | file-organizer | password-generator | system-info | url-toolkit | source-analyzer | interop | web-server |
+|---------|-------------|----------------|-----------------------|-------------|-------------|-----------------|---------|------------|
+| Classes | | | | | | ✓ | ✓ | |
+| Interfaces | | | | | | ✓ | | |
+| Inheritance | | | | | | | ✓ | |
+| For-of loops | ✓ | ✓ | | ✓ | ✓ | | | ✓ |
+| While loops | | | | | ✓ | ✓ | | |
+| Object literals | | ✓ | | | ✓ | | | ✓ |
+| Arrays | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| String manipulation | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Type annotations | | | | | | ✓ | ✓ | |
+| Functions | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Modules (import) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | ✓ |
+| CLI arguments | ✓ | ✓ | ✓ | | ✓ | ✓ | | ✓ |
+| File I/O | ✓ | ✓ | | | | ✓ | | |
+| Crypto | ✓ | | ✓ | | | | | |
+| User input | | | ✓ | | ✓ | | | |
+| Process info | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | ✓ |
+| OS info | | | | ✓ | | | | |
+| Path manipulation | ✓ | ✓ | | ✓ | | ✓ | | |
+| URL parsing | | | | | ✓ | | | ✓ |
+| HTTP server | | | | | | | | ✓ |
+| C# interop | | | | | | | ✓ | |
 
 ## Built-in Modules Used
 
@@ -356,6 +405,15 @@ SharpTS provides Node.js-compatible built-in modules:
 **Readline (`readline`)**
 - `questionSync()` - Synchronous user input
 
+**HTTP (`http`)**
+- `createServer(handler)` - Create an HTTP server
+- Server methods: `listen(port, callback?)`, `close(callback?)`
+- Server events: `on('listening')`, `on('error')`, `on('request')`
+- Server properties: `listening`, `address()`
+- Request properties: `method`, `url`, `headers`, `socket`, `httpVersion`
+- Response methods: `writeHead(status, headers?)`, `write(data)`, `end(data?)`, `setHeader(name, value)`
+- Response properties: `statusCode`, `statusMessage`, `headersSent`
+
 ## Tips for Running Examples
 
 **Interpreted mode** (faster for development):
@@ -388,8 +446,9 @@ Recommended order for exploring examples:
 3. **password-generator.ts** - Explore user input and randomness
 4. **file-organizer.ts** - Practice file system manipulation
 5. **url-toolkit.ts** - Interactive CLI patterns
-6. **source-analyzer.ts** - Complex application with interfaces
-7. **Interop/** - Advanced: C# interoperability
+6. **web-server.ts** - HTTP server with routing and APIs
+7. **source-analyzer.ts** - Complex application with interfaces
+8. **Interop/** - Advanced: C# interoperability
 
 ## Creating Your Own Examples
 
