@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-30 (Added fetch API with full request/response support)
+**Last Updated:** 2026-01-30 (Added dns module and worker_threads support)
 
 ## Legend
 - ✅ Implemented
@@ -35,9 +35,9 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `perf_hooks` | ✅ | performance.now(), performance.timeOrigin |
 | `http` / `https` | ❌ | No network server/client (use `fetch()` for client requests) |
 | `net` | ❌ | No TCP/IPC sockets |
-| `dns` | ❌ | No DNS resolution |
+| `dns` | ⚠️ | lookup, lookupService (sync only) |
 | `zlib` | ✅ | gzip, deflate, deflateRaw, brotli, zstd (sync APIs) |
-| `worker_threads` | ❌ | No worker support |
+| `worker_threads` | ⚠️ | Worker, MessageChannel, parentPort, workerData, isMainThread |
 | `cluster` | ❌ | No cluster support |
 
 ---
@@ -592,9 +592,58 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
+## 20. DNS
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Methods** | | |
+| `lookup` | ✅ | Resolve hostname to IP; supports family and all options |
+| `lookupService` | ✅ | Reverse lookup (IP to hostname) |
+| **Constants** | | |
+| `ADDRCONFIG` | ✅ | Address configuration hint |
+| `V4MAPPED` | ✅ | Map IPv4 to IPv6 hint |
+| `ALL` | ✅ | Return all addresses hint |
+| **Not Implemented** | | |
+| `resolve` | ❌ | Use lookup instead |
+| `resolve4` / `resolve6` | ❌ | Use lookup with family option |
+| `resolveMx` / `resolveTxt` | ❌ | MX/TXT record lookup |
+| `reverse` | ❌ | Use lookupService instead |
+| `Resolver` class | ❌ | Use module methods |
+| Async callbacks | ❌ | Sync-only, returns directly |
+
+---
+
+## 21. WORKER_THREADS
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Worker Creation** | | |
+| `Worker` constructor | ✅ | Create worker from script file |
+| `workerData` | ✅ | Pass data to worker |
+| **Thread Identity** | | |
+| `isMainThread` | ✅ | Check if running on main thread |
+| `threadId` | ✅ | Current thread identifier |
+| **Messaging** | | |
+| `parentPort` | ✅ | Port for worker-to-parent communication |
+| `MessageChannel` | ✅ | Create connected port pairs |
+| `receiveMessageOnPort` | ✅ | Sync message receive |
+| `postMessage` | ✅ | Send messages between threads |
+| **Environment** | | |
+| `getEnvironmentData` | ✅ | Get shared environment data |
+| `setEnvironmentData` | ✅ | Set shared environment data |
+| `SHARE_ENV` | ⚠️ | Symbol exists, env sharing not supported |
+| **Utilities** | | |
+| `markAsUntransferable` | ⚠️ | No-op (no transferability tracking) |
+| **Not Implemented** | | |
+| `moveMessagePortToContext` | ❌ | Requires VM module |
+| `resourceLimits` | ❌ | No resource limiting |
+| `BroadcastChannel` | ❌ | |
+
+---
+
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support, and the Web Fetch API for HTTP client requests. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support, the Web Fetch API for HTTP client requests, DNS resolution (lookup/lookupService), and Worker Threads for parallel execution. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
 - No async fs operations (sync-only workaround)

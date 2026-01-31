@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-24 (Added ES2023 array methods: `findLast()`, `findLastIndex()`, `toReversed()`, `with()`)
+**Last Updated:** 2026-01-30 (Added printf-style format specifiers to console.log, Array.at method, Promise executor constructor)
 
 ## Legend
 - ✅ Implemented
@@ -105,7 +105,8 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Promises | ✅ | `Promise<T>` type with await support |
+| Promises | ✅ | `Promise<T>` type with await support, `new Promise((resolve, reject) => { })` executor constructor |
+| Promise instance methods | ✅ | `.then()`, `.catch()`, `.finally()` with chaining support |
 | `async` functions | ✅ | Full state machine compilation |
 | `await` keyword | ✅ | Pause and resume via .NET Task infrastructure |
 | Async arrow functions | ✅ | Including nested async arrows |
@@ -205,10 +206,10 @@ This document tracks TypeScript language features and their implementation statu
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `console.log` | ✅ | Multiple arguments |
+| `console.log` | ✅ | Multiple arguments, printf-style format specifiers (%s, %d, %i, %f, %o, %O, %j, %%) |
 | `Math` object | ✅ | PI, E, abs, floor, ceil, round, sqrt, sin, cos, tan, log, exp, sign, trunc, pow, min, max, random |
 | String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at |
-| Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, findLast, findLastIndex, some, every, reduce, includes, indexOf, join, sort, toSorted, toReversed, with, flat, flatMap, splice, toSpliced |
+| Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, findLast, findLastIndex, some, every, reduce, includes, indexOf, join, sort, toSorted, toReversed, with, flat, flatMap, splice, toSpliced, at |
 | `JSON.parse`/`stringify` | ✅ | With reviver, replacer, indentation, class instances, toJSON(), BigInt TypeError |
 | `Object.keys`/`values`/`entries`/`fromEntries`/`hasOwn` | ✅ | Full support for object literals and class instances |
 | `Array.isArray` | ✅ | Type guard for array detection |
