@@ -1,15 +1,14 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for the crypto module's createSign and createVerify functions.
-/// Uses interpreter mode for testing.
 /// </summary>
 public class CryptoSignVerifyTests
 {
-    // Sample RSA key pair for testing (2048-bit, generated for testing purposes only)
+    // Sample RSA key pair for testing (2048-bit)
     private const string TestPrivateKey = """
 -----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDQ9wlSXsD5OUJ3
@@ -53,8 +52,11 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 -----END PUBLIC KEY-----
 """;
 
-    [Fact]
-    public void Crypto_CreateSign_ReturnsSignObject()
+    #region Object Creation Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSign_ReturnsSignObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -67,12 +69,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateVerify_ReturnsVerifyObject()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateVerify_ReturnsVerifyObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -85,12 +88,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_UpdateReturnsThis()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_UpdateReturnsThis(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -102,12 +106,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Verify_UpdateReturnsThis()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Verify_UpdateReturnsThis(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -119,12 +124,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_SupportsRsaSha256Algorithm()
+    #endregion
+
+    #region Algorithm Support Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_SupportsRsaSha256Algorithm(ExecutionMode mode)
     {
         // RSA-SHA256 prefixed algorithm should work the same as sha256
         var files = new Dictionary<string, string>
@@ -136,12 +146,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_SupportsSha384Algorithm()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_SupportsSha384Algorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -152,12 +163,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_SupportsSha512Algorithm()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_SupportsSha512Algorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -168,14 +180,18 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_SignAndVerify_RoundTrip()
+    #endregion
+
+    #region Sign and Verify Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_SignAndVerify_RoundTrip(ExecutionMode mode)
     {
-        // Test that we can sign data and verify it
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = $$"""
@@ -201,12 +217,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_Verify_ReturnsFalseForInvalidSignature()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Verify_ReturnsFalseForInvalidSignature(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -230,12 +247,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_MultipleUpdates()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_MultipleUpdates(ExecutionMode mode)
     {
         // Multiple updates should work the same as a single update with concatenated data
         var files = new Dictionary<string, string>
@@ -262,12 +280,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_MethodChaining()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_MethodChaining(ExecutionMode mode)
     {
         // Test that update().sign() chaining works
         var files = new Dictionary<string, string>
@@ -283,12 +302,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_Base64Encoding()
+    #endregion
+
+    #region Encoding Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_Base64Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -307,12 +331,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_SignAndVerify_Base64()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_SignAndVerify_Base64(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -336,12 +361,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_ReturnsBuffer_WhenNoEncoding()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_ReturnsBuffer_WhenNoEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -360,12 +386,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_ThrowsOnUnsupportedAlgorithm()
+    #endregion
+
+    #region Error Handling Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_ThrowsOnUnsupportedAlgorithm(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -380,12 +411,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_ThrowsOnDoubleSign()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_ThrowsOnDoubleSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -407,12 +439,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_Sign_ThrowsOnUpdateAfterSign()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Sign_ThrowsOnUpdateAfterSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -434,12 +467,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_Verify_ThrowsOnDoubleVerify()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_Verify_ThrowsOnDoubleVerify(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -461,7 +495,9 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
+
+    #endregion
 }

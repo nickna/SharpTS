@@ -1,11 +1,10 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the crypto module's RSA encryption/decryption functions.
-/// Uses interpreter mode for testing.
+/// Tests for the crypto module's RSA encryption/decryption functions: publicEncrypt, privateDecrypt.
 /// </summary>
 public class CryptoRsaEncryptTests
 {
@@ -53,8 +52,11 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 -----END PUBLIC KEY-----
 """;
 
-    [Fact]
-    public void Crypto_PublicEncrypt_ReturnsBuffer()
+    #region Basic Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -70,12 +72,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_PublicEncrypt_PrivateDecrypt_Roundtrip()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_PrivateDecrypt_Roundtrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -93,12 +96,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_PublicEncrypt_PrivateDecrypt_WithGeneratedKeyPair()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_PrivateDecrypt_WithGeneratedKeyPair(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -115,12 +119,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_PublicEncrypt_StringInput()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_StringInput(ExecutionMode mode)
     {
         // publicEncrypt should also accept string input (UTF-8 encoded)
         var files = new Dictionary<string, string>
@@ -138,12 +143,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_PrivateDecrypt_FailsWithWrongKey()
+    #endregion
+
+    #region Security Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PrivateDecrypt_FailsWithWrongKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -167,12 +177,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_EncryptionProducesDifferentOutputEachTime()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_EncryptionProducesDifferentOutputEachTime(ExecutionMode mode)
     {
         // OAEP padding includes randomness, so encrypting the same message twice
         // should produce different ciphertexts
@@ -195,12 +206,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_PublicEncrypt_ThrowsOnInvalidKey()
+    #endregion
+
+    #region Error Handling Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_ThrowsOnInvalidKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -216,12 +232,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_PublicEncrypt_MessageSizeLimit()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_PublicEncrypt_MessageSizeLimit(ExecutionMode mode)
     {
         // RSA-2048 with OAEP-SHA1 can encrypt at most 214 bytes
         // (256 - 2*20 - 2 = 214 bytes for OAEP with SHA-1)
@@ -250,7 +267,9 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\nerror for large\n", output);
     }
+
+    #endregion
 }

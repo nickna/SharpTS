@@ -1,22 +1,24 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for Node.js-compatible error codes in fs module operations.
+/// Uses namespace imports (import * as fs) for compiled mode compatibility.
 /// </summary>
 public class NodeErrorTests
 {
-    [Fact]
-    public void ReadFileSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReadFileSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { readFileSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    readFileSync('nonexistent_file_xyz.txt', 'utf8');
+                    fs.readFileSync('nonexistent_file_xyz.txt', 'utf8');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -25,19 +27,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void StatSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StatSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { statSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    statSync('nonexistent_file_xyz.txt');
+                    fs.statSync('nonexistent_file_xyz.txt');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -46,19 +49,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void ReaddirSync_NonexistentDir_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ReaddirSync_NonexistentDir_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { readdirSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    readdirSync('nonexistent_dir_xyz');
+                    fs.readdirSync('nonexistent_dir_xyz');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -67,19 +71,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void UnlinkSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UnlinkSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { unlinkSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    unlinkSync('nonexistent_file_xyz.txt');
+                    fs.unlinkSync('nonexistent_file_xyz.txt');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -88,19 +93,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void RmdirSync_NonexistentDir_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void RmdirSync_NonexistentDir_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { rmdirSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    rmdirSync('nonexistent_dir_xyz');
+                    fs.rmdirSync('nonexistent_dir_xyz');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -109,19 +115,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void RenameSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void RenameSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { renameSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    renameSync('nonexistent_file_xyz.txt', 'new_name.txt');
+                    fs.renameSync('nonexistent_file_xyz.txt', 'new_name.txt');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -130,19 +137,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void CopyFileSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void CopyFileSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { copyFileSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    copyFileSync('nonexistent_file_xyz.txt', 'dest.txt');
+                    fs.copyFileSync('nonexistent_file_xyz.txt', 'dest.txt');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -151,19 +159,20 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void AccessSync_NonexistentFile_ThrowsENOENT()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void AccessSync_NonexistentFile_ThrowsENOENT(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { accessSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    accessSync('nonexistent_file_xyz.txt');
+                    fs.accessSync('nonexistent_file_xyz.txt');
                     console.log('no error');
                 } catch (e) {
                     console.log(e.code === 'ENOENT');
@@ -172,45 +181,47 @@ public class NodeErrorTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void NodeError_HasPathProperty()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NodeError_HasPathProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { readFileSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    readFileSync('specific_path.txt', 'utf8');
+                    fs.readFileSync('specific_path.txt', 'utf8');
                 } catch (e) {
                     console.log(e.path === 'specific_path.txt');
                 }
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void NodeError_MessageIncludesCode()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NodeError_MessageIncludesCode(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
-                import { readFileSync } from 'fs';
+                import * as fs from 'fs';
                 try {
-                    readFileSync('nonexistent.txt', 'utf8');
+                    fs.readFileSync('nonexistent.txt', 'utf8');
                 } catch (e) {
                     console.log(e.message.includes('ENOENT'));
                 }
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 }

@@ -1,16 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for the crypto module's hkdfSync function.
-/// Uses interpreter mode for testing.
 /// </summary>
 public class CryptoHkdfTests
 {
-    [Fact]
-    public void Crypto_HkdfSync_ReturnsBuffer()
+    #region Basic Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -27,12 +29,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_DifferentKeyLengths()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_DifferentKeyLengths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -53,12 +56,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_Deterministic()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_Deterministic(ExecutionMode mode)
     {
         // Same inputs should produce same output
         var files = new Dictionary<string, string>
@@ -77,12 +81,17 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_DifferentInputsProduceDifferentOutput()
+    #endregion
+
+    #region Different Inputs Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_DifferentInputsProduceDifferentOutput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -101,12 +110,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_DifferentSalts()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_DifferentSalts(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -125,12 +135,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_DifferentInfo()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_DifferentInfo(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -149,12 +160,17 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_EmptySaltAndInfo()
+    #endregion
+
+    #region Input Variations Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_EmptySaltAndInfo(ExecutionMode mode)
     {
         // Empty salt and info should be valid
         var files = new Dictionary<string, string>
@@ -173,12 +189,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_StringInputs()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_StringInputs(ExecutionMode mode)
     {
         // String inputs should be converted to UTF-8 bytes
         var files = new Dictionary<string, string>
@@ -193,12 +210,37 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_SHA1()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_ZeroKeyLength(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+
+                const key = crypto.hkdfSync('sha256', 'key', 'salt', 'info', 0);
+
+                console.log(Buffer.isBuffer(key));
+                console.log(key.length === 0);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region Hash Algorithm Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_SHA1(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -212,12 +254,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_SHA384()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_SHA384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -231,12 +274,13 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_SHA512()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_SHA512(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -250,12 +294,17 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_InvalidDigest_Throws()
+    #endregion
+
+    #region Error Handling Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_InvalidDigest_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -271,31 +320,17 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_HkdfSync_ZeroKeyLength()
-    {
-        var files = new Dictionary<string, string>
-        {
-            ["main.ts"] = """
-                import * as crypto from 'crypto';
+    #endregion
 
-                const key = crypto.hkdfSync('sha256', 'key', 'salt', 'info', 0);
+    #region RFC 5869 Test Vectors
 
-                console.log(Buffer.isBuffer(key));
-                console.log(key.length === 0);
-                """
-        };
-
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\n", output);
-    }
-
-    [Fact]
-    public void Crypto_HkdfSync_RFC5869_TestVector1()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_HkdfSync_RFC5869_TestVector1(ExecutionMode mode)
     {
         // RFC 5869 Test Case 1 (SHA-256)
         // IKM  = 0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b (22 octets)
@@ -319,7 +354,9 @@ public class CryptoHkdfTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
+
+    #endregion
 }

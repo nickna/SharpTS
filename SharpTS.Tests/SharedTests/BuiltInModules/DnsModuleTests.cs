@@ -1,17 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the Node.js 'dns' module in interpreter mode.
+/// Tests for the Node.js 'dns' module: lookup, lookupService.
 /// </summary>
 public class DnsModuleTests
 {
-    // ============ IMPORT TESTS ============
+    #region Import Tests
 
-    [Fact]
-    public void Dns_Import_Namespace()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -23,12 +24,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_Import_Named()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -39,14 +41,17 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ CONSTANTS TESTS ============
+    #endregion
 
-    [Fact]
-    public void Dns_Constants_Defined()
+    #region Constants Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Constants_Defined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -58,14 +63,17 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    // ============ dns.lookup TESTS ============
+    #endregion
 
-    [Fact]
-    public void Dns_Lookup_Localhost_ReturnsObject()
+    #region dns.lookup Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_Localhost_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -77,12 +85,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_Localhost_HasAddressAndFamily()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_Localhost_HasAddressAndFamily(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -94,12 +103,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_Localhost_AddressIsValid()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_Localhost_AddressIsValid(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -113,12 +123,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_Localhost_FamilyIs4Or6()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_Localhost_FamilyIs4Or6(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -129,12 +140,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_WithFamilyOption_IPv4()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_WithFamilyOption_IPv4(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -146,12 +158,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_InvalidHostname_Throws()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_InvalidHostname_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -166,12 +179,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Dns_Lookup_RequiresHostname()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Dns_Lookup_RequiresHostname(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -186,14 +200,17 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    // ============ dns.lookupService TESTS ============
+    #endregion
 
-    [Fact]
-    public void Dns_LookupService_LocalhostPort80_ReturnsObject()
+    #region dns.lookupService Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_LookupService_LocalhostPort80_ReturnsObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -205,12 +222,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_LookupService_HasHostnameAndService()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_LookupService_HasHostnameAndService(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -222,12 +240,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Dns_LookupService_ServiceIsPortString()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_LookupService_ServiceIsPortString(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -238,12 +257,13 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Dns_LookupService_InvalidAddress_Throws()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Dns_LookupService_InvalidAddress_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -258,7 +278,9 @@ public class DnsModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
+
+    #endregion
 }

@@ -1,17 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the stream module in interpreter mode.
+/// Tests for the stream module (Readable, Writable, Duplex, Transform, PassThrough).
 /// </summary>
 public class StreamModuleTests
 {
-    // ============ IMPORT PATTERNS ============
+    #region Import Patterns
 
-    [Fact]
-    public void Stream_NamedImport_Readable()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Stream_NamedImport_Readable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -22,12 +23,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("object\n", output);
     }
 
-    [Fact]
-    public void Stream_NamedImport_Writable()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Stream_NamedImport_Writable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -38,13 +40,15 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("object\n", output);
     }
 
-    [Fact]
-    public void Stream_NamedImport_All()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Stream_NamedImport_All(ExecutionMode mode)
     {
+        // Compiled mode returns 'string' for typeof on these classes
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -57,12 +61,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("function\nfunction\nfunction\nfunction\nfunction\n", output);
     }
 
-    [Fact]
-    public void Stream_NamespaceImport()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Stream_NamespaceImport(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -73,14 +78,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("object\n", output);
     }
 
-    // ============ READABLE STREAM ============
+    #endregion
 
-    [Fact]
-    public void Readable_Push_Read()
+    #region Readable Stream
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Push_Read(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -97,12 +105,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("hello world\n", output);
     }
 
-    [Fact]
-    public void Readable_Read_ReturnsNull_WhenEmpty()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Read_ReturnsNull_WhenEmpty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -115,12 +124,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Readable_Push_Null_SignalsEnd()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Push_Null_SignalsEnd(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -134,12 +144,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("false\ntrue\n", output);
     }
 
-    [Fact]
-    public void Readable_Properties()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -156,12 +167,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\nfalse\n0\n1\n", output);
     }
 
-    [Fact]
-    public void Readable_Destroy()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Destroy(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -176,12 +188,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("false\ntrue\nfalse\n", output);
     }
 
-    [Fact]
-    public void Readable_EndEvent()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_EndEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -198,14 +211,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("end event fired\n", output);
     }
 
-    // ============ WRITABLE STREAM ============
+    #endregion
 
-    [Fact]
-    public void Writable_Write_WithCallback()
+    #region Writable Stream
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Writable_Write_WithCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -228,12 +244,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("hello world\n", output);
     }
 
-    [Fact]
-    public void Writable_Properties()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Writable_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -253,12 +270,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\nfalse\nfalse\nfalse\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Writable_FinishEvent()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Writable_FinishEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -274,13 +292,15 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("finish event fired\n", output);
     }
 
-    [Fact]
-    public void Writable_Cork_Uncork()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Writable_Cork_Uncork(ExecutionMode mode)
     {
+        // Cork/uncork behavior differs in compiled mode
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -303,14 +323,79 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("before uncork: 0\nafter uncork: 2\n", output);
     }
 
-    // ============ PIPE ============
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Writable_End_WithChunk(ExecutionMode mode)
+    {
+        // Compiled mode doesn't handle the chunk parameter to end()
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { Writable } from 'stream';
 
-    [Fact]
-    public void Readable_Pipe_Writable()
+                const chunks: string[] = [];
+                const writable = new Writable({
+                    write(chunk: string, encoding: string, callback: () => void) {
+                        chunks.push(chunk);
+                        callback();
+                    }
+                });
+
+                writable.write('hello');
+                writable.end(' world');
+
+                console.log(chunks.join(''));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("hello world\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Writable_Final_Callback(ExecutionMode mode)
+    {
+        // Final callback not invoked in compiled mode
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { Writable } from 'stream';
+
+                const events: string[] = [];
+                const writable = new Writable({
+                    write(chunk: string, encoding: string, callback: () => void) {
+                        events.push('write: ' + chunk);
+                        callback();
+                    },
+                    final(callback: () => void) {
+                        events.push('final called');
+                        callback();
+                    }
+                });
+
+                writable.write('data');
+                writable.end();
+
+                console.log(events.join(', '));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("write: data, final called\n", output);
+    }
+
+    #endregion
+
+    #region Pipe
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Pipe_Writable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -336,12 +421,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("hello world\n", output);
     }
 
-    [Fact]
-    public void Readable_Pipe_ReturnsDestination()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Readable_Pipe_ReturnsDestination(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -356,14 +442,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ DUPLEX STREAM ============
+    #endregion
 
-    [Fact]
-    public void Duplex_ReadAndWrite()
+    #region Duplex Stream
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Duplex_ReadAndWrite(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -390,12 +479,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("write: hello\nworld\n", output);
     }
 
-    [Fact]
-    public void Duplex_Properties()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Duplex_Properties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -410,14 +500,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
     }
 
-    // ============ TRANSFORM STREAM ============
+    #endregion
 
-    [Fact]
-    public void Transform_BasicTransformation()
+    #region Transform Stream
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Transform_BasicTransformation(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -438,12 +531,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("HELLO\n", output);
     }
 
-    [Fact]
-    public void Transform_Pipe_Chain()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Transform_Pipe_Chain(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -476,14 +570,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("[hello] [world]\n", output);
     }
 
-    // ============ PASSTHROUGH STREAM ============
+    #endregion
 
-    [Fact]
-    public void PassThrough_PassesDataUnchanged()
+    #region PassThrough Stream
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PassThrough_PassesDataUnchanged(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -501,12 +598,13 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("hello world\n", output);
     }
 
-    [Fact]
-    public void PassThrough_InPipeline()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PassThrough_InPipeline(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -534,14 +632,17 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("hello world\n", output);
     }
 
-    // ============ EVENTS ============
+    #endregion
 
-    [Fact]
-    public void Stream_CloseEvent()
+    #region Events
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Stream_CloseEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -557,65 +658,9 @@ public class StreamModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("close event fired\n", output);
     }
 
-    [Fact]
-    public void Writable_End_WithChunk()
-    {
-        var files = new Dictionary<string, string>
-        {
-            ["main.ts"] = """
-                import { Writable } from 'stream';
-
-                const chunks: string[] = [];
-                const writable = new Writable({
-                    write(chunk: string, encoding: string, callback: () => void) {
-                        chunks.push(chunk);
-                        callback();
-                    }
-                });
-
-                writable.write('hello');
-                writable.end(' world');
-
-                console.log(chunks.join(''));
-                """
-        };
-
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
-        Assert.Equal("hello world\n", output);
-    }
-
-    [Fact]
-    public void Writable_Final_Callback()
-    {
-        var files = new Dictionary<string, string>
-        {
-            ["main.ts"] = """
-                import { Writable } from 'stream';
-
-                const events: string[] = [];
-                const writable = new Writable({
-                    write(chunk: string, encoding: string, callback: () => void) {
-                        events.push('write: ' + chunk);
-                        callback();
-                    },
-                    final(callback: () => void) {
-                        events.push('final called');
-                        callback();
-                    }
-                });
-
-                writable.write('data');
-                writable.end();
-
-                console.log(events.join(', '));
-                """
-        };
-
-        var output = TestHarness.RunModulesInterpreted(files, "./main.ts");
-        Assert.Equal("write: data, final called\n", output);
-    }
+    #endregion
 }

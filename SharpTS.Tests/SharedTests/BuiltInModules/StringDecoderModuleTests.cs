@@ -1,17 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the Node.js 'string_decoder' module (interpreter mode).
+/// Tests for the Node.js 'string_decoder' module: StringDecoder class.
 /// </summary>
 public class StringDecoderModuleTests
 {
-    // ============ IMPORT TESTS ============
+    #region Import Tests
 
-    [Fact]
-    public void StringDecoder_Import_Named()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -21,12 +22,13 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void StringDecoder_Import_Namespace()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -36,14 +38,17 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ CONSTRUCTOR TESTS ============
+    #endregion
 
-    [Fact]
-    public void StringDecoder_Constructor_DefaultEncoding()
+    #region Constructor Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Constructor_DefaultEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -54,12 +59,13 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("utf8\n", output);
     }
 
-    [Fact]
-    public void StringDecoder_Constructor_Utf8Encoding()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Constructor_Utf8Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -70,12 +76,13 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("utf8\n", output);
     }
 
-    [Fact]
-    public void StringDecoder_Constructor_Latin1Encoding()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Constructor_Latin1Encoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -86,14 +93,17 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("latin1\n", output);
     }
 
-    // ============ WRITE TESTS ============
+    #endregion
 
-    [Fact]
-    public void StringDecoder_Write_SimpleAscii()
+    #region Write Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Write_SimpleAscii(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -106,12 +116,13 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("Hello, World!\n", output);
     }
 
-    [Fact]
-    public void StringDecoder_Write_Utf8()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Write_Utf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -124,14 +135,17 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ END TESTS ============
+    #endregion
 
-    [Fact]
-    public void StringDecoder_End_NoArgument()
+    #region End Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_End_NoArgument(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -145,12 +159,13 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void StringDecoder_End_WithBuffer()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_End_WithBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -163,14 +178,17 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("end data\n", output);
     }
 
-    // ============ CHAINED WRITES ============
+    #endregion
 
-    [Fact]
-    public void StringDecoder_Write_MultipleChunks()
+    #region Chained Writes Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StringDecoder_Write_MultipleChunks(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -186,7 +204,9 @@ public class StringDecoderModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("Hello World\n", output);
     }
+
+    #endregion
 }

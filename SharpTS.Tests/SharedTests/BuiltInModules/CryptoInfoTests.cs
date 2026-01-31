@@ -1,15 +1,16 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Compiled mode tests for crypto.getHashes() and crypto.getCiphers().
+/// Tests for crypto.getHashes() and crypto.getCiphers().
 /// </summary>
-public class CryptoInfoCompiledTests
+public class CryptoInfoTests
 {
-    [Fact]
-    public void Crypto_GetHashes_ReturnsArray_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetHashes_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -21,12 +22,13 @@ public class CryptoInfoCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GetHashes_ContainsSha256_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetHashes_ContainsSha256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -39,12 +41,13 @@ public class CryptoInfoCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GetCiphers_ReturnsArray_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetCiphers_ReturnsArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -56,12 +59,13 @@ public class CryptoInfoCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GetCiphers_ContainsAesCbc_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetCiphers_ContainsAesCbc(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -73,7 +77,7 @@ public class CryptoInfoCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 }

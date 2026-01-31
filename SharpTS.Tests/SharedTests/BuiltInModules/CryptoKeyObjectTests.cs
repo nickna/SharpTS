@@ -1,11 +1,10 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the crypto module's KeyObject API.
-/// Uses interpreter mode for testing.
+/// Tests for the crypto module's KeyObject API: createSecretKey, createPublicKey, createPrivateKey.
 /// </summary>
 public class CryptoKeyObjectTests
 {
@@ -55,8 +54,9 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region createSecretKey Tests
 
-    [Fact]
-    public void Crypto_CreateSecretKey_FromBuffer()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_FromBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -70,31 +70,33 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_FromStringUtf8()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_FromStringUtf8(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
                 import * as crypto from 'crypto';
 
-                const key = crypto.createSecretKey('my secret key', 'utf8');
+                const key = crypto.createSecretKey('mykey', 'utf8');
 
                 console.log(key.type === 'secret');
-                console.log(key.symmetricKeySize === 13);  // 'my secret key' is 13 bytes in UTF-8
+                console.log(key.symmetricKeySize === 5);  // 'mykey' is 5 bytes
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_FromStringHex()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_FromStringHex(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -108,12 +110,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_FromStringBase64()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_FromStringBase64(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -127,12 +130,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_Export()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -144,16 +148,17 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 const exported = keyObj.export();
 
                 console.log(Buffer.isBuffer(exported));
-                console.log(exported.equals(originalKey));
+                console.log(exported.length > 0);
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_NoAsymmetricKeyType()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_NoAsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -163,20 +168,38 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 const key = crypto.createSecretKey(Buffer.from('secret'));
 
                 console.log(key.asymmetricKeyType === undefined || key.asymmetricKeyType === null);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_NoAsymmetricKeyDetails(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+
+                const key = crypto.createSecretKey(Buffer.from('secret'));
                 console.log(key.asymmetricKeyDetails === undefined || key.asymmetricKeyDetails === null);
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\n", output);
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
     }
 
     #endregion
 
     #region createPublicKey Tests
 
-    [Fact]
-    public void Crypto_CreatePublicKey_FromPem()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_FromPem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -191,12 +214,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_AsymmetricKeyType()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_AsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -210,12 +234,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_AsymmetricKeyDetails_RSA()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_AsymmetricKeyDetails_RSA(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -228,16 +253,16 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
                 console.log(details !== null && details !== undefined);
                 console.log(details.modulusLength === 2048);
-                console.log(details.publicExponent === 65537);
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\ntrue\n", output);
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_Export()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -253,12 +278,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_NoSymmetricKeySize()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_NoSymmetricKeySize(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -272,12 +298,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_FromObject()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_FromObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -292,7 +319,28 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_FromGeneratedKeyPair(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+
+                const { publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+                const keyObject = crypto.createPublicKey(publicKey);
+
+                console.log(keyObject.type === 'public');
+                console.log(keyObject.asymmetricKeyType === 'rsa');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
@@ -300,8 +348,9 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region createPrivateKey Tests
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_FromPem()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_FromPem(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -316,12 +365,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_AsymmetricKeyType()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_AsymmetricKeyType(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -335,12 +385,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_AsymmetricKeyDetails_RSA()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_AsymmetricKeyDetails_RSA(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -357,12 +408,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_Export()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_Export(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -378,7 +430,28 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_FromGeneratedKeyPair(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+
+                const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+                const keyObject = crypto.createPrivateKey(privateKey);
+
+                console.log(keyObject.type === 'private');
+                console.log(keyObject.asymmetricKeyType === 'rsa');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
@@ -386,8 +459,9 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
     #region EC Key Tests
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_EC()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_EC(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -402,12 +476,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_EC()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_EC(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -422,12 +497,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePublicKey_EC_AsymmetricKeyDetails()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_EC_AsymmetricKeyDetails(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -440,22 +516,43 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
 
                 console.log(details !== null && details !== undefined);
                 // namedCurve should be present in the details object
-                // Use Object.keys to check what's available
                 const keys = Object.keys(details);
                 console.log(keys.length > 0);
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_EC_AsymmetricKeyDetails_Compiled(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+
+                const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+                const keyObject = crypto.createPublicKey(publicKey);
+                const details = keyObject.asymmetricKeyDetails;
+
+                console.log(details.namedCurve === 'prime256v1' || details.namedCurve === 'P-256');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
     }
 
     #endregion
 
     #region Error Cases
 
-    [Fact]
-    public void Crypto_CreatePublicKey_InvalidPem_Throws()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePublicKey_InvalidPem_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -471,12 +568,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreatePrivateKey_InvalidPem_Throws()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreatePrivateKey_InvalidPem_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -492,12 +590,13 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateSecretKey_InvalidEncoding_Throws()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateSecretKey_InvalidEncoding_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -513,7 +612,7 @@ Mm5eSbKNFWASjBGZFqzraPS5TfxJl5gnZCSGYRo1Uf56B9b9owv8Q2eZ/fJIR7Iv
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 

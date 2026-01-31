@@ -1,18 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for crypto.createCipheriv and crypto.createDecipheriv.
-/// Uses interpreter mode to test the runtime types.
 /// </summary>
 public class CryptoCipherTests
 {
-    // ============ CBC MODE TESTS ============
+    #region CBC Mode Tests
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Aes256Cbc_RoundTrip()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes256Cbc_RoundTrip(ExecutionMode mode)
     {
         // Encrypt then decrypt, verify match
         var files = new Dictionary<string, string>
@@ -23,23 +23,26 @@ public class CryptoCipherTests
                 const iv = crypto.randomBytes(16);
 
                 const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-                let encrypted = cipher.update('Hello, World!', 'utf8', 'hex');
-                encrypted += cipher.final('hex');
+                let encrypted: string = '';
+                encrypted = encrypted + cipher.update('Hello, World!', 'utf8', 'hex');
+                encrypted = encrypted + cipher.final('hex');
 
                 const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-                decrypted += decipher.final('utf8');
+                let decrypted: string = '';
+                decrypted = decrypted + decipher.update(encrypted, 'hex', 'utf8');
+                decrypted = decrypted + decipher.final('utf8');
 
                 console.log(decrypted === 'Hello, World!');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Aes128Cbc_RoundTrip()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes128Cbc_RoundTrip(ExecutionMode mode)
     {
         // Test with AES-128-CBC
         var files = new Dictionary<string, string>
@@ -50,23 +53,26 @@ public class CryptoCipherTests
                 const iv = crypto.randomBytes(16);
 
                 const cipher = crypto.createCipheriv('aes-128-cbc', key, iv);
-                let encrypted = cipher.update('Test message', 'utf8', 'hex');
-                encrypted += cipher.final('hex');
+                let encrypted: string = '';
+                encrypted = encrypted + cipher.update('Test message', 'utf8', 'hex');
+                encrypted = encrypted + cipher.final('hex');
 
                 const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
-                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-                decrypted += decipher.final('utf8');
+                let decrypted: string = '';
+                decrypted = decrypted + decipher.update(encrypted, 'hex', 'utf8');
+                decrypted = decrypted + decipher.final('utf8');
 
                 console.log(decrypted === 'Test message');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Aes192Cbc_RoundTrip()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes192Cbc_RoundTrip(ExecutionMode mode)
     {
         // Test with AES-192-CBC
         var files = new Dictionary<string, string>
@@ -88,12 +94,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Cbc_MultipleUpdates()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Cbc_MultipleUpdates(ExecutionMode mode)
     {
         // Multiple update() calls should work correctly
         var files = new Dictionary<string, string>
@@ -118,12 +125,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Cbc_EmptyInput()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Cbc_EmptyInput(ExecutionMode mode)
     {
         // Empty plaintext should still work
         var files = new Dictionary<string, string>
@@ -145,12 +153,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Cbc_Base64Encoding()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Cbc_Base64Encoding(ExecutionMode mode)
     {
         // Test with base64 encoding
         var files = new Dictionary<string, string>
@@ -161,23 +170,26 @@ public class CryptoCipherTests
                 const iv = crypto.randomBytes(16);
 
                 const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-                let encrypted = cipher.update('Test base64', 'utf8', 'base64');
-                encrypted += cipher.final('base64');
+                let encrypted: string = '';
+                encrypted = encrypted + cipher.update('Test base64', 'utf8', 'base64');
+                encrypted = encrypted + cipher.final('base64');
 
                 const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                let decrypted = decipher.update(encrypted, 'base64', 'utf8');
-                decrypted += decipher.final('utf8');
+                let decrypted: string = '';
+                decrypted = decrypted + decipher.update(encrypted, 'base64', 'utf8');
+                decrypted = decrypted + decipher.final('utf8');
 
                 console.log(decrypted === 'Test base64');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Cbc_BufferOutput()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Cbc_BufferOutput(ExecutionMode mode)
     {
         // Test with Buffer output (default)
         var files = new Dictionary<string, string>
@@ -196,16 +208,19 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ GCM MODE TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip()
+    #region GCM Mode Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip_String(ExecutionMode mode)
     {
-        // GCM mode with auth tag
+        // GCM mode with auth tag using string output
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -227,12 +242,43 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Aes128Gcm_RoundTrip()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip_Buffer(ExecutionMode mode)
+    {
+        // GCM mode with auth tag using Buffer output
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const key = crypto.randomBytes(32);
+                const iv = crypto.randomBytes(12);
+
+                const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+                cipher.update('Hello, GCM World!', 'utf8');
+                const encrypted = cipher.final();
+                const authTag = cipher.getAuthTag();
+
+                const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+                decipher.setAuthTag(authTag);
+                decipher.update(encrypted);
+                const decrypted = decipher.final('utf8');
+
+                console.log(decrypted === 'Hello, GCM World!');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Aes128Gcm_RoundTrip(ExecutionMode mode)
     {
         // AES-128-GCM mode
         var files = new Dictionary<string, string>
@@ -243,25 +289,26 @@ public class CryptoCipherTests
                 const iv = crypto.randomBytes(12);
 
                 const cipher = crypto.createCipheriv('aes-128-gcm', key, iv);
-                let encrypted = cipher.update('GCM 128 test', 'utf8', 'hex');
-                encrypted += cipher.final('hex');
+                cipher.update('GCM 128-bit test', 'utf8');
+                const encrypted = cipher.final();
                 const authTag = cipher.getAuthTag();
 
                 const decipher = crypto.createDecipheriv('aes-128-gcm', key, iv);
                 decipher.setAuthTag(authTag);
-                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-                decrypted += decipher.final('utf8');
+                decipher.update(encrypted);
+                const decrypted = decipher.final('utf8');
 
-                console.log(decrypted === 'GCM 128 test');
+                console.log(decrypted === 'GCM 128-bit test');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Gcm_WithAAD()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Gcm_WithAAD(ExecutionMode mode)
     {
         // GCM with additional authenticated data
         var files = new Dictionary<string, string>
@@ -274,26 +321,27 @@ public class CryptoCipherTests
 
                 const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
                 cipher.setAAD(aad);
-                let encrypted = cipher.update('GCM with AAD', 'utf8', 'hex');
-                encrypted += cipher.final('hex');
+                cipher.update('Secret with AAD', 'utf8');
+                const encrypted = cipher.final();
                 const authTag = cipher.getAuthTag();
 
                 const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
                 decipher.setAAD(aad);
                 decipher.setAuthTag(authTag);
-                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-                decrypted += decipher.final('utf8');
+                decipher.update(encrypted);
+                const decrypted = decipher.final('utf8');
 
-                console.log(decrypted === 'GCM with AAD');
+                console.log(decrypted === 'Secret with AAD');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Gcm_GetAuthTagReturnsBuffer()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Gcm_GetAuthTagReturnsBuffer(ExecutionMode mode)
     {
         // getAuthTag should return a Buffer
         var files = new Dictionary<string, string>
@@ -313,14 +361,17 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ ERROR HANDLING TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateCipheriv_InvalidAlgorithm()
+    #region Error Handling Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_InvalidAlgorithm(ExecutionMode mode)
     {
         // Unknown algorithm should throw
         var files = new Dictionary<string, string>
@@ -339,12 +390,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_WrongKeySize()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_WrongKeySize(ExecutionMode mode)
     {
         // Wrong key size should throw
         var files = new Dictionary<string, string>
@@ -363,12 +415,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_WrongIVSize()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_WrongIVSize(ExecutionMode mode)
     {
         // Wrong IV size should throw
         var files = new Dictionary<string, string>
@@ -387,12 +440,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_UpdateAfterFinal()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_UpdateAfterFinal(ExecutionMode mode)
     {
         // Calling update after final should throw
         var files = new Dictionary<string, string>
@@ -415,12 +469,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_DoubleFinal()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_DoubleFinal(ExecutionMode mode)
     {
         // Calling final twice should throw
         var files = new Dictionary<string, string>
@@ -443,12 +498,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateDecipheriv_Gcm_MissingAuthTag()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateDecipheriv_Gcm_MissingAuthTag(ExecutionMode mode)
     {
         // GCM decryption without setAuthTag should throw
         var files = new Dictionary<string, string>
@@ -458,15 +514,10 @@ public class CryptoCipherTests
                 const key = crypto.randomBytes(32);
                 const iv = crypto.randomBytes(12);
 
-                const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-                let encrypted = cipher.update('test', 'utf8', 'hex');
-                encrypted += cipher.final('hex');
-
-                const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-                decipher.update(encrypted, 'hex');
-
                 try {
-                    decipher.final();  // No setAuthTag called
+                    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+                    decipher.update(Buffer.from([1, 2, 3]));
+                    decipher.final();
                     console.log('no error');
                 } catch (e) {
                     console.log('error thrown');
@@ -474,12 +525,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Gcm_GetAuthTagBeforeFinal()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Gcm_GetAuthTagBeforeFinal(ExecutionMode mode)
     {
         // Calling getAuthTag before final should throw
         var files = new Dictionary<string, string>
@@ -501,12 +553,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Cbc_GetAuthTagThrows()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Cbc_GetAuthTagThrows(ExecutionMode mode)
     {
         // getAuthTag on CBC cipher should throw
         var files = new Dictionary<string, string>
@@ -529,14 +582,17 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    // ============ BUFFER INPUT TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateCipheriv_BufferInput()
+    #region Buffer Input Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_BufferInput(ExecutionMode mode)
     {
         // Using Buffer as input with hex encoding for simpler output handling
         var files = new Dictionary<string, string>
@@ -559,14 +615,17 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ CHAINING TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateCipheriv_SetAutoPaddingChaining()
+    #region Chaining Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_SetAutoPaddingChaining(ExecutionMode mode)
     {
         // setAutoPadding should return this for chaining
         var files = new Dictionary<string, string>
@@ -583,12 +642,13 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_SetAADChaining()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_SetAADChaining(ExecutionMode mode)
     {
         // setAAD should return this for chaining
         var files = new Dictionary<string, string>
@@ -606,14 +666,17 @@ public class CryptoCipherTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ INPUT ENCODING TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateCipheriv_HexInputEncoding()
+    #region Input Encoding Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_HexInputEncoding(ExecutionMode mode)
     {
         // Test hex input encoding for cipher
         var files = new Dictionary<string, string>
@@ -627,23 +690,26 @@ public class CryptoCipherTests
                 const hexInput = '48656c6c6f';
 
                 const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-                let encrypted = cipher.update(hexInput, 'hex', 'hex');
-                encrypted += cipher.final('hex');
+                let encrypted: string = '';
+                encrypted = encrypted + cipher.update(hexInput, 'hex', 'hex');
+                encrypted = encrypted + cipher.final('hex');
 
                 const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-                decrypted += decipher.final('utf8');
+                let decrypted: string = '';
+                decrypted = decrypted + decipher.update(encrypted, 'hex', 'utf8');
+                decrypted = decrypted + decipher.final('utf8');
 
                 console.log(decrypted === 'Hello');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateCipheriv_Base64InputEncoding()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateCipheriv_Base64InputEncoding(ExecutionMode mode)
     {
         // Test base64 input encoding for cipher
         var files = new Dictionary<string, string>
@@ -657,18 +723,22 @@ public class CryptoCipherTests
                 const base64Input = 'SGVsbG8=';
 
                 const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-                let encrypted = cipher.update(base64Input, 'base64', 'base64');
-                encrypted += cipher.final('base64');
+                let encrypted: string = '';
+                encrypted = encrypted + cipher.update(base64Input, 'base64', 'base64');
+                encrypted = encrypted + cipher.final('base64');
 
                 const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-                let decrypted = decipher.update(encrypted, 'base64', 'utf8');
-                decrypted += decipher.final('utf8');
+                let decrypted: string = '';
+                decrypted = decrypted + decipher.update(encrypted, 'base64', 'utf8');
+                decrypted = decrypted + decipher.final('utf8');
 
                 console.log(decrypted === 'Hello');
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
+
+    #endregion
 }

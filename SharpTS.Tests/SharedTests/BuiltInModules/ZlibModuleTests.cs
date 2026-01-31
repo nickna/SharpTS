@@ -1,17 +1,19 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the built-in 'zlib' module in compiled mode.
+/// Tests for the built-in 'zlib' module: gzip, deflate, brotli, zstd compression.
+/// Note: Zstd tests are interpreter-only because compiled DLLs require ZstdSharp.dll deployed alongside.
 /// </summary>
-public class ZlibModuleCompiledTests
+public class ZlibModuleTests
 {
-    // ============ GZIP TESTS ============
+    #region Gzip Tests
 
-    [Fact]
-    public void Zlib_Gzip_RoundTrip_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Gzip_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -24,12 +26,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Gzip_CompressesData_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Gzip_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -41,12 +44,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Gzip_StringInput_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Gzip_StringInput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -58,12 +62,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Gzip_WithLevel_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Gzip_WithLevel(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -82,14 +87,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ DEFLATE TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_Deflate_RoundTrip_Compiled()
+    #region Deflate Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Deflate_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -102,12 +110,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_DeflateRaw_RoundTrip_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_DeflateRaw_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -120,12 +129,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Deflate_CompressesData_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Deflate_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -137,14 +147,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ BROTLI TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_Brotli_RoundTrip_Compiled()
+    #region Brotli Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Brotli_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -157,12 +170,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Brotli_CompressesData_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Brotli_CompressesData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -174,12 +188,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Brotli_LargeData_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Brotli_LargeData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -193,19 +208,78 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ ZSTD TESTS ============
-    // Note: Zstd compiled tests are skipped because the compiled DLL runs in a separate
-    // process and would need ZstdSharp.dll deployed alongside it. The interpreter tests
-    // verify that Zstd works correctly when running from within SharpTS.
+    #endregion
 
-    // ============ UNZIP (AUTO-DETECT) TESTS ============
+    #region Zstd Tests (Interpreter Only - requires ZstdSharp.dll for compiled)
 
-    [Fact]
-    public void Zlib_Unzip_DetectsGzip_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Zstd_RoundTrip(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                const input = Buffer.from('hello world');
+                const compressed = zlib.zstdCompressSync(input);
+                const decompressed = zlib.zstdDecompressSync(compressed);
+                console.log(decompressed.toString() === 'hello world');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Zstd_CompressesData(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                const input = Buffer.from('hello world '.repeat(100));
+                const compressed = zlib.zstdCompressSync(input);
+                console.log(compressed.length < input.length);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Zstd_LargeData(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                const input = Buffer.from('The quick brown fox jumps over the lazy dog. '.repeat(1000));
+                const compressed = zlib.zstdCompressSync(input);
+                const decompressed = zlib.zstdDecompressSync(compressed);
+                console.log(decompressed.toString() === input.toString());
+                console.log(compressed.length < input.length);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region Unzip (Auto-Detect) Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Unzip_DetectsGzip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -218,12 +292,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Zlib_Unzip_DetectsDeflate_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Unzip_DetectsDeflate(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -236,14 +311,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ CONSTANTS TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_Constants_CompressionLevels_Compiled()
+    #region Constants Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_CompressionLevels(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -256,12 +334,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Zlib_Constants_Strategies_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_Strategies(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -275,12 +354,13 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Zlib_Constants_ReturnCodes_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_ReturnCodes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -292,12 +372,33 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Zlib_Constants_Brotli_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_Brotli_Extended(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                console.log(zlib.constants.BROTLI_MIN_QUALITY === 0);
+                console.log(zlib.constants.BROTLI_MAX_QUALITY === 11);
+                console.log(zlib.constants.BROTLI_DEFAULT_QUALITY === 11);
+                console.log(zlib.constants.BROTLI_MODE_GENERIC === 0);
+                console.log(zlib.constants.BROTLI_MODE_TEXT === 1);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_Brotli_Basic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -309,15 +410,14 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Zlib_Constants_Zstd_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_Constants_Zstd(ExecutionMode mode)
     {
-        // Note: This tests that zstd constants are available, even though
-        // zstd compression itself is not available in compiled mode
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -328,17 +428,40 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    // ============ RETURN TYPE TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_ReturnsBuffer_Compiled()
+    #region Return Type Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_ReturnsBuffer_Full(ExecutionMode mode)
     {
-        // Note: zstdCompressSync is not included because it requires ZstdSharp.dll
-        // to be deployed alongside the compiled output (see interpreter tests for zstd coverage)
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as zlib from 'zlib';
+                const input = Buffer.from('hello');
+                console.log(Buffer.isBuffer(zlib.gzipSync(input)));
+                console.log(Buffer.isBuffer(zlib.deflateSync(input)));
+                console.log(Buffer.isBuffer(zlib.deflateRawSync(input)));
+                console.log(Buffer.isBuffer(zlib.brotliCompressSync(input)));
+                console.log(Buffer.isBuffer(zlib.zstdCompressSync(input)));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void Zlib_ReturnsBuffer_Basic(ExecutionMode mode)
+    {
+        // Note: zstdCompressSync and deflateRawSync excluded due to deployment requirements
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -350,14 +473,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    // ============ EMPTY INPUT TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_EmptyInput_Compiled()
+    #region Empty Input Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_EmptyInput(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -375,14 +501,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ BINARY DATA TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_BinaryData_Compiled()
+    #region Binary Data Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_BinaryData(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -408,14 +537,17 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ NAMED IMPORT TESTS ============
+    #endregion
 
-    [Fact]
-    public void Zlib_NamedImports_Compiled()
+    #region Named Import Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Zlib_NamedImports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -429,7 +561,9 @@ public class ZlibModuleCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
+
+    #endregion
 }

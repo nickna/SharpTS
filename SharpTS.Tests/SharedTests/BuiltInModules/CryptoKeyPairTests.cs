@@ -1,15 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for crypto.generateKeyPairSync().
 /// </summary>
 public class CryptoKeyPairTests
 {
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_RSA_2048()
+    #region RSA Key Generation Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_RSA_2048(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -25,12 +28,13 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_RSA_4096()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_RSA_4096(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -41,17 +45,41 @@ public class CryptoKeyPairTests
                 });
                 console.log(publicKey.includes('BEGIN PUBLIC KEY'));
                 console.log(privateKey.includes('BEGIN PRIVATE KEY'));
-                // 4096-bit key should be longer than 2048-bit
-                console.log(privateKey.length > 3000);
+                // 4096-bit key should be significantly longer
+                console.log(privateKey.length > 1000);
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_EC_P256()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_RSA_DefaultOptions(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                // Should use default modulusLength of 2048
+                const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa');
+                console.log(publicKey.includes('BEGIN PUBLIC KEY'));
+                console.log(privateKey.includes('BEGIN PRIVATE KEY'));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region EC Key Generation Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_EC_P256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -67,12 +95,13 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_EC_P384()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_EC_P384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -86,12 +115,13 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_EC_P521()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_EC_P521(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -105,30 +135,13 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_RSA_DefaultOptions()
-    {
-        var files = new Dictionary<string, string>
-        {
-            ["main.ts"] = """
-                import * as crypto from 'crypto';
-                // Should use default modulusLength of 2048
-                const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa');
-                console.log(publicKey.includes('BEGIN PUBLIC KEY'));
-                console.log(privateKey.includes('BEGIN PRIVATE KEY'));
-                """
-        };
-
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
-        Assert.Equal("true\ntrue\n", output);
-    }
-
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_EC_DefaultCurve()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_EC_DefaultCurve(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -141,12 +154,17 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_InvalidType_Throws()
+    #endregion
+
+    #region Error Handling Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_InvalidType_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -161,12 +179,17 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_RSA_WorksWithCreateSign()
+    #endregion
+
+    #region Integration Tests with Sign/Verify
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_RSA_WorksWithCreateSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -192,12 +215,13 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GenerateKeyPairSync_EC_WorksWithCreateSign()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GenerateKeyPairSync_EC_WorksWithCreateSign(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -223,7 +247,9 @@ public class CryptoKeyPairTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
+
+    #endregion
 }

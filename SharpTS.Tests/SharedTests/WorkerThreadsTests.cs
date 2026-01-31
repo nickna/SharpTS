@@ -1,39 +1,48 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests;
+namespace SharpTS.Tests.SharedTests;
 
+/// <summary>
+/// Tests for worker_threads-related APIs: SharedArrayBuffer, Atomics,
+/// MessageChannel, and structuredClone.
+/// </summary>
 public class WorkerThreadsTests
 {
-    // ========== SharedArrayBuffer Tests ==========
+    #region SharedArrayBuffer Tests
 
-    [Fact]
-    public void SharedArrayBuffer_Constructor_CreatesBufferWithSize()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SharedArrayBuffer_Constructor_CreatesBufferWithSize(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
             console.log(sab.byteLength);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("16\n", output);
     }
 
-    [Fact]
-    public void SharedArrayBuffer_Slice_CreatesNewBuffer()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SharedArrayBuffer_Slice_CreatesNewBuffer(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
             let sliced = sab.slice(4, 12);
             console.log(sliced.byteLength);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("8\n", output);
     }
 
-    // ========== TypedArray over SharedArrayBuffer Tests ==========
+    #endregion
 
-    [Fact]
-    public void Int32Array_OverSharedArrayBuffer_SharesMemory()
+    #region TypedArray over SharedArrayBuffer Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Int32Array_OverSharedArrayBuffer_SharesMemory(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -42,12 +51,13 @@ public class WorkerThreadsTests
             view1[0] = 42;
             console.log(view2[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n", output);
     }
 
-    [Fact]
-    public void TypedArray_WithByteOffset_CreatesCorrectView()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void TypedArray_WithByteOffset_CreatesCorrectView(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -55,12 +65,13 @@ public class WorkerThreadsTests
             console.log(view.byteOffset);
             console.log(view.length);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("4\n2\n", output);
     }
 
-    [Fact]
-    public void Uint8Array_OverSharedArrayBuffer_WorksCorrectly()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Uint8Array_OverSharedArrayBuffer_WorksCorrectly(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(4);
@@ -70,14 +81,35 @@ public class WorkerThreadsTests
             console.log(view[0]);
             console.log(view[1]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("255\n128\n", output);
     }
 
-    // ========== Atomics Tests ==========
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void TypedArray_FromLength_CreatesArray(ExecutionMode mode)
+    {
+        var source = @"
+            let arr = new Int32Array(4);
+            arr[0] = 10;
+            arr[1] = 20;
+            arr[2] = 30;
+            arr[3] = 40;
+            console.log(arr[0]);
+            console.log(arr[3]);
+            console.log(arr.length);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("10\n40\n4\n", output);
+    }
 
-    [Fact]
-    public void Atomics_Load_ReadsValue()
+    #endregion
+
+    #region Atomics Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Load_ReadsValue(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -85,12 +117,13 @@ public class WorkerThreadsTests
             view[0] = 42;
             console.log(Atomics.load(view, 0));
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n", output);
     }
 
-    [Fact]
-    public void Atomics_Store_WritesValue()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Store_WritesValue(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -98,12 +131,13 @@ public class WorkerThreadsTests
             Atomics.store(view, 0, 100);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("100\n", output);
     }
 
-    [Fact]
-    public void Atomics_Add_AddsAndReturnsOldValue()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Add_AddsAndReturnsOldValue(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -113,12 +147,13 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n15\n", output);
     }
 
-    [Fact]
-    public void Atomics_Sub_SubtractsAndReturnsOldValue()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Sub_SubtractsAndReturnsOldValue(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -128,12 +163,13 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n7\n", output);
     }
 
-    [Fact]
-    public void Atomics_Exchange_SwapsValues()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Exchange_SwapsValues(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -143,12 +179,13 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n100\n", output);
     }
 
-    [Fact]
-    public void Atomics_CompareExchange_Success()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_CompareExchange_Success(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -158,12 +195,13 @@ public class WorkerThreadsTests
             console.log(result);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n100\n", output);
     }
 
-    [Fact]
-    public void Atomics_CompareExchange_Failure()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_CompareExchange_Failure(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -173,12 +211,13 @@ public class WorkerThreadsTests
             console.log(result);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n42\n", output);
     }
 
-    [Fact]
-    public void Atomics_And_PerformsBitwiseAnd()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_And_PerformsBitwiseAnd(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -188,12 +227,13 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("15\n5\n", output);
     }
 
-    [Fact]
-    public void Atomics_Or_PerformsBitwiseOr()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Or_PerformsBitwiseOr(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -203,12 +243,13 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n15\n", output);
     }
 
-    [Fact]
-    public void Atomics_Xor_PerformsBitwiseXor()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_Xor_PerformsBitwiseXor(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -218,25 +259,29 @@ public class WorkerThreadsTests
             console.log(oldValue);
             console.log(view[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("15\n10\n", output);
     }
 
-    [Fact]
-    public void Atomics_IsLockFree_ReturnsBooleanForSize()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Atomics_IsLockFree_ReturnsBooleanForSize(ExecutionMode mode)
     {
         var source = @"
             console.log(Atomics.isLockFree(4));
             console.log(Atomics.isLockFree(8));
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ========== MessageChannel Tests ==========
+    #endregion
 
-    [Fact]
-    public void MessageChannel_Constructor_CreatesTwoPorts()
+    #region MessageChannel Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void MessageChannel_Constructor_CreatesTwoPorts(ExecutionMode mode)
     {
         var source = @"
             let channel = new MessageChannel();
@@ -244,14 +289,17 @@ public class WorkerThreadsTests
             console.log(channel.port2 !== null);
             console.log(channel.port1 !== channel.port2);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    // ========== StructuredClone Tests ==========
+    #endregion
 
-    [Fact]
-    public void StructuredClone_ClonesObject()
+    #region StructuredClone Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesObject(ExecutionMode mode)
     {
         var source = @"
             let obj = { a: 1, b: 'hello', c: [1, 2, 3] };
@@ -260,12 +308,13 @@ public class WorkerThreadsTests
             console.log(obj.a);
             console.log(cloned.a);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("1\n999\n", output);
     }
 
-    [Fact]
-    public void StructuredClone_ClonesNestedObjects()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesNestedObjects(ExecutionMode mode)
     {
         var source = @"
             let obj = { nested: { value: 42 } };
@@ -274,12 +323,13 @@ public class WorkerThreadsTests
             console.log(obj.nested.value);
             console.log(cloned.nested.value);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n100\n", output);
     }
 
-    [Fact]
-    public void StructuredClone_ClonesArrays()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesArrays(ExecutionMode mode)
     {
         var source = @"
             let arr = [1, 2, [3, 4]];
@@ -288,12 +338,13 @@ public class WorkerThreadsTests
             console.log(arr[0]);
             console.log(cloned[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("1\n999\n", output);
     }
 
-    [Fact]
-    public void StructuredClone_SharesSharedArrayBuffer()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_SharesSharedArrayBuffer(ExecutionMode mode)
     {
         var source = @"
             let sab = new SharedArrayBuffer(16);
@@ -308,12 +359,13 @@ public class WorkerThreadsTests
             view2[0] = 100;
             console.log(view1[0]);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n100\n", output);
     }
 
-    [Fact]
-    public void StructuredClone_ClonesMap()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesMap(ExecutionMode mode)
     {
         var source = @"
             let map = new Map<string, number>([['a', 1], ['b', 2]]);
@@ -322,15 +374,14 @@ public class WorkerThreadsTests
             console.log(map.get('a'));
             console.log(cloned.get('a'));
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("1\n999\n", output);
     }
 
-    [Fact]
-    public void StructuredClone_ClonesSet()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void StructuredClone_ClonesSet(ExecutionMode mode)
     {
-        // Note: Using Set([...]) without generic type annotation since parser doesn't support it
-        // Also using 'mySet' instead of 'set' to avoid potential keyword conflicts
         var source = @"
             let mySet = new Set([1, 2, 3]);
             let cloned = structuredClone(mySet);
@@ -338,11 +389,9 @@ public class WorkerThreadsTests
             console.log(mySet.size);
             console.log(cloned.size);
         ";
-        var output = TestHarness.RunInterpreted(source);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("3\n4\n", output);
     }
 
-    // Note: worker_threads module import tests would require module mode,
-    // which is a separate compilation path. For interpreter tests, we test
-    // the global functionality through the built-in constructors.
+    #endregion
 }

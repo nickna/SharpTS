@@ -1,18 +1,19 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the Node.js 'timers' module (interpreter mode).
+/// Tests for the Node.js 'timers' module: setTimeout, clearTimeout, setInterval, clearInterval, setImmediate, clearImmediate.
 /// </summary>
 [Collection("TimerTests")]
 public class TimersModuleTests
 {
-    // ============ IMPORT TESTS ============
+    #region Import Tests
 
-    [Fact]
-    public void Timers_Import_Namespace()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Timers_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -28,12 +29,13 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Timers_Import_Named()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Timers_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -44,14 +46,17 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ setTimeout TESTS ============
+    #endregion
 
-    [Fact]
-    public void Timers_SetTimeout_ReturnsHandle()
+    #region setTimeout Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetTimeout_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -63,12 +68,13 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Timers_SetTimeout_ExecutesCallback()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetTimeout_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -83,13 +89,38 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Timers_ClearTimeout_CancelsCallback()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetTimeout_ExecutesCallback_Compiled(ExecutionMode mode)
     {
+        // Note: Cannot use captured variable mutation due to known closure limitation.
+        // Instead, directly console.log from the callback.
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as timers from 'timers';
+                timers.setTimeout(() => { console.log('executed'); }, 0);
+                // Wait for callback
+                let start = Date.now();
+                while (Date.now() - start < 50) { }
+                console.log('done');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("executed", output);
+        Assert.Contains("done", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_ClearTimeout_CancelsCallback(ExecutionMode mode)
+    {
+        // Note: This test relies on captured variable mutation which doesn't work in compiled mode.
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -104,14 +135,17 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("false\n", output);
     }
 
-    // ============ setInterval TESTS ============
+    #endregion
 
-    [Fact]
-    public void Timers_SetInterval_ReturnsHandle()
+    #region setInterval Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetInterval_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -124,14 +158,17 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    // ============ setImmediate TESTS ============
+    #endregion
 
-    [Fact]
-    public void Timers_SetImmediate_ReturnsHandle()
+    #region setImmediate Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetImmediate_ReturnsHandle(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -143,12 +180,13 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Timers_SetImmediate_ExecutesCallback()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetImmediate_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -163,13 +201,38 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Timers_ClearImmediate_CancelsCallback()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_SetImmediate_ExecutesCallback_Compiled(ExecutionMode mode)
     {
+        // Note: Cannot use captured variable mutation due to known closure limitation.
+        // Instead, directly console.log from the callback.
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as timers from 'timers';
+                timers.setImmediate(() => { console.log('executed'); });
+                // Wait for callback
+                let start = Date.now();
+                while (Date.now() - start < 50) { }
+                console.log('done');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("executed", output);
+        Assert.Contains("done", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Timers_ClearImmediate_CancelsCallback(ExecutionMode mode)
+    {
+        // Note: This test relies on captured variable mutation which doesn't work in compiled mode.
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -184,7 +247,9 @@ public class TimersModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("false\n", output);
     }
+
+    #endregion
 }

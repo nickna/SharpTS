@@ -1,17 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Tests for the Node.js 'perf_hooks' module (interpreter mode).
+/// Tests for the Node.js 'perf_hooks' module: performance.now(), timeOrigin.
 /// </summary>
 public class PerfHooksModuleTests
 {
-    // ============ IMPORT TESTS ============
+    #region Import Tests
 
-    [Fact]
-    public void PerfHooks_Import_Namespace()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_Import_Namespace(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -22,12 +23,13 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void PerfHooks_Import_Named()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_Import_Named(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -37,14 +39,17 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ performance.now() TESTS ============
+    #endregion
 
-    [Fact]
-    public void PerfHooks_PerformanceNow_ReturnsNumber()
+    #region performance.now() Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_PerformanceNow_ReturnsNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -55,12 +60,13 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void PerfHooks_PerformanceNow_NonNegative()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_PerformanceNow_NonNegative(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -71,12 +77,13 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void PerfHooks_PerformanceNow_Increasing()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_PerformanceNow_Increasing(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -93,12 +100,13 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void PerfHooks_PerformanceNow_MeasuresElapsed()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_PerformanceNow_MeasuresElapsed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -116,14 +124,17 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ performance.timeOrigin TESTS ============
+    #endregion
 
-    [Fact]
-    public void PerfHooks_TimeOrigin_ReturnsNumber()
+    #region performance.timeOrigin Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_TimeOrigin_ReturnsNumber(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -134,12 +145,13 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void PerfHooks_TimeOrigin_ReasonableValue()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_TimeOrigin_ReasonableValue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -155,14 +167,17 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ PRACTICAL USAGE TESTS ============
+    #endregion
 
-    [Fact]
-    public void PerfHooks_MeasureFunctionDuration()
+    #region Practical Usage Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void PerfHooks_MeasureFunctionDuration(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -186,7 +201,9 @@ public class PerfHooksModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
+
+    #endregion
 }

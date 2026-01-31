@@ -1,17 +1,18 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
-/// Compiled mode tests for Diffie-Hellman and ECDH key exchange.
+/// Tests for Diffie-Hellman and ECDH key exchange.
 /// </summary>
-public class CryptoKeyExchangeCompiledTests
+public class CryptoKeyExchangeTests
 {
-    // ============ DIFFIE-HELLMAN TESTS ============
+    #region Diffie-Hellman Tests
 
-    [Fact]
-    public void Crypto_GetDiffieHellman_Modp14_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetDiffieHellman_Modp14(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -24,12 +25,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_GetDiffieHellman_InvalidGroup_Throws_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_GetDiffieHellman_InvalidGroup_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -44,12 +46,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_GenerateKeys_ReturnsBuffer_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_GenerateKeys_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -62,12 +65,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_GenerateKeys_HexEncoding_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_GenerateKeys_HexEncoding(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -82,12 +86,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_ComputeSecret_TwoParties_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_ComputeSecret_TwoParties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -111,12 +116,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_GetPrime_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_GetPrime(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -131,12 +137,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_GetGenerator_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_GetGenerator(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -150,12 +157,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_DiffieHellman_VerifyError_IsZero_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_DiffieHellman_VerifyError_IsZero(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -166,14 +174,17 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    // ============ ECDH TESTS ============
+    #endregion
 
-    [Fact]
-    public void Crypto_CreateECDH_P256_Compiled()
+    #region ECDH Tests
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateECDH_P256(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -186,12 +197,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateECDH_P384_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateECDH_P384(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -204,12 +216,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateECDH_P521_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateECDH_P521(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -222,12 +235,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_CreateECDH_InvalidCurve_Throws_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_CreateECDH_InvalidCurve_Throws(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -242,12 +256,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("error thrown\n", output);
     }
 
-    [Fact]
-    public void Crypto_ECDH_GenerateKeys_ReturnsBuffer_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_ECDH_GenerateKeys_ReturnsBuffer(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -260,12 +275,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_ECDH_ComputeSecret_TwoParties_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_ECDH_ComputeSecret_TwoParties(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -289,12 +305,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_ECDH_GetPublicKey_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_ECDH_GetPublicKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -308,12 +325,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_ECDH_GetPrivateKey_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_ECDH_GetPrivateKey(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -327,12 +345,13 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Crypto_ECDH_DifferentCurves_DifferentKeyLengths_Compiled()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Crypto_ECDH_DifferentCurves_DifferentKeyLengths(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
@@ -352,7 +371,9 @@ public class CryptoKeyExchangeCompiledTests
                 """
         };
 
-        var output = TestHarness.RunModulesCompiled(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
+
+    #endregion
 }
