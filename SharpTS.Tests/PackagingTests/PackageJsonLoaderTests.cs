@@ -149,7 +149,9 @@ public class PackageJsonLoaderTests
 
         try
         {
-            var result = PackageJsonLoader.FindAndLoad(tempDir);
+            // Use stopDirectory to prevent walking up beyond the temp directory
+            // This ensures the test doesn't find package.json files in parent directories
+            var result = PackageJsonLoader.FindAndLoad(tempDir, stopDirectory: Path.GetTempPath());
 
             Assert.Null(result);
         }

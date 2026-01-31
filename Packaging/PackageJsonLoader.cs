@@ -18,13 +18,25 @@ public static class PackageJsonLoader
     /// Attempts to find and load a package.json file in the specified directory or its parents.
     /// </summary>
     /// <param name="startDirectory">Directory to start searching from.</param>
+    /// <param name="stopDirectory">Optional directory to stop searching at (exclusive). If specified, the search will not look in this directory or its parents.</param>
     /// <returns>Loaded PackageJson or null if not found.</returns>
-    public static PackageJson? FindAndLoad(string startDirectory)
+    public static PackageJson? FindAndLoad(string startDirectory, string? stopDirectory = null)
     {
         var dir = new DirectoryInfo(startDirectory);
+        var stopDirFullName = stopDirectory != null
+            ? new DirectoryInfo(stopDirectory).FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            : null;
 
         while (dir != null)
         {
+            // Stop if we've reached the stop directory
+            var currentPath = dir.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (stopDirFullName != null &&
+                string.Equals(currentPath, stopDirFullName, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
             var packageJsonPath = Path.Combine(dir.FullName, "package.json");
             if (File.Exists(packageJsonPath))
             {

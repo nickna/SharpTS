@@ -23,6 +23,7 @@ public partial class RuntimeEmitter
     /// Emits DnsLookup: resolves a hostname to an IP address.
     /// Signature: object DnsLookup(object hostname, object options)
     /// Returns a Dictionary with { address: string, family: number }.
+    /// Options can be a number (4 or 6) to request a specific address family.
     /// </summary>
     private void EmitDnsLookup(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -37,26 +38,57 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Local variables
-        var hostnameLocal = il.DeclareLocal(_types.String);
-        var hostEntryLocal = il.DeclareLocal(typeof(IPHostEntry));
-        var resultLocal = il.DeclareLocal(_types.Object);
+        var hostnameLocal = il.DeclareLocal(_types.String);          // 0
+        var hostEntryLocal = il.DeclareLocal(typeof(IPHostEntry));   // 1
+        var resultLocal = il.DeclareLocal(_types.Object);            // 2
+        var requestedFamilyLocal = il.DeclareLocal(_types.Int32);    // 3: 0 = any, 4 = IPv4, 6 = IPv6
+        var selectedAddressLocal = il.DeclareLocal(typeof(IPAddress)); // 4
+        var addressListLocal = il.DeclareLocal(typeof(IPAddress[])); // 5
+        var indexLocal = il.DeclareLocal(_types.Int32);              // 6
+        var currentAddressLocal = il.DeclareLocal(typeof(IPAddress)); // 7
 
         // Labels
         var parseOptionsLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
-        var hasAddressesLabel = il.DefineLabel();
+        var checkOptionsIsDoubleLabel = il.DefineLabel();
+        var optionsParsedLabel = il.DefineLabel();
+        var loopStartLabel = il.DefineLabel();
+        var loopBodyLabel = il.DefineLabel();
+        var loopEndLabel = il.DefineLabel();
+        var checkFamilyLabel = il.DefineLabel();
+        var addressMatchedLabel = il.DefineLabel();
+        var loopContinueLabel = il.DefineLabel();
+        var foundAddressLabel = il.DefineLabel();
 
         // Extract hostname from arg0
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, hostnameLocal);
-        il.Emit(OpCodes.Brtrue, parseOptionsLabel);
+        il.Emit(OpCodes.Brtrue, checkOptionsIsDoubleLabel);
 
         // Throw error if hostname is not a string
         il.Emit(OpCodes.Ldstr, "Runtime Error: dns.lookup requires a hostname string");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Throw);
+
+        // Parse options - check if it's a double (family number)
+        il.MarkLabel(checkOptionsIsDoubleLabel);
+        il.Emit(OpCodes.Ldc_I4_0);  // default: any family
+        il.Emit(OpCodes.Stloc, requestedFamilyLocal);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, parseOptionsLabel);  // null options = any family
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Brfalse, parseOptionsLabel);  // not a double = any family
+
+        // It's a double - get the value
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, requestedFamilyLocal);
 
         il.MarkLabel(parseOptionsLabel);
 
@@ -68,21 +100,91 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(Dns).GetMethod("GetHostEntry", [typeof(string)])!);
         il.Emit(OpCodes.Stloc, hostEntryLocal);
 
-        // if (hostEntry.AddressList.Length == 0) throw ENOTFOUND
+        // var addressList = hostEntry.AddressList;
         il.Emit(OpCodes.Ldloc, hostEntryLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("AddressList")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, addressListLocal);
+
+        // selectedAddress = null
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, selectedAddressLocal);
+
+        // index = 0
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        // Loop: for (int i = 0; i < addressList.Length; i++)
+        il.MarkLabel(loopStartLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, addressListLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brtrue, hasAddressesLabel);
+        il.Emit(OpCodes.Bge, loopEndLabel);  // if index >= length, exit loop
 
-        // Throw ENOTFOUND
+        // currentAddress = addressList[index]
+        il.Emit(OpCodes.Ldloc, addressListLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, currentAddressLocal);
+
+        // if (requestedFamily == 0) { selectedAddress = currentAddress; break; }
+        il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
+        il.Emit(OpCodes.Brtrue, checkFamilyLabel);
+        il.Emit(OpCodes.Ldloc, currentAddressLocal);
+        il.Emit(OpCodes.Stloc, selectedAddressLocal);
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // Check if address matches requested family
+        il.MarkLabel(checkFamilyLabel);
+
+        // if (requestedFamily == 4 && currentAddress.AddressFamily == InterNetwork)
+        il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Bne_Un, loopContinueLabel);  // skip to IPv6 check
+
+        il.Emit(OpCodes.Ldloc, currentAddressLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetwork);
+        il.Emit(OpCodes.Bne_Un, loopContinueLabel);
+        il.Emit(OpCodes.Ldloc, currentAddressLocal);
+        il.Emit(OpCodes.Stloc, selectedAddressLocal);
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // if (requestedFamily == 6 && currentAddress.AddressFamily == InterNetworkV6)
+        il.MarkLabel(loopContinueLabel);
+        il.Emit(OpCodes.Ldloc, requestedFamilyLocal);
+        il.Emit(OpCodes.Ldc_I4_6);
+        il.Emit(OpCodes.Bne_Un, addressMatchedLabel);  // not 6, skip
+
+        il.Emit(OpCodes.Ldloc, currentAddressLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetworkV6);
+        il.Emit(OpCodes.Bne_Un, addressMatchedLabel);
+        il.Emit(OpCodes.Ldloc, currentAddressLocal);
+        il.Emit(OpCodes.Stloc, selectedAddressLocal);
+        il.Emit(OpCodes.Br, loopEndLabel);
+
+        // index++; continue loop
+        il.MarkLabel(addressMatchedLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStartLabel);
+
+        il.MarkLabel(loopEndLabel);
+
+        // if (selectedAddress == null) throw ENOTFOUND
+        il.Emit(OpCodes.Ldloc, selectedAddressLocal);
+        il.Emit(OpCodes.Brtrue, foundAddressLabel);
+
         il.Emit(OpCodes.Ldstr, "Runtime Error: dns.lookup ENOTFOUND ");
         il.Emit(OpCodes.Ldloc, hostnameLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Throw);
 
-        il.MarkLabel(hasAddressesLabel);
+        il.MarkLabel(foundAddressLabel);
 
         // Create result object { address: string, family: number }
         var dictType = _types.DictionaryStringObject;
@@ -91,23 +193,17 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Newobj, dictCtor);
 
-        // address = hostEntry.AddressList[0].ToString()
+        // address = selectedAddress.ToString()
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "address");
-        il.Emit(OpCodes.Ldloc, hostEntryLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("AddressList")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldloc, selectedAddressLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetMethod("ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, addMethod);
 
-        // family = hostEntry.AddressList[0].AddressFamily == InterNetwork ? 4.0 : 6.0
+        // family = selectedAddress.AddressFamily == InterNetwork ? 4.0 : 6.0
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "family");
-        il.Emit(OpCodes.Ldloc, hostEntryLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IPHostEntry).GetProperty("AddressList")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldloc, selectedAddressLocal);
         il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetwork);
         var isIpv6Label = il.DefineLabel();
