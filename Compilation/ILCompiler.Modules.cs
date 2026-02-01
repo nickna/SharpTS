@@ -166,6 +166,9 @@ public partial class ILCompiler
 
         _modules.ExportFields[module.Path] = exportFields;
 
+        // Track which exports are classes (for direct constructor calls in importing modules)
+        TrackClassExports(module);
+
         // Create $GetNamespace method that returns all exports as SharpTSObject
         EmitModuleGetNamespace(module, moduleType, exportFields);
     }
@@ -495,6 +498,8 @@ public partial class ILCompiler
             FunctionToModule = _modules.FunctionToModule,
             EnumToModule = _modules.EnumToModule,
             ExportAssignmentClasses = _modules.ExportAssignmentClasses,
+            ExportedClasses = _modules.ExportedClasses,
+            DefaultExportClasses = _modules.DefaultExportClasses,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
@@ -528,5 +533,101 @@ public partial class ILCompiler
         }
 
         return baseName;
+    }
+
+    /// <summary>
+    /// Tracks which exports are classes to enable direct constructor calls in importing modules.
+    /// Populates ExportedClasses and DefaultExportClasses dictionaries.
+    /// </summary>
+    private void TrackClassExports(ParsedModule module)
+    {
+        // Build a set of class names defined in this module
+        var classNames = new HashSet<string>();
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is Stmt.Class classStmt)
+            {
+                classNames.Add(classStmt.Name.Lexeme);
+            }
+        }
+
+        // Initialize the export tracking for this module
+        var exportedClasses = new Dictionary<string, string>();
+        _modules.ExportedClasses[module.Path] = exportedClasses;
+
+        // Scan exports to track class exports
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is not Stmt.Export export)
+                continue;
+
+            // Default export of a class declaration
+            if (export.IsDefaultExport && export.Declaration is Stmt.Class defaultClass)
+            {
+                string qualifiedClassName = GetQualifiedClassName(defaultClass.Name.Lexeme, module.Path);
+                _modules.DefaultExportClasses[module.Path] = qualifiedClassName;
+                // Also add to exportedClasses under $default for consistency
+                exportedClasses["$default"] = qualifiedClassName;
+            }
+            // Named export of a class declaration (export class Foo { ... })
+            else if (!export.IsDefaultExport && export.Declaration is Stmt.Class namedClass)
+            {
+                string className = namedClass.Name.Lexeme;
+                string qualifiedClassName = GetQualifiedClassName(className, module.Path);
+                exportedClasses[className] = qualifiedClassName;
+            }
+            // Named exports from list (export { Foo, Bar as Baz })
+            else if (export.NamedExports != null && export.FromModulePath == null)
+            {
+                foreach (var spec in export.NamedExports)
+                {
+                    string localName = spec.LocalName.Lexeme;
+                    string exportedName = spec.ExportedName?.Lexeme ?? localName;
+
+                    // Check if this is exporting a class defined in this module
+                    if (classNames.Contains(localName))
+                    {
+                        string qualifiedClassName = GetQualifiedClassName(localName, module.Path);
+                        exportedClasses[exportedName] = qualifiedClassName;
+                    }
+                }
+            }
+            // Re-exports (export { Foo } from './other' or export * from './other')
+            else if (export.FromModulePath != null && _modules.Resolver != null)
+            {
+                string sourcePath = _modules.Resolver.ResolveModulePath(export.FromModulePath, module.Path);
+
+                // Get the source module's exported classes
+                if (_modules.ExportedClasses.TryGetValue(sourcePath, out var sourceExportedClasses))
+                {
+                    if (export.NamedExports != null)
+                    {
+                        // Re-export specific names
+                        foreach (var spec in export.NamedExports)
+                        {
+                            string importedName = spec.LocalName.Lexeme;
+                            string exportedName = spec.ExportedName?.Lexeme ?? importedName;
+
+                            if (sourceExportedClasses.TryGetValue(importedName, out var qualifiedClassName))
+                            {
+                                exportedClasses[exportedName] = qualifiedClassName;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Re-export all (export * from './module')
+                        foreach (var (name, qualifiedClassName) in sourceExportedClasses)
+                        {
+                            if (name == "$default") continue; // * doesn't include default
+                            if (!exportedClasses.ContainsKey(name))
+                            {
+                                exportedClasses[name] = qualifiedClassName;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

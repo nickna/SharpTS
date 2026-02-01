@@ -60,6 +60,13 @@ public partial class ILEmitter
                 var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
                 IL.Emit(OpCodes.Ldsfld, defaultField);
                 IL.Emit(OpCodes.Stloc, local);
+
+                // Track if this is a default class export for direct constructor calls
+                if (_ctx.DefaultExportClasses?.TryGetValue(importedPath, out var qualifiedClassName) == true)
+                {
+                    _ctx.ImportedClassAliases ??= new Dictionary<string, string>();
+                    _ctx.ImportedClassAliases[localName] = qualifiedClassName;
+                }
             }
         }
 
@@ -67,6 +74,10 @@ public partial class ILEmitter
         // Skip individual type-only specifiers
         if (import.NamedImports != null)
         {
+            // Get the exported classes for this module (if any)
+            Dictionary<string, string>? exportedClasses = null;
+            _ctx.ExportedClasses?.TryGetValue(importedPath, out exportedClasses);
+
             foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
             {
                 string importedName = spec.Imported.Lexeme;
@@ -77,6 +88,13 @@ public partial class ILEmitter
                     var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
                     IL.Emit(OpCodes.Ldsfld, field);
                     IL.Emit(OpCodes.Stloc, local);
+
+                    // Track if this is a class export for direct constructor calls
+                    if (exportedClasses?.TryGetValue(importedName, out var qualifiedClassName) == true)
+                    {
+                        _ctx.ImportedClassAliases ??= new Dictionary<string, string>();
+                        _ctx.ImportedClassAliases[localName] = qualifiedClassName;
+                    }
                 }
             }
         }
@@ -86,6 +104,10 @@ public partial class ILEmitter
         {
             string localName = import.NamespaceImport.Lexeme;
             var local = _ctx.Locals.GetLocal(localName) ?? _ctx.Locals.DeclareLocal(localName, _ctx.Types.Object);
+
+            // Track this namespace import for resolving namespace-qualified class construction
+            _ctx.NamespaceImports ??= new Dictionary<string, string>();
+            _ctx.NamespaceImports[localName] = importedPath;
 
             // Create new Dictionary<string, object?>
             var dictType = _ctx.Types.DictionaryStringObject;

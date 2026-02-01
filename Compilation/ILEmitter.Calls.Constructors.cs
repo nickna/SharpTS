@@ -236,13 +236,41 @@ public partial class ILEmitter
         string resolvedClassName;
         if (namespaceParts.Count > 0)
         {
-            // Build qualified name for namespace classes: Namespace_SubNs_ClassName
-            string nsPath = string.Join("_", namespaceParts);
-            resolvedClassName = $"{nsPath}_{className}";
+            // Check for namespace import (e.g., new Utils.Person() where Utils is import * as Utils from './utils')
+            string nsAlias = namespaceParts[0];
+            if (_ctx.NamespaceImports?.TryGetValue(nsAlias, out var modulePath) == true)
+            {
+                // Look up the class in the source module's exported classes
+                if (_ctx.ExportedClasses?.TryGetValue(modulePath, out var exportedClasses) == true &&
+                    exportedClasses.TryGetValue(className, out var qualifiedName))
+                {
+                    resolvedClassName = qualifiedName;
+                }
+                else
+                {
+                    // Build qualified name for namespace classes: Namespace_SubNs_ClassName
+                    string nsPath = string.Join("_", namespaceParts);
+                    resolvedClassName = $"{nsPath}_{className}";
+                }
+            }
+            else
+            {
+                // Build qualified name for namespace classes: Namespace_SubNs_ClassName
+                string nsPath = string.Join("_", namespaceParts);
+                resolvedClassName = $"{nsPath}_{className}";
+            }
         }
         else
         {
-            resolvedClassName = _ctx.ResolveClassName(className);
+            // Check if this is an imported class alias (e.g., import { Person } from './person')
+            if (_ctx.ImportedClassAliases?.TryGetValue(className, out var importedClassName) == true)
+            {
+                resolvedClassName = importedClassName;
+            }
+            else
+            {
+                resolvedClassName = _ctx.ResolveClassName(className);
+            }
         }
 
         // Check for external .NET type (@DotNetType)

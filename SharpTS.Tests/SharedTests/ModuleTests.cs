@@ -74,7 +74,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NamedExport_Class(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -143,7 +143,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NamedExport_ListWithAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -207,7 +207,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DefaultExport_Class(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -237,7 +237,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DefaultExport_ArrowFunction(ExecutionMode mode)
     {
         // Note: anonymous function export default not supported, use arrow function
@@ -287,7 +287,7 @@ public class ModuleTests
     #region Namespace Imports
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NamespaceImport_AllExports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -338,7 +338,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ReExport_NamedWithAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -410,7 +410,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void MultiLevel_DiamondDependency(ExecutionMode mode)
     {
         // a -> b -> d
@@ -588,7 +588,7 @@ public class ModuleTests
     #region Path Resolution
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void PathResolution_OmittedExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -607,7 +607,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void PathResolution_WithExtension(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -626,7 +626,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void PathResolution_NestedDirectories(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -651,7 +651,7 @@ public class ModuleTests
     #region Export Types (Interface, Type Alias, Enum)
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Export_InterfaceWithFactory(ExecutionMode mode)
     {
         // Note: Interfaces are type-only exports (erased at runtime).
@@ -680,7 +680,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Export_TypeAliasUsedLocally(ExecutionMode mode)
     {
         // Note: Type aliases are type-only exports (erased at runtime).
@@ -732,7 +732,7 @@ public class ModuleTests
     #region Complex Scenarios
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Complex_MultipleExportsAndImports(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -765,7 +765,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]  // TODO: Compiler cross-module inheritance super() call doesn't pass fields correctly
     public void Complex_ClassInheritanceAcrossModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -804,7 +804,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Complex_FunctionUsingImportedClass(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

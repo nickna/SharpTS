@@ -154,6 +154,20 @@ public partial class ILCompiler
         /// Used to enable compile-time static member resolution for imported classes.
         /// </summary>
         public Dictionary<string, string> ExportAssignmentClasses { get; } = [];
+
+        /// <summary>
+        /// Maps module path to a dictionary of export name to qualified class name.
+        /// Used for resolving named class imports to direct constructor calls.
+        /// Example: ExportedClasses["./person.ts"]["Person"] = "$M_person_Person"
+        /// </summary>
+        public Dictionary<string, Dictionary<string, string>> ExportedClasses { get; } = [];
+
+        /// <summary>
+        /// Maps module path to the qualified class name for default class exports.
+        /// Used for resolving default class imports to direct constructor calls.
+        /// Example: DefaultExportClasses["./counter.ts"] = "$M_counter_Counter"
+        /// </summary>
+        public Dictionary<string, string> DefaultExportClasses { get; } = [];
     }
 
     /// <summary>

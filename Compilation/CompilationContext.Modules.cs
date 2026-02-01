@@ -42,6 +42,25 @@ public partial class CompilationContext
     public Dictionary<string, string>? ImportedClassAliases { get; set; }
 
     /// <summary>
+    /// Maps module path to a dictionary of export name to qualified class name.
+    /// Used for resolving named class imports to direct constructor calls.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, string>>? ExportedClasses { get; set; }
+
+    /// <summary>
+    /// Maps module path to the qualified class name for default class exports.
+    /// Used for resolving default class imports to direct constructor calls.
+    /// </summary>
+    public Dictionary<string, string>? DefaultExportClasses { get; set; }
+
+    /// <summary>
+    /// Maps namespace import alias to the module path.
+    /// Used for resolving namespace-qualified class construction (e.g., new Utils.Person()).
+    /// Example: NamespaceImports["Utils"] = "./utils.ts"
+    /// </summary>
+    public Dictionary<string, string>? NamespaceImports { get; set; }
+
+    /// <summary>
     /// Resolves a simple enum name to its qualified name for lookup in the EnumMembers dictionary.
     /// </summary>
     public string ResolveEnumName(string simpleEnumName)
