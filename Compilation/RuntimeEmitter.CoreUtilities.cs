@@ -238,12 +238,100 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Br, endLabel);
 
-        // Dictionary case - use RuntimeTypes.Stringify for proper formatting
+        // Dictionary case - format as "{ key1: value1, key2: value2, ... }"
         il.MarkLabel(dictLabel);
+
+        // Use StringBuilder to build the result
+        var dictSbLocal = il.DeclareLocal(_types.StringBuilder);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, dictSbLocal);
+
+        // Append "{ "
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldstr, "{ ");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        // Get the dictionary
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
-            nameof(RuntimeTypes.Stringify),
-            [typeof(object)])!);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        // Get enumerator
+        var enumeratorLocal = il.DeclareLocal(_types.DictionaryStringObjectEnumerator);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.DictionaryStringObject, "GetEnumerator"));
+        il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        // Track if first element
+        var isFirstLocal = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, isFirstLocal);
+
+        var dictLoopStart = il.DefineLabel();
+        var dictLoopEnd = il.DefineLabel();
+
+        il.MarkLabel(dictLoopStart);
+
+        // if (!enumerator.MoveNext()) break
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.DictionaryStringObjectEnumerator, "MoveNext"));
+        il.Emit(OpCodes.Brfalse, dictLoopEnd);
+
+        // if (!isFirst) append ", "
+        var dictSkipComma = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, isFirstLocal);
+        il.Emit(OpCodes.Brtrue, dictSkipComma);
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldstr, ", ");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(dictSkipComma);
+
+        // isFirst = false
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, isFirstLocal);
+
+        // Get current KeyValuePair
+        var kvpLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
+        il.Emit(OpCodes.Ldloca, enumeratorLocal);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.DictionaryStringObjectEnumerator, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, kvpLocal);
+
+        // Append key
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldloca, kvpLocal);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        // Append ": "
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldstr, ": ");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        // Append Stringify(value) - recursive call to emitted method
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldloca, kvpLocal);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
+        il.Emit(OpCodes.Call, method); // Recursive call to this Stringify method
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Br, dictLoopStart);
+
+        il.MarkLabel(dictLoopEnd);
+
+        // Append " }" and return
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Ldstr, " }");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Ldloc, dictSbLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(endLabel);
