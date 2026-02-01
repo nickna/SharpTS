@@ -284,6 +284,9 @@ public partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
+        // Cached name and length for functions where reflection doesn't work (e.g., MethodBuilder tokens)
+        var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
+        var cachedLengthField = typeBuilder.DefineField("_cachedLength", _types.Int32, FieldAttributes.Private);
 
         // Static cache for "this" fields: ConcurrentDictionary<Type, FieldInfo>
         // used to avoid reflection overhead in BindThis
@@ -321,7 +324,46 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_2);
         ctorIL.Emit(OpCodes.Stfld, methodField);
+        // this._cachedLength = -1 (sentinel for "not cached")
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldc_I4_M1);
+        ctorIL.Emit(OpCodes.Stfld, cachedLengthField);
+        // this._cachedName = null (will use reflection)
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldnull);
+        ctorIL.Emit(OpCodes.Stfld, cachedNameField);
         ctorIL.Emit(OpCodes.Ret);
+
+        // Alternative constructor with cached name/length: public $TSFunction(object target, MethodInfo method, string name, int length)
+        // Use this constructor when the MethodInfo might not support GetParameters() (e.g., MethodBuilder tokens in persisted assemblies)
+        var ctorWithCacheBuilder = typeBuilder.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.Object, _types.MethodInfo, _types.String, _types.Int32]
+        );
+        runtime.TSFunctionCtorWithCache = ctorWithCacheBuilder;
+
+        var ctorCacheIL = ctorWithCacheBuilder.GetILGenerator();
+        // Call base constructor
+        ctorCacheIL.Emit(OpCodes.Ldarg_0);
+        ctorCacheIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        // this._target = target
+        ctorCacheIL.Emit(OpCodes.Ldarg_0);
+        ctorCacheIL.Emit(OpCodes.Ldarg_1);
+        ctorCacheIL.Emit(OpCodes.Stfld, targetField);
+        // this._method = method
+        ctorCacheIL.Emit(OpCodes.Ldarg_0);
+        ctorCacheIL.Emit(OpCodes.Ldarg_2);
+        ctorCacheIL.Emit(OpCodes.Stfld, methodField);
+        // this._cachedName = name
+        ctorCacheIL.Emit(OpCodes.Ldarg_0);
+        ctorCacheIL.Emit(OpCodes.Ldarg_3);
+        ctorCacheIL.Emit(OpCodes.Stfld, cachedNameField);
+        // this._cachedLength = length
+        ctorCacheIL.Emit(OpCodes.Ldarg_0);
+        ctorCacheIL.Emit(OpCodes.Ldarg, 4);  // 4th argument (0-indexed: 0=this, 1=target, 2=method, 3=name, 4=length)
+        ctorCacheIL.Emit(OpCodes.Stfld, cachedLengthField);
+        ctorCacheIL.Emit(OpCodes.Ret);
 
         // Helper method: private static object[] AdjustArgs(MethodInfo method, object[] args)
         var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(typeBuilder, runtime);
@@ -606,6 +648,190 @@ public partial class RuntimeEmitter
         bindThisIL.MarkLabel(noTargetLabel);
         bindThisIL.MarkLabel(endLabel);
         bindThisIL.Emit(OpCodes.Ret);
+
+        // Length property: returns the number of required parameters (excluding rest, optional, and those with defaults)
+        // public int get_Length()
+        var lengthGetterBuilder = typeBuilder.DefineMethod(
+            "get_Length",
+            MethodAttributes.Public,
+            _types.Int32,
+            Type.EmptyTypes
+        );
+        runtime.TSFunctionLengthGetter = lengthGetterBuilder;
+
+        var lengthIL = lengthGetterBuilder.GetILGenerator();
+        var paramsLocalLength = lengthIL.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
+        var countLocal = lengthIL.DeclareLocal(_types.Int32);
+        var indexLocalLength = lengthIL.DeclareLocal(_types.Int32);
+        var paramLocalLength = lengthIL.DeclareLocal(_types.ParameterInfo);
+        var lengthLoopStart = lengthIL.DefineLabel();
+        var lengthLoopEnd = lengthIL.DefineLabel();
+        var incrementCount = lengthIL.DefineLabel();
+        var skipParam = lengthIL.DefineLabel();
+        var returnZero = lengthIL.DefineLabel();
+        var useCachedLength = lengthIL.DefineLabel();
+        var computeLength = lengthIL.DefineLabel();
+
+        // Check if _cachedLength >= 0 (cached value available)
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, cachedLengthField);
+        lengthIL.Emit(OpCodes.Ldc_I4_0);
+        lengthIL.Emit(OpCodes.Bge, useCachedLength);
+        lengthIL.Emit(OpCodes.Br, computeLength);
+
+        // Return cached length
+        lengthIL.MarkLabel(useCachedLength);
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, cachedLengthField);
+        lengthIL.Emit(OpCodes.Ret);
+
+        // Compute length via reflection
+        lengthIL.MarkLabel(computeLength);
+
+        // Check if _method is null - if so, return 0
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, methodField);
+        lengthIL.Emit(OpCodes.Brfalse, returnZero);
+
+        // params = _method.GetParameters()
+        lengthIL.Emit(OpCodes.Ldarg_0);
+        lengthIL.Emit(OpCodes.Ldfld, methodField);
+        lengthIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetMethod("GetParameters")!);
+        lengthIL.Emit(OpCodes.Stloc, paramsLocalLength);
+
+        // Check if params is null - if so, return 0
+        lengthIL.Emit(OpCodes.Ldloc, paramsLocalLength);
+        lengthIL.Emit(OpCodes.Brfalse, returnZero);
+
+        // count = 0
+        lengthIL.Emit(OpCodes.Ldc_I4_0);
+        lengthIL.Emit(OpCodes.Stloc, countLocal);
+
+        // index = 0
+        lengthIL.Emit(OpCodes.Ldc_I4_0);
+        lengthIL.Emit(OpCodes.Stloc, indexLocalLength);
+
+        // Loop through parameters
+        lengthIL.MarkLabel(lengthLoopStart);
+        // if (index >= params.Length) goto end
+        lengthIL.Emit(OpCodes.Ldloc, indexLocalLength);
+        lengthIL.Emit(OpCodes.Ldloc, paramsLocalLength);
+        lengthIL.Emit(OpCodes.Ldlen);
+        lengthIL.Emit(OpCodes.Conv_I4);
+        lengthIL.Emit(OpCodes.Bge, lengthLoopEnd);
+
+        // param = params[index]
+        lengthIL.Emit(OpCodes.Ldloc, paramsLocalLength);
+        lengthIL.Emit(OpCodes.Ldloc, indexLocalLength);
+        lengthIL.Emit(OpCodes.Ldelem_Ref);
+        lengthIL.Emit(OpCodes.Stloc, paramLocalLength);
+
+        // Skip if param.IsOptional (has default value or is optional)
+        lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
+        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("IsOptional")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Brtrue, skipParam);
+
+        // Skip if param type is List<object> (rest parameter)
+        lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
+        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("ParameterType")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+        lengthIL.Emit(OpCodes.Call, _types.Type.GetMethod("GetTypeFromHandle")!);
+        lengthIL.Emit(OpCodes.Call, _types.Type.GetMethod("op_Equality", [_types.Type, _types.Type])!);
+        lengthIL.Emit(OpCodes.Brtrue, skipParam);
+
+        // Skip if param name starts with "__" (internal parameters like __this)
+        lengthIL.Emit(OpCodes.Ldloc, paramLocalLength);
+        lengthIL.Emit(OpCodes.Callvirt, _types.ParameterInfo.GetProperty("Name")!.GetGetMethod()!);
+        lengthIL.Emit(OpCodes.Ldstr, "__");
+        lengthIL.Emit(OpCodes.Callvirt, _types.String.GetMethod("StartsWith", [_types.String])!);
+        lengthIL.Emit(OpCodes.Brtrue, skipParam);
+
+        // count++
+        lengthIL.Emit(OpCodes.Ldloc, countLocal);
+        lengthIL.Emit(OpCodes.Ldc_I4_1);
+        lengthIL.Emit(OpCodes.Add);
+        lengthIL.Emit(OpCodes.Stloc, countLocal);
+
+        lengthIL.MarkLabel(skipParam);
+        // index++
+        lengthIL.Emit(OpCodes.Ldloc, indexLocalLength);
+        lengthIL.Emit(OpCodes.Ldc_I4_1);
+        lengthIL.Emit(OpCodes.Add);
+        lengthIL.Emit(OpCodes.Stloc, indexLocalLength);
+        lengthIL.Emit(OpCodes.Br, lengthLoopStart);
+
+        lengthIL.MarkLabel(lengthLoopEnd);
+        lengthIL.Emit(OpCodes.Ldloc, countLocal);
+        lengthIL.Emit(OpCodes.Ret);
+
+        // Return 0 if _method or params was null
+        lengthIL.MarkLabel(returnZero);
+        lengthIL.Emit(OpCodes.Ldc_I4_0);
+        lengthIL.Emit(OpCodes.Ret);
+
+        // Define Length property
+        var lengthProperty = typeBuilder.DefineProperty(
+            "Length",
+            PropertyAttributes.None,
+            _types.Int32,
+            Type.EmptyTypes
+        );
+        lengthProperty.SetGetMethod(lengthGetterBuilder);
+
+        // Name property: returns the method name
+        // public string get_Name()
+        var nameGetterBuilder = typeBuilder.DefineMethod(
+            "get_Name",
+            MethodAttributes.Public,
+            _types.String,
+            Type.EmptyTypes
+        );
+        runtime.TSFunctionNameGetter = nameGetterBuilder;
+
+        var nameIL = nameGetterBuilder.GetILGenerator();
+        var nameReturnEmpty = nameIL.DefineLabel();
+        var useCachedName = nameIL.DefineLabel();
+        var computeName = nameIL.DefineLabel();
+
+        // Check if _cachedName is not null (cached value available)
+        nameIL.Emit(OpCodes.Ldarg_0);
+        nameIL.Emit(OpCodes.Ldfld, cachedNameField);
+        nameIL.Emit(OpCodes.Brtrue, useCachedName);
+        nameIL.Emit(OpCodes.Br, computeName);
+
+        // Return cached name
+        nameIL.MarkLabel(useCachedName);
+        nameIL.Emit(OpCodes.Ldarg_0);
+        nameIL.Emit(OpCodes.Ldfld, cachedNameField);
+        nameIL.Emit(OpCodes.Ret);
+
+        // Compute name via reflection
+        nameIL.MarkLabel(computeName);
+
+        // Check if _method is null - if so, return ""
+        nameIL.Emit(OpCodes.Ldarg_0);
+        nameIL.Emit(OpCodes.Ldfld, methodField);
+        nameIL.Emit(OpCodes.Brfalse, nameReturnEmpty);
+
+        // return _method.Name
+        nameIL.Emit(OpCodes.Ldarg_0);
+        nameIL.Emit(OpCodes.Ldfld, methodField);
+        nameIL.Emit(OpCodes.Callvirt, _types.MethodInfo.GetProperty("Name")!.GetGetMethod()!);
+        nameIL.Emit(OpCodes.Ret);
+
+        // Return "" if _method was null
+        nameIL.MarkLabel(nameReturnEmpty);
+        nameIL.Emit(OpCodes.Ldstr, "");
+        nameIL.Emit(OpCodes.Ret);
+
+        // Define Name property
+        var nameProperty = typeBuilder.DefineProperty(
+            "Name",
+            PropertyAttributes.None,
+            _types.String,
+            Type.EmptyTypes
+        );
+        nameProperty.SetGetMethod(nameGetterBuilder);
 
         typeBuilder.CreateType();
     }

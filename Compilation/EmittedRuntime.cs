@@ -24,9 +24,16 @@ public class EmittedRuntime
     // The emitted TSFunction class
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
+    /// <summary>
+    /// Alternative constructor with cached name/length: $TSFunction(object target, MethodInfo method, string name, int length).
+    /// Use when MethodInfo might not support GetParameters() (e.g., MethodBuilder tokens in persisted assemblies).
+    /// </summary>
+    public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
     public MethodBuilder TSFunctionBindThis { get; set; } = null!;
+    public MethodBuilder TSFunctionLengthGetter { get; set; } = null!;
+    public MethodBuilder TSFunctionNameGetter { get; set; } = null!;
 
     // The emitted TSNamespace class
     public TypeBuilder TSNamespaceType { get; set; } = null!;
@@ -200,6 +207,7 @@ public class EmittedRuntime
     public ConstructorBuilder BoundTSFunctionCtor { get; set; } = null!;
     public MethodBuilder BoundTSFunctionInvoke { get; set; } = null!;
     public MethodBuilder BoundTSFunctionInvokeWithThis { get; set; } = null!;
+    public FieldBuilder BoundTSFunctionTargetField { get; set; } = null!;
     public TypeBuilder FunctionBindWrapperType { get; set; } = null!;
     public ConstructorBuilder FunctionBindWrapperCtor { get; set; } = null!;
     public TypeBuilder FunctionCallWrapperType { get; set; } = null!;

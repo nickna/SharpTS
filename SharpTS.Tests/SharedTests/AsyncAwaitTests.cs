@@ -47,10 +47,9 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncArrowFunction_Works(ExecutionMode mode)
     {
-        // Compiler has issues with top-level async arrow function definitions
         var source = """
             const add = async (a: number, b: number): Promise<number> => {
                 return a + b;
@@ -67,10 +66,9 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncArrowFunction_ExpressionBody(ExecutionMode mode)
     {
-        // Compiler has issues with top-level async arrow function definitions
         var source = """
             const double = async (x: number): Promise<number> => x * 2;
             async function test(): Promise<void> {

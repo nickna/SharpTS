@@ -22,8 +22,9 @@ public partial class RuntimeEmitter
         );
         runtime.BoundTSFunctionType = typeBuilder;
 
-        // Fields
-        var targetField = typeBuilder.DefineField("_target", runtime.TSFunctionType, FieldAttributes.Private);
+        // Fields - _target is Assembly since it needs to be accessed by GetFunctionMethod
+        var targetField = typeBuilder.DefineField("_target", runtime.TSFunctionType, FieldAttributes.Assembly);
+        runtime.BoundTSFunctionTargetField = targetField;
         var thisArgField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
         var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Private);
 
@@ -251,15 +252,66 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.FunctionApplyWrapperCtor);
         il.Emit(OpCodes.Ret);
 
-        // length: return 0.0 (arity - simplified)
+        // length: check if func is $TSFunction and call get_Length
         il.MarkLabel(lengthLabel);
+        var lengthNotTSFunctionLabel = il.DefineLabel();
+        var lengthEndLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, lengthNotTSFunctionLabel);
+        // It's a $TSFunction - call get_Length()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Br, lengthEndLabel);
+        // Not a TSFunction - return 0.0
+        il.MarkLabel(lengthNotTSFunctionLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, _types.Double);
+        il.MarkLabel(lengthEndLabel);
         il.Emit(OpCodes.Ret);
 
-        // name: return ""
+        // name: check if func is $TSFunction or $BoundTSFunction
         il.MarkLabel(nameLabel);
+        var nameIsTSFunctionLabel = il.DefineLabel();
+        var nameIsBoundLabel = il.DefineLabel();
+        var nameEndLabel = il.DefineLabel();
+
+        // Check for $TSFunction
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, nameIsTSFunctionLabel);
+
+        // Check for $BoundTSFunction
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, nameIsBoundLabel);
+
+        // Unknown - return ""
         il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Br, nameEndLabel);
+
+        // It's a $TSFunction - call get_Name()
+        il.MarkLabel(nameIsTSFunctionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Br, nameEndLabel);
+
+        // It's a $BoundTSFunction - get "bound " + target.Name
+        // Note: We need to get the _target field and call its get_Name()
+        // But _target is $TSFunction type, so we can call get_Name() on it
+        il.MarkLabel(nameIsBoundLabel);
+        il.Emit(OpCodes.Ldstr, "bound ");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
+        il.Emit(OpCodes.Call, runtime.TSFunctionNameGetter);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+
+        il.MarkLabel(nameEndLabel);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(nullLabel);

@@ -10,6 +10,12 @@ public partial class CompilationContext
 
     public Dictionary<string, MethodBuilder> Functions { get; }
 
+    /// <summary>
+    /// The $Program type where top-level functions are defined.
+    /// Used for GetMethodFromHandle to properly resolve MethodBuilder tokens in persisted assemblies.
+    /// </summary>
+    public TypeBuilder? ProgramType { get; set; }
+
     // Rest parameter info: function name -> (restParamIndex, regularParamCount)
     // If a function has a rest param, restParamIndex is its index, regularParamCount is non-rest param count
     public Dictionary<string, (int RestParamIndex, int RegularParamCount)>? FunctionRestParams { get; set; }

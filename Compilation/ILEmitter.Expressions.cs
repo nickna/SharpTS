@@ -144,9 +144,31 @@ public partial class ILEmitter
         {
             IL.Emit(OpCodes.Ldnull); // target (static method)
             IL.Emit(OpCodes.Ldtoken, methodBuilder);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            // Use two-parameter GetMethodFromHandle with declaring type for proper token resolution in persisted assemblies
+            if (_ctx.ProgramType != null)
+            {
+                IL.Emit(OpCodes.Ldtoken, _ctx.ProgramType);
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle, _ctx.Types.RuntimeTypeHandle));
+            }
+            else
+            {
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+            }
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-            EmitNewobjUnknown(_ctx.Runtime!.TSFunctionCtor);
+
+            // Use constructor with cached name/length to avoid reflection issues with MethodBuilder tokens
+            // Compute function arity at compile time
+            int arity = 0;
+            foreach (var param in methodBuilder.GetParameters())
+            {
+                if (param.IsOptional) continue;
+                if (param.ParameterType == typeof(List<object>)) continue;
+                if (param.Name?.StartsWith("__") == true) continue;
+                arity++;
+            }
+            IL.Emit(OpCodes.Ldstr, name);  // function name
+            IL.Emit(OpCodes.Ldc_I4, arity);  // function length
+            EmitNewobjUnknown(_ctx.Runtime!.TSFunctionCtorWithCache);
             return;
         }
 

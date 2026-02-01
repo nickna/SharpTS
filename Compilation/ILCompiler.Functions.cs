@@ -338,7 +338,9 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
             ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
+            // Program type for GetMethodFromHandle resolution
+            ProgramType = _programType
         };
 
         // Create entry-point display class instance if there are captured top-level variables

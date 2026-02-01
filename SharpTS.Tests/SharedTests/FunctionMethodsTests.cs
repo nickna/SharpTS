@@ -150,10 +150,9 @@ public class FunctionMethodsTests
     #region Function Length Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FunctionLength_ReturnsArity(ExecutionMode mode)
     {
-        // Compiler does not yet support function.length property
         var source = """
             function add(a: number, b: number): number {
                 return a + b;
@@ -166,10 +165,9 @@ public class FunctionMethodsTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FunctionLength_ZeroParams(ExecutionMode mode)
     {
-        // Compiler does not yet support function.length property
         var source = """
             function sayHi(): string {
                 return "Hi";
@@ -186,10 +184,9 @@ public class FunctionMethodsTests
     #region Function Name Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FunctionName_ReturnsName(ExecutionMode mode)
     {
-        // Compiler does not yet support function.name property
         var source = """
             function myFunction(): void {}
             console.log(myFunction.name);
@@ -200,10 +197,9 @@ public class FunctionMethodsTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void BoundFunctionName_PrefixedWithBound(ExecutionMode mode)
     {
-        // Compiler does not yet support function.name property
         var source = """
             function myFunction(): void {}
             let bound = myFunction.bind(null);
