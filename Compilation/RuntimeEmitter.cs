@@ -2004,6 +2004,7 @@ public partial class RuntimeEmitter
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
+        EmitDeletePropertyStrict(typeBuilder, runtime);
         EmitMergeIntoObject(typeBuilder, runtime);
         EmitMergeIntoTSObject(typeBuilder, runtime);
         // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
@@ -2017,6 +2018,8 @@ public partial class RuntimeEmitter
         EmitSetIndex(typeBuilder, runtime);
         EmitSetIndexStrict(typeBuilder, runtime);
         EmitDeleteIndex(typeBuilder, runtime);
+        EmitDeleteIndexStrict(typeBuilder, runtime);
+        EmitStrictModeHelpers(typeBuilder, runtime);
         // Basic iterator protocol methods - must come AFTER object methods (need GetProperty, InvokeMethodValue)
         EmitIteratorMethodsBasic(typeBuilder, runtime);
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)

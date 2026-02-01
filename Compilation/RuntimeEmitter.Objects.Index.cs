@@ -420,5 +420,135 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits DeleteIndexStrict(object obj, object key, bool strictMode) -> bool
+    /// In strict mode, throws TypeError for frozen/sealed objects.
+    /// Handles both symbol keys and string keys for delete operations.
+    /// </summary>
+    private void EmitDeleteIndexStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DeleteIndexStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object, _types.Boolean]
+        );
+        runtime.DeleteIndexStrict = method;
+
+        var il = method.GetILGenerator();
+        var dictLabel = il.DefineLabel();
+        var dictStringKeyLabel = il.DefineLabel();
+        var dictNumericKeyLabel = il.DefineLabel();
+        var symbolKeyLabel = il.DefineLabel();
+        var trueLabel = il.DefineLabel();
+
+        // null check on obj - return true (deleting from null is allowed in JS)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+
+        // Check if index is a symbol first
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // Dict<string, object>
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Other types (arrays, strings, etc.) - cannot delete, return true
+        il.Emit(OpCodes.Br, trueLabel);
+
+        // Symbol key handler: GetSymbolDict(obj).Remove(key)
+        il.MarkLabel(symbolKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "Remove", _types.Object));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictLabel);
+        // Check if frozen
+        var valueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notFrozenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Frozen - check strict mode
+        var frozenSloppyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, frozenSloppyLabel);
+
+        // Frozen + strict - throw TypeError
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property of a frozen object");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Frozen + sloppy - return false
+        il.MarkLabel(frozenSloppyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Check if sealed
+        il.MarkLabel(notFrozenLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notSealedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notSealedLabel);
+
+        // Sealed - check strict mode
+        var sealedSloppyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, sealedSloppyLabel);
+
+        // Sealed + strict - throw TypeError
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property of a sealed object");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Sealed + sloppy - return false
+        il.MarkLabel(sealedSloppyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Check if index is string
+        il.MarkLabel(notSealedLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
+        // Check if index is double (numeric key - convert to string)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
+        // Other key types - return true
+        il.Emit(OpCodes.Br, trueLabel);
+
+        il.MarkLabel(dictStringKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(dictNumericKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Ret);
+
+        // Return true (default)
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

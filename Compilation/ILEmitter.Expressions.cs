@@ -543,33 +543,62 @@ public partial class ILEmitter
     protected override void EmitDelete(Expr.Delete del)
     {
         // delete operator: returns boolean
-        // - delete obj.prop: removes property, returns true (or false if frozen/sealed)
-        // - delete obj[key]: removes computed property, returns true (or false if frozen/sealed)
-        // - delete variable: returns false (cannot delete variables)
+        // - delete obj.prop: removes property, returns true (or throws TypeError if frozen/sealed in strict mode)
+        // - delete obj[key]: removes computed property, returns true (or throws TypeError if frozen/sealed in strict mode)
+        // - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
         switch (del.Operand)
         {
             case Expr.Get get:
-                // delete obj.prop - use static runtime helper
+                // delete obj.prop - use static runtime helper with strict mode
                 EmitExpression(get.Object);
                 EmitBoxIfNeeded(get.Object);
                 IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-                EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                if (_ctx.IsStrictMode)
+                {
+                    IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+                    EmitCallUnknown(_ctx.Runtime!.DeletePropertyStrict);
+                }
+                else
+                {
+                    EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                }
                 SetStackType(StackType.Boolean);
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use DeleteIndex which handles both symbol and string keys
+                // delete obj[key] - use DeleteIndex with strict mode
                 EmitExpression(getIndex.Object);
                 EmitBoxIfNeeded(getIndex.Object);
                 EmitExpression(getIndex.Index);
                 EmitBoxIfNeeded(getIndex.Index);
-                EmitCallUnknown(_ctx.Runtime!.DeleteIndex);
+                if (_ctx.IsStrictMode)
+                {
+                    IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+                    EmitCallUnknown(_ctx.Runtime!.DeleteIndexStrict);
+                }
+                else
+                {
+                    EmitCallUnknown(_ctx.Runtime!.DeleteIndex);
+                }
                 SetStackType(StackType.Boolean);
                 break;
 
-            case Expr.Variable:
-                // delete variable: returns false
-                EmitBoolConstant(false);
+            case Expr.Variable v:
+                if (_ctx.IsStrictMode)
+                {
+                    // Strict mode: throw SyntaxError
+                    IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
+                    EmitCallUnknown(_ctx.Runtime!.ThrowStrictSyntaxError);
+                    // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
+                    EmitBoolConstant(false);
+                }
+                else
+                {
+                    // Sloppy mode: warn and return false
+                    IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+                    EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                }
+                SetStackType(StackType.Boolean);
                 break;
 
             default:

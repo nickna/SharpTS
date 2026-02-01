@@ -53,6 +53,7 @@ public partial class RuntimeEmitter
         EmitTSObjectSetPropertyStrict(typeBuilder, runtime);
         EmitTSObjectHasProperty(typeBuilder, runtime);
         EmitTSObjectDeleteProperty(typeBuilder, runtime);
+        EmitTSObjectDeletePropertyStrict(typeBuilder, runtime);
 
         // Methods: DefineGetter, DefineSetter, HasGetter, HasSetter, GetGetter, GetSetter
         EmitTSObjectDefineGetter(typeBuilder, runtime);
@@ -411,6 +412,36 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noSetterLabel);
 
+        // Check for getter-only property (has getter but no setter)
+        // if (HasGetter(name)) - no setter was found, so this is getter-only
+        var noGetterLabel = il.DefineLabel();
+        var getterReturnLabel = il.DefineLabel();
+
+        // if (_getters == null || !_getters.ContainsKey(name)) skip getter check
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Brfalse, noGetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectGettersField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Brfalse, noGetterLabel);
+
+        // Has getter but no setter - if strictMode, throw TypeError
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, getterReturnLabel);
+
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot set property which has only a getter");
+        il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(getterReturnLabel);
+        // Non-strict mode silently fails for getter-only
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noGetterLabel);
+
         // if (_isFrozen)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsObjectIsFrozenField);
@@ -516,6 +547,76 @@ public partial class RuntimeEmitter
         // return false for frozen/sealed
         il.MarkLabel(falseReturnLabel);
         il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitTSObjectDeletePropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DeletePropertyStrict",
+            MethodAttributes.Public,
+            _types.Boolean,
+            [_types.String, _types.Boolean]
+        );
+        runtime.TSObjectDeletePropertyStrict = method;
+
+        var il = method.GetILGenerator();
+        var notFrozenLabel = il.DefineLabel();
+        var notSealedLabel = il.DefineLabel();
+        var sloppyFrozenLabel = il.DefineLabel();
+        var sloppySealedLabel = il.DefineLabel();
+
+        // if (_isFrozen)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectIsFrozenField);
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Check if strict mode
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, sloppyFrozenLabel);
+
+        // Throw TypeError for frozen in strict mode
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property '");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "' of a frozen object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Sloppy mode frozen - return false
+        il.MarkLabel(sloppyFrozenLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Check if sealed (not frozen)
+        il.MarkLabel(notFrozenLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectIsSealedField);
+        il.Emit(OpCodes.Brfalse, notSealedLabel);
+
+        // Check if strict mode
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, sloppySealedLabel);
+
+        // Throw TypeError for sealed in strict mode
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property '");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "' of a sealed object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Sloppy mode sealed - return false
+        il.MarkLabel(sloppySealedLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Not frozen/sealed - return _fields.Remove(name)
+        il.MarkLabel(notSealedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsObjectFieldsField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetMethod("Remove", [_types.String])!);
         il.Emit(OpCodes.Ret);
     }
 

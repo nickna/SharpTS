@@ -1426,5 +1426,129 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits DeletePropertyStrict(object obj, string name, bool strictMode) -> bool
+    /// In strict mode, throws TypeError for frozen/sealed objects.
+    /// In sloppy mode, returns false for frozen/sealed objects.
+    /// </summary>
+    private void EmitDeletePropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DeletePropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.String, _types.Boolean]
+        );
+        runtime.DeletePropertyStrict = method;
+
+        var il = method.GetILGenerator();
+        var nullLabel = il.DefineLabel();
+        var dictLabel = il.DefineLabel();
+        var trueLabel = il.DefineLabel();
+
+        // null check - return true (deleting from null is allowed in JS)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+
+        // Check if $TSObject
+        var sharpTSObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, sharpTSObjectLabel);
+
+        // Dictionary
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Other types - cannot delete properties, return true (JS behavior for non-configurable)
+        il.Emit(OpCodes.Br, trueLabel);
+
+        // $TSObject - call DeletePropertyStrict instance method
+        il.MarkLabel(sharpTSObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2); // strictMode
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectDeletePropertyStrict);
+        il.Emit(OpCodes.Ret);
+
+        // Dictionary - check frozen/sealed and handle strict mode
+        il.MarkLabel(dictLabel);
+        var valueLocal = il.DeclareLocal(_types.Object);
+
+        // Check if frozen
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notFrozenLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Frozen - check if strict mode
+        var frozenSloppyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, frozenSloppyLabel);
+
+        // Frozen + strict - throw TypeError
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property '");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Ldstr, "' of a frozen object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Frozen + sloppy - return false
+        il.MarkLabel(frozenSloppyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Check if sealed
+        il.MarkLabel(notFrozenLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        var notSealedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notSealedLabel);
+
+        // Sealed - check if strict mode
+        var sealedSloppyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, sealedSloppyLabel);
+
+        // Sealed + strict - throw TypeError
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot delete property '");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Ldstr, "' of a sealed object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
+        // Sealed + sloppy - return false
+        il.MarkLabel(sealedSloppyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // Not frozen/sealed - do the removal
+        il.MarkLabel(notSealedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Ret);
+
+        // Return true (default for null and other types)
+        il.MarkLabel(trueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nullLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

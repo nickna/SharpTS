@@ -74,6 +74,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsFrozen)
         {
             // Frozen objects silently ignore property modifications (JavaScript behavior in non-strict mode)
+            SloppyModeWarnings.Warn("write to frozen", $"Assignment to frozen object property '{name}' ignored");
+            return;
+        }
+
+        // Check for getter-only properties (has getter but no setter)
+        if (HasGetter(name) && !HasSetter(name))
+        {
+            SloppyModeWarnings.Warn("write to getter-only", $"Assignment to getter-only property '{name}' ignored");
             return;
         }
 
@@ -81,6 +89,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsSealed && !exists)
         {
             // Sealed objects silently ignore new property additions
+            SloppyModeWarnings.Warn("add to sealed", $"Property addition to sealed object '{name}' ignored");
             return;
         }
 
@@ -89,7 +98,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
     /// <summary>
     /// Sets a property value with strict mode behavior.
-    /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
+    /// In strict mode, throws TypeError for modifications to frozen objects, new properties on sealed objects,
+    /// or assignments to getter-only properties.
     /// </summary>
     /// <param name="name">The property name to set.</param>
     /// <param name="value">The value to set.</param>
@@ -100,8 +110,20 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             if (strictMode)
             {
-                throw new Exception($"TypeError: Cannot assign to read only property '{name}' of object");
+                throw StrictModeErrors.TypeError($"Cannot assign to read only property '{name}' of object");
             }
+            SloppyModeWarnings.Warn("write to frozen", $"Assignment to frozen object property '{name}' ignored");
+            return;
+        }
+
+        // Check for getter-only properties (has getter but no setter)
+        if (HasGetter(name) && !HasSetter(name))
+        {
+            if (strictMode)
+            {
+                throw StrictModeErrors.TypeError($"Cannot set property '{name}' which has only a getter");
+            }
+            SloppyModeWarnings.Warn("write to getter-only", $"Assignment to getter-only property '{name}' ignored");
             return;
         }
 
@@ -110,8 +132,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             if (strictMode)
             {
-                throw new Exception($"TypeError: Cannot add property '{name}' to a sealed object");
+                throw StrictModeErrors.TypeError($"Cannot add property '{name}' to a sealed object");
             }
+            SloppyModeWarnings.Warn("add to sealed", $"Property addition to sealed object '{name}' ignored");
             return;
         }
 
@@ -126,6 +149,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsFrozen || IsSealed)
         {
             // Frozen and sealed objects silently ignore property deletions
+            SloppyModeWarnings.Warn("delete from frozen/sealed", $"Delete from frozen/sealed object property '{name}' returns false");
             return false;
         }
         return _fields.Remove(name);
@@ -144,8 +168,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             if (strictMode)
             {
-                throw new Exception($"TypeError: Cannot delete property '{name}' of a frozen or sealed object");
+                throw StrictModeErrors.TypeError($"Cannot delete property '{name}' of a frozen or sealed object");
             }
+            SloppyModeWarnings.Warn("delete from frozen/sealed", $"Delete from frozen/sealed object property '{name}' returns false");
             return false;
         }
         return _fields.Remove(name);

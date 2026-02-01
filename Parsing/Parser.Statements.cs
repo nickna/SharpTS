@@ -307,7 +307,8 @@ public partial class Parser
     /// Parses a block of statements enclosed in braces.
     /// </summary>
     /// <param name="parseFunctionPrologue">If true, parses directive prologue at the start (for function bodies).</param>
-    private List<Stmt> Block(bool parseFunctionPrologue)
+    /// <param name="setStrictMode">If true, updates parser strict mode based on directive prologue.</param>
+    private List<Stmt> Block(bool parseFunctionPrologue, bool setStrictMode = false)
     {
         List<Stmt> statements = [];
 
@@ -316,6 +317,19 @@ public partial class Parser
         {
             var directives = ParseDirectivePrologue();
             statements.AddRange(directives);
+
+            // Check if "use strict" directive was found
+            if (setStrictMode)
+            {
+                foreach (var directive in directives)
+                {
+                    if (directive.Value == "use strict")
+                    {
+                        _isStrictMode = true;
+                        break;
+                    }
+                }
+            }
         }
 
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())

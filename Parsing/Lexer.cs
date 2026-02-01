@@ -369,6 +369,12 @@ public class Lexer(string source)
                 OctalLiteral();
                 return;
             }
+            // Check for legacy octal literals (0-prefixed numbers like 0777)
+            // TypeScript does not support legacy octals - always reject them
+            else if (next >= '0' && next <= '7')
+            {
+                throw new Exception($"SyntaxError: Legacy octal literals are not allowed. Use '0o' prefix for octal numbers at line {_line}");
+            }
         }
 
         // Consume digits and numeric separators (underscores)
@@ -600,7 +606,24 @@ public class Lexer(string source)
                         case '\\': sb.Append('\\'); break;
                         case '"': sb.Append('"'); break;
                         case '\'': sb.Append('\''); break;
-                        case '0': sb.Append('\0'); break;
+                        case '0':
+                            // \0 is allowed when not followed by another digit (null character)
+                            // \00 through \07 are octal escapes and not allowed
+                            if (Peek() >= '0' && Peek() <= '7')
+                            {
+                                throw new Exception($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
+                            }
+                            sb.Append('\0');
+                            break;
+                        case '1':
+                        case '2':
+                        case '3':
+                        case '4':
+                        case '5':
+                        case '6':
+                        case '7':
+                            // \1 through \7 are octal escapes - not allowed
+                            throw new Exception($"SyntaxError: Octal escape sequences are not allowed in strict mode at line {_line}");
                         case 'b': sb.Append('\b'); break;
                         case 'f': sb.Append('\f'); break;
                         case 'v': sb.Append('\v'); break;

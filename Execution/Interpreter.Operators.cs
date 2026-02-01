@@ -265,16 +265,21 @@ public partial class Interpreter
     /// <remarks>
     /// - delete obj.prop: removes property from object, returns true
     /// - delete obj[key]: removes computed property from object, returns true
-    /// - delete variable: returns false (cannot delete variables)
+    /// - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
     /// - delete on non-existent property: returns true
     /// </remarks>
     private object EvaluateDelete(Expr.Delete delete)
     {
+        bool strictMode = _environment.IsStrictMode;
+
         return delete.Operand switch
         {
-            Expr.Get get => DeleteProperty(get),
-            Expr.GetIndex getIndex => DeleteIndexedProperty(getIndex),
-            Expr.Variable => false, // Cannot delete variables
+            Expr.Get get => DeleteProperty(get, strictMode),
+            Expr.GetIndex getIndex => DeleteIndexedProperty(getIndex, strictMode),
+            Expr.Variable v when strictMode =>
+                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
+            Expr.Variable v =>
+                SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
             _ => true // Deleting other expressions returns true but does nothing
         };
     }
@@ -284,27 +289,33 @@ public partial class Interpreter
     /// </summary>
     private async Task<object> EvaluateDeleteAsync(Expr.Delete delete)
     {
+        bool strictMode = _environment.IsStrictMode;
+
         return delete.Operand switch
         {
-            Expr.Get get => await DeletePropertyAsync(get),
-            Expr.GetIndex getIndex => await DeleteIndexedPropertyAsync(getIndex),
-            Expr.Variable => false,
+            Expr.Get get => await DeletePropertyAsync(get, strictMode),
+            Expr.GetIndex getIndex => await DeleteIndexedPropertyAsync(getIndex, strictMode),
+            Expr.Variable v when strictMode =>
+                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
+            Expr.Variable v =>
+                SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
             _ => true
         };
     }
 
     /// <summary>
     /// Deletes a property from an object (delete obj.prop).
+    /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private bool DeleteProperty(Expr.Get get)
+    private bool DeleteProperty(Expr.Get get, bool strictMode)
     {
         object? obj = Evaluate(get.Object);
         string name = get.Name.Lexeme;
 
         return obj switch
         {
-            SharpTSObject tsObj => tsObj.DeleteProperty(name),
-            SharpTSInstance tsInst => tsInst.DeleteField(name),
+            SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
+            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -312,16 +323,17 @@ public partial class Interpreter
 
     /// <summary>
     /// Async version of DeleteProperty.
+    /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private async Task<bool> DeletePropertyAsync(Expr.Get get)
+    private async Task<bool> DeletePropertyAsync(Expr.Get get, bool strictMode)
     {
         object? obj = await EvaluateAsync(get.Object);
         string name = get.Name.Lexeme;
 
         return obj switch
         {
-            SharpTSObject tsObj => tsObj.DeleteProperty(name),
-            SharpTSInstance tsInst => tsInst.DeleteField(name),
+            SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
+            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true
         };
@@ -329,8 +341,9 @@ public partial class Interpreter
 
     /// <summary>
     /// Deletes a computed property from an object (delete obj[key]).
+    /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private bool DeleteIndexedProperty(Expr.GetIndex getIndex)
+    private bool DeleteIndexedProperty(Expr.GetIndex getIndex, bool strictMode)
     {
         object? obj = Evaluate(getIndex.Object);
         object? key = Evaluate(getIndex.Index);
@@ -340,8 +353,8 @@ public partial class Interpreter
         {
             return obj switch
             {
-                SharpTSObject tsObj => tsObj.DeleteBySymbol(symbol),
-                SharpTSInstance tsInst => tsInst.DeleteBySymbol(symbol),
+                SharpTSObject tsObj => tsObj.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSInstance tsInst => tsInst.DeleteBySymbolStrict(symbol, strictMode),
                 _ => true
             };
         }
@@ -350,8 +363,8 @@ public partial class Interpreter
 
         return obj switch
         {
-            SharpTSObject tsObj => tsObj.DeleteProperty(keyStr),
-            SharpTSInstance tsInst => tsInst.DeleteField(keyStr),
+            SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
+            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };
@@ -359,8 +372,9 @@ public partial class Interpreter
 
     /// <summary>
     /// Async version of DeleteIndexedProperty.
+    /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private async Task<bool> DeleteIndexedPropertyAsync(Expr.GetIndex getIndex)
+    private async Task<bool> DeleteIndexedPropertyAsync(Expr.GetIndex getIndex, bool strictMode)
     {
         object? obj = await EvaluateAsync(getIndex.Object);
         object? key = await EvaluateAsync(getIndex.Index);
@@ -370,8 +384,8 @@ public partial class Interpreter
         {
             return obj switch
             {
-                SharpTSObject tsObj => tsObj.DeleteBySymbol(symbol),
-                SharpTSInstance tsInst => tsInst.DeleteBySymbol(symbol),
+                SharpTSObject tsObj => tsObj.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSInstance tsInst => tsInst.DeleteBySymbolStrict(symbol, strictMode),
                 _ => true
             };
         }
@@ -380,8 +394,8 @@ public partial class Interpreter
 
         return obj switch
         {
-            SharpTSObject tsObj => tsObj.DeleteProperty(keyStr),
-            SharpTSInstance tsInst => tsInst.DeleteField(keyStr),
+            SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
+            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };

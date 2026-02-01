@@ -176,6 +176,7 @@ public class EmittedRuntime
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
     public MethodBuilder DeleteProperty { get; set; } = null!;
+    public MethodBuilder DeletePropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsPropertyStrict { get; set; } = null!;
@@ -188,6 +189,9 @@ public class EmittedRuntime
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder SetIndexStrict { get; set; } = null!;
     public MethodBuilder DeleteIndex { get; set; } = null!;
+    public MethodBuilder DeleteIndexStrict { get; set; } = null!;
+    public MethodBuilder ThrowStrictSyntaxError { get; set; } = null!;
+    public MethodBuilder WarnSloppyDeleteVariable { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
@@ -607,6 +611,7 @@ public class EmittedRuntime
     public MethodBuilder TSObjectSetPropertyStrict { get; set; } = null!;
     public MethodBuilder TSObjectHasProperty { get; set; } = null!;
     public MethodBuilder TSObjectDeleteProperty { get; set; } = null!;
+    public MethodBuilder TSObjectDeletePropertyStrict { get; set; } = null!;
     public MethodBuilder TSObjectGetKeys { get; set; } = null!;
     public MethodBuilder TSObjectToString { get; set; } = null!;
     public MethodBuilder TSObjectDefineGetter { get; set; } = null!;

@@ -152,8 +152,22 @@ public partial class Parser
             return new Stmt.Function(name, typeParams, thisType, parameters, null, returnType, IsAsync: isAsync, IsGenerator: isGenerator);
         }
 
+        // Save current strict mode state before parsing function body
+        bool previousStrictMode = _isStrictMode;
+
         Consume(TokenType.LEFT_BRACE, $"Expect '{{' before {kind} body.");
-        List<Stmt> body = Block(parseFunctionPrologue: true);
+        List<Stmt> body = Block(parseFunctionPrologue: true, setStrictMode: true);
+
+        // Validate duplicate parameter names in strict mode
+        // This must happen after body parsing because the function's own "use strict" directive
+        // could enable strict mode for this function
+        if (_isStrictMode)
+        {
+            ValidateNoDuplicateParameters(parameters);
+        }
+
+        // Restore previous strict mode state after function body
+        _isStrictMode = previousStrictMode;
 
         // Prepend destructuring statements for patterned parameters
         if (destructuredParams.Count > 0)
@@ -195,6 +209,26 @@ public partial class Parser
         }
 
         return new Stmt.Function(name, typeParams, thisType, parameters, body, returnType, IsAsync: isAsync, IsGenerator: isGenerator);
+    }
+
+    /// <summary>
+    /// Validates that there are no duplicate parameter names.
+    /// In strict mode, duplicate parameter names are a SyntaxError.
+    /// </summary>
+    private void ValidateNoDuplicateParameters(List<Stmt.Parameter> parameters)
+    {
+        var seenNames = new HashSet<string>();
+        foreach (var param in parameters)
+        {
+            // Skip synthetic parameters (from destructuring patterns)
+            if (param.Name.Lexeme.StartsWith("_param"))
+                continue;
+
+            if (!seenNames.Add(param.Name.Lexeme))
+            {
+                throw new Exception($"SyntaxError: Duplicate parameter name '{param.Name.Lexeme}' not allowed in strict mode");
+            }
+        }
     }
 
     /// <summary>

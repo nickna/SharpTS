@@ -691,37 +691,67 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     /// <summary>
     /// Default implementation for delete expressions.
+    /// Handles strict mode: throws SyntaxError for variable deletion, TypeError for frozen/sealed objects.
     /// </summary>
     protected override void EmitDelete(Expr.Delete del)
     {
         // delete operator: returns boolean
-        // - delete obj.prop: removes property, returns true (or false if frozen/sealed)
-        // - delete obj[key]: removes computed property, returns true (or false if frozen/sealed)
-        // - delete variable: returns false (cannot delete variables)
+        // - delete obj.prop: removes property, returns true (or throws TypeError if frozen/sealed in strict mode)
+        // - delete obj[key]: removes computed property, returns true (or throws TypeError if frozen/sealed in strict mode)
+        // - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
         switch (del.Operand)
         {
             case Expr.Get get:
-                // delete obj.prop - use static runtime helper
+                // delete obj.prop - use static runtime helper with strict mode
                 EmitExpression(get.Object);
                 EnsureBoxed();
                 IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                if (Ctx.IsStrictMode)
+                {
+                    IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeletePropertyStrict);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                }
                 SetStackType(StackType.Boolean);
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use DeleteIndex which handles both symbol and string keys
+                // delete obj[key] - use DeleteIndex with strict mode
                 EmitExpression(getIndex.Object);
                 EnsureBoxed();
                 EmitExpression(getIndex.Index);
                 EnsureBoxed();
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndex);
+                if (Ctx.IsStrictMode)
+                {
+                    IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndexStrict);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndex);
+                }
                 SetStackType(StackType.Boolean);
                 break;
 
-            case Expr.Variable:
-                // delete variable: returns false
-                EmitBoolConstant(false);
+            case Expr.Variable v:
+                if (Ctx.IsStrictMode)
+                {
+                    // Strict mode: throw SyntaxError
+                    IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowStrictSyntaxError);
+                    // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
+                    EmitBoolConstant(false);
+                }
+                else
+                {
+                    // Sloppy mode: warn and return false
+                    IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.WarnSloppyDeleteVariable);
+                }
+                SetStackType(StackType.Boolean);
                 break;
 
             default:

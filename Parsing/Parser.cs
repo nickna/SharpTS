@@ -36,6 +36,9 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private int _current = 0;
     private int _tempVarCounter = 0;
 
+    // Strict mode tracking - tracks whether we're in a strict mode context
+    private bool _isStrictMode = false;
+
     // Error recovery support
     private readonly DiagnosticCollector _diagnostics = new();
     private string? _filePath = null;
@@ -73,6 +76,16 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         // Parse directive prologue at the start of the file
         var directives = ParseDirectivePrologue();
         statements.AddRange(directives);
+
+        // Check if "use strict" directive is present at file level
+        foreach (var directive in directives)
+        {
+            if (directive.Value == "use strict")
+            {
+                _isStrictMode = true;
+                break;
+            }
+        }
 
         while (!IsAtEnd())
         {

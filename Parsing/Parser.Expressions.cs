@@ -41,6 +41,11 @@ public partial class Parser
 
             if (expr is Expr.Variable variable)
             {
+                // In strict mode, cannot assign to 'eval' or 'arguments'
+                if (_isStrictMode && (variable.Name.Lexeme == "eval" || variable.Name.Lexeme == "arguments"))
+                {
+                    throw new Exception($"SyntaxError: Unexpected eval or arguments in strict mode");
+                }
                 return new Expr.Assign(variable.Name, value);
             }
             else if (expr is Expr.Get get)
@@ -70,6 +75,11 @@ public partial class Parser
 
             if (expr is Expr.Variable variable)
             {
+                // In strict mode, cannot assign to 'eval' or 'arguments'
+                if (_isStrictMode && (variable.Name.Lexeme == "eval" || variable.Name.Lexeme == "arguments"))
+                {
+                    throw new Exception($"SyntaxError: Unexpected eval or arguments in strict mode");
+                }
                 return new Expr.CompoundAssign(variable.Name, op, value);
             }
             else if (expr is Expr.Get get)
@@ -92,6 +102,11 @@ public partial class Parser
 
             if (expr is Expr.Variable variable)
             {
+                // In strict mode, cannot assign to 'eval' or 'arguments'
+                if (_isStrictMode && (variable.Name.Lexeme == "eval" || variable.Name.Lexeme == "arguments"))
+                {
+                    throw new Exception($"SyntaxError: Unexpected eval or arguments in strict mode");
+                }
                 return new Expr.LogicalAssign(variable.Name, op, value);
             }
             else if (expr is Expr.Get get)
@@ -1227,6 +1242,12 @@ public partial class Parser
                 body = prologue.Concat([new Stmt.Return(new Token(TokenType.RETURN, "return", null, 0), exprBody)]).ToList();
                 exprBody = null;
             }
+        }
+
+        // Validate duplicate parameter names in strict mode
+        if (_isStrictMode)
+        {
+            ValidateNoDuplicateParameters(parameters);
         }
 
         return new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: parameters, ExpressionBody: exprBody, BlockBody: body, ReturnType: returnType, IsAsync: isAsync);  // TODO: Parse type params

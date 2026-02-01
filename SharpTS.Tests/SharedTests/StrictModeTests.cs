@@ -239,4 +239,243 @@ public class StrictModeTests
         var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
         Assert.Contains("TypeError", ex.Message);
     }
+
+    // Delete variable tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_DeleteVariable_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            let x = 1;
+            delete x;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("Delete of unqualified identifier", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SloppyMode_DeleteVariable_ReturnsFalse(ExecutionMode mode)
+    {
+        var source = """
+            let x = 1;
+            const result = delete x;
+            console.log(result);
+            console.log(x);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        // delete returns false for variables in sloppy mode, variable still exists
+        Assert.Contains("false", output);
+        Assert.Contains("1", output);
+    }
+
+    // Duplicate parameter tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_DuplicateParameters_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            function f(a: number, a: number) {
+                return a;
+            }
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("Duplicate parameter name", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_FunctionLevelStrict_DuplicateParameters_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        // Function with "use strict" directive inside should detect duplicate params
+        var source = """
+            function f(a: number, a: number) {
+                "use strict";
+                return a;
+            }
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("Duplicate parameter name", ex.Message);
+    }
+
+    // eval/arguments assignment tests
+    // Note: In strict mode, 'eval' and 'arguments' cannot be used as assignment targets
+    // This is checked during parsing when we see `eval = ...` or `arguments = ...`
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_AssignToEval_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        // Need to have eval as a variable first, then reassign it
+        var source = """
+            "use strict";
+            let x = 0;
+            eval = 1;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("eval or arguments", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_AssignToArguments_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            let x = 0;
+            arguments = 1;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("eval or arguments", ex.Message);
+    }
+
+    // Legacy octal literal tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void LegacyOctalLiteral_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        var source = """
+            const x = 0777;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("Legacy octal literals are not allowed", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ModernOctalLiteral_Works(ExecutionMode mode)
+    {
+        var source = """
+            const x = 0o777;
+            console.log(x);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("511\n", output); // 0o777 = 511 in decimal
+    }
+
+    // Octal escape sequence tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void OctalEscapeSequence_ThrowsSyntaxError(ExecutionMode mode)
+    {
+        // \1 is an octal escape - not allowed
+        var source = "const x = \"\\1\";";
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("SyntaxError", ex.Message);
+        Assert.Contains("Octal escape sequences are not allowed", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void NullEscape_WithoutFollowingDigit_Works(ExecutionMode mode)
+    {
+        // \0 is allowed when not followed by a digit
+        var source = """
+            const x = "a\0b";
+            console.log(x.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("3\n", output); // "a" + null char + "b" = 3 characters
+    }
+
+    // Getter-only property tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_WriteToGetterOnly_ThrowsTypeError(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            const obj = {
+                get x() { return 1; }
+            };
+            obj.x = 2;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("TypeError", ex.Message);
+        Assert.Contains("getter", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SloppyMode_WriteToGetterOnly_SilentlyFails(ExecutionMode mode)
+    {
+        var source = """
+            const obj = {
+                get x() { return 1; }
+            };
+            obj.x = 2;
+            console.log(obj.x);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n", output); // Getter still returns 1, write was silently ignored
+    }
+
+    // Delete from frozen/sealed object tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_DeleteFromFrozen_ThrowsTypeError(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            const obj = Object.freeze({ x: 1 });
+            delete obj.x;
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("TypeError", ex.Message);
+        Assert.Contains("Cannot delete property", ex.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SloppyMode_DeleteFromFrozen_ReturnsFalse(ExecutionMode mode)
+    {
+        var source = """
+            const obj = Object.freeze({ x: 1 });
+            const result = delete obj.x;
+            console.log(result);
+            console.log(obj.x);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Contains("false", output);
+        Assert.Contains("1", output);
+    }
+
+    // Strict mode inheritance tests
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void UseStrict_ArrowFunction_InheritsStrictMode(ExecutionMode mode)
+    {
+        var source = """
+            "use strict";
+            const f = () => {
+                const obj = Object.freeze({ x: 1 });
+                obj.x = 2;
+            };
+            f();
+            """;
+
+        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.Contains("TypeError", ex.Message);
+    }
 }
