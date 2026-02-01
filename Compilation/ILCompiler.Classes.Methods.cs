@@ -300,7 +300,9 @@ public partial class ILCompiler
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
                 classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
             // Set return type based on method kind
-            var returnType = method.IsAsync ? _types.TaskOfObject :
+            // Must check async generator FIRST since it has both IsAsync and IsGenerator true
+            var returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
+                             method.IsAsync ? _types.TaskOfObject :
                              method.IsGenerator ? _types.IEnumerableOfObject :
                              typeof(object);
 
@@ -331,7 +333,9 @@ public partial class ILCompiler
             }
 
             // Set return type based on method kind
-            Type returnType = method.IsAsync ? typeof(Task<object>) :
+            // Must check async generator FIRST since it has both IsAsync and IsGenerator true
+            Type returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
+                              method.IsAsync ? typeof(Task<object>) :
                               method.IsGenerator ? _types.IEnumerableOfObject :
                               typeof(object);
 
@@ -742,6 +746,14 @@ public partial class ILCompiler
         // Abstract methods have no body
         if (method.IsAbstract)
         {
+            return;
+        }
+
+        // Async generator methods use combined async generator state machine
+        // Must check this FIRST since it has both IsAsync and IsGenerator true
+        if (method.IsAsync && method.IsGenerator)
+        {
+            EmitAsyncGeneratorMethodBody(methodBuilder, method, fieldsField);
             return;
         }
 

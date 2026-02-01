@@ -204,11 +204,11 @@ public class PrivateFieldAsyncTests
 
     #region Async Generators
 
-    // NOTE: Async generator methods in classes require interpreter support for recognizing
-    // async generator class methods as async iterables, and compiler support for generator
-    // state machine building in class methods.
+    // NOTE: Async generator class methods work in compiled mode. The interpreter needs
+    // additional support for recognizing async generator class methods as async iterables.
+    // For-of loops inside async generators need enumerator hoisting in the compiler.
 
-    [Theory(Skip = "Interpreter does not recognize async generator class methods as async iterables yet")]
+    [Theory(Skip = "For-of loops in async generator class methods need enumerator hoisting")]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_CanReadPrivateField(ExecutionMode mode)
     {
@@ -237,8 +237,8 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory(Skip = "Interpreter does not recognize async generator class methods as async iterables yet")]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_CanWritePrivateField(ExecutionMode mode)
     {
         var source = """
