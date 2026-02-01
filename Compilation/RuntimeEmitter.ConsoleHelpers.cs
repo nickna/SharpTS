@@ -26,13 +26,8 @@ public partial class RuntimeEmitter
         );
         runtime.ConsoleCountsField = countsField;
 
-        // Emit static field for group level: int
-        var groupLevelField = typeBuilder.DefineField(
-            "_consoleGroupLevel",
-            _types.Int32,
-            FieldAttributes.Private | FieldAttributes.Static
-        );
-        runtime.ConsoleGroupLevelField = groupLevelField;
+        // NOTE: _consoleGroupLevel field is defined early in EmitRuntimeType to allow ConsoleLog to use it
+        var groupLevelField = runtime.ConsoleGroupLevelField;
 
         // Phase 1 methods
         EmitConsoleError(typeBuilder, runtime);
@@ -613,7 +608,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static void ConsoleTable(object data, object columns)
-    /// Prints data in a table format.
+    /// Prints data in a table format by calling RuntimeTypes.ConsoleTable.
     /// </summary>
     private void EmitConsoleTable(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
     {
@@ -627,17 +622,18 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // For simplicity, just stringify the data (full table implementation would be complex in IL)
-        // A full implementation would require significant IL complexity
+        // Call RuntimeTypes.ConsoleTable(data, columns) which has full table rendering
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            nameof(RuntimeTypes.ConsoleTable),
+            [typeof(object), typeof(object)])!);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
     /// Emits: public static void ConsoleDir(object obj)
-    /// Prints object in an inspected format.
+    /// Prints object in an inspected format by calling RuntimeTypes.ConsoleDir.
     /// </summary>
     private void EmitConsoleDir(TypeBuilder typeBuilder, EmittedRuntime runtime, FieldBuilder groupLevelField)
     {
@@ -651,10 +647,11 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // For simplicity, just stringify the object
+        // Call RuntimeTypes.ConsoleDir(obj) which has full inspection
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            nameof(RuntimeTypes.ConsoleDir),
+            [typeof(object)])!);
         il.Emit(OpCodes.Ret);
     }
 

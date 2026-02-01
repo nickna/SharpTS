@@ -54,6 +54,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, bigintLabel);
 
+        // if (value is Dictionary<string, object?>) return "{ key: value, ... }"
+        var dictLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
         // Default: return value.ToString() ?? "null"
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
@@ -181,7 +187,49 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Br, endLabel);
 
+        // Dictionary case - use RuntimeTypes.Stringify for proper formatting
+        il.MarkLabel(dictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            nameof(RuntimeTypes.Stringify),
+            [typeof(object)])!);
+        il.Emit(OpCodes.Br, endLabel);
+
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static string GetConsoleIndent()
+    /// Returns a string of spaces based on _consoleGroupLevel (2 spaces per level).
+    /// </summary>
+    private void EmitGetConsoleIndent(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "GetConsoleIndent",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            Type.EmptyTypes
+        );
+        runtime.GetConsoleIndent = method;
+
+        var il = method.GetILGenerator();
+
+        // if (_consoleGroupLevel <= 0) return ""
+        var hasIndentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, runtime.ConsoleGroupLevelField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, hasIndentLabel);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasIndentLabel);
+        // return new string(' ', _consoleGroupLevel * 2)
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)' ');
+        il.Emit(OpCodes.Ldsfld, runtime.ConsoleGroupLevelField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.Char, _types.Int32]));
         il.Emit(OpCodes.Ret);
     }
 
@@ -209,17 +257,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.HasFormatSpecifiers);
         il.Emit(OpCodes.Brfalse, noFormatLabel);
 
-        // Has format specifiers - process with FormatSingleArg
+        // Has format specifiers - process with FormatSingleArg, then prepend indent
+        // Console.WriteLine(GetConsoleIndent() + FormatSingleArg(value))
+        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, runtime.FormatSingleArg);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
 
-        // No format specifiers - call Stringify then Console.WriteLine
+        // No format specifiers - call Stringify then prepend indent
+        // Console.WriteLine(GetConsoleIndent() + Stringify(value))
         il.MarkLabel(noFormatLabel);
+        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -356,17 +410,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.HasFormatSpecifiers);
         il.Emit(OpCodes.Brfalse, noFormatLabel);
 
-        // Format string case: call FormatConsoleArgs
+        // Format string case: call FormatConsoleArgs, prepend indent
+        // Console.WriteLine(GetConsoleIndent() + FormatConsoleArgs(args))
+        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.FormatConsoleArgs);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
 
-        // No format specifiers: join with spaces
+        // No format specifiers: join with spaces, prepend indent
+        // Console.WriteLine(GetConsoleIndent() + string.Join(" ", args))
         il.MarkLabel(noFormatLabel);
+        il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", _types.String, _types.ObjectArray));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
     }
@@ -1079,9 +1139,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notString);
 
-        // Default: use Stringify
+        // Default: use RuntimeTypes.FormatAsJson for proper JSON formatting of objects/arrays
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, typeof(RuntimeTypes).GetMethod(
+            nameof(RuntimeTypes.FormatAsJson),
+            [typeof(object)])!);
         il.Emit(OpCodes.Ret);
     }
 

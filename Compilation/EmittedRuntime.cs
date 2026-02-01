@@ -91,6 +91,7 @@ public class EmittedRuntime
     // Console format specifier methods
     public MethodBuilder HasFormatSpecifiers { get; set; } = null!;
     public MethodBuilder FormatConsoleArgs { get; set; } = null!;
+    public MethodBuilder GetConsoleIndent { get; set; } = null!;
     public MethodBuilder FormatSingleArg { get; set; } = null!;
     public MethodBuilder FormatAsInteger { get; set; } = null!;
     public MethodBuilder FormatAsFloat { get; set; } = null!;

@@ -79,7 +79,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Info_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """
@@ -93,7 +93,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Debug_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """
@@ -182,7 +182,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Time_CaseSensitiveLabels(ExecutionMode mode)
     {
         var source = """
@@ -246,7 +246,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Time_MultipleLabeledTimers(ExecutionMode mode)
     {
         var source = """
@@ -268,29 +268,14 @@ public class ConsoleTests
     #region Assert
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void Console_Assert_TruthyCondition_NoOutput_Interpreted(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Console_Assert_TruthyCondition_NoOutput(ExecutionMode mode)
     {
         var source = """
             console.assert(true);
             console.assert(1);
             console.assert('hello');
             console.assert({});
-            console.log('Done');
-            """;
-
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("Done\n", output);
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Console_Assert_TruthyCondition_NoOutput_Compiled(ExecutionMode mode)
-    {
-        var source = """
-            console.assert(true);
-            console.assert(1);
-            console.assert('hello');
             console.log('Done');
             """;
 
@@ -312,7 +297,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Assert_MultipleFalsyConditions(ExecutionMode mode)
     {
         var source = """
@@ -399,7 +384,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Table_ArrayOfObjects_HasTableBorders(ExecutionMode mode)
     {
         var source = """
@@ -415,7 +400,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Table_WithColumnFilter(ExecutionMode mode)
     {
         var source = """
@@ -428,7 +413,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Table_EmptyArray(ExecutionMode mode)
     {
         var source = """
@@ -459,7 +444,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Dir_Object_ShowsProperties(ExecutionMode mode)
     {
         var source = """
@@ -478,7 +463,7 @@ public class ConsoleTests
     #region Group
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Group_IncreasesIndentation(ExecutionMode mode)
     {
         var source = """
@@ -498,7 +483,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Group_PrintsLabel(ExecutionMode mode)
     {
         var source = """
@@ -515,7 +500,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_GroupCollapsed_SameAsGroup(ExecutionMode mode)
     {
         var source = """
@@ -532,7 +517,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_GroupEnd_DecreasesIndentation(ExecutionMode mode)
     {
         var source = """
@@ -644,8 +629,8 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void Console_Log_FormatSpecifier_Object_Interpreted(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Console_Log_FormatSpecifier_Object(ExecutionMode mode)
     {
         var source = """
             console.log('Object: %o', {a: 1, b: 2});
@@ -653,19 +638,6 @@ public class ConsoleTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Contains("Object: { a: 1, b: 2 }\n", output);
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Console_Log_FormatSpecifier_Object_Compiled(ExecutionMode mode)
-    {
-        var source = """
-            console.log('Object: %o', {a: 1});
-            """;
-
-        var output = TestHarness.Run(source, mode);
-        // Compiler uses different object representation
-        Assert.Contains("Object:", output);
     }
 
     [Theory]
@@ -681,7 +653,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Log_FormatSpecifier_Json(ExecutionMode mode)
     {
         var source = """
@@ -742,7 +714,7 @@ public class ConsoleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Console_Log_FormatSpecifier_Integer_SpecialValues(ExecutionMode mode)
     {
         var source = """

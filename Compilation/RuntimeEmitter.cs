@@ -1928,6 +1928,14 @@ public partial class RuntimeEmitter
         );
         runtime.SealedObjectsField = sealedObjectsField;
 
+        // Static field for console group indentation level (needed early for ConsoleLog)
+        var consoleGroupLevelField = typeBuilder.DefineField(
+            "_consoleGroupLevel",
+            _types.Int32,
+            FieldAttributes.Private | FieldAttributes.Static
+        );
+        runtime.ConsoleGroupLevelField = consoleGroupLevelField;
+
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -1968,6 +1976,8 @@ public partial class RuntimeEmitter
         EmitFormatAsFloat(typeBuilder, runtime);
         EmitFormatAsJson(typeBuilder, runtime);
         EmitFormatConsoleArgs(typeBuilder, runtime);
+        // GetConsoleIndent must be emitted before ConsoleLog/ConsoleLogMultiple which call it
+        EmitGetConsoleIndent(typeBuilder, runtime);
         EmitConsoleLog(typeBuilder, runtime);
         EmitConsoleLogMultiple(typeBuilder, runtime);
         EmitToNumber(typeBuilder, runtime);
