@@ -55,7 +55,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Then_ReturnsPromise_Flattens(ExecutionMode mode)
     {
         var source = """
@@ -77,7 +77,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Then_WithOnRejected(ExecutionMode mode)
     {
         var source = """
@@ -117,7 +117,7 @@ public class PromiseMethodTests
     #region Promise.catch() Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Catch_HandlesRejection(ExecutionMode mode)
     {
         var source = """
@@ -151,7 +151,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Catch_AfterThen(ExecutionMode mode)
     {
         var source = """
@@ -174,8 +174,8 @@ public class PromiseMethodTests
     #region Promise.finally() Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void Finally_RunsOnResolved_Interpreted(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Finally_RunsOnResolved(ExecutionMode mode)
     {
         var source = """
             let ran: boolean = false;
@@ -191,25 +191,6 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("42\ntrue\n", output);
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Finally_RunsOnResolved_Compiled(ExecutionMode mode)
-    {
-        // Note: Avoids capturing variable in zero-param arrow due to display class IL bug
-        var source = """
-            async function main(): Promise<void> {
-                let result = await Promise.resolve(42).finally((): void => {
-                    console.log("finally ran");
-                });
-                console.log(result);
-            }
-            main();
-            """;
-
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("finally ran\n42\n", output);
     }
 
     [Theory]
@@ -272,7 +253,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void All_WithNonPromises(ExecutionMode mode)
     {
         var source = """
@@ -310,7 +291,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Race_NonPromiseWins(ExecutionMode mode)
     {
         var source = """
@@ -350,7 +331,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Resolve_NoDoubleWrap(ExecutionMode mode)
     {
         var source = """
@@ -483,8 +464,8 @@ public class PromiseMethodTests
     #region Promise.reject() Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void Reject_CreatesRejectedPromise_Interpreted(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Reject_CreatesRejectedPromise(ExecutionMode mode)
     {
         var source = """
             async function main(): Promise<void> {
@@ -503,29 +484,12 @@ public class PromiseMethodTests
         Assert.Equal("caught\n", output);
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Reject_CreatesRejectedPromise_Compiled(ExecutionMode mode)
-    {
-        // Test that Promise.reject creates a promise (but don't await it)
-        var source = """
-            async function main(): Promise<void> {
-                let p = Promise.reject("error message");
-                console.log("created");
-            }
-            main();
-            """;
-
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("created\n", output);
-    }
-
     #endregion
 
     #region Complex Scenarios
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Chaining_ThenCatchFinally(ExecutionMode mode)
     {
         var source = """
@@ -558,7 +522,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void MultipleThenOnSamePromise(ExecutionMode mode)
     {
         var source = """
@@ -602,7 +566,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AllSettled_SomeReject(ExecutionMode mode)
     {
         var source = """
@@ -642,27 +606,9 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
-    public void AllSettled_WithNonPromises_Interpreted(ExecutionMode mode)
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void AllSettled_WithNonPromises(ExecutionMode mode)
     {
-        var source = """
-            async function main(): Promise<void> {
-                let results = await Promise.allSettled([1, 2, 3]);
-                console.log(results[0].status);
-                console.log(results[0].value);
-            }
-            main();
-            """;
-
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("fulfilled\n1\n", output);
-    }
-
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void AllSettled_NonTaskValues_Compiled(ExecutionMode mode)
-    {
-        // Test that non-Promise values are handled as immediately fulfilled
         var source = """
             async function main(): Promise<void> {
                 let results = await Promise.allSettled([42, "hello"]);
@@ -701,7 +647,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Any_NonPromiseWins(ExecutionMode mode)
     {
         var source = """
@@ -720,7 +666,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Any_FirstFulfilledAfterRejection(ExecutionMode mode)
     {
         var source = """
@@ -762,7 +708,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Any_EmptyArray_ThrowsAggregateError(ExecutionMode mode)
     {
         var source = """

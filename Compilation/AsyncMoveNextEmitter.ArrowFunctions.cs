@@ -89,6 +89,15 @@ public partial class AsyncMoveNextEmitter
         // Create display class instance
         _il.Emit(OpCodes.Newobj, displayCtor);
 
+        // Populate $entryPointDC field if this arrow captures top-level variables
+        if (_ctx.ArrowEntryPointDCFields?.TryGetValue(af, out var entryPointDCField) == true &&
+            _ctx.EntryPointDisplayClassStaticField != null)
+        {
+            _il.Emit(OpCodes.Dup); // Keep display class on stack
+            _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            _il.Emit(OpCodes.Stfld, entryPointDCField);
+        }
+
         // Get captured variables field mapping
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {

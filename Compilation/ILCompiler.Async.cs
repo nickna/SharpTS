@@ -478,6 +478,7 @@ public partial class ILCompiler
                 // Entry-point display class for captured top-level variables
                 EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
                 CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+                ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
                 EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
             };
 
@@ -811,6 +812,7 @@ public partial class ILCompiler
             // Entry-point display class for captured top-level variables
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
             EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
 
@@ -974,6 +976,7 @@ public partial class ILCompiler
                 ClassRegistry = GetClassRegistry(),
                 EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
                 CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+                ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
                 EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
             };
 
