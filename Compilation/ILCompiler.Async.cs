@@ -483,7 +483,7 @@ public partial class ILCompiler
 
             // Emit MoveNext body
             var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
-            moveNextEmitter.EmitMoveNext(func.Body, ctx, _types.Object);
+            moveNextEmitter.EmitMoveNext(func.Body, ctx, _types.Object, func.Parameters);
 
             // Emit async arrow MoveNext bodies
             foreach (var arrowInfo in analysis.AsyncArrows)
@@ -818,7 +818,7 @@ public partial class ILCompiler
         // Note: @lock fields are stored directly in the state machine (AsyncLockRefField, LockReentrancyRefField)
         // so the emitter doesn't need external references to the class's lock fields
         var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
-        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object);
+        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object, method.Parameters);
 
         // Emit MoveNext bodies for async arrows
         foreach (var arrowInfo in analysis.AsyncArrows)
@@ -868,5 +868,139 @@ public partial class ILCompiler
 
         // Finalize state machine type
         smBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Defines state machines for top-level async arrow functions (not inside any async function).
+    /// These are standalone async arrows that don't have an outer state machine context.
+    /// </summary>
+    private void DefineTopLevelAsyncArrows()
+    {
+        // Find all async arrows that were collected but not processed by DefineAsyncArrowStateMachines
+        foreach (var (arrow, captures) in _collectedArrows)
+        {
+            // Only process async arrows that aren't already handled
+            if (!arrow.IsAsync || _async.ArrowBuilders.ContainsKey(arrow))
+            {
+                continue;
+            }
+
+            // Analyze this arrow for await points and hoisted locals
+            var arrowAnalysis = AnalyzeAsyncArrow(arrow);
+
+            // Create a standalone async arrow builder
+            var arrowBuilder = new AsyncArrowStateMachineBuilder(
+                _moduleBuilder,
+                _types,
+                arrow,
+                captures,
+                _async.ArrowCounter++);
+
+            // Define standalone state machine (no outer reference)
+            arrowBuilder.DefineStateMachineStandalone(
+                arrowAnalysis.AwaitCount,
+                arrow.Parameters,
+                arrowAnalysis.HoistedLocals);
+
+            // Define the stub method
+            arrowBuilder.DefineStubMethod(_programType);
+
+            // Store the builder
+            _async.ArrowBuilders[arrow] = arrowBuilder;
+        }
+    }
+
+    /// <summary>
+    /// Emits MoveNext bodies for top-level async arrows.
+    /// </summary>
+    private void EmitTopLevelAsyncArrowBodies()
+    {
+        foreach (var (arrow, arrowBuilder) in _async.ArrowBuilders)
+        {
+            // Only process standalone arrows (not nested in async functions)
+            if (!arrowBuilder.IsStandalone)
+            {
+                continue;
+            }
+
+            // Create IL generator for the arrow's MoveNext
+            var il = arrowBuilder.MoveNextMethod.GetILGenerator();
+
+            // Create analysis for this arrow
+            var arrowAnalysis = AnalyzeAsyncArrow(arrow);
+            var analysis = new AsyncStateAnalyzer.AsyncFunctionAnalysis(
+                arrowAnalysis.AwaitCount,
+                [], // Await points are regenerated during emission
+                arrowAnalysis.HoistedLocals,
+                new HashSet<string>(arrow.Parameters.Select(p => p.Name.Lexeme)),
+                false, // HasTryCatch - detected during emission
+                false, // UsesThis - standalone arrows don't have 'this' binding by default
+                []     // No nested async arrows handled in this pass
+            );
+
+            // Create context for MoveNext emission
+            var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
+            {
+                Runtime = _runtime,
+                ClosureAnalyzer = _closures.Analyzer,
+                ArrowMethods = _closures.ArrowMethods,
+                DisplayClasses = _closures.DisplayClasses,
+                DisplayClassFields = _closures.DisplayClassFields,
+                DisplayClassConstructors = _closures.DisplayClassConstructors,
+                EnumMembers = _enums.Members,
+                EnumReverse = _enums.Reverse,
+                EnumKinds = _enums.Kinds,
+                NamespaceFields = _namespaceFields,
+                TopLevelStaticVars = _topLevelStaticVars,
+                FunctionRestParams = _functions.RestParams,
+                FunctionGenericParams = _functions.GenericParams,
+                IsGenericFunction = _functions.IsGeneric,
+                TypeMap = _typeMap,
+                DeadCode = _deadCodeInfo,
+                AsyncMethods = null,
+                AsyncArrowBuilders = _async.ArrowBuilders,
+                AsyncArrowOuterBuilders = _async.ArrowOuterBuilders,
+                AsyncArrowParentBuilders = _async.ArrowParentBuilders,
+                CurrentModulePath = _modules.CurrentPath,
+                ClassToModule = _modules.ClassToModule,
+                FunctionToModule = _modules.FunctionToModule,
+                EnumToModule = _modules.EnumToModule,
+                DotNetNamespace = _modules.CurrentDotNetNamespace,
+                TypeEmitterRegistry = _typeEmitterRegistry,
+                BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
+                BuiltInModuleNamespaces = _builtInModuleNamespaces,
+                ClassExprBuilders = _classExprs.Builders,
+                IsStrictMode = _isStrictMode,
+                ClassRegistry = GetClassRegistry(),
+                EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+                CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+                EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
+            };
+
+            // Create arrow-specific emitter
+            var arrowEmitter = new AsyncArrowMoveNextEmitter(arrowBuilder, analysis, _types);
+
+            // Get the body statements
+            List<Stmt> bodyStatements;
+            if (arrow.BlockBody != null)
+            {
+                bodyStatements = arrow.BlockBody;
+            }
+            else if (arrow.ExpressionBody != null)
+            {
+                // Create a synthetic return statement for expression body arrows
+                var returnToken = new Token(TokenType.RETURN, "return", null, 0);
+                bodyStatements = [new Stmt.Return(returnToken, arrow.ExpressionBody)];
+            }
+            else
+            {
+                bodyStatements = [];
+            }
+
+            arrowEmitter.EmitMoveNext(bodyStatements, ctx, _types.Object);
+
+            // Finalize the type
+            arrowBuilder.CreateType();
+        }
     }
 }

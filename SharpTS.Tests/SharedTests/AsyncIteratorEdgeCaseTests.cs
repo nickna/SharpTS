@@ -93,7 +93,8 @@ public class AsyncIteratorEdgeCaseTests
     [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_TryFinally_CleanupRuns(ExecutionMode mode)
     {
-        // Compiler does not yet support finally in async generators
+        // Compiler does not yet support yield inside try blocks due to IL limitations.
+        // The interpreter runs the generator eagerly so finally blocks always execute.
         var source = """
             let cleanupRan = false;
 
@@ -119,9 +120,10 @@ public class AsyncIteratorEdgeCaseTests
             """;
 
         var output = TestHarness.Run(source, mode);
-        // Note: cleanup should run when break exits the loop
         Assert.Contains("1\n", output);
         Assert.Contains("2\n", output);
+        // In interpreter mode, finally runs because generator executes eagerly
+        Assert.Contains("cleanup: true\n", output);
     }
 
     #endregion

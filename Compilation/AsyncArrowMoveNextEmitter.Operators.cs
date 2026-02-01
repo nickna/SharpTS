@@ -24,6 +24,37 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitCall(Expr.Call c)
     {
+        // Handle console.log specially (handles both Variable and Get patterns)
+        if (_helpers.TryEmitConsoleLog(c,
+            arg => { EmitExpression(arg); EnsureBoxed(); },
+            _ctx!.Runtime!.ConsoleLog))
+        {
+            return;
+        }
+
+        // Check if it's a direct function call
+        if (c.Callee is Expr.Variable funcVar && _ctx!.Functions.TryGetValue(_ctx.ResolveFunctionName(funcVar.Name.Lexeme), out var funcMethod))
+        {
+            // Direct call to known function
+            var parameters = funcMethod.GetParameters();
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (i < c.Arguments.Count)
+                {
+                    EmitExpression(c.Arguments[i]);
+                    EnsureBoxed();
+                }
+                else
+                {
+                    _il.Emit(OpCodes.Ldnull);
+                }
+            }
+            _il.Emit(OpCodes.Call, funcMethod);
+            SetStackUnknown();
+            return;
+        }
+
+        // Generic call through TSFunction/InvokeValue
         // Emit callee
         EmitExpression(c.Callee);
         EnsureBoxed();

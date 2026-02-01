@@ -196,6 +196,12 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContex
     /// Emits the complete MoveNext method body.
     /// </summary>
     public void EmitMoveNext(List<Stmt>? body, CompilationContext ctx, Type returnType)
+        => EmitMoveNext(body, ctx, returnType, null);
+
+    /// <summary>
+    /// Emits the complete MoveNext method body with optional default parameter handling.
+    /// </summary>
+    public void EmitMoveNext(List<Stmt>? body, CompilationContext ctx, Type returnType, List<Stmt.Parameter>? parameters)
     {
         if (body == null) return;
 
@@ -244,6 +250,13 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContex
         if (hasLock)
         {
             EmitLockAcquisitionPrologue();
+        }
+
+        // Emit default parameter handling at the beginning of the body
+        // This checks if hoisted parameters are undefined and assigns default values
+        if (parameters != null)
+        {
+            EmitDefaultParameters(parameters);
         }
 
         // Emit the function body (will emit await points inline)
@@ -307,6 +320,47 @@ public partial class AsyncMoveNextEmitter : StatementEmitterBase, IEmitterContex
         // End label
         _il.MarkLabel(_endLabel);
         _il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits default parameter handling at the beginning of the async function body.
+    /// For each parameter with a default value, checks if the hoisted field is undefined
+    /// and assigns the default value if so.
+    /// </summary>
+    private void EmitDefaultParameters(List<Stmt.Parameter> parameters)
+    {
+        foreach (var param in parameters)
+        {
+            if (param.DefaultValue == null) continue;
+
+            string paramName = param.Name.Lexeme;
+            var field = _builder.GetVariableField(paramName);
+            if (field == null) continue; // Parameter not hoisted - skip
+
+            // Check if parameter is undefined and assign default value
+            // if (param === undefined) { param = <default>; }
+            var skipDefault = _il.DefineLabel();
+
+            // Load the parameter field value
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, field);
+
+            // Check if it's not undefined (skip default assignment)
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+            _il.Emit(OpCodes.Ceq);
+            _il.Emit(OpCodes.Brfalse, skipDefault);
+
+            // Value is undefined - emit default value and store to field
+            EmitExpression(param.DefaultValue);
+            EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, field);
+
+            _il.MarkLabel(skipDefault);
+        }
     }
 
     /// <summary>

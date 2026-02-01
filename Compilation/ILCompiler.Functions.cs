@@ -148,6 +148,7 @@ public partial class ILCompiler
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             AsyncMethods = null,
+            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
             TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation
             CurrentModulePath = _modules.CurrentPath,
@@ -315,6 +316,7 @@ public partial class ILCompiler
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             AsyncMethods = null,
+            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
@@ -477,6 +479,7 @@ public partial class ILCompiler
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             AsyncMethods = null,
+            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,

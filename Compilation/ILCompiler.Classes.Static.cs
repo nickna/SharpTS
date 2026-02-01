@@ -514,7 +514,7 @@ public partial class ILCompiler
 
         // Emit MoveNext body
         var moveNextEmitter = new AsyncMoveNextEmitter(smBuilder, analysis, _types);
-        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object);
+        moveNextEmitter.EmitMoveNext(method.Body, ctx, _types.Object, method.Parameters);
 
         // Emit MoveNext bodies for async arrows
         foreach (var arrowInfo in analysis.AsyncArrows)

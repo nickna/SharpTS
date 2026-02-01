@@ -22,6 +22,13 @@ public partial class ILCompiler
         // Define methods and display classes
         foreach (var (arrow, captures) in _collectedArrows)
         {
+            // Skip async arrows - they're handled via DefineTopLevelAsyncArrows() or
+            // DefineAsyncArrowStateMachines() (if inside an async function)
+            if (arrow.IsAsync)
+            {
+                continue;
+            }
+
             // For object methods, add __this as the first parameter
             // Rest parameters use List<object> to enable detection at invoke time
             Type[] paramTypes;

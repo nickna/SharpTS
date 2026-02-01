@@ -12,6 +12,15 @@ public partial class ILEmitter
 {
     protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
+        // Check if this is an async arrow function with a state machine
+        if (af.IsAsync && _ctx.AsyncArrowBuilders?.TryGetValue(af, out var arrowBuilder) == true)
+        {
+            // Async arrow with its own state machine - emit a callable for the stub method
+            EmitAsyncArrowFunction(af, arrowBuilder);
+            SetStackUnknown();
+            return;
+        }
+
         // Get the method for this arrow function
         if (!_ctx.ArrowMethods.TryGetValue(af, out var method))
         {
@@ -35,6 +44,24 @@ public partial class ILEmitter
 
         // $TSFunction is a reference type, mark stack as unknown (not a value type)
         SetStackUnknown();
+    }
+
+    private void EmitAsyncArrowFunction(Expr.ArrowFunction af, AsyncArrowStateMachineBuilder arrowBuilder)
+    {
+        // For standalone async arrows, create a TSFunction that wraps the stub method
+        // The stub method takes just the parameters (no outer SM for standalone arrows)
+        var stubMethod = arrowBuilder.StubMethod;
+
+        // Non-capturing async arrow: new TSFunction(null, stubMethod)
+        IL.Emit(OpCodes.Ldnull);
+
+        // Load method info for the stub method
+        IL.Emit(OpCodes.Ldtoken, stubMethod);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.MethodBase, "GetMethodFromHandle", _ctx.Types.RuntimeMethodHandle));
+        IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
+
+        // Create TSFunction
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
     }
 
     private void EmitNonCapturingArrowFunction(Expr.ArrowFunction af, MethodBuilder method)

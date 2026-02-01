@@ -23,9 +23,12 @@ public class AsyncArrowStateMachineBuilder
     // The type being built
     public TypeBuilder StateMachineType => _stateMachineType;
 
-    // Reference to outer state machine (for by-reference capture)
-    public FieldBuilder OuterStateMachineField { get; private set; } = null!;
-    public Type OuterStateMachineType { get; private set; } = null!;
+    // Whether this is a standalone (top-level) async arrow without an outer async function
+    public bool IsStandalone { get; private set; }
+
+    // Reference to outer state machine (for by-reference capture) - null for standalone arrows
+    public FieldBuilder? OuterStateMachineField { get; private set; }
+    public Type? OuterStateMachineType { get; private set; }
 
     // For nested arrows: the parent arrow's outer state machine info (for transitive captures)
     public FieldBuilder? ParentOuterStateMachineField { get; set; }
@@ -209,13 +212,100 @@ public class AsyncArrowStateMachineBuilder
     }
 
     /// <summary>
+    /// Defines a standalone state machine for top-level async arrows (not inside async functions).
+    /// These don't have an outer state machine reference.
+    /// </summary>
+    /// <param name="awaitCount">Number of await points in this arrow</param>
+    /// <param name="arrowParameters">Parameters of this arrow function</param>
+    /// <param name="hoistedLocals">Local variables that need hoisting for this arrow's awaits</param>
+    public void DefineStateMachineStandalone(
+        int awaitCount,
+        List<Stmt.Parameter> arrowParameters,
+        HashSet<string> hoistedLocals)
+    {
+        IsStandalone = true;
+        OuterStateMachineType = null;
+        OuterStateMachineField = null;
+
+        // Define the state machine struct
+        _stateMachineType = _moduleBuilder.DefineType(
+            $"<>c__AsyncArrow_{_counter}",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.ValueType,
+            [_types.IAsyncStateMachine]
+        );
+
+        // No outer reference field for standalone arrows
+
+        // Define core fields
+        StateField = _stateMachineType.DefineField(
+            "<>1__state",
+            _types.Int32,
+            FieldAttributes.Public
+        );
+
+        BuilderField = _stateMachineType.DefineField(
+            "<>t__builder",
+            BuilderType,
+            FieldAttributes.Public
+        );
+
+        // Define parameter fields (arrow parameters become state machine fields)
+        foreach (var param in arrowParameters)
+        {
+            var field = _stateMachineType.DefineField(
+                param.Name.Lexeme,
+                _types.Object,
+                FieldAttributes.Public
+            );
+            ParameterFields[param.Name.Lexeme] = field;
+            ParameterOrder.Add(param.Name.Lexeme);
+        }
+
+        // Define local fields for variables that span await points
+        foreach (var localName in hoistedLocals)
+        {
+            var field = _stateMachineType.DefineField(
+                localName,
+                _types.Object,
+                FieldAttributes.Public
+            );
+            LocalFields[localName] = field;
+        }
+
+        // Define awaiter fields
+        for (int i = 0; i < awaitCount; i++)
+        {
+            var field = _stateMachineType.DefineField(
+                $"<>u__{i + 1}",
+                AwaiterType,
+                FieldAttributes.Private
+            );
+            AwaiterFields[i] = field;
+        }
+
+        // Define the IAsyncStateMachine methods
+        DefineMoveNextMethod();
+        DefineSetStateMachineMethod();
+    }
+
+    /// <summary>
     /// Defines and emits the stub method that creates the state machine when the arrow is invoked.
     /// The stub takes (outer state machine boxed, params...) and returns Task&lt;object&gt;.
+    /// For standalone arrows, there's no outer SM parameter.
     /// </summary>
     public void DefineStubMethod(TypeBuilder programType)
     {
-        // First parameter is the outer state machine (boxed), rest are arrow parameters
-        var paramTypes = new List<Type> { _types.Object }; // Outer SM
+        // Build parameter types list
+        var paramTypes = new List<Type>();
+
+        // For non-standalone arrows, first parameter is the outer state machine (boxed)
+        if (!IsStandalone)
+        {
+            paramTypes.Add(_types.Object); // Outer SM
+        }
+
+        // Add arrow parameters
         foreach (var _ in ParameterOrder)
         {
             paramTypes.Add(_types.Object); // All arrow params are object
@@ -235,10 +325,15 @@ public class AsyncArrowStateMachineBuilder
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Initobj, _stateMachineType);
 
-        // sm.<>__outer = arg0 (outer state machine boxed)
-        il.Emit(OpCodes.Ldloca, smLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stfld, OuterStateMachineField);
+        // For non-standalone: sm.<>__outer = arg0 (outer state machine boxed)
+        int paramOffset = 0;
+        if (!IsStandalone && OuterStateMachineField != null)
+        {
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Stfld, OuterStateMachineField);
+            paramOffset = 1; // Skip outer SM arg when copying params
+        }
 
         // Copy parameters to state machine fields (in order!)
         for (int i = 0; i < ParameterOrder.Count; i++)
@@ -246,7 +341,7 @@ public class AsyncArrowStateMachineBuilder
             var paramName = ParameterOrder[i];
             var paramField = ParameterFields[paramName];
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg, i + 1); // +1 to skip outer SM arg
+            il.Emit(OpCodes.Ldarg, i + paramOffset);
             il.Emit(OpCodes.Stfld, paramField);
         }
 

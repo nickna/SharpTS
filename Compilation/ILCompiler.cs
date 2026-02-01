@@ -464,6 +464,7 @@ public partial class ILCompiler
     private void Phase5_CollectArrowFunctions(List<Stmt> statements)
     {
         CollectAndDefineArrowFunctions(statements);
+        DefineTopLevelAsyncArrows(); // Define state machines for top-level async arrows
         DefineClassExpressionTypes();
         DefineClassExpressionMethods();
     }
@@ -476,6 +477,7 @@ public partial class ILCompiler
         EmitArrowFunctionBodies();
         DefineAllClassMethods(statements);
         EmitAsyncStateMachineBodies();
+        EmitTopLevelAsyncArrowBodies(); // Emit MoveNext for top-level async arrows
         EmitGeneratorStateMachineBodies();
         EmitAsyncGeneratorStateMachineBodies();
     }
@@ -720,6 +722,7 @@ public partial class ILCompiler
     private void ModulePhase6_CollectArrowFunctions(List<Stmt> allStatements)
     {
         CollectAndDefineArrowFunctions(allStatements);
+        DefineTopLevelAsyncArrows(); // Define state machines for top-level async arrows
         DefineClassExpressionTypes();
         DefineClassExpressionMethods();
     }
@@ -731,6 +734,7 @@ public partial class ILCompiler
     {
         EmitArrowFunctionBodies();
         EmitAsyncStateMachineBodies();
+        EmitTopLevelAsyncArrowBodies(); // Emit MoveNext for top-level async arrows
         EmitGeneratorStateMachineBodies();
         EmitAsyncGeneratorStateMachineBodies();
     }

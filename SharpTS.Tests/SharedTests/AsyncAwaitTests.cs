@@ -665,13 +665,12 @@ public class AsyncAwaitTests
 
     #endregion
 
-    #region Capturing Arrow Functions in Async (Compiler)
+    #region Capturing Arrow Functions in Async
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncFunction_CapturingArrowLocal(ExecutionMode mode)
     {
-        // Capturing arrow functions in async context is compiler-specific
         var source = """
             async function test(): Promise<number> {
                 let x = 10;
@@ -691,7 +690,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncFunction_CapturingArrowParameter(ExecutionMode mode)
     {
         var source = """
@@ -712,7 +711,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncFunction_CapturingArrowMultipleVariables(ExecutionMode mode)
     {
         var source = """
@@ -734,7 +733,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_CapturingArrowThis(ExecutionMode mode)
     {
         var source = """
@@ -762,7 +761,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncFunction_CapturingArrowBeforeAwait(ExecutionMode mode)
     {
         var source = """
@@ -784,7 +783,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncFunction_CapturingArrowPassedToMethod(ExecutionMode mode)
     {
         var source = """

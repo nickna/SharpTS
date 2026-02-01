@@ -303,13 +303,30 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Call, getAwaiter);
         var awaiterLocal = _il.DeclareLocal(_types.TaskAwaiterOfObject);
         _il.Emit(OpCodes.Stloc, awaiterLocal);
+
+        // Result local for storing the result
+        var resultLocal = _il.DeclareLocal(_types.Object);
+        var getResultSuccessLabel = _il.DefineLabel();
+
+        // Wrap GetResult() in try-catch for proper error propagation from rejected promises
+        _il.BeginExceptionBlock();
+
         _il.Emit(OpCodes.Ldloca, awaiterLocal);
         var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
         _il.Emit(OpCodes.Call, getResult);
+        _il.Emit(OpCodes.Stloc, resultLocal);
+        _il.Emit(OpCodes.Leave, getResultSuccessLabel);
+
+        _il.BeginCatchBlock(typeof(Exception));
+        // Re-throw wrapped exception for proper propagation
+        _il.Emit(OpCodes.Call, _ctx.Runtime.WrapException);
+        _il.Emit(OpCodes.Call, _ctx.Runtime.CreateException);
+        _il.Emit(OpCodes.Throw);
+        _il.EndExceptionBlock();
+
+        _il.MarkLabel(getResultSuccessLabel);
 
         // Result is a Dictionary<string, object> with { value, done }
-        // Store it
-        var resultLocal = _il.DeclareLocal(_types.Object);
         _il.Emit(OpCodes.Stloc, resultLocal);
 
         // Check if done: GetProperty(result, "done")
