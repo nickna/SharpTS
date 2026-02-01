@@ -404,17 +404,51 @@ public partial class AsyncGeneratorMoveNextEmitter
         var resumeLabel = _stateLabels[stateNumber];
         var continueLabel = _il.DefineLabel();
 
-        // 1. Emit the awaited expression (should produce Task<object>)
+        // 1. Emit the awaited expression (should produce Task<object> or $Promise or any value)
         EmitExpression(a.Expression);
         EnsureBoxed();
 
-        // 2. Convert to Task<object> if needed
+        // 2. Convert to Task<object> - handle $Promise, Task<object>, or non-Task values
+        // If it's a $Promise, extract its Task property
+        // If it's already a Task<object>, use it directly
+        // Otherwise, wrap in Task.FromResult (for non-promise values like numbers, strings, etc.)
+        var taskLocal = _il.DeclareLocal(typeof(Task<object>));
+        var isPromiseLabel = _il.DefineLabel();
+        var isTaskLabel = _il.DefineLabel();
+        var wrapValueLabel = _il.DefineLabel();
+        var haveTaskLabel = _il.DefineLabel();
+
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.TSPromiseType);
+        _il.Emit(OpCodes.Brtrue, isPromiseLabel);
+
+        // Not a $Promise - check if it's a Task<object>
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, typeof(Task<object>));
+        _il.Emit(OpCodes.Brtrue, isTaskLabel);
+
+        // Not a Promise or Task - wrap in Task.FromResult
+        _il.MarkLabel(wrapValueLabel);
+        _il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        _il.Emit(OpCodes.Stloc, taskLocal);
+        _il.Emit(OpCodes.Br, haveTaskLabel);
+
+        // Is a Task<object> - use directly
+        _il.MarkLabel(isTaskLabel);
         _il.Emit(OpCodes.Castclass, typeof(Task<object>));
+        _il.Emit(OpCodes.Stloc, taskLocal);
+        _il.Emit(OpCodes.Br, haveTaskLabel);
+
+        // Is a $Promise - extract its Task property
+        _il.MarkLabel(isPromiseLabel);
+        _il.Emit(OpCodes.Castclass, _ctx.Runtime.TSPromiseType);
+        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.TSPromiseTaskGetter);
+        _il.Emit(OpCodes.Stloc, taskLocal);
+
+        _il.MarkLabel(haveTaskLabel);
 
         // 2b. Store the task in AwaitedTaskField (needed for continuation if not completed)
-        // Stack: [task]
-        var taskLocal = _il.DeclareLocal(typeof(Task<object>));
-        _il.Emit(OpCodes.Stloc, taskLocal);       // Stack: []
+        // Stack: []
         _il.Emit(OpCodes.Ldarg_0);                // Stack: [this]
         _il.Emit(OpCodes.Ldloc, taskLocal);       // Stack: [this, task]
         _il.Emit(OpCodes.Stfld, _builder.AwaitedTaskField); // Stack: []
@@ -1510,14 +1544,25 @@ public partial class AsyncGeneratorMoveNextEmitter
             return;
         }
 
-        // Start with first string
-        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
-
-        // Interleave expressions and remaining strings
+        // Two-phase emission for async generators:
+        // Phase 1: Evaluate all expressions to temps first (awaits happen here)
+        // This ensures proper stack management when expressions contain await
+        var exprTemps = new List<LocalBuilder>();
         for (int i = 0; i < tl.Expressions.Count; i++)
         {
             EmitExpression(tl.Expressions[i]);
             EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            exprTemps.Add(temp);
+        }
+
+        // Phase 2: Build string from temps (no awaits, stack safe)
+        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
+
+        for (int i = 0; i < exprTemps.Count; i++)
+        {
+            _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
             _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
 
@@ -1532,8 +1577,25 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
     {
+        // Two-phase emission for async generators:
+        // Phase 1: Evaluate tag and all expressions to temps first (awaits happen here)
         EmitExpression(ttl.Tag);
         EnsureBoxed();
+        var tagTemp = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, tagTemp);
+
+        var exprTemps = new List<LocalBuilder>();
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            EmitExpression(ttl.Expressions[i]);
+            EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            exprTemps.Add(temp);
+        }
+
+        // Phase 2: Build arrays and call from temps (no awaits, stack safe)
+        _il.Emit(OpCodes.Ldloc, tagTemp);
 
         _il.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
         _il.Emit(OpCodes.Newarr, typeof(object));
@@ -1558,14 +1620,13 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stelem_Ref);
         }
 
-        _il.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
+        _il.Emit(OpCodes.Ldc_I4, exprTemps.Count);
         _il.Emit(OpCodes.Newarr, typeof(object));
-        for (int i = 0; i < ttl.Expressions.Count; i++)
+        for (int i = 0; i < exprTemps.Count; i++)
         {
             _il.Emit(OpCodes.Dup);
             _il.Emit(OpCodes.Ldc_I4, i);
-            EmitExpression(ttl.Expressions[i]);
-            EnsureBoxed();
+            _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Stelem_Ref);
         }
 

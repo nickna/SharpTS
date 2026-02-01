@@ -40,6 +40,9 @@ public class AsyncStateMachineBuilder
     // Self-reference field (boxed) for passing to nested async arrows
     public FieldBuilder? SelfBoxedField { get; private set; }
 
+    // Flag to track if default parameters have been applied (prevents re-evaluation on resume)
+    public FieldBuilder? DefaultsAppliedField { get; private set; }
+
     // @lock decorator support for async methods
     public FieldBuilder? LockPrevReentrancyField { get; private set; }  // <>__prevReentrancy (int)
     public FieldBuilder? LockAcquiredField { get; private set; }         // <>__lockAcquired (bool)
@@ -145,6 +148,14 @@ public class AsyncStateMachineBuilder
                 FieldAttributes.Public
             );
         }
+
+        // Define defaults applied flag field
+        // This prevents re-evaluation of default parameters on every state machine resume
+        DefaultsAppliedField = _stateMachineType.DefineField(
+            "<>__defaultsApplied",
+            typeof(bool),
+            FieldAttributes.Public
+        );
 
         // Define @lock decorator fields for async methods
         // These are used to track reentrancy and lock acquisition state across await points

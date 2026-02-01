@@ -699,6 +699,8 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitTemplateLiteral(Expr.TemplateLiteral tl)
     {
+        // TemplateLiteral has Strings (literal parts) and Expressions (interpolated parts)
+        // Structure: strings[0] + expressions[0] + strings[1] + expressions[1] + ... + strings[n]
         if (tl.Strings.Count == 0 && tl.Expressions.Count == 0)
         {
             _il.Emit(OpCodes.Ldstr, "");
@@ -706,17 +708,29 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
-        // Start with first string
-        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
-
-        // Interleave expressions and remaining strings
+        // In async context, expressions may contain await which clears the stack.
+        // Phase 1: Evaluate all expressions to temps first (awaits happen here)
+        var exprTemps = new List<LocalBuilder>();
         for (int i = 0; i < tl.Expressions.Count; i++)
         {
             EmitExpression(tl.Expressions[i]);
             EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            exprTemps.Add(temp);
+        }
+
+        // Phase 2: Build string from temps (no awaits, stack safe)
+        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
+
+        for (int i = 0; i < exprTemps.Count; i++)
+        {
+            // Load expression value from temp and convert to string
+            _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
             _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
 
+            // Emit next string part
             if (i + 1 < tl.Strings.Count)
             {
                 _il.Emit(OpCodes.Ldstr, tl.Strings[i + 1]);
@@ -728,11 +742,28 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
     {
-        // 1. Emit the tag function reference
+        // In async context, expressions may contain await which clears the stack.
+        // Phase 1: Evaluate tag and all expressions to temps first (awaits happen here)
         EmitExpression(ttl.Tag);
         EnsureBoxed();
+        var tagTemp = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, tagTemp);
 
-        // 2. Create cooked strings array
+        var exprTemps = new List<LocalBuilder>();
+        for (int i = 0; i < ttl.Expressions.Count; i++)
+        {
+            EmitExpression(ttl.Expressions[i]);
+            EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            exprTemps.Add(temp);
+        }
+
+        // Phase 2: Build arrays and make call (no awaits, stack safe)
+        // Load tag function
+        _il.Emit(OpCodes.Ldloc, tagTemp);
+
+        // Create cooked strings array
         _il.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
         _il.Emit(OpCodes.Newarr, typeof(object));
         for (int i = 0; i < ttl.CookedStrings.Count; i++)
@@ -746,7 +777,7 @@ public partial class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Stelem_Ref);
         }
 
-        // 3. Create raw strings array
+        // Create raw strings array
         _il.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
         _il.Emit(OpCodes.Newarr, typeof(string));
         for (int i = 0; i < ttl.RawStrings.Count; i++)
@@ -757,19 +788,18 @@ public partial class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Stelem_Ref);
         }
 
-        // 4. Create expressions array
+        // Create expressions array from temps
         _il.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
         _il.Emit(OpCodes.Newarr, typeof(object));
-        for (int i = 0; i < ttl.Expressions.Count; i++)
+        for (int i = 0; i < exprTemps.Count; i++)
         {
             _il.Emit(OpCodes.Dup);
             _il.Emit(OpCodes.Ldc_I4, i);
-            EmitExpression(ttl.Expressions[i]);
-            EnsureBoxed();
+            _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Stelem_Ref);
         }
 
-        // 5. Call runtime helper
+        // Call runtime helper
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.InvokeTaggedTemplate);
         SetStackUnknown();
     }

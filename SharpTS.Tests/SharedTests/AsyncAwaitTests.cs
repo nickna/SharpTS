@@ -230,10 +230,9 @@ public class AsyncAwaitTests
     #region Await with Non-Promise
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AwaitOnNonPromise_ReturnsValue(ExecutionMode mode)
     {
-        // Compiler does not support await on non-Promise values
         var source = """
             async function test(): Promise<void> {
                 let x = await 42;
@@ -296,10 +295,9 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncWithDefaultParameters(ExecutionMode mode)
     {
-        // Compiler does not properly handle default parameters in async functions
         var source = """
             async function greet(name: string = "Guest"): Promise<string> {
                 return "Hello, " + name;
@@ -404,10 +402,9 @@ public class AsyncAwaitTests
     #region Await in Expressions
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AwaitInTemplateLiteral(ExecutionMode mode)
     {
-        // Compiler does not support await inside template literals
         var source = """
             async function getName(): Promise<string> {
                 return "World";
