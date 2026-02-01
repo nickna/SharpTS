@@ -71,7 +71,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Aes192Cbc_RoundTrip(ExecutionMode mode)
     {
         // Test with AES-192-CBC
@@ -99,7 +99,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Cbc_MultipleUpdates(ExecutionMode mode)
     {
         // Multiple update() calls should work correctly
@@ -130,7 +130,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Cbc_EmptyInput(ExecutionMode mode)
     {
         // Empty plaintext should still work
@@ -217,7 +217,7 @@ public class CryptoCipherTests
     #region GCM Mode Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Aes256Gcm_RoundTrip_String(ExecutionMode mode)
     {
         // GCM mode with auth tag using string output
@@ -420,7 +420,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_WrongIVSize(ExecutionMode mode)
     {
         // Wrong IV size should throw
@@ -445,7 +445,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_UpdateAfterFinal(ExecutionMode mode)
     {
         // Calling update after final should throw
@@ -474,7 +474,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_DoubleFinal(ExecutionMode mode)
     {
         // Calling final twice should throw
@@ -530,7 +530,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Gcm_GetAuthTagBeforeFinal(ExecutionMode mode)
     {
         // Calling getAuthTag before final should throw
@@ -558,7 +558,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_Cbc_GetAuthTagThrows(ExecutionMode mode)
     {
         // getAuthTag on CBC cipher should throw
@@ -624,7 +624,7 @@ public class CryptoCipherTests
     #region Chaining Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_SetAutoPaddingChaining(ExecutionMode mode)
     {
         // setAutoPadding should return this for chaining
@@ -647,7 +647,7 @@ public class CryptoCipherTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Crypto_CreateCipheriv_SetAADChaining(ExecutionMode mode)
     {
         // setAAD should return this for chaining

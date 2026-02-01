@@ -57,7 +57,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_ZeroDelay_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setTimeout with 0 delay should execute callback (compiled: check console output)
@@ -90,7 +90,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_DefaultDelay_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setTimeout without delay should default to 0 and execute (compiled)
@@ -128,7 +128,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ClearTimeout_PreventsExecution_Compiled(ExecutionMode mode)
     {
         // clearTimeout should prevent callback from executing (compiled: check console output)
@@ -292,7 +292,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_PassesArgsToCallback_Compiled(ExecutionMode mode)
     {
         // Additional args should be passed to callback (compiled: console.log)
@@ -383,7 +383,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // setInterval should execute callback (compiled: console.log and self-clear)
@@ -427,7 +427,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ClearInterval_StopsExecution_Compiled(ExecutionMode mode)
     {
         // clearInterval should stop the interval from executing (compiled: console.log)
@@ -461,7 +461,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_PassesArgsToCallback_Compiled(ExecutionMode mode)
     {
         // Additional args should be passed to callback (compiled: console.log)
@@ -494,7 +494,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_DefaultDelay_Compiled(ExecutionMode mode)
     {
         // setInterval without delay should default to 0 and execute (compiled)
