@@ -344,10 +344,20 @@ public partial class RuntimeEmitter
         var setterMethodLocal = il.DeclareLocal(_types.MethodInfo);
         var argsArrayLocal = il.DeclareLocal(_types.ObjectArray);
         var currentTypeLocal = il.DeclareLocal(_types.Type);
+        var frozenCheckLocal = il.DeclareLocal(_types.Object);
+        var notFrozenLabel = il.DefineLabel();
 
         // if (obj == null) return;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, endLabel);
+
+        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        // If frozen, silently return (non-strict mode behavior)
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, frozenCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, endLabel); // Frozen - silently return
 
         // Try ISharpTSPropertyAccessor interface FIRST (for interpreter runtime types)
         // Types implementing this interface may have custom property handling
@@ -475,8 +485,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, nextType);
 
-        // Found a non-null _fields dictionary - set the value and return
-        // dict[name] = value;
+        // Found a non-null _fields dictionary
+        // Check if sealed: _sealedObjects.TryGetValue(obj, out _)
+        var doSetFieldLabel = il.DefineLabel();
+        var sealedCheckLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, sealedCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, doSetFieldLabel); // Not sealed, proceed to set
+
+        // Object is sealed - check if property exists in dictionary
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldarg_1); // name
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brfalse, endLabel); // Property doesn't exist on sealed object, silently return
+
+        // Set the value: dict[name] = value;
+        il.MarkLabel(doSetFieldLabel);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);

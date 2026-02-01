@@ -93,14 +93,65 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "true");
         il.Emit(OpCodes.Br, endLabel);
 
-        // double case - simple ToString
+        // double case - handle NaN, Infinity, integer formatting
         il.MarkLabel(doubleLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         var doubleLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, doubleLocal);
+
+        // Check NaN
+        var notNanLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double]));
+        il.Emit(OpCodes.Brfalse, notNanLabel);
+        il.Emit(OpCodes.Ldstr, "NaN");
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notNanLabel);
+
+        // Check PositiveInfinity
+        var notPosInfLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", [_types.Double]));
+        il.Emit(OpCodes.Brfalse, notPosInfLabel);
+        il.Emit(OpCodes.Ldstr, "Infinity");
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notPosInfLabel);
+
+        // Check NegativeInfinity
+        var notNegInfLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", [_types.Double]));
+        il.Emit(OpCodes.Brfalse, notNegInfLabel);
+        il.Emit(OpCodes.Ldstr, "-Infinity");
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notNegInfLabel);
+
+        // Check if integer (d == floor(d) && abs(d) < 1e15)
+        var notIntLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", [_types.Double]));
+        il.Emit(OpCodes.Bne_Un, notIntLabel);
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double]));
+        il.Emit(OpCodes.Ldc_R8, 1e15);
+        il.Emit(OpCodes.Bge, notIntLabel);
+
+        // Integer: format as long
+        il.Emit(OpCodes.Ldloc, doubleLocal);
+        il.Emit(OpCodes.Conv_I8);
+        var longLocal = il.DeclareLocal(_types.Int64);
+        il.Emit(OpCodes.Stloc, longLocal);
+        il.Emit(OpCodes.Ldloca, longLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int64, "ToString"));
+        il.Emit(OpCodes.Br, endLabel);
+
+        // Non-integer: use G15 format
+        il.MarkLabel(notIntLabel);
         il.Emit(OpCodes.Ldloca, doubleLocal);
-        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Double, "ToString"));
+        il.Emit(OpCodes.Ldstr, "G15");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String]));
         il.Emit(OpCodes.Br, endLabel);
 
         // BigInteger case - format as value.ToString() + "n"

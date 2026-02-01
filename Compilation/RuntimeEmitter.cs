@@ -1915,16 +1915,17 @@ public partial class RuntimeEmitter
         runtime.SymbolStorageField = symbolStorageField;
 
         // Static fields for Object.freeze/seal tracking: ConditionalWeakTable<object, object>
+        // Made public so other types (like class constructors) can access for freeze checks
         var frozenObjectsField = typeBuilder.DefineField(
             "_frozenObjects",
             _types.ConditionalWeakTable,
-            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
         runtime.FrozenObjectsField = frozenObjectsField;
         var sealedObjectsField = typeBuilder.DefineField(
             "_sealedObjects",
             _types.ConditionalWeakTable,
-            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
         runtime.SealedObjectsField = sealedObjectsField;
 

@@ -862,8 +862,35 @@ public partial class ILEmitter
 
         // Emit: ((ClassName)receiver).set_PropertyName(value)
         // Also need to keep the value on the stack as the expression result
+        // But first check if object is frozen - if so, skip setter call
+
+        // Emit receiver and save for freeze check and potential setter call
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
+        var receiverTemp = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, receiverTemp);
+
+        // Check if frozen: _frozenObjects.TryGetValue(obj, out _)
+        var notFrozenLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        var frozenCheckLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.FrozenObjectsField);
+        IL.Emit(OpCodes.Ldloc, receiverTemp);
+        IL.Emit(OpCodes.Ldloca, frozenCheckLocal);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ConditionalWeakTable, "TryGetValue", _ctx.Types.Object, _ctx.Types.Object.MakeByRefType()));
+        IL.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Object is frozen - emit value but skip setter call
+        // Just return the value as the expression result
+        EmitExpression(value);
+        EmitBoxIfNeeded(value);
+        IL.Emit(OpCodes.Br, endLabel);
+
+        // Not frozen - proceed with normal setter call
+        IL.MarkLabel(notFrozenLabel);
+
+        // Load receiver and cast to class type
+        IL.Emit(OpCodes.Ldloc, receiverTemp);
         IL.Emit(OpCodes.Castclass, classType);
 
         // Emit value and convert to setter parameter type
@@ -909,6 +936,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, resultTemp);
         }
 
+        IL.MarkLabel(endLabel);
         SetStackUnknown();  // Result is boxed object
         return true;
     }

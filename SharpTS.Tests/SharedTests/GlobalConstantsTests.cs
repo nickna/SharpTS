@@ -104,20 +104,18 @@ public class GlobalConstantsTests
     #region Infinity Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Infinity_OutputsInfinity(ExecutionMode mode)
     {
-        // Compiler outputs "∞" instead of "Infinity"
         var source = "console.log(Infinity);";
         var output = TestHarness.Run(source, mode);
         Assert.Equal("Infinity\n", output);
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Infinity_NegativeOutputsNegativeInfinity(ExecutionMode mode)
     {
-        // Compiler outputs "-∞" instead of "-Infinity"
         var source = "console.log(-Infinity);";
         var output = TestHarness.Run(source, mode);
         Assert.Equal("-Infinity\n", output);
@@ -182,10 +180,9 @@ public class GlobalConstantsTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Infinity_Arithmetic(ExecutionMode mode)
     {
-        // Compiler outputs "∞" instead of "Infinity"
         var source = """
             console.log(Infinity + 1);
             console.log(Infinity * 2);

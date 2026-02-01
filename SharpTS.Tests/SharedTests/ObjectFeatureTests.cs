@@ -886,10 +886,9 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_PreventsMutation(ExecutionMode mode)
     {
-        // Compiler does not yet implement freeze mutation prevention
         var source = """
             let obj: { a: number } = { a: 1 };
             Object.freeze(obj);
@@ -902,10 +901,9 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_PreventsAddingProperties(ExecutionMode mode)
     {
-        // Compiler does not yet implement freeze property addition prevention
         var source = """
             let obj: any = { a: 1 };
             Object.freeze(obj);
@@ -975,10 +973,9 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_AllowsPropertyModification(ExecutionMode mode)
     {
-        // Compiler does not yet implement seal property modification behavior
         var source = """
             let obj: { a: number } = { a: 1 };
             Object.seal(obj);
@@ -991,10 +988,9 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_PreventsAddingProperties(ExecutionMode mode)
     {
-        // Compiler does not yet implement seal property addition prevention
         var source = """
             let obj: any = { a: 1 };
             Object.seal(obj);
@@ -1123,9 +1119,9 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    // Class instance freeze/seal tests (compiler class instance property mutation not yet implemented)
+    // Class instance freeze/seal tests
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_ClassInstancePreventsModification(ExecutionMode mode)
     {
         var source = """
@@ -1149,7 +1145,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_ClassInstanceAllowsModification(ExecutionMode mode)
     {
         var source = """
