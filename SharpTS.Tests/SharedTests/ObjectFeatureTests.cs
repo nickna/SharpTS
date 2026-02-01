@@ -1048,9 +1048,9 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    // Array freeze/seal tests (interpreter-only behavioral tests)
+    // Array freeze/seal tests
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_ArrayPreventsModification(ExecutionMode mode)
     {
         var source = """
@@ -1065,7 +1065,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_ArrayPreventsPush(ExecutionMode mode)
     {
         var source = """
@@ -1080,7 +1080,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_ArrayAllowsModification(ExecutionMode mode)
     {
         var source = """
@@ -1095,7 +1095,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_ArrayPreventsPush(ExecutionMode mode)
     {
         var source = """
@@ -1110,7 +1110,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_IsFrozen_ArrayReturnsTrueForFrozen(ExecutionMode mode)
     {
         var source = """
@@ -1123,7 +1123,7 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    // Class instance freeze/seal tests (interpreter-only)
+    // Class instance freeze/seal tests (compiler class instance property mutation not yet implemented)
     [Theory]
     [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_ClassInstancePreventsModification(ExecutionMode mode)
@@ -1173,7 +1173,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_IsFrozen_ClassInstanceReturnsTrueForFrozen(ExecutionMode mode)
     {
         var source = """
@@ -1192,9 +1192,9 @@ public class ObjectFeatureTests
         Assert.Equal("true\n", output);
     }
 
-    // Shallow freeze tests (interpreter-only)
+    // Shallow freeze tests
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_IsShallow(ExecutionMode mode)
     {
         var source = """
@@ -1209,7 +1209,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Freeze_ArrayReverseFails(ExecutionMode mode)
     {
         var source = """
@@ -1225,7 +1225,7 @@ public class ObjectFeatureTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Object_Seal_ArrayReverseSucceeds(ExecutionMode mode)
     {
         var source = """

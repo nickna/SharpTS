@@ -5,6 +5,40 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    /// <summary>
+    /// Emits frozen/sealed check for array mutation methods.
+    /// If frozen (or sealed when checkSealed=true), branches to returnLabel.
+    /// </summary>
+    private void EmitArrayFrozenSealedCheck(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Label returnLabel,
+        bool checkSealed = true)
+    {
+        var checkLocal = il.DeclareLocal(_types.Object);
+
+        // Check frozen
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);  // list
+        il.Emit(OpCodes.Ldloca, checkLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ConditionalWeakTable, "TryGetValue",
+            _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, returnLabel);
+
+        if (checkSealed)
+        {
+            // Check sealed
+            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, checkLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "TryGetValue",
+                _types.Object, _types.Object.MakeByRefType()));
+            il.Emit(OpCodes.Brtrue, returnLabel);
+        }
+    }
+
     private void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -17,6 +51,10 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var emptyLabel = il.DefineLabel();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen/sealed - pop removes an element (changes length)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
 
         // if (list.Count == 0) return null
         il.Emit(OpCodes.Ldarg_0);
@@ -49,6 +87,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(emptyLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+
+        // Frozen/sealed return path - return null without removing
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitArrayShift(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -63,6 +106,10 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var emptyLabel = il.DefineLabel();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen/sealed - shift removes an element (changes length)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
 
         // if (list.Count == 0) return null
         il.Emit(OpCodes.Ldarg_0);
@@ -89,6 +136,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(emptyLabel);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+
+        // Frozen/sealed return path - return null without removing
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitArrayUnshift(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -102,6 +154,10 @@ public partial class RuntimeEmitter
         runtime.ArrayUnshift = method;
 
         var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen/sealed - unshift adds an element (changes length)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
 
         // list.Insert(0, element)
         il.Emit(OpCodes.Ldarg_0);
@@ -110,6 +166,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Insert", _types.Int32, _types.Object));
 
         // return (double)list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        // Frozen/sealed return path - return current count without inserting
+        il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
@@ -127,6 +190,10 @@ public partial class RuntimeEmitter
         runtime.ArrayPush = method;
 
         var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen/sealed - push adds an element (changes length)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
 
         // list.Add(element)
         il.Emit(OpCodes.Ldarg_0);
@@ -134,6 +201,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         // return (double)list.Count
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+
+        // Frozen/sealed return path - return current count without adding
+        il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
@@ -282,12 +356,21 @@ public partial class RuntimeEmitter
         runtime.ArrayReverse = method;
 
         var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen ONLY (sealed allows reordering, no length change)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: false);
 
         // list.Reverse()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Reverse", _types.EmptyTypes));
 
         // return list
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+
+        // Frozen return path - return unchanged list
+        il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
     }
@@ -555,10 +638,19 @@ public partial class RuntimeEmitter
         runtime.ArraySort = method;
 
         var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen ONLY (sealed allows reordering, no length change)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: false);
 
         // Use a simple in-place insertion sort for stability
         // This is efficient enough for typical use cases and guarantees stability
         EmitSortBody(il, runtime, mutateInPlace: true);
+
+        // Frozen return path - return unchanged list
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitArrayToSorted(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1013,6 +1105,10 @@ public partial class RuntimeEmitter
         runtime.ArraySplice = method;
 
         var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+
+        // Check frozen/sealed - splice changes length (removes and/or adds elements)
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
 
         // Local variables
         var lenLocal = il.DeclareLocal(_types.Int32);
@@ -1172,6 +1268,11 @@ public partial class RuntimeEmitter
 
         // return deleted
         il.Emit(OpCodes.Ldloc, deletedLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Frozen/sealed return path - return empty list (no elements removed)
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Ret);
     }
 
