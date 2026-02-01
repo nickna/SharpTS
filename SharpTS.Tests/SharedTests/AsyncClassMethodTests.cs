@@ -116,10 +116,9 @@ public class AsyncClassMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_PropertyWithAwait(ExecutionMode mode)
     {
-        // Interpreter limitation: async class methods with await don't properly track async context
         var source = """
             async function getIncrement(): Promise<number> {
                 return 5;

@@ -381,10 +381,9 @@ public class AsyncIteratorEdgeCaseTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncIterator_YieldZero_WorksCorrectly(ExecutionMode mode)
     {
-        // Test that falsy values like 0 work correctly
         var source = """
             async function* gen() {
                 yield 0;

@@ -82,7 +82,7 @@ public class ProcessNextTickTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NextTick_ReturnsUndefined(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -103,7 +103,7 @@ public class ProcessNextTickTests
     #region Arguments Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NextTick_PassesArguments_ThreeArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -128,7 +128,7 @@ public class ProcessNextTickTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NextTick_PassesArguments_TwoArgs(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -184,7 +184,7 @@ public class ProcessNextTickTests
     #region Error Handling Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void NextTick_ThrowsWithoutCallback(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

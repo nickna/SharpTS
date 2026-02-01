@@ -531,7 +531,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ExecutionOrder_MultipleModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -843,7 +843,7 @@ public class ModuleTests
     /// and they should be treated as separate types.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DuplicateClassNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -879,7 +879,7 @@ public class ModuleTests
     /// and they should be treated as separate functions.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DuplicateFunctionNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -912,7 +912,7 @@ public class ModuleTests
     /// and they should be treated as separate enums.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DuplicateEnumNames_AcrossModules_ShouldBeDistinct(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -949,7 +949,7 @@ public class ModuleTests
     /// and have its methods called from another module.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void CrossModule_ClassInstantiationAndMethodCall(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -993,7 +993,7 @@ public class ModuleTests
     /// from another module with arguments and return values.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void CrossModule_FunctionCall(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1030,7 +1030,7 @@ public class ModuleTests
     /// members accessed from another module.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void CrossModule_EnumAccess(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1068,7 +1068,7 @@ public class ModuleTests
     /// and each gets the correct types without interference.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void CrossModule_SharedDependency(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -1129,7 +1129,7 @@ public class ModuleTests
     /// imported and used across modules.
     /// </summary>
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void CrossModule_MixedTypes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

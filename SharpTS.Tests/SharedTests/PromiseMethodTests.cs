@@ -97,7 +97,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Then_PassesValueThrough(ExecutionMode mode)
     {
         var source = """

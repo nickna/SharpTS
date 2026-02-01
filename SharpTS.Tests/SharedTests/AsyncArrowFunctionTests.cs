@@ -201,10 +201,9 @@ public class AsyncArrowFunctionTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncArrow_InClassMethod(ExecutionMode mode)
     {
-        // Interpreter limitation: async class methods with await don't properly track async context
         // Test async arrow capturing 'this' in class method
         var source = """
             class Counter {
@@ -230,10 +229,9 @@ public class AsyncArrowFunctionTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncArrow_CaptureThis(ExecutionMode mode)
     {
-        // Interpreter limitation: async class methods with await don't properly track async context
         var source = """
             class Calculator {
                 multiplier: number;

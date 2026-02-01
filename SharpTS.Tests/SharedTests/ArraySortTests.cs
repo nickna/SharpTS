@@ -298,10 +298,9 @@ public class ArraySortTests
     #region Frozen Array Behavior
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Array_Sort_FrozenArray_ReturnsUnchanged(ExecutionMode mode)
     {
-        // Compiler does not yet enforce frozen array restrictions
         var source = """
             let arr: number[] = [3, 1, 2];
             Object.freeze(arr);

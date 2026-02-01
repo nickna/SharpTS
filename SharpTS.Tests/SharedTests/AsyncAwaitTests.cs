@@ -545,10 +545,9 @@ public class AsyncAwaitTests
     #region Super in Async Methods (Compiler)
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_SuperMethodCall(ExecutionMode mode)
     {
-        // Super calls in async methods are compiler-specific
         var source = """
             class Parent {
                 greet(): string {
@@ -574,7 +573,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_SuperMethodCallBeforeAwait(ExecutionMode mode)
     {
         var source = """
@@ -603,7 +602,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_SuperMethodCallAfterAwait(ExecutionMode mode)
     {
         var source = """
@@ -631,7 +630,7 @@ public class AsyncAwaitTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncMethod_SuperWithParameters(ExecutionMode mode)
     {
         var source = """

@@ -86,7 +86,7 @@ public class WorkerThreadsTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void TypedArray_FromLength_CreatesArray(ExecutionMode mode)
     {
         var source = @"

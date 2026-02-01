@@ -89,9 +89,8 @@ public class ImportMetaTests
         Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
     }
 
-    // Compiler-specific test for single-file mode
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ImportMeta_UrlStartsWithFile_InSingleFileMode(ExecutionMode mode)
     {
         var source = """

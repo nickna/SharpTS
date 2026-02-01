@@ -140,9 +140,8 @@ public class HttpModuleTests
         Assert.Equal("object\ntrue\n", output);
     }
 
-    // Interpreter-only tests for network-dependent features
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FetchResponseProperties(ExecutionMode mode)
     {
         // Test Response properties - use a mock/local test
@@ -166,7 +165,7 @@ public class HttpModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FetchJsonMethod(ExecutionMode mode)
     {
         // Test Response.json() method
@@ -188,7 +187,7 @@ public class HttpModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FetchTextMethod(ExecutionMode mode)
     {
         // Test Response.text() method
@@ -210,7 +209,7 @@ public class HttpModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void FetchWithPost(ExecutionMode mode)
     {
         // Test POST request with body
@@ -247,9 +246,8 @@ public class HttpModuleTests
         Assert.Equal("true\n", output);
     }
 
-    // Compiled-only test for globalThis.fetch type check
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void GlobalThisHasFetch_TypeCheck(ExecutionMode mode)
     {
         // Test that fetch is accessible via globalThis

@@ -256,10 +256,9 @@ public class StaticBlockTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void StaticBlock_WithTryCatch(ExecutionMode mode)
     {
-        // Compiler does not yet support try/catch in static blocks
         var source = """
             class Foo {
                 static status: string = "init";
@@ -344,10 +343,9 @@ public class StaticBlockTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void StaticBlock_ThrowPropagates(ExecutionMode mode)
     {
-        // Compiler may handle this differently
         var source = """
             class Foo {
                 static { throw new Error("init failed"); }
