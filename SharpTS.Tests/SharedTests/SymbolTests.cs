@@ -441,11 +441,10 @@ public class SymbolTests
 
     /// <summary>
     /// Tests computed property names with symbols in class fields.
-    /// Note: Currently interpreter-only because the compiler has a pre-existing limitation
-    /// where class methods cannot access module-level variables (closure capture issue).
     /// </summary>
-    [Fact]
-    public void Symbol_AsClassPropertyKey()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Symbol_AsClassPropertyKey(ExecutionMode mode)
     {
         var source = """
             const mySymbol = Symbol("myProp");
@@ -468,7 +467,7 @@ public class SymbolTests
             console.log(instance.getValue());
             """;
 
-        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("initial\nupdated\n", output);
     }
 

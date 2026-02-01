@@ -647,7 +647,12 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support
             CurrentClassName = qualifiedClassName,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Module-level variable access
+            TopLevelStaticVars = _topLevelStaticVars,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
         // Define parameters
@@ -787,7 +792,12 @@ public partial class ILCompiler
             CurrentClassName = typeBuilder.Name,
             CurrentClassBuilder = typeBuilder,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Module-level variable access
+            TopLevelStaticVars = _topLevelStaticVars,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
         // Add class generic type parameters to context

@@ -90,7 +90,12 @@ public partial class ILCompiler
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Module-level variable access
+            TopLevelStaticVars = _topLevelStaticVars,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
         // Add class generic type parameters to context (required for static blocks in generic classes)
@@ -283,7 +288,12 @@ public partial class ILCompiler
             // ES2022 Private Class Elements support
             CurrentClassName = className,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Module-level variable access
+            TopLevelStaticVars = _topLevelStaticVars,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')

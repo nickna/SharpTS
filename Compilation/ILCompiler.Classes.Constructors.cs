@@ -81,7 +81,12 @@ public partial class ILCompiler
             CurrentClassName = className,
             CurrentClassBuilder = typeBuilder,
             // Registry services
-            ClassRegistry = GetClassRegistry()
+            ClassRegistry = GetClassRegistry(),
+            // Module-level variable access
+            TopLevelStaticVars = _topLevelStaticVars,
+            CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
+            EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
         // Add class generic type parameters to context
@@ -169,6 +174,23 @@ public partial class ILCompiler
 
             foreach (var field in instanceFieldsWithInit)
             {
+                // Handle computed property names (e.g., [mySymbol]: string = "value")
+                if (field.ComputedKey != null)
+                {
+                    // Computed keys use dynamic SetIndex to support Symbol keys
+                    // Stack: this
+                    il.Emit(OpCodes.Ldarg_0);
+                    // Evaluate computed key expression (e.g., the Symbol)
+                    initEmitter.EmitExpression(field.ComputedKey);
+                    initEmitter.EmitBoxIfNeeded(field.ComputedKey);
+                    // Emit initializer value
+                    initEmitter.EmitExpression(field.Initializer!);
+                    initEmitter.EmitBoxIfNeeded(field.Initializer!);
+                    // Call Runtime.SetIndex(object, key, value)
+                    il.Emit(OpCodes.Call, _runtime.SetIndex);
+                    continue;
+                }
+
                 string fieldName = field.Name.Lexeme;
                 string pascalName = NamingConventions.ToPascalCase(fieldName);
 
