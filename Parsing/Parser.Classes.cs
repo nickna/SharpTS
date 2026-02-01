@@ -128,9 +128,18 @@ public partial class Parser
                 continue;
             }
 
+            // Check for generator method: * before method name
+            bool isMemberGenerator = Match(TokenType.STAR);
+
             // Check for auto-accessor: accessor name: type = value
             if (Check(TokenType.ACCESSOR))
             {
+                // Validate: generator cannot be used with auto-accessor
+                if (isMemberGenerator)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
+                }
+
                 // Validate: abstract accessor is not valid
                 if (isMemberAbstract)
                 {
@@ -177,6 +186,12 @@ public partial class Parser
             // Check for getter/setter
             if (Check(TokenType.GET) || Check(TokenType.SET))
             {
+                // Validate: generator cannot be used with getter/setter
+                if (isMemberGenerator)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
+                }
+
                 Token kind = Advance(); // consume 'get' or 'set'
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'get'/'set'.");
                 Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
@@ -252,11 +267,17 @@ public partial class Parser
                     Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
 
-                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: false, Decorators: null, IsPrivate: true);
+                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
                     methods.Add(func);
                 }
                 else
                 {
+                    // Validate: generator cannot be used with fields
+                    if (isMemberGenerator)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
+                    }
+
                     // Private field: #name: type or #name = value
                     string? typeAnnotation = null;
                     if (Match(TokenType.COLON))
@@ -404,14 +425,20 @@ public partial class Parser
 
                     Consume(TokenType.SEMICOLON, "Expect ';' after abstract method declaration.");
 
-                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: false, Decorators: memberDecorators);
+                    var func = new Stmt.Function(methodName, typeParams2, thisType, parameters, null, returnType, isStatic, access, IsAbstract: true, IsOverride: isOverride, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: memberDecorators);
                     methods.Add(func);
                 }
                 else
                 {
+                    // Validate: generator cannot be used with constructor
+                    if (isMemberGenerator && Check(TokenType.CONSTRUCTOR))
+                    {
+                        throw new Exception("Parse Error: A constructor cannot be a generator.");
+                    }
+
                     string kind = "method";
                     if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
-                    var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
+                    var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync, isMemberGenerator);
                     func = func with { IsStatic = isStatic, Access = access, IsOverride = isOverride, Decorators = memberDecorators };
                     methods.Add(func);
 
@@ -582,9 +609,18 @@ public partial class Parser
                 continue;
             }
 
+            // Check for generator method: * before method name
+            bool isMemberGenerator = Match(TokenType.STAR);
+
             // Check for auto-accessor: accessor name: type = value
             if (Check(TokenType.ACCESSOR))
             {
+                // Validate: generator cannot be used with auto-accessor
+                if (isMemberGenerator)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Auto-accessors cannot be generators.");
+                }
+
                 Advance(); // consume 'accessor'
 
                 // Validate: accessor #name (private identifier) is not valid
@@ -625,6 +661,12 @@ public partial class Parser
             // Check for getter/setter
             if (Check(TokenType.GET) || Check(TokenType.SET))
             {
+                // Validate: generator cannot be used with getter/setter
+                if (isMemberGenerator)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: Getters and setters cannot be generators.");
+                }
+
                 Token kind = Advance(); // consume 'get' or 'set'
                 Token accessorName = Consume(TokenType.IDENTIFIER, "Expect property name after 'get'/'set'.");
                 Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
@@ -689,11 +731,17 @@ public partial class Parser
                     Consume(TokenType.LEFT_BRACE, "Expect '{' before private method body.");
                     List<Stmt> body = Block();
 
-                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: false, Decorators: null, IsPrivate: true);
+                    var func = new Stmt.Function(fieldName, typeParams2, null, parameters, body, returnType, isStatic, AccessModifier.Public, IsAbstract: false, IsOverride: false, IsAsync: isMemberAsync, IsGenerator: isMemberGenerator, Decorators: null, IsPrivate: true);
                     methods.Add(func);
                 }
                 else
                 {
+                    // Validate: generator cannot be used with fields
+                    if (isMemberGenerator)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: Generator marker '*' can only be used with methods, not fields.");
+                    }
+
                     // Private field: #name: type or #name = value
                     string? typeAnnotation = null;
                     if (Match(TokenType.COLON))
@@ -763,9 +811,15 @@ public partial class Parser
                     throw new Exception("Parse Error: 'declare' modifier is only valid on fields, not methods.");
                 }
 
+                // Validate: generator cannot be used with constructor
+                if (isMemberGenerator && Check(TokenType.CONSTRUCTOR))
+                {
+                    throw new Exception("Parse Error: A constructor cannot be a generator.");
+                }
+
                 string kind = "method";
                 if (Check(TokenType.CONSTRUCTOR)) kind = "constructor";
-                var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync);
+                var func = (Stmt.Function)FunctionDeclaration(kind, isMemberAsync, isMemberGenerator);
                 func = func with { IsStatic = isStatic, Access = access };
                 methods.Add(func);
 

@@ -117,10 +117,7 @@ public class PrivateFieldAsyncTests
 
     #region Generators
 
-    // NOTE: Generator methods in classes (*methodName() syntax) are not yet supported by the parser.
-    // These tests are skipped until class generator method syntax is implemented.
-
-    [Theory(Skip = "Parser does not support generator method syntax in classes yet")]
+    [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Generator_CanReadPrivateField(ExecutionMode mode)
     {
@@ -145,7 +142,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory(Skip = "Parser does not support generator method syntax in classes yet")]
+    [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Generator_CanWritePrivateField(ExecutionMode mode)
     {
@@ -176,7 +173,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n3\n", output);
     }
 
-    [Theory(Skip = "Parser does not support generator method syntax in classes yet")]
+    [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Generator_CanCallPrivateMethod(ExecutionMode mode)
     {
@@ -207,10 +204,11 @@ public class PrivateFieldAsyncTests
 
     #region Async Generators
 
-    // NOTE: Async generator methods in classes (async *methodName() syntax) are not yet supported by the parser.
-    // These tests are skipped until class async generator method syntax is implemented.
+    // NOTE: Async generator methods in classes require interpreter support for recognizing
+    // async generator class methods as async iterables, and compiler support for generator
+    // state machine building in class methods.
 
-    [Theory(Skip = "Parser does not support async generator method syntax in classes yet")]
+    [Theory(Skip = "Interpreter does not recognize async generator class methods as async iterables yet")]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_CanReadPrivateField(ExecutionMode mode)
     {
@@ -239,7 +237,7 @@ public class PrivateFieldAsyncTests
         Assert.Equal("1\n2\n3\n", output);
     }
 
-    [Theory(Skip = "Parser does not support async generator method syntax in classes yet")]
+    [Theory(Skip = "Interpreter does not recognize async generator class methods as async iterables yet")]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_CanWritePrivateField(ExecutionMode mode)
     {

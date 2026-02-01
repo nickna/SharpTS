@@ -97,6 +97,19 @@ public partial class TypeChecker
                 ? ToTypeInfo(method.ReturnType)
                 : new TypeInfo.Void();
 
+            // Wrap return type for generator/async generator methods
+            if (method.IsGenerator)
+            {
+                if (method.IsAsync && returnType is not TypeInfo.AsyncGenerator)
+                {
+                    returnType = new TypeInfo.AsyncGenerator(returnType);
+                }
+                else if (!method.IsAsync && returnType is not TypeInfo.Generator)
+                {
+                    returnType = new TypeInfo.Generator(returnType);
+                }
+            }
+
             return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
         }
 
@@ -758,6 +771,19 @@ public partial class TypeChecker
             TypeInfo returnType = method.ReturnType != null
                 ? ToTypeInfo(method.ReturnType)
                 : new TypeInfo.Void();
+
+            // Wrap return type for generator/async generator methods
+            if (method.IsGenerator)
+            {
+                if (method.IsAsync && returnType is not TypeInfo.AsyncGenerator)
+                {
+                    returnType = new TypeInfo.AsyncGenerator(returnType);
+                }
+                else if (!method.IsAsync && returnType is not TypeInfo.Generator)
+                {
+                    returnType = new TypeInfo.Generator(returnType);
+                }
+            }
 
             return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
         }

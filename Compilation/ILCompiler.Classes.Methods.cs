@@ -299,8 +299,10 @@ public partial class ILCompiler
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
                 classStmt.Name.Lexeme, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
-            // Keep return type as object for now (async methods return Task<object>)
-            var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
+            // Set return type based on method kind
+            var returnType = method.IsAsync ? _types.TaskOfObject :
+                             method.IsGenerator ? _types.IEnumerableOfObject :
+                             typeof(object);
 
             var methodBuilder = typeBuilder.DefineMethod(
                 method.Name.Lexeme,
@@ -328,8 +330,10 @@ public partial class ILCompiler
                 methodAttrs |= MethodAttributes.Abstract;
             }
 
-            // Keep return type as object for now (async methods return Task<object>)
-            Type returnType = method.IsAsync ? typeof(Task<object>) : typeof(object);
+            // Set return type based on method kind
+            Type returnType = method.IsAsync ? typeof(Task<object>) :
+                              method.IsGenerator ? _types.IEnumerableOfObject :
+                              typeof(object);
 
             var methodBuilder = typeBuilder.DefineMethod(
                 method.Name.Lexeme,
@@ -708,8 +712,10 @@ public partial class ILCompiler
                 methodAttrs |= MethodAttributes.Abstract;
             }
 
-            // Keep return type as object for now
-            Type returnType = method.IsAsync ? typeof(Task<object>) : typeof(object);
+            // Set return type based on method kind
+            Type returnType = method.IsAsync ? typeof(Task<object>) :
+                              method.IsGenerator ? _types.IEnumerableOfObject :
+                              typeof(object);
 
             methodBuilder = typeBuilder.DefineMethod(
                 method.Name.Lexeme,
@@ -743,6 +749,13 @@ public partial class ILCompiler
         if (method.IsAsync)
         {
             EmitAsyncMethodBody(methodBuilder, method, fieldsField);
+            return;
+        }
+
+        // Generator methods use generator state machine generation
+        if (method.IsGenerator)
+        {
+            EmitGeneratorMethodBody(methodBuilder, method, fieldsField);
             return;
         }
 
