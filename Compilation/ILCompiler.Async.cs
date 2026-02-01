@@ -554,6 +554,9 @@ public partial class ILCompiler
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
             IsStrictMode = parentCtx.IsStrictMode,
+            // ES2022 Private Class Elements support - inherit from parent context
+            CurrentClassName = parentCtx.CurrentClassName,
+            CurrentClassBuilder = parentCtx.CurrentClassBuilder,
             // Registry services
             ClassRegistry = parentCtx.ClassRegistry,
             // Entry-point display class for captured top-level variables
@@ -807,6 +810,9 @@ public partial class ILCompiler
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
+            // ES2022 Private Class Elements support for async methods
+            CurrentClassName = methodBuilder.DeclaringType?.Name,
+            CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder,
             // Registry services
             ClassRegistry = GetClassRegistry(),
             // Entry-point display class for captured top-level variables

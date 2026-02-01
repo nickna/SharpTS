@@ -1302,4 +1302,46 @@ public class EmittedRuntime
     public MethodBuilder DnsLookupService { get; set; } = null!;
     public MethodBuilder DnsGetLookup { get; set; } = null!;
     public MethodBuilder DnsGetLookupService { get; set; } = null!;
+
+    // ============================================================
+    // Private Field/Method Access Helpers for Async Contexts
+    // ============================================================
+    // These methods use reflection to access private fields/methods from
+    // async state machine MoveNext() methods where direct access isn't possible.
+
+    /// <summary>
+    /// Gets an instance private field value.
+    /// Signature: GetPrivateField(object instance, Type declaringClass, string fieldName) -> object
+    /// </summary>
+    public MethodBuilder GetPrivateField { get; set; } = null!;
+
+    /// <summary>
+    /// Sets an instance private field value.
+    /// Signature: SetPrivateField(object instance, Type declaringClass, string fieldName, object value) -> void
+    /// </summary>
+    public MethodBuilder SetPrivateField { get; set; } = null!;
+
+    /// <summary>
+    /// Calls an instance private method.
+    /// Signature: CallPrivateMethod(object instance, Type declaringClass, string methodName, object[] args) -> object
+    /// </summary>
+    public MethodBuilder CallPrivateMethod { get; set; } = null!;
+
+    /// <summary>
+    /// Gets a static private field value.
+    /// Signature: GetStaticPrivateField(Type declaringClass, string fieldName) -> object
+    /// </summary>
+    public MethodBuilder GetStaticPrivateField { get; set; } = null!;
+
+    /// <summary>
+    /// Sets a static private field value.
+    /// Signature: SetStaticPrivateField(Type declaringClass, string fieldName, object value) -> void
+    /// </summary>
+    public MethodBuilder SetStaticPrivateField { get; set; } = null!;
+
+    /// <summary>
+    /// Calls a static private method.
+    /// Signature: CallStaticPrivateMethod(Type declaringClass, string methodName, object[] args) -> object
+    /// </summary>
+    public MethodBuilder CallStaticPrivateMethod { get; set; } = null!;
 }

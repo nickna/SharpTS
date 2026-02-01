@@ -508,6 +508,8 @@ public partial class ILCompiler
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
+            // ES2022 Private Class Elements support
+            CurrentClassName = className,
             // Registry services
             ClassRegistry = GetClassRegistry()
         };

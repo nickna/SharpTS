@@ -840,17 +840,200 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitGetPrivate(Expr.GetPrivate gp)
     {
-        throw new NotImplementedException($"Private field '{gp.Name.Lexeme}' access not supported in compiled async arrow functions.");
+        // Get the field name without the # prefix
+        string fieldName = gp.Name.Lexeme;
+        if (fieldName.StartsWith('#'))
+            fieldName = fieldName[1..];
+
+        // Check if this is static private field access (ClassName.#field)
+        if (gp.Object is Expr.Variable classVar &&
+            _ctx?.CurrentClassName != null &&
+            classVar.Name.Lexeme == _ctx.CurrentClassName.Split('.').Last()?.Split('_').Last())
+        {
+            // In async state machines, we can't directly access private static fields
+            // from another class, so always use the runtime helper for static private fields
+            EmitDeclaringClassType();
+            _il.Emit(OpCodes.Ldstr, fieldName);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.GetStaticPrivateField);
+            SetStackUnknown();
+            return;
+        }
+
+        // Instance private field access - use runtime helper
+        // Stack: GetPrivateField(instance, declaringClass, fieldName)
+        EmitExpression(gp.Object);
+        EnsureBoxed();
+        EmitDeclaringClassTypeOrGetFromObject();
+        _il.Emit(OpCodes.Ldstr, fieldName);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetPrivateField);
+        SetStackUnknown();
     }
 
     protected override void EmitSetPrivate(Expr.SetPrivate sp)
     {
-        throw new NotImplementedException($"Private field '{sp.Name.Lexeme}' assignment not supported in compiled async arrow functions.");
+        // Get the field name without the # prefix
+        string fieldName = sp.Name.Lexeme;
+        if (fieldName.StartsWith('#'))
+            fieldName = fieldName[1..];
+
+        // Check if this is static private field access (ClassName.#field)
+        if (sp.Object is Expr.Variable classVar &&
+            _ctx?.CurrentClassName != null &&
+            classVar.Name.Lexeme == _ctx.CurrentClassName.Split('.').Last()?.Split('_').Last())
+        {
+            // In async state machines, we can't directly access private static fields
+            // from another class, so always use the runtime helper for static private fields
+            EmitExpression(sp.Value);
+            EnsureBoxed();
+            var valueTemp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, valueTemp);
+
+            EmitDeclaringClassType();
+            _il.Emit(OpCodes.Ldstr, fieldName);
+            _il.Emit(OpCodes.Ldloc, valueTemp);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.SetStaticPrivateField);
+
+            // Leave value on stack for expression result
+            _il.Emit(OpCodes.Ldloc, valueTemp);
+            SetStackUnknown();
+            return;
+        }
+
+        // Instance private field assignment - use runtime helper
+        // Emit value first (may contain await which clears stack)
+        EmitExpression(sp.Value);
+        EnsureBoxed();
+        var valueLocal = _il.DeclareLocal(typeof(object));
+        _il.Emit(OpCodes.Stloc, valueLocal);
+
+        // SetPrivateField(instance, declaringClass, fieldName, value)
+        EmitExpression(sp.Object);
+        EnsureBoxed();
+        EmitDeclaringClassTypeOrGetFromObject();
+        _il.Emit(OpCodes.Ldstr, fieldName);
+        _il.Emit(OpCodes.Ldloc, valueLocal);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetPrivateField);
+
+        // Leave value on stack for expression result
+        _il.Emit(OpCodes.Ldloc, valueLocal);
+        SetStackUnknown();
     }
 
     protected override void EmitCallPrivate(Expr.CallPrivate cp)
     {
-        throw new NotImplementedException($"Private method '{cp.Name.Lexeme}' call not supported in compiled async arrow functions.");
+        // Get the method name without the # prefix
+        string methodName = cp.Name.Lexeme;
+        if (methodName.StartsWith('#'))
+            methodName = methodName[1..];
+
+        // Check if this is static private method call (ClassName.#method())
+        if (cp.Object is Expr.Variable classVar &&
+            _ctx?.CurrentClassName != null &&
+            classVar.Name.Lexeme == _ctx.CurrentClassName.Split('.').Last()?.Split('_').Last())
+        {
+            // In async state machines, we can't directly call private static methods
+            // from another class, so always use the runtime helper for static private methods
+            EmitDeclaringClassType();
+            _il.Emit(OpCodes.Ldstr, methodName);
+            EmitArgumentArray(cp.Arguments);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.CallStaticPrivateMethod);
+            SetStackUnknown();
+            return;
+        }
+
+        // Instance private method call - use runtime helper
+        // Emit arguments first (may contain await which clears stack)
+        var argTemps = new List<LocalBuilder>();
+        foreach (var arg in cp.Arguments)
+        {
+            EmitExpression(arg);
+            EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            argTemps.Add(temp);
+        }
+
+        // CallPrivateMethod(instance, declaringClass, methodName, args[])
+        EmitExpression(cp.Object);
+        EnsureBoxed();
+        EmitDeclaringClassTypeOrGetFromObject();
+        _il.Emit(OpCodes.Ldstr, methodName);
+
+        // Build args array from temps
+        _il.Emit(OpCodes.Ldc_I4, argTemps.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < argTemps.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            _il.Emit(OpCodes.Ldloc, argTemps[i]);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.CallPrivateMethod);
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits the typeof() for the declaring class containing the private member.
+    /// Used for static private member access where we know the class at compile time.
+    /// </summary>
+    private void EmitDeclaringClassType()
+    {
+        if (_ctx?.CurrentClassBuilder != null)
+        {
+            _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
+            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+        }
+        else
+        {
+            // Should not happen if called correctly - throw at runtime
+            _il.Emit(OpCodes.Ldstr, "Cannot access private members outside of class context");
+            _il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            _il.Emit(OpCodes.Throw);
+        }
+    }
+
+    /// <summary>
+    /// Emits the declaring class type for instance private member access.
+    /// When CurrentClassBuilder is available, uses typeof(). Otherwise, calls GetType()
+    /// on the instance that's already on the stack (duplicates it first).
+    /// Stack before: [instance]
+    /// Stack after: [instance, Type]
+    /// </summary>
+    private void EmitDeclaringClassTypeOrGetFromObject()
+    {
+        if (_ctx?.CurrentClassBuilder != null)
+        {
+            // Known class at compile time - use typeof
+            _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
+            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+        }
+        else
+        {
+            // Unknown class at compile time (async arrow in regular method)
+            // Get the type from the instance that's on the stack
+            // Stack: [instance] -> [instance, instance] -> [instance, Type]
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetType")!);
+        }
+    }
+
+    /// <summary>
+    /// Emits an object[] array from argument expressions.
+    /// </summary>
+    private void EmitArgumentArray(List<Expr> arguments)
+    {
+        _il.Emit(OpCodes.Ldc_I4, arguments.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(arguments[i]);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
     }
 
     protected override void EmitCompoundSet(Expr.CompoundSet cs)

@@ -2191,6 +2191,9 @@ public partial class RuntimeEmitter
         // Worker Threads support (SharedArrayBuffer, TypedArrays, Atomics, MessagePort, Worker)
         EmitWorkerHelpers(typeBuilder, runtime);
 
+        // Private field/method access helpers for async contexts
+        EmitPrivateMemberHelpers(typeBuilder, runtime);
+
         typeBuilder.CreateType();
     }
 }
