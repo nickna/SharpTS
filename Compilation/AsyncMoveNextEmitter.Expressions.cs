@@ -21,17 +21,33 @@ public partial class AsyncMoveNextEmitter
         EmitExpression(a.Expression);
         EnsureBoxed();
 
-        // 2. Convert to Task<object> - handle both $Promise and raw Task<object>
+        // 2. Convert to Task<object> - handle $Promise, Task<object>, or non-Task values
         // If it's a $Promise, extract its Task property
+        // If it's already a Task<object>, use it directly
+        // Otherwise, wrap in Task.FromResult (for non-promise values like numbers, strings, etc.)
         var taskLocal = _il.DeclareLocal(typeof(Task<object>));
         var isPromiseLabel = _il.DefineLabel();
+        var isTaskLabel = _il.DefineLabel();
+        var wrapValueLabel = _il.DefineLabel();
         var haveTaskLabel = _il.DefineLabel();
 
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.TSPromiseType);
         _il.Emit(OpCodes.Brtrue, isPromiseLabel);
 
-        // Not a $Promise - assume it's a Task<object>
+        // Not a $Promise - check if it's a Task<object>
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, typeof(Task<object>));
+        _il.Emit(OpCodes.Brtrue, isTaskLabel);
+
+        // Not a Promise or Task - wrap in Task.FromResult
+        _il.MarkLabel(wrapValueLabel);
+        _il.Emit(OpCodes.Call, typeof(Task).GetMethod("FromResult")!.MakeGenericMethod(typeof(object)));
+        _il.Emit(OpCodes.Stloc, taskLocal);
+        _il.Emit(OpCodes.Br, haveTaskLabel);
+
+        // Is a Task<object> - use directly
+        _il.MarkLabel(isTaskLabel);
         _il.Emit(OpCodes.Castclass, typeof(Task<object>));
         _il.Emit(OpCodes.Stloc, taskLocal);
         _il.Emit(OpCodes.Br, haveTaskLabel);

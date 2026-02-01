@@ -37,7 +37,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     // Bound method cache to avoid repeated Bind() allocations
     // Key is the method name (since we already resolved the method via _lookupCache)
-    private readonly Dictionary<string, SharpTSFunction> _boundMethodCache = [];
+    private readonly Dictionary<string, ISharpTSCallable> _boundMethodCache = [];
 
     /// <summary>
     /// Whether this instance is frozen (no property additions, removals, or modifications).
@@ -78,7 +78,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private sealed class PropertyResolution
     {
         public required ResolutionType Type { get; init; }
-        public SharpTSFunction? Function { get; init; }
+        public ISharpTSCallable? Function { get; init; }
     }
 
     public void SetInterpreter(Interpreter interpreter) => _interpreter = interpreter;
@@ -110,7 +110,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         }
 
         // Check for method
-        SharpTSFunction? method = _klass.FindMethod(name);
+        ISharpTSCallable? method = _klass.FindMethod(name);
         if (method != null)
         {
             return new PropertyResolution
@@ -140,7 +140,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         return resolution.Type switch
         {
             ResolutionType.AutoAccessor => _klass.GetAutoAccessorValue(this, propName),
-            ResolutionType.Getter => resolution.Function!.Bind(this).Call(_interpreter!, []),
+            ResolutionType.Getter => ((SharpTSFunction)resolution.Function!).Bind(this).Call(_interpreter!, []),
             ResolutionType.Field => _fields[propName],
             ResolutionType.Method => GetOrCreateBoundMethod(propName, resolution.Function!),
             ResolutionType.NotFound => throw new Exception($"Undefined property '{propName}'."),
@@ -151,12 +151,13 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// <summary>
     /// Gets a cached bound method or creates and caches a new one.
     /// Avoids repeated Bind() allocations for frequently accessed methods.
+    /// Handles both sync and async methods via SharpTSClass.BindMethod.
     /// </summary>
-    private SharpTSFunction GetOrCreateBoundMethod(string methodName, SharpTSFunction method)
+    private ISharpTSCallable GetOrCreateBoundMethod(string methodName, ISharpTSCallable method)
     {
         if (!_boundMethodCache.TryGetValue(methodName, out var boundMethod))
         {
-            boundMethod = method.Bind(this);
+            boundMethod = SharpTSClass.BindMethod(method, this);
             _boundMethodCache[methodName] = boundMethod;
         }
         return boundMethod;

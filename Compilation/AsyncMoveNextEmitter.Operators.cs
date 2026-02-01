@@ -24,15 +24,25 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
-        // Start with first string
-        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
-
-        // Interleave expressions and remaining strings
+        // In async context, expressions may contain await which clears the stack.
+        // Phase 1: Evaluate all expressions to temps first (awaits happen here)
+        var exprTemps = new List<LocalBuilder>();
         for (int i = 0; i < tl.Expressions.Count; i++)
         {
-            // Emit expression, convert to string
             EmitExpression(tl.Expressions[i]);
             EnsureBoxed();
+            var temp = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, temp);
+            exprTemps.Add(temp);
+        }
+
+        // Phase 2: Build string from temps (no awaits, stack safe)
+        _il.Emit(OpCodes.Ldstr, tl.Strings[0]);
+
+        for (int i = 0; i < exprTemps.Count; i++)
+        {
+            // Load expression value from temp and convert to string
+            _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
             _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
 

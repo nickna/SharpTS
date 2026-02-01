@@ -313,13 +313,25 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Stloc, resultLocal);
 
         // Check if done: GetProperty(result, "done")
+        // IMPORTANT: Use strict boolean check, not IsTruthy - IsTruthy treats 0 as falsy
+        // which would incorrectly end the loop when yielding zero
         _il.Emit(OpCodes.Ldloc, resultLocal);
         _il.Emit(OpCodes.Ldstr, "done");
         _il.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
 
-        // Convert to bool and check
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IsTruthy);
-        _il.Emit(OpCodes.Brtrue, endLabel);
+        // Check if it's a boxed bool true (strict check)
+        var notDoneLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Isinst, typeof(bool));
+        _il.Emit(OpCodes.Brfalse, notDoneLabel);  // Not a bool - continue loop
+
+        // It's a bool - unbox and check if true
+        _il.Emit(OpCodes.Ldloc, resultLocal);
+        _il.Emit(OpCodes.Ldstr, "done");
+        _il.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+        _il.Emit(OpCodes.Unbox_Any, typeof(bool));
+        _il.Emit(OpCodes.Brtrue, endLabel);  // done === true -> exit loop
+
+        _il.MarkLabel(notDoneLabel);
 
         // Get value: GetProperty(result, "value")
         _il.Emit(OpCodes.Ldloc, resultLocal);

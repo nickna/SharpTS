@@ -302,8 +302,8 @@ internal class SyntheticThisInstance : SharpTSInstance
         return new SharpTSClass(
             name: "SyntheticThis",
             superclass: null,
-            methods: new Dictionary<string, SharpTSFunction>(),
-            staticMethods: new Dictionary<string, SharpTSFunction>(),
+            methods: new Dictionary<string, ISharpTSCallable>(),
+            staticMethods: new Dictionary<string, ISharpTSCallable>(),
             staticProperties: new Dictionary<string, object?>(),
             getters: null,
             setters: null,

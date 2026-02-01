@@ -85,6 +85,19 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable
     {
         RuntimeEnvironment environment = new(_closure);
         environment.Define("this", instance);
+
+        // Propagate 'super' from closure if present (needed for async methods in derived classes)
+        try
+        {
+            var superclass = _closure.Get(new Parsing.Token(Parsing.TokenType.SUPER, "super", null, 0));
+            if (superclass != null)
+                environment.Define("super", superclass);
+        }
+        catch
+        {
+            // 'super' not in scope - ignore
+        }
+
         return new SharpTSAsyncFunction(_declaration, environment);
     }
 

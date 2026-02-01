@@ -345,7 +345,7 @@ public partial class Interpreter
             var method = inst.GetClass().FindMethod(methodName);
             if (method != null)
             {
-                var bound = method.Bind(inst);
+                var bound = SharpTSClass.BindMethod(method, inst);
                 return bound.Call(this, args);
             }
         }

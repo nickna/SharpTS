@@ -309,7 +309,7 @@ public partial class Interpreter
         }
 
         // Try static method
-        SharpTSFunction? staticMethod = klass.FindStaticMethod(memberName);
+        ISharpTSCallable? staticMethod = klass.FindStaticMethod(memberName);
         if (staticMethod != null) return staticMethod;
 
         // Try static property
@@ -700,7 +700,7 @@ public partial class Interpreter
             }
 
             // Bind method to instance
-            return method.Bind(instance).Call(this, arguments);
+            return SharpTSClass.BindMethod(method, instance).Call(this, arguments);
         }
 
         throw new Exception($"Runtime Error: Cannot call private method '{methodName}' on non-class value.");

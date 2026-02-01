@@ -269,7 +269,7 @@ public partial class Interpreter
 
         // super() with null Method means constructor call
         string methodName = expr.Method?.Lexeme ?? "constructor";
-        SharpTSFunction? method = superclass.FindMethod(methodName);
+        ISharpTSCallable? method = superclass.FindMethod(methodName);
 
         // If no constructor exists, return a no-op callable for super() calls
         // This matches TypeScript's implicit default constructor behavior
@@ -283,7 +283,7 @@ public partial class Interpreter
             throw new Exception($"Undefined property '{methodName}'.");
         }
 
-        return method.Bind(instance);
+        return SharpTSClass.BindMethod(method, instance);
     }
 
     /// <summary>
@@ -788,8 +788,8 @@ public partial class Interpreter
 
         using (PushScope(classEnv))
         {
-            Dictionary<string, SharpTSFunction> methods = [];
-            Dictionary<string, SharpTSFunction> staticMethods = [];
+            Dictionary<string, ISharpTSCallable> methods = [];
+            Dictionary<string, ISharpTSCallable> staticMethods = [];
             Dictionary<string, object?> staticProperties = [];
             List<Stmt.Field> instanceFields = [];
 
@@ -820,7 +820,15 @@ public partial class Interpreter
             // Process methods (skip overload signatures with no body)
             foreach (Stmt.Function method in classExpr.Methods.Where(m => m.Body != null))
             {
-                SharpTSFunction func = new(method, _environment);
+                // Create the appropriate function type based on async/generator flags
+                ISharpTSCallable func;
+                if (method.IsAsync)
+                    func = new SharpTSAsyncFunction(method, _environment);
+                else if (method.IsGenerator)
+                    func = new SharpTSGeneratorFunction(method, _environment);
+                else
+                    func = new SharpTSFunction(method, _environment);
+
                 if (method.IsStatic)
                 {
                     staticMethods[method.Name.Lexeme] = func;

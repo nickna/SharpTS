@@ -1211,15 +1211,15 @@ public partial class Interpreter : IDisposable
             _environment.Define("super", superclass);
         }
 
-        Dictionary<string, SharpTSFunction> methods = [];
-        Dictionary<string, SharpTSFunction> staticMethods = [];
+        Dictionary<string, ISharpTSCallable> methods = [];
+        Dictionary<string, ISharpTSCallable> staticMethods = [];
         Dictionary<string, object?> staticProperties = [];
         List<Stmt.Field> instanceFields = [];
         // ES2022 private class elements
         List<Stmt.Field> instancePrivateFields = [];
-        Dictionary<string, SharpTSFunction> privateMethods = [];
+        Dictionary<string, ISharpTSCallable> privateMethods = [];
         Dictionary<string, object?> staticPrivateFields = [];
-        Dictionary<string, SharpTSFunction> staticPrivateMethods = [];
+        Dictionary<string, ISharpTSCallable> staticPrivateMethods = [];
 
         // Process fields: collect instance fields, defer static field initialization if using StaticInitializers
         // Note: Declare fields are processed normally - they can't have initializers (enforced by parser),
@@ -1271,7 +1271,15 @@ public partial class Interpreter : IDisposable
         // Separate static and instance methods (skip overload signatures with no body)
         foreach (Stmt.Function method in classStmt.Methods.Where(m => m.Body != null))
         {
-            SharpTSFunction func = new(method, _environment);
+            // Create the appropriate function type based on async/generator flags
+            ISharpTSCallable func;
+            if (method.IsAsync)
+                func = new SharpTSAsyncFunction(method, _environment);
+            else if (method.IsGenerator)
+                func = new SharpTSGeneratorFunction(method, _environment);
+            else
+                func = new SharpTSFunction(method, _environment);
+
             if (method.IsPrivate)
             {
                 // ES2022 private methods

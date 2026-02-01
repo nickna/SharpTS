@@ -186,7 +186,7 @@ public static class JSONBuiltIns
         {
             var toJson = inst.GetClass().FindMethod("toJSON");
             if (toJson != null)
-                return toJson.Bind(inst).Call(interp, []);
+                return SharpTSClass.BindMethod(toJson, inst).Call(interp, []);
         }
         else if (value is SharpTSObject obj && obj.Fields.TryGetValue("toJSON", out var fn))
         {

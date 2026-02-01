@@ -20,17 +20,17 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSClass(
     string name,
     SharpTSClass? superclass,
-    Dictionary<string, SharpTSFunction> methods,
-    Dictionary<string, SharpTSFunction> staticMethods,
+    Dictionary<string, ISharpTSCallable> methods,
+    Dictionary<string, ISharpTSCallable> staticMethods,
     Dictionary<string, object?> staticProperties,
     Dictionary<string, SharpTSFunction>? getters = null,
     Dictionary<string, SharpTSFunction>? setters = null,
     bool isAbstract = false,
     List<Stmt.Field>? instanceFields = null,
     List<Stmt.Field>? instancePrivateFields = null,
-    Dictionary<string, SharpTSFunction>? privateMethods = null,
+    Dictionary<string, ISharpTSCallable>? privateMethods = null,
     Dictionary<string, object?>? staticPrivateFields = null,
-    Dictionary<string, SharpTSFunction>? staticPrivateMethods = null,
+    Dictionary<string, ISharpTSCallable>? staticPrivateMethods = null,
     List<Stmt.AutoAccessor>? instanceAutoAccessors = null,
     Dictionary<string, object?>? staticAutoAccessors = null) : ISharpTSCallable, ITypeCategorized
 {
@@ -40,8 +40,8 @@ public class SharpTSClass(
     public string Name { get; } = name;
     public SharpTSClass? Superclass { get; } = superclass;
     public bool IsAbstract { get; } = isAbstract;
-    private readonly FrozenDictionary<string, SharpTSFunction> _methods = methods.ToFrozenDictionary();
-    private readonly FrozenDictionary<string, SharpTSFunction> _staticMethods = staticMethods.ToFrozenDictionary();
+    private readonly FrozenDictionary<string, ISharpTSCallable> _methods = methods.ToFrozenDictionary();
+    private readonly FrozenDictionary<string, ISharpTSCallable> _staticMethods = staticMethods.ToFrozenDictionary();
     private readonly Dictionary<string, object?> _staticProperties = staticProperties;
     private readonly FrozenDictionary<string, SharpTSFunction> _getters = getters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
     private readonly FrozenDictionary<string, SharpTSFunction> _setters = setters?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
@@ -49,8 +49,8 @@ public class SharpTSClass(
 
     // Method lookup cache - avoids repeated inheritance chain walks
     // Key: method name, Value: method (null means not found in entire chain)
-    private readonly Dictionary<string, SharpTSFunction?> _methodCache = [];
-    private readonly Dictionary<string, SharpTSFunction?> _staticMethodCache = [];
+    private readonly Dictionary<string, ISharpTSCallable?> _methodCache = [];
+    private readonly Dictionary<string, ISharpTSCallable?> _staticMethodCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _getterCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
 
@@ -58,9 +58,9 @@ public class SharpTSClass(
     // Instance private storage - ConditionalWeakTable for GC-friendly per-instance storage
     private readonly ConditionalWeakTable<object, Dictionary<string, object?>> _privateFieldStorage = new();
     private readonly List<Stmt.Field> _instancePrivateFields = instancePrivateFields ?? [];
-    private readonly FrozenDictionary<string, SharpTSFunction> _privateMethods = privateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
+    private readonly FrozenDictionary<string, ISharpTSCallable> _privateMethods = privateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
     private readonly Dictionary<string, object?> _staticPrivateFields = staticPrivateFields ?? [];
-    private readonly FrozenDictionary<string, SharpTSFunction> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, SharpTSFunction>.Empty;
+    private readonly FrozenDictionary<string, ISharpTSCallable> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
 
     // Auto-accessor backing storage (TypeScript 4.9+)
     // Instance auto-accessor storage - ConditionalWeakTable for per-instance backing values
@@ -71,7 +71,7 @@ public class SharpTSClass(
 
     public int Arity()
     {
-        SharpTSFunction? constructor = FindMethod("constructor");
+        ISharpTSCallable? constructor = FindMethod("constructor");
         if (constructor != null) return constructor.Arity();
         return Superclass?.Arity() ?? 0;
     }
@@ -90,10 +90,10 @@ public class SharpTSClass(
         // Initialize auto-accessor backing storage (before constructor runs)
         InitializeAutoAccessors(interpreter, instance);
 
-        SharpTSFunction? constructor = FindMethod("constructor");
+        ISharpTSCallable? constructor = FindMethod("constructor");
         if (constructor != null)
         {
-            constructor.Bind(instance).Call(interpreter, arguments);
+            BindMethod(constructor, instance).Call(interpreter, arguments);
         }
         else if (Superclass != null)
         {
@@ -102,6 +102,20 @@ public class SharpTSClass(
         }
 
         return instance;
+    }
+
+    /// <summary>
+    /// Binds a method to an instance, handling both sync and async function types.
+    /// </summary>
+    public static ISharpTSCallable BindMethod(ISharpTSCallable method, SharpTSInstance instance)
+    {
+        return method switch
+        {
+            SharpTSFunction func => func.Bind(instance),
+            SharpTSAsyncFunction asyncFunc => asyncFunc.Bind(instance),
+            SharpTSGeneratorFunction genFunc => genFunc.Bind(instance),
+            _ => method // For other callables that don't need binding
+        };
     }
 
     private void InitializeInstanceFields(Interpreter interpreter, SharpTSInstance instance)
@@ -140,16 +154,16 @@ public class SharpTSClass(
         }
     }
 
-    public SharpTSFunction? FindMethod(string name)
+    public ISharpTSCallable? FindMethod(string name)
     {
         // Check cache first
-        if (_methodCache.TryGetValue(name, out SharpTSFunction? cached))
+        if (_methodCache.TryGetValue(name, out ISharpTSCallable? cached))
         {
             return cached;
         }
 
         // Look up in this class's methods
-        if (_methods.TryGetValue(name, out SharpTSFunction? method))
+        if (_methods.TryGetValue(name, out ISharpTSCallable? method))
         {
             _methodCache[name] = method;
             return method;
@@ -161,16 +175,16 @@ public class SharpTSClass(
         return result;
     }
 
-    public SharpTSFunction? FindStaticMethod(string name)
+    public ISharpTSCallable? FindStaticMethod(string name)
     {
         // Check cache first
-        if (_staticMethodCache.TryGetValue(name, out SharpTSFunction? cached))
+        if (_staticMethodCache.TryGetValue(name, out ISharpTSCallable? cached))
         {
             return cached;
         }
 
         // Look up in this class's static methods
-        if (_staticMethods.TryGetValue(name, out SharpTSFunction? method))
+        if (_staticMethods.TryGetValue(name, out ISharpTSCallable? method))
         {
             _staticMethodCache[name] = method;
             return method;
@@ -312,7 +326,7 @@ public class SharpTSClass(
     /// <summary>
     /// Gets a private instance method. Private methods are NOT inherited.
     /// </summary>
-    public SharpTSFunction? GetPrivateMethod(string name)
+    public ISharpTSCallable? GetPrivateMethod(string name)
     {
         return _privateMethods.GetValueOrDefault(name);
     }
@@ -340,7 +354,7 @@ public class SharpTSClass(
     /// <summary>
     /// Gets a static private method. Static private methods are NOT inherited.
     /// </summary>
-    public SharpTSFunction? GetStaticPrivateMethod(string name)
+    public ISharpTSCallable? GetStaticPrivateMethod(string name)
     {
         return _staticPrivateMethods.GetValueOrDefault(name);
     }

@@ -27,8 +27,8 @@ public partial class Interpreter
     internal SharpTSClass ApplyAllDecorators(
         Stmt.Class classStmt,
         SharpTSClass klass,
-        Dictionary<string, SharpTSFunction> methods,
-        Dictionary<string, SharpTSFunction> staticMethods,
+        Dictionary<string, ISharpTSCallable> methods,
+        Dictionary<string, ISharpTSCallable> staticMethods,
         Dictionary<string, SharpTSFunction> getters,
         Dictionary<string, SharpTSFunction> setters)
     {
@@ -122,7 +122,7 @@ public partial class Interpreter
     /// Legacy: decorator(target, propertyKey, descriptor) => descriptor | void
     /// Stage 3: decorator(value, context) => value | void
     /// </summary>
-    private SharpTSFunction ApplyMethodDecorators(Stmt.Function method, SharpTSFunction func, SharpTSClass klass)
+    private ISharpTSCallable ApplyMethodDecorators(Stmt.Function method, ISharpTSCallable func, SharpTSClass klass)
     {
         if (method.Decorators == null || method.Decorators.Count == 0)
             return func;
@@ -144,7 +144,7 @@ public partial class Interpreter
                 if (result is SharpTSObject resultObj)
                 {
                     var newDescriptor = SharpTSPropertyDescriptor.FromObject(resultObj);
-                    if (newDescriptor.Value is SharpTSFunction newFunc)
+                    if (newDescriptor.Value is ISharpTSCallable newFunc)
                     {
                         func = newFunc;
                     }
@@ -156,7 +156,7 @@ public partial class Interpreter
                 var context = SharpTSDecoratorContext.ForMethod(method.Name.Lexeme, method.IsStatic);
                 result = decoratorFn.Call(this, [func, context.ToRuntimeObject()]);
 
-                if (result is SharpTSFunction replacement)
+                if (result is ISharpTSCallable replacement)
                 {
                     func = replacement;
                 }
