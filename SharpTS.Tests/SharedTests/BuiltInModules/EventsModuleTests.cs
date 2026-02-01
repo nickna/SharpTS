@@ -187,7 +187,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_Once_WithArguments(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -237,7 +237,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_RemoveListener_Alias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -287,7 +287,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_RemoveAllListeners_AllEvents(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -437,7 +437,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_PrependOnceListener_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -584,7 +584,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_RemoveDuringEmit_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -652,7 +652,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_AddDuringEmit_Compiled(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -687,7 +687,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_SameListenerMultipleTimes(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -713,7 +713,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_AddListener_Alias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -732,7 +732,7 @@ public class EventsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void EventEmitter_MultipleEmitters(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

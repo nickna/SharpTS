@@ -94,7 +94,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_SetTimeout_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // Note: Cannot use captured variable mutation due to known closure limitation.
@@ -206,7 +206,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_SetImmediate_ExecutesCallback_Compiled(ExecutionMode mode)
     {
         // Note: Cannot use captured variable mutation due to known closure limitation.

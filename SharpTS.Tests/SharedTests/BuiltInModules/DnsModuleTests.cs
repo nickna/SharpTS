@@ -184,7 +184,7 @@ public class DnsModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Dns_Lookup_RequiresHostname(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

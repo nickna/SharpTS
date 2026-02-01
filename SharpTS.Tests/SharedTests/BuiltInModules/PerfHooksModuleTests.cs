@@ -105,7 +105,7 @@ public class PerfHooksModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void PerfHooks_PerformanceNow_MeasuresElapsed(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

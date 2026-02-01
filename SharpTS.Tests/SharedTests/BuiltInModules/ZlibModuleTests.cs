@@ -397,7 +397,7 @@ public class ZlibModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Zlib_Constants_Brotli_Basic(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -458,7 +458,7 @@ public class ZlibModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Zlib_ReturnsBuffer_Basic(ExecutionMode mode)
     {
         // Note: zstdCompressSync and deflateRawSync excluded due to deployment requirements
