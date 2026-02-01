@@ -278,6 +278,41 @@ public partial class Parser
                     }
                 }
             }
+            // Check for computed property name: [expression]: type = value
+            else if (Check(TokenType.LEFT_BRACKET))
+            {
+                // Validate: computed properties cannot have access modifiers in TypeScript
+                // Actually TypeScript does allow this, so we'll support it
+
+                // Validate: declare cannot be used with computed properties
+                if (isMemberDeclare)
+                {
+                    throw new Exception($"Parse Error at line {Peek().Line}: 'declare' modifier cannot be used with computed property names.");
+                }
+
+                Advance(); // consume '['
+                Expr computedKey = Expression();
+                Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed property name.");
+
+                // Create a synthetic token for the field name (for error reporting)
+                Token syntheticName = new Token(TokenType.IDENTIFIER, "<computed>", null, Previous().Line);
+
+                Consume(TokenType.COLON, "Expect ':' after computed property name.");
+                string typeAnnotation = ParseTypeAnnotation();
+                Expr? initializer = null;
+                if (Match(TokenType.EQUAL))
+                {
+                    initializer = Expression();
+                }
+
+                Consume(TokenType.SEMICOLON, "Expect ';' after computed property field declaration.");
+                var field = new Stmt.Field(syntheticName, typeAnnotation, initializer, isStatic, access, isReadonly, IsOptional: false, HasDefiniteAssignmentAssertion: false, memberDecorators, IsPrivate: false, IsDeclare: false, ComputedKey: computedKey);
+                fields.Add(field);
+                if (isStatic)
+                {
+                    staticInitializers.Add(field);
+                }
+            }
             else if (Peek().Type == TokenType.IDENTIFIER && (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION || PeekNext().Type == TokenType.BANG))
             {
                 // Field declaration

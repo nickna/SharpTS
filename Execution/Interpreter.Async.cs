@@ -673,6 +673,18 @@ public partial class Interpreter
         {
             return enumObj.GetReverse(enumIdx);
         }
+        // Handle symbol keys - return undefined for missing symbol properties
+        if (index is SharpTSSymbol symbol)
+        {
+            if (obj is SharpTSObject symObj)
+            {
+                return symObj.GetBySymbol(symbol) ?? SharpTSUndefined.Instance;
+            }
+            if (obj is SharpTSInstance symInst)
+            {
+                return symInst.GetBySymbol(symbol) ?? SharpTSUndefined.Instance;
+            }
+        }
         if (obj is SharpTSObject sharpObj && index is string strKey)
         {
             return sharpObj.GetProperty(strKey);

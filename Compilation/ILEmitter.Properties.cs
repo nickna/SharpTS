@@ -1669,6 +1669,7 @@ public partial class ILEmitter
             TypeCategory.Error => TryEmitErrorPropertyGet(g, propName),
             TypeCategory.Timeout => TryEmitTimeoutPropertyGet(g, propName),
             TypeCategory.Buffer => TryEmitBufferPropertyGet(g, propName),
+            TypeCategory.Symbol => TryEmitSymbolPropertyGet(g, propName),
             _ => false
         };
     }
@@ -1802,6 +1803,18 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.TSBufferLengthGetter);
         IL.Emit(OpCodes.Conv_R8);  // Convert to double for TypeScript number
         IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryEmitSymbolPropertyGet(Expr.Get g, string propName)
+    {
+        if (propName != "description") return false;
+
+        EmitExpression(g.Object);
+        EmitBoxIfNeeded(g.Object);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSSymbolType);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.SymbolDescriptionGetter);
         SetStackUnknown();
         return true;
     }

@@ -112,15 +112,30 @@ public class SharpTSClass(
         // Then initialize this class's fields
         foreach (var field in _instanceFields)
         {
-            if (field.Initializer != null)
+            object? value = field.Initializer != null
+                ? interpreter.Evaluate(field.Initializer)
+                : null;
+
+            // Check if this is a computed property name
+            if (field.ComputedKey != null)
             {
-                object? value = interpreter.Evaluate(field.Initializer);
-                instance.SetRawField(field.Name.Lexeme, value);
+                object? key = interpreter.Evaluate(field.ComputedKey);
+                if (key is SharpTSSymbol symbol)
+                {
+                    // Symbol key - store in symbol fields
+                    instance.SetBySymbol(symbol, value);
+                }
+                else
+                {
+                    // String key - store as regular field
+                    string keyStr = key?.ToString() ?? "undefined";
+                    instance.SetRawField(keyStr, value);
+                }
             }
             else
             {
-                // Fields without initializers are set to null/undefined
-                instance.SetRawField(field.Name.Lexeme, null);
+                // Regular field
+                instance.SetRawField(field.Name.Lexeme, value);
             }
         }
     }

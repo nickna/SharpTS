@@ -436,5 +436,41 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         _symbolFields[symbol] = value;
     }
 
+    /// <summary>
+    /// Removes a property by symbol key. Respects frozen/sealed state.
+    /// </summary>
+    public bool DeleteBySymbol(SharpTSSymbol symbol)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            return false;
+        }
+        return _symbolFields.Remove(symbol);
+    }
+
+    /// <summary>
+    /// Removes a property by symbol key with strict mode behavior.
+    /// </summary>
+    public bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot delete symbol property of a frozen or sealed object");
+            }
+            return false;
+        }
+        return _symbolFields.Remove(symbol);
+    }
+
+    /// <summary>
+    /// Checks if the instance has a property with the given symbol key.
+    /// </summary>
+    public bool HasSymbolProperty(SharpTSSymbol symbol)
+    {
+        return _symbolFields.ContainsKey(symbol);
+    }
+
     public override string ToString() => _klass.Name + " instance";
 }

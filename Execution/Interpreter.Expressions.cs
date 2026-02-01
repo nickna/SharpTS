@@ -603,9 +603,9 @@ public partial class Interpreter
             IndexTarget.ConstEnumError t => throw new Exception(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
             IndexTarget.ObjectString t => t.Target.GetProperty(t.Key),
-            IndexTarget.ObjectSymbol t => t.Target.GetBySymbol(t.Key),
+            IndexTarget.ObjectSymbol t => t.Target.GetBySymbol(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.InstanceString t => t.Target.Get(new Token(TokenType.IDENTIFIER, t.Key, null, 0)),
-            IndexTarget.InstanceSymbol t => t.Target.GetBySymbol(t.Key),
+            IndexTarget.InstanceSymbol t => t.Target.GetBySymbol(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.GlobalThis t => t.Target.GetProperty(t.Key),
             IndexTarget.Unsupported => throw new Exception("Index access not supported on this type."),
             _ => throw new Exception("Index access not supported on this type.")

@@ -1381,6 +1381,108 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Emits HasIn(object key, object obj) -> bool
+    /// Implements the JavaScript 'in' operator: checks if a property exists in an object.
+    /// Handles both symbol keys and string keys.
+    /// </summary>
+    private void EmitHasIn(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "HasIn",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]
+        );
+        runtime.HasIn = method;
+
+        var il = method.GetILGenerator();
+        var falseLabel = il.DefineLabel();
+        var symbolKeyLabel = il.DefineLabel();
+        var dictLabel = il.DefineLabel();
+        var listLabel = il.DefineLabel();
+
+        // if (obj == null) return false
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+
+        // Check if key is a symbol
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // String key path
+        // Check if obj is $TSObject
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        var notTSObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notTSObjectLabel);
+
+        // $TSObject - call HasProperty(string)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasProperty);
+        il.Emit(OpCodes.Ret);
+
+        // Check if obj is Dictionary<string, object>
+        il.MarkLabel(notTSObjectLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, dictLabel);
+
+        // Check if obj is List<object> (array)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, listLabel);
+
+        // Other types - return false
+        il.Emit(OpCodes.Br, falseLabel);
+
+        // Dictionary - use ContainsKey
+        il.MarkLabel(dictLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Ret);
+
+        // List (array) - check if index exists
+        il.MarkLabel(listLabel);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        // Try to convert key to int
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+        il.Emit(OpCodes.Stloc, indexLocal);
+        // index >= 0 && index < list.Count
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, falseLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, falseLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        // Symbol key path
+        il.MarkLabel(symbolKeyLabel);
+        // Get symbol dict and check if key exists
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Ret);
+
+        // Return false
+        il.MarkLabel(falseLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
     // NOTE: EmitConvertArgsForUnionTypes was removed - it was dead code.
     // The actual conversion is done by the private ConvertArgsForUnionTypes method on $TSFunction.
 

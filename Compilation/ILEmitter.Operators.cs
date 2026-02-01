@@ -67,9 +67,13 @@ public partial class ILEmitter
                 break;
 
             case In:
-                // 'in' operator falls through to runtime call (not yet implemented in IL)
-                // This will cause a compile-time error for now
-                throw new NotSupportedException("The 'in' operator is not yet supported in compiled mode.");
+                // 'in' operator checks if a property exists in an object
+                EmitExpression(b.Left);
+                EmitBoxIfNeeded(b.Left);
+                EmitExpression(b.Right);
+                EmitBoxIfNeeded(b.Right);
+                EmitCallAndBoxBool(_ctx.Runtime!.HasIn);
+                break;
 
             case InstanceOf:
                 EmitExpression(b.Left);

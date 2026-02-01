@@ -39,43 +39,23 @@ public static class SymbolBuiltIns
             // Symbol.for() - returns a shared symbol from the global symbol registry
             "for" => new BuiltInMethod("for", 1, (_, _, args) =>
             {
-                var key = args.Count > 0 ? args[0]?.ToString() : null;
-                return GetOrCreateGlobalSymbol(key);
+                var key = args.Count > 0 ? args[0]?.ToString() ?? "undefined" : "undefined";
+                return SharpTSSymbol.For(key);
             }),
 
-            // Symbol.keyFor() - returns the key for a symbol in the global registry
+            // Symbol.keyFor() - returns the key for a symbol in the global registry, or undefined
             "keyFor" => new BuiltInMethod("keyFor", 1, (_, _, args) =>
             {
                 if (args.Count > 0 && args[0] is SharpTSSymbol sym)
                 {
-                    return GetKeyForGlobalSymbol(sym);
+                    var key = SharpTSSymbol.KeyFor(sym);
+                    // Return undefined if symbol is not in global registry (matches JS behavior)
+                    return key ?? (object?)SharpTSUndefined.Instance;
                 }
-                return null;
+                return SharpTSUndefined.Instance;
             }),
 
             _ => null
         };
-    }
-
-    // Global symbol registry for Symbol.for() / Symbol.keyFor()
-    private static readonly Dictionary<string, SharpTSSymbol> _globalRegistry = new();
-    private static readonly Dictionary<SharpTSSymbol, string> _reverseRegistry = new();
-
-    private static SharpTSSymbol GetOrCreateGlobalSymbol(string? key)
-    {
-        if (key == null) return new SharpTSSymbol();
-
-        if (!_globalRegistry.TryGetValue(key, out var symbol))
-        {
-            symbol = new SharpTSSymbol(key);
-            _globalRegistry[key] = symbol;
-            _reverseRegistry[symbol] = key;
-        }
-        return symbol;
-    }
-
-    private static string? GetKeyForGlobalSymbol(SharpTSSymbol symbol)
-    {
-        return _reverseRegistry.TryGetValue(symbol, out var key) ? key : null;
     }
 }

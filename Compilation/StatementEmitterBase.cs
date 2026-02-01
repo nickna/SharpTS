@@ -710,14 +710,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use static runtime helper
+                // delete obj[key] - use DeleteIndex which handles both symbol and string keys
                 EmitExpression(getIndex.Object);
                 EnsureBoxed();
                 EmitExpression(getIndex.Index);
                 EnsureBoxed();
-                // Convert key to string
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.Stringify);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteProperty);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.DeleteIndex);
                 SetStackType(StackType.Boolean);
                 break;
 

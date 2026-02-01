@@ -79,6 +79,7 @@ public class EmittedRuntime
     public MethodBuilder IsTruthy { get; set; } = null!;
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
+    public MethodBuilder HasIn { get; set; } = null!;
 
     // Console format specifier methods
     public MethodBuilder HasFormatSpecifiers { get; set; } = null!;
@@ -178,6 +179,7 @@ public class EmittedRuntime
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder SetIndexStrict { get; set; } = null!;
+    public MethodBuilder DeleteIndex { get; set; } = null!;
     public MethodBuilder ObjectFromEntries { get; set; } = null!;
     public MethodBuilder ObjectHasOwn { get; set; } = null!;
     public MethodBuilder ObjectAssign { get; set; } = null!;
@@ -238,6 +240,13 @@ public class EmittedRuntime
     public FieldBuilder SymbolToPrimitive { get; set; } = null!;
     public FieldBuilder SymbolSpecies { get; set; } = null!;
     public FieldBuilder SymbolUnscopables { get; set; } = null!;
+
+    // Symbol.for() and Symbol.keyFor() global registry support
+    public MethodBuilder SymbolFor { get; set; } = null!;
+    public MethodBuilder SymbolKeyFor { get; set; } = null!;
+
+    // Symbol.description instance property getter
+    public MethodBuilder SymbolDescriptionGetter { get; set; } = null!;
 
     // Symbol storage for compiled objects (symbol as object key)
     public FieldBuilder SymbolStorageField { get; set; } = null!;

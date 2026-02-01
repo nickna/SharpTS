@@ -334,6 +334,18 @@ public partial class Interpreter
     {
         object? obj = Evaluate(getIndex.Object);
         object? key = Evaluate(getIndex.Index);
+
+        // Handle symbol keys
+        if (key is SharpTSSymbol symbol)
+        {
+            return obj switch
+            {
+                SharpTSObject tsObj => tsObj.DeleteBySymbol(symbol),
+                SharpTSInstance tsInst => tsInst.DeleteBySymbol(symbol),
+                _ => true
+            };
+        }
+
         string keyStr = Stringify(key);
 
         return obj switch
@@ -352,6 +364,18 @@ public partial class Interpreter
     {
         object? obj = await EvaluateAsync(getIndex.Object);
         object? key = await EvaluateAsync(getIndex.Index);
+
+        // Handle symbol keys
+        if (key is SharpTSSymbol symbol)
+        {
+            return obj switch
+            {
+                SharpTSObject tsObj => tsObj.DeleteBySymbol(symbol),
+                SharpTSInstance tsInst => tsInst.DeleteBySymbol(symbol),
+                _ => true
+            };
+        }
+
         string keyStr = Stringify(key);
 
         return obj switch
@@ -481,6 +505,25 @@ public partial class Interpreter
     private object EvaluateIn(object? left, object? right)
     {
         // 'in' operator checks if a property exists in an object
+        // Handle symbol keys specially
+        if (left is SharpTSSymbol symbol)
+        {
+            if (right is SharpTSObject symObj)
+            {
+                return symObj.HasSymbolProperty(symbol);
+            }
+            if (right is SharpTSInstance symInst)
+            {
+                return symInst.HasSymbolProperty(symbol);
+            }
+            // Symbols can't be in arrays or other types
+            if (right is SharpTSArray)
+            {
+                return false;
+            }
+            throw new InterpreterException("'in' operator requires an object on the right side.");
+        }
+
         string key = left?.ToString() ?? "";
 
         if (right is SharpTSObject obj)

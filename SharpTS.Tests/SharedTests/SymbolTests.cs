@@ -283,4 +283,194 @@ public class SymbolTests
     }
 
     #endregion
+
+    #region Symbol.for() and Symbol.keyFor() - Global Registry
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolFor_ReturnsSameSymbolForSameKey(ExecutionMode mode)
+    {
+        var source = """
+            let s1 = Symbol.for("shared");
+            let s2 = Symbol.for("shared");
+            console.log(s1 === s2);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolFor_ReturnsDifferentSymbolsForDifferentKeys(ExecutionMode mode)
+    {
+        var source = """
+            let s1 = Symbol.for("key1");
+            let s2 = Symbol.for("key2");
+            console.log(s1 === s2);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolFor_DifferentFromRegularSymbol(ExecutionMode mode)
+    {
+        var source = """
+            let globalSym = Symbol.for("test");
+            let local = Symbol("test");
+            console.log(globalSym === local);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolKeyFor_ReturnsKeyForGlobalSymbol(ExecutionMode mode)
+    {
+        var source = """
+            let s = Symbol.for("myKey");
+            console.log(Symbol.keyFor(s));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("myKey\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolKeyFor_ReturnsUndefinedForLocalSymbol(ExecutionMode mode)
+    {
+        var source = """
+            let s = Symbol("local");
+            let key = Symbol.keyFor(s);
+            console.log(key === undefined);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SymbolKeyFor_WellKnownSymbolsNotInRegistry(ExecutionMode mode)
+    {
+        var source = """
+            let key = Symbol.keyFor(Symbol.iterator);
+            console.log(key === undefined);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    #endregion
+
+    #region Symbol Description Property
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Symbol_Description_ReturnsDescription(ExecutionMode mode)
+    {
+        var source = """
+            let s = Symbol("myDesc");
+            console.log(s.description);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("myDesc\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Symbol_Description_UndefinedWhenNoDescription(ExecutionMode mode)
+    {
+        var source = """
+            let s = Symbol();
+            console.log(s.description);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("undefined\n", output);
+    }
+
+    #endregion
+
+    #region Symbol Object Property Operations (Not Yet Implemented)
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Symbol_ObjectKey_DeleteProperty(ExecutionMode mode)
+    {
+        var source = """
+            let sym = Symbol("key");
+            let obj: { [key: symbol]: string } = {};
+            obj[sym] = "value";
+            console.log(obj[sym]);
+            delete obj[sym];
+            console.log(obj[sym]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("value\nundefined\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Symbol_InOperator_Works(ExecutionMode mode)
+    {
+        var source = """
+            let sym = Symbol("key");
+            let obj: { [key: symbol]: string } = {};
+            console.log(sym in obj);
+            obj[sym] = "value";
+            console.log(sym in obj);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\ntrue\n", output);
+    }
+
+    #endregion
+
+    #region Symbol in Classes (Not Yet Supported)
+
+    /// <summary>
+    /// Tests computed property names with symbols in class fields.
+    /// Note: Currently interpreter-only because the compiler has a pre-existing limitation
+    /// where class methods cannot access module-level variables (closure capture issue).
+    /// </summary>
+    [Fact]
+    public void Symbol_AsClassPropertyKey()
+    {
+        var source = """
+            const mySymbol = Symbol("myProp");
+
+            class MyClass {
+                [mySymbol]: string = "initial";
+
+                getValue(): string {
+                    return this[mySymbol];
+                }
+
+                setValue(v: string): void {
+                    this[mySymbol] = v;
+                }
+            }
+
+            let instance = new MyClass();
+            console.log(instance.getValue());
+            instance.setValue("updated");
+            console.log(instance.getValue());
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("initial\nupdated\n", output);
+    }
+
+    #endregion
 }

@@ -268,5 +268,35 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         return _symbolFields.ContainsKey(symbol);
     }
 
+    /// <summary>
+    /// Removes a property by symbol key. Respects frozen/sealed state.
+    /// </summary>
+    public bool DeleteBySymbol(SharpTSSymbol symbol)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            // Frozen and sealed objects silently ignore property deletions
+            return false;
+        }
+        return _symbolFields.Remove(symbol);
+    }
+
+    /// <summary>
+    /// Removes a property by symbol key with strict mode behavior.
+    /// In strict mode, throws TypeError for deletions on frozen/sealed objects.
+    /// </summary>
+    public bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+    {
+        if (IsFrozen || IsSealed)
+        {
+            if (strictMode)
+            {
+                throw new Exception($"TypeError: Cannot delete symbol property of a frozen or sealed object");
+            }
+            return false;
+        }
+        return _symbolFields.Remove(symbol);
+    }
+
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
 }

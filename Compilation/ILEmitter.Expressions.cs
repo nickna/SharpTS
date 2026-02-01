@@ -536,14 +536,12 @@ public partial class ILEmitter
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use static runtime helper
+                // delete obj[key] - use DeleteIndex which handles both symbol and string keys
                 EmitExpression(getIndex.Object);
                 EmitBoxIfNeeded(getIndex.Object);
                 EmitExpression(getIndex.Index);
                 EmitBoxIfNeeded(getIndex.Index);
-                // Convert key to string
-                EmitCallUnknown(_ctx.Runtime!.Stringify);
-                EmitCallUnknown(_ctx.Runtime!.DeleteProperty);
+                EmitCallUnknown(_ctx.Runtime!.DeleteIndex);
                 SetStackType(StackType.Boolean);
                 break;
 

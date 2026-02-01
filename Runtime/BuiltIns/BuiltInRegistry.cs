@@ -180,6 +180,7 @@ public sealed class BuiltInRegistry
         RegisterStreamTypes(registry);
         RegisterHttpTypes(registry);
         RegisterWorkerTypes(registry);
+        RegisterSymbolType(registry);
 
         return registry;
     }
@@ -703,6 +704,20 @@ public sealed class BuiltInRegistry
         // Register Atomics singleton member lookup
         registry.RegisterInstanceType(typeof(AtomicsSingleton), (instance, name) =>
             ((AtomicsSingleton)instance).GetMember(name));
+    }
+
+    private static void RegisterSymbolType(BuiltInRegistry registry)
+    {
+        // Symbol instance members (description property)
+        registry.RegisterInstanceType(typeof(SharpTSSymbol), (instance, name) =>
+        {
+            var symbol = (SharpTSSymbol)instance;
+            return name switch
+            {
+                "description" => symbol.Description ?? (object)SharpTSUndefined.Instance,
+                _ => null
+            };
+        });
     }
 
     private static string Stringify(object? obj)
