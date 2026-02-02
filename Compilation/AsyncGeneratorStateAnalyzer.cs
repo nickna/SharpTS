@@ -52,7 +52,8 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
         bool UsesThis,
         bool HasYieldStar,
         bool HasTryCatch,
-        List<TryBlockInfo> TryBlocks
+        List<TryBlockInfo> TryBlocks,
+        List<Stmt.ForOf> ForOfLoopsWithSuspension  // for...of loops containing yields/awaits that need enumerator hoisting
     )
     {
         /// <summary>
@@ -145,7 +146,8 @@ public partial class AsyncGeneratorStateAnalyzer : AstVisitorBase
             UsesThis: _usesThis,
             HasYieldStar: _hasYieldStar,
             HasTryCatch: _hasTryCatch,
-            TryBlocks: tryBlocks
+            TryBlocks: tryBlocks,
+            ForOfLoopsWithSuspension: [.. _forOfLoopsWithSuspension]
         );
     }
 

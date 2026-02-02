@@ -206,10 +206,9 @@ public class PrivateFieldAsyncTests
 
     // NOTE: Async generator class methods work in compiled mode. The interpreter needs
     // additional support for recognizing async generator class methods as async iterables.
-    // For-of loops inside async generators need enumerator hoisting in the compiler.
 
-    [Theory(Skip = "For-of loops in async generator class methods need enumerator hoisting")]
-    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    [Theory]
+    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
     public void AsyncGenerator_CanReadPrivateField(ExecutionMode mode)
     {
         var source = """

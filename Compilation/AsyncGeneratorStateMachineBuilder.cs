@@ -111,6 +111,9 @@ public class AsyncGeneratorStateMachineBuilder
         _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
         _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
 
+        // Define hoisted enumerators for for...of loops containing suspensions (yield/await)
+        _hoisting.DefineHoistedEnumerators(analysis.ForOfLoopsWithSuspension, _types.IEnumerator);
+
         // Define 'this' field for instance methods that use 'this'
         if (isInstanceMethod && analysis.UsesThis)
         {
@@ -490,6 +493,11 @@ public class AsyncGeneratorStateMachineBuilder
     /// Checks if a variable is hoisted to the state machine.
     /// </summary>
     public bool IsHoisted(string name) => _hoisting.IsHoisted(name);
+
+    /// <summary>
+    /// Gets the hoisted enumerator field for a for...of loop containing suspension points.
+    /// </summary>
+    public FieldBuilder? GetEnumeratorField(Parsing.Stmt.ForOf loop) => _hoisting.GetEnumeratorField(loop);
 
     /// <summary>
     /// Finalizes the type after MoveNextAsync body has been emitted.

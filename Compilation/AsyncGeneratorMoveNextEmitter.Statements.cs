@@ -209,6 +209,22 @@ public partial class AsyncGeneratorMoveNextEmitter
             return;
         }
 
+        // Check if this loop needs a hoisted enumerator (contains yield/await)
+        var enumeratorField = _builder.GetEnumeratorField(f);
+
+        if (enumeratorField == null)
+        {
+            // No suspension inside this loop - use local enumerator
+            EmitForOfWithLocalEnumerator(f);
+            return;
+        }
+
+        // Loop contains yield/await - use hoisted enumerator field
+        EmitForOfWithHoistedEnumerator(f, enumeratorField);
+    }
+
+    private void EmitForOfWithLocalEnumerator(Stmt.ForOf f)
+    {
         string varName = f.Variable.Lexeme;
         var varField = _builder.GetVariableField(varName);
 
@@ -248,6 +264,72 @@ public partial class AsyncGeneratorMoveNextEmitter
             var varLocal = _il.DeclareLocal(typeof(object));
             _ctx!.Locals.RegisterLocal(varName, varLocal);
             _il.Emit(OpCodes.Ldloc, enumLocal);
+            _il.Emit(OpCodes.Callvirt, current);
+            _il.Emit(OpCodes.Stloc, varLocal);
+        }
+
+        EmitStatement(f.Body);
+
+        _il.MarkLabel(continueLabel);
+        _il.Emit(OpCodes.Br, startLabel);
+
+        _il.MarkLabel(endLabel);
+        _loopLabels.Pop();
+    }
+
+    private void EmitForOfWithHoistedEnumerator(Stmt.ForOf f, FieldBuilder enumeratorField)
+    {
+        // For...of loop with hoisted enumerator (contains yield/await)
+        // The enumerator is stored in a state machine field so it persists across suspension boundaries
+        string varName = f.Variable.Lexeme;
+        var varField = _builder.GetVariableField(varName);
+
+        var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
+        var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
+        var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
+
+        // Emit the iterable and get enumerator
+        EmitExpression(f.Iterable);
+        EnsureBoxed();
+        _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
+        _il.Emit(OpCodes.Callvirt, getEnumerator);
+
+        // Store enumerator to hoisted field (need temp local for the stack swap)
+        var tempLocal = _il.DeclareLocal(typeof(System.Collections.IEnumerator));
+        _il.Emit(OpCodes.Stloc, tempLocal);
+        _il.Emit(OpCodes.Ldarg_0);  // this
+        _il.Emit(OpCodes.Ldloc, tempLocal);
+        _il.Emit(OpCodes.Stfld, enumeratorField);
+
+        var startLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+        var continueLabel = _il.DefineLabel();
+
+        _loopLabels.Push((endLabel, continueLabel, null));
+
+        _il.MarkLabel(startLabel);
+
+        // Check MoveNext - load enumerator from hoisted field
+        _il.Emit(OpCodes.Ldarg_0);  // this
+        _il.Emit(OpCodes.Ldfld, enumeratorField);
+        _il.Emit(OpCodes.Callvirt, moveNext);
+        _il.Emit(OpCodes.Brfalse, endLabel);
+
+        // Set loop variable from Current (loaded from hoisted enumerator field)
+        if (varField != null)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldarg_0);  // this for enumerator field
+            _il.Emit(OpCodes.Ldfld, enumeratorField);
+            _il.Emit(OpCodes.Callvirt, current);
+            _il.Emit(OpCodes.Stfld, varField);
+        }
+        else
+        {
+            var varLocal = _il.DeclareLocal(typeof(object));
+            _ctx!.Locals.RegisterLocal(varName, varLocal);
+            _il.Emit(OpCodes.Ldarg_0);  // this for enumerator field
+            _il.Emit(OpCodes.Ldfld, enumeratorField);
             _il.Emit(OpCodes.Callvirt, current);
             _il.Emit(OpCodes.Stloc, varLocal);
         }
