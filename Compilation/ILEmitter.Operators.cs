@@ -13,6 +13,10 @@ public partial class ILEmitter
 {
     protected override void EmitBinary(Expr.Binary b)
     {
+        // Try constant folding first
+        if (TryEmitConstantFolded(b))
+            return;
+
         // Check for bigint operations first
         if (IsBigIntOperation(b))
         {
@@ -183,6 +187,13 @@ public partial class ILEmitter
 
     protected override void EmitLogical(Expr.Logical l)
     {
+        // Try constant folding first
+        if (ConstantFolder.TryFoldLogical(l, out var result))
+        {
+            EmitConstantValue(result);
+            return;
+        }
+
         var builder = _ctx.ILBuilder;
         var endLabel = builder.DefineLabel("logical_end");
 
@@ -212,6 +223,13 @@ public partial class ILEmitter
 
     protected override void EmitUnary(Expr.Unary u)
     {
+        // Try constant folding first
+        if (ConstantFolder.TryFoldUnary(u, out var result))
+        {
+            EmitConstantValue(result);
+            return;
+        }
+
         switch (u.Operator.Type)
         {
             case TokenType.MINUS:
@@ -1137,5 +1155,61 @@ public partial class ILEmitter
         }
 
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Attempts to evaluate a binary expression at compile time and emit the result as a constant.
+    /// </summary>
+    /// <param name="b">The binary expression to fold.</param>
+    /// <returns>True if the expression was constant-folded; false otherwise.</returns>
+    private bool TryEmitConstantFolded(Expr.Binary b)
+    {
+        if (!ConstantFolder.TryFoldBinary(b, out var result))
+            return false;
+
+        EmitConstantValue(result);
+        return true;
+    }
+
+    /// <summary>
+    /// Emits a constant value onto the stack.
+    /// </summary>
+    private void EmitConstantValue(object? value)
+    {
+        switch (value)
+        {
+            case null:
+                IL.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                break;
+
+            case SharpTS.Runtime.Types.SharpTSUndefined:
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                SetStackUnknown();
+                break;
+
+            case bool boolVal:
+                IL.Emit(boolVal ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                SetStackUnknown();
+                break;
+
+            case double doubleVal:
+                IL.Emit(OpCodes.Ldc_R8, doubleVal);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                SetStackUnknown();
+                break;
+
+            case string strVal:
+                IL.Emit(OpCodes.Ldstr, strVal);
+                SetStackType(StackType.String);
+                break;
+
+            default:
+                // Shouldn't happen, but fall back to null
+                IL.Emit(OpCodes.Ldnull);
+                SetStackUnknown();
+                break;
+        }
     }
 }
