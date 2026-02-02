@@ -1999,6 +1999,9 @@ public partial class RuntimeEmitter
         // InvokeValue/InvokeMethodValue must come before Promise methods (needed by InvokeCallback)
         EmitInvokeValue(typeBuilder, runtime);
         EmitInvokeMethodValue(typeBuilder, runtime);
+        // Exception helpers must come before Promise methods (Promise.any uses CreateException)
+        EmitCreateException(typeBuilder, runtime);
+        EmitWrapException(typeBuilder, runtime);
         // Promise methods must come before GetProperty (which needs PromiseThen for typeof p.then)
         EmitPromiseMethods(typeBuilder, runtime);
         EmitGetProperty(typeBuilder, runtime);
@@ -2100,8 +2103,7 @@ public partial class RuntimeEmitter
         EmitStringAt(typeBuilder, runtime);
         // Object utilities
         EmitGetSuperMethod(typeBuilder, runtime);
-        EmitCreateException(typeBuilder, runtime);
-        EmitWrapException(typeBuilder, runtime);
+        // EmitCreateException and EmitWrapException moved earlier (before Promise methods)
         EmitThrowUndefinedVariable(typeBuilder, runtime);
         EmitRandom(typeBuilder, runtime, randomField);
         EmitGetEnumMemberName(typeBuilder, runtime);

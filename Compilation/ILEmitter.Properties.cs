@@ -256,7 +256,20 @@ public partial class ILEmitter
         // Handle static property assignment via 'this' in static context (static blocks, static methods)
         if (s.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
         {
-            // Find the class name for the current class builder
+            // First check for class expressions
+            if (_ctx.CurrentClassExpr != null &&
+                _ctx.ClassExprStaticFields != null &&
+                _ctx.ClassExprStaticFields.TryGetValue(_ctx.CurrentClassExpr, out var classExprStaticFields) &&
+                classExprStaticFields.TryGetValue(s.Name.Lexeme, out var classExprStaticField))
+            {
+                EmitExpression(s.Value);
+                EmitBoxIfNeeded(s.Value);
+                IL.Emit(OpCodes.Dup); // Keep value for expression result
+                IL.Emit(OpCodes.Stsfld, classExprStaticField);
+                return;
+            }
+
+            // Find the class name for the current class builder (class declarations)
             string? currentClassName = null;
             foreach (var (name, builder) in _ctx.Classes)
             {

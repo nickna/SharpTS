@@ -89,6 +89,7 @@ public partial class ILCompiler
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
+            IsStaticConstructorContext = true,
             // Registry services
             ClassRegistry = GetClassRegistry(),
             // Module-level variable access

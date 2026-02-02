@@ -563,6 +563,17 @@ public partial class ILEmitter
         // The type has been pre-defined during collection phase.
         if (_ctx.ClassExprBuilders != null && _ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
         {
+            // If the class has static initializers, trigger the static constructor
+            // JavaScript/TypeScript static blocks run when the class is defined, not lazily
+            if (ce.StaticInitializers?.Count > 0 || ce.Fields.Any(f => f.IsStatic && f.Initializer != null))
+            {
+                // RuntimeHelpers.RunClassConstructor(typeof(ClassName).TypeHandle)
+                IL.Emit(OpCodes.Ldtoken, typeBuilder);
+                IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                IL.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
+                IL.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+            }
+
             // Load the Type object using ldtoken + GetTypeFromHandle
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);

@@ -234,10 +234,9 @@ public class AsConstTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsConst_WithMethodCalls_Works(ExecutionMode mode)
     {
-        // Compiler does not support dynamic dispatch for map on as const arrays
         var source = """
             const nums = [3, 1, 2] as const;
             const doubled = nums.map(n => n * 2);
@@ -251,10 +250,9 @@ public class AsConstTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsConst_FilterOperation_Works(ExecutionMode mode)
     {
-        // Compiler does not support dynamic dispatch for filter on as const arrays
         var source = """
             const values = [1, 2, 3, 4, 5] as const;
             const evens = values.filter(v => v % 2 === 0);
@@ -268,10 +266,9 @@ public class AsConstTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsConst_ReduceOperation_Works(ExecutionMode mode)
     {
-        // Compiler does not support dynamic dispatch for reduce on as const arrays
         var source = """
             const nums = [1, 2, 3, 4] as const;
             const sum = nums.reduce((acc, n) => acc + n, 0);

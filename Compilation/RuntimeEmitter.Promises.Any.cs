@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
     /// Emits the HandleAnyCompletion static method.
     /// Called by ContinueWith for each task in PromiseAny.
     /// </summary>
-    private void EmitHandleAnyCompletion(ILGenerator il, AnyStateClass anyState)
+    private void EmitHandleAnyCompletion(ILGenerator il, AnyStateClass anyState, EmittedRuntime runtime)
     {
         // Parameters: arg0 = Task<object?>, arg1 = $AnyState
 
@@ -178,11 +178,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, anyState.PendingCountField);
         il.Emit(OpCodes.Brtrue, notAllFailedLabel);
 
-        // All failed: state.Tcs.TrySetException(new Exception("AggregateError: All promises rejected"))
+        // All failed: state.Tcs.TrySetException($Runtime.CreateException(new $AggregateError(errors, null)))
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
-        il.Emit(OpCodes.Ldstr, "AggregateError: All promises were rejected");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, [_types.String]));
+        // Create $AggregateError(state.RejectionReasons, null)
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldfld, anyState.RejectionReasonsField);  // errors list
+        il.Emit(OpCodes.Ldnull);  // message (use default)
+        il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
+        // Wrap with CreateException to store in Data["__tsValue"]
+        il.Emit(OpCodes.Call, runtime.CreateException);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception]));
         il.Emit(OpCodes.Pop);  // discard bool result
 

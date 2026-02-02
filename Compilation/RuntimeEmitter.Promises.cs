@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
             [typeof(Task<object?>), anyState.Type]
         );
         anyState.HandleCompletionMethod = handleAnyCompletion;
-        EmitHandleAnyCompletion(handleAnyCompletion.GetILGenerator(), anyState);
+        EmitHandleAnyCompletion(handleAnyCompletion.GetILGenerator(), anyState, runtime);
 
         // Define HandleAnyCompletionShim(Task<object?>, object?) - casts and calls the real method
         var handleAnyCompletionShim = typeBuilder.DefineMethod(

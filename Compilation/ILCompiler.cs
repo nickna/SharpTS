@@ -570,6 +570,7 @@ public partial class ILCompiler
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.String>(stringEmitter);
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.StringLiteral>(stringEmitter);
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Array>(new ArrayEmitter());
+        _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Tuple>(new ArrayEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Buffer>(new BufferEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.EventEmitter>(new EventEmitterEmitter());
         _typeEmitterRegistry.Register<TypeSystem.TypeInfo.Date>(new DateEmitter());

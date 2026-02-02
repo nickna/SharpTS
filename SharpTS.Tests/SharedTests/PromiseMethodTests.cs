@@ -685,7 +685,7 @@ public class PromiseMethodTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Any_AllReject_ThrowsAggregateError(ExecutionMode mode)
     {
         var source = """

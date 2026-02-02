@@ -113,6 +113,12 @@ public partial class CompilationContext
     /// </summary>
     public bool IsStrictMode { get; set; }
 
+    /// <summary>
+    /// True when emitting code inside a static constructor (class initializer).
+    /// In this context, 'this' refers to the class type, not an instance.
+    /// </summary>
+    public bool IsStaticConstructorContext { get; set; }
+
     // Namespace support: namespace path -> static field
     public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
 

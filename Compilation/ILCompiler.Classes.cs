@@ -1085,12 +1085,14 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Emits static constructor for class expression static field initializers.
+    /// Emits static constructor for class expression static field initializers and static blocks.
     /// </summary>
     private void EmitClassExpressionStaticConstructor(Expr.ClassExpr classExpr, TypeBuilder typeBuilder)
     {
-        var staticFieldsWithInit = classExpr.Fields.Where(f => f.IsStatic && f.Initializer != null).ToList();
-        if (staticFieldsWithInit.Count == 0) return;
+        bool hasStaticFields = classExpr.Fields.Any(f => f.IsStatic && f.Initializer != null);
+        bool hasStaticInitializers = classExpr.StaticInitializers?.Count > 0;
+
+        if (!hasStaticFields && !hasStaticInitializers) return;
 
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -1100,22 +1102,42 @@ public partial class ILCompiler
 
         var il = cctor.GetILGenerator();
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null);
+        ctx.IsStaticConstructorContext = true;
         var emitter = new ILEmitter(ctx);
 
-        foreach (var field in staticFieldsWithInit)
+        // Process StaticInitializers if available (preserves declaration order)
+        if (hasStaticInitializers)
         {
-            var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
-
-            emitter.EmitExpression(field.Initializer!);
-
-            // Only box if the field type is object (dynamic field)
-            // Don't box for typed fields (number -> double, etc.)
-            if (staticField.FieldType == typeof(object))
+            foreach (var initializer in classExpr.StaticInitializers!)
             {
-                emitter.EmitBoxIfNeeded(field.Initializer!);
-            }
+                switch (initializer)
+                {
+                    case Stmt.Field field when field.IsStatic && field.Initializer != null:
+                        var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
+                        emitter.EmitExpression(field.Initializer);
+                        if (staticField.FieldType == typeof(object))
+                            emitter.EmitBoxIfNeeded(field.Initializer);
+                        il.Emit(OpCodes.Stsfld, staticField);
+                        break;
 
-            il.Emit(OpCodes.Stsfld, staticField);
+                    case Stmt.StaticBlock block:
+                        foreach (var stmt in block.Body)
+                            emitter.EmitStatement(stmt);
+                        break;
+                }
+            }
+        }
+        else
+        {
+            // Fallback for backward compatibility (fields only)
+            foreach (var field in classExpr.Fields.Where(f => f.IsStatic && f.Initializer != null))
+            {
+                var staticField = _classExprs.StaticFields[classExpr][field.Name.Lexeme];
+                emitter.EmitExpression(field.Initializer!);
+                if (staticField.FieldType == typeof(object))
+                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                il.Emit(OpCodes.Stsfld, staticField);
+            }
         }
 
         il.Emit(OpCodes.Ret);

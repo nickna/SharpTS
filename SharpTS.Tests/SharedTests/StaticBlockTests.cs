@@ -118,10 +118,9 @@ public class StaticBlockTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void StaticBlock_ThisCanCallStaticMethod(ExecutionMode mode)
     {
-        // Compiler does not yet support this.method() in static blocks (requires runtime dispatch)
         var source = """
             class Foo {
                 static greet(): string { return "hello"; }
@@ -184,10 +183,9 @@ public class StaticBlockTests
     // ============== CLASS EXPRESSIONS ==============
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void StaticBlock_InAnonymousClassExpression(ExecutionMode mode)
     {
-        // Compiler does not yet support static blocks in class expressions
         var source = """
             const Foo = class {
                 static value: number = 0;
@@ -200,10 +198,9 @@ public class StaticBlockTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void StaticBlock_InNamedClassExpression(ExecutionMode mode)
     {
-        // Compiler does not yet support static blocks in class expressions
         var source = """
             const Foo = class Bar {
                 static { console.log("named class expr"); }

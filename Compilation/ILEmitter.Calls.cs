@@ -444,6 +444,56 @@ public partial class ILEmitter
             return;
         }
 
+        // Special case: this.method() in static context (static blocks, static methods)
+        // In static blocks, 'this' refers to the class constructor, so this.method() calls static methods
+        if (c.Callee is Expr.Get thisStaticGet &&
+            thisStaticGet.Object is Expr.This &&
+            !_ctx.IsInstanceMethod &&
+            _ctx.CurrentClassBuilder != null)
+        {
+            // Find the class name for the current class builder
+            string? currentClassName = null;
+            foreach (var (name, builder) in _ctx.Classes)
+            {
+                if (builder == _ctx.CurrentClassBuilder)
+                {
+                    currentClassName = name;
+                    break;
+                }
+            }
+
+            if (currentClassName != null &&
+                _ctx.ClassRegistry!.TryGetCallableStaticMethod(currentClassName, thisStaticGet.Name.Lexeme, _ctx.CurrentClassBuilder, out var thisStaticMethod))
+            {
+                var staticMethodParams = thisStaticMethod!.GetParameters();
+                var paramCount = staticMethodParams.Length;
+
+                // Emit provided arguments with proper type conversions
+                for (int i = 0; i < c.Arguments.Count; i++)
+                {
+                    EmitExpression(c.Arguments[i]);
+                    if (i < staticMethodParams.Length)
+                    {
+                        EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
+                    }
+                    else
+                    {
+                        EmitBoxIfNeeded(c.Arguments[i]);
+                    }
+                }
+
+                // Pad missing optional arguments with appropriate default values
+                for (int i = c.Arguments.Count; i < paramCount; i++)
+                {
+                    EmitDefaultForType(staticMethodParams[i].ParameterType);
+                }
+
+                IL.Emit(OpCodes.Call, thisStaticMethod);
+                SetStackUnknown();
+                return;
+            }
+        }
+
         // Special case: Array/String methods
         if (c.Callee is Expr.Get methodGet)
         {

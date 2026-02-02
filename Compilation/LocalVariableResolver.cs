@@ -270,7 +270,16 @@ public class LocalVariableResolver : IVariableResolver
             return;
         }
 
-        // 4. Static context
+        // 4. Static constructor context - 'this' is the class type
+        if (_ctx.IsStaticConstructorContext && _ctx.CurrentClassBuilder != null)
+        {
+            // Load the Type object for the current class
+            _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
+            _il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            return;
+        }
+
+        // 5. Static context (not in static constructor)
         _il.Emit(OpCodes.Ldnull);
     }
 
