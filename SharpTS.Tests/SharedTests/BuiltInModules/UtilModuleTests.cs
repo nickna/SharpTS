@@ -1511,9 +1511,8 @@ public class UtilModuleTests
 
     #region Compiled-Only Standalone Tests
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Compiled_Util_ToUSVString_Standalone(ExecutionMode mode)
+    [Fact]
+    public void Compiled_Util_ToUSVString_Standalone()
     {
         // This test verifies that toUSVString is truly self-contained
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_test_{Guid.NewGuid()}");
@@ -1579,9 +1578,8 @@ public class UtilModuleTests
         }
     }
 
-    [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
-    public void Compiled_Util_Format_Standalone(ExecutionMode mode)
+    [Fact]
+    public void Compiled_Util_Format_Standalone()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_standalone_format_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);

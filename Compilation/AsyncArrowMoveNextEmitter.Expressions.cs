@@ -99,8 +99,8 @@ public partial class AsyncArrowMoveNextEmitter
                 outerBuilder.ThisField != null)
             {
                 _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+                _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
+                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
                 _il.Emit(OpCodes.Ldfld, outerBuilder.ThisField);
                 SetStackUnknown();
                 return;
@@ -1136,8 +1136,8 @@ public partial class AsyncArrowMoveNextEmitter
                 outerBuilder.ThisField != null)
             {
                 _il.Emit(OpCodes.Ldarg_0);
-                _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
-                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+                _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
+                _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
                 _il.Emit(OpCodes.Ldfld, outerBuilder.ThisField);
             }
             else

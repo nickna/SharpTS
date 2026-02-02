@@ -115,8 +115,8 @@ public class AsyncArrowVariableResolver : IVariableResolver
         if (_builder.IsCaptured("this") && _builder.CapturedFieldMap.TryGetValue("this", out var thisField))
         {
             _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+            _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
+            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
             _il.Emit(OpCodes.Ldfld, thisField);
         }
         else
@@ -130,7 +130,7 @@ public class AsyncArrowVariableResolver : IVariableResolver
         // Load through outer reference
         // Use Unbox (not Unbox_Any) to get a pointer to the boxed struct, then load field
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
+        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
 
         // Check if this is a transitive capture (needs extra indirection through parent's outer)
         if (_builder.TransitiveCaptures.Contains(name) &&
@@ -138,13 +138,13 @@ public class AsyncArrowVariableResolver : IVariableResolver
             _builder.GrandparentStateMachineType != null)
         {
             // First unbox to parent, then load parent's outer reference
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
             _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
             _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
         }
         else
         {
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
         }
 
         _il.Emit(OpCodes.Ldfld, outerField);
@@ -160,7 +160,7 @@ public class AsyncArrowVariableResolver : IVariableResolver
 
         // Get pointer to the boxed outer state machine
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField);
+        _il.Emit(OpCodes.Ldfld, _builder.OuterStateMachineField!);
 
         // Check if this is a transitive capture (needs extra indirection through parent's outer)
         if (_builder.TransitiveCaptures.Contains(name) &&
@@ -168,13 +168,13 @@ public class AsyncArrowVariableResolver : IVariableResolver
             _builder.GrandparentStateMachineType != null)
         {
             // First unbox to parent, then load parent's outer reference
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
             _il.Emit(OpCodes.Ldfld, _builder.ParentOuterStateMachineField);
             _il.Emit(OpCodes.Unbox, _builder.GrandparentStateMachineType);
         }
         else
         {
-            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType);
+            _il.Emit(OpCodes.Unbox, _builder.OuterStateMachineType!);
         }
 
         // Load value and store to field
