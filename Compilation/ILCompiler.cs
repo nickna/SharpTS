@@ -526,6 +526,12 @@ public partial class ILCompiler
         // Finalize entry-point display class first (needed by closures)
         _closures.EntryPointDisplayClass?.CreateType();
 
+        // Finalize function-level display classes
+        foreach (var tb in _closures.FunctionDisplayClasses.Values)
+        {
+            tb.CreateType();
+        }
+
         foreach (var tb in _closures.DisplayClasses.Values)
         {
             tb.CreateType();
@@ -805,6 +811,12 @@ public partial class ILCompiler
 
         // Finalize entry-point display class first (needed by closures)
         _closures.EntryPointDisplayClass?.CreateType();
+
+        // Finalize function-level display classes
+        foreach (var tb in _closures.FunctionDisplayClasses.Values)
+        {
+            tb.CreateType();
+        }
 
         foreach (var tb in _closures.DisplayClasses.Values)
         {

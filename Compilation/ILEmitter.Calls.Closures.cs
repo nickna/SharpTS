@@ -126,10 +126,31 @@ public partial class ILEmitter
             }
         }
 
+        // Populate $functionDC field if this arrow captures function-level variables
+        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true)
+        {
+            if (_ctx.FunctionDisplayClassLocal != null)
+            {
+                // In function body - use local variable
+                IL.Emit(OpCodes.Dup); // Keep display class on stack
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                IL.Emit(OpCodes.Stfld, functionDCField);
+            }
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                // In arrow body - get from parent arrow's $functionDC field
+                IL.Emit(OpCodes.Dup); // Keep display class on stack
+                IL.Emit(OpCodes.Ldarg_0); // Load parent display class
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                IL.Emit(OpCodes.Stfld, functionDCField);
+            }
+        }
+
         // Get captured variables for this arrow using the stored field mapping
         if (!_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
-            // No fields to populate, just create TSFunction
+            // No field map found - this arrow might only have $functionDC or $entryPointDC fields
+            // These were already populated above, so just create the TSFunction
             // Use two-argument GetMethodFromHandle for display class methods
             IL.Emit(OpCodes.Ldtoken, method);
             IL.Emit(OpCodes.Ldtoken, displayClass);
@@ -138,6 +159,9 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             return;
         }
+
+        // If fieldMap is empty but we have $functionDC or other special fields, that's fine
+        // The special fields were populated above
 
         // Determine if this is a named function expression with self-reference
         string? selfRefName = af.Name?.Lexeme;

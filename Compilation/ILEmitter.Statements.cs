@@ -80,6 +80,33 @@ public partial class ILEmitter
             }
         }
 
+        // Check if this is a function-level captured variable - use function display class
+        if (_ctx.CapturedFunctionLocals?.Contains(v.Name.Lexeme) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var funcDisplayField) == true &&
+            _ctx.FunctionDisplayClassLocal != null)
+        {
+            // Store initializer (or default) in function display class field
+            IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+
+            if (v.Initializer != null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+            }
+            else if (v.TypeAnnotation == "number")
+            {
+                // Typed number without initializer defaults to 0
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+            IL.Emit(OpCodes.Stfld, funcDisplayField);
+            return;
+        }
+
         // Determine if this local can use unboxed double type
         Type localType = CanUseUnboxedLocal(v) ? _ctx.Types.Double : _ctx.Types.Object;
         var local = _ctx.Locals.DeclareLocal(v.Name.Lexeme, localType);

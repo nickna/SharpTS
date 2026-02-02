@@ -611,6 +611,54 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Dup);
 
+            // Check function display class first (before regular locals)
+            if (_ctx.CapturedFunctionLocals?.Contains(v.Name.Lexeme) == true &&
+                _ctx.FunctionDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var funcDCField) == true)
+            {
+                // Store to function display class field
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                if (_ctx.FunctionDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                }
+                else if (_ctx.CurrentArrowFunctionDCField != null)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);
+                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                }
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, funcDCField);
+                SetStackUnknown();
+                return;
+            }
+
+            // Check entry-point display class (captured top-level vars)
+            if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
+                _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
+            {
+                // Store to entry-point display class field
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                if (_ctx.EntryPointDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                }
+                else if (_ctx.CurrentArrowEntryPointDCField != null)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);
+                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+                }
+                else if (_ctx.EntryPointDisplayClassStaticField != null)
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+                }
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, entryPointField);
+                SetStackUnknown();
+                return;
+            }
+
             var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
             if (local != null)
             {
@@ -726,6 +774,60 @@ public partial class ILEmitter
             }
 
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
+
+            // Check function display class first (before regular locals)
+            if (_ctx.CapturedFunctionLocals?.Contains(v.Name.Lexeme) == true &&
+                _ctx.FunctionDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var funcDCField) == true)
+            {
+                // Store to function display class field
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                if (_ctx.FunctionDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                }
+                else if (_ctx.CurrentArrowFunctionDCField != null)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);
+                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                }
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, funcDCField);
+
+                // Original value is still on stack, box it
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                SetStackUnknown();
+                return;
+            }
+
+            // Check entry-point display class (captured top-level vars)
+            if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
+                _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
+            {
+                // Store to entry-point display class field
+                var temp = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, temp);
+                if (_ctx.EntryPointDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                }
+                else if (_ctx.CurrentArrowEntryPointDCField != null)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);
+                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+                }
+                else if (_ctx.EntryPointDisplayClassStaticField != null)
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+                }
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, entryPointField);
+
+                // Original value is still on stack, box it
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                SetStackUnknown();
+                return;
+            }
 
             var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
             if (local != null)

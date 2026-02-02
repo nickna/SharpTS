@@ -88,6 +88,28 @@ public partial class ILCompiler
 
         // Maps arrow functions to their $entryPointDC field (if they capture top-level vars)
         public Dictionary<Expr.ArrowFunction, FieldBuilder> ArrowEntryPointDCFields { get; } = new(ReferenceEqualityComparer.Instance);
+
+        // ============================================
+        // Function-level display classes (for captured local variables)
+        // ============================================
+
+        // Maps function (by qualified name) to its display class type
+        public Dictionary<string, TypeBuilder> FunctionDisplayClasses { get; } = [];
+
+        // Maps function to its display class constructor
+        public Dictionary<string, ConstructorBuilder> FunctionDisplayClassCtors { get; } = [];
+
+        // Maps function to its display class fields (variable name -> field)
+        public Dictionary<string, Dictionary<string, FieldBuilder>> FunctionDisplayClassFields { get; } = [];
+
+        // Maps function to its AST node (needed for ClosureAnalyzer lookups)
+        public Dictionary<string, object> FunctionAstNodes { get; } = [];
+
+        // Maps arrow functions to their $functionDC field (if they capture function-level vars)
+        public Dictionary<Expr.ArrowFunction, FieldBuilder> ArrowFunctionDCFields { get; } = new(ReferenceEqualityComparer.Instance);
+
+        // Maps arrow functions to the function display class they need access to
+        public Dictionary<Expr.ArrowFunction, string> ArrowFunctionDCSource { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

@@ -80,4 +80,38 @@ public partial class CompilationContext
     /// Used for accessing captured top-level variables through the $entryPointDC field.
     /// </summary>
     public FieldBuilder? CurrentArrowEntryPointDCField { get; set; }
+
+    // ============================================
+    // Function-Level Display Class (for captured function-local variables)
+    // ============================================
+
+    /// <summary>
+    /// Local variable holding the current function's display class instance.
+    /// Used when function-local variables are captured by inner closures.
+    /// </summary>
+    public LocalBuilder? FunctionDisplayClassLocal { get; set; }
+
+    /// <summary>
+    /// Fields in the current function's display class (variable name -> field).
+    /// These are local variables that are captured by inner arrow functions.
+    /// </summary>
+    public Dictionary<string, FieldBuilder>? FunctionDisplayClassFields { get; set; }
+
+    /// <summary>
+    /// Set of variable names that are stored in the function display class.
+    /// Used to redirect local variable access to display class fields.
+    /// </summary>
+    public HashSet<string>? CapturedFunctionLocals { get; set; }
+
+    /// <summary>
+    /// Maps arrow functions to their $functionDC field (if they capture function-level vars).
+    /// Used when creating capturing arrows to populate the reference to the function display class.
+    /// </summary>
+    public Dictionary<ArrowFunction, FieldBuilder>? ArrowFunctionDCFields { get; set; }
+
+    /// <summary>
+    /// When inside an arrow body, this is the field that holds the reference to the function display class.
+    /// Used for accessing captured function-level variables through the $functionDC field.
+    /// </summary>
+    public FieldBuilder? CurrentArrowFunctionDCField { get; set; }
 }

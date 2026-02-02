@@ -199,6 +199,42 @@ public partial class ILEmitter
     {
         EmitExpression(a.Value);
 
+        // 1. Function display class fields (captured function-local vars)
+        // Check this BEFORE regular locals to ensure we use the shared storage
+        if (_ctx.CapturedFunctionLocals?.Contains(a.Name.Lexeme) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(a.Name.Lexeme, out var funcDCField) == true)
+        {
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Dup);
+            // Store to field: need temp since value is on top of stack
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+
+            if (_ctx.FunctionDisplayClassLocal != null)
+            {
+                // Direct access from function body
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                // Access from arrow body - go through $functionDC field
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+            }
+            else
+            {
+                // Fallback - just discard the temp and leave value on stack
+                IL.Emit(OpCodes.Pop);
+                SetStackUnknown();
+                return;
+            }
+
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, funcDCField);
+            SetStackUnknown();
+            return;
+        }
+
         var local = _ctx.Locals.GetLocal(a.Name.Lexeme);
         if (local != null)
         {

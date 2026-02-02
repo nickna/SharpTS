@@ -10,6 +10,9 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly List<(Expr.ArrowFunction Arrow, HashSet<string> Captures)> _collectedArrows = [];
+    private readonly Dictionary<Expr.ArrowFunction, Expr.ArrowFunction?> _arrowParent = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.ArrowFunction> _arrowsNeedingFunctionDC = new(ReferenceEqualityComparer.Instance);
+    private Expr.ArrowFunction? _currentParentArrow;
 
     private void CollectAndDefineArrowFunctions(List<Stmt> statements)
     {
@@ -18,6 +21,10 @@ public partial class ILCompiler
         {
             CollectArrowsFromStmt(stmt);
         }
+
+        // Propagate function DC requirements through arrow nesting
+        // If an inner arrow needs $functionDC, parent arrows also need it
+        PropagateFunctionDCRequirements();
 
         // Define methods and display classes
         foreach (var (arrow, captures) in _collectedArrows)
@@ -44,9 +51,12 @@ public partial class ILCompiler
                 paramTypes = arrow.Parameters.Select(p => p.IsRest ? _types.ListOfObject : _types.Object).ToArray();
             }
 
-            if (captures.Count == 0)
+            // Check if arrow needs function DC (for itself or to pass to inner arrows)
+            bool needsFunctionDCForArrow = _arrowsNeedingFunctionDC.Contains(arrow);
+
+            if (captures.Count == 0 && !needsFunctionDCForArrow)
             {
-                // Non-capturing: static method on $Program
+                // Non-capturing and doesn't need function DC: static method on $Program
                 var methodBuilder = _programType.DefineMethod(
                     $"<>Arrow_{_closures.ArrowMethodCounter++}",
                     MethodAttributes.Private | MethodAttributes.Static,
@@ -82,9 +92,14 @@ public partial class ILCompiler
                 bool needsEntryPointDC = _closures.EntryPointDisplayClass != null &&
                     captures.Any(c => _closures.CapturedTopLevelVars.Contains(c));
 
-                // Add fields for captured variables (except top-level captured vars, which go through $entryPointDC)
+                // Check if this arrow needs function DC (either directly or to propagate to inner arrows)
+                bool needsFunctionDC = _arrowsNeedingFunctionDC.Contains(arrow);
+                string? sourceFunction = needsFunctionDC && _closures.ArrowFunctionDCSource.TryGetValue(arrow, out var src) ? src : null;
+
+                // Add fields for captured variables (except top-level and function-level captured vars)
                 Dictionary<string, FieldBuilder> fieldMap = [];
                 FieldBuilder? entryPointDCField = null;
+                FieldBuilder? functionDCField = null;
 
                 if (needsEntryPointDC)
                 {
@@ -92,10 +107,22 @@ public partial class ILCompiler
                     entryPointDCField = displayClass.DefineField("$entryPointDC", _closures.EntryPointDisplayClass!, FieldAttributes.Public);
                 }
 
+                if (needsFunctionDC && sourceFunction != null && _closures.FunctionDisplayClasses.TryGetValue(sourceFunction, out var funcDC))
+                {
+                    // Add field to hold reference to function display class
+                    functionDCField = displayClass.DefineField("$functionDC", funcDC, FieldAttributes.Public);
+                }
+
                 foreach (var capturedVar in captures)
                 {
                     // Skip top-level captured vars - they'll be accessed through $entryPointDC
                     if (_closures.CapturedTopLevelVars.Contains(capturedVar))
+                        continue;
+
+                    // Skip function-level captured vars - they'll be accessed through $functionDC
+                    if (needsFunctionDC && sourceFunction != null &&
+                        _closures.FunctionDisplayClassFields.TryGetValue(sourceFunction, out var funcFields) &&
+                        funcFields.ContainsKey(capturedVar))
                         continue;
 
                     var field = displayClass.DefineField(capturedVar, _types.Object, FieldAttributes.Public);
@@ -107,6 +134,12 @@ public partial class ILCompiler
                 if (entryPointDCField != null)
                 {
                     _closures.ArrowEntryPointDCFields[arrow] = entryPointDCField;
+                }
+
+                // Track $functionDC field for this arrow
+                if (functionDCField != null)
+                {
+                    _closures.ArrowFunctionDCFields[arrow] = functionDCField;
                 }
 
                 // Add default constructor
@@ -266,12 +299,20 @@ public partial class ILCompiler
             case Expr.ArrowFunction af:
                 var captures = _closures.Analyzer.GetCaptures(af);
                 _collectedArrows.Add((af, captures));
+
+                // Track parent arrow for function DC propagation
+                _arrowParent[af] = _currentParentArrow;
+                var previousParent = _currentParentArrow;
+                _currentParentArrow = af;
+
                 // Also collect arrows inside this arrow's body
                 if (af.ExpressionBody != null)
                     CollectArrowsFromExpr(af.ExpressionBody);
                 if (af.BlockBody != null)
                     foreach (var s in af.BlockBody)
                         CollectArrowsFromStmt(s);
+
+                _currentParentArrow = previousParent;
                 break;
             case Expr.Binary b:
                 CollectArrowsFromExpr(b.Left);
@@ -415,6 +456,51 @@ public partial class ILCompiler
         _classExprs.ToDefine.Add(classExpr);
     }
 
+    /// <summary>
+    /// Propagates function display class requirements through arrow nesting.
+    /// If an inner arrow needs $functionDC, its parent arrows also need it to pass it through.
+    /// </summary>
+    private void PropagateFunctionDCRequirements()
+    {
+        // First, identify arrows that directly need $functionDC
+        foreach (var (arrow, captures) in _collectedArrows)
+        {
+            // Check if this arrow directly captures function-level variables
+            foreach (var (funcName, funcDCFields) in _closures.FunctionDisplayClassFields)
+            {
+                if (captures.Any(c => funcDCFields.ContainsKey(c)))
+                {
+                    _arrowsNeedingFunctionDC.Add(arrow);
+                    _closures.ArrowFunctionDCSource[arrow] = funcName;
+                    break;
+                }
+            }
+        }
+
+        // Propagate requirements up the parent chain
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var arrow in _arrowsNeedingFunctionDC.ToList())
+            {
+                if (_arrowParent.TryGetValue(arrow, out var parent) && parent != null)
+                {
+                    if (!_arrowsNeedingFunctionDC.Contains(parent))
+                    {
+                        _arrowsNeedingFunctionDC.Add(parent);
+                        // Inherit the source function from the child
+                        if (_closures.ArrowFunctionDCSource.TryGetValue(arrow, out var source))
+                        {
+                            _closures.ArrowFunctionDCSource[parent] = source;
+                        }
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+
     private void EmitArrowFunctionBodies()
     {
         foreach (var (arrow, captures) in _collectedArrows)
@@ -428,14 +514,18 @@ public partial class ILCompiler
 
             var methodBuilder = _closures.ArrowMethods[arrow];
 
-            if (captures.Count == 0)
+            // Check if this arrow needs function DC (either directly or to pass to inner arrows)
+            // This must match the logic in CollectAndDefineArrowFunctions
+            bool needsFunctionDCForArrow = _arrowsNeedingFunctionDC.Contains(arrow);
+
+            if (captures.Count == 0 && !needsFunctionDCForArrow)
             {
-                // Non-capturing: emit body into static method
+                // Non-capturing and doesn't need function DC: emit body into static method
                 EmitArrowBody(arrow, methodBuilder, null);
             }
             else
             {
-                // Capturing: emit body into display class method
+                // Capturing or needs function DC: emit body into display class method
                 var displayClass = _closures.DisplayClasses[arrow];
                 EmitArrowBody(arrow, methodBuilder, displayClass);
             }
@@ -481,7 +571,9 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
             ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
+            // Function-level display class for nested arrow functions
+            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null
         };
 
         if (displayClass != null)
@@ -503,6 +595,20 @@ public partial class ILCompiler
             if (_closures.ArrowEntryPointDCFields.TryGetValue(arrow, out var entryPointDCField))
             {
                 ctx.CurrentArrowEntryPointDCField = entryPointDCField;
+            }
+
+            // Set the $functionDC field if this arrow captures function-level variables
+            if (_closures.ArrowFunctionDCFields.TryGetValue(arrow, out var functionDCField))
+            {
+                ctx.CurrentArrowFunctionDCField = functionDCField;
+
+                // Also set up the captured function locals info so LocalVariableResolver can use it
+                if (_closures.ArrowFunctionDCSource.TryGetValue(arrow, out var sourceFuncName) &&
+                    _closures.FunctionDisplayClassFields.TryGetValue(sourceFuncName, out var funcDCFields))
+                {
+                    ctx.FunctionDisplayClassFields = funcDCFields;
+                    ctx.CapturedFunctionLocals = [.. funcDCFields.Keys];
+                }
             }
 
             // For object methods, __this is the first parameter after 'this' (display class)

@@ -113,6 +113,53 @@ public partial class ILCompiler
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
             _functions.RestParams[qualifiedFunctionName] = (restIndex, regularCount);
         }
+
+        // Track function AST node for closure analysis lookups
+        _closures.FunctionAstNodes[qualifiedFunctionName] = funcStmt;
+
+        // Create function-level display class if this function has captured locals
+        DefineFunctionDisplayClass(funcStmt, qualifiedFunctionName);
+    }
+
+    /// <summary>
+    /// Creates a display class for a function's captured local variables.
+    /// This is needed when local variables are captured by inner arrow functions.
+    /// </summary>
+    private void DefineFunctionDisplayClass(Stmt.Function funcStmt, string qualifiedFunctionName)
+    {
+        // Check if this function has local variables that are captured by inner closures
+        var capturedLocals = _closures.Analyzer.GetCapturedLocals(funcStmt);
+        if (capturedLocals.Count == 0)
+            return;
+
+        // Create display class type
+        var displayClass = _moduleBuilder.DefineType(
+            $"<>c__FuncDisplayClass_{qualifiedFunctionName.Replace(".", "_")}_{_closures.DisplayClassCounter++}",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+
+        // Define fields for each captured variable
+        var fieldMap = new Dictionary<string, FieldBuilder>();
+        foreach (var varName in capturedLocals)
+        {
+            var field = displayClass.DefineField(varName, _types.Object, FieldAttributes.Public);
+            fieldMap[varName] = field;
+        }
+
+        // Define default constructor
+        var ctor = displayClass.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            Type.EmptyTypes);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIl.Emit(OpCodes.Ret);
+
+        // Store the display class info
+        _closures.FunctionDisplayClasses[qualifiedFunctionName] = displayClass;
+        _closures.FunctionDisplayClassCtors[qualifiedFunctionName] = ctor;
+        _closures.FunctionDisplayClassFields[qualifiedFunctionName] = fieldMap;
     }
 
     private void EmitFunctionBody(Stmt.Function funcStmt)
@@ -130,6 +177,11 @@ public partial class ILCompiler
 
         var methodBuilder = _functions.Builders[qualifiedFunctionName];
         var il = methodBuilder.GetILGenerator();
+
+        // Check if this function has captured locals that need a display class
+        var hasFunctionDC = _closures.FunctionDisplayClasses.TryGetValue(qualifiedFunctionName, out var functionDCType);
+        var capturedLocals = hasFunctionDC ? _closures.Analyzer.GetCapturedLocals(funcStmt) : null;
+
         var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             ClosureAnalyzer = _closures.Analyzer,
@@ -168,8 +220,22 @@ public partial class ILCompiler
             // Entry-point display class for captured top-level variables
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
-            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
+            // Function-level display class for captured function-local variables
+            FunctionDisplayClassFields = hasFunctionDC ? _closures.FunctionDisplayClassFields[qualifiedFunctionName] : null,
+            CapturedFunctionLocals = capturedLocals,
+            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null
         };
+
+        // Create function display class instance if needed
+        LocalBuilder? displayLocal = null;
+        if (hasFunctionDC && _closures.FunctionDisplayClassCtors.TryGetValue(qualifiedFunctionName, out var functionDCCtor))
+        {
+            displayLocal = il.DeclareLocal(functionDCType!);
+            il.Emit(OpCodes.Newobj, functionDCCtor);
+            il.Emit(OpCodes.Stloc, displayLocal);
+            ctx.FunctionDisplayClassLocal = displayLocal;
+        }
 
         // Add generic type parameters to context if this is a generic function
         if (_functions.GenericParams.TryGetValue(qualifiedFunctionName, out var genericParams))
@@ -184,6 +250,28 @@ public partial class ILCompiler
         {
             Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
             ctx.DefineParameter(funcStmt.Parameters[i].Name.Lexeme, i, paramType);
+        }
+
+        // Initialize captured parameters into the function display class
+        // This must happen after parameter definitions so we have correct indices
+        if (displayLocal != null && capturedLocals != null && _closures.FunctionDisplayClassFields.TryGetValue(qualifiedFunctionName, out var funcDCFieldMap))
+        {
+            for (int i = 0; i < funcStmt.Parameters.Count; i++)
+            {
+                var paramName = funcStmt.Parameters[i].Name.Lexeme;
+                if (capturedLocals.Contains(paramName) && funcDCFieldMap.TryGetValue(paramName, out var field))
+                {
+                    il.Emit(OpCodes.Ldloc, displayLocal);
+                    il.Emit(OpCodes.Ldarg, i);
+                    // Box if the parameter is a value type (numbers are double)
+                    Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
+                    if (paramType.IsValueType)
+                    {
+                        il.Emit(OpCodes.Box, paramType);
+                    }
+                    il.Emit(OpCodes.Stfld, field);
+                }
+            }
         }
 
         var emitter = new ILEmitter(ctx);

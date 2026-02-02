@@ -55,7 +55,33 @@ public class LocalVariableResolver : IVariableResolver
             return StackType.Unknown; // Fallback for untyped parameters
         }
 
-        // 2. Locals (with type awareness)
+        // 2. Function display class fields (captured function-local vars)
+        // Check this BEFORE regular locals to ensure we use the shared storage
+        if (_ctx.CapturedFunctionLocals?.Contains(name) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var funcDCField) == true)
+        {
+            if (_ctx.FunctionDisplayClassLocal != null)
+            {
+                // Direct access from function body - use the local
+                _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                _il.Emit(OpCodes.Ldfld, funcDCField);
+            }
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                // Access from arrow body - go through $functionDC field
+                _il.Emit(OpCodes.Ldarg_0); // Load display class instance
+                _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField); // Load function display class
+                _il.Emit(OpCodes.Ldfld, funcDCField); // Load the variable field
+            }
+            else
+            {
+                // Fallback - shouldn't happen
+                return null;
+            }
+            return StackType.Unknown;
+        }
+
+        // 3. Locals (with type awareness)
         var local = _ctx.Locals.GetLocal(name);
         if (local != null)
         {
@@ -64,7 +90,7 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(localType);
         }
 
-        // 3. Captured fields (closure)
+        // 4. Captured fields (closure)
         if (_ctx.CapturedFields?.TryGetValue(name, out var field) == true)
         {
             _il.Emit(OpCodes.Ldarg_0);
@@ -72,7 +98,7 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(field.FieldType);
         }
 
-        // 4. Entry-point display class fields (captured top-level vars)
+        // 5. Entry-point display class fields (captured top-level vars)
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
@@ -103,7 +129,7 @@ public class LocalVariableResolver : IVariableResolver
             return StackType.Unknown;
         }
 
-        // 5. Top-level static vars (non-captured)
+        // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Ldsfld, topLevelField);
@@ -116,21 +142,52 @@ public class LocalVariableResolver : IVariableResolver
     /// <inheritdoc />
     public bool TryStoreVariable(string name)
     {
-        // 1. Locals
+        // 1. Function display class fields (captured function-local vars)
+        // Check this BEFORE regular locals to ensure we use the shared storage
+        if (_ctx.CapturedFunctionLocals?.Contains(name) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var funcDCField) == true)
+        {
+            // Use temp local pattern for storing to fields
+            var temp = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, temp);
+
+            if (_ctx.FunctionDisplayClassLocal != null)
+            {
+                // Direct access from function body - use the local
+                _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                // Access from arrow body - go through $functionDC field
+                _il.Emit(OpCodes.Ldarg_0); // Load display class instance
+                _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField); // Load function display class
+            }
+            else
+            {
+                // Fallback - shouldn't happen
+                return false;
+            }
+
+            _il.Emit(OpCodes.Ldloc, temp);
+            _il.Emit(OpCodes.Stfld, funcDCField);
+            return true;
+        }
+
+        // 2. Locals
         if (_ctx.Locals.TryGetLocal(name, out var local))
         {
             _il.Emit(OpCodes.Stloc, local);
             return true;
         }
 
-        // 2. Parameters
+        // 3. Parameters
         if (_ctx.TryGetParameter(name, out var argIndex))
         {
             _il.Emit(OpCodes.Starg, argIndex);
             return true;
         }
 
-        // 3. Captured fields (auto-detect value/reference type)
+        // 4. Captured fields (auto-detect value/reference type)
         if (_ctx.CapturedFields?.TryGetValue(name, out var field) == true)
         {
             // Use temp local pattern for storing to fields
@@ -143,7 +200,7 @@ public class LocalVariableResolver : IVariableResolver
             return true;
         }
 
-        // 4. Entry-point display class fields (captured top-level vars)
+        // 5. Entry-point display class fields (captured top-level vars)
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
@@ -178,7 +235,7 @@ public class LocalVariableResolver : IVariableResolver
             return true;
         }
 
-        // 5. Top-level static vars (non-captured)
+        // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
             _il.Emit(OpCodes.Stsfld, topLevelField);

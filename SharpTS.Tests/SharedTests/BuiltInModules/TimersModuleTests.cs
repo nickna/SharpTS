@@ -73,7 +73,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_SetTimeout_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -117,7 +117,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_ClearTimeout_CancelsCallback(ExecutionMode mode)
     {
         // Note: This test relies on captured variable mutation which doesn't work in compiled mode.
@@ -185,7 +185,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_SetImmediate_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -229,7 +229,7 @@ public class TimersModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Timers_ClearImmediate_CancelsCallback(ExecutionMode mode)
     {
         // Note: This test relies on captured variable mutation which doesn't work in compiled mode.

@@ -35,6 +35,16 @@ public class ClosureAnalyzer : AstVisitorBase
     // Set of variables defined in outer scopes relative to current function
     private readonly HashSet<string> _outerVariables = [];
 
+    // ============================================
+    // New: Function-level capture tracking
+    // ============================================
+
+    // Stack of function scopes - tracks the function node at each nesting level
+    private readonly Stack<object?> _functionStack = new();
+
+    // Maps function node → set of its local variables that are captured by inner closures
+    private readonly Dictionary<object, HashSet<string>> _functionCapturedLocals = [];
+
     /// <summary>
     /// Gets the captured variables for a given function/arrow AST node.
     /// </summary>
@@ -52,6 +62,26 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         return _captures.Values.Any(set => set.Contains(name));
     }
+
+    /// <summary>
+    /// Gets the set of local variables for a function that are captured by inner closures.
+    /// These variables need to be hoisted to a display class for proper mutation propagation.
+    /// </summary>
+    public HashSet<string> GetCapturedLocals(object functionNode)
+    {
+        return _functionCapturedLocals.TryGetValue(functionNode, out var locals)
+            ? locals
+            : [];
+    }
+
+    /// <summary>
+    /// Checks if a function has any local variables that are captured by inner closures.
+    /// </summary>
+    public bool HasCapturedLocals(object functionNode)
+    {
+        return _functionCapturedLocals.TryGetValue(functionNode, out var locals) && locals.Count > 0;
+    }
+
 
     /// <summary>
     /// Analyze the entire program to detect captures.
@@ -101,7 +131,41 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Check if it's an outer variable - this means it's captured
         if (_outerVariables.Contains(name))
+        {
             _captures[_currentFunction].Add(name);
+
+            // Track that this variable is captured from its defining function
+            // This enables function-level display class creation
+            // Walk up the function stack to find which function defines this variable
+            var definingFunc = FindDefiningFunction(name);
+            if (definingFunc != null)
+            {
+                // The variable is defined in some function, not at top level
+                // Mark it as captured in the defining function
+                if (!_functionCapturedLocals.TryGetValue(definingFunc, out var capturedLocals))
+                {
+                    capturedLocals = [];
+                    _functionCapturedLocals[definingFunc] = capturedLocals;
+                }
+                capturedLocals.Add(name);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds the function that defines a given variable by checking _localVars
+    /// for functions in the stack. Returns null if the variable is top-level.
+    /// </summary>
+    private object? FindDefiningFunction(string name)
+    {
+        foreach (var func in _functionStack)
+        {
+            if (func != null && _localVars.TryGetValue(func, out var locals) && locals.Contains(name))
+            {
+                return func;
+            }
+        }
+        return null; // Top-level variable
     }
 
     #endregion
@@ -297,6 +361,9 @@ public class ClosureAnalyzer : AstVisitorBase
         _captures[funcNode] = [];
         _localVars[funcNode] = [];
 
+        // Push this function onto the function stack for capture tracking
+        _functionStack.Push(funcNode);
+
         // Enter function scope and declare parameters
         EnterScope();
         foreach (var param in parameters)
@@ -311,6 +378,9 @@ public class ClosureAnalyzer : AstVisitorBase
             Visit(stmt);
 
         ExitScope();
+
+        // Pop from function stack
+        _functionStack.Pop();
 
         // Restore context
         _currentFunction = previousFunction;
@@ -337,6 +407,9 @@ public class ClosureAnalyzer : AstVisitorBase
         _currentFunctionName = af.Name?.Lexeme;
         _captures[af] = [];
         _localVars[af] = [];
+
+        // Push this arrow function onto the function stack for capture tracking
+        _functionStack.Push(af);
 
         // Enter function scope
         EnterScope();
@@ -365,6 +438,9 @@ public class ClosureAnalyzer : AstVisitorBase
                 Visit(stmt);
 
         ExitScope();
+
+        // Pop from function stack
+        _functionStack.Pop();
 
         // Restore context
         _currentFunction = previousFunction;

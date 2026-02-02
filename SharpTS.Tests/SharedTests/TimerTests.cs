@@ -14,10 +14,9 @@ namespace SharpTS.Tests.SharedTests;
 /// SharpTS compiled programs exit when <c>Main()</c> returns, regardless of pending timers.
 /// </para>
 /// <para>
-/// <strong>Closure Limitation (Compiled Mode):</strong>
-/// Tests that modify captured variables may not work in compiled mode due to a pre-existing
-/// compiler closure limitation (captured variable mutations don't propagate to outer scope).
-/// Such tests are marked InterpretedOnly.
+/// <strong>Note:</strong> All tests now run in both interpreted and compiled modes.
+/// The compiler's closure mutation propagation has been fixed to properly handle
+/// captured variable modifications in nested closures.
 /// </para>
 /// </remarks>
 [Collection("TimerTests")]
@@ -40,7 +39,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_ZeroDelay_ExecutesCallback_Interpreted(ExecutionMode mode)
     {
         // setTimeout with 0 delay should still execute (interpreted: check variable)
@@ -74,7 +73,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_DefaultDelay_IsZero_Interpreted(ExecutionMode mode)
     {
         // setTimeout without delay should default to 0 (interpreted)
@@ -110,7 +109,7 @@ public class TimerTests
     #region clearTimeout Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ClearTimeout_PreventsExecution_Interpreted(ExecutionMode mode)
     {
         // clearTimeout should prevent callback from executing (interpreted: check variable)
@@ -276,7 +275,7 @@ public class TimerTests
     #region setTimeout with Arguments Tests
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetTimeout_PassesArgsToCallback_Interpreted(ExecutionMode mode)
     {
         // Additional args should be passed to callback (interpreted: captured variable)
@@ -365,7 +364,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_ExecutesMultipleTimes_Interpreted(ExecutionMode mode)
     {
         // setInterval should execute multiple times (interpreted: count variable)
@@ -407,7 +406,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void ClearInterval_StopsExecution_Interpreted(ExecutionMode mode)
     {
         // clearInterval should stop the interval (interpreted: count variable)
@@ -444,7 +443,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_PassesArgsToCallback_Interpreted(ExecutionMode mode)
     {
         // Additional args should be passed to callback (interpreted: captured variable)
@@ -477,7 +476,7 @@ public class TimerTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void SetInterval_DefaultDelay_Interpreted(ExecutionMode mode)
     {
         // setInterval without delay should default to 0 (interpreted)
