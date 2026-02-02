@@ -389,7 +389,11 @@ public partial class Parser
                 } while (Match(TokenType.COMMA));
             }
             Consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
-            return new Expr.New(callee, typeArgs, arguments);
+
+            // Allow operations on new expressions
+            // Examples: new Date().toISOString()
+            Expr newExpr = new Expr.New(callee, typeArgs, arguments);
+            return ParseCallChain(newExpr);
         }
 
         return Call();
@@ -398,7 +402,16 @@ public partial class Parser
     private Expr Call()
     {
         Expr expr = Primary();
+        return ParseCallChain(expr);
+    }
 
+    /// <summary>
+    /// Parses postfix operations on an expression: method calls, property access,
+    /// index access, type assertions, non-null assertions, and tagged templates.
+    /// This is extracted to allow reuse after parsing new expressions.
+    /// </summary>
+    private Expr ParseCallChain(Expr expr)
+    {
         while (true)
         {
             // Check for type arguments before call: func<T>(args)
