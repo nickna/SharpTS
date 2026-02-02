@@ -570,6 +570,7 @@ public partial class Interpreter
     {
         (SharpTSArray array, double idx) => new IndexTarget.Array(array, (int)idx),
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
+        (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
         (ConstEnumValues constEnum, _) => new IndexTarget.ConstEnumError(constEnum),
         (SharpTSObject sharpObj, string strKey) => new IndexTarget.ObjectString(sharpObj, strKey),
@@ -599,6 +600,7 @@ public partial class Interpreter
         {
             IndexTarget.Array t => t.Target.Get(t.Index),
             IndexTarget.TypedArray t => t.Target[t.Index],
+            IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
             IndexTarget.ConstEnumError t => throw new Exception(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
@@ -642,6 +644,10 @@ public partial class Interpreter
 
             case IndexTarget.TypedArray t:
                 t.Target[t.Index] = value;
+                return value;
+
+            case IndexTarget.Buffer t:
+                t.Target[t.Index] = value is double d ? d : Convert.ToDouble(value);
                 return value;
 
             case IndexTarget.ObjectString t:

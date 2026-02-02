@@ -304,9 +304,11 @@ public static class BuiltInModuleTypes
                 voidType,
                 RequiredParams: 1
             ),
+            // Note: In Node.js, readdirSync returns string[] by default, Dirent[] only with { withFileTypes: true }
+            // Without function overloading support, we use the common case (string[]) as the return type
             ["readdirSync"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Union([new TypeInfo.Array(stringType), new TypeInfo.Array(direntType)]),
+                new TypeInfo.Array(stringType),
                 RequiredParams: 1
             ),
 

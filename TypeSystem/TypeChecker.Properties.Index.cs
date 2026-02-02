@@ -23,6 +23,34 @@ public partial class TypeChecker
             return new TypeInfo.Any();
         }
 
+        // Handle Union types - distribute index access across all union members
+        if (objType is TypeInfo.Union union)
+        {
+            List<TypeInfo> memberTypes = [];
+            foreach (var member in union.FlattenedTypes)
+            {
+                try
+                {
+                    var memberType = CheckGetIndexOnType(member, indexType, getIndex);
+                    if (memberType != null)
+                    {
+                        memberTypes.Add(memberType);
+                    }
+                    else
+                    {
+                        throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing member '{member}' of union type.");
+                    }
+                }
+                catch (TypeCheckException)
+                {
+                    throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing all members of union type '{union}'.");
+                }
+            }
+            // Return union of all member types
+            var unique = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+        }
+
         // Handle TypeParameter with constraint - delegate to constraint for indexing
         if (objType is TypeInfo.TypeParameter objTp)
         {
@@ -142,6 +170,12 @@ public partial class TypeChecker
                 return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
             }
 
+            // Buffer index access returns number (Buffer is a Uint8Array subclass)
+            if (objType is TypeInfo.Buffer)
+            {
+                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+            }
+
             // Enum reverse mapping: Direction[0] returns "Up" (only for numeric enums)
             if (objType is TypeInfo.Enum enumType)
             {
@@ -189,6 +223,21 @@ public partial class TypeChecker
         // Allow setting on 'any' type
         if (objType is TypeInfo.Any)
         {
+            return valueType;
+        }
+
+        // Handle Union types - verify assignment is valid for all union members
+        if (objType is TypeInfo.Union union)
+        {
+            foreach (var member in union.FlattenedTypes)
+            {
+                // Verify the index is valid for each member
+                var memberIndexResult = CheckSetIndexOnType(member, indexType, valueType, setIndex);
+                if (memberIndexResult == null)
+                {
+                    throw new TypeCheckException($" Index type '{indexType}' is not valid for assigning to member '{member}' of union type.");
+                }
+            }
             return valueType;
         }
 
@@ -263,6 +312,17 @@ public partial class TypeChecker
                 if (!IsNumber(valueType) && valueType is not TypeInfo.Any)
                 {
                     throw new TypeCheckException($" Cannot assign '{valueType}' to {typedArrayType.ElementType}Array.");
+                }
+                return valueType;
+            }
+
+            // Buffer index assignment (Buffer is a Uint8Array subclass)
+            if (objType is TypeInfo.Buffer)
+            {
+                // Buffer accepts number values
+                if (!IsNumber(valueType) && valueType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to Buffer.");
                 }
                 return valueType;
             }
@@ -344,10 +404,84 @@ public partial class TypeChecker
             // TypedArray index access returns number
             if (objType is TypeInfo.TypedArray)
                 return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
+            // Buffer index access returns number (Buffer is a Uint8Array subclass)
+            if (objType is TypeInfo.Buffer)
+                return new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER);
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
                 return itf3.NumberIndexType;
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
                 return rec3.NumberIndexType;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks index assignment on a given type (used for delegating from Union types).
+    /// Returns the value type if assignment is valid, null otherwise.
+    /// </summary>
+    private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
+    {
+        // Recursive case for nested type parameters
+        if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
+        {
+            return CheckSetIndexOnType(tp.Constraint, indexType, valueType, setIndex);
+        }
+
+        // Handle string index
+        if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
+        {
+            if (objType is TypeInfo.Interface itf && itf.StringIndexType != null)
+            {
+                if (IsCompatible(itf.StringIndexType, valueType))
+                    return valueType;
+                return null;
+            }
+            if (objType is TypeInfo.Record rec && rec.StringIndexType != null)
+            {
+                if (IsCompatible(rec.StringIndexType, valueType))
+                    return valueType;
+                return null;
+            }
+            if (objType is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Instance)
+                return valueType;
+        }
+
+        // Handle number index
+        if (IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+        {
+            if (objType is TypeInfo.Array arrayType)
+            {
+                if (IsCompatible(arrayType.ElementType, valueType))
+                    return valueType;
+                return null;
+            }
+            // TypedArray index assignment
+            if (objType is TypeInfo.TypedArray)
+            {
+                if (IsNumber(valueType) || valueType is TypeInfo.Any)
+                    return valueType;
+                return null;
+            }
+            // Buffer index assignment
+            if (objType is TypeInfo.Buffer)
+            {
+                if (IsNumber(valueType) || valueType is TypeInfo.Any)
+                    return valueType;
+                return null;
+            }
+            if (objType is TypeInfo.Interface itf2 && itf2.NumberIndexType != null)
+            {
+                if (IsCompatible(itf2.NumberIndexType, valueType))
+                    return valueType;
+                return null;
+            }
+            if (objType is TypeInfo.Record rec2 && rec2.NumberIndexType != null)
+            {
+                if (IsCompatible(rec2.NumberIndexType, valueType))
+                    return valueType;
+                return null;
+            }
         }
 
         return null;

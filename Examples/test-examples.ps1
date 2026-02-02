@@ -318,6 +318,8 @@ const arrow = () => 42;
                 Name = "InvalidPortNumber"
                 RequiresArgs = $true
                 Args = { @("invalid") }
+                # Short timeout since server starts quickly; we just need initial output
+                Timeout = 5000
                 Assertions = @(
                     @{ Type = "Contains"; Value = "Invalid port number" }
                     @{ Type = "Contains"; Value = "Using default port 3000" }
@@ -327,6 +329,8 @@ const arrow = () => 42;
                 Name = "PortOutOfRange"
                 RequiresArgs = $true
                 Args = { @("99999") }
+                # Short timeout since server starts quickly; we just need initial output
+                Timeout = 5000
                 Assertions = @(
                     @{ Type = "Contains"; Value = "Invalid port number" }
                     @{ Type = "Contains"; Value = "Using default port 3000" }
@@ -388,12 +392,21 @@ function Invoke-ProcessWithTimeout {
 
         if (-not $completed) {
             $process.Kill()
+            # Wait for async reads to complete after killing the process
+            # This captures any output that was written before timeout
+            [void]$stdoutTask.Wait(5000)
+            [void]$stderrTask.Wait(5000)
+
+            $stdout = if ($stdoutTask.IsCompleted) { $stdoutTask.Result } else { "" }
+            $stderr = if ($stderrTask.IsCompleted) { $stderrTask.Result } else { "" }
+
             return @{
                 Success = $false
-                Output = ""
-                Error = "Process timed out after $($Timeout)ms"
+                Output = $stdout
+                Error = $stderr
                 ExitCode = -1
                 Duration = $sw.ElapsedMilliseconds
+                TimedOut = $true
             }
         }
 
