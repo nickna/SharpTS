@@ -1,17 +1,19 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for the built-in 'readline' module.
-/// Uses interpreter mode since readline module isn't fully supported in compiled mode.
-/// Note: Interactive input tests are limited - we focus on object structure and exports.
+/// Tests synchronous methods that work in both interpreter and compiled modes.
+/// Note: typeof checks on module namespace exports are interpreter-only due to
+/// compiler limitations in how module namespaces expose their exports.
 /// </summary>
 public class ReadlineModuleTests
 {
-    [Fact]
-    public void CreateInterface_ReturnsObject()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void CreateInterface_ReturnsObject(ExecutionMode mode)
     {
         // createInterface should return an object
         var files = new Dictionary<string, string>
@@ -24,14 +26,16 @@ public class ReadlineModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void Module_HasQuestionSync()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Module_HasQuestionSync(ExecutionMode mode)
     {
         // readline module should export questionSync as a function
+        // Interpreter-only: compiled mode doesn't support typeof checks on module namespace exports
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -40,14 +44,16 @@ public class ReadlineModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 
-    [Fact]
-    public void Module_HasCreateInterface()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Module_HasCreateInterface(ExecutionMode mode)
     {
         // readline module should export createInterface as a function
+        // Interpreter-only: compiled mode doesn't support typeof checks on module namespace exports
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -56,7 +62,7 @@ public class ReadlineModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\n", output);
     }
 }

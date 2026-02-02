@@ -2,16 +2,18 @@ using System.Runtime.InteropServices;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.InterpreterTests.BuiltInModules;
+namespace SharpTS.Tests.SharedTests.BuiltInModules;
 
 /// <summary>
 /// Tests for the built-in 'child_process' module.
-/// Uses interpreter mode since child_process isn't fully supported in compiled mode.
+/// Tests synchronous methods (execSync, spawnSync) that work in both interpreter and compiled modes.
+/// Note: Environment variable passing in execSync is interpreter-only due to compiler limitations.
 /// </summary>
 public class ChildProcessModuleTests
 {
-    [Fact]
-    public void ExecSync_EchoCommand_ReturnsOutput()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void ExecSync_EchoCommand_ReturnsOutput(ExecutionMode mode)
     {
         // Use a simple echo command that works on all platforms
         var echoCommand = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -28,14 +30,16 @@ public class ChildProcessModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void ExecSync_WithEnvironment_PassesEnvVars()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void ExecSync_WithEnvironment_PassesEnvVars(ExecutionMode mode)
     {
         // Test that environment variables are passed through
+        // Interpreter-only: compiled mode doesn't extract env from options
         var envVarEcho = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? "echo %TEST_VAR%"
             : "echo $TEST_VAR";
@@ -50,12 +54,13 @@ public class ChildProcessModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 
-    [Fact]
-    public void SpawnSync_ReturnsStatusObject()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SpawnSync_ReturnsStatusObject(ExecutionMode mode)
     {
         // spawnSync should return an object with status, stdout, stderr
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -78,12 +83,13 @@ public class ChildProcessModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
-    [Fact]
-    public void SpawnSync_WithArgs_PassesArguments()
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SpawnSync_WithArgs_PassesArguments(ExecutionMode mode)
     {
         // spawnSync should pass arguments correctly
         var command = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -103,7 +109,7 @@ public class ChildProcessModuleTests
                 """
         };
 
-        var output = TestHarness.RunModulesInterpreted(files, "main.ts");
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
     }
 }
