@@ -12,10 +12,9 @@ public class DeclareFieldTests
     #region Instance Declare Fields
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DeclareField_Instance_ReturnsNull(ExecutionMode mode)
     {
-        // Compiler returns 0 for uninitialized numeric fields instead of null
         var source = """
             class Model {
                 declare id: number;
@@ -105,10 +104,9 @@ public class DeclareFieldTests
     #region Mixed Fields
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DeclareField_MixedWithRegularFields(ExecutionMode mode)
     {
-        // Compiler returns 0 for uninitialized numeric fields instead of null
         var source = """
             class Model {
                 declare id: number;
@@ -166,10 +164,9 @@ public class DeclareFieldTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DeclareField_WithPrivateAccess(ExecutionMode mode)
     {
-        // Compiler returns 0 for uninitialized numeric fields instead of null
         var source = """
             class Model {
                 declare private _internal: number;
@@ -197,10 +194,9 @@ public class DeclareFieldTests
     #region Class Expression
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void DeclareField_ClassExpression(ExecutionMode mode)
     {
-        // Compiler returns 0 for uninitialized numeric fields instead of null
         var source = """
             const Model = class {
                 declare id: number;

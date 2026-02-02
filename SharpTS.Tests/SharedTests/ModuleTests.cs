@@ -765,7 +765,7 @@ public class ModuleTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]  // TODO: Compiler cross-module inheritance super() call doesn't pass fields correctly
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Complex_ClassInheritanceAcrossModules(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

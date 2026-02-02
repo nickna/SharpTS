@@ -27,8 +27,10 @@ public partial class ILEmitter
         if (c.Callee is Expr.Super superExpr && (superExpr.Method == null || superExpr.Method.Lexeme == "constructor"))
         {
             // Try class declaration constructors first
+            // Use GetConstructor (not GetConstructorByQualifiedName) to resolve simple names like "Animal"
+            // to qualified names like "$M_base_Animal" for cross-module inheritance
             var parentCtor = _ctx.CurrentSuperclassName != null
-                ? _ctx.ClassRegistry?.GetConstructorByQualifiedName(_ctx.CurrentSuperclassName)
+                ? _ctx.ClassRegistry?.GetConstructor(_ctx.CurrentSuperclassName)
                 : null;
             if (parentCtor != null)
             {
@@ -780,6 +782,18 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Callvirt, methodName == "ref" ? _ctx.Runtime!.TSTimeoutRef : _ctx.Runtime!.TSTimeoutUnref);
             SetStackUnknown();
             return;
+        }
+
+        // Promise instance methods: then(), catch(), finally()
+        // These work on Task<object?> returned by async functions
+        if (methodName is "then" or "catch" or "finally")
+        {
+            // Check if we know it's a Promise at compile time
+            if (objType is TypeSystem.TypeInfo.Promise)
+            {
+                EmitPromiseInstanceMethodCall(methodGet.Object, methodName, arguments);
+                return;
+            }
         }
 
         // Type-first dispatch: Use TypeEmitterRegistry if we have type information
@@ -2244,5 +2258,91 @@ public partial class ILEmitter
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Emits a Promise instance method call (.then, .catch, .finally).
+    /// These methods take callbacks and return a new Promise (Task).
+    /// </summary>
+    private void EmitPromiseInstanceMethodCall(Expr promise, string methodName, List<Expr> arguments)
+    {
+        // Emit the promise (should be Task<object?>)
+        EmitExpression(promise);
+        EmitBoxIfNeeded(promise);
+
+        // Cast to Task<object?> if needed
+        IL.Emit(OpCodes.Castclass, typeof(Task<object?>));
+
+        switch (methodName)
+        {
+            case "then":
+                // promise.then(onFulfilled?, onRejected?)
+                // PromiseThen(Task<object?> promise, object? onFulfilled, object? onRejected)
+
+                // onFulfilled callback (optional)
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+
+                // onRejected callback (optional)
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseThen);
+                break;
+
+            case "catch":
+                // promise.catch(onRejected)
+                // PromiseCatch(Task<object?> promise, object? onRejected)
+
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseCatch);
+                break;
+
+            case "finally":
+                // promise.finally(onFinally)
+                // PromiseFinally(Task<object?> promise, object? onFinally)
+
+                if (arguments.Count > 0)
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
+
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.PromiseFinally);
+                break;
+
+            default:
+                // Unknown method - just return the promise unchanged
+                break;
+        }
+
+        SetStackUnknown();
     }
 }

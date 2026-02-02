@@ -57,10 +57,9 @@ public class AsyncIteratorEdgeCaseTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void AsyncIterator_ThrowInForAwaitBody_CatchesError(ExecutionMode mode)
     {
-        // Compiler has issues with throw in for-await body
         var source = """
             async function* gen() {
                 yield 1;

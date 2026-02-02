@@ -216,9 +216,10 @@ public partial class ILCompiler
         // Define real .NET properties with typed backing fields for instance fields
         // Skip fields with generic type parameters - they'll use _extras dictionary instead
         // Skip ES2022 private fields (#field) - they're not exposed as .NET properties
+        // Skip declare fields - they use _extras dictionary to support TypeScript null semantics
         foreach (var field in classStmt.Fields)
         {
-            if (!field.IsStatic && !field.IsPrivate)
+            if (!field.IsStatic && !field.IsPrivate && !field.IsDeclare)
             {
                 // Check if field type is a generic parameter
                 bool isGenericField = classGenericParams != null &&
@@ -742,7 +743,8 @@ public partial class ILCompiler
         _classes.InstanceFieldsField[className] = fieldsField;
 
         // Define typed instance properties
-        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic))
+        // Skip declare fields - they use _fields dictionary to support TypeScript null semantics
+        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare))
         {
             DefineClassExpressionProperty(typeBuilder, classExpr, field, classGenericParams);
         }
@@ -1205,6 +1207,20 @@ public partial class ILCompiler
                 emitter.EmitBoxIfNeeded(field.Initializer!);
                 il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
             }
+        }
+
+        // Initialize instance declare fields (without initializers) to null in _fields dictionary
+        // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
+        foreach (var field in classExpr.Fields.Where(f =>
+            !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null))
+        {
+            string fieldName = field.Name.Lexeme;
+            // Store null in _fields dictionary
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, fieldsField);
+            il.Emit(OpCodes.Ldstr, fieldName);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
         }
 
         il.Emit(OpCodes.Ret);
