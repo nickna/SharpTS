@@ -39,6 +39,52 @@ public partial class RuntimeEmitter
         }
     }
 
+    /// <summary>
+    /// Emits frozen/sealed check that throws TypeError if array is frozen/sealed.
+    /// </summary>
+    private void EmitArrayFrozenSealedThrowCheck(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        bool checkSealed = true)
+    {
+        var checkLocal = il.DeclareLocal(_types.Object);
+        var notFrozenLabel = il.DefineLabel();
+        var notSealedLabel = il.DefineLabel();
+
+        // Check frozen
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, checkLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ConditionalWeakTable, "TryGetValue",
+            _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notFrozenLabel);
+
+        // Throw TypeError
+        il.Emit(OpCodes.Ldstr, "TypeError: Cannot modify a frozen or sealed array");
+        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(notFrozenLabel);
+
+        if (checkSealed)
+        {
+            il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, checkLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "TryGetValue",
+                _types.Object, _types.Object.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, notSealedLabel);
+
+            il.Emit(OpCodes.Ldstr, "TypeError: Cannot modify a frozen or sealed array");
+            il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Throw);
+
+            il.MarkLabel(notSealedLabel);
+        }
+    }
+
     private void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -1105,10 +1151,10 @@ public partial class RuntimeEmitter
         runtime.ArraySplice = method;
 
         var il = method.GetILGenerator();
-        var frozenLabel = il.DefineLabel();
 
         // Check frozen/sealed - splice changes length (removes and/or adds elements)
-        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
+        // Use throwing variant since splice must throw TypeError on frozen/sealed arrays
+        EmitArrayFrozenSealedThrowCheck(il, runtime, checkSealed: true);
 
         // Local variables
         var lenLocal = il.DeclareLocal(_types.Int32);
@@ -1268,11 +1314,6 @@ public partial class RuntimeEmitter
 
         // return deleted
         il.Emit(OpCodes.Ldloc, deletedLocal);
-        il.Emit(OpCodes.Ret);
-
-        // Frozen/sealed return path - return empty list (no elements removed)
-        il.MarkLabel(frozenLabel);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Ret);
     }
 

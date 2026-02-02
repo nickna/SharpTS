@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
         EmitEscapeJsonStringHelper(typeBuilder);
 
         // Then emit the main stringify helper
-        var stringifyHelper = EmitJsonStringifyHelper(typeBuilder);
+        var stringifyHelper = EmitJsonStringifyHelper(typeBuilder, runtime);
 
         var method = typeBuilder.DefineMethod(
             "JsonStringify",
@@ -199,7 +199,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // First emit the class instance stringify helper
         var classInstanceHelper = EmitStringifyClassInstanceHelper(typeBuilder);
@@ -234,7 +234,7 @@ public partial class RuntimeEmitter
         EmitBigIntCheck(il, valueLocal);
 
         // Check for toJSON() method and call it if present
-        EmitToJsonCheck(il, valueLocal);
+        EmitToJsonCheck(il, valueLocal, runtime);
 
         // if (value is bool)
         il.Emit(OpCodes.Ldloc, valueLocal);
@@ -347,33 +347,91 @@ public partial class RuntimeEmitter
         il.MarkLabel(notBigIntLabel);
     }
 
-    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal)
+    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
     {
         var noToJsonLabel = il.DefineLabel();
         var typeLocal = il.DeclareLocal(_types.Type);
         var methodLocal = il.DeclareLocal(_types.MethodInfo);
 
-        // var type = value.GetType();
+        // First, check if value is a Dictionary<string, object?> (object literal)
+        var notDictionaryLabel = il.DefineLabel();
+        var toJsonFieldLocal = il.DeclareLocal(_types.Object);
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+
+        // if (value is Dictionary<string, object?>)
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, notDictionaryLabel);
+
+        // dict.TryGetValue("toJSON", out var fn)
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Ldloca, toJsonFieldLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
+            _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notDictionaryLabel);
+
+        // Check if field is a TSFunction
+        var notTSFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notTSFunctionLabel);
+
+        // Call TSFunction.Invoke with empty args
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, noToJsonLabel);
+
+        il.MarkLabel(notTSFunctionLabel);
+        // Check for BoundTSFunction
+        var notBoundLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, notBoundLabel);
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvoke);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, noToJsonLabel);
+
+        il.MarkLabel(notBoundLabel);
+        il.MarkLabel(notDictionaryLabel);
+
+        // Fallback: check for toJSON method via reflection (class instances)
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
         il.Emit(OpCodes.Stloc, typeLocal);
 
-        // var method = type.GetMethod("toJSON", BindingFlags.Public | BindingFlags.Instance);
         il.Emit(OpCodes.Ldloc, typeLocal);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", [_types.String, _types.BindingFlags]));
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Public |
+                                      System.Reflection.BindingFlags.Instance));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod",
+            [_types.String, _types.BindingFlags]));
         il.Emit(OpCodes.Stloc, methodLocal);
 
-        // if (method == null) goto noToJsonLabel;
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Brfalse, noToJsonLabel);
 
-        // value = method.Invoke(value, null);
         il.Emit(OpCodes.Ldloc, methodLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", [_types.Object, _types.ObjectArray]));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke",
+            [_types.Object, _types.ObjectArray]));
         il.Emit(OpCodes.Stloc, valueLocal);
 
         il.MarkLabel(noToJsonLabel);

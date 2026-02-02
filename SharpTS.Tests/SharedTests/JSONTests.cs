@@ -330,10 +330,9 @@ public class JSONTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void JSON_Stringify_ObjectWithToJSON(ExecutionMode mode)
     {
-        // Compiler doesn't support arrow function toJSON on object literals the same way
         var source = """
             let obj: any = {
                 x: 10,

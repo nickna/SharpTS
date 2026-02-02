@@ -248,7 +248,7 @@ public partial class RuntimeEmitter
         EmitBigIntCheck(il, valueLocal);
 
         // Check for toJSON() method
-        EmitToJsonCheck(il, valueLocal);
+        EmitToJsonCheck(il, valueLocal, runtime);
 
         // Type checks
         il.Emit(OpCodes.Ldloc, valueLocal);

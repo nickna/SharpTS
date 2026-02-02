@@ -319,10 +319,9 @@ public class ArraySpliceTests
     #region Frozen/Sealed Arrays
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Array_Splice_OnFrozenArray_ThrowsTypeError(ExecutionMode mode)
     {
-        // Compiler does not yet enforce frozen array restrictions
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.freeze(arr);
@@ -351,10 +350,9 @@ public class ArraySpliceTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Array_Splice_OnSealedArray_ThrowsTypeError(ExecutionMode mode)
     {
-        // Compiler does not yet enforce sealed array restrictions
         var source = """
             let arr: number[] = [1, 2, 3];
             Object.seal(arr);
