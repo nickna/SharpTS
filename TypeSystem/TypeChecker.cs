@@ -75,45 +75,87 @@ public partial class TypeChecker
     // Memoization cache for IsCompatible checks - cleared per Check() call
     private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;
 
-    // Property narrowings from type guards like `if (obj.prop !== null)`
-    // Key: (objectVarName, propertyName), Value: narrowed type
-    // This is scoped through a stack - each scope level can have its own narrowings
-    private readonly Stack<Dictionary<(string Object, string Property), TypeInfo>> _propertyNarrowingStack = new();
+    // Path-based narrowing context stack for control flow type narrowing
+    // Each scope level can have its own narrowings (for if/else branches, etc.)
+    private readonly Stack<Narrowing.NarrowingContext> _narrowingContextStack = new();
 
     /// <summary>
-    /// Gets the narrowed type for a property access, if one exists in the current scope.
+    /// Gets the current narrowing context (top of stack), or empty if none.
     /// </summary>
-    private TypeInfo? GetPropertyNarrowing(string objectVarName, string propertyName)
+    private Narrowing.NarrowingContext CurrentNarrowingContext =>
+        _narrowingContextStack.Count > 0 ? _narrowingContextStack.Peek() : Narrowing.NarrowingContext.Empty;
+
+    /// <summary>
+    /// Gets the narrowed type for a path, if one exists in the current scope.
+    /// </summary>
+    private TypeInfo? GetNarrowing(Narrowing.NarrowingPath path)
     {
-        foreach (var scope in _propertyNarrowingStack)
+        foreach (var context in _narrowingContextStack)
         {
-            if (scope.TryGetValue((objectVarName, propertyName), out var narrowedType))
-                return narrowedType;
+            var narrowed = context.GetNarrowing(path);
+            if (narrowed != null) return narrowed;
         }
         return null;
     }
 
     /// <summary>
-    /// Enters a new property narrowing scope.
+    /// Gets the narrowed type for a property access, if one exists.
+    /// Legacy method for backwards compatibility during migration.
     /// </summary>
-    private void PushPropertyNarrowingScope() => _propertyNarrowingStack.Push(new Dictionary<(string, string), TypeInfo>());
-
-    /// <summary>
-    /// Exits the current property narrowing scope.
-    /// </summary>
-    private void PopPropertyNarrowingScope()
+    private TypeInfo? GetPropertyNarrowing(string objectVarName, string propertyName)
     {
-        if (_propertyNarrowingStack.Count > 0)
-            _propertyNarrowingStack.Pop();
+        var path = new Narrowing.NarrowingPath.PropertyAccess(
+            new Narrowing.NarrowingPath.Variable(objectVarName),
+            propertyName);
+        return GetNarrowing(path);
     }
 
     /// <summary>
-    /// Defines a property narrowing in the current scope.
+    /// Enters a new narrowing scope with the given context.
     /// </summary>
-    private void DefinePropertyNarrowing(string objectVarName, string propertyName, TypeInfo narrowedType)
+    private void PushNarrowingContext(Narrowing.NarrowingContext context) => _narrowingContextStack.Push(context);
+
+    /// <summary>
+    /// Enters a new empty narrowing scope.
+    /// </summary>
+    private void PushEmptyNarrowingScope() => _narrowingContextStack.Push(Narrowing.NarrowingContext.Empty);
+
+    /// <summary>
+    /// Exits the current narrowing scope.
+    /// </summary>
+    private void PopNarrowingContext()
     {
-        if (_propertyNarrowingStack.Count > 0)
-            _propertyNarrowingStack.Peek()[(objectVarName, propertyName)] = narrowedType;
+        if (_narrowingContextStack.Count > 0)
+            _narrowingContextStack.Pop();
+    }
+
+    /// <summary>
+    /// Adds a narrowing to the current scope.
+    /// </summary>
+    private void AddNarrowing(Narrowing.NarrowingPath path, TypeInfo narrowedType)
+    {
+        if (_narrowingContextStack.Count > 0)
+        {
+            var current = _narrowingContextStack.Pop();
+            _narrowingContextStack.Push(current.WithNarrowing(path, narrowedType));
+        }
+        else
+        {
+            // If no context exists, create one with this narrowing
+            _narrowingContextStack.Push(Narrowing.NarrowingContext.Empty.WithNarrowing(path, narrowedType));
+        }
+    }
+
+    /// <summary>
+    /// Invalidates narrowings affected by an assignment to the given path.
+    /// </summary>
+    private void InvalidateNarrowingsFor(Narrowing.NarrowingPath assignedPath)
+    {
+        if (_narrowingContextStack.Count > 0)
+        {
+            var current = _narrowingContextStack.Pop();
+            _narrowingContextStack.Push(current.Invalidate(assignedPath));
+        }
     }
 
     /// <summary>
@@ -350,7 +392,7 @@ public partial class TypeChecker
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
         _compatibilityCheckDepth = 0;
-        _propertyNarrowingStack.Clear();
+        _narrowingContextStack.Clear();
 
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
@@ -385,7 +427,7 @@ public partial class TypeChecker
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
         _compatibilityCheckDepth = 0;
-        _propertyNarrowingStack.Clear();
+        _narrowingContextStack.Clear();
 
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());

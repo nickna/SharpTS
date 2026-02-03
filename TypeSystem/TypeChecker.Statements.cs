@@ -306,81 +306,129 @@ public partial class TypeChecker
     {
         CheckExpr(stmt.Condition);
 
-        var guard = AnalyzeTypeGuard(stmt.Condition);
-        var propGuard = AnalyzePropertyTypeGuard(stmt.Condition);
+        // Try unified path-based type guard analysis first (supports nested paths like obj.a.b.c)
+        var pathGuard = AnalyzePathTypeGuard(stmt.Condition);
 
-        // Handle variable narrowing
-        if (guard.VarName != null)
+        if (pathGuard.Path != null && pathGuard.NarrowedType != null)
         {
-            var thenEnv = new TypeEnvironment(_environment);
-            thenEnv.Define(guard.VarName, guard.NarrowedType!);
-            using (new EnvironmentScope(this, thenEnv))
+            // Handle path-based narrowing (works for both variables and property chains)
+            if (pathGuard.Path is Narrowing.NarrowingPath.Variable varPath)
             {
-                CheckStmt(stmt.ThenBranch);
-            }
+                // For simple variables, use TypeEnvironment for backwards compatibility
+                var thenEnv = new TypeEnvironment(_environment);
+                thenEnv.Define(varPath.Name, pathGuard.NarrowedType);
+                using (new EnvironmentScope(this, thenEnv))
+                {
+                    CheckStmt(stmt.ThenBranch);
+                }
 
-            if (stmt.ElseBranch != null && guard.ExcludedType != null)
-            {
-                var elseEnv = new TypeEnvironment(_environment);
-                elseEnv.Define(guard.VarName, guard.ExcludedType);
-                using (new EnvironmentScope(this, elseEnv))
+                if (stmt.ElseBranch != null && pathGuard.ExcludedType != null)
+                {
+                    var elseEnv = new TypeEnvironment(_environment);
+                    elseEnv.Define(varPath.Name, pathGuard.ExcludedType);
+                    using (new EnvironmentScope(this, elseEnv))
+                    {
+                        CheckStmt(stmt.ElseBranch);
+                    }
+                }
+                else if (stmt.ElseBranch != null)
                 {
                     CheckStmt(stmt.ElseBranch);
                 }
-            }
-            else if (stmt.ElseBranch != null)
-            {
-                CheckStmt(stmt.ElseBranch);
-            }
 
-            if (stmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
-            {
-                _environment.Define(guard.VarName, guard.ExcludedType);
+                // Handle early termination (if (x === null) return; -> x is non-null after)
+                if (stmt.ElseBranch == null && pathGuard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
+                {
+                    _environment.Define(varPath.Name, pathGuard.ExcludedType);
+                }
+                else if (stmt.ElseBranch != null && pathGuard.NarrowedType != null &&
+                         AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
+                {
+                    _environment.Define(varPath.Name, pathGuard.NarrowedType);
+                }
             }
-            else if (stmt.ElseBranch != null && guard.NarrowedType != null &&
-                     AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
+            else
             {
-                _environment.Define(guard.VarName, guard.NarrowedType);
-            }
-        }
-        // Handle property narrowing (e.g., if (obj.prop !== null))
-        else if (propGuard is { ObjectName: not null, PropertyName: not null, NarrowedType: not null })
-        {
-            // Then branch: property is narrowed
-            PushPropertyNarrowingScope();
-            DefinePropertyNarrowing(propGuard.Value.ObjectName, propGuard.Value.PropertyName, propGuard.Value.NarrowedType);
-            try
-            {
-                CheckStmt(stmt.ThenBranch);
-            }
-            finally
-            {
-                PopPropertyNarrowingScope();
-            }
-
-            // Else branch: property has excluded type
-            if (stmt.ElseBranch != null && propGuard.Value.ExcludedType != null)
-            {
-                PushPropertyNarrowingScope();
-                DefinePropertyNarrowing(propGuard.Value.ObjectName, propGuard.Value.PropertyName, propGuard.Value.ExcludedType);
+                // For property paths, use NarrowingContext
+                var thenContext = Narrowing.NarrowingContext.Empty.WithNarrowing(pathGuard.Path, pathGuard.NarrowedType);
+                PushNarrowingContext(thenContext);
                 try
                 {
-                    CheckStmt(stmt.ElseBranch);
+                    CheckStmt(stmt.ThenBranch);
                 }
                 finally
                 {
-                    PopPropertyNarrowingScope();
+                    PopNarrowingContext();
                 }
-            }
-            else if (stmt.ElseBranch != null)
-            {
-                CheckStmt(stmt.ElseBranch);
+
+                if (stmt.ElseBranch != null && pathGuard.ExcludedType != null)
+                {
+                    var elseContext = Narrowing.NarrowingContext.Empty.WithNarrowing(pathGuard.Path, pathGuard.ExcludedType);
+                    PushNarrowingContext(elseContext);
+                    try
+                    {
+                        CheckStmt(stmt.ElseBranch);
+                    }
+                    finally
+                    {
+                        PopNarrowingContext();
+                    }
+                }
+                else if (stmt.ElseBranch != null)
+                {
+                    CheckStmt(stmt.ElseBranch);
+                }
+
+                // Handle early termination for property paths (if (obj.prop === null) return; -> obj.prop is non-null after)
+                if (stmt.ElseBranch == null && pathGuard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
+                {
+                    AddNarrowing(pathGuard.Path, pathGuard.ExcludedType);
+                }
             }
         }
         else
         {
-            CheckStmt(stmt.ThenBranch);
-            if (stmt.ElseBranch != null) CheckStmt(stmt.ElseBranch);
+            // Fall back to legacy type guard analysis for other patterns (typeof, instanceof, etc.)
+            var guard = AnalyzeTypeGuard(stmt.Condition);
+
+            if (guard.VarName != null)
+            {
+                var thenEnv = new TypeEnvironment(_environment);
+                thenEnv.Define(guard.VarName, guard.NarrowedType!);
+                using (new EnvironmentScope(this, thenEnv))
+                {
+                    CheckStmt(stmt.ThenBranch);
+                }
+
+                if (stmt.ElseBranch != null && guard.ExcludedType != null)
+                {
+                    var elseEnv = new TypeEnvironment(_environment);
+                    elseEnv.Define(guard.VarName, guard.ExcludedType);
+                    using (new EnvironmentScope(this, elseEnv))
+                    {
+                        CheckStmt(stmt.ElseBranch);
+                    }
+                }
+                else if (stmt.ElseBranch != null)
+                {
+                    CheckStmt(stmt.ElseBranch);
+                }
+
+                if (stmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
+                {
+                    _environment.Define(guard.VarName, guard.ExcludedType);
+                }
+                else if (stmt.ElseBranch != null && guard.NarrowedType != null &&
+                         AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
+                {
+                    _environment.Define(guard.VarName, guard.NarrowedType);
+                }
+            }
+            else
+            {
+                CheckStmt(stmt.ThenBranch);
+                if (stmt.ElseBranch != null) CheckStmt(stmt.ElseBranch);
+            }
         }
         return VoidResult.Instance;
     }

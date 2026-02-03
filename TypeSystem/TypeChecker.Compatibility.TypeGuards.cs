@@ -560,6 +560,104 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Analyzes type guards for any narrowable path (variables, property access chains, etc.).
+    /// Returns a NarrowingPath-based result that supports nested property access.
+    /// </summary>
+    /// <remarks>
+    /// This is the new unified type guard analysis that supports:
+    /// - Simple variables: if (x !== null)
+    /// - Property access: if (obj.prop !== null)
+    /// - Nested paths: if (obj.a.b.c !== null)
+    /// </remarks>
+    private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathTypeGuard(Expr condition)
+    {
+        // Pattern: path !== null or path != null
+        if (condition is Expr.Binary bin &&
+            bin.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin.Right is Expr.Literal { Value: null })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin.Left);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin.Left, negated: true);
+            }
+        }
+
+        // Pattern: null !== path (reversed)
+        if (condition is Expr.Binary bin2 &&
+            bin2.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin2.Left is Expr.Literal { Value: null })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin2.Right);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin2.Right, negated: true);
+            }
+        }
+
+        // Pattern: path === null
+        if (condition is Expr.Binary bin3 &&
+            bin3.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin3.Right is Expr.Literal { Value: null })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin3.Left);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin3.Left, negated: false);
+            }
+        }
+
+        // Pattern: null === path (reversed)
+        if (condition is Expr.Binary bin4 &&
+            bin4.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin4.Left is Expr.Literal { Value: null })
+        {
+            var path = Narrowing.NarrowingPathExtractor.TryExtract(bin4.Right);
+            if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
+            {
+                return AnalyzePathNullCheck(path, bin4.Right, negated: false);
+            }
+        }
+
+        return (null, null, null);
+    }
+
+    /// <summary>
+    /// Analyzes a null check for a narrowable path.
+    /// </summary>
+    private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathNullCheck(
+        Narrowing.NarrowingPath path, Expr expr, bool negated)
+    {
+        // Get the current type of the expression
+        TypeInfo currentType = CheckExpr(expr);
+
+        // If it's a union containing null, we can narrow
+        if (currentType is TypeInfo.Union union)
+        {
+            var flattenedTypes = union.FlattenedTypes;
+            var nonNull = flattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
+            var nullTypes = flattenedTypes.Where(t => t is TypeInfo.Null).ToList();
+
+            if (nonNull.Count == 0 && nullTypes.Count == 0)
+                return (null, null, null);
+
+            TypeInfo nonNullType = nonNull.Count == 0 ? new TypeInfo.Never() :
+                nonNull.Count == 1 ? nonNull[0] : new TypeInfo.Union(nonNull);
+            TypeInfo nullType = nullTypes.Count == 0 ? new TypeInfo.Null() :
+                nullTypes.Count == 1 ? nullTypes[0] : new TypeInfo.Union(nullTypes);
+
+            // if (path !== null) -> then: non-null, else: null
+            // if (path === null) -> then: null, else: non-null
+            if (negated)
+                return (path, nonNullType, nullType);
+            return (path, nullType, nonNullType);
+        }
+
+        // Not a union with null - no narrowing effect
+        return (null, null, null);
+    }
+
+    /// <summary>
     /// Analyzes 'in' operator type guards like `"prop" in x`.
     /// Narrows union types to only those members that have the specified property.
     /// </summary>

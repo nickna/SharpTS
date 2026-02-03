@@ -84,10 +84,12 @@ public partial class TypeChecker
                 return wellKnownType;
         }
 
-        // Check for property narrowing (e.g., after "if (obj.prop !== null)")
-        if (get.Object is Expr.Variable objVar)
+        // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
+        // Use NarrowingPathExtractor to support nested property access
+        var path = Narrowing.NarrowingPathExtractor.TryExtract(get);
+        if (path != null)
         {
-            var narrowedType = GetPropertyNarrowing(objVar.Name.Lexeme, get.Name.Lexeme);
+            var narrowedType = GetNarrowing(path);
             if (narrowedType != null)
                 return narrowedType;
         }
