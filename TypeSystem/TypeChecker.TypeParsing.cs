@@ -282,8 +282,11 @@ public partial class TypeChecker
         for (int i = 0; i < typeName.Length; i++)
         {
             char c = typeName[i];
-            if (c == '(') depth++;
-            else if (c == ')') depth--;
+            // Track depth for all bracket types to avoid splitting inside nested structures
+            // But skip '>' when it's part of '=>' (arrow function syntax)
+            if (c == '(' || c == '<' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '}') depth--;
+            else if (c == '>' && (i == 0 || typeName[i - 1] != '=')) depth--;  // Skip > in =>
             else if (c == '|' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
             {
                 ReadOnlySpan<char> segment = typeName[start..(i - 1)].Trim();
@@ -309,8 +312,11 @@ public partial class TypeChecker
         for (int i = 0; i < typeName.Length; i++)
         {
             char c = typeName[i];
+            // Track depth for all bracket types to avoid splitting inside nested structures
+            // But skip '>' when it's part of '=>' (arrow function syntax)
             if (c == '(' || c == '<' || c == '[' || c == '{') depth++;
-            else if (c == ')' || c == '>' || c == ']' || c == '}') depth--;
+            else if (c == ')' || c == ']' || c == '}') depth--;
+            else if (c == '>' && (i == 0 || typeName[i - 1] != '=')) depth--;  // Skip > in =>
             else if (c == '&' && depth == 0 && i > 0 && typeName[i - 1] == ' ')
             {
                 ReadOnlySpan<char> segment = typeName[start..(i - 1)].Trim();
@@ -499,7 +505,13 @@ public partial class TypeChecker
     private TypeInfo ParseFunctionTypeInfo(string funcType)
     {
         // Parse "(param1, param2) => returnType" or "(this: Type, param1) => returnType"
-        var arrowIdx = funcType.IndexOf("=>");
+        // Find the OUTERMOST => (not one inside nested function types)
+        var arrowIdx = FindOutermostArrow(funcType);
+        if (arrowIdx < 0)
+        {
+            // Malformed - no arrow found at top level
+            return new TypeInfo.Any();
+        }
         var paramsSection = funcType.Substring(0, arrowIdx).Trim();
         var returnTypeStr = funcType.Substring(arrowIdx + 2).Trim();
 
@@ -534,6 +546,27 @@ public partial class TypeChecker
 
         TypeInfo returnType = ToTypeInfo(returnTypeStr);
         return new TypeInfo.Function(paramTypes, returnType, -1, false, thisType);
+    }
+
+    /// <summary>
+    /// Finds the outermost => in a function type string, respecting nested brackets.
+    /// Returns -1 if no top-level arrow is found.
+    /// </summary>
+    private static int FindOutermostArrow(string funcType)
+    {
+        int depth = 0;
+        for (int i = 0; i < funcType.Length - 1; i++)
+        {
+            char c = funcType[i];
+            if (c == '(' || c == '<' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '}') depth--;
+            else if (c == '>' && (i == 0 || funcType[i - 1] != '=')) depth--;  // Skip > in =>
+            else if (c == '=' && funcType[i + 1] == '>' && depth == 0)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /// <summary>

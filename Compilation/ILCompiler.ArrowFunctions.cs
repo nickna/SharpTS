@@ -604,6 +604,7 @@ public partial class ILCompiler
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             AsyncMethods = null,
+            AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null,
             // Top-level variables for module-level access
             TopLevelStaticVars = _topLevelStaticVars,
             // Module support for multi-module compilation

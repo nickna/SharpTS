@@ -56,6 +56,10 @@ public class AsyncArrowStateMachineBuilder
     // Maps captured var names to their fields in the outer state machine
     public Dictionary<string, FieldBuilder> CapturedFieldMap { get; } = [];
 
+    // For standalone arrows: fields in this state machine for captured variables
+    // (similar to display class fields for non-async closures)
+    public Dictionary<string, FieldBuilder> StandaloneCaptureFields { get; } = [];
+
     // For nested arrows: captures that require accessing through outer's outer reference
     // These are variables from a grandparent that the parent arrow also captured
     public HashSet<string> TransitiveCaptures { get; } = [];
@@ -273,6 +277,22 @@ public class AsyncArrowStateMachineBuilder
             LocalFields[localName] = field;
         }
 
+        // Define capture fields for variables from the enclosing (non-async) function
+        // These will be passed to the stub method and stored in the state machine
+        foreach (var captureName in Captures)
+        {
+            // Skip parameters and hoisted locals (already have fields)
+            if (ParameterFields.ContainsKey(captureName) || LocalFields.ContainsKey(captureName))
+                continue;
+
+            var field = _stateMachineType.DefineField(
+                $"<>captured_{captureName}",
+                _types.Object,
+                FieldAttributes.Public
+            );
+            StandaloneCaptureFields[captureName] = field;
+        }
+
         // Define awaiter fields
         for (int i = 0; i < awaitCount; i++)
         {
@@ -292,7 +312,7 @@ public class AsyncArrowStateMachineBuilder
     /// <summary>
     /// Defines and emits the stub method that creates the state machine when the arrow is invoked.
     /// The stub takes (outer state machine boxed, params...) and returns Task&lt;object&gt;.
-    /// For standalone arrows, there's no outer SM parameter.
+    /// For standalone arrows, there's no outer SM parameter but captures are passed.
     /// </summary>
     public void DefineStubMethod(TypeBuilder programType)
     {
@@ -303,6 +323,17 @@ public class AsyncArrowStateMachineBuilder
         if (!IsStandalone)
         {
             paramTypes.Add(_types.Object); // Outer SM
+        }
+
+        // For standalone arrows with captures, add capture parameters first
+        // Order: [captures...], [arrow params...]
+        var captureOrder = StandaloneCaptureFields.Keys.OrderBy(k => k).ToList();
+        if (IsStandalone)
+        {
+            foreach (var _ in captureOrder)
+            {
+                paramTypes.Add(_types.Object); // Captured values
+            }
         }
 
         // Add arrow parameters
@@ -333,6 +364,20 @@ public class AsyncArrowStateMachineBuilder
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stfld, OuterStateMachineField);
             paramOffset = 1; // Skip outer SM arg when copying params
+        }
+
+        // For standalone arrows with captures, copy captured values to state machine fields
+        if (IsStandalone && captureOrder.Count > 0)
+        {
+            for (int i = 0; i < captureOrder.Count; i++)
+            {
+                var captureName = captureOrder[i];
+                var captureField = StandaloneCaptureFields[captureName];
+                il.Emit(OpCodes.Ldloca, smLocal);
+                il.Emit(OpCodes.Ldarg, i);
+                il.Emit(OpCodes.Stfld, captureField);
+            }
+            paramOffset = captureOrder.Count; // Skip capture args when copying params
         }
 
         // Copy parameters to state machine fields (in order!)
@@ -440,15 +485,26 @@ public class AsyncArrowStateMachineBuilder
             return paramField;
         if (LocalFields.TryGetValue(name, out var localField))
             return localField;
+        if (StandaloneCaptureFields.TryGetValue(name, out var captureField))
+            return captureField;
         return null;
     }
 
     /// <summary>
     /// Checks if a variable is from the outer state machine (captured).
+    /// For standalone arrows, this returns false as captures are stored locally.
     /// </summary>
     public bool IsCaptured(string name)
     {
         return CapturedFieldMap.ContainsKey(name) || (name == "this" && Captures.Contains("this"));
+    }
+
+    /// <summary>
+    /// Checks if a variable is a standalone capture (stored in this state machine, not outer).
+    /// </summary>
+    public bool IsStandaloneCapture(string name)
+    {
+        return StandaloneCaptureFields.ContainsKey(name);
     }
 
     /// <summary>
