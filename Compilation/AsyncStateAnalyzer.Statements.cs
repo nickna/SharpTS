@@ -115,6 +115,7 @@ public partial class AsyncStateAnalyzer
             if (t.CatchParam != null)
             {
                 _declaredVariables.Add(t.CatchParam.Lexeme);
+                _catchParameters.Add(t.CatchParam.Lexeme);  // Track as catch param (should not be hoisted)
                 if (!_seenAwait)
                     _variablesDeclaredBeforeAwait.Add(t.CatchParam.Lexeme);
             }

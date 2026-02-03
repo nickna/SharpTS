@@ -681,6 +681,10 @@ public partial class ILEmitter
                 string importedName = spec.Imported.Lexeme;
                 string localName = spec.LocalName?.Lexeme ?? importedName;
 
+                // Track this binding for direct dispatch (avoids TSFunction reflection issues)
+                _ctx.BuiltInModuleMethodBindings ??= new Dictionary<string, (string, string)>();
+                _ctx.BuiltInModuleMethodBindings[localName] = (moduleName, importedName);
+
                 // Try property first, then method
                 if (!emitter.TryEmitPropertyGet(this, importedName))
                 {

@@ -760,6 +760,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSBufferType);
         il.Emit(OpCodes.Brtrue, tsBufferLabel);
 
+        // $Stats - check for isFile, isDirectory, size, etc.
+        var tsStatsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.StatsType);
+        il.Emit(OpCodes.Brtrue, tsStatsLabel);
+
         // $TSFunction - check for bind/call/apply
         var tsFunctionLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -1038,6 +1044,138 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBufferToStringLabel);
         // Unknown buffer property - return null
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        // $Stats handler - return method wrappers or property values
+        il.MarkLabel(tsStatsLabel);
+        // Check for "size" property
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "size");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsSizeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsSizeLabel);
+        // Return stats.size
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.StatsType);
+        il.Emit(OpCodes.Call, runtime.StatsSizeGetter);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsSizeLabel);
+        // Check for "isFile" method - return TSFunction wrapper
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isFile");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsFileLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsFileLabel);
+        // Create TSFunction wrapper for isFile
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsFile);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsFileLabel);
+        // Check for "isDirectory" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isDirectory");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsDirLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsDirLabel);
+        // Create TSFunction wrapper for isDirectory
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsDirectory);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsDirLabel);
+        // Check for "isSymbolicLink" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isSymbolicLink");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsSymlinkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsSymlinkLabel);
+        // Create TSFunction wrapper for isSymbolicLink
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsSymbolicLink);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsSymlinkLabel);
+        // Check for "isBlockDevice" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isBlockDevice");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsBlockLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsBlockLabel);
+        // Create TSFunction wrapper for isBlockDevice
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsBlockDevice);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsBlockLabel);
+        // Check for "isCharacterDevice" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isCharacterDevice");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsCharLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsCharLabel);
+        // Create TSFunction wrapper for isCharacterDevice
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsCharacterDevice);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsCharLabel);
+        // Check for "isFIFO" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isFIFO");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsFIFOLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsFIFOLabel);
+        // Create TSFunction wrapper for isFIFO
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsFIFO);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsFIFOLabel);
+        // Check for "isSocket" method
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "isSocket");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var notStatsIsSocketLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notStatsIsSocketLabel);
+        // Create TSFunction wrapper for isSocket
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsIsSocket);
+        il.Emit(OpCodes.Ldtoken, runtime.StatsType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle, _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notStatsIsSocketLabel);
+        // Unknown stats property - return null
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 

@@ -650,6 +650,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // ES2022 Private Class Elements support
@@ -812,6 +813,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             // Check for method-level "use strict" directive
             IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body),

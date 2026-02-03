@@ -70,6 +70,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     private readonly HashSet<string> _declaredVariables = [];
     private readonly HashSet<string> _variablesUsedAfterAwait = [];
     private readonly HashSet<string> _variablesDeclaredBeforeAwait = [];
+    private readonly HashSet<string> _catchParameters = [];  // Catch params should not be hoisted
     private readonly List<AsyncArrowInfo> _asyncArrows = [];
     private readonly List<TryBlockInfo> _tryBlocks = [];
     private int _awaitCounter = 0;
@@ -121,10 +122,12 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
             }
         }
 
-        // Variables that need hoisting: declared before await AND used after await
-        var hoistedLocals = new HashSet<string>(_variablesDeclaredBeforeAwait);
+        // Variables that need hoisting: declared AND used after any await
+        // This includes variables declared between await points that are used after a later await
+        var hoistedLocals = new HashSet<string>(_declaredVariables);
         hoistedLocals.IntersectWith(_variablesUsedAfterAwait);
         hoistedLocals.ExceptWith(parameters); // Parameters are tracked separately
+        hoistedLocals.ExceptWith(_catchParameters); // Catch params are scoped to catch block, not hoisted
 
         // Build TryBlockInfo list from collected data
         var tryBlocks = BuildTryBlockInfoList();
@@ -175,6 +178,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         _declaredVariables.Clear();
         _variablesUsedAfterAwait.Clear();
         _variablesDeclaredBeforeAwait.Clear();
+        _catchParameters.Clear();
         _asyncArrows.Clear();
         _tryBlocks.Clear();
         _awaitCounter = 0;

@@ -25,7 +25,9 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         "mkdtempSync", "opendirSync",
         // Hard links
         "linkSync",
-        "constants"
+        "constants",
+        // fs.promises namespace
+        "promises"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -73,13 +75,21 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
         if (propertyName == "constants")
         {
-            var ctx = emitter.Context;
-            var il = ctx.IL;
             il.Emit(OpCodes.Call, ctx.Runtime!.FsGetConstants);
             return true;
         }
+
+        if (propertyName == "promises")
+        {
+            il.Emit(OpCodes.Call, ctx.Runtime!.FsGetPromisesNamespace);
+            return true;
+        }
+
         return false;
     }
 

@@ -27,9 +27,42 @@ public partial class AsyncArrowMoveNextEmitter
         // Handle console.log specially (handles both Variable and Get patterns)
         if (_helpers.TryEmitConsoleLog(c,
             arg => { EmitExpression(arg); EnsureBoxed(); },
-            _ctx!.Runtime!.ConsoleLog))
+            _ctx!.Runtime!.ConsoleLog,
+            _ctx!.Runtime!.ConsoleLogMultiple))
         {
             return;
+        }
+
+        // Built-in module method calls (fs.readFileSync, path.join, etc.)
+        if (c.Callee is Expr.Get builtInGet &&
+            builtInGet.Object is Expr.Variable builtInModuleVar &&
+            _ctx!.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(builtInModuleVar.Name.Lexeme, out var builtInModuleName) &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(builtInModuleName) is { } builtInModuleEmitter)
+        {
+            if (builtInModuleEmitter.TryEmitMethodCall(this, builtInGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Special case: fs.promises.methodName() - emit direct method call instead of going through TSFunction
+        // Pattern: c.Callee is Get(Get(Variable("fs"), "promises"), "methodName")
+        if (c.Callee is Expr.Get fsPromisesMethodGet &&
+            fsPromisesMethodGet.Object is Expr.Get fsPromisesGet &&
+            fsPromisesGet.Name.Lexeme == "promises" &&
+            fsPromisesGet.Object is Expr.Variable fsVar &&
+            _ctx!.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(fsVar.Name.Lexeme, out var fsModuleName) &&
+            fsModuleName == "fs" &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter("fs/promises") is { } fsPromisesEmitter)
+        {
+            if (fsPromisesEmitter.TryEmitMethodCall(this, fsPromisesMethodGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
         }
 
         // Check if it's a direct function call

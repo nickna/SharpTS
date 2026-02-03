@@ -170,6 +170,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             // Check for function-level "use strict" directive
             IsStrictMode = _isStrictMode || CheckForUseStrict(funcStmt.Body),
@@ -233,6 +234,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode || CheckForUseStrict(method.Body),
             // ES2022 Private Class Elements support for generator methods

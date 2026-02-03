@@ -412,8 +412,8 @@ public class InterpreterModuleTests
                 const testFile = 'test_stat.txt';
                 writeFileSync(testFile, 'test content');
                 const stats = statSync(testFile);
-                console.log(stats.isFile);
-                console.log(stats.isDirectory);
+                console.log(stats.isFile());
+                console.log(stats.isDirectory());
                 console.log(stats.size > 0);
                 unlinkSync(testFile);
                 """
@@ -433,8 +433,8 @@ public class InterpreterModuleTests
                 const testDir = 'test_stat_dir';
                 mkdirSync(testDir);
                 const stats = statSync(testDir);
-                console.log(stats.isFile);
-                console.log(stats.isDirectory);
+                console.log(stats.isFile());
+                console.log(stats.isDirectory());
                 rmdirSync(testDir);
                 """
         };

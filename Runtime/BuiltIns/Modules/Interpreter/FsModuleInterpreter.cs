@@ -6,7 +6,8 @@ using Interp = SharpTS.Execution.Interpreter;
 namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 
 /// <summary>
-/// Interpreter-mode implementation of the Node.js 'fs' module (sync APIs only).
+/// Interpreter-mode implementation of the Node.js 'fs' module.
+/// Provides synchronous, callback-based async, and promise-based APIs.
 /// </summary>
 /// <remarks>
 /// Provides runtime values for synchronous file system operations.
@@ -95,14 +96,39 @@ public static class FsModuleInterpreter
             ["opendirSync"] = new BuiltInMethod("opendirSync", 1, 1, OpendirSync),
             // Hard links
             ["linkSync"] = new BuiltInMethod("linkSync", 2, 2, LinkSync),
-            ["constants"] = CreateConstants()
+            ["constants"] = CreateConstants(),
+
+            // Callback-based async methods
+            ["readFile"] = new BuiltInMethod("readFile", 2, 3, ReadFile),
+            ["writeFile"] = new BuiltInMethod("writeFile", 3, 4, WriteFile),
+            ["appendFile"] = new BuiltInMethod("appendFile", 3, 4, AppendFile),
+            ["stat"] = new BuiltInMethod("stat", 2, 3, Stat),
+            ["lstat"] = new BuiltInMethod("lstat", 2, 3, Lstat),
+            ["unlink"] = new BuiltInMethod("unlink", 2, 2, Unlink),
+            ["mkdir"] = new BuiltInMethod("mkdir", 2, 3, Mkdir),
+            ["rmdir"] = new BuiltInMethod("rmdir", 2, 3, Rmdir),
+            ["readdir"] = new BuiltInMethod("readdir", 2, 3, Readdir),
+            ["rename"] = new BuiltInMethod("rename", 3, 3, Rename),
+            ["copyFile"] = new BuiltInMethod("copyFile", 3, 4, CopyFile),
+            ["access"] = new BuiltInMethod("access", 2, 3, Access),
+            ["chmod"] = new BuiltInMethod("chmod", 3, 3, Chmod),
+            ["truncate"] = new BuiltInMethod("truncate", 2, 3, Truncate),
+            ["utimes"] = new BuiltInMethod("utimes", 4, 4, Utimes),
+            ["readlink"] = new BuiltInMethod("readlink", 2, 3, Readlink),
+            ["realpath"] = new BuiltInMethod("realpath", 2, 3, Realpath),
+            ["symlink"] = new BuiltInMethod("symlink", 3, 4, Symlink),
+            ["link"] = new BuiltInMethod("link", 3, 3, Link),
+            ["mkdtemp"] = new BuiltInMethod("mkdtemp", 2, 3, Mkdtemp),
+
+            // Promise-based methods namespace
+            ["promises"] = FsPromisesModuleInterpreter.CreatePromisesNamespace()
         };
     }
 
     /// <summary>
     /// Creates the fs.constants object with file system constants.
     /// </summary>
-    private static SharpTSObject CreateConstants()
+    internal static SharpTSObject CreateConstants()
     {
         return new SharpTSObject(new Dictionary<string, object?>
         {
@@ -306,8 +332,8 @@ public static class FsModuleInterpreter
             {
                 return (object?)new SharpTSObject(new Dictionary<string, object?>
                 {
-                    ["isDirectory"] = true,
-                    ["isFile"] = false,
+                    ["isDirectory"] = new BuiltInMethod("isDirectory", 0, 0, (_, _, _) => true),
+                    ["isFile"] = new BuiltInMethod("isFile", 0, 0, (_, _, _) => false),
                     ["size"] = 0.0
                 });
             }
@@ -316,8 +342,8 @@ public static class FsModuleInterpreter
                 var fileInfo = new FileInfo(path);
                 return new SharpTSObject(new Dictionary<string, object?>
                 {
-                    ["isDirectory"] = false,
-                    ["isFile"] = true,
+                    ["isDirectory"] = new BuiltInMethod("isDirectory", 0, 0, (_, _, _) => false),
+                    ["isFile"] = new BuiltInMethod("isFile", 0, 0, (_, _, _) => true),
                     ["size"] = (double)fileInfo.Length
                 });
             }
@@ -391,11 +417,12 @@ public static class FsModuleInterpreter
             var isDir = dirInfo.Exists && !fileInfo.Exists;
             var size = fileInfo.Exists ? (double)fileInfo.Length : 0.0;
 
+            var isFile = fileInfo.Exists && !isDir;
             return (object?)new SharpTSObject(new Dictionary<string, object?>
             {
-                ["isDirectory"] = isDir,
-                ["isFile"] = fileInfo.Exists && !isDir,
-                ["isSymbolicLink"] = isSymlink,
+                ["isDirectory"] = new BuiltInMethod("isDirectory", 0, 0, (_, _, _) => isDir),
+                ["isFile"] = new BuiltInMethod("isFile", 0, 0, (_, _, _) => isFile),
+                ["isSymbolicLink"] = new BuiltInMethod("isSymbolicLink", 0, 0, (_, _, _) => isSymlink),
                 ["size"] = size
             });
         });
@@ -771,9 +798,9 @@ public static class FsModuleInterpreter
 
             return (object?)new SharpTSObject(new Dictionary<string, object?>
             {
-                ["isDirectory"] = false, // File descriptors are always files
-                ["isFile"] = true,
-                ["isSymbolicLink"] = false,
+                ["isDirectory"] = new BuiltInMethod("isDirectory", 0, 0, (_, _, _) => false), // File descriptors are always files
+                ["isFile"] = new BuiltInMethod("isFile", 0, 0, (_, _, _) => true),
+                ["isSymbolicLink"] = new BuiltInMethod("isSymbolicLink", 0, 0, (_, _, _) => false),
                 ["size"] = (double)stream.Length
             });
         });
@@ -846,6 +873,522 @@ public static class FsModuleInterpreter
             LibC.CreateHardLink(existingPath, newPath);
         });
         return null;
+    }
+
+    #endregion
+
+    #region Callback-based Async Methods
+
+    /// <summary>
+    /// Extracts the callback function from the arguments.
+    /// The callback is always the last argument.
+    /// </summary>
+    private static ISharpTSCallable GetCallback(List<object?> args)
+    {
+        var callback = args[^1] as ISharpTSCallable
+            ?? throw new Exception("Runtime Error: callback is required");
+        return callback;
+    }
+
+    /// <summary>
+    /// Schedules an async callback on the interpreter's event loop.
+    /// </summary>
+    private static void ScheduleCallback(Interp interpreter, ISharpTSCallable callback, object? error, object? result)
+    {
+        interpreter.ScheduleTimer(0, 0, () =>
+        {
+            callback.Call(interpreter, [error, result]);
+        }, isInterval: false);
+    }
+
+    /// <summary>
+    /// Converts an exception to a Node.js-style error object for callbacks.
+    /// </summary>
+    private static SharpTSObject CreateErrorObject(Exception ex, string syscall, string? path)
+    {
+        var code = ex is NodeError ne ? ne.Code : NodeErrorCodes.FromException(ex);
+        var message = ex.Message;
+
+        return new SharpTSObject(new Dictionary<string, object?>
+        {
+            ["code"] = code,
+            ["syscall"] = syscall,
+            ["path"] = path,
+            ["message"] = $"{code}: {message}, {syscall} '{path}'"
+        });
+    }
+
+    private static object? ReadFile(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        // Extract encoding from middle argument if present
+        object? encoding = null;
+        if (args.Count == 3)
+        {
+            var options = args[1];
+            if (options is string s)
+            {
+                encoding = s;
+            }
+            else if (options is SharpTSObject opts)
+            {
+                encoding = opts.GetProperty("encoding");
+            }
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.ReadFileAsync(path, encoding);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "open", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? WriteFile(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var data = args[1];
+        var callback = GetCallback(args);
+        var options = args.Count == 4 ? args[2] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.WriteFileAsync(path, data, options);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "open", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? AppendFile(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var data = args[1];
+        var callback = GetCallback(args);
+        var options = args.Count == 4 ? args[2] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.AppendFileAsync(path, data, options);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "open", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Stat(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.StatAsync(path);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "stat", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Lstat(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.LstatAsync(path);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "lstat", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Unlink(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.UnlinkAsync(path);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "unlink", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Mkdir(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var options = args.Count == 3 ? args[1] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.MkdirAsync(path, options);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "mkdir", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Rmdir(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var options = args.Count == 3 ? args[1] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.RmdirAsync(path, options);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "rmdir", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Readdir(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var options = args.Count == 3 ? args[1] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.ReaddirAsync(path, options);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "readdir", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Rename(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var oldPath = args[0]?.ToString() ?? "";
+        var newPath = args[1]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.RenameAsync(oldPath, newPath);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "rename", oldPath);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? CopyFile(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var src = args[0]?.ToString() ?? "";
+        var dest = args[1]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var mode = args.Count == 4 ? args[2] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.CopyFileAsync(src, dest, mode);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "copyfile", src);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Access(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var mode = args.Count == 3 ? args[1] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.AccessAsync(path, mode);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "access", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Chmod(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var mode = args[1];
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.ChmodAsync(path, mode);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "chmod", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Truncate(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var len = args.Count == 3 ? args[1] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.TruncateAsync(path, len);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "truncate", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Utimes(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var atime = args[1];
+        var mtime = args[2];
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.UtimesAsync(path, atime, mtime);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "utimes", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Readlink(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.ReadlinkAsync(path);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "readlink", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Realpath(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var path = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.RealpathAsync(path);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "realpath", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Symlink(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var target = args[0]?.ToString() ?? "";
+        var path = args[1]?.ToString() ?? "";
+        var callback = GetCallback(args);
+        var type = args.Count == 4 ? args[2] : null;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.SymlinkAsync(target, path, type);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "symlink", path);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Link(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var existingPath = args[0]?.ToString() ?? "";
+        var newPath = args[1]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await FsAsyncHelpers.LinkAsync(existingPath, newPath);
+                ScheduleCallback(interpreter, callback, null, null);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "link", newPath);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
+    }
+
+    private static object? Mkdtemp(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var prefix = args[0]?.ToString() ?? "";
+        var callback = GetCallback(args);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await FsAsyncHelpers.MkdtempAsync(prefix);
+                ScheduleCallback(interpreter, callback, null, result);
+            }
+            catch (Exception ex)
+            {
+                var error = CreateErrorObject(ex, "mkdtemp", null);
+                ScheduleCallback(interpreter, callback, error, null);
+            }
+        });
+
+        return SharpTSUndefined.Instance;
     }
 
     #endregion

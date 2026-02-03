@@ -558,15 +558,88 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
         il.Emit(OpCodes.Ret);
 
-        // No format specifiers: join with spaces, prepend indent
-        // Console.WriteLine(GetConsoleIndent() + string.Join(" ", args))
+        // No format specifiers: join with spaces using Stringify for JS-compatible output
+        // Console.WriteLine(GetConsoleIndent() + JoinWithStringify(" ", args))
         il.MarkLabel(noFormatLabel);
         il.Emit(OpCodes.Call, runtime.GetConsoleIndent);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", _types.String, _types.ObjectArray));
+        il.Emit(OpCodes.Call, runtime.JoinWithStringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits JoinWithStringify: joins array elements with separator using Stringify for JS-compatible output.
+    /// Signature: string JoinWithStringify(string separator, object[] args)
+    /// </summary>
+    private void EmitJoinWithStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "JoinWithStringify",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String, _types.ObjectArray]
+        );
+        runtime.JoinWithStringify = method;
+
+        var il = method.GetILGenerator();
+
+        // StringBuilder result = new StringBuilder()
+        var resultLocal = il.DeclareLocal(_types.StringBuilder);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        // int i = 0
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        // Loop
+        var loopStart = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+
+        il.MarkLabel(loopStart);
+        // if (i >= args.Length) goto loopEnd
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, loopEnd);
+
+        // if (i > 0) result.Append(separator)
+        var skipSeparator = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, skipSeparator);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0); // separator
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(skipSeparator);
+
+        // result.Append(Stringify(args[i]))
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
+        il.Emit(OpCodes.Pop);
+
+        // i++
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
+
+        il.MarkLabel(loopEnd);
+
+        // return result.ToString()
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 

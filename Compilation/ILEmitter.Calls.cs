@@ -216,6 +216,24 @@ public partial class ILEmitter
             }
         }
 
+        // Special case: fs.promises.methodName() - emit direct method call instead of going through TSFunction
+        // Pattern: c.Callee is Get(Get(Variable("fs"), "promises"), "methodName")
+        if (c.Callee is Expr.Get fsPromisesMethodGet &&
+            fsPromisesMethodGet.Object is Expr.Get fsPromisesGet &&
+            fsPromisesGet.Name.Lexeme == "promises" &&
+            fsPromisesGet.Object is Expr.Variable fsVar &&
+            _ctx.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(fsVar.Name.Lexeme, out var fsModuleName) &&
+            fsModuleName == "fs" &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter("fs/promises") is { } fsPromisesEmitter)
+        {
+            if (fsPromisesEmitter.TryEmitMethodCall(this, fsPromisesMethodGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
         // Special case: __objectRest (internal helper for object rest patterns)
         if (c.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
         {
@@ -502,7 +520,19 @@ public partial class ILEmitter
         }
 
         // Regular function call (named top-level function)
-        // First check for async functions
+        // First check for built-in module method bindings (e.g., import { readFile } from 'fs/promises')
+        // This handles direct calls like readFile(...) by emitting direct method calls instead of TSFunction
+        if (c.Callee is Expr.Variable builtInMethodVar &&
+            _ctx.BuiltInModuleMethodBindings?.TryGetValue(builtInMethodVar.Name.Lexeme, out var binding) == true)
+        {
+            var methodBindingEmitter = _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(binding.ModuleName);
+            if (methodBindingEmitter != null && methodBindingEmitter.TryEmitMethodCall(this, binding.MethodName, c.Arguments))
+            {
+                return;
+            }
+        }
+
+        // Check for async functions
         if (c.Callee is Expr.Variable asyncVar && _ctx.AsyncMethods?.TryGetValue(asyncVar.Name.Lexeme, out var asyncMethod) == true)
         {
             EmitAsyncFunctionCall(asyncMethod, c.Arguments);

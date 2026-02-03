@@ -38,6 +38,7 @@ public partial class ILCompiler
     private readonly TypeEmitterRegistry _typeEmitterRegistry = new();  // Type-first method dispatch registry
     private readonly BuiltInModuleEmitterRegistry _builtInModuleEmitterRegistry = new();  // Built-in module emitters
     private readonly Dictionary<string, string> _builtInModuleNamespaces = [];  // Variable name -> module name for direct dispatch
+    private readonly Dictionary<string, (string ModuleName, string MethodName)> _builtInModuleMethodBindings = [];  // Variable name -> (module, method) for named imports
     private TypeBuilder _programType = null!;
 
     // Organized state containers (see ILCompiler.State.cs for definitions)
@@ -400,11 +401,17 @@ public partial class ILCompiler
                     }
 
                     // Named imports: create static fields so they're accessible from functions
+                    // Also track bindings for direct dispatch (avoids TSFunction reflection issues)
                     if (import.NamedImports != null)
                     {
                         foreach (var spec in import.NamedImports.Where(s => !s.IsTypeOnly))
                         {
-                            string localName = spec.LocalName?.Lexeme ?? spec.Imported.Lexeme;
+                            string importedName = spec.Imported.Lexeme;
+                            string localName = spec.LocalName?.Lexeme ?? importedName;
+
+                            // Track method binding for direct dispatch
+                            _builtInModuleMethodBindings[localName] = (builtInModuleName, importedName);
+
                             if (!_topLevelStaticVars.ContainsKey(localName))
                             {
                                 var field = _programType.DefineField(
@@ -618,6 +625,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new WorkerThreadsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new DnsModuleEmitter());
+        _builtInModuleEmitterRegistry.Register(new FsPromisesModuleEmitter());
     }
 
     #endregion

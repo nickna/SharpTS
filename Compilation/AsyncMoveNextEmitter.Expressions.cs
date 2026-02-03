@@ -310,7 +310,8 @@ public partial class AsyncMoveNextEmitter
         // Handle console.log specially (handles both Variable and Get patterns)
         if (_helpers.TryEmitConsoleLog(c,
             arg => { EmitExpression(arg); EnsureBoxed(); },
-            _ctx!.Runtime!.ConsoleLog))
+            _ctx!.Runtime!.ConsoleLog,
+            _ctx!.Runtime!.ConsoleLogMultiple))
         {
             return;
         }
@@ -329,6 +330,38 @@ public partial class AsyncMoveNextEmitter
         {
             var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
             if (staticStrategy != null && staticStrategy.TryEmitStaticCall(this, staticGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Built-in module method calls (fs.readFileSync, path.join, etc.)
+        if (c.Callee is Expr.Get builtInGet &&
+            builtInGet.Object is Expr.Variable builtInModuleVar &&
+            _ctx!.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(builtInModuleVar.Name.Lexeme, out var builtInModuleName) &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(builtInModuleName) is { } builtInModuleEmitter)
+        {
+            if (builtInModuleEmitter.TryEmitMethodCall(this, builtInGet.Name.Lexeme, c.Arguments))
+            {
+                SetStackUnknown();
+                return;
+            }
+        }
+
+        // Special case: fs.promises.methodName() - emit direct method call instead of going through TSFunction
+        // Pattern: c.Callee is Get(Get(Variable("fs"), "promises"), "methodName")
+        if (c.Callee is Expr.Get fsPromisesMethodGet &&
+            fsPromisesMethodGet.Object is Expr.Get fsPromisesGet &&
+            fsPromisesGet.Name.Lexeme == "promises" &&
+            fsPromisesGet.Object is Expr.Variable fsVar &&
+            _ctx!.BuiltInModuleNamespaces != null &&
+            _ctx.BuiltInModuleNamespaces.TryGetValue(fsVar.Name.Lexeme, out var fsModuleName) &&
+            fsModuleName == "fs" &&
+            _ctx.BuiltInModuleEmitterRegistry?.GetEmitter("fs/promises") is { } fsPromisesEmitter)
+        {
+            if (fsPromisesEmitter.TryEmitMethodCall(this, fsPromisesMethodGet.Name.Lexeme, c.Arguments))
             {
                 SetStackUnknown();
                 return;
@@ -409,22 +442,44 @@ public partial class AsyncMoveNextEmitter
                 // Handle union types - try emitters for member types
                 if (objType is TypeSystem.TypeInfo.Union union)
                 {
-                    // Try string emitter if union contains string
+                    bool hasBufferMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Buffer);
                     bool hasStringMember = union.Types.Any(t => t is TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral);
-                    if (hasStringMember)
-                    {
-                        var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
-                        if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
-                            return;
-                    }
-
-                    // Try array emitter if union contains array
                     bool hasArrayMember = union.Types.Any(t => t is TypeSystem.TypeInfo.Array);
-                    if (hasArrayMember)
+
+                    // Check for ambiguous methods that exist on multiple types
+                    bool isAmbiguousMethod = methodName is "slice" or "concat" or "includes" or "indexOf" or "toString";
+                    int typesWithMethod = 0;
+                    if (hasBufferMember && isAmbiguousMethod) typesWithMethod++;
+                    if (hasStringMember && isAmbiguousMethod) typesWithMethod++;
+                    if (hasArrayMember && isAmbiguousMethod) typesWithMethod++;
+
+                    // If multiple types could have this method, skip type-specific emitters
+                    // and let runtime dispatch handle it below
+                    if (typesWithMethod <= 1)
                     {
-                        var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
-                        if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
-                            return;
+                        // Try buffer emitter if union contains buffer
+                        if (hasBufferMember)
+                        {
+                            var bufferStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Buffer());
+                            if (bufferStrategy != null && bufferStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                                return;
+                        }
+
+                        // Try string emitter if union contains string
+                        if (hasStringMember)
+                        {
+                            var stringStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.String());
+                            if (stringStrategy != null && stringStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                                return;
+                        }
+
+                        // Try array emitter if union contains array
+                        if (hasArrayMember)
+                        {
+                            var arrayStrategy = _ctx.TypeEmitterRegistry.GetStrategy(new TypeSystem.TypeInfo.Array(new TypeSystem.TypeInfo.Any()));
+                            if (arrayStrategy != null && arrayStrategy.TryEmitMethodCall(this, methodGet.Object, methodName, c.Arguments))
+                                return;
+                        }
                     }
                 }
             }
@@ -460,6 +515,19 @@ public partial class AsyncMoveNextEmitter
             if (methodName is "slice" or "concat" or "includes" or "indexOf")
             {
                 EmitAmbiguousMethodCall(methodGet.Object, methodName, c.Arguments);
+                return;
+            }
+        }
+
+        // Check if it's a built-in module method binding (e.g., import { readFile } from 'fs/promises')
+        // This handles direct calls like readFile(...) by emitting direct method calls instead of TSFunction
+        if (c.Callee is Expr.Variable builtInVar &&
+            _ctx!.BuiltInModuleMethodBindings?.TryGetValue(builtInVar.Name.Lexeme, out var binding) == true)
+        {
+            var builtInEmitter = _ctx.BuiltInModuleEmitterRegistry?.GetEmitter(binding.ModuleName);
+            if (builtInEmitter != null && builtInEmitter.TryEmitMethodCall(this, binding.MethodName, c.Arguments))
+            {
+                SetStackUnknown();
                 return;
             }
         }

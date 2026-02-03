@@ -51,6 +51,7 @@ public class EmittedRuntime
     // Console methods
     public MethodBuilder ConsoleLog { get; set; } = null!;
     public MethodBuilder ConsoleLogMultiple { get; set; } = null!;
+    public MethodBuilder JoinWithStringify { get; set; } = null!;  // Helper for JS-compatible console output
     public MethodBuilder ConsoleError { get; set; } = null!;
     public MethodBuilder ConsoleErrorMultiple { get; set; } = null!;
     public MethodBuilder ConsoleWarn { get; set; } = null!;
@@ -706,6 +707,38 @@ public class EmittedRuntime
     // Hard links
     public MethodBuilder FsLinkSync { get; set; } = null!;
 
+    // Async fs methods (fs.promises and fs/promises)
+    public MethodBuilder FsReadFileAsync { get; set; } = null!;
+    public MethodBuilder FsWriteFileAsync { get; set; } = null!;
+    public MethodBuilder FsAppendFileAsync { get; set; } = null!;
+    public MethodBuilder FsStatAsync { get; set; } = null!;
+    public MethodBuilder FsLstatAsync { get; set; } = null!;
+    public MethodBuilder FsUnlinkAsync { get; set; } = null!;
+    public MethodBuilder FsMkdirAsync { get; set; } = null!;
+    public MethodBuilder FsRmdirAsync { get; set; } = null!;
+    public MethodBuilder FsRmAsync { get; set; } = null!;
+    public MethodBuilder FsReaddirAsync { get; set; } = null!;
+    public MethodBuilder FsRenameAsync { get; set; } = null!;
+    public MethodBuilder FsCopyFileAsync { get; set; } = null!;
+    public MethodBuilder FsAccessAsync { get; set; } = null!;
+    public MethodBuilder FsChmodAsync { get; set; } = null!;
+    public MethodBuilder FsTruncateAsync { get; set; } = null!;
+    public MethodBuilder FsUtimesAsync { get; set; } = null!;
+    public MethodBuilder FsReadlinkAsync { get; set; } = null!;
+    public MethodBuilder FsRealpathAsync { get; set; } = null!;
+    public MethodBuilder FsSymlinkAsync { get; set; } = null!;
+    public MethodBuilder FsLinkAsync { get; set; } = null!;
+    public MethodBuilder FsMkdtempAsync { get; set; } = null!;
+
+    // fs.promises namespace accessor
+    public MethodBuilder FsGetPromisesNamespace { get; set; } = null!;
+
+    // fs.promises wrapper methods for standalone compilation
+    public Dictionary<string, MethodBuilder> FsPromisesWrapperMethods { get; set; } = new();
+
+    // Helper to convert Task to Task<object?> (for void-returning async methods)
+    public MethodBuilder WrapVoidTaskAsObjectTask { get; set; } = null!;
+
     // NodeError conversion helpers
     public MethodBuilder ConvertToNodeError { get; set; } = null!;
     public MethodBuilder ThrowNodeError { get; set; } = null!;
@@ -1344,4 +1377,18 @@ public class EmittedRuntime
     /// Signature: CallStaticPrivateMethod(Type declaringClass, string methodName, object[] args) -> object
     /// </summary>
     public MethodBuilder CallStaticPrivateMethod { get; set; } = null!;
+
+    // $Stats type - emitted for fs.stat() and related methods
+    // Provides Node.js-compatible Stats object with methods like isFile(), isDirectory(), etc.
+    public Type StatsType { get; set; } = null!;
+    public ConstructorInfo StatsCtor { get; set; } = null!;
+    public MethodBuilder StatsIsFile { get; set; } = null!;
+    public MethodBuilder StatsIsDirectory { get; set; } = null!;
+    public MethodBuilder StatsIsSymbolicLink { get; set; } = null!;
+    public MethodBuilder StatsIsBlockDevice { get; set; } = null!;
+    public MethodBuilder StatsIsCharacterDevice { get; set; } = null!;
+    public MethodBuilder StatsIsFIFO { get; set; } = null!;
+    public MethodBuilder StatsIsSocket { get; set; } = null!;
+    public MethodBuilder StatsSizeGetter { get; set; } = null!;
+    public MethodBuilder StatsModeGetter { get; set; } = null!;
 }

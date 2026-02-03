@@ -10,6 +10,7 @@ public static class BuiltInModuleRegistry
     private static readonly HashSet<string> _builtInModules =
     [
         "fs",
+        "fs/promises",
         "path",
         "os",
         "querystring",

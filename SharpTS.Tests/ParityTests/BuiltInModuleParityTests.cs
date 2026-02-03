@@ -812,8 +812,8 @@ public class BuiltInModuleParityTests
             fs.writeFileSync(testFile, content);
             const stat = fs.statSync(testFile);
 
-            console.log(stat.isFile);
-            console.log(!stat.isDirectory);
+            console.log(stat.isFile());
+            console.log(!stat.isDirectory());
             console.log(stat.size > 0);
 
             // Cleanup
@@ -831,8 +831,8 @@ public class BuiltInModuleParityTests
             fs.mkdirSync(testDir);
             const stat = fs.statSync(testDir);
 
-            console.log(!stat.isFile);
-            console.log(stat.isDirectory);
+            console.log(!stat.isFile());
+            console.log(stat.isDirectory());
 
             // Cleanup
             fs.rmdirSync(testDir);

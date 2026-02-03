@@ -210,7 +210,7 @@ public static class BuiltInModuleTypes
     }
 
     /// <summary>
-    /// Gets the exported types for the fs module (sync APIs only).
+    /// Gets the exported types for the fs module (sync, callback, and promise-based APIs).
     /// </summary>
     public static Dictionary<string, TypeInfo> GetFsModuleTypes()
     {
@@ -222,9 +222,9 @@ public static class BuiltInModuleTypes
         // Stats-like return type for statSync/lstatSync
         var statsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
-            ["isDirectory"] = BooleanType,
-            ["isFile"] = BooleanType,
-            ["isSymbolicLink"] = BooleanType,
+            ["isDirectory"] = new TypeInfo.Function([], BooleanType),
+            ["isFile"] = new TypeInfo.Function([], BooleanType),
+            ["isSymbolicLink"] = new TypeInfo.Function([], BooleanType),
             ["size"] = numberType
         }.ToFrozenDictionary());
 
@@ -417,8 +417,182 @@ public static class BuiltInModuleTypes
             ["linkSync"] = new TypeInfo.Function([stringType, stringType], voidType),
 
             // Constants object
-            ["constants"] = constantsType
+            ["constants"] = constantsType,
+
+            // Callback-based async methods
+            // Callback type: (err: Error | null, data?: T) => void
+            ["readFile"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["writeFile"] = new TypeInfo.Function(
+                [stringType, anyType, anyType, anyType],
+                voidType,
+                RequiredParams: 3
+            ),
+            ["appendFile"] = new TypeInfo.Function(
+                [stringType, anyType, anyType, anyType],
+                voidType,
+                RequiredParams: 3
+            ),
+            ["stat"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["lstat"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["unlink"] = new TypeInfo.Function(
+                [stringType, anyType],
+                voidType
+            ),
+            ["mkdir"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["rmdir"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["readdir"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["rename"] = new TypeInfo.Function(
+                [stringType, stringType, anyType],
+                voidType
+            ),
+            ["copyFile"] = new TypeInfo.Function(
+                [stringType, stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 3
+            ),
+            ["access"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["chmod"] = new TypeInfo.Function(
+                [stringType, numberType, anyType],
+                voidType
+            ),
+            ["truncate"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["utimes"] = new TypeInfo.Function(
+                [stringType, anyType, anyType, anyType],
+                voidType
+            ),
+            ["readlink"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["realpath"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+            ["symlink"] = new TypeInfo.Function(
+                [stringType, stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 3
+            ),
+            ["link"] = new TypeInfo.Function(
+                [stringType, stringType, anyType],
+                voidType
+            ),
+            ["mkdtemp"] = new TypeInfo.Function(
+                [stringType, anyType, anyType],
+                voidType,
+                RequiredParams: 2
+            ),
+
+            // fs.promises namespace
+            ["promises"] = GetFsPromisesTypes()
         };
+    }
+
+    /// <summary>
+    /// Gets the type definitions for the fs.promises namespace.
+    /// </summary>
+    public static TypeInfo.Record GetFsPromisesTypes()
+    {
+        var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringType = new TypeInfo.String();
+        var voidType = new TypeInfo.Void();
+        var anyType = new TypeInfo.Any();
+        var bufferType = new TypeInfo.Buffer();
+
+        // Promise types
+        var promiseVoid = new TypeInfo.Promise(voidType);
+        var promiseString = new TypeInfo.Promise(stringType);
+        var promiseBuffer = new TypeInfo.Promise(bufferType);
+        var promiseBufferOrString = new TypeInfo.Promise(new TypeInfo.Union([bufferType, stringType]));
+        var promiseArray = new TypeInfo.Promise(new TypeInfo.Array(stringType));
+
+        // Stats-like type for stat/lstat
+        var statsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["isDirectory"] = new TypeInfo.Function([], BooleanType),
+            ["isFile"] = new TypeInfo.Function([], BooleanType),
+            ["isSymbolicLink"] = new TypeInfo.Function([], BooleanType),
+            ["size"] = numberType
+        }.ToFrozenDictionary());
+        var promiseStats = new TypeInfo.Promise(statsType);
+
+        // Constants type
+        var constantsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["F_OK"] = numberType,
+            ["R_OK"] = numberType,
+            ["W_OK"] = numberType,
+            ["X_OK"] = numberType
+        }.ToFrozenDictionary());
+
+        return new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["readFile"] = new TypeInfo.Function([stringType, anyType], promiseBufferOrString, RequiredParams: 1),
+            ["writeFile"] = new TypeInfo.Function([stringType, anyType, anyType], promiseVoid, RequiredParams: 2),
+            ["appendFile"] = new TypeInfo.Function([stringType, anyType, anyType], promiseVoid, RequiredParams: 2),
+            ["stat"] = new TypeInfo.Function([stringType, anyType], promiseStats, RequiredParams: 1),
+            ["lstat"] = new TypeInfo.Function([stringType, anyType], promiseStats, RequiredParams: 1),
+            ["unlink"] = new TypeInfo.Function([stringType], promiseVoid),
+            ["mkdir"] = new TypeInfo.Function([stringType, anyType], promiseVoid, RequiredParams: 1),
+            ["rmdir"] = new TypeInfo.Function([stringType, anyType], promiseVoid, RequiredParams: 1),
+            ["rm"] = new TypeInfo.Function([stringType, anyType], promiseVoid, RequiredParams: 1),
+            ["readdir"] = new TypeInfo.Function([stringType, anyType], promiseArray, RequiredParams: 1),
+            ["rename"] = new TypeInfo.Function([stringType, stringType], promiseVoid),
+            ["copyFile"] = new TypeInfo.Function([stringType, stringType, anyType], promiseVoid, RequiredParams: 2),
+            ["access"] = new TypeInfo.Function([stringType, anyType], promiseVoid, RequiredParams: 1),
+            ["chmod"] = new TypeInfo.Function([stringType, numberType], promiseVoid),
+            ["truncate"] = new TypeInfo.Function([stringType, anyType], promiseVoid, RequiredParams: 1),
+            ["utimes"] = new TypeInfo.Function([stringType, anyType, anyType], promiseVoid),
+            ["readlink"] = new TypeInfo.Function([stringType, anyType], promiseString, RequiredParams: 1),
+            ["realpath"] = new TypeInfo.Function([stringType, anyType], promiseString, RequiredParams: 1),
+            ["symlink"] = new TypeInfo.Function([stringType, stringType, anyType], promiseVoid, RequiredParams: 2),
+            ["link"] = new TypeInfo.Function([stringType, stringType], promiseVoid),
+            ["mkdtemp"] = new TypeInfo.Function([stringType, anyType], promiseString, RequiredParams: 1),
+            ["constants"] = constantsType
+        }.ToFrozenDictionary());
+    }
+
+    /// <summary>
+    /// Gets the exported types for the fs/promises module.
+    /// </summary>
+    public static Dictionary<string, TypeInfo> GetFsPromisesModuleTypes()
+    {
+        var fsPromises = GetFsPromisesTypes();
+        return fsPromises.Fields.ToDictionary(kv => kv.Key, kv => kv.Value);
     }
 
     /// <summary>
@@ -1088,6 +1262,7 @@ public static class BuiltInModuleTypes
             "path" => GetPathModuleTypes(),
             "os" => GetOsModuleTypes(),
             "fs" => GetFsModuleTypes(),
+            "fs/promises" => GetFsPromisesModuleTypes(),
             "querystring" => GetQuerystringModuleTypes(),
             "assert" => GetAssertModuleTypes(),
             "url" => GetUrlModuleTypes(),

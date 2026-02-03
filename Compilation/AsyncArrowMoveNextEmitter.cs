@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -9,7 +10,7 @@ namespace SharpTS.Compilation;
 /// Similar to AsyncMoveNextEmitter but handles captured variable access
 /// through the outer state machine reference.
 /// </summary>
-public partial class AsyncArrowMoveNextEmitter : StatementEmitterBase
+public partial class AsyncArrowMoveNextEmitter : StatementEmitterBase, IEmitterContext
 {
     private readonly AsyncArrowStateMachineBuilder _builder;
     private readonly AsyncStateAnalyzer.AsyncFunctionAnalysis _analysis;
@@ -44,6 +45,71 @@ public partial class AsyncArrowMoveNextEmitter : StatementEmitterBase
 
     // Variable resolver for hoisted fields, locals, and captured variables
     private IVariableResolver? _resolver;
+
+    #region IEmitterContext Implementation
+
+    /// <summary>
+    /// Provides access to the compilation context for type emitter strategies.
+    /// </summary>
+    public CompilationContext Context => _ctx!;
+
+    /// <summary>
+    /// Provides access to the IL generator via IEmitterContext.
+    /// </summary>
+    ILGenerator IEmitterContext.IL => _il;
+
+    /// <summary>
+    /// Boxes the value on the stack if needed.
+    /// In the async arrow context, uses EnsureBoxed from helpers.
+    /// </summary>
+    public void EmitBoxIfNeeded(Expr expr) => EnsureBoxed();
+
+    /// <summary>
+    /// Emits an expression and ensures the result is an unboxed double on the stack.
+    /// </summary>
+    public void EmitExpressionAsDouble(Expr expr)
+    {
+        if (expr is Expr.Literal lit && lit.Value is double d)
+        {
+            _il.Emit(OpCodes.Ldc_R8, d);
+            return;
+        }
+
+        EmitExpression(expr);
+        EnsureBoxed();
+
+        // Try to unbox if it's a boxed double
+        var skipUnbox = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, typeof(double));
+        _il.Emit(OpCodes.Brfalse, skipUnbox);
+
+        // It's a boxed double - unbox it
+        _il.Emit(OpCodes.Unbox_Any, typeof(double));
+        _il.Emit(OpCodes.Br, endLabel);
+
+        _il.MarkLabel(skipUnbox);
+        // Not a double - use runtime ToNumber conversion
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ToNumber);
+
+        _il.MarkLabel(endLabel);
+    }
+
+    /// <summary>
+    /// Marks the stack as containing an unknown/object type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackUnknown() => _helpers.SetStackUnknown();
+
+    /// <summary>
+    /// Marks the stack as containing a specific type.
+    /// Part of IEmitterContext interface for type emitter strategies.
+    /// </summary>
+    void IEmitterContext.SetStackType(StackType type) => _helpers.SetStackType(type);
+
+    #endregion
 
     public AsyncArrowMoveNextEmitter(
         AsyncArrowStateMachineBuilder builder,

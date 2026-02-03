@@ -72,6 +72,11 @@ public partial class CompilationContext
     // Tracks which local variables are built-in module namespaces for direct dispatch
     public Dictionary<string, string>? BuiltInModuleNamespaces { get; set; }
 
+    // Built-in module method bindings (variable name -> (module name, method name))
+    // Tracks which local variables are bound to built-in module methods for direct dispatch
+    // Example: import { readFile } from 'fs/promises' -> readFile -> ("fs/promises", "readFile")
+    public Dictionary<string, (string ModuleName, string MethodName)>? BuiltInModuleMethodBindings { get; set; }
+
     // ============================================
     // Registry Services
     // ============================================

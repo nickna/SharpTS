@@ -242,6 +242,60 @@ public partial class ILCompiler
     };
 
     /// <summary>
+    /// Emits an expression statement with special handling to wait for async return values.
+    /// If the expression returns a Task or Promise, waits for it to complete.
+    /// This provides "top-level await" behavior for compiled code.
+    /// </summary>
+    private void EmitExpressionWithAsyncWait(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
+    {
+        emitter.EmitExpression(exprStmt.Expr);
+
+        // Box value types first (e.g., delete returns boolean)
+        emitter.Helpers.EnsureBoxed();
+        var exprResult = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, exprResult);
+
+        var notTaskLabel = il.DefineLabel();
+        var waitForTaskLabel = il.DefineLabel();
+        var isTaskLabel = il.DefineLabel();
+
+        // Check for Task<object> first
+        il.Emit(OpCodes.Ldloc, exprResult);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Brtrue, isTaskLabel);
+
+        // Check for $Promise (async function return type)
+        il.Emit(OpCodes.Ldloc, exprResult);
+        il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+        il.Emit(OpCodes.Brfalse, notTaskLabel);
+
+        // It's a $Promise - extract its underlying Task
+        il.Emit(OpCodes.Ldloc, exprResult);
+        il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
+        il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Br, waitForTaskLabel);
+
+        // It's a Task<object> directly
+        il.MarkLabel(isTaskLabel);
+        il.Emit(OpCodes.Ldloc, exprResult);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+
+        // Wait for the task
+        il.MarkLabel(waitForTaskLabel);
+        var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
+        il.Emit(OpCodes.Call, getAwaiter);
+        var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
+        il.Emit(OpCodes.Stloc, awaiterLocal);
+        il.Emit(OpCodes.Ldloca, awaiterLocal);
+        var getResult = _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult");
+        il.Emit(OpCodes.Call, getResult);
+        il.Emit(OpCodes.Pop);  // Discard the result
+
+        il.MarkLabel(notTaskLabel);
+        // No pop needed - value is in local
+    }
+
+    /// <summary>
     /// Emits the initialization method for a module.
     /// Includes an initialization guard to ensure module is only initialized once.
     /// Script files are initialized in the main program type, not a module type.
@@ -302,7 +356,15 @@ public partial class ILCompiler
                 continue;
             }
 
-            emitter.EmitStatement(stmt);
+            // Special handling for expression statements to wait for top-level async calls
+            if (stmt is Stmt.Expression exprStmt)
+            {
+                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+            }
+            else
+            {
+                emitter.EmitStatement(stmt);
+            }
         }
 
         il.MarkLabel(skipLabel);
@@ -360,7 +422,15 @@ public partial class ILCompiler
                 continue;
             }
 
-            emitter.EmitStatement(stmt);
+            // Special handling for expression statements to wait for top-level async calls
+            if (stmt is Stmt.Expression exprStmt)
+            {
+                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+            }
+            else
+            {
+                emitter.EmitStatement(stmt);
+            }
         }
 
         il.MarkLabel(skipLabel);
@@ -504,6 +574,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             IsStrictMode = _isStrictMode,
             // Registry services

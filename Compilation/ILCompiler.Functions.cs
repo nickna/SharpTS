@@ -213,6 +213,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             ClassExprBuilders = _classExprs.Builders,
             UnionGenerator = _unionGenerator,
             // Check for function-level "use strict" directive
@@ -450,6 +451,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             // Class expression support
             VarToClassExpr = _classExprs.VarToClassExpr,
             ClassExprStaticFields = _classExprs.StaticFields,
@@ -531,7 +533,7 @@ public partial class ILCompiler
             {
                 emitter.EmitExpression(exprStmt.Expr);
 
-                // Check if the result is a Task<object> and wait for it
+                // Check if the result is a Task<object> or $Promise and wait for it
                 // This provides "top-level await" behavior for compiled code
                 // Box value types first (e.g., delete returns boolean)
                 emitter.Helpers.EnsureBoxed();
@@ -539,15 +541,32 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Stloc, exprResult);
 
                 var notTaskLabel = il.DefineLabel();
-                var doneLabel = il.DefineLabel();
+                var waitForTaskLabel = il.DefineLabel();
+                var isTaskLabel = il.DefineLabel();
 
+                // Check for Task<object> first
                 il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+                il.Emit(OpCodes.Brtrue, isTaskLabel);
+
+                // Check for $Promise (async function return type)
+                il.Emit(OpCodes.Ldloc, exprResult);
+                il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
                 il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-                // It's a Task<object> - wait for it
+                // It's a $Promise - extract its underlying Task
+                il.Emit(OpCodes.Ldloc, exprResult);
+                il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
+                il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+                il.Emit(OpCodes.Br, waitForTaskLabel);
+
+                // It's a Task<object> directly
+                il.MarkLabel(isTaskLabel);
                 il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+
+                // Wait for the task
+                il.MarkLabel(waitForTaskLabel);
                 var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
                 il.Emit(OpCodes.Call, getAwaiter);
                 var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
@@ -559,8 +578,6 @@ public partial class ILCompiler
 
                 il.MarkLabel(notTaskLabel);
                 // No pop needed - value is in local
-
-                il.MarkLabel(doneLabel);
             }
             else
             {
@@ -615,6 +632,7 @@ public partial class ILCompiler
             TypeEmitterRegistry = _typeEmitterRegistry,
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
+            BuiltInModuleMethodBindings = _builtInModuleMethodBindings,
             VarToClassExpr = _classExprs.VarToClassExpr,
             ClassExprStaticFields = _classExprs.StaticFields,
             ClassExprStaticMethods = _classExprs.StaticMethods,

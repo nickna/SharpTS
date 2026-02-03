@@ -172,6 +172,10 @@ public partial class RuntimeEmitter
         // Must come after $Buffer (StringDecoder works with Buffer)
         EmitTSStringDecoderClass(moduleBuilder, runtime);
 
+        // Emit $Stats class for fs.stat() and related methods
+        // Must come before fs module methods which use it
+        EmitStatsClass(moduleBuilder, runtime);
+
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);
 
@@ -1980,6 +1984,8 @@ public partial class RuntimeEmitter
         // GetConsoleIndent must be emitted before ConsoleLog/ConsoleLogMultiple which call it
         EmitGetConsoleIndent(typeBuilder, runtime);
         EmitConsoleLog(typeBuilder, runtime);
+        // JoinWithStringify must be emitted before ConsoleLogMultiple which uses it
+        EmitJoinWithStringify(typeBuilder, runtime);
         EmitConsoleLogMultiple(typeBuilder, runtime);
         EmitToNumber(typeBuilder, runtime);
         EmitIsTruthy(typeBuilder, runtime);

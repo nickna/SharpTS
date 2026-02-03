@@ -11,7 +11,8 @@ public partial class GeneratorMoveNextEmitter
         // Handle console.log specially (handles both Variable and Get patterns)
         if (_helpers.TryEmitConsoleLog(c,
             arg => { EmitExpression(arg); EnsureBoxed(); },
-            _ctx!.Runtime!.ConsoleLog))
+            _ctx!.Runtime!.ConsoleLog,
+            _ctx!.Runtime!.ConsoleLogMultiple))
         {
             return;
         }

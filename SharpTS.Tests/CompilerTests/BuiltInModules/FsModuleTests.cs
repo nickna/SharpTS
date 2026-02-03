@@ -147,8 +147,8 @@ public class FsModuleTests
                 fs.writeFileSync(testFile, content);
                 const stat = fs.statSync(testFile);
 
-                console.log(stat.isFile);
-                console.log(stat.isDirectory);
+                console.log(stat.isFile());
+                console.log(stat.isDirectory());
                 console.log(stat.size > 0);
 
                 // Cleanup
@@ -172,8 +172,8 @@ public class FsModuleTests
                 fs.mkdirSync(testDir);
                 const stat = fs.statSync(testDir);
 
-                console.log(stat.isFile);
-                console.log(stat.isDirectory);
+                console.log(stat.isFile());
+                console.log(stat.isDirectory());
 
                 // Cleanup
                 fs.rmdirSync(testDir);
@@ -492,7 +492,7 @@ public class FsModuleTests
                 fs.symlinkSync(testFile, linkPath);
 
                 const stat = fs.lstatSync(linkPath);
-                console.log(stat.isSymbolicLink === true);
+                console.log(stat.isSymbolicLink() === true);
 
                 // Cleanup
                 fs.unlinkSync(linkPath);
@@ -796,8 +796,8 @@ public class FsModuleTests
                 const fd = fs.openSync(testFile, 'r');
                 const stat = fs.fstatSync(fd);
 
-                console.log(stat.isFile === true);
-                console.log(stat.isDirectory === false);
+                console.log(stat.isFile() === true);
+                console.log(stat.isDirectory() === false);
                 console.log(stat.size === 5);
 
                 fs.closeSync(fd);
