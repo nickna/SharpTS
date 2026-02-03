@@ -104,8 +104,9 @@ public partial class ILEmitter
                 break;
 
             case Stmt.Enum enumStmt:
-                // Enums are handled at compile time - store the enum values object if available
-                // For now, skip - enums are accessed via special handling
+                // Create a Dictionary<string, object?> with enum members and store in namespace
+                // This allows namespace.EnumName.MemberName access at runtime
+                EmitEnumInNamespace(nsField, enumStmt);
                 break;
 
             case Stmt.Namespace nestedNs:
@@ -156,6 +157,57 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldstr, memberName);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
         IL.Emit(OpCodes.Stloc, aliasLocal);
+    }
+
+    /// <summary>
+    /// Emits IL to create an enum object (Dictionary) and store it in the namespace.
+    /// </summary>
+    private void EmitEnumInNamespace(FieldBuilder nsField, Stmt.Enum enumStmt)
+    {
+        // Get the qualified enum name and its members
+        string qualifiedEnumName = _ctx.ResolveEnumName(enumStmt.Name.Lexeme);
+        if (_ctx.EnumMembers == null ||
+            !_ctx.EnumMembers.TryGetValue(qualifiedEnumName, out var members) ||
+            members == null)
+        {
+            return; // No enum members found
+        }
+
+        // Create: new Dictionary<string, object?>()
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
+
+        // For each member, add to dictionary: dict[memberName] = value
+        foreach (var (memberName, value) in members!)
+        {
+            IL.Emit(OpCodes.Dup); // Keep dictionary on stack
+            IL.Emit(OpCodes.Ldstr, memberName);
+
+            if (value is double d)
+            {
+                IL.Emit(OpCodes.Ldc_R8, d);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            }
+            else if (value is string s)
+            {
+                IL.Emit(OpCodes.Ldstr, s);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item"));
+        }
+
+        // Store the dictionary in the namespace: nsField.Set(enumName, dict)
+        // Stack: dict
+        var dictLocal = IL.DeclareLocal(_ctx.Types.DictionaryStringObject);
+        IL.Emit(OpCodes.Stloc, dictLocal);
+
+        IL.Emit(OpCodes.Ldsfld, nsField);
+        IL.Emit(OpCodes.Ldstr, enumStmt.Name.Lexeme);
+        IL.Emit(OpCodes.Ldloc, dictLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceSet);
     }
 
     /// <summary>

@@ -364,37 +364,138 @@ public partial class ILEmitter
         }
         else
         {
-            // Fallback: try to instantiate via local variable (imported class as Type)
-            var local = _ctx.Locals.GetLocal(className);
-            if (local != null)
+            // Try namespace-qualified class instantiation (e.g., new Shapes.Circle(2))
+            if (namespaceParts.Count > 0 && TryEmitNamespaceClassConstruction(namespaceParts, className, n.Arguments, n.TypeArgs))
             {
-                // The local contains a Type object - use Activator.CreateInstance
-                // Load the Type first
-                IL.Emit(OpCodes.Ldloc, local);
-
-                // Create an object array for the arguments
-                IL.Emit(OpCodes.Ldc_I4, n.Arguments.Count);
-                IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-
-                for (int i = 0; i < n.Arguments.Count; i++)
-                {
-                    IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Ldc_I4, i);
-                    EmitExpression(n.Arguments[i]);
-                    EmitBoxIfNeeded(n.Arguments[i]);
-                    IL.Emit(OpCodes.Stelem_Ref);
-                }
-
-                // Call Activator.CreateInstance(Type, object[])
-                // Stack: Type, object[]
-                var createInstanceMethod = _ctx.Types.GetMethod(_ctx.Types.Activator, "CreateInstance", _ctx.Types.Type, _ctx.Types.ObjectArray);
-                IL.Emit(OpCodes.Call, createInstanceMethod!);
+                // Successfully emitted namespace class construction
             }
             else
             {
-                IL.Emit(OpCodes.Ldnull);
+                // Fallback: try to instantiate via local variable (imported class as Type)
+                var local = _ctx.Locals.GetLocal(className);
+                if (local != null)
+                {
+                    // The local contains a Type object - use Activator.CreateInstance
+                    // Load the Type first
+                    IL.Emit(OpCodes.Ldloc, local);
+
+                    // Create an object array for the arguments
+                    IL.Emit(OpCodes.Ldc_I4, n.Arguments.Count);
+                    IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+
+                    for (int i = 0; i < n.Arguments.Count; i++)
+                    {
+                        IL.Emit(OpCodes.Dup);
+                        IL.Emit(OpCodes.Ldc_I4, i);
+                        EmitExpression(n.Arguments[i]);
+                        EmitBoxIfNeeded(n.Arguments[i]);
+                        IL.Emit(OpCodes.Stelem_Ref);
+                    }
+
+                    // Call Activator.CreateInstance(Type, object[])
+                    // Stack: Type, object[]
+                    var createInstanceMethod = _ctx.Types.GetMethod(_ctx.Types.Activator, "CreateInstance", _ctx.Types.Type, _ctx.Types.ObjectArray);
+                    IL.Emit(OpCodes.Call, createInstanceMethod!);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldnull);
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// Tries to emit class construction for a namespace-qualified class (e.g., new Shapes.Circle(2)).
+    /// Returns true if the namespace path is valid and code was emitted.
+    /// </summary>
+    private bool TryEmitNamespaceClassConstruction(List<string> namespaceParts, string className, List<Expr> arguments, List<string>? typeArgs)
+    {
+        // Check if the first part is a known namespace
+        string nsPath = namespaceParts[0];
+        if (_ctx.NamespaceFields == null || !_ctx.NamespaceFields.TryGetValue(nsPath, out var nsField))
+        {
+            return false;
+        }
+
+        // Load the namespace field
+        IL.Emit(OpCodes.Ldsfld, nsField);
+
+        // Walk through nested namespaces (if any)
+        for (int i = 1; i < namespaceParts.Count; i++)
+        {
+            nsPath = $"{nsPath}.{namespaceParts[i]}";
+            if (_ctx.NamespaceFields.TryGetValue(nsPath, out var nestedField))
+            {
+                // Use the direct field for nested namespace
+                IL.Emit(OpCodes.Pop); // Discard parent namespace
+                IL.Emit(OpCodes.Ldsfld, nestedField);
+            }
+            else
+            {
+                // Fall back to runtime Get() call for nested namespace
+                IL.Emit(OpCodes.Ldstr, namespaceParts[i]);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+            }
+        }
+
+        // Get the class Type from the namespace: namespace.Get(className)
+        IL.Emit(OpCodes.Ldstr, className);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.TSNamespaceGet);
+
+        // The result is a Type object (as object) - cast to Type
+        // Stack: Type (as object)
+
+        // Handle generic type arguments (e.g., new Collections.Box<number>(42))
+        if (typeArgs != null && typeArgs.Count > 0)
+        {
+            // Cast to Type first
+            IL.Emit(OpCodes.Castclass, _ctx.Types.Type);
+
+            // Create Type[] array for MakeGenericType
+            IL.Emit(OpCodes.Ldc_I4, typeArgs.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Type);
+
+            for (int i = 0; i < typeArgs.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+
+                // Resolve the type argument string to a runtime Type
+                Type resolvedType = ResolveTypeArg(typeArgs[i]);
+                IL.Emit(OpCodes.Ldtoken, resolvedType);
+                IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+
+                IL.Emit(OpCodes.Stelem_Ref);
+            }
+
+            // Call Type.MakeGenericType(Type[])
+            // Stack: Type, Type[]
+            var makeGenericTypeMethod = typeof(Type).GetMethod("MakeGenericType", [typeof(Type[])]);
+            IL.Emit(OpCodes.Callvirt, makeGenericTypeMethod!);
+            // Stack: Type (closed generic)
+        }
+
+        // Create an object array for the constructor arguments
+        IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            EmitExpression(arguments[i]);
+            EmitBoxIfNeeded(arguments[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        // Call Activator.CreateInstance(Type, object[])
+        // Stack: Type, object[]
+        var createInstanceMethod = _ctx.Types.GetMethod(_ctx.Types.Activator, "CreateInstance", _ctx.Types.Type, _ctx.Types.ObjectArray);
+        IL.Emit(OpCodes.Call, createInstanceMethod!);
+
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>
