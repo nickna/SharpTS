@@ -642,4 +642,317 @@ public class UnboxedArithmeticTests
     }
 
     #endregion
+
+    #region Typed Return Value Tests
+
+    [Fact]
+    public void TypedReturn_FibonacciRecursion_WorksCorrectly()
+    {
+        // Tests recursive typed returns with multiple return points
+        var source = """
+            function fib(n: number): number {
+                if (n <= 1) {
+                    return n;
+                }
+                return fib(n - 1) + fib(n - 2);
+            }
+            console.log(fib(10));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("55\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_MutualRecursion_WorksCorrectly()
+    {
+        // Tests mutually recursive functions with typed returns
+        var source = """
+            function isEven(n: number): boolean {
+                if (n === 0) return true;
+                return isOdd(n - 1);
+            }
+            function isOdd(n: number): boolean {
+                if (n === 0) return false;
+                return isEven(n - 1);
+            }
+            console.log(isEven(10));
+            console.log(isOdd(7));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_DeepNesting_WorksCorrectly()
+    {
+        // Tests deeply nested function calls with typed returns
+        var source = """
+            function a(x: number): number { return x + 1; }
+            function b(x: number): number { return a(x) * 2; }
+            function c(x: number): number { return b(x) - 3; }
+            function d(x: number): number { return c(x) + 10; }
+            function e(x: number): number { return d(x) / 2; }
+            console.log(e(5));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // e(5) = d(5)/2 = (c(5)+10)/2 = ((b(5)-3)+10)/2 = (((a(5)*2)-3)+10)/2
+        // = (((6*2)-3)+10)/2 = ((12-3)+10)/2 = (9+10)/2 = 19/2 = 9.5
+        Assert.Equal("9.5\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_ChainedInExpression_WorksCorrectly()
+    {
+        // Tests using typed return values in complex expressions
+        var source = """
+            function square(x: number): number { return x * x; }
+            function cube(x: number): number { return x * x * x; }
+            let result: number = square(3) + cube(2) - square(2);
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // 9 + 8 - 4 = 13
+        Assert.Equal("13\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_InTernaryCondition_WorksCorrectly()
+    {
+        // Tests typed return values used in ternary expressions
+        var source = """
+            function getValue(): number { return 10; }
+            function getThreshold(): number { return 5; }
+            let result: string = getValue() > getThreshold() ? "above" : "below";
+            console.log(result);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("above\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_BooleanFunction_WorksCorrectly()
+    {
+        // Tests functions with boolean return type
+        var source = """
+            function isPositive(n: number): boolean {
+                return n > 0;
+            }
+            function isNegative(n: number): boolean {
+                return n < 0;
+            }
+            console.log(isPositive(5));
+            console.log(isNegative(-3));
+            console.log(isPositive(-1));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\ntrue\nfalse\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_StringFunction_WorksCorrectly()
+    {
+        // Tests functions with string return type
+        var source = """
+            function greet(name: string): string {
+                return "Hello, " + name + "!";
+            }
+            console.log(greet("World"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello, World!\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_UsedAsArgument_WorksCorrectly()
+    {
+        // Tests passing typed return values directly as arguments
+        var source = """
+            function double(x: number): number { return x * 2; }
+            function add(a: number, b: number): number { return a + b; }
+            console.log(add(double(3), double(4)));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // add(6, 8) = 14
+        Assert.Equal("14\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_InWhileCondition_WorksCorrectly()
+    {
+        // Tests typed boolean return in loop condition
+        var source = """
+            let count: number = 0;
+            function shouldContinue(): boolean {
+                count = count + 1;
+                return count < 5;
+            }
+            while (shouldContinue()) {
+                console.log(count);
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n3\n4\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_InIfCondition_WorksCorrectly()
+    {
+        // Tests typed boolean return in if condition
+        var source = """
+            function check(x: number): boolean {
+                return x > 10;
+            }
+            if (check(15)) {
+                console.log("greater");
+            } else {
+                console.log("less");
+            }
+            if (check(5)) {
+                console.log("greater");
+            } else {
+                console.log("less");
+            }
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("greater\nless\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_MultipleReturnPaths_WorksCorrectly()
+    {
+        // Tests function with multiple return statements
+        var source = """
+            function classify(n: number): string {
+                if (n < 0) {
+                    return "negative";
+                }
+                if (n === 0) {
+                    return "zero";
+                }
+                if (n < 10) {
+                    return "small";
+                }
+                return "large";
+            }
+            console.log(classify(-5));
+            console.log(classify(0));
+            console.log(classify(7));
+            console.log(classify(100));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("negative\nzero\nsmall\nlarge\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_InArrayMap_WorksCorrectly()
+    {
+        // Tests typed return with array operations
+        var source = """
+            function double(x: number): number {
+                return x * 2;
+            }
+            let arr: number[] = [1, 2, 3, 4, 5];
+            let doubled = arr.map(x => double(x));
+            console.log(doubled.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2,4,6,8,10\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_ClassMethodReturningNumber_WorksCorrectly()
+    {
+        // Tests class methods with typed returns
+        var source = """
+            class Counter {
+                value: number = 0;
+
+                increment(): number {
+                    this.value = this.value + 1;
+                    return this.value;
+                }
+
+                getDoubled(): number {
+                    return this.value * 2;
+                }
+            }
+            let c = new Counter();
+            console.log(c.increment());
+            console.log(c.increment());
+            console.log(c.getDoubled());
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("1\n2\n4\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_ClassMethodChaining_WorksCorrectly()
+    {
+        // Tests chaining calls on class methods with typed returns
+        var source = """
+            class Math2 {
+                static square(x: number): number {
+                    return x * x;
+                }
+                static cube(x: number): number {
+                    return x * x * x;
+                }
+            }
+            console.log(Math2.square(Math2.cube(2)));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // cube(2) = 8, square(8) = 64
+        Assert.Equal("64\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_WithDefaultParameter_WorksCorrectly()
+    {
+        // Tests typed return with default parameters
+        var source = """
+            function multiply(x: number, factor: number = 2): number {
+                return x * factor;
+            }
+            console.log(multiply(5));
+            console.log(multiply(5, 3));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n15\n", output);
+    }
+
+    [Fact]
+    public void TypedReturn_TailRecursion_WorksCorrectly()
+    {
+        // Tests tail-recursive function with typed return
+        var source = """
+            function sumTo(n: number, acc: number = 0): number {
+                if (n <= 0) {
+                    return acc;
+                }
+                return sumTo(n - 1, acc + n);
+            }
+            console.log(sumTo(10));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // 10 + 9 + 8 + 7 + 6 + 5 + 4 + 3 + 2 + 1 = 55
+        Assert.Equal("55\n", output);
+    }
+
+    #endregion
 }
