@@ -1,3 +1,4 @@
+using System.Collections;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -11,7 +12,7 @@ namespace SharpTS.Runtime.Types;
 /// - Object keys are compared by reference (same object identity)
 /// Methods match the JavaScript Map API: get, set, has, delete, clear, keys, values, entries, forEach.
 /// </remarks>
-public class SharpTSMap : ITypeCategorized
+public class SharpTSMap : ITypeCategorized, IEnumerable<object?>
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Map;
@@ -143,6 +144,14 @@ public class SharpTSMap : ITypeCategorized
         foreach (var kvp in _map)
             yield return new SharpTSArray([kvp.Key, kvp.Value]);
     }
+
+    /// <summary>
+    /// Returns an enumerator over [key, value] pairs, matching JavaScript Map iteration semantics.
+    /// This enables yield* and for...of to work with Map in compiled mode.
+    /// </summary>
+    public IEnumerator<object?> GetEnumerator() => EnumerateEntries().GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     public override string ToString()
     {

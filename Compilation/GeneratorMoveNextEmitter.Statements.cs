@@ -1,5 +1,6 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -128,10 +129,62 @@ public partial class GeneratorMoveNextEmitter
         var endLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
+        // Get compile-time type info for the iterable expression
+        TypeInfo? iterableType = _ctx!.TypeMap?.Get(f.Iterable);
+
         // Emit iterable and get enumerator
         EmitExpression(f.Iterable);
         EnsureBoxed();
 
+        // Handle Map/Set specially - convert to List before iteration
+        // This matches the behavior in ILEmitter.Statements.cs EmitForOf
+        if (iterableType is TypeInfo.Map)
+        {
+            // Map iteration yields [key, value] entries (compile-time known)
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+        }
+        else if (iterableType is TypeInfo.Set)
+        {
+            // Set iteration yields values (compile-time known)
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+        }
+        else
+        {
+            // Fallback: runtime type checking for Map/Set when compile-time type isn't available
+            var afterMapSetLabel = _il.DefineLabel();
+            var checkSetLabel = _il.DefineLabel();
+            var dictionaryType = typeof(Dictionary<object, object?>);
+            var hashSetType = typeof(HashSet<object>);
+            var iterableLocal = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+
+            // Check if iterable is Dictionary<object, object?> (Map)
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, dictionaryType);
+            _il.Emit(OpCodes.Brfalse, checkSetLabel);
+
+            // It's a Map - call MapEntries to get List<object?>
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+            _il.Emit(OpCodes.Br, afterMapSetLabel);
+
+            // Check if iterable is HashSet<object> (Set)
+            _il.MarkLabel(checkSetLabel);
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, hashSetType);
+            _il.Emit(OpCodes.Brfalse, afterMapSetLabel);
+
+            // It's a Set - call SetValues to get List<object?>
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+
+            _il.MarkLabel(afterMapSetLabel);
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+        }
+
+        // Get the enumerator from the (possibly converted) iterable
         _il.Emit(OpCodes.Castclass, _types.IEnumerable);
         _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerable, "GetEnumerator"));
 

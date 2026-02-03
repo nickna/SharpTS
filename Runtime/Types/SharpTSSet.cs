@@ -1,3 +1,4 @@
+using System.Collections;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -11,7 +12,7 @@ namespace SharpTS.Runtime.Types;
 /// - Object values are compared by reference (same object identity)
 /// Methods match the JavaScript Set API: add, has, delete, clear, keys, values, entries, forEach.
 /// </remarks>
-public class SharpTSSet : ITypeCategorized
+public class SharpTSSet : ITypeCategorized, IEnumerable<object?>
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Set;
@@ -267,6 +268,14 @@ public class SharpTSSet : ITypeCategorized
         foreach (var value in _set)
             yield return new SharpTSArray([value, value]);
     }
+
+    /// <summary>
+    /// Returns an enumerator over the values, matching JavaScript Set iteration semantics.
+    /// This enables yield* and for...of to work with Set in compiled mode.
+    /// </summary>
+    public IEnumerator<object?> GetEnumerator() => EnumerateValues().GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     public override string ToString()
     {

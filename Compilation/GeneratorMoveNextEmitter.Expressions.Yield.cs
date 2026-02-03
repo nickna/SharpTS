@@ -1,5 +1,6 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -66,9 +67,9 @@ public partial class GeneratorMoveNextEmitter
             return;
         }
 
-        var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
         var moveNext = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
         var current = typeof(System.Collections.IEnumerator).GetProperty("Current")!.GetGetMethod()!;
+        var getEnumerator = typeof(System.Collections.IEnumerable).GetMethod("GetEnumerator")!;
 
         var loopEnd = _il.DefineLabel();
         var hasIteratorLabel = _il.DefineLabel();
@@ -85,7 +86,39 @@ public partial class GeneratorMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Stloc, iterableLocal);
 
-        // Check for Symbol.iterator: var iterFn = GetIteratorFunction(iterable, Symbol.iterator)
+        // Handle Map/Set specially - convert to List before iteration
+        {
+            var afterMapSetLabel = _il.DefineLabel();
+            var checkSetLabel = _il.DefineLabel();
+            var dictionaryType = typeof(Dictionary<object, object?>);
+            var hashSetType = typeof(HashSet<object>);
+
+            // Check if iterable is Dictionary<object, object?> (Map)
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, dictionaryType);
+            _il.Emit(OpCodes.Brfalse, checkSetLabel);
+
+            // It's a Map - call MapEntries
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.MapEntries);
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+            _il.Emit(OpCodes.Br, afterMapSetLabel);
+
+            // Check if iterable is HashSet<object> (Set)
+            _il.MarkLabel(checkSetLabel);
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, hashSetType);
+            _il.Emit(OpCodes.Brfalse, afterMapSetLabel);
+
+            // It's a Set - call SetValues
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.SetValues);
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+
+            _il.MarkLabel(afterMapSetLabel);
+        }
+
+        // Check for Symbol.iterator on the object (for custom iterables)
         _il.Emit(OpCodes.Ldloc, iterableLocal);
         _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
         _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
@@ -125,7 +158,6 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, enumTemp);
         _il.Emit(OpCodes.Stfld, delegatedField);
 
-        // Fall through to check first element
         // This label is where we resume from state dispatch
         _il.MarkLabel(resumeLabel);
 
