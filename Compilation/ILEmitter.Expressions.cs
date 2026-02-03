@@ -82,6 +82,12 @@ public partial class ILEmitter
             return;
         }
 
+        if (name == "Symbol")
+        {
+            EmitNullConstant(); // Symbol is handled specially in property access via SymbolStaticEmitter
+            return;
+        }
+
         // JavaScript global constants
         if (name == "NaN")
         {

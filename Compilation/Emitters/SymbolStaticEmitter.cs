@@ -103,6 +103,12 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
             case "unscopables":
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolUnscopables);
                 return true;
+            case "dispose":
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolDispose);
+                return true;
+            case "asyncDispose":
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolAsyncDispose);
+                return true;
             default:
                 return false;
         }

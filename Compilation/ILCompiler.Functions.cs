@@ -224,6 +224,7 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
             EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
             // Function-level display class for captured function-local variables
             FunctionDisplayClassFields = hasFunctionDC ? _closures.FunctionDisplayClassFields[qualifiedFunctionName] : null,
             CapturedFunctionLocals = capturedLocals,
@@ -287,10 +288,8 @@ public partial class ILCompiler
             throw new InvalidOperationException($"Cannot compile function '{funcStmt.Name.Lexeme}' without a body.");
         }
 
-        foreach (var stmt in funcStmt.Body)
-        {
-            emitter.EmitStatement(stmt);
-        }
+        // Use EmitStatements to handle 'using' declarations with proper try/finally disposal
+        emitter.EmitStatements(funcStmt.Body);
 
         // Finalize any deferred returns from exception blocks
         if (emitter.HasDeferredReturns)
@@ -647,15 +646,26 @@ public partial class ILCompiler
             EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor,
             EntryPointDisplayClassFields = _closures.EntryPointDisplayClassFields.Count > 0 ? _closures.EntryPointDisplayClassFields : null,
             CapturedTopLevelVars = _closures.CapturedTopLevelVars.Count > 0 ? _closures.CapturedTopLevelVars : null,
-            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null
+            ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
+            EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField
         };
 
         // Create entry-point display class instance if there are captured top-level variables
         if (_closures.EntryPointDisplayClass != null && _closures.EntryPointDisplayClassCtor != null)
         {
+            // Create instance and store in both local variable and static field
             var displayLocal = il.DeclareLocal(_closures.EntryPointDisplayClass);
             il.Emit(OpCodes.Newobj, _closures.EntryPointDisplayClassCtor);
+            il.Emit(OpCodes.Dup); // Keep copy for static field
             il.Emit(OpCodes.Stloc, displayLocal);
+            if (_closures.EntryPointDisplayClassStaticField != null)
+            {
+                il.Emit(OpCodes.Stsfld, _closures.EntryPointDisplayClassStaticField);
+            }
+            else
+            {
+                il.Emit(OpCodes.Pop);
+            }
             ctx.EntryPointDisplayClassLocal = displayLocal;
         }
 

@@ -203,6 +203,9 @@ public class EmittedRuntime
     public FieldBuilder FrozenObjectsField { get; set; } = null!;
     public FieldBuilder SealedObjectsField { get; set; } = null!;
 
+    // Resource disposal for using declarations
+    public MethodBuilder DisposeResource { get; set; } = null!;
+
     // Invocation methods
     public MethodBuilder InvokeValue { get; set; } = null!;
     public MethodBuilder InvokeMethodValue { get; set; } = null!;
@@ -254,6 +257,8 @@ public class EmittedRuntime
     public FieldBuilder SymbolToPrimitive { get; set; } = null!;
     public FieldBuilder SymbolSpecies { get; set; } = null!;
     public FieldBuilder SymbolUnscopables { get; set; } = null!;
+    public FieldBuilder SymbolDispose { get; set; } = null!;
+    public FieldBuilder SymbolAsyncDispose { get; set; } = null!;
 
     // Symbol.for() and Symbol.keyFor() global registry support
     public MethodBuilder SymbolFor { get; set; } = null!;

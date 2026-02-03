@@ -68,5 +68,78 @@ public partial class RuntimeEmitter
         il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ret);
     }
+
+    /// <summary>
+    /// Emits: public static void DisposeResource(object resource, object disposeSymbol)
+    /// Disposes a resource using Symbol.dispose if available.
+    /// </summary>
+    private void EmitDisposeResource(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "DisposeResource",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object]
+        );
+        runtime.DisposeResource = method;
+
+        var il = method.GetILGenerator();
+        var doneLabel = il.DefineLabel();
+        var noDisposeLabel = il.DefineLabel();
+        var hasDisposeLabel = il.DefineLabel();
+        var invokeLabel = il.DefineLabel();
+
+        var disposeMethodLocal = il.DeclareLocal(_types.Object); // local 0: dispose method
+        var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject); // local 1: symbol dict
+
+        // if (resource == null) return;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, doneLabel);
+
+        // var symbolDict = GetSymbolDict(resource);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symbolDictLocal);
+
+        // if (!symbolDict.TryGetValue(disposeSymbol, out disposeMethod)) return;
+        il.Emit(OpCodes.Ldloc, symbolDictLocal);
+        il.Emit(OpCodes.Ldarg_1); // disposeSymbol
+        il.Emit(OpCodes.Ldloca, disposeMethodLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, noDisposeLabel);
+
+        // if (disposeMethod == null) return;
+        il.Emit(OpCodes.Ldloc, disposeMethodLocal);
+        il.Emit(OpCodes.Brfalse, noDisposeLabel);
+
+        // Invoke the dispose method with resource as the context
+        // Use InvokeMethodValue(thisObj, method, args) which handles various function types
+        il.Emit(OpCodes.Ldarg_0); // resource (for 'this' context)
+        il.Emit(OpCodes.Ldloc, disposeMethodLocal);
+        il.Emit(OpCodes.Ldc_I4_0); // no additional args
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop); // Discard return value
+        il.Emit(OpCodes.Br, doneLabel);
+
+        // No dispose method - check for .NET IDisposable
+        il.MarkLabel(noDisposeLabel);
+        var notDisposableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, typeof(IDisposable));
+        il.Emit(OpCodes.Brfalse, notDisposableLabel);
+
+        // Call IDisposable.Dispose()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, typeof(IDisposable));
+        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Br, doneLabel);
+
+        il.MarkLabel(notDisposableLabel);
+        // No disposal method - silently return (TypeScript allows this)
+
+        il.MarkLabel(doneLabel);
+        il.Emit(OpCodes.Ret);
+    }
 }
 

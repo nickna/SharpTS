@@ -1335,6 +1335,10 @@ public partial class RuntimeEmitter
         runtime.SymbolSpecies = speciesField;
         var unscopablesField = typeBuilder.DefineField("unscopables", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
         runtime.SymbolUnscopables = unscopablesField;
+        var disposeField = typeBuilder.DefineField("dispose", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolDispose = disposeField;
+        var asyncDisposeField = typeBuilder.DefineField("asyncDispose", typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.SymbolAsyncDispose = asyncDisposeField;
 
         // ============================================================
         // Symbol.For(string key) - static method
@@ -1540,6 +1544,16 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Ldstr, "Symbol.unscopables");
         cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
         cctorIL.Emit(OpCodes.Stsfld, unscopablesField);
+
+        // dispose = new $TSSymbol("Symbol.dispose")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.dispose");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, disposeField);
+
+        // asyncDispose = new $TSSymbol("Symbol.asyncDispose")
+        cctorIL.Emit(OpCodes.Ldstr, "Symbol.asyncDispose");
+        cctorIL.Emit(OpCodes.Newobj, ctorBuilder);
+        cctorIL.Emit(OpCodes.Stsfld, asyncDisposeField);
 
         cctorIL.Emit(OpCodes.Ret);
 
@@ -2020,6 +2034,8 @@ public partial class RuntimeEmitter
         // Symbol support helpers - must come before iterator methods which depend on GetSymbolDict
         EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
         EmitIsSymbol(typeBuilder, runtime);
+        // DisposeResource depends on GetSymbolDict and InvokeMethodValue
+        EmitDisposeResource(typeBuilder, runtime);
         // HasIn operator depends on IsSymbol and GetSymbolDict
         EmitHasIn(typeBuilder, runtime);
         // TypedArray helpers must come BEFORE GetIndex/SetIndex since they use these helpers

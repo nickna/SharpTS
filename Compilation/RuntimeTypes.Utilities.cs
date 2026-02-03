@@ -141,6 +141,56 @@ public static partial class RuntimeTypes
 
     #endregion
 
+    #region Resource Disposal
+
+    /// <summary>
+    /// Disposes a resource using Symbol.dispose if available.
+    /// Called at the end of a using declaration's scope.
+    /// </summary>
+    /// <param name="resource">The resource to dispose.</param>
+    /// <param name="disposeSymbol">The Symbol.dispose symbol to look up.</param>
+    public static void DisposeResource(object? resource, object disposeSymbol)
+    {
+        // Null/undefined resources are skipped
+        if (resource == null)
+            return;
+
+        // Get the symbol dictionary for this object
+        var symbolDict = _symbolStorage.GetOrCreateValue(resource);
+
+        // Try to get the dispose method from the symbol dictionary
+        if (!symbolDict.TryGetValue(disposeSymbol, out var disposeMethod) || disposeMethod == null)
+        {
+            // Check for .NET IDisposable as fallback
+            if (resource is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+            // No disposal method - silently skip (TypeScript allows this)
+            return;
+        }
+
+        // Call the dispose method
+        if (disposeMethod is TSFunction func)
+        {
+            // Call with resource as implicit `this` - TSFunction.Invoke will handle binding
+            // For object literals with methods, we need to set up the this context
+            func.Invoke([]);
+        }
+        else if (disposeMethod is Delegate del)
+        {
+            del.DynamicInvoke([]);
+        }
+        else
+        {
+            // Try reflection for other function types
+            var invokeMethod = disposeMethod.GetType().GetMethod("Invoke", [typeof(object?[])]);
+            invokeMethod?.Invoke(disposeMethod, [Array.Empty<object?>()]);
+        }
+    }
+
+    #endregion
+
     #region Array Method Binding
 
     /// <summary>

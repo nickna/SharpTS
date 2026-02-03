@@ -603,11 +603,181 @@ public partial class ILEmitter
     protected override void EmitBlock(Stmt.Block b)
     {
         _ctx.Locals.EnterScope();
-        foreach (var stmt in b.Statements)
+
+        // Check if block contains using declarations
+        var usingResources = new List<LocalBuilder>();
+        bool hasUsing = b.Statements.Any(s => s is Stmt.Using);
+
+        if (hasUsing)
         {
-            EmitStatement(stmt);
+            // Emit block with try/finally for disposal
+            EmitBlockWithUsing(b.Statements, usingResources);
         }
+        else
+        {
+            // Simple block without using declarations
+            foreach (var stmt in b.Statements)
+            {
+                EmitStatement(stmt);
+            }
+        }
+
         _ctx.Locals.ExitScope();
+    }
+
+    /// <summary>
+    /// Emits a block that contains using declarations with proper try/finally disposal.
+    /// </summary>
+    private void EmitBlockWithUsing(List<Stmt> statements, List<LocalBuilder> usingResources)
+    {
+        // Find the first using declaration index
+        int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
+
+        // Emit statements before the first using
+        for (int i = 0; i < firstUsingIndex; i++)
+        {
+            EmitStatement(statements[i]);
+        }
+
+        // Now emit using declarations and remaining statements in a try/finally
+        IL.BeginExceptionBlock();
+
+        for (int i = firstUsingIndex; i < statements.Count; i++)
+        {
+            var stmt = statements[i];
+            if (stmt is Stmt.Using usingStmt)
+            {
+                // Process using declaration - store resources for disposal
+                foreach (var binding in usingStmt.Bindings)
+                {
+                    // Evaluate the initializer
+                    EmitExpression(binding.Initializer);
+                    EnsureBoxed();
+
+                    // Store in a local variable for later disposal
+                    LocalBuilder resourceLocal;
+                    if (binding.Name != null)
+                    {
+                        resourceLocal = _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object);
+                    }
+                    else
+                    {
+                        // Anonymous using - still need to track for disposal
+                        resourceLocal = IL.DeclareLocal(_ctx.Types.Object);
+                    }
+                    IL.Emit(OpCodes.Stloc, resourceLocal);
+                    usingResources.Add(resourceLocal);
+                }
+            }
+            else
+            {
+                EmitStatement(stmt);
+            }
+        }
+
+        // Finally block - dispose resources in reverse order
+        IL.BeginFinallyBlock();
+        EmitUsingDisposal(usingResources);
+        IL.EndExceptionBlock();
+    }
+
+    /// <summary>
+    /// Emits disposal code for using declaration resources.
+    /// Disposes in reverse order (LIFO).
+    /// </summary>
+    private void EmitUsingDisposal(List<LocalBuilder> resources)
+    {
+        // Dispose in reverse order
+        for (int i = resources.Count - 1; i >= 0; i--)
+        {
+            var resourceLocal = resources[i];
+
+            // Load the resource
+            IL.Emit(OpCodes.Ldloc, resourceLocal);
+
+            // Load Symbol.dispose
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolDispose);
+
+            // Call $Runtime.DisposeResource(resource, Symbol.dispose)
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.DisposeResource);
+        }
+    }
+
+    /// <summary>
+    /// Emits a list of statements with proper handling for 'using' declarations.
+    /// If using declarations are present, wraps the statements in try/finally for disposal.
+    /// </summary>
+    public void EmitStatements(List<Stmt> statements)
+    {
+        // Check if any statement is a using declaration
+        bool hasUsing = statements.Any(s => s is Stmt.Using);
+
+        if (hasUsing)
+        {
+            var usingResources = new List<LocalBuilder>();
+
+            // Find the first using declaration index
+            int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
+
+            // Emit statements before the first using
+            for (int i = 0; i < firstUsingIndex; i++)
+            {
+                EmitStatement(statements[i]);
+            }
+
+            // Now emit using declarations and remaining statements in a try/finally
+            // Use the builder for exception block tracking and validation
+            var builder = _ctx.ILBuilder;
+            _ctx.ExceptionBlockDepth++;
+            builder.BeginExceptionBlock();
+
+            for (int i = firstUsingIndex; i < statements.Count; i++)
+            {
+                var stmt = statements[i];
+                if (stmt is Stmt.Using usingStmt)
+                {
+                    // Process using declaration - store resources for disposal
+                    foreach (var binding in usingStmt.Bindings)
+                    {
+                        // Evaluate the initializer
+                        EmitExpression(binding.Initializer);
+                        EnsureBoxed();
+
+                        // Store in a local variable for later disposal
+                        LocalBuilder resourceLocal;
+                        if (binding.Name != null)
+                        {
+                            resourceLocal = _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object);
+                        }
+                        else
+                        {
+                            // Anonymous using - still need to track for disposal
+                            resourceLocal = IL.DeclareLocal(_ctx.Types.Object);
+                        }
+                        IL.Emit(OpCodes.Stloc, resourceLocal);
+                        usingResources.Add(resourceLocal);
+                    }
+                }
+                else
+                {
+                    EmitStatement(stmt);
+                }
+            }
+
+            // Finally block - dispose resources in reverse order
+            builder.BeginFinallyBlock();
+            EmitUsingDisposal(usingResources);
+            builder.EndExceptionBlock();
+            _ctx.ExceptionBlockDepth--;
+        }
+        else
+        {
+            // No using declarations - emit normally
+            foreach (var stmt in statements)
+            {
+                EmitStatement(stmt);
+            }
+        }
     }
 
     protected override void EmitReturn(Stmt.Return r)
