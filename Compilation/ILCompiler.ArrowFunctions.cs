@@ -44,6 +44,38 @@ public partial class ILCompiler
             // Store resolved types for use during arrow body emission
             _closures.ArrowParameterTypes[arrow] = resolvedParamTypes;
 
+            // Resolve typed return type from TypeMap (optimization for typed returns)
+            // Arrow functions can use typed returns - reflection automatically boxes at the boundary.
+            // However, we must be careful with expression body arrows that produce void (like console.log).
+            Type returnType = _types.Object;
+            var arrowTypeInfo = _typeMap?.Get(arrow);
+            if (arrowTypeInfo is TypeSystem.TypeInfo.Function funcTypeInfo)
+            {
+                var logicalReturnType = ParameterTypeResolver.ResolveReturnType(
+                    funcTypeInfo.ReturnType, isAsync: false, _typeMapper);
+
+                // Use typed return if:
+                // 1. Return type is not void (void methods need special handling)
+                // 2. For expression body arrows, the expression must produce a value
+                if (logicalReturnType != typeof(void))
+                {
+                    // For expression body arrows, check if the expression produces void
+                    // (like console.log) - in that case, keep return type as object
+                    bool isVoidExpressionBody = false;
+                    if (arrow.ExpressionBody != null)
+                    {
+                        var exprType = _typeMap?.Get(arrow.ExpressionBody);
+                        isVoidExpressionBody = exprType is TypeSystem.TypeInfo.Void;
+                    }
+
+                    if (!isVoidExpressionBody)
+                    {
+                        returnType = logicalReturnType;
+                    }
+                }
+            }
+            _closures.ArrowReturnTypes[arrow] = returnType;
+
             // For object methods, add __this as the first parameter
             Type[] paramTypes;
             if (arrow.HasOwnThis)
@@ -66,10 +98,11 @@ public partial class ILCompiler
             if (captures.Count == 0 && !needsFunctionDCForArrow)
             {
                 // Non-capturing and doesn't need function DC: static method on $Program
+                // Use typed return when available - reflection automatically boxes at $TSFunction boundary
                 var methodBuilder = _programType.DefineMethod(
                     $"<>Arrow_{_closures.ArrowMethodCounter++}",
                     MethodAttributes.Private | MethodAttributes.Static,
-                    _types.Object,
+                    returnType,
                     paramTypes
                 );
 
@@ -164,10 +197,11 @@ public partial class ILCompiler
                 _closures.DisplayClassConstructors[arrow] = ctorBuilder;
 
                 // Add Invoke method
+                // Use typed return when available - reflection automatically boxes at $TSFunction boundary
                 var invokeMethod = displayClass.DefineMethod(
                     "Invoke",
                     MethodAttributes.Public,
-                    _types.Object,
+                    returnType,
                     paramTypes
                 );
 
@@ -544,6 +578,11 @@ public partial class ILCompiler
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {
         var il = method.GetILGenerator();
+
+        // Get the resolved return type for this arrow (for typed return optimization)
+        _closures.ArrowReturnTypes.TryGetValue(arrow, out var arrowReturnType);
+        arrowReturnType ??= _types.Object;
+
         var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _types)
         {
             ClosureAnalyzer = _closures.Analyzer,
@@ -582,7 +621,9 @@ public partial class ILCompiler
             ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null,
             EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
             // Function-level display class for nested arrow functions
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null
+            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
+            // Typed return optimization - set return type so EmitReturn knows whether to box
+            CurrentMethodReturnType = arrowReturnType
         };
 
         if (displayClass != null)
@@ -679,7 +720,25 @@ public partial class ILCompiler
         {
             // Expression body: emit expression and return
             emitter.EmitExpression(arrow.ExpressionBody);
-            emitter.EmitBoxIfNeeded(arrow.ExpressionBody);
+
+            // Handle return based on method return type
+            if (arrowReturnType == _types.Object)
+            {
+                // Return type is object - box value types
+                emitter.EmitBoxIfNeeded(arrow.ExpressionBody);
+            }
+            else if (_types.IsDouble(arrowReturnType))
+            {
+                // Return type is double - ensure unboxed double on stack
+                emitter.EnsureDouble();
+            }
+            else if (_types.IsBoolean(arrowReturnType))
+            {
+                // Return type is bool - ensure unboxed bool on stack
+                emitter.EnsureBoolean();
+            }
+            // For string and other reference types, no conversion needed
+
             il.Emit(OpCodes.Ret);
         }
         else if (arrow.BlockBody != null)
@@ -696,8 +755,8 @@ public partial class ILCompiler
             }
             else
             {
-                // Default return null
-                il.Emit(OpCodes.Ldnull);
+                // Default return based on return type
+                EmitDefaultReturnValue(il, arrowReturnType);
                 il.Emit(OpCodes.Ret);
             }
         }

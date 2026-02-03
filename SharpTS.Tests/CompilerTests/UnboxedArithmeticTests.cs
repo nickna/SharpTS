@@ -955,4 +955,238 @@ public class UnboxedArithmeticTests
     }
 
     #endregion
+
+    #region Arrow Function Typed Return Tests
+
+    [Fact]
+    public void ArrowTypedReturn_ExpressionBody_Number()
+    {
+        // Tests arrow function with expression body returning number
+        var source = """
+            const double = (x: number): number => x * 2;
+            console.log(double(5));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ExpressionBody_Boolean()
+    {
+        // Tests arrow function with expression body returning boolean
+        var source = """
+            const isPositive = (x: number): boolean => x > 0;
+            console.log(isPositive(5));
+            console.log(isPositive(-3));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("true\nfalse\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ExpressionBody_String()
+    {
+        // Tests arrow function with expression body returning string
+        var source = """
+            const greet = (name: string): string => "Hello, " + name;
+            console.log(greet("World"));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello, World\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_BlockBody_Number()
+    {
+        // Tests arrow function with block body returning number
+        var source = """
+            const square = (x: number): number => {
+                let result: number = x * x;
+                return result;
+            };
+            console.log(square(7));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("49\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_BlockBody_MultipleReturns()
+    {
+        // Tests arrow function with multiple return paths
+        var source = """
+            const abs = (x: number): number => {
+                if (x < 0) {
+                    return -x;
+                }
+                return x;
+            };
+            console.log(abs(-5));
+            console.log(abs(3));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("5\n3\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_NestedArrows()
+    {
+        // Tests nested arrow functions with typed returns
+        var source = """
+            const outer = (x: number): number => {
+                const inner = (y: number): number => y * 2;
+                return inner(x) + 1;
+            };
+            console.log(outer(5));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // inner(5) = 10, outer = 10 + 1 = 11
+        Assert.Equal("11\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ArrayMap()
+    {
+        // Tests arrow function typed return with array map
+        var source = """
+            const numbers: number[] = [1, 2, 3, 4, 5];
+            const doubled = numbers.map((x: number): number => x * 2);
+            console.log(doubled.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2,4,6,8,10\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ArrayFilter()
+    {
+        // Tests arrow function typed return with array filter
+        var source = """
+            const numbers: number[] = [1, 2, 3, 4, 5, 6];
+            const evens = numbers.filter((x: number): boolean => x % 2 === 0);
+            console.log(evens.join(","));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("2,4,6\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ArrayReduce()
+    {
+        // Tests arrow function typed return with array reduce
+        var source = """
+            const numbers: number[] = [1, 2, 3, 4, 5];
+            const sum = numbers.reduce((acc: number, x: number): number => acc + x, 0);
+            console.log(sum);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("15\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_ChainedCalls()
+    {
+        // Tests chaining calls on arrow functions with typed returns
+        var source = """
+            const double = (x: number): number => x * 2;
+            const square = (x: number): number => x * x;
+            const addOne = (x: number): number => x + 1;
+            console.log(addOne(square(double(3))));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        // double(3) = 6, square(6) = 36, addOne(36) = 37
+        Assert.Equal("37\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_WithClosure()
+    {
+        // Tests arrow function with closure and typed return
+        var source = """
+            function makeMultiplier(factor: number): (x: number) => number {
+                return (x: number): number => x * factor;
+            }
+            const triple = makeMultiplier(3);
+            console.log(triple(4));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("12\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_VoidExpression_NoError()
+    {
+        // Tests arrow function with void expression body (like console.log)
+        // Should not error and should handle void correctly
+        var source = """
+            const log = (msg: string): void => console.log(msg);
+            log("Hello");
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("Hello\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_InTernary()
+    {
+        // Tests arrow function typed return used in ternary expression
+        var source = """
+            const getValue = (flag: boolean): number => flag ? 10 : 20;
+            console.log(getValue(true));
+            console.log(getValue(false));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n20\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_RecursiveArrow()
+    {
+        // Tests recursive arrow function with typed return (using let for self-reference)
+        var source = """
+            let factorial: (n: number) => number;
+            factorial = (n: number): number => n <= 1 ? 1 : n * factorial(n - 1);
+            console.log(factorial(5));
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("120\n", output);
+    }
+
+    [Fact]
+    public void ArrowTypedReturn_AsMethodCallback()
+    {
+        // Tests arrow function with typed return as method callback
+        var source = """
+            class Calculator {
+                value: number = 0;
+
+                apply(fn: (x: number) => number): void {
+                    this.value = fn(this.value);
+                }
+            }
+            let calc = new Calculator();
+            calc.value = 5;
+            calc.apply((x: number): number => x * 2);
+            console.log(calc.value);
+            """;
+
+        var output = TestHarness.RunCompiled(source);
+        Assert.Equal("10\n", output);
+    }
+
+    #endregion
 }
