@@ -306,85 +306,13 @@ public partial class TypeChecker
     {
         CheckExpr(stmt.Condition);
 
-        // Try unified path-based type guard analysis first (supports nested paths like obj.a.b.c)
-        var pathGuard = AnalyzePathTypeGuard(stmt.Condition);
+        // Try compound type guard analysis first (handles && conditions like x !== null && y !== null)
+        var compoundGuards = AnalyzeCompoundTypeGuards(stmt.Condition);
 
-        if (pathGuard.Path != null && pathGuard.NarrowedType != null)
+        if (compoundGuards.Count > 0)
         {
-            // Handle path-based narrowing (works for both variables and property chains)
-            if (pathGuard.Path is Narrowing.NarrowingPath.Variable varPath)
-            {
-                // For simple variables, use TypeEnvironment for backwards compatibility
-                var thenEnv = new TypeEnvironment(_environment);
-                thenEnv.Define(varPath.Name, pathGuard.NarrowedType);
-                using (new EnvironmentScope(this, thenEnv))
-                {
-                    CheckStmt(stmt.ThenBranch);
-                }
-
-                if (stmt.ElseBranch != null && pathGuard.ExcludedType != null)
-                {
-                    var elseEnv = new TypeEnvironment(_environment);
-                    elseEnv.Define(varPath.Name, pathGuard.ExcludedType);
-                    using (new EnvironmentScope(this, elseEnv))
-                    {
-                        CheckStmt(stmt.ElseBranch);
-                    }
-                }
-                else if (stmt.ElseBranch != null)
-                {
-                    CheckStmt(stmt.ElseBranch);
-                }
-
-                // Handle early termination (if (x === null) return; -> x is non-null after)
-                if (stmt.ElseBranch == null && pathGuard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
-                {
-                    _environment.Define(varPath.Name, pathGuard.ExcludedType);
-                }
-                else if (stmt.ElseBranch != null && pathGuard.NarrowedType != null &&
-                         AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
-                {
-                    _environment.Define(varPath.Name, pathGuard.NarrowedType);
-                }
-            }
-            else
-            {
-                // For property paths, use NarrowingContext
-                var thenContext = Narrowing.NarrowingContext.Empty.WithNarrowing(pathGuard.Path, pathGuard.NarrowedType);
-                PushNarrowingContext(thenContext);
-                try
-                {
-                    CheckStmt(stmt.ThenBranch);
-                }
-                finally
-                {
-                    PopNarrowingContext();
-                }
-
-                if (stmt.ElseBranch != null && pathGuard.ExcludedType != null)
-                {
-                    var elseContext = Narrowing.NarrowingContext.Empty.WithNarrowing(pathGuard.Path, pathGuard.ExcludedType);
-                    PushNarrowingContext(elseContext);
-                    try
-                    {
-                        CheckStmt(stmt.ElseBranch);
-                    }
-                    finally
-                    {
-                        PopNarrowingContext();
-                    }
-                }
-                else if (stmt.ElseBranch != null)
-                {
-                    CheckStmt(stmt.ElseBranch);
-                }
-
-                // Handle early termination for property paths (if (obj.prop === null) return; -> obj.prop is non-null after)
-                if (stmt.ElseBranch == null && pathGuard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
-                {
-                    AddNarrowing(pathGuard.Path, pathGuard.ExcludedType);
-                }
-            }
+            // Apply all narrowings for compound conditions
+            ApplyCompoundNarrowings(stmt, compoundGuards);
         }
         else
         {
@@ -431,6 +359,80 @@ public partial class TypeChecker
             }
         }
         return VoidResult.Instance;
+    }
+
+    /// <summary>
+    /// Applies compound narrowings from multiple type guards (e.g., x !== null && y !== null).
+    /// </summary>
+    private void ApplyCompoundNarrowings(
+        Stmt.If stmt,
+        List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> narrowings)
+    {
+        // Separate variable and property path narrowings
+        var varNarrowings = narrowings.Where(n => n.Path is Narrowing.NarrowingPath.Variable).ToList();
+        var propNarrowings = narrowings.Where(n => n.Path is not Narrowing.NarrowingPath.Variable).ToList();
+
+        // Build then branch environment with all variable narrowings
+        var thenEnv = new TypeEnvironment(_environment);
+        foreach (var (path, narrowedType, _) in varNarrowings)
+        {
+            if (path is Narrowing.NarrowingPath.Variable varPath)
+            {
+                thenEnv.Define(varPath.Name, narrowedType);
+            }
+        }
+
+        // Build then branch context with all property narrowings
+        var thenContext = Narrowing.NarrowingContext.Empty;
+        foreach (var (path, narrowedType, _) in propNarrowings)
+        {
+            thenContext = thenContext.WithNarrowing(path, narrowedType);
+        }
+
+        // Check then branch with all narrowings applied
+        using (new EnvironmentScope(this, thenEnv))
+        {
+            if (!thenContext.IsEmpty)
+            {
+                PushNarrowingContext(thenContext);
+            }
+            try
+            {
+                CheckStmt(stmt.ThenBranch);
+            }
+            finally
+            {
+                if (!thenContext.IsEmpty)
+                {
+                    PopNarrowingContext();
+                }
+            }
+        }
+
+        // For else branch, apply excluded types (only if all conditions have excluded types)
+        if (stmt.ElseBranch != null)
+        {
+            // For &&, the else branch means at least one condition is false
+            // We can't safely narrow all variables to their excluded types
+            // Just check the else branch without narrowing
+            CheckStmt(stmt.ElseBranch);
+        }
+
+        // Handle early termination: if then branch terminates, apply excluded types after
+        if (stmt.ElseBranch == null && AlwaysTerminates(stmt.ThenBranch))
+        {
+            foreach (var (path, _, excludedType) in narrowings)
+            {
+                if (path is Narrowing.NarrowingPath.Variable varPath)
+                {
+                    _environment.Define(varPath.Name, excludedType);
+                }
+                else
+                {
+                    AddNarrowing(path, excludedType);
+                }
+            }
+        }
     }
 
     internal VoidResult VisitWhile(Stmt.While stmt)

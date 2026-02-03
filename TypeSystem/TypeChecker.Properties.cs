@@ -160,6 +160,14 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(set.Object);
 
+        // Invalidate any narrowings affected by this property assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(set.Object);
+        if (basePath != null)
+        {
+            var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, set.Name.Lexeme);
+            InvalidateNarrowingsFor(assignedPath);
+        }
+
         // Handle TypeParameter - delegate to constraint type for property assignment
         if (objType is TypeInfo.TypeParameter tp)
         {

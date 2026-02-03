@@ -220,6 +220,31 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(setIndex.Index);
         TypeInfo valueType = CheckExpr(setIndex.Value);
 
+        // Invalidate any narrowings affected by this index assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(setIndex.Object);
+        if (basePath != null)
+        {
+            Narrowing.NarrowingPath? assignedPath = null;
+
+            // For numeric literal index (tuple/array access), create ElementAccess path
+            if (setIndex.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
+            {
+                assignedPath = new Narrowing.NarrowingPath.ElementAccess(basePath, (int)d);
+            }
+            // For string literal index, treat as property access
+            else if (setIndex.Index is Expr.Literal { Value: string propName })
+            {
+                assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, propName);
+            }
+            else
+            {
+                // For computed index, conservatively invalidate the entire object's narrowings
+                assignedPath = basePath;
+            }
+
+            InvalidateNarrowingsFor(assignedPath);
+        }
+
         // Allow setting on 'any' type
         if (objType is TypeInfo.Any)
         {

@@ -623,6 +623,50 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Analyzes compound conditions (&&, ||) and collects all type guard narrowings.
+    /// For &&, all narrowings apply (intersection). For ||, narrowings only apply if in both branches.
+    /// </summary>
+    /// <returns>
+    /// A list of narrowings to apply. For the then branch, use NarrowedType.
+    /// For the else branch, use ExcludedType.
+    /// </returns>
+    private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> AnalyzeCompoundTypeGuards(Expr condition)
+    {
+        var narrowings = new List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>();
+
+        void CollectNarrowings(Expr expr)
+        {
+            // For &&, collect narrowings from both sides
+            if (expr is Expr.Logical logical && logical.Operator.Type == TokenType.AND_AND)
+            {
+                CollectNarrowings(logical.Left);
+                CollectNarrowings(logical.Right);
+                return;
+            }
+
+            // Try to get a single type guard from this expression
+            var guard = AnalyzePathTypeGuard(expr);
+            if (guard.Path != null && guard.NarrowedType != null && guard.ExcludedType != null)
+            {
+                narrowings.Add((guard.Path, guard.NarrowedType, guard.ExcludedType));
+            }
+            else
+            {
+                // Fall back to legacy type guard analysis for variables
+                var legacyGuard = AnalyzeTypeGuard(expr);
+                if (legacyGuard.VarName != null && legacyGuard.NarrowedType != null && legacyGuard.ExcludedType != null)
+                {
+                    var varPath = new Narrowing.NarrowingPath.Variable(legacyGuard.VarName);
+                    narrowings.Add((varPath, legacyGuard.NarrowedType, legacyGuard.ExcludedType));
+                }
+            }
+        }
+
+        CollectNarrowings(condition);
+        return narrowings;
+    }
+
+    /// <summary>
     /// Analyzes a null check for a narrowable path.
     /// </summary>
     private (Narrowing.NarrowingPath? Path, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePathNullCheck(

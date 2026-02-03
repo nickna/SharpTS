@@ -180,6 +180,10 @@ public partial class TypeChecker
         TypeInfo varType = LookupVariable(compound.Name);
         TypeInfo valueType = CheckExpr(compound.Value);
 
+        // Invalidate any narrowings affected by this assignment
+        var assignedPath = new Narrowing.NarrowingPath.Variable(compound.Name.Lexeme);
+        InvalidateNarrowingsFor(assignedPath);
+
         // For += with strings, allow string concatenation
         if (compound.Operator.Type == TokenType.PLUS_EQUAL)
         {
@@ -202,6 +206,15 @@ public partial class TypeChecker
     {
         CheckExpr(compound.Object);
         CheckExpr(compound.Value);
+
+        // Invalidate any narrowings affected by this property assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        if (basePath != null)
+        {
+            var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, compound.Name.Lexeme);
+            InvalidateNarrowingsFor(assignedPath);
+        }
+
         return new TypeInfo.Any();
     }
 
@@ -210,6 +223,26 @@ public partial class TypeChecker
         TypeInfo objType = CheckExpr(compound.Object);
         TypeInfo indexType = CheckExpr(compound.Index);
         TypeInfo valueType = CheckExpr(compound.Value);
+
+        // Invalidate any narrowings affected by this index assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(compound.Object);
+        if (basePath != null)
+        {
+            Narrowing.NarrowingPath? assignedPath = null;
+
+            // For numeric literal index, create ElementAccess path
+            if (compound.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
+            {
+                assignedPath = new Narrowing.NarrowingPath.ElementAccess(basePath, (int)d);
+            }
+            else
+            {
+                // For computed index, conservatively invalidate the entire object's narrowings
+                assignedPath = basePath;
+            }
+
+            InvalidateNarrowingsFor(assignedPath);
+        }
 
         if (!IsNumber(indexType))
             throw new TypeCheckException(" Array index must be a number.");
@@ -229,6 +262,10 @@ public partial class TypeChecker
         TypeInfo varType = LookupVariable(logical.Name);
         TypeInfo valueType = CheckExpr(logical.Value);
 
+        // Invalidate any narrowings affected by this assignment
+        var assignedPath = new Narrowing.NarrowingPath.Variable(logical.Name.Lexeme);
+        InvalidateNarrowingsFor(assignedPath);
+
         // Logical assignment can return either the current value or the new value
         // For simplicity, return union of both types or the variable type
         return varType;
@@ -238,6 +275,15 @@ public partial class TypeChecker
     {
         CheckExpr(logical.Object);
         CheckExpr(logical.Value);
+
+        // Invalidate any narrowings affected by this property assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        if (basePath != null)
+        {
+            var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, logical.Name.Lexeme);
+            InvalidateNarrowingsFor(assignedPath);
+        }
+
         return new TypeInfo.Any();
     }
 
@@ -246,6 +292,26 @@ public partial class TypeChecker
         TypeInfo objType = CheckExpr(logical.Object);
         CheckExpr(logical.Index);
         CheckExpr(logical.Value);
+
+        // Invalidate any narrowings affected by this index assignment
+        var basePath = Narrowing.NarrowingPathExtractor.TryExtract(logical.Object);
+        if (basePath != null)
+        {
+            Narrowing.NarrowingPath? assignedPath = null;
+
+            // For numeric literal index, create ElementAccess path
+            if (logical.Index is Expr.Literal { Value: double d } && d == Math.Floor(d) && d >= 0)
+            {
+                assignedPath = new Narrowing.NarrowingPath.ElementAccess(basePath, (int)d);
+            }
+            else
+            {
+                // For computed index, conservatively invalidate the entire object's narrowings
+                assignedPath = basePath;
+            }
+
+            InvalidateNarrowingsFor(assignedPath);
+        }
 
         if (objType is TypeInfo.Array arrayType)
         {

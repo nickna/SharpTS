@@ -1058,6 +1058,11 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{varType}'.");
         }
+
+        // Invalidate any narrowings affected by this assignment
+        var assignedPath = new Narrowing.NarrowingPath.Variable(assign.Name.Lexeme);
+        InvalidateNarrowingsFor(assignedPath);
+
         return valueType;
     }
 
