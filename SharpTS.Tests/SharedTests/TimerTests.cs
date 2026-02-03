@@ -9,9 +9,8 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <strong>Important: Timers do NOT keep the process alive.</strong>
-/// Unlike Node.js where timers with <c>.ref()</c> (the default) keep the event loop running,
-/// SharpTS compiled programs exit when <c>Main()</c> returns, regardless of pending timers.
+/// <strong>Important:</strong> In interpreted mode, timers keep the event loop alive by default.
+/// In compiled mode, programs exit when <c>Main()</c> returns, regardless of pending timers.
 /// </para>
 /// <para>
 /// <strong>Note:</strong> All tests now run in both interpreted and compiled modes.
@@ -102,6 +101,30 @@ public class TimerTests
         var output = TestHarness.Run(source, mode);
         Assert.Contains("executed", output);
         Assert.Contains("done", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void SetTimeout_KeepsEventLoopAlive_Interpreted(ExecutionMode mode)
+    {
+        // In interpreted mode, the event loop should stay alive for timers by default
+        var source = @"
+            setTimeout(() => { console.log('executed'); }, 10);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("executed\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void SetTimeout_Unref_AllowsExit_Interpreted(ExecutionMode mode)
+    {
+        // unref() should allow the program to exit without running the timer
+        var source = @"
+            setTimeout(() => { console.log('should not run'); }, 10).unref();
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(string.Empty, output);
     }
 
     #endregion

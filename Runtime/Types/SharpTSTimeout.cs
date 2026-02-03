@@ -19,6 +19,9 @@ public class SharpTSTimeout
     private Task? _task;
     private Timer? _timer;
     private bool _hasRef = true;
+    private bool _isRefed;
+    private Action? _onRef;
+    private Action? _onUnref;
 
     /// <summary>
     /// Creates a new timeout handle with a unique ID and cancellation support.
@@ -94,6 +97,8 @@ public class SharpTSTimeout
         // Dispose the timer to stop it from firing
         _timer?.Dispose();
         _timer = null;
+
+        ReleaseRef();
     }
 
     /// <summary>
@@ -103,7 +108,15 @@ public class SharpTSTimeout
     /// <returns>This timeout object for method chaining.</returns>
     public SharpTSTimeout Ref()
     {
-        _hasRef = true;
+        if (!_hasRef)
+        {
+            _hasRef = true;
+            if (!_isRefed)
+            {
+                _onRef?.Invoke();
+                _isRefed = true;
+            }
+        }
         return this;
     }
 
@@ -115,8 +128,41 @@ public class SharpTSTimeout
     /// <returns>This timeout object for method chaining.</returns>
     public SharpTSTimeout Unref()
     {
-        _hasRef = false;
+        if (_hasRef)
+        {
+            _hasRef = false;
+            ReleaseRef();
+        }
         return this;
+    }
+
+    /// <summary>
+    /// Attaches ref/unref tracking callbacks for event loop liveness.
+    /// </summary>
+    /// <param name="onRef">Called when this timeout should keep the loop alive.</param>
+    /// <param name="onUnref">Called when this timeout should release the loop.</param>
+    internal void AttachRefTracking(Action onRef, Action onUnref)
+    {
+        _onRef = onRef;
+        _onUnref = onUnref;
+
+        if (_hasRef && !_isRefed)
+        {
+            _onRef?.Invoke();
+            _isRefed = true;
+        }
+    }
+
+    /// <summary>
+    /// Releases the active ref if one is held. Safe to call multiple times.
+    /// </summary>
+    internal void ReleaseRef()
+    {
+        if (_isRefed)
+        {
+            _isRefed = false;
+            _onUnref?.Invoke();
+        }
     }
 
     public override bool Equals(object? obj) =>

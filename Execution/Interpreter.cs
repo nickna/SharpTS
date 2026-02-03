@@ -10,6 +10,7 @@ using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
 using System.Collections.Frozen;
+using System.Threading;
 
 namespace SharpTS.Execution;
 
@@ -130,9 +131,6 @@ public partial class Interpreter : IDisposable
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
 
-    // Event loop for managing async handles (servers, timers, etc.)
-    private readonly EventLoop _eventLoop = new();
-
     // Virtual timer system - timers are checked and executed on the main thread during loop iterations.
     // This avoids thread scheduling issues on macOS where background threads may not get CPU time.
     // Uses PriorityQueue for O(log n) insert and O(log n) extraction of due timers.
@@ -140,6 +138,15 @@ public partial class Interpreter : IDisposable
     private readonly object _virtualTimersLock = new();
     // Volatile flag for O(1) "queue empty" check without acquiring lock
     private volatile bool _hasScheduledTimers;
+
+    // Active handles counter - keeps the event loop alive while there are active operations
+    private int _activeHandles;
+    private readonly object _activeHandlesLock = new();
+
+    // Event loop infrastructure - BlockingCollection for efficient waiting (no polling)
+    // SynchronizationContext routes async/await continuations back to the main thread
+    private readonly System.Collections.Concurrent.BlockingCollection<Action> _callbackQueue = new();
+    private InterpreterSynchronizationContext? _eventLoopSyncContext;
 
     /// <summary>
     /// Represents a scheduled timer callback that will be executed by the main thread.
@@ -160,6 +167,36 @@ public partial class Interpreter : IDisposable
             Callback = callback;
             IsInterval = isInterval;
         }
+    }
+
+    /// <summary>
+    /// Custom SynchronizationContext that routes async/await continuations back to the event loop.
+    /// Ensures all user callbacks execute on the main interpreter thread (Node.js semantics).
+    /// </summary>
+    private sealed class InterpreterSynchronizationContext : SynchronizationContext
+    {
+        private readonly Action<Action> _enqueue;
+
+        public InterpreterSynchronizationContext(Action<Action> enqueue)
+            => _enqueue = enqueue;
+
+        /// <summary>
+        /// Posts a callback to be executed asynchronously on the event loop thread.
+        /// Called by .NET when an async operation completes.
+        /// </summary>
+        public override void Post(SendOrPostCallback d, object? state)
+            => _enqueue(() => d(state));
+
+        /// <summary>
+        /// Sends a callback to be executed synchronously. Simplified to use Post.
+        /// </summary>
+        public override void Send(SendOrPostCallback d, object? state)
+            => Post(d, state);
+
+        /// <summary>
+        /// Creates a copy of this SynchronizationContext.
+        /// </summary>
+        public override SynchronizationContext CreateCopy() => this;
     }
 
     /// <summary>
@@ -196,53 +233,231 @@ public partial class Interpreter : IDisposable
             _virtualTimerQueue.Enqueue(timer, fireTime);
             _hasScheduledTimers = true;
         }
+        // Wake the event loop if the timer fires soon (within 10ms)
+        // This ensures immediate timers (setTimeout(fn, 0)) are processed promptly
+        if (delayMs <= 10)
+        {
+            WakeEventLoop();
+        }
         return timer;
     }
 
     /// <summary>
+    /// Wakes the event loop by enqueueing a no-op action.
+    /// Used when a timer or other operation needs prompt processing.
+    /// </summary>
+    private void WakeEventLoop()
+    {
+        if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
+        {
+            try { _callbackQueue.Add(() => { }); }
+            catch (InvalidOperationException) { /* queue completed */ }
+        }
+    }
+
+    /// <summary>
+    /// Enqueues a callback to be executed on the main event loop thread.
+    /// Thread-safe - can be called from any thread (HTTP accept loop, async I/O, etc).
+    /// </summary>
+    /// <param name="action">The callback action to execute on the main thread.</param>
+    internal void EnqueueCallback(Action action)
+    {
+        if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
+        {
+            try { _callbackQueue.Add(action); }
+            catch (InvalidOperationException) { /* queue completed */ }
+        }
+    }
+
+    /// <summary>
+    /// Calculates the timeout until the next timer fires.
+    /// Used by the event loop to efficiently wait without polling.
+    /// </summary>
+    /// <returns>TimeSpan until next timer, or 60 seconds if no timers pending.</returns>
+    private TimeSpan GetNextTimerTimeout()
+    {
+        lock (_virtualTimersLock)
+        {
+            // Remove cancelled timers at the front of the queue
+            while (_virtualTimerQueue.TryPeek(out var timer, out _))
+            {
+                if (!timer.IsCancelled) break;
+                _virtualTimerQueue.Dequeue();
+            }
+
+            if (!_virtualTimerQueue.TryPeek(out _, out var fireTime))
+            {
+                _hasScheduledTimers = false;
+                return TimeSpan.FromSeconds(60);
+            }
+
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var ms = fireTime - now;
+
+            // Clamp to reasonable range: 0ms to 60 seconds
+            if (ms <= 0) return TimeSpan.Zero;
+            if (ms > 60000) return TimeSpan.FromSeconds(60);
+            return TimeSpan.FromMilliseconds(ms);
+        }
+    }
+
+    /// <summary>
+    /// Increments the active handles count. Used by servers, timers, etc. to keep the event loop alive.
+    /// </summary>
+    internal void Ref()
+    {
+        lock (_activeHandlesLock)
+        {
+            _activeHandles++;
+        }
+    }
+
+    /// <summary>
+    /// Decrements the active handles count. When count reaches zero, the event loop can exit.
+    /// </summary>
+    internal void Unref()
+    {
+        bool shouldWake = false;
+        lock (_activeHandlesLock)
+        {
+            if (_activeHandles > 0)
+            {
+                _activeHandles--;
+                shouldWake = _activeHandles == 0;
+            }
+        }
+
+        if (shouldWake)
+        {
+            WakeEventLoop();
+        }
+    }
+
+    /// <summary>
     /// Registers an async handle with the interpreter's event loop.
-    /// The interpreter will keep running while this handle is active.
+    /// Compatibility shim for existing handle-based callers.
     /// </summary>
     internal void RegisterHandle(IAsyncHandle handle)
     {
-        _eventLoop.Register(handle);
+        Ref();
     }
 
     /// <summary>
     /// Unregisters an async handle from the interpreter's event loop.
+    /// Compatibility shim for existing handle-based callers.
     /// </summary>
     internal void UnregisterHandle(IAsyncHandle handle)
     {
-        _eventLoop.Unregister(handle);
+        Unref();
     }
 
     /// <summary>
-    /// Runs the event loop, processing timers and keeping the process alive while there are active handles.
-    /// Uses efficient waiting via ManualResetEventSlim instead of polling.
+    /// Gets whether there are active handles keeping the event loop alive.
     /// </summary>
-    private void RunEventLoop()
+    internal bool HasActiveHandles
     {
-        // Check if there are scheduled timers - they also count as active handles
-        bool HasTimersOrHandles() => _hasScheduledTimers || _eventLoop.HasActiveHandles();
-
-        while (!_isDisposed && HasTimersOrHandles())
+        get
         {
-            // Process any pending timer callbacks
-            ProcessPendingCallbacks();
-
-            // If only timers are active (no server handles), we need to continue the loop
-            // If there are active handles, the event loop will wait efficiently
-            if (_eventLoop.HasActiveHandles())
+            lock (_activeHandlesLock)
             {
-                // Let the event loop wait for state changes (with timeout for timer processing)
-                _eventLoop.Run(ProcessPendingCallbacks);
-            }
-            else if (_hasScheduledTimers)
-            {
-                // Only timers active - sleep briefly then check again
-                Thread.Sleep(10);
+                return _activeHandles > 0;
             }
         }
+    }
+
+    /// <summary>
+    /// Runs the event loop, processing callbacks until there are no more active handles.
+    /// This is the main loop that keeps the program alive for servers, timers, etc.
+    /// </summary>
+    /// <remarks>
+    /// Uses a BlockingCollection for efficient waiting (no CPU polling).
+    /// Sets up a SynchronizationContext to route async/await continuations back to this thread.
+    /// This provides Node.js-compatible single-threaded semantics where all user callbacks
+    /// execute on the main thread, while I/O operations run on the ThreadPool.
+    /// </remarks>
+    public void RunEventLoop()
+    {
+        // Set up SynchronizationContext so async/await continuations come back to this thread
+        _eventLoopSyncContext = new InterpreterSynchronizationContext(EnqueueCallback);
+        var previousSyncContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(_eventLoopSyncContext);
+
+        try
+        {
+            while (!_isDisposed)
+            {
+                // Exit immediately if there's no work keeping the loop alive
+                if (!HasActiveHandles && _callbackQueue.Count == 0)
+                {
+                    break;
+                }
+
+                // Calculate timeout until next timer fires
+                var timeout = GetNextTimerTimeout();
+
+                // Efficient wait: blocks until callback arrives OR timeout expires
+                // This uses no CPU while waiting (unlike Thread.Sleep polling)
+                if (_callbackQueue.TryTake(out var action, timeout))
+                {
+                    // Execute the queued callback (HTTP request handler, async continuation, etc.)
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log uncaught exceptions but don't crash the event loop
+                        Console.Error.WriteLine($"Uncaught exception in event loop callback: {ex.Message}");
+                    }
+                }
+
+                // Process any due timers (setTimeout, setInterval callbacks)
+                ProcessPendingCallbacks();
+
+                // Exit condition: no active handles AND queue is empty
+                // This ensures all queued callbacks are processed before exiting (like Node.js)
+                if (!HasActiveHandles && _callbackQueue.Count == 0)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            // Drain any remaining callbacks before fully exiting
+            // This handles edge cases where callbacks were queued during shutdown
+            DrainCallbackQueue();
+
+            // Restore previous SynchronizationContext
+            SynchronizationContext.SetSynchronizationContext(previousSyncContext);
+
+            // Complete the queue so any pending Add() calls don't block
+            try { _callbackQueue.CompleteAdding(); }
+            catch (ObjectDisposedException) { /* already disposed */ }
+        }
+    }
+
+    /// <summary>
+    /// Drains any remaining callbacks from the queue during shutdown.
+    /// Ensures all queued work completes before the event loop fully exits.
+    /// </summary>
+    private void DrainCallbackQueue()
+    {
+        // Process any remaining callbacks synchronously
+        while (_callbackQueue.TryTake(out var action, TimeSpan.Zero))
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Uncaught exception during event loop drain: {ex.Message}");
+            }
+        }
+
+        // Final timer processing
+        ProcessPendingCallbacks();
     }
 
     /// <summary>
@@ -320,8 +535,9 @@ public partial class Interpreter : IDisposable
     {
         _isDisposed = true;
 
-        // Dispose the event loop first to stop any waiting
-        _eventLoop.Dispose();
+        // Complete the callback queue to unblock any waiting TryTake
+        try { _callbackQueue.CompleteAdding(); }
+        catch (ObjectDisposedException) { /* already disposed */ }
 
         // Cancel all pending timers to release resources immediately
         while (_pendingTimers.TryTake(out var timer))
@@ -335,6 +551,10 @@ public partial class Interpreter : IDisposable
             _virtualTimerQueue.Clear();
             _hasScheduledTimers = false;
         }
+
+        // Dispose the callback queue
+        try { _callbackQueue.Dispose(); }
+        catch (ObjectDisposedException) { /* already disposed */ }
 
         GC.SuppressFinalize(this);
     }
@@ -753,7 +973,7 @@ public partial class Interpreter : IDisposable
             {
                 var result = Execute(export.Declaration);
                 if (result.IsAbrupt) return result;
-                
+
                 if (_currentModuleInstance != null)
                 {
                     _currentModuleInstance.DefaultExport = GetDeclaredValue(export.Declaration);
@@ -823,7 +1043,7 @@ public partial class Interpreter : IDisposable
                 }
             }
         }
-        
+
         return ExecutionResult.Success();
     }
 
