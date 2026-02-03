@@ -81,10 +81,21 @@ public partial class TypeChecker
     // Fast identity-based cache (first level)
     private Dictionary<IdentityCompatibilityCacheKey, bool>? _identityCompatibilityCache;
 
+    // Track compatibility checks in progress for co-induction cycle detection
+    // Uses identity-based comparison since we need to detect the exact same type pair
+    private HashSet<IdentityCompatibilityCacheKey>? _compatibilityInProgress;
+
+    // Depth counter to prevent stack overflow with deeply nested recursive type checks
+    private int _compatibilityCheckDepth;
+    private const int MaxCompatibilityCheckDepth = 50;
+
     /// <summary>
-    /// Checks type compatibility with two-level memoization.
+    /// Checks type compatibility with two-level memoization and co-inductive cycle detection.
     /// Level 1: Fast identity-based cache using reference equality (O(1) for same instances)
     /// Level 2: Structural equality cache for different instances with same structure
+    /// Co-induction: If checking the same type pair (by identity) that's already in progress,
+    /// assume compatible to break infinite recursion with recursive types.
+    /// Depth limit: At max depth, assume compatible as a fallback for deeply nested checks.
     /// </summary>
     private bool IsCompatible(TypeInfo expected, TypeInfo actual)
     {
@@ -106,24 +117,65 @@ public partial class TypeChecker
             return structuralCached;
         }
 
-        // Cache miss - compute result
-        var result = IsCompatibleCore(expected, actual);
+        // Co-induction: if this exact type pair (by identity) is already being checked,
+        // assume compatible to break cycle. This is safe because if the types were
+        // incompatible, we would have found that incompatibility before recursing back.
+        _compatibilityInProgress ??= new(IdentityCacheKeyComparer.Instance);
+        if (!_compatibilityInProgress.Add(identityKey))
+        {
+            // Already checking this pair - assume compatible (co-induction)
+            return true;
+        }
 
-        // Store in both caches
-        _compatibilityCache[structuralKey] = result;
-        _identityCompatibilityCache[identityKey] = result;
+        // Depth limit: at max depth, assume compatible as fallback
+        // This handles cases where co-induction doesn't catch the cycle (different actual values)
+        if (_compatibilityCheckDepth >= MaxCompatibilityCheckDepth)
+        {
+            _compatibilityInProgress.Remove(identityKey);
+            return true;
+        }
 
-        return result;
+        _compatibilityCheckDepth++;
+        try
+        {
+            // Cache miss - compute result
+            var result = IsCompatibleCore(expected, actual);
+
+            // Store in both caches
+            _compatibilityCache[structuralKey] = result;
+            _identityCompatibilityCache[identityKey] = result;
+
+            return result;
+        }
+        finally
+        {
+            _compatibilityCheckDepth--;
+            _compatibilityInProgress.Remove(identityKey);
+        }
     }
 
     /// <summary>
     /// Expands a recursive type alias placeholder to its full type.
     /// Used for lazy expansion during compatibility checks.
+    /// Uses _expandedTypeAliasCache to ensure the same TypeInfo object is reused,
+    /// enabling identity-based caching to break infinite recursion.
     /// </summary>
     /// <param name="rta">The recursive type alias to expand.</param>
     /// <returns>The expanded type.</returns>
     private TypeInfo ExpandRecursiveTypeAlias(TypeInfo.RecursiveTypeAlias rta)
     {
+        // For generic aliases, create a cache key that includes type arguments
+        string cacheKey = rta.TypeArguments is { Count: > 0 }
+            ? $"{rta.AliasName}<{string.Join(",", rta.TypeArguments.Select(t => t.ToString()))}>"
+            : rta.AliasName;
+
+        // Check cache first - reusing the same TypeInfo object is crucial for breaking recursion
+        _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+        if (_expandedTypeAliasCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
         if (++_typeAliasExpansionDepth > MaxTypeAliasExpansionDepth)
         {
             _typeAliasExpansionDepth--;
@@ -131,26 +183,44 @@ public partial class TypeChecker
                 $"Type alias '{rta.AliasName}' circularly references itself.");
         }
 
+        // Set up the expansion stack to prevent infinite recursion when ToTypeInfo
+        // encounters nested references to the same alias
+        _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
+        bool addedToStack = _typeAliasExpansionStack.Add(rta.AliasName);
+
         try
         {
+            TypeInfo expanded;
             if (rta.TypeArguments is { Count: > 0 })
             {
                 // Generic recursive alias - resolve directly with TypeInfo arguments
                 // This avoids the TypeInfo -> string -> TypeInfo round-trip
-                return ResolveGenericType(rta.AliasName, rta.TypeArguments);
+                expanded = ResolveGenericType(rta.AliasName, rta.TypeArguments);
             }
-
-            // Non-generic recursive alias
-            var alias = _environment.GetTypeAlias(rta.AliasName);
-            if (alias != null)
+            else
             {
-                return ToTypeInfo(alias);
+                // Non-generic recursive alias
+                var alias = _environment.GetTypeAlias(rta.AliasName);
+                if (alias != null)
+                {
+                    expanded = ToTypeInfo(alias);
+                }
+                else
+                {
+                    throw new TypeCheckException($"Unknown type '{rta.AliasName}'.");
+                }
             }
 
-            throw new TypeCheckException($"Unknown type '{rta.AliasName}'.");
+            // Cache the expanded type
+            _expandedTypeAliasCache[cacheKey] = expanded;
+            return expanded;
         }
         finally
         {
+            if (addedToStack)
+            {
+                _typeAliasExpansionStack.Remove(rta.AliasName);
+            }
             _typeAliasExpansionDepth--;
         }
     }

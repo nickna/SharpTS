@@ -75,6 +75,47 @@ public partial class TypeChecker
     // Memoization cache for IsCompatible checks - cleared per Check() call
     private Dictionary<(TypeInfo Expected, TypeInfo Actual), bool>? _compatibilityCache;
 
+    // Property narrowings from type guards like `if (obj.prop !== null)`
+    // Key: (objectVarName, propertyName), Value: narrowed type
+    // This is scoped through a stack - each scope level can have its own narrowings
+    private readonly Stack<Dictionary<(string Object, string Property), TypeInfo>> _propertyNarrowingStack = new();
+
+    /// <summary>
+    /// Gets the narrowed type for a property access, if one exists in the current scope.
+    /// </summary>
+    private TypeInfo? GetPropertyNarrowing(string objectVarName, string propertyName)
+    {
+        foreach (var scope in _propertyNarrowingStack)
+        {
+            if (scope.TryGetValue((objectVarName, propertyName), out var narrowedType))
+                return narrowedType;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Enters a new property narrowing scope.
+    /// </summary>
+    private void PushPropertyNarrowingScope() => _propertyNarrowingStack.Push(new Dictionary<(string, string), TypeInfo>());
+
+    /// <summary>
+    /// Exits the current property narrowing scope.
+    /// </summary>
+    private void PopPropertyNarrowingScope()
+    {
+        if (_propertyNarrowingStack.Count > 0)
+            _propertyNarrowingStack.Pop();
+    }
+
+    /// <summary>
+    /// Defines a property narrowing in the current scope.
+    /// </summary>
+    private void DefinePropertyNarrowing(string objectVarName, string propertyName, TypeInfo narrowedType)
+    {
+        if (_propertyNarrowingStack.Count > 0)
+            _propertyNarrowingStack.Peek()[(objectVarName, propertyName)] = narrowedType;
+    }
+
     /// <summary>
     /// Cache for variance position analysis results.
     /// Key: "{TypeName}:{TypeParamName}", Value: positions where param appears
@@ -115,6 +156,14 @@ public partial class TypeChecker
     /// </summary>
     [ThreadStatic]
     private static int _typeAliasExpansionDepth;
+
+    /// <summary>
+    /// Cache for expanded type aliases to ensure the same TypeInfo object is reused.
+    /// This enables identity-based caching in IsCompatible to work correctly with recursive types.
+    /// Key: alias name (or "name&lt;arg1,arg2&gt;" for generic), Value: expanded TypeInfo
+    /// </summary>
+    [ThreadStatic]
+    private static Dictionary<string, TypeInfo>? _expandedTypeAliasCache;
 
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.
@@ -296,8 +345,12 @@ public partial class TypeChecker
     /// <returns>A TypeMap containing the resolved type for each expression.</returns>
     public TypeMap Check(List<Stmt> statements)
     {
-        // Clear compatibility cache for fresh check
+        // Clear caches for fresh check
         _compatibilityCache = null;
+        _expandedTypeAliasCache = null;
+        _compatibilityInProgress = null;
+        _compatibilityCheckDepth = 0;
+        _propertyNarrowingStack.Clear();
 
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());
@@ -327,7 +380,12 @@ public partial class TypeChecker
     public TypeCheckDiagnosticResult CheckWithRecovery(List<Stmt> statements)
     {
         _diagnostics.Clear();
+        // Clear caches for fresh check
         _compatibilityCache = null;
+        _expandedTypeAliasCache = null;
+        _compatibilityInProgress = null;
+        _compatibilityCheckDepth = 0;
+        _propertyNarrowingStack.Clear();
 
         // Pre-define built-ins
         _environment.Define("console", new TypeInfo.Any());

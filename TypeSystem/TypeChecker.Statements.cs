@@ -307,6 +307,9 @@ public partial class TypeChecker
         CheckExpr(stmt.Condition);
 
         var guard = AnalyzeTypeGuard(stmt.Condition);
+        var propGuard = AnalyzePropertyTypeGuard(stmt.Condition);
+
+        // Handle variable narrowing
         if (guard.VarName != null)
         {
             var thenEnv = new TypeEnvironment(_environment);
@@ -338,6 +341,40 @@ public partial class TypeChecker
                      AlwaysTerminates(stmt.ElseBranch) && !AlwaysTerminates(stmt.ThenBranch))
             {
                 _environment.Define(guard.VarName, guard.NarrowedType);
+            }
+        }
+        // Handle property narrowing (e.g., if (obj.prop !== null))
+        else if (propGuard is { ObjectName: not null, PropertyName: not null, NarrowedType: not null })
+        {
+            // Then branch: property is narrowed
+            PushPropertyNarrowingScope();
+            DefinePropertyNarrowing(propGuard.Value.ObjectName, propGuard.Value.PropertyName, propGuard.Value.NarrowedType);
+            try
+            {
+                CheckStmt(stmt.ThenBranch);
+            }
+            finally
+            {
+                PopPropertyNarrowingScope();
+            }
+
+            // Else branch: property has excluded type
+            if (stmt.ElseBranch != null && propGuard.Value.ExcludedType != null)
+            {
+                PushPropertyNarrowingScope();
+                DefinePropertyNarrowing(propGuard.Value.ObjectName, propGuard.Value.PropertyName, propGuard.Value.ExcludedType);
+                try
+                {
+                    CheckStmt(stmt.ElseBranch);
+                }
+                finally
+                {
+                    PopPropertyNarrowingScope();
+                }
+            }
+            else if (stmt.ElseBranch != null)
+            {
+                CheckStmt(stmt.ElseBranch);
             }
         }
         else

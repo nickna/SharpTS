@@ -72,6 +72,9 @@ public partial class TypeChecker
             return AnalyzeNullCheck(v5.Name.Lexeme, checkingForNull: true, negated: true);
         }
 
+        // Note: Property null checks (x.prop !== null) are handled by AnalyzePropertyTypeGuard
+        // which is called separately in VisitIf
+
         // Pattern 6: x === undefined (undefined is a literal, not a variable)
         if (condition is Expr.Binary bin6 &&
             bin6.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
@@ -469,6 +472,91 @@ public partial class TypeChecker
 
         // Type is not nullable - narrowing has no effect
         return (null, null, null);
+    }
+
+    /// <summary>
+    /// Analyzes property null checks like `obj.prop !== null`.
+    /// Returns property narrowing info (object name, property name, narrowed type, excluded type).
+    /// </summary>
+    private (string? ObjectName, string? PropertyName, TypeInfo? NarrowedType, TypeInfo? ExcludedType) AnalyzePropertyNullCheck(
+        string objectVarName, string propertyName, bool negated)
+    {
+        // Get the object's type
+        var objectType = _environment.Get(objectVarName);
+        if (objectType == null) return (null, null, null, null);
+
+        // Get the property type from the object
+        TypeInfo? propertyType = GetMemberType(objectType, propertyName);
+        if (propertyType == null) return (null, null, null, null);
+
+        // If the property type is a union containing null, narrow it
+        if (propertyType is TypeInfo.Union union)
+        {
+            var flattenedTypes = union.FlattenedTypes;
+            var nonNull = flattenedTypes.Where(t => t is not TypeInfo.Null).ToList();
+            var nullTypes = flattenedTypes.Where(t => t is TypeInfo.Null).ToList();
+
+            if (nonNull.Count == 0 && nullTypes.Count == 0)
+                return (null, null, null, null);
+
+            TypeInfo nonNullType = nonNull.Count == 0 ? new TypeInfo.Never() :
+                nonNull.Count == 1 ? nonNull[0] : new TypeInfo.Union(nonNull);
+            TypeInfo nullType = nullTypes.Count == 0 ? new TypeInfo.Null() :
+                nullTypes.Count == 1 ? nullTypes[0] : new TypeInfo.Union(nullTypes);
+
+            // if (obj.prop !== null) -> then: non-null, else: null
+            // if (obj.prop === null) -> then: null, else: non-null
+            if (negated)
+                return (objectVarName, propertyName, nonNullType, nullType);
+            return (objectVarName, propertyName, nullType, nonNullType);
+        }
+
+        // Property type is not a union - no narrowing effect
+        return (null, null, null, null);
+    }
+
+    /// <summary>
+    /// Analyzes type guards and returns both variable and property narrowing info.
+    /// </summary>
+    private (string? ObjectName, string? PropertyName, TypeInfo? NarrowedType, TypeInfo? ExcludedType)? AnalyzePropertyTypeGuard(Expr condition)
+    {
+        // Pattern: x.prop !== null
+        if (condition is Expr.Binary bin &&
+            bin.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin.Left is Expr.Get { Object: Expr.Variable objVar, Name: var propToken } &&
+            bin.Right is Expr.Literal { Value: null })
+        {
+            return AnalyzePropertyNullCheck(objVar.Name.Lexeme, propToken.Lexeme, negated: true);
+        }
+
+        // Pattern: null !== x.prop (reversed)
+        if (condition is Expr.Binary bin2 &&
+            bin2.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
+            bin2.Right is Expr.Get { Object: Expr.Variable objVar2, Name: var propToken2 } &&
+            bin2.Left is Expr.Literal { Value: null })
+        {
+            return AnalyzePropertyNullCheck(objVar2.Name.Lexeme, propToken2.Lexeme, negated: true);
+        }
+
+        // Pattern: x.prop === null
+        if (condition is Expr.Binary bin3 &&
+            bin3.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin3.Left is Expr.Get { Object: Expr.Variable objVar3, Name: var propToken3 } &&
+            bin3.Right is Expr.Literal { Value: null })
+        {
+            return AnalyzePropertyNullCheck(objVar3.Name.Lexeme, propToken3.Lexeme, negated: false);
+        }
+
+        // Pattern: null === x.prop (reversed)
+        if (condition is Expr.Binary bin4 &&
+            bin4.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin4.Right is Expr.Get { Object: Expr.Variable objVar4, Name: var propToken4 } &&
+            bin4.Left is Expr.Literal { Value: null })
+        {
+            return AnalyzePropertyNullCheck(objVar4.Name.Lexeme, propToken4.Lexeme, negated: false);
+        }
+
+        return null;
     }
 
     /// <summary>

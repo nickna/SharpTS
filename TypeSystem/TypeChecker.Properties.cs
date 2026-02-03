@@ -84,6 +84,14 @@ public partial class TypeChecker
                 return wellKnownType;
         }
 
+        // Check for property narrowing (e.g., after "if (obj.prop !== null)")
+        if (get.Object is Expr.Variable objVar)
+        {
+            var narrowedType = GetPropertyNarrowing(objVar.Name.Lexeme, get.Name.Lexeme);
+            if (narrowedType != null)
+                return narrowedType;
+        }
+
         TypeInfo objType = CheckExpr(get.Object);
 
         // Expand recursive type aliases lazily before property access

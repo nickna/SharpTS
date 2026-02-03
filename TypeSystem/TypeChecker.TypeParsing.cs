@@ -28,6 +28,13 @@ public partial class TypeChecker
         var aliasExpansion = _environment.GetTypeAlias(typeName);
         if (aliasExpansion != null)
         {
+            // Check cache first - reusing the same TypeInfo object enables identity-based caching
+            _expandedTypeAliasCache ??= new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+            if (_expandedTypeAliasCache.TryGetValue(typeName, out var cached))
+            {
+                return cached;
+            }
+
             _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
 
             // Recursive reference detected - return deferred placeholder
@@ -53,6 +60,9 @@ public partial class TypeChecker
                     throw new TypeCheckException(
                         $"Type alias '{typeName}' circularly references itself.");
                 }
+
+                // Cache the expanded type for future use
+                _expandedTypeAliasCache[typeName] = expanded;
 
                 return expanded;
             }
@@ -131,17 +141,10 @@ public partial class TypeChecker
             return conditionalMatch;
         }
 
-        // Handle generic type syntax: Box<number>, Map<string, number>
-        // Must NOT match inline object types that contain generic types like { x: Box<T> }
-        // or tuple types that contain generics like [Box<T>, string]
-        if (typeName.Contains('<') && typeName.Contains('>') &&
-            !typeName.StartsWith("{ ") && !typeName.StartsWith("["))
-        {
-            return ParseGenericTypeReference(typeName);
-        }
-
         // Handle union types: "string | number"
         // Union has lower precedence than intersection, check it first at top level
+        // IMPORTANT: Must check unions BEFORE generic types, otherwise "Container<number> | null"
+        // would be parsed as a generic type reference with suffix " | null" instead of a union
         if (typeName.Contains(" | "))
         {
             var parts = SplitUnionParts(typeName.AsSpan());
@@ -150,6 +153,15 @@ public partial class TypeChecker
                 var types = parts.Select(ToTypeInfo).ToList();
                 return new TypeInfo.Union(types);
             }
+        }
+
+        // Handle generic type syntax: Box<number>, Map<string, number>
+        // Must NOT match inline object types that contain generic types like { x: Box<T> }
+        // or tuple types that contain generics like [Box<T>, string]
+        if (typeName.Contains('<') && typeName.Contains('>') &&
+            !typeName.StartsWith("{ ") && !typeName.StartsWith("["))
+        {
+            return ParseGenericTypeReference(typeName);
         }
 
         // Handle intersection types: "A & B"
