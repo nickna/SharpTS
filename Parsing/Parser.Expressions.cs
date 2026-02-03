@@ -1436,7 +1436,34 @@ public partial class Parser
             {
                 do
                 {
-                    paramTypes.Add(ParseTypeAnnotation());
+                    // Handle rest parameter: ...args: number[]
+                    bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                    // Handle optional parameter marker: x?: number
+                    bool isOptional = false;
+
+                    // Parameter can be: name: type, name?: type, or just type
+                    if (Check(TokenType.IDENTIFIER) &&
+                        (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
+                    {
+                        Advance(); // skip name
+                        if (Match(TokenType.QUESTION))
+                        {
+                            isOptional = true;
+                        }
+                        Consume(TokenType.COLON, "Expect ':' after parameter name in function type.");
+                    }
+
+                    string paramType = ParseTypeAnnotation();
+
+                    // Preserve optional/rest info in the type string representation
+                    if (isRest)
+                        paramTypes.Add("..." + paramType);
+                    else if (isOptional)
+                        paramTypes.Add(paramType + "?");
+                    else
+                        paramTypes.Add(paramType);
+
                 } while (Match(TokenType.COMMA));
             }
             Consume(TokenType.RIGHT_PAREN, "Expect ')' in function type.");
