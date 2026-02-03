@@ -48,6 +48,76 @@ public partial class Parser
     }
 
     /// <summary>
+    /// Parses the body of a function type after the opening '(' has been consumed.
+    /// Handles: this parameter, regular/optional/rest parameters, closing ')', '=>', and return type.
+    /// Returns the complete function type string like "(number, string) => void".
+    /// </summary>
+    private string ParseFunctionTypeBody()
+    {
+        string? thisType = null;
+        List<string> paramTypes = [];
+
+        // Check for 'this' parameter: (this: Window, ...)
+        if (Check(TokenType.THIS) && PeekNext().Type == TokenType.COLON)
+        {
+            Advance(); // consume 'this'
+            Consume(TokenType.COLON, "Expect ':' after 'this' in function type.");
+            thisType = ParseTypeAnnotation();
+            if (Check(TokenType.COMMA))
+            {
+                Advance(); // consume ','
+            }
+        }
+
+        // Parse parameter types
+        if (!Check(TokenType.RIGHT_PAREN))
+        {
+            do
+            {
+                // Handle rest parameter: ...args: number[]
+                bool isRest = Match(TokenType.DOT_DOT_DOT);
+
+                // Handle optional parameter marker: x?: number
+                bool isOptional = false;
+
+                // Parameter can be: name: type, name?: type, or just type
+                if (Check(TokenType.IDENTIFIER) &&
+                    (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
+                {
+                    Advance(); // skip name
+                    if (Match(TokenType.QUESTION))
+                    {
+                        isOptional = true;
+                    }
+                    Consume(TokenType.COLON, "Expect ':' after parameter name in function type.");
+                }
+
+                string paramType = ParseTypeAnnotation();
+
+                // Preserve optional/rest info in the type string representation
+                if (isRest)
+                    paramTypes.Add("..." + paramType);
+                else if (isOptional)
+                    paramTypes.Add(paramType + "?");
+                else
+                    paramTypes.Add(paramType);
+
+            } while (Match(TokenType.COMMA));
+        }
+
+        Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
+        Consume(TokenType.ARROW, "Expect '=>' after function type parameters.");
+        string returnType = ParseTypeAnnotation();
+
+        // Build the function type string
+        if (thisType != null)
+        {
+            return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
+        }
+        return $"({string.Join(", ", paramTypes)}) => {returnType}";
+    }
+
+    /// <summary>
     /// Parses conditional types: T extends U ? X : Y
     /// Conditional types have the lowest precedence among type operators.
     /// </summary>
@@ -242,67 +312,7 @@ public partial class Parser
 
             if (isFunctionType)
             {
-                // Parse as function type: (params) => returnType or (this: Type, params) => returnType
-                string? thisType = null;
-                List<string> paramTypes = [];
-
-                // Check for 'this' parameter
-                if (Check(TokenType.THIS) && PeekNext().Type == TokenType.COLON)
-                {
-                    Advance(); // consume 'this'
-                    Consume(TokenType.COLON, "");
-                    thisType = ParseTypeAnnotation();
-                    if (Check(TokenType.COMMA))
-                    {
-                        Advance(); // consume ','
-                    }
-                }
-
-                if (!Check(TokenType.RIGHT_PAREN))
-                {
-                    do
-                    {
-                        // Handle rest parameter: ...args: number[]
-                        bool isRest = Match(TokenType.DOT_DOT_DOT);
-
-                        // Handle optional parameter marker: x?: number
-                        bool isOptional = false;
-
-                        // Parameter can be: name: type, name?: type, or just type
-                        if (Check(TokenType.IDENTIFIER) &&
-                            (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
-                        {
-                            Advance(); // skip name
-                            if (Match(TokenType.QUESTION))
-                            {
-                                isOptional = true;
-                            }
-                            Consume(TokenType.COLON, "Expect ':' after parameter name in function type.");
-                        }
-
-                        string paramType = ParseTypeAnnotation();
-
-                        // Preserve optional/rest info in the type string representation
-                        if (isRest)
-                            paramTypes.Add("..." + paramType);
-                        else if (isOptional)
-                            paramTypes.Add(paramType + "?");
-                        else
-                            paramTypes.Add(paramType);
-
-                    } while (Match(TokenType.COMMA));
-                }
-                Consume(TokenType.RIGHT_PAREN, "Expect ')' after function type parameters.");
-                Consume(TokenType.ARROW, "Expect '=>' after function type parameters.");
-                string returnType = ParseTypeAnnotation();
-                if (thisType != null)
-                {
-                    typeName = $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
-                }
-                else
-                {
-                    typeName = $"({string.Join(", ", paramTypes)}) => {returnType}";
-                }
+                typeName = ParseFunctionTypeBody();
             }
             else
             {

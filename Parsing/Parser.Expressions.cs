@@ -1417,65 +1417,7 @@ public partial class Parser
         if (Check(TokenType.LEFT_PAREN))
         {
             Advance(); // consume '('
-            string? thisType = null;
-            List<string> paramTypes = [];
-
-            // Check for 'this' parameter in function type
-            if (Check(TokenType.THIS))
-            {
-                Advance(); // consume 'this'
-                Consume(TokenType.COLON, "Expect ':' after 'this' in function type.");
-                thisType = ParseTypeAnnotation();
-                if (Check(TokenType.COMMA))
-                {
-                    Advance(); // consume ','
-                }
-            }
-
-            if (!Check(TokenType.RIGHT_PAREN))
-            {
-                do
-                {
-                    // Handle rest parameter: ...args: number[]
-                    bool isRest = Match(TokenType.DOT_DOT_DOT);
-
-                    // Handle optional parameter marker: x?: number
-                    bool isOptional = false;
-
-                    // Parameter can be: name: type, name?: type, or just type
-                    if (Check(TokenType.IDENTIFIER) &&
-                        (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
-                    {
-                        Advance(); // skip name
-                        if (Match(TokenType.QUESTION))
-                        {
-                            isOptional = true;
-                        }
-                        Consume(TokenType.COLON, "Expect ':' after parameter name in function type.");
-                    }
-
-                    string paramType = ParseTypeAnnotation();
-
-                    // Preserve optional/rest info in the type string representation
-                    if (isRest)
-                        paramTypes.Add("..." + paramType);
-                    else if (isOptional)
-                        paramTypes.Add(paramType + "?");
-                    else
-                        paramTypes.Add(paramType);
-
-                } while (Match(TokenType.COMMA));
-            }
-            Consume(TokenType.RIGHT_PAREN, "Expect ')' in function type.");
-            Consume(TokenType.ARROW, "Expect '=>' in function type.");
-            string returnType = ParseTypeAnnotation();
-
-            // Include this type in the string representation
-            if (thisType != null)
-            {
-                return $"(this: {thisType}, {string.Join(", ", paramTypes)}) => {returnType}";
-            }
-            return $"({string.Join(", ", paramTypes)}) => {returnType}";
+            return ParseFunctionTypeBody();
         }
 
         // Otherwise regular type
