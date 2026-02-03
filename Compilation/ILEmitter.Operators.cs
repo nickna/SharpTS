@@ -616,8 +616,17 @@ public partial class ILEmitter
     {
         if (pi.Operand is Expr.Variable v)
         {
+            // Check if this is a typed double local
+            var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
+            bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+
             EmitVariable(v);
-            EmitUnboxToDouble();
+
+            // Only unbox if not already an unboxed double
+            if (_stackType != StackType.Double)
+            {
+                EmitUnboxToDouble();
+            }
 
             if (pi.Operator.Type == TokenType.PLUS_PLUS)
             {
@@ -630,14 +639,27 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
             }
 
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
+            // Duplicate for expression result, then store
+            // For typed double locals, duplicate unboxed, store unboxed, then box the duplicate for result
+            if (isTypedDouble)
+            {
+                IL.Emit(OpCodes.Dup); // Duplicate unboxed value
+            }
+            else
+            {
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Dup);
+            }
 
             // Check function display class first (before regular locals)
             if (_ctx.CapturedFunctionLocals?.Contains(v.Name.Lexeme) == true &&
                 _ctx.FunctionDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var funcDCField) == true)
             {
-                // Store to function display class field
+                // Store to function display class field (always boxed)
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 if (_ctx.FunctionDisplayClassLocal != null)
@@ -651,6 +673,11 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, temp);
                 IL.Emit(OpCodes.Stfld, funcDCField);
+                // Box result if needed
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 SetStackUnknown();
                 return;
             }
@@ -659,7 +686,11 @@ public partial class ILEmitter
             if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
                 _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
             {
-                // Store to entry-point display class field
+                // Store to entry-point display class field (always boxed)
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 if (_ctx.EntryPointDisplayClassLocal != null)
@@ -677,6 +708,11 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, temp);
                 IL.Emit(OpCodes.Stfld, entryPointField);
+                // Box result if needed
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 SetStackUnknown();
                 return;
             }
@@ -688,7 +724,11 @@ public partial class ILEmitter
             }
             else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
             {
-                // Store to captured field: need to use temp pattern
+                // Store to captured field (always boxed): need to use temp pattern
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 IL.Emit(OpCodes.Ldarg_0); // display class instance
@@ -697,7 +737,18 @@ public partial class ILEmitter
             }
             else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
             {
+                // Top-level static fields are always boxed
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 IL.Emit(OpCodes.Stsfld, topLevelField);
+            }
+
+            // Box result if needed
+            if (isTypedDouble)
+            {
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
             }
             SetStackUnknown();
             return;
@@ -780,8 +831,17 @@ public partial class ILEmitter
     {
         if (pi.Operand is Expr.Variable v)
         {
+            // Check if this is a typed double local
+            var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
+            bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+
             EmitVariable(v);
-            EmitUnboxToDouble();
+
+            // Only unbox if not already an unboxed double
+            if (_stackType != StackType.Double)
+            {
+                EmitUnboxToDouble();
+            }
             IL.Emit(OpCodes.Dup); // Keep original value
 
             if (pi.Operator.Type == TokenType.PLUS_PLUS)
@@ -795,13 +855,22 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Sub);
             }
 
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            // Box only if storing to a non-typed location
+            if (!isTypedDouble)
+            {
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            }
 
             // Check function display class first (before regular locals)
             if (_ctx.CapturedFunctionLocals?.Contains(v.Name.Lexeme) == true &&
                 _ctx.FunctionDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var funcDCField) == true)
             {
-                // Store to function display class field
+                // Store to function display class field (always boxed)
+                if (isTypedDouble)
+                {
+                    // Need to box for field storage
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 if (_ctx.FunctionDisplayClassLocal != null)
@@ -826,7 +895,12 @@ public partial class ILEmitter
             if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
                 _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
             {
-                // Store to entry-point display class field
+                // Store to entry-point display class field (always boxed)
+                if (isTypedDouble)
+                {
+                    // Need to box for field storage
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 if (_ctx.EntryPointDisplayClassLocal != null)
@@ -858,7 +932,12 @@ public partial class ILEmitter
             }
             else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
             {
-                // Store to captured field: need to use temp pattern
+                // Store to captured field (always boxed): need to use temp pattern
+                if (isTypedDouble)
+                {
+                    // Need to box for field storage
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 var temp = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Stloc, temp);
                 IL.Emit(OpCodes.Ldarg_0); // display class instance
@@ -867,10 +946,15 @@ public partial class ILEmitter
             }
             else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
             {
+                // Top-level static fields are always boxed
+                if (isTypedDouble)
+                {
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                }
                 IL.Emit(OpCodes.Stsfld, topLevelField);
             }
 
-            // Original value is still on stack, box it
+            // Original value is still on stack, box it for the expression result
             IL.Emit(OpCodes.Box, _ctx.Types.Double);
             SetStackUnknown();
             return;

@@ -143,10 +143,21 @@ public partial class ILEmitter
     }
 
     /// <summary>
-    /// Conservative check: only use unboxed double for variables with explicit ': number' annotation.
+    /// Tracks the loop counter variable name for optimized for loops.
+    /// When set, the variable can use unboxed double even without explicit type annotation.
+    /// </summary>
+    private string? _optimizedLoopCounterName;
+
+    /// <summary>
+    /// Conservative check: use unboxed double for variables with explicit ': number' annotation
+    /// or for optimized for loop counters.
     /// </summary>
     private bool CanUseUnboxedLocal(Stmt.Var v)
     {
+        // Check if this is an optimized for loop counter
+        if (_optimizedLoopCounterName != null && v.Name.Lexeme == _optimizedLoopCounterName)
+            return true;
+
         // Must have explicit 'number' type annotation
         if (v.TypeAnnotation != "number")
             return false;
@@ -160,6 +171,36 @@ public partial class ILEmitter
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Emits a for loop with unboxed counter optimization when applicable.
+    /// </summary>
+    protected override void EmitFor(Stmt.For f)
+    {
+        // Analyze the loop to see if we can use an unboxed counter
+        var analysis = ForLoopAnalyzer.Analyze(f, _ctx.ClosureAnalyzer);
+
+        if (analysis.CanUseUnboxedCounter && analysis.VariableName != null)
+        {
+            // Set the flag so CanUseUnboxedLocal will return true for this variable
+            _optimizedLoopCounterName = analysis.VariableName;
+            try
+            {
+                // Emit the loop with the optimization enabled
+                base.EmitFor(f);
+            }
+            finally
+            {
+                // Clear the flag
+                _optimizedLoopCounterName = null;
+            }
+        }
+        else
+        {
+            // No optimization - emit normally
+            base.EmitFor(f);
+        }
     }
 
     protected override void EmitIf(Stmt.If i)
