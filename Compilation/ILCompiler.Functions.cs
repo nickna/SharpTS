@@ -45,17 +45,19 @@ public partial class ILCompiler
             _modules.FunctionToModule[funcStmt.Name.Lexeme] = _modules.CurrentPath;
         }
 
-        // Resolve typed parameters from TypeMap
-        // Note: Return type remains 'object' for now to avoid breaking entry point code
-        // that expects object on the stack for Task checking and logging.
+        // Resolve typed parameters and return type from TypeMap
         var funcType = _typeMap?.GetFunctionType(qualifiedFunctionName);
         var paramTypes = ParameterTypeResolver.ResolveParameters(
             funcStmt.Parameters, _typeMapper, funcType);
 
+        // Resolve typed return type (optimization: avoid boxing for : number returns)
+        Type returnType = ParameterTypeResolver.ResolveReturnType(
+            funcType?.ReturnType, isAsync: false, _typeMapper);
+
         var methodBuilder = _programType.DefineMethod(
             qualifiedFunctionName,
             MethodAttributes.Public | MethodAttributes.Static,
-            typeof(object),
+            returnType,
             paramTypes
         );
 
@@ -98,7 +100,7 @@ public partial class ILCompiler
                 var overload = _programType.DefineMethod(
                     qualifiedFunctionName,
                     MethodAttributes.Public | MethodAttributes.Static,
-                    typeof(object),
+                    returnType,  // Use same typed return type as main method
                     overloadParams
                 );
                 _functions.Overloads[qualifiedFunctionName].Add(overload);
@@ -224,7 +226,9 @@ public partial class ILCompiler
             // Function-level display class for captured function-local variables
             FunctionDisplayClassFields = hasFunctionDC ? _closures.FunctionDisplayClassFields[qualifiedFunctionName] : null,
             CapturedFunctionLocals = capturedLocals,
-            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null
+            ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null,
+            // Typed return type for unboxed return optimization
+            CurrentMethodReturnType = methodBuilder.ReturnType
         };
 
         // Create function display class instance if needed
@@ -294,9 +298,46 @@ public partial class ILCompiler
         }
         else
         {
-            // Default return null (return type is object for now)
-            il.Emit(OpCodes.Ldnull);
+            // Emit appropriate default return value based on return type
+            EmitDefaultReturnValue(il, methodBuilder.ReturnType);
             il.Emit(OpCodes.Ret);
+        }
+    }
+
+    /// <summary>
+    /// Emits the default return value for a given return type.
+    /// For reference types: null
+    /// For double: 0.0
+    /// For bool: false
+    /// For void: nothing
+    /// </summary>
+    private void EmitDefaultReturnValue(ILGenerator il, Type returnType)
+    {
+        if (returnType == typeof(void))
+        {
+            // Void functions don't return a value
+            return;
+        }
+        else if (returnType == typeof(double))
+        {
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+        }
+        else if (returnType == typeof(bool))
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+        else if (returnType.IsValueType)
+        {
+            // For other value types, use default(T)
+            var local = il.DeclareLocal(returnType);
+            il.Emit(OpCodes.Ldloca, local);
+            il.Emit(OpCodes.Initobj, returnType);
+            il.Emit(OpCodes.Ldloc, local);
+        }
+        else
+        {
+            // Reference types default to null
+            il.Emit(OpCodes.Ldnull);
         }
     }
 

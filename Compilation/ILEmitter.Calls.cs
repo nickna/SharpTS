@@ -703,7 +703,8 @@ public partial class ILEmitter
                 }
 
                 IL.Emit(OpCodes.Call, targetMethod);
-                SetStackUnknown(); // Function returns boxed object
+                // Handle typed return values - box value types so callers receive object
+                BoxReturnValueIfNeeded(targetMethod.ReturnType);
                 return;
             }
         }

@@ -28,6 +28,49 @@ public partial class ILEmitter
     public bool HasDeferredReturns => _ctx.ReturnValueLocal != null;
 
     /// <summary>
+    /// Boxes the return value if it's a value type, and sets the appropriate stack type.
+    /// Used after calling functions that may have typed return values.
+    /// </summary>
+    /// <param name="returnType">The return type of the called method</param>
+    private void BoxReturnValueIfNeeded(Type returnType)
+    {
+        if (returnType == typeof(void))
+        {
+            // Void returns don't leave a value on the stack
+            IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
+        }
+        else if (_ctx.Types.IsDouble(returnType))
+        {
+            // Return is unboxed double - box it for callers expecting object
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+        }
+        else if (_ctx.Types.IsBoolean(returnType))
+        {
+            // Return is unboxed bool - box it for callers expecting object
+            IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+            SetStackUnknown();
+        }
+        else if (returnType.IsValueType)
+        {
+            // Other value types - box them
+            IL.Emit(OpCodes.Box, returnType);
+            SetStackUnknown();
+        }
+        else if (_ctx.Types.IsString(returnType))
+        {
+            // String is a reference type, just set stack type
+            _stackType = StackType.String;
+        }
+        else
+        {
+            // Reference types (including object) - just set stack to unknown
+            SetStackUnknown();
+        }
+    }
+
+    /// <summary>
     /// Emit default parameter value checks at function entry.
     /// For each parameter with a default value, checks if arg is null and assigns default.
     /// </summary>

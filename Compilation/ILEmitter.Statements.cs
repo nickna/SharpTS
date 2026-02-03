@@ -612,14 +612,67 @@ public partial class ILEmitter
 
     protected override void EmitReturn(Stmt.Return r)
     {
+        // Get the current method's return type (defaults to object if not set)
+        var returnType = _ctx.CurrentMethodReturnType ?? _ctx.Types.Object;
+
         if (r.Value != null)
         {
             EmitExpression(r.Value);
-            EmitBoxIfNeeded(r.Value);
+            // Only box if return type is object; otherwise use typed value directly
+            if (returnType == _ctx.Types.Object)
+            {
+                EmitBoxIfNeeded(r.Value);
+            }
+            else if (_ctx.Types.IsDouble(returnType))
+            {
+                // Ensure we have an unboxed double for : number return type
+                if (_stackType != StackType.Double)
+                {
+                    EmitUnboxToDouble();
+                }
+            }
+            else if (_ctx.Types.IsBoolean(returnType))
+            {
+                // Ensure we have an unboxed bool for : boolean return type
+                if (_stackType != StackType.Boolean)
+                {
+                    // Convert to boolean: double -> i4, or object -> unbox to double -> i4
+                    if (_stackType == StackType.Double)
+                    {
+                        IL.Emit(OpCodes.Conv_I4);
+                    }
+                    else
+                    {
+                        EmitUnboxToDouble();
+                        IL.Emit(OpCodes.Conv_I4);
+                    }
+                }
+            }
+            // For other types (string, etc.), the value should already be correct
         }
         else
         {
-            IL.Emit(OpCodes.Ldnull);
+            // Return undefined (null) or appropriate default
+            if (returnType == _ctx.Types.Object || !returnType.IsValueType)
+            {
+                IL.Emit(OpCodes.Ldnull);
+            }
+            else if (_ctx.Types.IsDouble(returnType))
+            {
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+            }
+            else if (_ctx.Types.IsBoolean(returnType))
+            {
+                IL.Emit(OpCodes.Ldc_I4_0);
+            }
+            else
+            {
+                // For other value types, emit default
+                var local = IL.DeclareLocal(returnType);
+                IL.Emit(OpCodes.Ldloca, local);
+                IL.Emit(OpCodes.Initobj, returnType);
+                IL.Emit(OpCodes.Ldloc, local);
+            }
         }
 
         if (_ctx.ExceptionBlockDepth > 0)
@@ -629,7 +682,8 @@ public partial class ILEmitter
             var builder = _ctx.ILBuilder;
             if (_ctx.ReturnValueLocal == null)
             {
-                _ctx.ReturnValueLocal = IL.DeclareLocal(_ctx.Types.Object);
+                // Use the appropriate type for the return value local
+                _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
                 _ctx.ReturnLabel = builder.DefineLabel("deferred_return");
             }
             IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);

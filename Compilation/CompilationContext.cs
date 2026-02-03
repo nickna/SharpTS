@@ -108,6 +108,13 @@ public partial class CompilationContext
     // ============================================
 
     /// <summary>
+    /// The return type of the current method being compiled.
+    /// Used for typed return optimization to avoid unnecessary boxing.
+    /// When null, defaults to object (boxed return).
+    /// </summary>
+    public Type? CurrentMethodReturnType { get; set; }
+
+    /// <summary>
     /// Whether the current compilation context is in JavaScript strict mode.
     /// Affects property assignment behavior on frozen/sealed objects.
     /// </summary>

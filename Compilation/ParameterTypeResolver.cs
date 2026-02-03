@@ -95,6 +95,26 @@ public static class ParameterTypeResolver
         else
         {
             baseType = typeMapper.MapTypeInfoStrict(returnTypeInfo);
+
+            // BigInteger returns need to stay as object because BigInt operations
+            // in the emitter expect boxed values
+            if (baseType == typeof(System.Numerics.BigInteger))
+            {
+                baseType = typeof(object);
+            }
+
+            // Function types return $TSFunction objects, not Delegate, so use object
+            if (baseType == typeof(Delegate) || baseType.IsSubclassOf(typeof(Delegate)))
+            {
+                baseType = typeof(object);
+            }
+
+            // Nullable value types (like number | null -> double?) need to stay as object
+            // because the emitter doesn't have special handling for Nullable<T>
+            if (Nullable.GetUnderlyingType(baseType) != null)
+            {
+                baseType = typeof(object);
+            }
         }
 
         // Wrap async return types in Task<T>
