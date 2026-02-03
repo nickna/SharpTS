@@ -36,19 +36,28 @@ public partial class ILCompiler
                 continue;
             }
 
+            // Resolve typed parameters from annotations (optimization for numeric parameters)
+            // Rest parameters always use List<object> to enable detection at invoke time
+            var resolvedParamTypes = ParameterTypeResolver.ResolveParameters(
+                arrow.Parameters, _typeMapper, null); // null funcType - use annotations only
+
+            // Store resolved types for use during arrow body emission
+            _closures.ArrowParameterTypes[arrow] = resolvedParamTypes;
+
             // For object methods, add __this as the first parameter
-            // Rest parameters use List<object> to enable detection at invoke time
             Type[] paramTypes;
             if (arrow.HasOwnThis)
             {
                 paramTypes = new Type[arrow.Parameters.Count + 1];
                 paramTypes[0] = _types.Object;  // __this
                 for (int i = 0; i < arrow.Parameters.Count; i++)
-                    paramTypes[i + 1] = arrow.Parameters[i].IsRest ? _types.ListOfObject : _types.Object;
+                    paramTypes[i + 1] = arrow.Parameters[i].IsRest ? _types.ListOfObject : resolvedParamTypes[i];
             }
             else
             {
-                paramTypes = arrow.Parameters.Select(p => p.IsRest ? _types.ListOfObject : _types.Object).ToArray();
+                paramTypes = new Type[arrow.Parameters.Count];
+                for (int i = 0; i < arrow.Parameters.Count; i++)
+                    paramTypes[i] = arrow.Parameters[i].IsRest ? _types.ListOfObject : resolvedParamTypes[i];
             }
 
             // Check if arrow needs function DC (for itself or to pass to inner arrows)
@@ -611,6 +620,9 @@ public partial class ILCompiler
                 }
             }
 
+            // Get resolved parameter types for this arrow (for typed parameter optimization)
+            _closures.ArrowParameterTypes.TryGetValue(arrow, out var arrowParamTypes);
+
             // For object methods, __this is the first parameter after 'this' (display class)
             // Parameters start at index 1 (display class is arg 0)
             if (arrow.HasOwnThis)
@@ -619,19 +631,24 @@ public partial class ILCompiler
                 ctx.DefineParameter("__this", 1);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
-                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 2);
+                    Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 2, paramType);
                 }
             }
             else
             {
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
-                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1);
+                    Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1, paramType);
                 }
             }
         }
         else
         {
+            // Get resolved parameter types for this arrow (for typed parameter optimization)
+            _closures.ArrowParameterTypes.TryGetValue(arrow, out var arrowParamTypes);
+
             // Static method - parameters start at index 0
             if (arrow.HasOwnThis)
             {
@@ -639,14 +656,16 @@ public partial class ILCompiler
                 ctx.DefineParameter("__this", 0);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
-                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1);
+                    Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i + 1, paramType);
                 }
             }
             else
             {
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
-                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i);
+                    Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
+                    ctx.DefineParameter(arrow.Parameters[i].Name.Lexeme, i, paramType);
                 }
             }
         }

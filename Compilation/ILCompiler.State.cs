@@ -110,6 +110,10 @@ public partial class ILCompiler
 
         // Maps arrow functions to the function display class they need access to
         public Dictionary<Expr.ArrowFunction, string> ArrowFunctionDCSource { get; } = new(ReferenceEqualityComparer.Instance);
+
+        // Maps arrow functions to their resolved parameter types (for typed parameter optimization)
+        // When parameters have type annotations, this stores the resolved .NET types to avoid boxing
+        public Dictionary<Expr.ArrowFunction, Type[]> ArrowParameterTypes { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

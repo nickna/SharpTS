@@ -121,10 +121,12 @@ public partial class ILCompiler
                 ctx.GenericTypeParameters[gp.Name] = gp;
         }
 
-        // Define setter parameter if applicable
+        // Define setter parameter if applicable with typed parameter type
         if (accessor.Kind.Type == TokenType.SET && accessor.SetterParam != null)
         {
-            ctx.DefineParameter(accessor.SetterParam.Name.Lexeme, 1);
+            var accessorParams = methodBuilder.GetParameters();
+            Type? paramType = accessorParams.Length > 0 ? accessorParams[0].ParameterType : null;
+            ctx.DefineParameter(accessor.SetterParam.Name.Lexeme, 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);

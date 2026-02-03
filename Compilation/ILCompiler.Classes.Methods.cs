@@ -663,11 +663,13 @@ public partial class ILCompiler
             EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField,
         };
 
-        // Define parameters
+        // Define parameters with typed parameter types from method signature
+        var methodParams = methodBuilder.GetParameters();
         int paramOffset = isStatic ? 0 : 1;  // Instance methods have 'this' at index 0
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + paramOffset);
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + paramOffset, paramType);
         }
 
         var emitter = new ILEmitter(ctx);

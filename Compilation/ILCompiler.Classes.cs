@@ -1185,10 +1185,12 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
         if (constructor != null)
         {
-            // Define parameters
+            // Define parameters with typed parameter types from constructor signature
+            var ctorParams = ctorBuilder.GetParameters();
             for (int i = 0; i < constructor.Parameters.Count; i++)
             {
-                ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1);
+                Type? paramType = i < ctorParams.Length ? ctorParams[i].ParameterType : null;
+                ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1, paramType);
             }
 
             emitter.EmitDefaultParameters(constructor.Parameters, true);
@@ -1304,10 +1306,12 @@ public partial class ILCompiler
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField);
         ctx.IsInstanceMethod = true;
 
-        // Define parameters
+        // Define parameters with typed parameter types from method signature
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1);
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
@@ -1352,10 +1356,12 @@ public partial class ILCompiler
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null);
         ctx.IsInstanceMethod = false;
 
-        // Define parameters (starting at index 0 for static)
+        // Define parameters with typed parameter types from method signature (starting at index 0 for static)
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i);
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
@@ -1402,7 +1408,10 @@ public partial class ILCompiler
 
         if (accessor.Kind.Type == TokenType.SET && accessor.SetterParam != null)
         {
-            ctx.DefineParameter(accessor.SetterParam.Name.Lexeme, 1);
+            // Get typed parameter type from accessor method signature
+            var accessorParams = methodBuilder.GetParameters();
+            Type? paramType = accessorParams.Length > 0 ? accessorParams[0].ParameterType : null;
+            ctx.DefineParameter(accessor.SetterParam.Name.Lexeme, 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
@@ -1439,10 +1448,12 @@ public partial class ILCompiler
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField);
         ctx.IsInstanceMethod = true;
 
-        // Define parameters
+        // Define parameters with typed parameter types from method signature
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1);
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i + 1, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
@@ -1483,10 +1494,12 @@ public partial class ILCompiler
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null);
         ctx.IsInstanceMethod = false;
 
-        // Define parameters
+        // Define parameters with typed parameter types from method signature
+        var methodParams = methodBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
-            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i);
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(method.Parameters[i].Name.Lexeme, i, paramType);
         }
 
         var emitter = new ILEmitter(ctx);
