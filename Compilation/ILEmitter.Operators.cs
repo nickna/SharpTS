@@ -29,6 +29,10 @@ public partial class ILEmitter
         switch (desc)
         {
             case Plus:
+                // Try string concatenation chain optimization first
+                if (TryEmitStringConcatChain(b))
+                    return;
+
                 // Use runtime Add() which handles both string concat and numeric add
                 EmitExpression(b.Left);
                 EmitBoxIfNeeded(b.Left);
@@ -1211,5 +1215,94 @@ public partial class ILEmitter
                 SetStackUnknown();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Attempts to optimize a string concatenation chain into a single String.Concat call.
+    /// </summary>
+    /// <param name="b">The binary expression to optimize.</param>
+    /// <returns>True if the chain was optimized; false otherwise.</returns>
+    private bool TryEmitStringConcatChain(Expr.Binary b)
+    {
+        if (!StringConcatOptimizer.TryFlattenConcatChain(b, out var parts))
+            return false;
+
+        // Check if we can fold everything to a constant string
+        if (StringConcatOptimizer.TryFoldAllToString(parts, out var constantResult))
+        {
+            IL.Emit(OpCodes.Ldstr, constantResult!);
+            SetStackType(StackType.String);
+            return true;
+        }
+
+        // Emit optimized String.Concat with array
+        // For 2-4 parts, use the specific overloads; for more, use params array
+        if (parts.Count <= 4)
+        {
+            // Use String.Concat(object, object, ...) overloads
+            EmitStringConcatWithOverload(parts);
+        }
+        else
+        {
+            // Use String.Concat(params object[]) for 5+ parts
+            EmitStringConcatWithArray(parts);
+        }
+
+        SetStackType(StackType.String);
+        return true;
+    }
+
+    /// <summary>
+    /// Emits String.Concat using specific overloads for 2-3 arguments.
+    /// Falls back to array version for 4+ arguments.
+    /// </summary>
+    private void EmitStringConcatWithOverload(List<Expr> parts)
+    {
+        // Get the appropriate String.Concat overload
+        var paramTypes = new Type[parts.Count];
+        for (int i = 0; i < parts.Count; i++)
+            paramTypes[i] = _ctx.Types.Object;
+
+        var concatMethod = _ctx.Types.String.GetMethod("Concat", paramTypes);
+
+        // If we can't find the specific overload (e.g., for 4 args), use array version
+        if (concatMethod == null)
+        {
+            EmitStringConcatWithArray(parts);
+            return;
+        }
+
+        // Emit each part as boxed object
+        foreach (var part in parts)
+        {
+            EmitExpression(part);
+            EmitBoxIfNeeded(part);
+        }
+
+        IL.Emit(OpCodes.Call, concatMethod);
+    }
+
+    /// <summary>
+    /// Emits String.Concat using the params object[] overload for 5+ arguments.
+    /// </summary>
+    private void EmitStringConcatWithArray(List<Expr> parts)
+    {
+        // Create array: new object[parts.Count]
+        IL.Emit(OpCodes.Ldc_I4, parts.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+
+        // Fill array with parts
+        for (int i = 0; i < parts.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);           // Duplicate array reference
+            IL.Emit(OpCodes.Ldc_I4, i);     // Index
+            EmitExpression(parts[i]);       // Value
+            EmitBoxIfNeeded(parts[i]);
+            IL.Emit(OpCodes.Stelem_Ref);    // Store in array
+        }
+
+        // Call String.Concat(object[])
+        var concatMethod = _ctx.Types.String.GetMethod("Concat", [_ctx.Types.ObjectArray]);
+        IL.Emit(OpCodes.Call, concatMethod!);
     }
 }
