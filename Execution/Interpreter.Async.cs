@@ -17,6 +17,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Asynchronously executes a block of statements.
+    /// Uses registry-based dispatch via ExecuteStatementAsync.
     /// </summary>
     internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
@@ -24,135 +25,10 @@ public partial class Interpreter
         {
             foreach (Stmt statement in statements)
             {
-                var result = await ExecuteAsync(statement);
+                var result = await ExecuteStatementAsync(statement);
                 if (result.IsAbrupt) return result;
             }
             return ExecutionResult.Success();
-        }
-    }
-
-    /// <summary>
-    /// Asynchronously dispatches a statement to the appropriate execution handler.
-    /// </summary>
-    private async Task<ExecutionResult> ExecuteAsync(Stmt stmt)
-    {
-        switch (stmt)
-        {
-            case Stmt.Block block:
-                return await ExecuteBlockAsync(block.Statements, new RuntimeEnvironment(_environment));
-            case Stmt.Sequence seq:
-                foreach (var s in seq.Statements)
-                {
-                    var result = await ExecuteAsync(s);
-                    if (result.IsAbrupt) return result;
-                }
-                return ExecutionResult.Success();
-            case Stmt.Expression exprStmt:
-                await EvaluateAsync(exprStmt.Expr);
-                return ExecutionResult.Success();
-            case Stmt.If ifStmt:
-                if (IsTruthy(await EvaluateAsync(ifStmt.Condition)))
-                {
-                    return await ExecuteAsync(ifStmt.ThenBranch);
-                }
-                else if (ifStmt.ElseBranch != null)
-                {
-                    return await ExecuteAsync(ifStmt.ElseBranch);
-                }
-                return ExecutionResult.Success();
-            case Stmt.While whileStmt:
-                while (IsTruthy(await EvaluateAsync(whileStmt.Condition)))
-                {
-                    var result = await ExecuteAsync(whileStmt.Body);
-                    var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
-                    if (shouldBreak) return ExecutionResult.Success();
-                    if (shouldContinue) continue;
-                    if (abruptResult.HasValue) return abruptResult.Value;
-                    // Process any pending timer callbacks
-                    ProcessPendingCallbacks();
-                }
-                return ExecutionResult.Success();
-            case Stmt.DoWhile doWhileStmt:
-                do
-                {
-                    var result = await ExecuteAsync(doWhileStmt.Body);
-                    var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
-                    if (shouldBreak) return ExecutionResult.Success();
-                    if (shouldContinue) continue;
-                    if (abruptResult.HasValue) return abruptResult.Value;
-                    // Process any pending timer callbacks
-                    ProcessPendingCallbacks();
-                } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
-                return ExecutionResult.Success();
-            case Stmt.For forStmt:
-            {
-                // Create scope for loop variables (ES6 let/const block scoping)
-                RuntimeEnvironment loopEnv = new(_environment);
-                using (PushScope(loopEnv))
-                {
-                    // Execute initializer once (defines loop variable in loopEnv)
-                    if (forStmt.Initializer != null)
-                        await ExecuteAsync(forStmt.Initializer);
-                    // Loop with proper continue handling - increment always runs
-                    while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
-                    {
-                        var result = await ExecuteAsync(forStmt.Body);
-                        if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
-                        // On continue, execute increment then continue the loop
-                        if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
-                        {
-                            if (forStmt.Increment != null)
-                                await EvaluateAsync(forStmt.Increment);
-                            // Yield to allow timer callbacks and other threads to execute
-                            await Task.Yield();
-                            continue;
-                        }
-                        if (result.IsAbrupt) return result;
-                        // Normal completion: execute increment
-                        if (forStmt.Increment != null)
-                            await EvaluateAsync(forStmt.Increment);
-                        // Process any pending timer callbacks
-                        ProcessPendingCallbacks();
-                    }
-                    return ExecutionResult.Success();
-                }
-            }
-            case Stmt.ForOf forOf:
-                return await ExecuteForOfAsync(forOf);
-            case Stmt.ForIn forIn:
-                return await ExecuteForInAsync(forIn);
-            case Stmt.Break breakStmt:
-                return ExecutionResult.Break(breakStmt.Label?.Lexeme);
-            case Stmt.Continue continueStmt:
-                return ExecutionResult.Continue(continueStmt.Label?.Lexeme);
-            case Stmt.Switch switchStmt:
-                return await ExecuteSwitchAsync(switchStmt);
-            case Stmt.TryCatch tryCatch:
-                return await ExecuteTryCatchAsync(tryCatch);
-            case Stmt.Throw throwStmt:
-                return ExecutionResult.Throw(await EvaluateAsync(throwStmt.Value));
-            case Stmt.Var varStmt:
-                object? value = null;
-                if (varStmt.Initializer != null)
-                {
-                    value = await EvaluateAsync(varStmt.Initializer);
-                }
-                _environment.Define(varStmt.Name.Lexeme, value);
-                return ExecutionResult.Success();
-            case Stmt.Const constStmt:
-                object? constValue = await EvaluateAsync(constStmt.Initializer);
-                _environment.Define(constStmt.Name.Lexeme, constValue);
-                return ExecutionResult.Success();
-            case Stmt.Return returnStmt:
-                object? returnValue = null;
-                if (returnStmt.Value != null) returnValue = await EvaluateAsync(returnStmt.Value);
-                return ExecutionResult.Return(returnValue);
-            case Stmt.Print printStmt:
-                Console.WriteLine(Stringify(await EvaluateAsync(printStmt.Expr)));
-                return ExecutionResult.Success();
-            default:
-                // Fall back to sync execution for other statements
-                return Execute(stmt);
         }
     }
 
@@ -230,7 +106,7 @@ public partial class Interpreter
         _environment = loopEnv;
         try
         {
-            return await ExecuteAsync(body);
+            return await ExecuteStatementAsync(body);
         }
         finally
         {
@@ -412,6 +288,155 @@ public partial class Interpreter
     {
         // Use async context with unified core
         return await ExecuteTryCatchCore(_asyncContext, tryCatch);
+    }
+
+    // ===================== Async Statement Handlers for Registry =====================
+    // These methods return ValueTask<ExecutionResult> for use with DispatchStmtAsync.
+    // They wrap the existing async execution logic in ValueTask.
+
+    internal async ValueTask<ExecutionResult> ExecuteBlockAsyncVT(Stmt.Block block)
+    {
+        return await ExecuteBlockAsync(block.Statements, new RuntimeEnvironment(_environment));
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteSequenceAsyncVT(Stmt.Sequence seq)
+    {
+        foreach (var s in seq.Statements)
+        {
+            var result = await ExecuteStatementAsync(s);
+            if (result.IsAbrupt) return result;
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteExpressionAsyncVT(Stmt.Expression exprStmt)
+    {
+        await EvaluateAsync(exprStmt.Expr);
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteIfAsyncVT(Stmt.If ifStmt)
+    {
+        if (IsTruthy(await EvaluateAsync(ifStmt.Condition)))
+        {
+            return await ExecuteStatementAsync(ifStmt.ThenBranch);
+        }
+        else if (ifStmt.ElseBranch != null)
+        {
+            return await ExecuteStatementAsync(ifStmt.ElseBranch);
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteWhileAsyncVT(Stmt.While whileStmt)
+    {
+        while (IsTruthy(await EvaluateAsync(whileStmt.Condition)))
+        {
+            var result = await ExecuteStatementAsync(whileStmt.Body);
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
+            ProcessPendingCallbacks();
+        }
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteDoWhileAsyncVT(Stmt.DoWhile doWhileStmt)
+    {
+        do
+        {
+            var result = await ExecuteStatementAsync(doWhileStmt.Body);
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, null);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
+            ProcessPendingCallbacks();
+        } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteForAsyncVT(Stmt.For forStmt)
+    {
+        RuntimeEnvironment loopEnv = new(_environment);
+        using (PushScope(loopEnv))
+        {
+            if (forStmt.Initializer != null)
+                await ExecuteStatementAsync(forStmt.Initializer);
+            while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
+            {
+                var result = await ExecuteStatementAsync(forStmt.Body);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) break;
+                if (result.Type == ExecutionResult.ResultType.Continue && result.TargetLabel == null)
+                {
+                    if (forStmt.Increment != null)
+                        await EvaluateAsync(forStmt.Increment);
+                    await Task.Yield();
+                    continue;
+                }
+                if (result.IsAbrupt) return result;
+                if (forStmt.Increment != null)
+                    await EvaluateAsync(forStmt.Increment);
+                ProcessPendingCallbacks();
+            }
+            return ExecutionResult.Success();
+        }
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteForOfAsyncVT(Stmt.ForOf forOf)
+    {
+        return await ExecuteForOfAsync(forOf);
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteForInAsyncVT(Stmt.ForIn forIn)
+    {
+        return await ExecuteForInAsync(forIn);
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteSwitchAsyncVT(Stmt.Switch switchStmt)
+    {
+        return await ExecuteSwitchCore(_asyncContext, switchStmt);
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteTryCatchAsyncVT(Stmt.TryCatch tryCatch)
+    {
+        return await ExecuteTryCatchCore(_asyncContext, tryCatch);
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteThrowAsyncVT(Stmt.Throw throwStmt)
+    {
+        return ExecutionResult.Throw(await EvaluateAsync(throwStmt.Value));
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteVarAsyncVT(Stmt.Var varStmt)
+    {
+        object? value = null;
+        if (varStmt.Initializer != null)
+        {
+            value = await EvaluateAsync(varStmt.Initializer);
+        }
+        _environment.Define(varStmt.Name.Lexeme, value);
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteConstAsyncVT(Stmt.Const constStmt)
+    {
+        object? constValue = await EvaluateAsync(constStmt.Initializer);
+        _environment.Define(constStmt.Name.Lexeme, constValue);
+        return ExecutionResult.Success();
+    }
+
+    internal async ValueTask<ExecutionResult> ExecuteReturnAsyncVT(Stmt.Return returnStmt)
+    {
+        object? returnValue = null;
+        if (returnStmt.Value != null) returnValue = await EvaluateAsync(returnStmt.Value);
+        return ExecutionResult.Return(returnValue);
+    }
+
+    internal async ValueTask<ExecutionResult> ExecutePrintAsyncVT(Stmt.Print printStmt)
+    {
+        Console.WriteLine(Stringify(await EvaluateAsync(printStmt.Expr)));
+        return ExecutionResult.Success();
     }
 
     // ===================== Async Expression Helpers =====================

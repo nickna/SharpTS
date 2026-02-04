@@ -22,6 +22,7 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     private readonly Dictionary<Type, Func<Expr, TContext, TExprResult>> _exprHandlers = new();
     private readonly Dictionary<Type, Func<Stmt, TContext, TStmtResult>> _stmtHandlers = new();
     private readonly Dictionary<Type, Func<Expr, TContext, ValueTask<TExprResult>>>? _asyncExprHandlers;
+    private readonly Dictionary<Type, Func<Stmt, TContext, ValueTask<TStmtResult>>>? _asyncStmtHandlers;
 
     private bool _frozen;
     private readonly bool _supportAsync;
@@ -29,13 +30,14 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     /// <summary>
     /// Creates a new NodeRegistry.
     /// </summary>
-    /// <param name="supportAsync">Whether to support async expression handlers.</param>
+    /// <param name="supportAsync">Whether to support async expression and statement handlers.</param>
     public NodeRegistry(bool supportAsync = false)
     {
         _supportAsync = supportAsync;
         if (supportAsync)
         {
             _asyncExprHandlers = new();
+            _asyncStmtHandlers = new();
         }
     }
 
@@ -86,6 +88,26 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
                 "Async handlers require supportAsync=true in constructor.");
         }
         _asyncExprHandlers[typeof(TExpr)] = (expr, ctx) => handler((TExpr)expr, ctx);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers an async handler for a specific statement type.
+    /// </summary>
+    /// <typeparam name="TStmt">The concrete statement type (must inherit from Stmt).</typeparam>
+    /// <param name="handler">The async handler function.</param>
+    /// <returns>This registry for fluent chaining.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if async support is not enabled or registry is frozen.</exception>
+    public NodeRegistry<TContext, TExprResult, TStmtResult> RegisterStmtAsync<TStmt>(
+        Func<TStmt, TContext, ValueTask<TStmtResult>> handler) where TStmt : Stmt
+    {
+        ThrowIfFrozen();
+        if (_asyncStmtHandlers == null)
+        {
+            throw new InvalidOperationException(
+                "Async handlers require supportAsync=true in constructor.");
+        }
+        _asyncStmtHandlers[typeof(TStmt)] = (stmt, ctx) => handler((TStmt)stmt, ctx);
         return this;
     }
 
@@ -160,6 +182,40 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     }
 
     /// <summary>
+    /// Dispatches a statement to its async handler.
+    /// Falls back to sync handler wrapped in ValueTask if no async handler is registered.
+    /// </summary>
+    /// <param name="stmt">The statement to dispatch.</param>
+    /// <param name="context">The context for execution.</param>
+    /// <returns>A ValueTask containing the result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if async support is not enabled.</exception>
+    public ValueTask<TStmtResult> DispatchStmtAsync(Stmt stmt, TContext context)
+    {
+        if (_asyncStmtHandlers == null)
+        {
+            throw new InvalidOperationException(
+                "Async dispatch requires supportAsync=true in constructor.");
+        }
+
+        var stmtType = stmt.GetType();
+
+        // Try async handler first
+        if (_asyncStmtHandlers.TryGetValue(stmtType, out var asyncHandler))
+        {
+            return asyncHandler(stmt, context);
+        }
+
+        // Fall back to sync handler
+        if (_stmtHandlers.TryGetValue(stmtType, out var syncHandler))
+        {
+            return new ValueTask<TStmtResult>(syncHandler(stmt, context));
+        }
+
+        throw new InvalidOperationException(
+            $"No handler registered for statement type: {stmtType.Name}");
+    }
+
+    /// <summary>
     /// Freezes the registry and validates that all AST node types have handlers.
     /// After this call, no more handlers can be registered.
     /// </summary>
@@ -222,6 +278,16 @@ public sealed class NodeRegistry<TContext, TExprResult, TStmtResult>
     /// Gets the number of registered statement handlers.
     /// </summary>
     public int StmtHandlerCount => _stmtHandlers.Count;
+
+    /// <summary>
+    /// Gets the number of registered async statement handlers.
+    /// </summary>
+    public int AsyncStmtHandlerCount => _asyncStmtHandlers?.Count ?? 0;
+
+    /// <summary>
+    /// Gets the number of registered async expression handlers.
+    /// </summary>
+    public int AsyncExprHandlerCount => _asyncExprHandlers?.Count ?? 0;
 
     private void ThrowIfFrozen()
     {

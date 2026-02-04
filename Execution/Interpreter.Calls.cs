@@ -133,6 +133,26 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Calls a built-in method with sync evaluation.
+    /// </summary>
+    private object? CallBuiltInSync(ISharpTSCallable method, IReadOnlyList<Expr> arguments)
+    {
+        var pooledList = ArgumentListPool.Rent();
+        try
+        {
+            foreach (var arg in arguments)
+            {
+                pooledList.Add(Evaluate(arg));
+            }
+            return method.Call(this, pooledList);
+        }
+        finally
+        {
+            ArgumentListPool.Return(pooledList);
+        }
+    }
+
+    /// <summary>
     /// Evaluates a function or method call expression.
     /// </summary>
     /// <param name="call">The call expression AST node.</param>
@@ -145,8 +165,91 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
     private object? EvaluateCall(Expr.Call call)
     {
-        // Use sync context - ValueTask with sync context completes synchronously
-        return EvaluateCallCore(_syncContext, call).GetAwaiter().GetResult();
+        // Handle console.* methods
+        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.Console + "."))
+        {
+            var methodName = v.Name.Lexeme[(BuiltInNames.Console.Length + 1)..];
+            var method = BuiltInRegistry.Instance.GetStaticMethod(BuiltInNames.Console, methodName);
+            if (method != null)
+            {
+                return CallBuiltInSync(method, call.Arguments);
+            }
+        }
+
+        // Handle globalThis.console.* calls
+        if (call.Callee is Expr.Get chainedGet &&
+            chainedGet.Object is Expr.Get innerGet &&
+            innerGet.Object is Expr.Variable globalThisVar &&
+            globalThisVar.Name.Lexeme == BuiltInNames.GlobalThis &&
+            innerGet.Name.Lexeme == BuiltInNames.Console)
+        {
+            var method = BuiltInRegistry.Instance.GetStaticMethod(BuiltInNames.Console, chainedGet.Name.Lexeme);
+            if (method != null)
+            {
+                return CallBuiltInSync(method, call.Arguments);
+            }
+        }
+
+        // Handle globalThis.<namespace>.<method>() calls (e.g., globalThis.Math.floor())
+        if (call.Callee is Expr.Get gtChainedGet &&
+            gtChainedGet.Object is Expr.Get gtInnerGet &&
+            gtInnerGet.Object is Expr.Variable gtVar &&
+            gtVar.Name.Lexeme == BuiltInNames.GlobalThis)
+        {
+            var method = BuiltInRegistry.Instance.GetStaticMethod(gtInnerGet.Name.Lexeme, gtChainedGet.Name.Lexeme);
+            if (method != null)
+            {
+                return CallBuiltInSync(method, call.Arguments);
+            }
+        }
+
+        // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
+        if (call.Callee is Expr.Get get &&
+            get.Object is Expr.Variable nsVar)
+        {
+            var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
+            if (method != null)
+            {
+                return CallBuiltInSync(method, call.Arguments);
+            }
+        }
+
+        // Handle global functions via registry (Symbol, BigInt, parseInt, setTimeout, Error types, etc.)
+        if (call.Callee is Expr.Variable globalVar &&
+            GlobalFunctionRegistry.Instance.TryGetHandler(globalVar.Name.Lexeme, out var handler))
+        {
+            // Use sync context for handler
+            return handler!(_syncContext.EvaluateExprAsync, call.Arguments, this).GetAwaiter().GetResult();
+        }
+
+        object? callee = Evaluate(call.Callee);
+
+        List<object?> argumentsList = [];
+        foreach (Expr argument in call.Arguments)
+        {
+            if (argument is Expr.Spread spread)
+            {
+                object? spreadValue = Evaluate(spread.Expression);
+                // Use GetIterableElements to support custom iterables with Symbol.iterator
+                argumentsList.AddRange(GetIterableElements(spreadValue));
+            }
+            else
+            {
+                argumentsList.Add(Evaluate(argument));
+            }
+        }
+
+        if (callee is not ISharpTSCallable function)
+        {
+            throw new InterpreterException("Can only call functions and classes.");
+        }
+
+        if (argumentsList.Count < function.Arity())
+        {
+            throw new InterpreterException($"Expected at least {function.Arity()} arguments but got {argumentsList.Count}.");
+        }
+
+        return function.Call(this, argumentsList);
     }
 
     /// <summary>

@@ -104,8 +104,74 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/classes.html#constructors">TypeScript Constructors</seealso>
     private object? EvaluateNew(Expr.New newExpr)
     {
-        // Use sync context - ValueTask with sync context completes synchronously
-        return EvaluateNewCore(_syncContext, newExpr).GetAwaiter().GetResult();
+        // Built-in types only apply when callee is a simple identifier
+        bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
+        string? simpleClassName = GetSimpleClassName(newExpr.Callee);
+
+        // Handle built-in constructors via factory
+        if (isSimpleName && simpleClassName != null)
+        {
+            // Special case: Promise needs executor function evaluation, not standard arg evaluation
+            if (simpleClassName == BuiltInNames.Promise)
+            {
+                if (newExpr.Arguments.Count != 1)
+                {
+                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+                }
+                object? executor = Evaluate(newExpr.Arguments[0]);
+                return CreatePromiseFromExecutor(executor);
+            }
+
+            // Try factory for all other built-in constructors
+            if (BuiltInConstructorFactory.IsBuiltIn(simpleClassName))
+            {
+                List<object?> args = [];
+                foreach (var arg in newExpr.Arguments)
+                {
+                    args.Add(Evaluate(arg));
+                }
+                return BuiltInConstructorFactory.TryCreate(simpleClassName, args, this);
+            }
+        }
+
+        // Evaluate the callee expression to get the class/constructor
+        object? klass = Evaluate(newExpr.Callee);
+
+        // Handle callable constructors (like SharpTSEventEmitterConstructor)
+        // These implement ISharpTSCallable and are used for module-imported types
+        if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
+        {
+            List<object?> ctorArgs = [];
+            foreach (var arg in newExpr.Arguments)
+            {
+                ctorArgs.Add(Evaluate(arg));
+            }
+            return callable.Call(this, ctorArgs);
+        }
+
+        // Bound functions cannot be used as constructors (JS spec compliance)
+        if (klass is BoundFunction)
+        {
+            throw new InterpreterException("Bound functions cannot be used as constructors.");
+        }
+
+        if (klass is not SharpTSClass sharpClass)
+        {
+             throw new InterpreterException("Can only instantiate classes.");
+        }
+
+        // Runtime check for abstract class instantiation (backup to type checker)
+        if (sharpClass.IsAbstract)
+        {
+            throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
+        }
+
+        List<object?> arguments = [];
+        foreach (var arg in newExpr.Arguments)
+        {
+            arguments.Add(Evaluate(arg));
+        }
+        return sharpClass.Call(this, arguments);
     }
 
     /// <summary>

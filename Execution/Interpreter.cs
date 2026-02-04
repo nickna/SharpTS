@@ -1214,11 +1214,15 @@ public partial class Interpreter : IDisposable
     internal ExecutionResult ExecuteStatement(Stmt stmt) => Execute(stmt);
 
     /// <summary>
-    /// Internal async wrapper for ExecuteAsync that allows evaluation contexts to dispatch statements.
+    /// Internal async wrapper for statement execution using registry-based dispatch.
+    /// Uses DispatchStmtAsync which falls back to sync handlers when no async handler exists.
     /// </summary>
     /// <param name="stmt">The statement to execute.</param>
     /// <returns>A task containing the execution result.</returns>
-    internal Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt) => ExecuteAsync(stmt);
+    internal async Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt)
+    {
+        return await _registry.DispatchStmtAsync(stmt, this);
+    }
 
     /// <summary>
     /// Dispatches a statement to the appropriate execution handler using the registry.

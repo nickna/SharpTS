@@ -372,6 +372,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Executes a switch statement with case matching and fall-through semantics.
+    /// Pure sync implementation that avoids async overhead.
     /// </summary>
     /// <param name="switchStmt">The switch statement AST node.</param>
     /// <remarks>
@@ -381,8 +382,44 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/switch">MDN switch Statement</seealso>
     private ExecutionResult ExecuteSwitch(Stmt.Switch switchStmt)
     {
-        // Use sync context - ValueTask with sync context completes synchronously
-        return ExecuteSwitchCore(_syncContext, switchStmt).GetAwaiter().GetResult();
+        object? subject = Evaluate(switchStmt.Subject);
+        bool fallen = false;
+        bool matched = false;
+
+        foreach (var caseItem in switchStmt.Cases)
+        {
+            if (!fallen && !matched)
+            {
+                object? caseValue = Evaluate(caseItem.Value);
+                if (IsEqual(subject, caseValue))
+                {
+                    matched = true;
+                }
+            }
+
+            if (fallen || matched)
+            {
+                fallen = true;
+                foreach (var stmt in caseItem.Body)
+                {
+                    var result = Execute(stmt);
+                    if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                    if (result.IsAbrupt) return result;
+                }
+            }
+        }
+
+        if (switchStmt.DefaultBody != null && (fallen || !matched))
+        {
+            foreach (var stmt in switchStmt.DefaultBody)
+            {
+                var result = Execute(stmt);
+                if (result.Type == ExecutionResult.ResultType.Break && result.TargetLabel == null) return ExecutionResult.Success();
+                if (result.IsAbrupt) return result;
+            }
+        }
+
+        return ExecutionResult.Success();
     }
 
     /// <summary>
@@ -496,6 +533,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Executes a try/catch/finally statement with proper exception handling.
+    /// Pure sync implementation that avoids async overhead.
     /// </summary>
     /// <param name="tryCatch">The try/catch statement AST node.</param>
     /// <remarks>
@@ -506,8 +544,104 @@ public partial class Interpreter
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/try...catch">MDN try...catch</seealso>
     private ExecutionResult ExecuteTryCatch(Stmt.TryCatch tryCatch)
     {
-        // Use sync context - ValueTask with sync context completes synchronously
-        return ExecuteTryCatchCore(_syncContext, tryCatch).GetAwaiter().GetResult();
+        ExecutionResult pendingResult = ExecutionResult.Success();
+        bool exceptionHandled = false;
+
+        try
+        {
+            foreach (var stmt in tryCatch.TryBlock)
+            {
+                var result = Execute(stmt);
+                if (result.Type == ExecutionResult.ResultType.Throw)
+                {
+                    pendingResult = result;
+                    (exceptionHandled, pendingResult) = HandleCatchBlock(tryCatch, result.Value);
+                    break;
+                }
+                else if (result.IsAbrupt)
+                {
+                    pendingResult = result;
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Treat host exceptions as guest throws
+            object? errorValue = TranslateException(ex);
+            pendingResult = ExecutionResult.Throw(errorValue);
+            (exceptionHandled, pendingResult) = HandleCatchBlock(tryCatch, errorValue);
+        }
+
+        // Always execute finally
+        if (tryCatch.FinallyBlock != null)
+        {
+            var finallyResult = ExecuteFinallyBlock(tryCatch.FinallyBlock);
+            if (finallyResult.IsAbrupt)
+            {
+                // Finally block overrides previous jump/throw
+                return finallyResult;
+            }
+        }
+
+        if (pendingResult.Type == ExecutionResult.ResultType.Throw && !exceptionHandled)
+        {
+            return pendingResult;
+        }
+
+        return pendingResult;
+    }
+
+    /// <summary>
+    /// Pure sync implementation for handling catch blocks.
+    /// </summary>
+    private (bool Handled, ExecutionResult Result) HandleCatchBlock(
+        Stmt.TryCatch tryCatch,
+        object? errorValue)
+    {
+        if (tryCatch.CatchBlock != null)
+        {
+            RuntimeEnvironment catchEnv = new(_environment);
+            if (tryCatch.CatchParam != null)
+            {
+                catchEnv.Define(tryCatch.CatchParam.Lexeme, errorValue);
+            }
+
+            using (PushScope(catchEnv))
+            {
+                try
+                {
+                    foreach (var catchStmt in tryCatch.CatchBlock)
+                    {
+                        var catchResult = Execute(catchStmt);
+                        if (catchResult.IsAbrupt)
+                        {
+                            return (true, catchResult);
+                        }
+                    }
+                    return (true, ExecutionResult.Success());
+                }
+                catch (Exception ex)
+                {
+                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    return (true, ExecutionResult.Throw(catchError));
+                }
+            }
+        }
+        return (false, ExecutionResult.Throw(errorValue));
+    }
+
+    /// <summary>
+    /// Pure sync implementation for executing finally blocks.
+    /// </summary>
+    private ExecutionResult ExecuteFinallyBlock(List<Stmt> finallyBlock)
+    {
+        foreach (var stmt in finallyBlock)
+        {
+            var result = Execute(stmt);
+            if (result.IsAbrupt) return result;
+        }
+        return ExecutionResult.Success();
     }
 
     /// <summary>
