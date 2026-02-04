@@ -160,7 +160,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var il = ctx.IL;
 
         il.Emit(OpCodes.Ldc_I4, (int)Environment.SpecialFolder.UserProfile);
-        il.Emit(OpCodes.Call, typeof(Environment).GetMethod("GetFolderPath", [typeof(Environment.SpecialFolder)])!);
+        il.Emit(OpCodes.Call, ctx.Types.EnvironmentGetFolderPath);
         return true;
     }
 
@@ -342,7 +342,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "homedir");
         il.Emit(OpCodes.Ldc_I4, (int)Environment.SpecialFolder.UserProfile);
-        il.Emit(OpCodes.Call, typeof(Environment).GetMethod("GetFolderPath", [typeof(Environment.SpecialFolder)])!);
+        il.Emit(OpCodes.Call, ctx.Types.EnvironmentGetFolderPath);
         il.Emit(OpCodes.Call, addMethod);
 
         il.Emit(OpCodes.Call, ctx.Runtime!.CreateObject);

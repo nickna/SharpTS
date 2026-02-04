@@ -996,7 +996,7 @@ public partial class RuntimeEmitter
 
         // if (char.IsLowSurrogate(c)) goto lowSurrogateLabel
         il.Emit(OpCodes.Ldloc, cLocal);
-        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsLowSurrogate", [typeof(char)])!);
+        il.Emit(OpCodes.Call, _types.CharIsLowSurrogate);
         il.Emit(OpCodes.Brtrue, lowSurrogateLabel);
 
         // Regular character - append and continue
@@ -1023,7 +1023,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(char).GetMethod("IsLowSurrogate", [typeof(char)])!);
+        il.Emit(OpCodes.Call, _types.CharIsLowSurrogate);
         il.Emit(OpCodes.Brfalse, appendReplacementLabel); // if not low surrogate, append replacement
 
         // Valid surrogate pair - append both

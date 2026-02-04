@@ -940,6 +940,108 @@ public class TypeProvider
     public MethodInfo TaskOfObjectArrayGetAwaiter =>
         _taskOfObjectArrayGetAwaiter ??= GetMethodNoParams(TaskOfObjectArray, "GetAwaiter");
 
+    // List<byte> methods and constructors
+    private MethodInfo? _listByteAddRange;
+    private ConstructorInfo? _listByteDefaultCtor;
+
+    /// <summary>
+    /// Gets the List&lt;byte&gt;.AddRange(IEnumerable&lt;byte&gt;) method.
+    /// </summary>
+    public MethodInfo ListByteAddRange =>
+        _listByteAddRange ??= GetMethod(ListOfByte, "AddRange", IEnumerableOfByte);
+
+    /// <summary>
+    /// Gets the List&lt;byte&gt;() default constructor.
+    /// </summary>
+    public ConstructorInfo ListByteDefaultCtor =>
+        _listByteDefaultCtor ??= GetDefaultConstructor(ListOfByte);
+
+    // Environment methods
+    private MethodInfo? _environmentGetFolderPath;
+
+    /// <summary>
+    /// Gets the Environment.GetFolderPath(SpecialFolder) method.
+    /// </summary>
+    public MethodInfo EnvironmentGetFolderPath =>
+        _environmentGetFolderPath ??= GetMethod(Environment, "GetFolderPath", typeof(Environment.SpecialFolder));
+
+    // Double methods
+    private MethodInfo? _doubleToStringWithFormat;
+    private MethodInfo? _doubleIsPositiveInfinity;
+
+    /// <summary>
+    /// Gets the double.ToString(IFormatProvider) method.
+    /// </summary>
+    public MethodInfo DoubleToStringWithFormat =>
+        _doubleToStringWithFormat ??= GetMethod(Double, "ToString", typeof(IFormatProvider));
+
+    /// <summary>
+    /// Gets the double.IsPositiveInfinity(double) method.
+    /// </summary>
+    public MethodInfo DoubleIsPositiveInfinity =>
+        _doubleIsPositiveInfinity ??= GetMethod(Double, "IsPositiveInfinity", Double);
+
+    // Dictionary<object, object> methods
+    private MethodInfo? _dictionaryObjectObjectTryGetValue;
+    private MethodInfo? _dictionaryObjectObjectSetItem;
+
+    /// <summary>
+    /// Gets the Dictionary&lt;object, object&gt;.TryGetValue method.
+    /// </summary>
+    public MethodInfo DictionaryObjectObjectTryGetValue =>
+        _dictionaryObjectObjectTryGetValue ??= DictionaryObjectObject.GetMethod("TryGetValue", [Object, Object.MakeByRefType()])!;
+
+    /// <summary>
+    /// Gets the Dictionary&lt;object, object&gt;.set_Item method.
+    /// </summary>
+    public MethodInfo DictionaryObjectObjectSetItem =>
+        _dictionaryObjectObjectSetItem ??= GetMethod(DictionaryObjectObject, "set_Item", Object, Object);
+
+    // Delegate methods
+    private MethodInfo? _delegateDynamicInvoke;
+
+    /// <summary>
+    /// Gets the Delegate.DynamicInvoke(object[]) method.
+    /// </summary>
+    public MethodInfo DelegateDynamicInvoke =>
+        _delegateDynamicInvoke ??= GetMethod(Delegate, "DynamicInvoke", ObjectArray);
+
+    // Convert methods
+    private MethodInfo? _convertToStringFromObject;
+
+    /// <summary>
+    /// Gets the Convert.ToString(object) method.
+    /// </summary>
+    public MethodInfo ConvertToStringFromObject =>
+        _convertToStringFromObject ??= GetMethod(Convert, "ToString", Object);
+
+    // Char methods
+    private MethodInfo? _charIsLowSurrogate;
+
+    /// <summary>
+    /// Gets the char.IsLowSurrogate(char) method.
+    /// </summary>
+    public MethodInfo CharIsLowSurrogate =>
+        _charIsLowSurrogate ??= GetMethod(Char, "IsLowSurrogate", Char);
+
+    // AsyncLocal<int> constructor
+    private ConstructorInfo? _asyncLocalIntCtor;
+
+    /// <summary>
+    /// Gets the AsyncLocal&lt;int&gt;() default constructor.
+    /// </summary>
+    public ConstructorInfo AsyncLocalIntCtor =>
+        _asyncLocalIntCtor ??= GetDefaultConstructor(typeof(AsyncLocal<int>));
+
+    // ArgumentException constructor
+    private ConstructorInfo? _argumentExceptionCtorString;
+
+    /// <summary>
+    /// Gets the ArgumentException(string) constructor.
+    /// </summary>
+    public ConstructorInfo ArgumentExceptionCtorString =>
+        _argumentExceptionCtorString ??= GetConstructor(ArgumentException, String);
+
     #endregion
 
     #region Method Resolution

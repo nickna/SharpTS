@@ -719,7 +719,7 @@ public partial class RuntimeEmitter
         // throw case
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Unsupported digest algorithm");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         // Call Rfc2898DeriveBytes.Pbkdf2
@@ -981,7 +981,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, bLenLocal);
         il.Emit(OpCodes.Call, _types.Int32.GetMethod("ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(ArgumentException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(lengthsMatchLabel);

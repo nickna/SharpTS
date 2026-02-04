@@ -452,7 +452,7 @@ public partial class RuntimeEmitter
         var notInfinity = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsPositiveInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsPositiveInfinity);
         il.Emit(OpCodes.Brfalse, notInfinity);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
         il.Emit(OpCodes.Stloc, depthLocal);
@@ -1114,7 +1114,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notNaN);
         // if (double.IsPositiveInfinity(d)) return int.MaxValue
         il.Emit(OpCodes.Ldloc, doubleLocal);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsPositiveInfinity", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsPositiveInfinity);
         il.Emit(OpCodes.Brfalse, notPosInf);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
         il.Emit(OpCodes.Ret);

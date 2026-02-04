@@ -686,7 +686,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, typeof(Delegate));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, typeof(Delegate).GetMethod("DynamicInvoke")!);
+        il.Emit(OpCodes.Callvirt, _types.DelegateDynamicInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, afterTryLabel);
 
@@ -787,7 +787,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, typeof(Delegate));
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, typeof(Delegate).GetMethod("DynamicInvoke")!);
+        il.Emit(OpCodes.Callvirt, _types.DelegateDynamicInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 

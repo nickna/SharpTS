@@ -155,7 +155,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, localDouble);
         il.Emit(OpCodes.Ldloca, localDouble);
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", [typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.DoubleToStringWithFormat);
         il.Emit(OpCodes.Ret);
 
         // Bool case: return b ? "true" : "false"
@@ -799,7 +799,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, fLocal);
         il.Emit(OpCodes.Ldloca, fLocal);
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", [typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, _types.DoubleToStringWithFormat);
         il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
@@ -1189,7 +1189,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2); // seen
         il.Emit(OpCodes.Ldarg_0); // a
         il.Emit(OpCodes.Ldloca, prevLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryObjectObjectTryGetValue);
         il.Emit(OpCodes.Brfalse, notInSeen);
         // Found in seen - return ReferenceEquals(b, prev)
         il.Emit(OpCodes.Ldarg_1);
@@ -1273,7 +1273,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, prevLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<object, object>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryObjectObjectTryGetValue);
         il.Emit(OpCodes.Brfalse, notInSeen);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, prevLocal);

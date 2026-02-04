@@ -1005,7 +1005,7 @@ public partial class AsyncMoveNextEmitter
         EnsureBoxed();
 
         // Convert to string
-        _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToString", [typeof(object)])!);
+        _il.Emit(OpCodes.Call, Types.ConvertToStringFromObject);
 
         // Push current module path (or empty string if not in module context)
         _il.Emit(OpCodes.Ldstr, _ctx?.CurrentModulePath ?? "");

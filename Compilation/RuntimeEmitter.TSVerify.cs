@@ -170,7 +170,7 @@ public partial class RuntimeEmitter
 
         // _data = new List<byte>()
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(List<byte>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListByteDefaultCtor);
         il.Emit(OpCodes.Stfld, _tsVerifyDataField);
 
         // _finalized = false
@@ -219,7 +219,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsVerifyDataField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<byte>).GetMethod("AddRange", [typeof(IEnumerable<byte>)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListByteAddRange);
 
         // return this
         il.Emit(OpCodes.Ldarg_0);
