@@ -47,10 +47,10 @@ public partial class Interpreter
     private async ValueTask<object?> EvaluateCallCore(IEvaluationContext ctx, Expr.Call call)
     {
         // Handle console.* methods
-        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith("console."))
+        if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.Console + "."))
         {
-            var methodName = v.Name.Lexeme["console.".Length..];
-            var method = BuiltInRegistry.Instance.GetStaticMethod("console", methodName);
+            var methodName = v.Name.Lexeme[(BuiltInNames.Console.Length + 1)..];
+            var method = BuiltInRegistry.Instance.GetStaticMethod(BuiltInNames.Console, methodName);
             if (method != null)
             {
                 return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
@@ -61,10 +61,10 @@ public partial class Interpreter
         if (call.Callee is Expr.Get chainedGet &&
             chainedGet.Object is Expr.Get innerGet &&
             innerGet.Object is Expr.Variable globalThisVar &&
-            globalThisVar.Name.Lexeme == "globalThis" &&
-            innerGet.Name.Lexeme == "console")
+            globalThisVar.Name.Lexeme == BuiltInNames.GlobalThis &&
+            innerGet.Name.Lexeme == BuiltInNames.Console)
         {
-            var method = BuiltInRegistry.Instance.GetStaticMethod("console", chainedGet.Name.Lexeme);
+            var method = BuiltInRegistry.Instance.GetStaticMethod(BuiltInNames.Console, chainedGet.Name.Lexeme);
             if (method != null)
             {
                 return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
@@ -75,7 +75,7 @@ public partial class Interpreter
         if (call.Callee is Expr.Get gtChainedGet &&
             gtChainedGet.Object is Expr.Get gtInnerGet &&
             gtInnerGet.Object is Expr.Variable gtVar &&
-            gtVar.Name.Lexeme == "globalThis")
+            gtVar.Name.Lexeme == BuiltInNames.GlobalThis)
         {
             var method = BuiltInRegistry.Instance.GetStaticMethod(gtInnerGet.Name.Lexeme, gtChainedGet.Name.Lexeme);
             if (method != null)
@@ -96,7 +96,7 @@ public partial class Interpreter
         }
 
         // Handle __objectRest (internal helper for object rest patterns)
-        if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == "__objectRest")
+        if (call.Callee is Expr.Variable restVar && restVar.Name.Lexeme == BuiltInNames.ObjectRest)
         {
             if (call.Arguments.Count >= 2)
             {
@@ -104,11 +104,11 @@ public partial class Interpreter
                 var excludeKeys = await ctx.EvaluateExprAsync(call.Arguments[1]) as SharpTSArray;
                 return ObjectBuiltIns.ObjectRest(source, excludeKeys?.Elements ?? []);
             }
-            throw new Exception("__objectRest requires 2 arguments");
+            throw new Exception($"{BuiltInNames.ObjectRest} requires 2 arguments");
         }
 
         // Handle Symbol() constructor - creates unique symbols
-        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == "Symbol")
+        if (call.Callee is Expr.Variable symVar && symVar.Name.Lexeme == BuiltInNames.Symbol)
         {
             string? description = null;
             if (call.Arguments.Count > 0)
@@ -120,10 +120,10 @@ public partial class Interpreter
         }
 
         // Handle BigInt() constructor - converts number/string to bigint
-        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == "BigInt")
+        if (call.Callee is Expr.Variable bigIntVar && bigIntVar.Name.Lexeme == BuiltInNames.BigInt)
         {
             if (call.Arguments.Count != 1)
-                throw new InterpreterException(" BigInt() requires exactly one argument.");
+                throw new InterpreterException($" {BuiltInNames.BigInt}() requires exactly one argument.");
 
             var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
             return arg switch
@@ -137,14 +137,14 @@ public partial class Interpreter
         }
 
         // Handle Date() function call - returns current date as string (without 'new')
-        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == "Date")
+        if (call.Callee is Expr.Variable dateVar && dateVar.Name.Lexeme == BuiltInNames.Date)
         {
             // Date() called without 'new' ignores all arguments and returns current date as string
             return new SharpTSDate().ToString();
         }
 
         // Handle Error() and error subtypes called without 'new' - still creates an error object
-        if (call.Callee is Expr.Variable errorVar && IsErrorType(errorVar.Name.Lexeme))
+        if (call.Callee is Expr.Variable errorVar && BuiltInNames.IsErrorTypeName(errorVar.Name.Lexeme))
         {
             var pooledArgs = ArgumentListPool.Rent();
             try
@@ -162,10 +162,10 @@ public partial class Interpreter
         }
 
         // Handle global parseInt()
-        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == "parseInt")
+        if (call.Callee is Expr.Variable parseIntVar && parseIntVar.Name.Lexeme == BuiltInNames.ParseInt)
         {
             if (call.Arguments.Count < 1)
-                throw new InterpreterException(" parseInt() requires at least one argument.");
+                throw new InterpreterException($" {BuiltInNames.ParseInt}() requires at least one argument.");
             var str = (await ctx.EvaluateExprAsync(call.Arguments[0]))?.ToString() ?? "";
             int radix = 10;
             if (call.Arguments.Count > 1)
@@ -178,16 +178,16 @@ public partial class Interpreter
         }
 
         // Handle global parseFloat()
-        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == "parseFloat")
+        if (call.Callee is Expr.Variable parseFloatVar && parseFloatVar.Name.Lexeme == BuiltInNames.ParseFloat)
         {
             if (call.Arguments.Count < 1)
-                throw new InterpreterException(" parseFloat() requires at least one argument.");
+                throw new InterpreterException($" {BuiltInNames.ParseFloat}() requires at least one argument.");
             var str = (await ctx.EvaluateExprAsync(call.Arguments[0]))?.ToString() ?? "";
             return NumberBuiltIns.ParseFloat(str);
         }
 
         // Handle global isNaN()
-        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == "isNaN")
+        if (call.Callee is Expr.Variable isNaNVar && isNaNVar.Name.Lexeme == BuiltInNames.IsNaN)
         {
             if (call.Arguments.Count < 1) return true; // isNaN() with no args returns true
             var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
@@ -200,7 +200,7 @@ public partial class Interpreter
         }
 
         // Handle global isFinite()
-        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == "isFinite")
+        if (call.Callee is Expr.Variable isFiniteVar && isFiniteVar.Name.Lexeme == BuiltInNames.IsFinite)
         {
             if (call.Arguments.Count < 1) return false; // isFinite() with no args returns false
             var arg = await ctx.EvaluateExprAsync(call.Arguments[0]);
@@ -213,10 +213,10 @@ public partial class Interpreter
         }
 
         // Handle global structuredClone(value, options?)
-        if (call.Callee is Expr.Variable structuredCloneVar && structuredCloneVar.Name.Lexeme == "structuredClone")
+        if (call.Callee is Expr.Variable structuredCloneVar && structuredCloneVar.Name.Lexeme == BuiltInNames.StructuredClone)
         {
             if (call.Arguments.Count < 1)
-                throw new InterpreterException(" structuredClone() requires at least one argument (value).");
+                throw new InterpreterException($" {BuiltInNames.StructuredClone}() requires at least one argument (value).");
             var value = await ctx.EvaluateExprAsync(call.Arguments[0]);
             SharpTSArray? transfer = null;
             if (call.Arguments.Count > 1)
@@ -231,14 +231,14 @@ public partial class Interpreter
         }
 
         // Handle setTimeout(callback, delay?, ...args)
-        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout")
+        if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == BuiltInNames.SetTimeout)
         {
             if (call.Arguments.Count < 1)
-                throw new InterpreterException(" setTimeout() requires at least one argument (callback).");
+                throw new InterpreterException($" {BuiltInNames.SetTimeout}() requires at least one argument (callback).");
 
             var callbackValue = await ctx.EvaluateExprAsync(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
-                throw new InterpreterException(" setTimeout() callback must be a function.");
+                throw new InterpreterException($" {BuiltInNames.SetTimeout}() callback must be a function.");
 
             // Get delay (defaults to 0)
             double delayMs = 0;
@@ -248,7 +248,7 @@ public partial class Interpreter
                 if (delayValue is double dv)
                     delayMs = dv;
                 else if (delayValue != null && delayValue is not SharpTSUndefined)
-                    throw new Exception($"Runtime Error: setTimeout() delay must be a number, got {delayValue.GetType().Name}.");
+                    throw new Exception($"Runtime Error: {BuiltInNames.SetTimeout}() delay must be a number, got {delayValue.GetType().Name}.");
             }
 
             // Get additional args for the callback
@@ -262,7 +262,7 @@ public partial class Interpreter
         }
 
         // Handle clearTimeout(handle?)
-        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout")
+        if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == BuiltInNames.ClearTimeout)
         {
             object? handle = null;
             if (call.Arguments.Count > 0)
@@ -274,14 +274,14 @@ public partial class Interpreter
         }
 
         // Handle setInterval(callback, delay?, ...args)
-        if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval")
+        if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == BuiltInNames.SetInterval)
         {
             if (call.Arguments.Count < 1)
-                throw new InterpreterException(" setInterval() requires at least one argument (callback).");
+                throw new InterpreterException($" {BuiltInNames.SetInterval}() requires at least one argument (callback).");
 
             var callbackValue = await ctx.EvaluateExprAsync(call.Arguments[0]);
             if (callbackValue is not ISharpTSCallable callback)
-                throw new InterpreterException(" setInterval() callback must be a function.");
+                throw new InterpreterException($" {BuiltInNames.SetInterval}() callback must be a function.");
 
             // Get delay (defaults to 0)
             double delayMs = 0;
@@ -291,7 +291,7 @@ public partial class Interpreter
                 if (delayValue is double dv)
                     delayMs = dv;
                 else if (delayValue != null && delayValue is not SharpTSUndefined)
-                    throw new Exception($"Runtime Error: setInterval() delay must be a number, got {delayValue.GetType().Name}.");
+                    throw new Exception($"Runtime Error: {BuiltInNames.SetInterval}() delay must be a number, got {delayValue.GetType().Name}.");
             }
 
             // Get additional args for the callback
@@ -305,7 +305,7 @@ public partial class Interpreter
         }
 
         // Handle clearInterval(handle?)
-        if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval")
+        if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == BuiltInNames.ClearInterval)
         {
             object? handle = null;
             if (call.Arguments.Count > 0)

@@ -1017,14 +1017,7 @@ public partial class ILEmitter
     /// <summary>
     /// Checks if a name is a TypedArray constructor name.
     /// </summary>
-    private static bool IsTypedArrayName(string name)
-    {
-        return name is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
-            or "Int16Array" or "Uint16Array"
-            or "Int32Array" or "Uint32Array"
-            or "Float32Array" or "Float64Array"
-            or "BigInt64Array" or "BigUint64Array";
-    }
+    private static bool IsTypedArrayName(string name) => Runtime.BuiltIns.BuiltInNames.IsTypedArrayName(name);
 
     /// <summary>
     /// Emits code for new TypedArray(...) construction.

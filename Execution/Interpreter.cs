@@ -56,29 +56,30 @@ public partial class Interpreter : IDisposable
     {
         var globals = new Dictionary<string, object>
         {
-            ["NaN"] = double.NaN,
-            ["Infinity"] = double.PositiveInfinity,
-            ["undefined"] = Runtime.Types.SharpTSUndefined.Instance,
-            ["fetch"] = Runtime.BuiltIns.FetchBuiltIns.FetchMethod,
+            [BuiltInNames.NaN] = double.NaN,
+            [BuiltInNames.Infinity] = double.PositiveInfinity,
+            [BuiltInNames.Undefined] = Runtime.Types.SharpTSUndefined.Instance,
+            [BuiltInNames.Fetch] = Runtime.BuiltIns.FetchBuiltIns.FetchMethod,
 
-            // SharedArrayBuffer and TypedArray constructors
-            ["SharedArrayBuffer"] = WorkerBuiltIns.SharedArrayBufferConstructor,
-            ["Int8Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int8Array"),
-            ["Uint8Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint8Array"),
-            ["Uint8ClampedArray"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint8ClampedArray"),
-            ["Int16Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int16Array"),
-            ["Uint16Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint16Array"),
-            ["Int32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Int32Array"),
-            ["Uint32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Uint32Array"),
-            ["Float32Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Float32Array"),
-            ["Float64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("Float64Array"),
-            ["BigInt64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("BigInt64Array"),
-            ["BigUint64Array"] = WorkerBuiltIns.GetTypedArrayConstructor("BigUint64Array"),
+            // SharedArrayBuffer constructor
+            [BuiltInNames.SharedArrayBuffer] = WorkerBuiltIns.SharedArrayBufferConstructor,
         };
+
+        // Add TypedArray constructors using centralized names
+        foreach (var typedArrayName in BuiltInNames.TypedArrayNames)
+        {
+            globals[typedArrayName] = WorkerBuiltIns.GetTypedArrayConstructor(typedArrayName);
+        }
 
         // Add built-in singletons (Math, JSON, Object, etc.)
         // These are namespaces that resolve to singleton instances when accessed as variables
-        var singletonNames = new[] { "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "console", "process", "globalThis", "Reflect", "Promise", "Atomics" };
+        string[] singletonNames =
+        [
+            BuiltInNames.Math, BuiltInNames.JSON, BuiltInNames.Object, BuiltInNames.Array,
+            BuiltInNames.Number, BuiltInNames.String, BuiltInNames.Boolean, BuiltInNames.Symbol,
+            BuiltInNames.Console, BuiltInNames.Process, BuiltInNames.GlobalThis,
+            BuiltInNames.Reflect, BuiltInNames.Promise, BuiltInNames.Atomics
+        ];
         foreach (var name in singletonNames)
         {
             var singleton = BuiltInRegistry.Instance.GetSingleton(name);

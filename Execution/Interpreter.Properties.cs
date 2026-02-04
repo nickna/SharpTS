@@ -578,14 +578,7 @@ public partial class Interpreter
     /// </summary>
     private static bool IsErrorType(string name) => ErrorBuiltIns.IsErrorTypeName(name);
 
-    private static bool IsTypedArrayName(string name)
-    {
-        return name is "Int8Array" or "Uint8Array" or "Uint8ClampedArray"
-            or "Int16Array" or "Uint16Array"
-            or "Int32Array" or "Uint32Array"
-            or "Float32Array" or "Float64Array"
-            or "BigInt64Array" or "BigUint64Array";
-    }
+    private static bool IsTypedArrayName(string name) => BuiltInNames.IsTypedArrayName(name);
 
     #region ES2022 Private Class Elements
 
