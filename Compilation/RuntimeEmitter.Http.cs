@@ -738,7 +738,7 @@ public partial class RuntimeEmitter
 
         // Dispose client
         il.Emit(OpCodes.Ldloc, clientLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.DisposableDispose);
 
         // Build success result array
         il.Emit(OpCodes.Ldc_I4_8);

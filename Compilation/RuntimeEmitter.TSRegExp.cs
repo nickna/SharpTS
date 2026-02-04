@@ -430,7 +430,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Match", [_types.String, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.RegexMatchStringInt);
         il.Emit(OpCodes.Stloc, matchLocal);
 
         // if (match.Success)
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Match", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.RegexMatchString);
         il.Emit(OpCodes.Stloc, matchLocal);
         il.Emit(OpCodes.Br, checkSuccessLabel);
 
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, startIndexLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Match", [_types.String, _types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.RegexMatchStringInt);
         il.Emit(OpCodes.Stloc, matchLocal);
 
         // Check if match was successful
@@ -724,7 +724,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, disposeEndLabel);
         il.Emit(OpCodes.Ldloc, enumeratorLocal);
         il.Emit(OpCodes.Castclass, typeof(IDisposable));
-        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.DisposableDispose);
         il.MarkLabel(disposeEndLabel);
         il.EndExceptionBlock();
 
@@ -793,7 +793,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Match", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.RegexMatchString);
         il.Emit(OpCodes.Stloc, matchLocal);
 
         // return match.Success ? match.Index : -1

@@ -1236,7 +1236,7 @@ public partial class RuntimeEmitter
             var fileStreamType = typeof(FileStream);
             var fileStreamCtor = fileStreamType.GetConstructor([typeof(string), typeof(FileMode), typeof(FileAccess)])!;
             var setLengthMethod = fileStreamType.GetMethod("SetLength", [typeof(long)])!;
-            var disposeMethod = typeof(IDisposable).GetMethod("Dispose")!;
+            var disposeMethod = _types.DisposableDispose;
 
             var fsLocal = il.DeclareLocal(fileStreamType);
             var innerAfterTry = il.DefineLabel();
@@ -2389,7 +2389,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetMethod!);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.Stringify);
-            il.Emit(OpCodes.Callvirt, typeof(System.Text.Encoding).GetMethod("GetBytes", [typeof(string)])!);
+            il.Emit(OpCodes.Callvirt, _types.EncodingGetBytesFromString);
             il.Emit(OpCodes.Stloc, dataLocal);
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Stloc, offsetLocal);

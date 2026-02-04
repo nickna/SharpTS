@@ -512,7 +512,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldtoken, classBuilder);
                     il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                     il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
-                    il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+                    il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
                 }
             }
         }
@@ -688,7 +688,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldtoken, classBuilder);
                     il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                     il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
-                    il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+                    il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
                 }
             }
         }

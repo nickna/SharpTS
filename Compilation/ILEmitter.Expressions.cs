@@ -577,7 +577,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldtoken, typeBuilder);
                 IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
-                IL.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
+                IL.Emit(OpCodes.Call, Types.RuntimeHelpersRunClassConstructor);
             }
 
             // Load the Type object using ldtoken + GetTypeFromHandle

@@ -273,7 +273,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
         il.Emit(OpCodes.Ldarg_0); // instance
         il.Emit(OpCodes.Ldarg_3); // args
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfoInvoke);
         il.Emit(OpCodes.Ret);
     }
 
@@ -413,7 +413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, methodInfoLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldarg_2); // args
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfoInvoke);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -243,7 +243,7 @@ public partial class RuntimeEmitter
 
         // GetAwaiter and store to field
         var awaiterLocal = il.DeclareLocal(sm.AwaiterType);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?[]>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectArrayGetAwaiter);
         il.Emit(OpCodes.Stloc, awaiterLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, awaiterLocal);

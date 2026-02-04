@@ -2902,7 +2902,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.Encoding).GetMethod("GetBytes", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.EncodingGetBytesFromString);
         il.Emit(OpCodes.Stloc, searchBytesLocal);
         il.Emit(OpCodes.Br, afterTypeCheck);
 

@@ -601,13 +601,13 @@ public class UnionTypeGenerator
 
         // not null: call GetHashCode
         il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("GetHashCode")!);
+        il.Emit(OpCodes.Callvirt, _typeMapper.Types.ObjectGetHashCode);
 
         il.MarkLabel(endLabel);
         // XOR tag with value hash
         il.Emit(OpCodes.Xor);
         il.Emit(OpCodes.Ret);
 
-        typeBuilder.DefineMethodOverride(method, typeof(object).GetMethod("GetHashCode")!);
+        typeBuilder.DefineMethodOverride(method, _typeMapper.Types.ObjectGetHashCode);
     }
 }

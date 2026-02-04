@@ -260,7 +260,7 @@ public partial class RuntimeEmitter
         decodeIL.Emit(OpCodes.Ldarg_0);
         decodeIL.Emit(OpCodes.Ldfld, encodingField);
         decodeIL.Emit(OpCodes.Ldloc, bytesLocal);
-        decodeIL.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetString", [typeof(byte[])])!);
+        decodeIL.Emit(OpCodes.Callvirt, _types.EncodingGetStringFromBytes);
         decodeIL.Emit(OpCodes.Ret);
 
         // Override ToString

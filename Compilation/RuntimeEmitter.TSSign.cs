@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
         var dataBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsSignDataField);
-        il.Emit(OpCodes.Callvirt, typeof(List<byte>).GetMethod("ToArray")!);
+        il.Emit(OpCodes.Callvirt, _types.ListByteToArray);
         il.Emit(OpCodes.Stloc, dataBytesLocal);
 
         // Call helper method to get signature bytes

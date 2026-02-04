@@ -124,7 +124,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stsfld, timerQueueField);
 
         // _timerStartTicks = Stopwatch.GetTimestamp();
-        il.Emit(OpCodes.Call, typeof(System.Diagnostics.Stopwatch).GetMethod("GetTimestamp")!);
+        il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         il.Emit(OpCodes.Stsfld, startTicksField);
 
         // _timerInitialized = true;
@@ -159,7 +159,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
 
         // return (Stopwatch.GetTimestamp() - _timerStartTicks) * 1000 / Stopwatch.Frequency;
-        il.Emit(OpCodes.Call, typeof(System.Diagnostics.Stopwatch).GetMethod("GetTimestamp")!);
+        il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         il.Emit(OpCodes.Ldsfld, startTicksField);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ldc_I8, 1000L);

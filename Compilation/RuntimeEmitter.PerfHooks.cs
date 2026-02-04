@@ -64,7 +64,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue_S, alreadyInitializedLabel);
 
         // _perfHooksStartTicks = Stopwatch.GetTimestamp();
-        il.Emit(OpCodes.Call, typeof(Stopwatch).GetMethod("GetTimestamp")!);
+        il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         il.Emit(OpCodes.Stsfld, startTicksField);
 
         // _perfHooksTicksPerMs = Stopwatch.Frequency / 1000.0;
@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue_S, alreadyInitializedLabel);
 
         // Initialize if needed
-        il.Emit(OpCodes.Call, typeof(Stopwatch).GetMethod("GetTimestamp")!);
+        il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         il.Emit(OpCodes.Stsfld, startTicksField);
         il.Emit(OpCodes.Ldsfld, typeof(Stopwatch).GetField("Frequency")!);
         il.Emit(OpCodes.Conv_R8);
@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(alreadyInitializedLabel);
 
         // long elapsed = Stopwatch.GetTimestamp() - _perfHooksStartTicks;
-        il.Emit(OpCodes.Call, typeof(Stopwatch).GetMethod("GetTimestamp")!);
+        il.Emit(OpCodes.Call, _types.StopwatchGetTimestamp);
         il.Emit(OpCodes.Ldsfld, startTicksField);
         il.Emit(OpCodes.Sub);
 

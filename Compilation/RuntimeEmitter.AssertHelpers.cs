@@ -714,7 +714,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [_types.Object, typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfoInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, afterTryLabel);
 
@@ -814,7 +814,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, typeof(MethodInfo).GetMethod("Invoke", [_types.Object, typeof(object[])])!);
+        il.Emit(OpCodes.Callvirt, _types.MethodInfoInvoke);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Leave, endLabel);
 

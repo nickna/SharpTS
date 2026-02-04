@@ -795,6 +795,151 @@ public class TypeProvider
     public MethodInfo AsyncStateMachineMoveNext =>
         _asyncStateMachineMoveNext ??= GetMethodNoParams(IAsyncStateMachine, "MoveNext");
 
+    // RuntimeInformation methods
+    private MethodInfo? _runtimeInformationIsOSPlatform;
+
+    /// <summary>
+    /// Gets the RuntimeInformation.IsOSPlatform(OSPlatform) method.
+    /// </summary>
+    public MethodInfo RuntimeInformationIsOSPlatform =>
+        _runtimeInformationIsOSPlatform ??= GetMethod(RuntimeInformation, "IsOSPlatform", OSPlatform);
+
+    // RuntimeHelpers methods
+    private MethodInfo? _runtimeHelpersRunClassConstructor;
+
+    /// <summary>
+    /// Gets the RuntimeHelpers.RunClassConstructor(RuntimeTypeHandle) method.
+    /// </summary>
+    public MethodInfo RuntimeHelpersRunClassConstructor =>
+        _runtimeHelpersRunClassConstructor ??= GetMethod(RuntimeHelpers, "RunClassConstructor", RuntimeTypeHandle);
+
+    // Stopwatch methods
+    private MethodInfo? _stopwatchGetTimestamp;
+
+    /// <summary>
+    /// Gets the Stopwatch.GetTimestamp() method.
+    /// </summary>
+    public MethodInfo StopwatchGetTimestamp =>
+        _stopwatchGetTimestamp ??= GetMethodNoParams(Stopwatch, "GetTimestamp");
+
+    // IDisposable methods
+    private MethodInfo? _disposableDispose;
+
+    /// <summary>
+    /// Gets the IDisposable.Dispose() method.
+    /// </summary>
+    public MethodInfo DisposableDispose =>
+        _disposableDispose ??= GetMethodNoParams(IDisposable, "Dispose");
+
+    // Encoding methods
+    private MethodInfo? _encodingGetStringFromBytes;
+    private MethodInfo? _encodingGetBytesFromString;
+
+    /// <summary>
+    /// Gets the Encoding.GetString(byte[]) method.
+    /// </summary>
+    public MethodInfo EncodingGetStringFromBytes =>
+        _encodingGetStringFromBytes ??= GetMethod(Encoding, "GetString", ByteArray);
+
+    /// <summary>
+    /// Gets the Encoding.GetBytes(string) method.
+    /// </summary>
+    public MethodInfo EncodingGetBytesFromString =>
+        _encodingGetBytesFromString ??= GetMethod(Encoding, "GetBytes", String);
+
+    // Type reflection methods
+    private MethodInfo? _typeGetMethodWithBindingFlags;
+    private MethodInfo? _typeGetMethodByName;
+
+    /// <summary>
+    /// Gets the Type.GetMethod(string, BindingFlags) method.
+    /// </summary>
+    public MethodInfo TypeGetMethodWithBindingFlags =>
+        _typeGetMethodWithBindingFlags ??= GetMethod(Type, "GetMethod", String, BindingFlags);
+
+    /// <summary>
+    /// Gets the Type.GetMethod(string) method.
+    /// </summary>
+    public MethodInfo TypeGetMethodByName =>
+        _typeGetMethodByName ??= GetMethod(Type, "GetMethod", String);
+
+    // String methods
+    private MethodInfo? _stringToLowerInvariant;
+
+    /// <summary>
+    /// Gets the string.ToLowerInvariant() method.
+    /// </summary>
+    public MethodInfo StringToLowerInvariant =>
+        _stringToLowerInvariant ??= GetMethodNoParams(String, "ToLowerInvariant");
+
+    // Object methods
+    private MethodInfo? _objectGetHashCode;
+
+    /// <summary>
+    /// Gets the object.GetHashCode() method.
+    /// </summary>
+    public MethodInfo ObjectGetHashCode =>
+        _objectGetHashCode ??= GetMethodNoParams(Object, "GetHashCode");
+
+    // MethodInfo methods
+    private MethodInfo? _methodInfoInvoke;
+
+    /// <summary>
+    /// Gets the MethodInfo.Invoke(object, object[]) method.
+    /// </summary>
+    public MethodInfo MethodInfoInvoke =>
+        _methodInfoInvoke ??= GetMethod(MethodInfo, "Invoke", Object, ObjectArray);
+
+    // Regex methods
+    private MethodInfo? _regexMatchString;
+    private MethodInfo? _regexMatchStringInt;
+
+    /// <summary>
+    /// Gets the Regex.Match(string) method.
+    /// </summary>
+    public MethodInfo RegexMatchString =>
+        _regexMatchString ??= GetMethod(Regex, "Match", String);
+
+    /// <summary>
+    /// Gets the Regex.Match(string, int) method.
+    /// </summary>
+    public MethodInfo RegexMatchStringInt =>
+        _regexMatchStringInt ??= GetMethod(Regex, "Match", String, Int32);
+
+    // RandomNumberGenerator methods
+    private MethodInfo? _randomNumberGeneratorGetBytes;
+
+    /// <summary>
+    /// Gets the RandomNumberGenerator.GetBytes(int) method.
+    /// </summary>
+    public MethodInfo RandomNumberGeneratorGetBytes =>
+        _randomNumberGeneratorGetBytes ??= GetMethod(RandomNumberGenerator, "GetBytes", Int32);
+
+    // List methods
+    private MethodInfo? _listObjectAddRange;
+    private MethodInfo? _listByteToArray;
+
+    /// <summary>
+    /// Gets the List&lt;object?&gt;.AddRange(IEnumerable&lt;object?&gt;) method.
+    /// </summary>
+    public MethodInfo ListObjectAddRange =>
+        _listObjectAddRange ??= GetMethod(ListOfObjectNullable, "AddRange", typeof(IEnumerable<object?>));
+
+    /// <summary>
+    /// Gets the List&lt;byte&gt;.ToArray() method.
+    /// </summary>
+    public MethodInfo ListByteToArray =>
+        _listByteToArray ??= GetMethodNoParams(ListOfByte, "ToArray");
+
+    // Task<object?[]> methods
+    private MethodInfo? _taskOfObjectArrayGetAwaiter;
+
+    /// <summary>
+    /// Gets the Task&lt;object?[]&gt;.GetAwaiter() method.
+    /// </summary>
+    public MethodInfo TaskOfObjectArrayGetAwaiter =>
+        _taskOfObjectArrayGetAwaiter ??= GetMethodNoParams(TaskOfObjectArray, "GetAwaiter");
+
     #endregion
 
     #region Method Resolution

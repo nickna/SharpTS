@@ -642,7 +642,7 @@ public partial class RuntimeEmitter
         // result.AddRange(nestedList)
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, nestedListLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object?>).GetMethod("AddRange", [typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListObjectAddRange);
         var continueLoop = il.DefineLabel();
         il.Emit(OpCodes.Br, continueLoop);
 
@@ -1034,7 +1034,7 @@ public partial class RuntimeEmitter
         // list.AddRange(defined)
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, definedLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<object?>).GetMethod("AddRange", [typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListObjectAddRange);
 
         // for (i = 0; i < undefinedCount; i++) list.Add($Undefined.Instance)
         il.Emit(OpCodes.Ldc_I4_0);

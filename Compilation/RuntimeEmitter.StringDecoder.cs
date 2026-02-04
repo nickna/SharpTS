@@ -56,7 +56,7 @@ public partial class RuntimeEmitter
         // Normalize and store encoding
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldarg_1);
-        ctorIL.Emit(OpCodes.Call, typeof(string).GetMethod("ToLowerInvariant")!);
+        ctorIL.Emit(OpCodes.Call, _types.StringToLowerInvariant);
         ctorIL.Emit(OpCodes.Stfld, encodingField);
 
         // Initialize pending bytes as empty array
@@ -179,7 +179,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, textEncodingField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetString", [typeof(byte[])])!);
+        il.Emit(OpCodes.Callvirt, _types.EncodingGetStringFromBytes);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Clear pending bytes (simplified)
@@ -237,7 +237,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, textEncodingField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, pendingBytesField);
-        il.Emit(OpCodes.Callvirt, typeof(Encoding).GetMethod("GetString", [typeof(byte[])])!);
+        il.Emit(OpCodes.Callvirt, _types.EncodingGetStringFromBytes);
         il.Emit(OpCodes.Stloc, pendingResultLocal);
 
         // Clear pending

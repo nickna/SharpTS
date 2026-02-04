@@ -69,7 +69,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
 
         // Check Windows
         il.Emit(OpCodes.Call, typeof(OSPlatform).GetProperty("Windows")!.GetMethod!);
-        il.Emit(OpCodes.Call, typeof(RuntimeInformation).GetMethod("IsOSPlatform")!);
+        il.Emit(OpCodes.Call, ctx.Types.RuntimeInformationIsOSPlatform);
         il.Emit(OpCodes.Brfalse, linuxLabel);
         il.Emit(OpCodes.Ldstr, "win32");
         il.Emit(OpCodes.Br, done);
@@ -77,7 +77,7 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         // Check Linux
         il.MarkLabel(linuxLabel);
         il.Emit(OpCodes.Call, typeof(OSPlatform).GetProperty("Linux")!.GetMethod!);
-        il.Emit(OpCodes.Call, typeof(RuntimeInformation).GetMethod("IsOSPlatform")!);
+        il.Emit(OpCodes.Call, ctx.Types.RuntimeInformationIsOSPlatform);
         il.Emit(OpCodes.Brfalse, darwinLabel);
         il.Emit(OpCodes.Ldstr, "linux");
         il.Emit(OpCodes.Br, done);
@@ -184,14 +184,14 @@ public sealed class OsModuleEmitter : IBuiltInModuleEmitter
         var done = il.DefineLabel();
 
         il.Emit(OpCodes.Call, typeof(OSPlatform).GetProperty("Windows")!.GetMethod!);
-        il.Emit(OpCodes.Call, typeof(RuntimeInformation).GetMethod("IsOSPlatform")!);
+        il.Emit(OpCodes.Call, ctx.Types.RuntimeInformationIsOSPlatform);
         il.Emit(OpCodes.Brfalse, linuxLabel);
         il.Emit(OpCodes.Ldstr, "Windows_NT");
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(linuxLabel);
         il.Emit(OpCodes.Call, typeof(OSPlatform).GetProperty("Linux")!.GetMethod!);
-        il.Emit(OpCodes.Call, typeof(RuntimeInformation).GetMethod("IsOSPlatform")!);
+        il.Emit(OpCodes.Call, ctx.Types.RuntimeInformationIsOSPlatform);
         il.Emit(OpCodes.Brfalse, darwinLabel);
         il.Emit(OpCodes.Ldstr, "Linux");
         il.Emit(OpCodes.Br, done);

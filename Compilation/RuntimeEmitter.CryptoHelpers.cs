@@ -548,7 +548,7 @@ public partial class RuntimeEmitter
 
         // var bytes = RandomNumberGenerator.GetBytes(size);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(RandomNumberGenerator).GetMethod("GetBytes", [typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.RandomNumberGeneratorGetBytes);
 
         // Return new $Buffer(bytes)
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
@@ -606,7 +606,7 @@ public partial class RuntimeEmitter
 
         // Generate random bytes: RandomNumberGenerator.GetBytes(size)
         il.Emit(OpCodes.Ldloc, sizeLocal);
-        il.Emit(OpCodes.Call, typeof(RandomNumberGenerator).GetMethod("GetBytes", [typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.RandomNumberGeneratorGetBytes);
         il.Emit(OpCodes.Stloc, randomBytesLocal);
 
         // Array.Copy(randomBytes, 0, data, offset, size)
@@ -649,7 +649,7 @@ public partial class RuntimeEmitter
 
         // Convert digest to lowercase for comparison
         il.Emit(OpCodes.Ldarg, 4);
-        il.Emit(OpCodes.Callvirt, typeof(string).GetMethod("ToLowerInvariant")!);
+        il.Emit(OpCodes.Callvirt, _types.StringToLowerInvariant);
         var digestLower = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Stloc, digestLower);
 

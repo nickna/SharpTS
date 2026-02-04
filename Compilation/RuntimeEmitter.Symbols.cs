@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
         // Call IDisposable.Dispose()
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, typeof(IDisposable));
-        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Callvirt, _types.DisposableDispose);
         il.Emit(OpCodes.Br, doneLabel);
 
         il.MarkLabel(notDisposableLabel);
