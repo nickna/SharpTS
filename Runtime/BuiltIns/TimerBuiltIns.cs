@@ -24,6 +24,7 @@ public static class TimerBuiltIns
     {
         var cts = new CancellationTokenSource();
         var timeout = new SharpTSTimeout(cts);
+        timeout.AttachRefTracking(interpreter.Ref, interpreter.Unref);
 
         // Ensure delay is non-negative
         int delay = Math.Max(0, (int)delayMs);
@@ -33,7 +34,18 @@ public static class TimerBuiltIns
         {
             if (!cts.IsCancellationRequested && !interpreter.IsDisposed)
             {
-                callback.Call(interpreter, args);
+                try
+                {
+                    callback.Call(interpreter, args);
+                }
+                finally
+                {
+                    timeout.ReleaseRef();
+                }
+            }
+            else
+            {
+                timeout.ReleaseRef();
             }
         }, isInterval: false);
 
@@ -74,6 +86,7 @@ public static class TimerBuiltIns
     {
         var cts = new CancellationTokenSource();
         var interval = new SharpTSTimeout(cts);
+        interval.AttachRefTracking(interpreter.Ref, interpreter.Unref);
         int delay = Math.Max(0, (int)delayMs);
 
         // Schedule a virtual interval timer that will be checked and executed on the main thread
