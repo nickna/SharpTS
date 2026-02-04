@@ -37,109 +37,26 @@ public partial class Interpreter
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
-        // Handle new Date(...) constructor
-        if (isSimpleName && simpleClassName == "Date")
+        // Handle built-in constructors via factory
+        if (isSimpleName && simpleClassName != null)
         {
-            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            return CreateDate(args);
-        }
-
-        // Handle new RegExp(...) constructor
-        if (isSimpleName && simpleClassName == "RegExp")
-        {
-            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            var pattern = args.Count > 0 ? args[0]?.ToString() ?? "" : "";
-            var flags = args.Count > 1 ? args[1]?.ToString() ?? "" : "";
-            return new SharpTSRegExp(pattern, flags);
-        }
-
-        // Handle new Map(...) constructor
-        if (isSimpleName && simpleClassName == "Map")
-        {
-            if (newExpr.Arguments.Count == 0)
+            // Special case: Promise needs executor function evaluation, not standard arg evaluation
+            if (simpleClassName == BuiltInNames.Promise)
             {
-                return new SharpTSMap();
-            }
-            // Handle new Map([[k1, v1], [k2, v2], ...])
-            var arg = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
-            if (arg is SharpTSArray entriesArray)
-            {
-                return SharpTSMap.FromEntries(entriesArray);
-            }
-            return new SharpTSMap();
-        }
-
-        // Handle new Set(...) constructor
-        if (isSimpleName && simpleClassName == "Set")
-        {
-            if (newExpr.Arguments.Count == 0)
-            {
-                return new SharpTSSet();
-            }
-            // Handle new Set([v1, v2, v3, ...])
-            var arg = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
-            if (arg is SharpTSArray valuesArray)
-            {
-                return SharpTSSet.FromArray(valuesArray);
-            }
-            return new SharpTSSet();
-        }
-
-        // Handle new WeakMap() constructor (empty only)
-        if (isSimpleName && simpleClassName == "WeakMap")
-        {
-            return new SharpTSWeakMap();
-        }
-
-        // Handle new WeakSet() constructor (empty only)
-        if (isSimpleName && simpleClassName == "WeakSet")
-        {
-            return new SharpTSWeakSet();
-        }
-
-        // Handle new SharedArrayBuffer(byteLength) constructor
-        if (isSimpleName && simpleClassName == "SharedArrayBuffer")
-        {
-            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            return WorkerBuiltIns.SharedArrayBufferConstructor.Call(this, args);
-        }
-
-        // Handle new MessageChannel() constructor
-        if (isSimpleName && simpleClassName == "MessageChannel")
-        {
-            return WorkerBuiltIns.MessageChannelConstructor.Call(this, []);
-        }
-
-        // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
-        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
-        {
-            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            return WorkerBuiltIns.GetTypedArrayConstructor(simpleClassName).Call(this, args);
-        }
-
-        // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && simpleClassName != null && BuiltInNames.IsErrorTypeName(simpleClassName))
-        {
-            List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            return ErrorBuiltIns.CreateError(simpleClassName, args);
-        }
-
-        // Handle new EventEmitter() constructor for simple identifier
-        if (isSimpleName && simpleClassName == "EventEmitter")
-        {
-            return new SharpTSEventEmitter();
-        }
-
-        // Handle new Promise((resolve, reject) => { ... }) constructor
-        if (isSimpleName && simpleClassName == "Promise")
-        {
-            if (newExpr.Arguments.Count != 1)
-            {
-                throw new InterpreterException($"Promise constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+                if (newExpr.Arguments.Count != 1)
+                {
+                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {newExpr.Arguments.Count}.");
+                }
+                object? executor = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
+                return CreatePromiseFromExecutor(executor);
             }
 
-            object? executor = await ctx.EvaluateExprAsync(newExpr.Arguments[0]);
-            return CreatePromiseFromExecutor(executor);
+            // Try factory for all other built-in constructors
+            if (BuiltInConstructorFactory.IsBuiltIn(simpleClassName))
+            {
+                List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
+                return BuiltInConstructorFactory.TryCreate(simpleClassName, args, this);
+            }
         }
 
         // Evaluate the callee expression to get the class/constructor
@@ -189,27 +106,6 @@ public partial class Interpreter
     {
         // Use sync context - ValueTask with sync context completes synchronously
         return EvaluateNewCore(_syncContext, newExpr).GetAwaiter().GetResult();
-    }
-
-    /// <summary>
-    /// Creates a Date object from constructor arguments.
-    /// </summary>
-    private static SharpTSDate CreateDate(List<object?> args)
-    {
-        return args.Count switch
-        {
-            0 => new SharpTSDate(),
-            1 when args[0] is double ms => new SharpTSDate(ms),
-            1 when args[0] is string str => new SharpTSDate(str),
-            _ => new SharpTSDate(
-                (int)(double)args[0]!,
-                (int)(double)args[1]!,
-                args.Count > 2 ? (int)(double)args[2]! : 1,
-                args.Count > 3 ? (int)(double)args[3]! : 0,
-                args.Count > 4 ? (int)(double)args[4]! : 0,
-                args.Count > 5 ? (int)(double)args[5]! : 0,
-                args.Count > 6 ? (int)(double)args[6]! : 0)
-        };
     }
 
     /// <summary>
@@ -571,8 +467,6 @@ public partial class Interpreter
 
         return value;
     }
-
-    private static bool IsTypedArrayName(string name) => BuiltInNames.IsTypedArrayName(name);
 
     #region ES2022 Private Class Elements
 
