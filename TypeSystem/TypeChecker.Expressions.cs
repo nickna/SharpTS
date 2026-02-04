@@ -93,7 +93,7 @@ public partial class TypeChecker
     {
         if (!_inAsyncFunction)
         {
-            throw new TypeCheckException(" 'await' is only valid inside an async function.");
+            throw new TypeCheckException("'await' is only valid inside an async function.");
         }
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
@@ -167,7 +167,7 @@ public partial class TypeChecker
     {
         if (!_inGeneratorFunction)
         {
-            throw new TypeCheckException(" 'yield' is only valid inside a generator function.");
+            throw new TypeCheckException("'yield' is only valid inside a generator function.");
         }
 
         if (yieldExpr.Value != null)
@@ -590,7 +590,7 @@ public partial class TypeChecker
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
             Expr.ComputedKey => "[computed]", // Computed keys need special handling at runtime
-            _ => throw new TypeCheckException(" Invalid property key for accessor.")
+            _ => throw new TypeCheckException("Invalid property key for accessor.")
         };
     }
 

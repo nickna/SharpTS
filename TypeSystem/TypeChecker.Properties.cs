@@ -20,7 +20,7 @@ public partial class TypeChecker
     {
         if (_currentClass == null)
         {
-            throw new TypeCheckException(" Cannot use 'super' outside of a class.");
+            throw new TypeCheckException("Cannot use 'super' outside of a class.");
         }
         if (_currentClass.Superclass == null)
         {
@@ -60,7 +60,7 @@ public partial class TypeChecker
 
         if (_currentClass == null)
         {
-            throw new TypeCheckException(" Cannot use 'this' outside of a class.");
+            throw new TypeCheckException("Cannot use 'this' outside of a class.");
         }
         // In static blocks, 'this' refers to the class constructor (the class type itself)
         if (_inStaticBlock)
@@ -69,7 +69,7 @@ public partial class TypeChecker
         }
         if (_inStaticMethod)
         {
-            throw new TypeCheckException(" Cannot use 'this' in a static method.");
+            throw new TypeCheckException("Cannot use 'this' in a static method.");
         }
         return new TypeInfo.Instance(_currentClass);
     }
@@ -465,7 +465,7 @@ public partial class TypeChecker
         {
             return CheckExpr(set.Value);
         }
-        throw new TypeCheckException(" Only instances and objects have properties.");
+        throw new TypeCheckException("Only instances and objects have properties.");
     }
 
     /// <summary>

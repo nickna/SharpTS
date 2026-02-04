@@ -33,14 +33,14 @@ public partial class TypeChecker
         {
             if (call.Arguments.Count > 1)
             {
-                throw new TypeCheckException(" Symbol() accepts at most one argument (description).");
+                throw new TypeCheckException("Symbol() accepts at most one argument (description).");
             }
             if (call.Arguments.Count == 1)
             {
                 var argType = CheckExpr(call.Arguments[0]);
                 if (!IsString(argType) && argType is not TypeInfo.Any)
                 {
-                    throw new TypeCheckException($" Symbol() description must be a string, got '{argType}'.");
+                    throw new TypeCheckException($"Symbol() description must be a string, got '{argType}'.");
                 }
             }
             return new TypeInfo.Symbol();
@@ -51,12 +51,12 @@ public partial class TypeChecker
         {
             if (call.Arguments.Count != 1)
             {
-                throw new TypeCheckException(" BigInt() requires exactly one argument.");
+                throw new TypeCheckException("BigInt() requires exactly one argument.");
             }
             var argType = CheckExpr(call.Arguments[0]);
             if (!IsNumber(argType) && !IsString(argType) && argType is not TypeInfo.BigInt && argType is not TypeInfo.Any)
             {
-                throw new TypeCheckException($" BigInt() argument must be a number, string, or bigint, got '{argType}'.");
+                throw new TypeCheckException($"BigInt() argument must be a number, string, or bigint, got '{argType}'.");
             }
             return new TypeInfo.BigInt();
         }
@@ -77,7 +77,7 @@ public partial class TypeChecker
             int maxArgs = errorVar.Name.Lexeme == "AggregateError" ? 2 : 1;
             if (call.Arguments.Count > maxArgs)
             {
-                throw new TypeCheckException($" {errorVar.Name.Lexeme}() accepts at most {maxArgs} argument(s).");
+                throw new TypeCheckException($"{errorVar.Name.Lexeme}() accepts at most {maxArgs} argument(s).");
             }
 
             // Validate argument types
@@ -89,7 +89,7 @@ public partial class TypeChecker
                     // First argument should be an array of errors
                     if (firstArgType is not TypeInfo.Array && firstArgType is not TypeInfo.Any)
                     {
-                        throw new TypeCheckException($" AggregateError first argument must be an array, got '{firstArgType}'.");
+                        throw new TypeCheckException($"AggregateError first argument must be an array, got '{firstArgType}'.");
                     }
                 }
                 else
@@ -97,7 +97,7 @@ public partial class TypeChecker
                     // For other error types, first argument should be a string message
                     if (!IsString(firstArgType) && firstArgType is not TypeInfo.Any)
                     {
-                        throw new TypeCheckException($" {errorVar.Name.Lexeme}() message must be a string, got '{firstArgType}'.");
+                        throw new TypeCheckException($"{errorVar.Name.Lexeme}() message must be a string, got '{firstArgType}'.");
                     }
                 }
             }
@@ -107,7 +107,7 @@ public partial class TypeChecker
                 var secondArgType = CheckExpr(call.Arguments[1]);
                 if (!IsString(secondArgType) && secondArgType is not TypeInfo.Any)
                 {
-                    throw new TypeCheckException($" AggregateError message must be a string, got '{secondArgType}'.");
+                    throw new TypeCheckException($"AggregateError message must be a string, got '{secondArgType}'.");
                 }
             }
 
@@ -225,14 +225,14 @@ public partial class TypeChecker
         {
             if (call.Arguments.Count < 1)
             {
-                throw new TypeCheckException(" setTimeout() requires at least one argument (callback).");
+                throw new TypeCheckException("setTimeout() requires at least one argument (callback).");
             }
 
             // First argument must be a function
             var callbackType = CheckExpr(call.Arguments[0]);
             if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
             {
-                throw new TypeCheckException($" setTimeout() callback must be a function, got '{callbackType}'.");
+                throw new TypeCheckException($"setTimeout() callback must be a function, got '{callbackType}'.");
             }
 
             // Second argument (delay) must be a number if provided
@@ -241,7 +241,7 @@ public partial class TypeChecker
                 var delayType = CheckExpr(call.Arguments[1]);
                 if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
                 {
-                    throw new TypeCheckException($" setTimeout() delay must be a number, got '{delayType}'.");
+                    throw new TypeCheckException($"setTimeout() delay must be a number, got '{delayType}'.");
                 }
             }
 
@@ -260,7 +260,7 @@ public partial class TypeChecker
             // clearTimeout accepts 0 or 1 argument
             if (call.Arguments.Count > 1)
             {
-                throw new TypeCheckException(" clearTimeout() accepts at most one argument.");
+                throw new TypeCheckException("clearTimeout() accepts at most one argument.");
             }
 
             // If argument provided, it should be Timeout, null, undefined, or any
@@ -278,12 +278,12 @@ public partial class TypeChecker
                         bool hasTimeout = union.FlattenedTypes.Any(t => t is TypeInfo.Timeout);
                         if (!hasTimeout)
                         {
-                            throw new TypeCheckException($" clearTimeout() argument must be a Timeout, got '{handleType}'.");
+                            throw new TypeCheckException($"clearTimeout() argument must be a Timeout, got '{handleType}'.");
                         }
                     }
                     else
                     {
-                        throw new TypeCheckException($" clearTimeout() argument must be a Timeout, got '{handleType}'.");
+                        throw new TypeCheckException($"clearTimeout() argument must be a Timeout, got '{handleType}'.");
                     }
                 }
             }
@@ -296,14 +296,14 @@ public partial class TypeChecker
         {
             if (call.Arguments.Count < 1)
             {
-                throw new TypeCheckException(" setInterval() requires at least one argument (callback).");
+                throw new TypeCheckException("setInterval() requires at least one argument (callback).");
             }
 
             // First argument must be a function
             var callbackType = CheckExpr(call.Arguments[0]);
             if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
             {
-                throw new TypeCheckException($" setInterval() callback must be a function, got '{callbackType}'.");
+                throw new TypeCheckException($"setInterval() callback must be a function, got '{callbackType}'.");
             }
 
             // Second argument (delay) must be a number if provided
@@ -312,7 +312,7 @@ public partial class TypeChecker
                 var delayType = CheckExpr(call.Arguments[1]);
                 if (!IsNumber(delayType) && delayType is not TypeInfo.Any && delayType is not TypeInfo.Undefined)
                 {
-                    throw new TypeCheckException($" setInterval() delay must be a number, got '{delayType}'.");
+                    throw new TypeCheckException($"setInterval() delay must be a number, got '{delayType}'.");
                 }
             }
 
@@ -331,7 +331,7 @@ public partial class TypeChecker
             // clearInterval accepts 0 or 1 argument
             if (call.Arguments.Count > 1)
             {
-                throw new TypeCheckException(" clearInterval() accepts at most one argument.");
+                throw new TypeCheckException("clearInterval() accepts at most one argument.");
             }
 
             // If argument provided, it should be Timeout, null, undefined, or any
@@ -349,12 +349,12 @@ public partial class TypeChecker
                         bool hasTimeout = union.FlattenedTypes.Any(t => t is TypeInfo.Timeout);
                         if (!hasTimeout)
                         {
-                            throw new TypeCheckException($" clearInterval() argument must be a Timeout, got '{handleType}'.");
+                            throw new TypeCheckException($"clearInterval() argument must be a Timeout, got '{handleType}'.");
                         }
                     }
                     else
                     {
-                        throw new TypeCheckException($" clearInterval() argument must be a Timeout, got '{handleType}'.");
+                        throw new TypeCheckException($"clearInterval() argument must be a Timeout, got '{handleType}'.");
                     }
                 }
             }
@@ -447,13 +447,13 @@ public partial class TypeChecker
             // Only check min arity if no spreads (spreads can expand to any count)
             if (!hasSpread && nonSpreadCount < funcType.MinArity)
             {
-                throw new TypeCheckException($" Expected at least {funcType.MinArity} arguments but got {nonSpreadCount}.");
+                throw new TypeCheckException($"Expected at least {funcType.MinArity} arguments but got {nonSpreadCount}.");
             }
 
             // Check for too many arguments (when there's no rest parameter)
             if (!hasSpread && !funcType.HasRestParam && nonSpreadCount > funcType.ParamTypes.Count)
             {
-                throw new TypeCheckException($" Expected {funcType.ParamTypes.Count} arguments but got {nonSpreadCount}.");
+                throw new TypeCheckException($"Expected {funcType.ParamTypes.Count} arguments but got {nonSpreadCount}.");
             }
 
             // Get rest param element type if function has rest parameter
@@ -483,12 +483,12 @@ public partial class TypeChecker
                         // Check element type compatibility with rest param or remaining regular params
                         if (restElementType != null && !IsCompatible(restElementType, arrType.ElementType))
                         {
-                            throw new TypeCheckException($" Spread element type '{arrType.ElementType}' not compatible with rest parameter type '{restElementType}'.");
+                            throw new TypeCheckException($"Spread element type '{arrType.ElementType}' not compatible with rest parameter type '{restElementType}'.");
                         }
                     }
                     else if (spreadType is not TypeInfo.Any)
                     {
-                        throw new TypeCheckException($" Spread argument must be an array.");
+                        throw new TypeCheckException($"Spread argument must be an array.");
                     }
                     // After spread, we can't reliably match params
                     break;
@@ -512,7 +512,7 @@ public partial class TypeChecker
                             // Check against regular parameter
                             if (!IsCompatible(funcType.ParamTypes[paramIndex], argType))
                             {
-                                throw new TypeCheckException($" Argument {argIndex + 1} expected type '{funcType.ParamTypes[paramIndex]}' but got '{argType}'.");
+                                throw new TypeCheckException($"Argument {argIndex + 1} expected type '{funcType.ParamTypes[paramIndex]}' but got '{argType}'.");
                             }
                         }
                         else if (restElementType != null)
@@ -520,7 +520,7 @@ public partial class TypeChecker
                             // Check against rest parameter element type
                             if (!IsCompatible(restElementType, argType))
                             {
-                                throw new TypeCheckException($" Argument {argIndex + 1} expected type '{restElementType}' but got '{argType}'.");
+                                throw new TypeCheckException($"Argument {argIndex + 1} expected type '{restElementType}' but got '{argType}'.");
                             }
                         }
 
@@ -615,7 +615,7 @@ public partial class TypeChecker
             }
         }
 
-        throw new TypeCheckException($" Can only call functions.");
+        throw new TypeCheckException($"Can only call functions.");
     }
 
     /// <summary>
@@ -629,7 +629,7 @@ public partial class TypeChecker
     {
         if (itf.CallSignatures == null || itf.CallSignatures.Count == 0)
         {
-            throw new TypeCheckException($" Interface '{itf.Name}' is not callable.");
+            throw new TypeCheckException($"Interface '{itf.Name}' is not callable.");
         }
 
         List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
@@ -654,7 +654,7 @@ public partial class TypeChecker
             }
         }
 
-        throw new TypeCheckException($" No call signature matches the call for interface '{itf.Name}'.");
+        throw new TypeCheckException($"No call signature matches the call for interface '{itf.Name}'.");
     }
 
     /// <summary>
@@ -667,7 +667,7 @@ public partial class TypeChecker
     {
         if (gi.CallSignatures == null || gi.CallSignatures.Count == 0)
         {
-            throw new TypeCheckException($" Generic interface '{gi.Name}' is not callable.");
+            throw new TypeCheckException($"Generic interface '{gi.Name}' is not callable.");
         }
 
         // If type args provided, substitute and check
@@ -691,7 +691,7 @@ public partial class TypeChecker
             }
         }
 
-        throw new TypeCheckException($" No call signature matches the call for generic interface '{gi.Name}'.");
+        throw new TypeCheckException($"No call signature matches the call for generic interface '{gi.Name}'.");
     }
 
     /// <summary>
@@ -812,7 +812,7 @@ public partial class TypeChecker
         if (matchingSignatures.Count == 0)
         {
             string argTypesStr = string.Join(", ", argTypes);
-            throw new TypeCheckException($" No overload matches call with arguments ({argTypesStr}).");
+            throw new TypeCheckException($"No overload matches call with arguments ({argTypesStr}).");
         }
 
         // If multiple signatures match, select the most specific one
@@ -893,7 +893,7 @@ public partial class TypeChecker
         if (matchingSignatures.Count == 0)
         {
             string argTypesStr = string.Join(", ", argTypes);
-            throw new TypeCheckException($" No overload matches call with arguments ({argTypesStr}).");
+            throw new TypeCheckException($"No overload matches call with arguments ({argTypesStr}).");
         }
 
         // If multiple signatures match, select the most specific one

@@ -268,7 +268,7 @@ public partial class Interpreter
 
         // All other operators require both to be bigint
         if (!leftBi.HasValue || !rightBi.HasValue)
-            throw new InterpreterException(" Cannot mix bigint and other types in operations.");
+            throw new InterpreterException("Cannot mix bigint and other types in operations.");
 
         // Use centralized helper for all BigInt operations
         return BigIntOperatorHelper.EvaluateBinary(op, leftBi.Value, rightBi.Value);

@@ -74,7 +74,7 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count != 1)
-            throw new InterpreterException($" {BuiltInNames.BigInt}() requires exactly one argument.");
+            throw new InterpreterException($"{BuiltInNames.BigInt}() requires exactly one argument.");
 
         var arg = await evaluateArg(arguments[0]);
         return arg switch
@@ -108,7 +108,7 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($" {BuiltInNames.ParseInt}() requires at least one argument.");
+            throw new InterpreterException($"{BuiltInNames.ParseInt}() requires at least one argument.");
 
         var str = (await evaluateArg(arguments[0]))?.ToString() ?? "";
         int radix = 10;
@@ -130,7 +130,7 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($" {BuiltInNames.ParseFloat}() requires at least one argument.");
+            throw new InterpreterException($"{BuiltInNames.ParseFloat}() requires at least one argument.");
 
         var str = (await evaluateArg(arguments[0]))?.ToString() ?? "";
         return NumberBuiltIns.ParseFloat(str);
@@ -185,7 +185,7 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($" {BuiltInNames.StructuredClone}() requires at least one argument (value).");
+            throw new InterpreterException($"{BuiltInNames.StructuredClone}() requires at least one argument (value).");
 
         var value = await evaluateArg(arguments[0]);
         SharpTSArray? transfer = null;
@@ -209,11 +209,11 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($" {BuiltInNames.SetTimeout}() requires at least one argument (callback).");
+            throw new InterpreterException($"{BuiltInNames.SetTimeout}() requires at least one argument (callback).");
 
         var callbackValue = await evaluateArg(arguments[0]);
         if (callbackValue is not ISharpTSCallable callback)
-            throw new InterpreterException($" {BuiltInNames.SetTimeout}() callback must be a function.");
+            throw new InterpreterException($"{BuiltInNames.SetTimeout}() callback must be a function.");
 
         // Get delay (defaults to 0)
         double delayMs = 0;
@@ -262,11 +262,11 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($" {BuiltInNames.SetInterval}() requires at least one argument (callback).");
+            throw new InterpreterException($"{BuiltInNames.SetInterval}() requires at least one argument (callback).");
 
         var callbackValue = await evaluateArg(arguments[0]);
         if (callbackValue is not ISharpTSCallable callback)
-            throw new InterpreterException($" {BuiltInNames.SetInterval}() callback must be a function.");
+            throw new InterpreterException($"{BuiltInNames.SetInterval}() callback must be a function.");
 
         // Get delay (defaults to 0)
         double delayMs = 0;

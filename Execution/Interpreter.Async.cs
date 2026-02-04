@@ -200,7 +200,7 @@ public partial class Interpreter
             SharpTSIterator iter => iter.Elements,
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             string s => s.Select(c => (object?)c.ToString()),
-            _ => throw new InterpreterException(" for...of requires an iterable (array, Map, Set, or iterator).")
+            _ => throw new InterpreterException("for...of requires an iterable (array, Map, Set, or iterator).")
         };
 
         foreach (var item in items)
@@ -384,7 +384,7 @@ public partial class Interpreter
             SharpTSObject o => o.Fields.Keys,
             SharpTSInstance inst => inst.GetFieldNames(),
             SharpTSArray arr => Enumerable.Range(0, arr.Elements.Count).Select(i => i.ToString()),
-            _ => throw new InterpreterException(" for...in requires an object.")
+            _ => throw new InterpreterException("for...in requires an object.")
         };
 
         foreach (var key in keys)
@@ -650,7 +650,7 @@ public partial class Interpreter
         object? tag = await EvaluateAsync(tagged.Tag);
 
         if (tag is not Runtime.Types.ISharpTSCallable callable)
-            throw new InterpreterException(" Tagged template tag must be a function.");
+            throw new InterpreterException("Tagged template tag must be a function.");
 
         var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
         var stringsArray = new Runtime.Types.SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);

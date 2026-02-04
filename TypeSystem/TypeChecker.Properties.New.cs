@@ -70,7 +70,7 @@ public partial class TypeChecker
             // Date() accepts 0-7 arguments
             if (newExpr.Arguments.Count > 7)
             {
-                throw new TypeCheckException(" Date constructor accepts at most 7 arguments.");
+                throw new TypeCheckException("Date constructor accepts at most 7 arguments.");
             }
 
             // Validate argument types
@@ -101,7 +101,7 @@ public partial class TypeChecker
             // RegExp() accepts 0-2 arguments (pattern, flags)
             if (newExpr.Arguments.Count > 2)
             {
-                throw new TypeCheckException(" RegExp constructor accepts at most 2 arguments.");
+                throw new TypeCheckException("RegExp constructor accepts at most 2 arguments.");
             }
 
             // Validate argument types
@@ -132,7 +132,7 @@ public partial class TypeChecker
             // Map() accepts 0-1 arguments (optional iterable of entries)
             if (newExpr.Arguments.Count > 1)
             {
-                throw new TypeCheckException(" Map constructor accepts at most 1 argument.");
+                throw new TypeCheckException("Map constructor accepts at most 1 argument.");
             }
 
             // Validate argument if provided
@@ -152,7 +152,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new TypeCheckException(" Map requires exactly 2 type arguments: Map<K, V>");
+                throw new TypeCheckException("Map requires exactly 2 type arguments: Map<K, V>");
             }
 
             return new TypeInfo.Map(keyType, valueType);
@@ -164,7 +164,7 @@ public partial class TypeChecker
             // Set() accepts 0-1 arguments (optional iterable of values)
             if (newExpr.Arguments.Count > 1)
             {
-                throw new TypeCheckException(" Set constructor accepts at most 1 argument.");
+                throw new TypeCheckException("Set constructor accepts at most 1 argument.");
             }
 
             // Validate argument if provided
@@ -182,7 +182,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new TypeCheckException(" Set requires exactly 1 type argument: Set<T>");
+                throw new TypeCheckException("Set requires exactly 1 type argument: Set<T>");
             }
 
             return new TypeInfo.Set(elementType);
@@ -194,7 +194,7 @@ public partial class TypeChecker
             // WeakMap() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
             {
-                throw new TypeCheckException(" WeakMap constructor does not accept arguments.");
+                throw new TypeCheckException("WeakMap constructor does not accept arguments.");
             }
 
             // Determine key and value types from type arguments or default to any
@@ -214,7 +214,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new TypeCheckException(" WeakMap requires exactly 2 type arguments: WeakMap<K, V>");
+                throw new TypeCheckException("WeakMap requires exactly 2 type arguments: WeakMap<K, V>");
             }
 
             return new TypeInfo.WeakMap(keyType, valueType);
@@ -226,7 +226,7 @@ public partial class TypeChecker
             // WeakSet() accepts 0 arguments only (no iterable initialization)
             if (newExpr.Arguments.Count > 0)
             {
-                throw new TypeCheckException(" WeakSet constructor does not accept arguments.");
+                throw new TypeCheckException("WeakSet constructor does not accept arguments.");
             }
 
             // Determine element type from type argument or default to any
@@ -244,7 +244,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count != 0)
             {
-                throw new TypeCheckException(" WeakSet requires exactly 1 type argument: WeakSet<T>");
+                throw new TypeCheckException("WeakSet requires exactly 1 type argument: WeakSet<T>");
             }
 
             return new TypeInfo.WeakSet(elementType);
@@ -256,7 +256,7 @@ public partial class TypeChecker
             // EventEmitter() accepts 0 arguments
             if (newExpr.Arguments.Count > 0)
             {
-                throw new TypeCheckException(" EventEmitter constructor does not accept arguments.");
+                throw new TypeCheckException("EventEmitter constructor does not accept arguments.");
             }
 
             return new TypeInfo.EventEmitter();
@@ -268,7 +268,7 @@ public partial class TypeChecker
             // SharedArrayBuffer accepts 1 argument (byteLength)
             if (newExpr.Arguments.Count != 1)
             {
-                throw new TypeCheckException(" SharedArrayBuffer constructor requires exactly 1 argument (byteLength).");
+                throw new TypeCheckException("SharedArrayBuffer constructor requires exactly 1 argument (byteLength).");
             }
 
             var byteLengthType = CheckExpr(newExpr.Arguments[0]);
@@ -322,11 +322,11 @@ public partial class TypeChecker
             // Worker accepts 1-2 arguments (filename, options?)
             if (newExpr.Arguments.Count < 1)
             {
-                throw new TypeCheckException(" Worker constructor requires at least 1 argument (filename).");
+                throw new TypeCheckException("Worker constructor requires at least 1 argument (filename).");
             }
             if (newExpr.Arguments.Count > 2)
             {
-                throw new TypeCheckException(" Worker constructor accepts at most 2 arguments.");
+                throw new TypeCheckException("Worker constructor accepts at most 2 arguments.");
             }
 
             var filenameType = CheckExpr(newExpr.Arguments[0]);
@@ -350,7 +350,7 @@ public partial class TypeChecker
             // MessageChannel accepts 0 arguments
             if (newExpr.Arguments.Count > 0)
             {
-                throw new TypeCheckException(" MessageChannel constructor does not accept arguments.");
+                throw new TypeCheckException("MessageChannel constructor does not accept arguments.");
             }
 
             return new TypeInfo.MessageChannel();
@@ -373,7 +373,7 @@ public partial class TypeChecker
             }
             else if (newExpr.TypeArgs != null && newExpr.TypeArgs.Count > 1)
             {
-                throw new TypeCheckException(" Promise requires exactly 1 type argument: Promise<T>");
+                throw new TypeCheckException("Promise requires exactly 1 type argument: Promise<T>");
             }
 
             // Check the executor argument type

@@ -69,7 +69,7 @@ public partial class Interpreter
     internal object? VisitTypeAssertion(Expr.TypeAssertion ta) => Evaluate(ta.Expression); // Type assertions are pass-through at runtime
     internal object? VisitSatisfies(Expr.Satisfies sat) => Evaluate(sat.Expression); // Satisfies is pass-through at runtime
     internal object? VisitNonNullAssertion(Expr.NonNullAssertion nna) => Evaluate(nna.Expression); // Non-null assertions are pass-through at runtime
-    internal object? VisitAwait(Expr.Await awaitExpr) => throw new InterpreterException(" 'await' can only be used inside async functions.");
+    internal object? VisitAwait(Expr.Await awaitExpr) => throw new InterpreterException("'await' can only be used inside async functions.");
     internal object? VisitDynamicImport(Expr.DynamicImport di) => EvaluateDynamicImport(di);
     internal object? VisitImportMeta(Expr.ImportMeta im) => EvaluateImportMeta(im);
     internal object? VisitYield(Expr.Yield yieldExpr) => EvaluateYield(yieldExpr);
@@ -235,7 +235,7 @@ public partial class Interpreter
         object? tag = Evaluate(tagged.Tag);
 
         if (tag is not ISharpTSCallable callable)
-            throw new InterpreterException(" Tagged template tag must be a function.");
+            throw new InterpreterException("Tagged template tag must be a function.");
 
         // Create template strings array with raw property
         // Cooked values: null becomes undefined (or just null in our runtime)
@@ -357,7 +357,7 @@ public partial class Interpreter
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
             Expr.ComputedKey ck => (await ctx.EvaluateExprAsync(ck.Expression))?.ToString() ?? "undefined",
-            _ => throw new InterpreterException(" Invalid property key for accessor.")
+            _ => throw new InterpreterException("Invalid property key for accessor.")
         };
     }
 
@@ -482,9 +482,9 @@ public partial class Interpreter
         if (body is Expr.ArrowFunction arrow)
         {
             return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
-                   ?? throw new InterpreterException(" Failed to create getter function.");
+                   ?? throw new InterpreterException("Failed to create getter function.");
         }
-        throw new InterpreterException(" Getter must be a function expression.");
+        throw new InterpreterException("Getter must be a function expression.");
     }
 
     /// <summary>
@@ -496,9 +496,9 @@ public partial class Interpreter
         if (body is Expr.ArrowFunction arrow)
         {
             return EvaluateArrowFunction(arrow) as SharpTSArrowFunction
-                   ?? throw new InterpreterException(" Failed to create setter function.");
+                   ?? throw new InterpreterException("Failed to create setter function.");
         }
-        throw new InterpreterException(" Setter must be a function expression.");
+        throw new InterpreterException("Setter must be a function expression.");
     }
 
     /// <summary>
@@ -523,7 +523,7 @@ public partial class Interpreter
         }
         else
         {
-            throw new InterpreterException(" Spread in object literal requires an object.");
+            throw new InterpreterException("Spread in object literal requires an object.");
         }
     }
 
@@ -725,7 +725,7 @@ public partial class Interpreter
         // Evaluate the path expression
         object? pathValue = Evaluate(di.PathExpression);
         string specifier = pathValue?.ToString()
-            ?? throw new InterpreterException(" Dynamic import path cannot be null.");
+            ?? throw new InterpreterException("Dynamic import path cannot be null.");
 
         // Create resolver if needed (single-file mode without module context)
         _moduleResolver ??= new ModuleResolver(
