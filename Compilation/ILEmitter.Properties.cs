@@ -1371,7 +1371,7 @@ public partial class ILEmitter
         {
             // Fallback: throw runtime error if context isn't set up
             IL.Emit(OpCodes.Ldstr, $"Cannot access private field '#{fieldName}' - class context not available");
-            IL.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            IL.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             IL.Emit(OpCodes.Throw);
             return;
         }
@@ -1419,7 +1419,7 @@ public partial class ILEmitter
 
             // Brand check failed - throw TypeError
             IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot read private member #{fieldName} from an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
             IL.Emit(OpCodes.Throw);
 
             IL.MarkLabel(successLabel);
@@ -1443,7 +1443,7 @@ public partial class ILEmitter
 
         // No private field found
         IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
         IL.Emit(OpCodes.Throw);
     }
 
@@ -1461,7 +1461,7 @@ public partial class ILEmitter
         if (className == null)
         {
             IL.Emit(OpCodes.Ldstr, $"Cannot write private field '#{fieldName}' - class context not available");
-            IL.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            IL.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             IL.Emit(OpCodes.Throw);
             return;
         }
@@ -1513,7 +1513,7 @@ public partial class ILEmitter
 
             // Brand check failed
             IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot write private member #{fieldName} to an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
             IL.Emit(OpCodes.Throw);
 
             IL.MarkLabel(successLabel);
@@ -1548,7 +1548,7 @@ public partial class ILEmitter
 
         // No private field found
         IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
         IL.Emit(OpCodes.Throw);
     }
 
@@ -1566,7 +1566,7 @@ public partial class ILEmitter
         if (className == null)
         {
             IL.Emit(OpCodes.Ldstr, $"Cannot call private method '#{methodName}' - class context not available");
-            IL.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            IL.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             IL.Emit(OpCodes.Throw);
             return;
         }
@@ -1623,7 +1623,7 @@ public partial class ILEmitter
 
                 // Brand check failed
                 IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot call private method #{methodName} on an object whose class did not declare it");
-                IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+                IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
                 IL.Emit(OpCodes.Throw);
 
                 IL.MarkLabel(validLabel);
@@ -1685,7 +1685,7 @@ public partial class ILEmitter
 
         // No private method found
         IL.Emit(OpCodes.Ldstr, $"Private method '#{methodName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
         IL.Emit(OpCodes.Throw);
     }
 

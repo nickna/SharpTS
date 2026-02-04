@@ -367,7 +367,7 @@ public sealed class UtilModuleEmitter : IBuiltInModuleEmitter
         {
             // No argument provided - throw error at runtime
             il.Emit(OpCodes.Ldstr, "getSystemErrorName requires an error code argument");
-            il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Newobj, ctx.Types.ExceptionCtorString);
             il.Emit(OpCodes.Throw);
             return true;
         }

@@ -73,7 +73,7 @@ public partial class RuntimeEmitter
 
         // No __privateFields - throw TypeError
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot read private member - class has no private fields");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(hasFieldLabel);
@@ -81,7 +81,7 @@ public partial class RuntimeEmitter
         // Get the ConditionalWeakTable value: object cwt = fieldInfo.GetValue(null);
         il.Emit(OpCodes.Ldloc, fieldInfoLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfoGetValue);
         il.Emit(OpCodes.Stloc, cwtLocal);
 
         // We need to use reflection to call TryGetValue since we don't know the exact generic type
@@ -103,7 +103,7 @@ public partial class RuntimeEmitter
 
         // Brand check failed
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot read private member from an object whose class did not declare it");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(brandCheckPassedLabel);
@@ -148,7 +148,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, hasFieldLabel);
 
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot write private member - class has no private fields");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(hasFieldLabel);
@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
         // Get the ConditionalWeakTable value
         il.Emit(OpCodes.Ldloc, fieldInfoLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfoGetValue);
         il.Emit(OpCodes.Stloc, cwtLocal);
 
         // TryGetValue for brand check
@@ -174,7 +174,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, brandCheckPassedLabel);
 
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot write private member to an object whose class did not declare it");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(brandCheckPassedLabel);
@@ -224,7 +224,7 @@ public partial class RuntimeEmitter
         // Perform brand check
         il.Emit(OpCodes.Ldloc, fieldInfoLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfoGetValue);
         il.Emit(OpCodes.Stloc, cwtLocal);
 
         var cwtType = typeof(ConditionalWeakTable<,>).MakeGenericType(typeof(object), typeof(Dictionary<string, object>));
@@ -240,7 +240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, brandCheckPassedLabel);
 
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot call private method on an object whose class did not declare it");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(brandCheckPassedLabel);
@@ -264,7 +264,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "TypeError: Private method not found: ");
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.StringConcat2);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(methodFoundLabel);
@@ -311,7 +311,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "TypeError: Static private field not found: ");
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.StringConcat2);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(foundLabel);
@@ -319,7 +319,7 @@ public partial class RuntimeEmitter
         // Return fieldInfo.GetValue(null)
         il.Emit(OpCodes.Ldloc, fieldInfoLocal);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!);
+        il.Emit(OpCodes.Callvirt, _types.FieldInfoGetValue);
         il.Emit(OpCodes.Ret);
     }
 
@@ -357,7 +357,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "TypeError: Static private field not found: ");
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.StringConcat2);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(foundLabel);
@@ -404,7 +404,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "TypeError: Static private method not found: ");
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.StringConcat2);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(foundLabel);

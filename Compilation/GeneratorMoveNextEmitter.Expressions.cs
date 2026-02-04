@@ -36,7 +36,7 @@ public partial class GeneratorMoveNextEmitter
         string dirname = string.IsNullOrEmpty(path) ? "" : Path.GetDirectoryName(path) ?? "";
 
         // Create Dictionary<string, object> and add properties
-        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
 
         // Add "url" property
         _il.Emit(OpCodes.Dup);

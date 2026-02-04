@@ -945,7 +945,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         {
             // Should not happen if called correctly - throw at runtime
             _il.Emit(OpCodes.Ldstr, "Cannot access private members outside of class context");
-            _il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            _il.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             _il.Emit(OpCodes.Throw);
         }
     }
@@ -1496,7 +1496,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         if (!hasSpreads && !hasComputedKeys)
         {
             // Simple case: no spreads, no computed keys
-            _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+            _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
 
             foreach (var prop in o.Properties)
             {
@@ -1925,7 +1925,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         string dirname = string.IsNullOrEmpty(path) ? "" : Path.GetDirectoryName(path) ?? "";
 
         // Create Dictionary<string, object> and add properties
-        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
 
         // Add "url" property
         _il.Emit(OpCodes.Dup);

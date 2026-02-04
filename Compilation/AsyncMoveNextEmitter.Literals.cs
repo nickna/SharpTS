@@ -84,7 +84,7 @@ public partial class AsyncMoveNextEmitter
         else if (!hasSpreads && !hasComputedKeys)
         {
             // Simple case: no spreads, no computed keys
-            _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+            _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
 
             foreach (var prop in o.Properties)
             {

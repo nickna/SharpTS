@@ -62,7 +62,7 @@ public partial class RuntimeEmitter
 
         // Throw TypeError
         il.Emit(OpCodes.Ldstr, "TypeError: Cannot modify a frozen or sealed array");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(notFrozenLabel);
@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notSealedLabel);
 
             il.Emit(OpCodes.Ldstr, "TypeError: Cannot modify a frozen or sealed array");
-            il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
             il.Emit(OpCodes.Throw);
 
             il.MarkLabel(notSealedLabel);
@@ -1443,7 +1443,7 @@ public partial class RuntimeEmitter
         // Throw RangeError
         il.MarkLabel(throwRangeError);
         il.Emit(OpCodes.Ldstr, "RangeError: Invalid index for with()");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(validIndex);

@@ -302,7 +302,7 @@ public partial class AsyncMoveNextEmitter
         {
             // Should not happen if called correctly - throw at runtime
             _il.Emit(OpCodes.Ldstr, "Cannot access private members outside of class context");
-            _il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            _il.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             _il.Emit(OpCodes.Throw);
         }
     }

@@ -693,7 +693,7 @@ public partial class GeneratorMoveNextEmitter
         {
             // Should not happen if called correctly - throw at runtime
             _il.Emit(OpCodes.Ldstr, "Cannot access private members outside of class context");
-            _il.Emit(OpCodes.Newobj, typeof(InvalidOperationException).GetConstructor([typeof(string)])!);
+            _il.Emit(OpCodes.Newobj, Types.InvalidOperationExceptionCtorString);
             _il.Emit(OpCodes.Throw);
         }
     }
@@ -879,7 +879,7 @@ public partial class GeneratorMoveNextEmitter
 
     protected override void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
-        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
 
         foreach (var prop in o.Properties)
         {

@@ -735,14 +735,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromHexString", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.ConvertFromHexString);
         il.Emit(OpCodes.Br, doneLabel);
 
         // Base64 decode
         il.MarkLabel(checkBase64Label);
         il.Emit(OpCodes.Ldloc, dataLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromBase64String", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.ConvertFromBase64String);
         il.Emit(OpCodes.Br, doneLabel);
 
         // UTF8 default
@@ -796,14 +796,14 @@ public partial class RuntimeEmitter
         // Return hex string
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToHexString", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToHexString);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // Return base64 string
         il.MarkLabel(checkBase64Label);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBase64String", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToBase64String);
         il.Emit(OpCodes.Ret);
 
         // Return Buffer

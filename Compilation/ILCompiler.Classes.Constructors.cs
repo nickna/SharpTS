@@ -100,7 +100,7 @@ public partial class ILCompiler
         // Initialize _extras dictionary FIRST (before calling parent constructor)
         // This allows parent constructor to access fields via SetFieldsProperty
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stfld, fieldsField);
 
         // Initialize @lock decorator fields if present

@@ -1166,7 +1166,7 @@ public partial class ILCompiler
 
         // Initialize _fields dictionary FIRST
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object>).GetConstructor([])!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stfld, fieldsField);
 
         // Determine if we need to call base constructor automatically

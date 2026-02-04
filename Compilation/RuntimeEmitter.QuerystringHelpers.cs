@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notNull);
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
             il.MarkLabel(afterToString);
-            il.Emit(OpCodes.Call, typeof(Uri).GetMethod("EscapeDataString", [typeof(string)])!);
+            il.Emit(OpCodes.Call, _types.UriEscapeDataString);
         });
 
         // unescape(str) - 1 param
@@ -58,7 +58,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4, '+');
             il.Emit(OpCodes.Ldc_I4, ' ');
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", _types.Char, _types.Char));
-            il.Emit(OpCodes.Call, typeof(Uri).GetMethod("UnescapeDataString", [typeof(string)])!);
+            il.Emit(OpCodes.Call, _types.UriUnescapeDataString);
         });
 
         // parse(str, sep?, eq?) - 3 params
@@ -294,7 +294,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, ' ');
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", _types.Char, _types.Char));
         // Uri.UnescapeDataString
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("UnescapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.UriUnescapeDataString);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // value = pair.Substring(eqIndex + eq.Length)
@@ -309,7 +309,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, ' ');
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", _types.Char, _types.Char));
         // Uri.UnescapeDataString
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("UnescapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.UriUnescapeDataString);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, afterKV);
 
@@ -319,7 +319,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, '+');
         il.Emit(OpCodes.Ldc_I4, ' ');
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Replace", _types.Char, _types.Char));
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("UnescapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.UriUnescapeDataString);
         il.Emit(OpCodes.Stloc, keyLocal);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Stloc, valueLocal);
@@ -429,7 +429,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloca, kvpLocal);
         il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.KeyValuePairStringObject, "Key"));
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("EscapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.UriEscapeDataString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 
@@ -454,7 +454,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(valueNotNullLabel);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.MarkLabel(afterValueLabel);
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("EscapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.UriEscapeDataString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
         il.Emit(OpCodes.Pop);
 

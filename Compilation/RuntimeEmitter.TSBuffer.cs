@@ -239,14 +239,14 @@ public partial class RuntimeEmitter
         // Base64
         il.MarkLabel(base64Label);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromBase64String", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.ConvertFromBase64String);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
 
         // Hex
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("FromHexString", [_types.String])!);
+        il.Emit(OpCodes.Call, _types.ConvertFromHexString);
         il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
         il.Emit(OpCodes.Ret);
 
@@ -661,14 +661,14 @@ public partial class RuntimeEmitter
         il.MarkLabel(base64Label);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBase64String", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToBase64String);
         il.Emit(OpCodes.Ret);
 
         // Hex
         il.MarkLabel(hexLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToHexString", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToHexString);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
@@ -1444,7 +1444,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Offset is out of bounds");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(boundsOkLabel);
@@ -1591,7 +1591,7 @@ public partial class RuntimeEmitter
 
         // throw
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -1635,7 +1635,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -1945,7 +1945,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -2129,7 +2129,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -2204,7 +2204,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -2326,7 +2326,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -2815,7 +2815,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "offset");
-        il.Emit(OpCodes.Newobj, typeof(ArgumentOutOfRangeException).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ArgumentOutOfRangeExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -3094,7 +3094,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, okLabel);
 
         il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 16-bits");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -3191,7 +3191,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, okLabel);
 
         il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 32-bits");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);
@@ -3266,7 +3266,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, okLabel);
 
         il.Emit(OpCodes.Ldstr, "Buffer size must be a multiple of 64-bits");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(okLabel);

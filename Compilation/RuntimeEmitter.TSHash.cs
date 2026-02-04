@@ -279,14 +279,14 @@ public partial class RuntimeEmitter
         // Return hex string: Convert.ToHexString(hashBytes).ToLowerInvariant()
         il.MarkLabel(checkHexLabel);
         il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToHexString", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToHexString);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
         il.Emit(OpCodes.Ret);
 
         // Return base64 string: Convert.ToBase64String(hashBytes)
         il.MarkLabel(checkBase64Label);
         il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToBase64String", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToBase64String);
         il.Emit(OpCodes.Ret);
 
         // Return Buffer: create $Buffer from bytes

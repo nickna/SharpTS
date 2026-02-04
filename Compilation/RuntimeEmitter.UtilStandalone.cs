@@ -1762,7 +1762,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "' does not take an argument");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(boolNoError);
@@ -1794,7 +1794,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "' cannot be negated");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(stringNoNegateError);
@@ -1864,7 +1864,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "' requires an argument");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noStrictError);
@@ -1887,7 +1887,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, originalNameLocal);
         il.Emit(OpCodes.Ldstr, "'");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noUnknownError);
@@ -2153,7 +2153,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, shortCharLocal);
         il.Emit(OpCodes.Ldstr, "'");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noUnknownError);
@@ -2299,7 +2299,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, shortCharLocal);
         il.Emit(OpCodes.Ldstr, "' requires an argument");
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(noStrictErr);
@@ -2676,7 +2676,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Unexpected argument: ");
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(allowTermPositional);
@@ -2770,7 +2770,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Unexpected argument: ");
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(allowPos);

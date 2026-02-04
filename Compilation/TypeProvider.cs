@@ -514,6 +514,90 @@ public class TypeProvider
     public MethodInfo DoubleIsNaN =>
         _doubleIsNaN ??= GetMethod(Double, "IsNaN", Double);
 
+    // Additional method caches
+    private MethodInfo? _uriUnescapeDataString;
+    private MethodInfo? _uriEscapeDataString;
+    private MethodInfo? _convertToHexString;
+    private MethodInfo? _convertToBase64String;
+    private MethodInfo? _convertFromHexString;
+    private MethodInfo? _convertFromBase64String;
+    private MethodInfo? _fieldInfoGetValue;
+
+    /// <summary>
+    /// Gets the Uri.UnescapeDataString(string) method.
+    /// </summary>
+    public MethodInfo UriUnescapeDataString =>
+        _uriUnescapeDataString ??= GetMethod(Uri, "UnescapeDataString", String);
+
+    /// <summary>
+    /// Gets the Uri.EscapeDataString(string) method.
+    /// </summary>
+    public MethodInfo UriEscapeDataString =>
+        _uriEscapeDataString ??= GetMethod(Uri, "EscapeDataString", String);
+
+    /// <summary>
+    /// Gets the Convert.ToHexString(byte[]) method.
+    /// </summary>
+    public MethodInfo ConvertToHexString =>
+        _convertToHexString ??= GetMethod(Convert, "ToHexString", ByteArray);
+
+    /// <summary>
+    /// Gets the Convert.ToBase64String(byte[]) method.
+    /// </summary>
+    public MethodInfo ConvertToBase64String =>
+        _convertToBase64String ??= GetMethod(Convert, "ToBase64String", ByteArray);
+
+    /// <summary>
+    /// Gets the Convert.FromHexString(string) method.
+    /// </summary>
+    public MethodInfo ConvertFromHexString =>
+        _convertFromHexString ??= GetMethod(Convert, "FromHexString", String);
+
+    /// <summary>
+    /// Gets the Convert.FromBase64String(string) method.
+    /// </summary>
+    public MethodInfo ConvertFromBase64String =>
+        _convertFromBase64String ??= GetMethod(Convert, "FromBase64String", String);
+
+    /// <summary>
+    /// Gets the FieldInfo.GetValue(object) method.
+    /// </summary>
+    public MethodInfo FieldInfoGetValue =>
+        _fieldInfoGetValue ??= GetMethod(FieldInfo, "GetValue", Object);
+
+    #endregion
+
+    #region Cached Constructor References
+
+    private ConstructorInfo? _exceptionCtorString;
+    private ConstructorInfo? _argumentOutOfRangeExceptionCtorString;
+    private ConstructorInfo? _invalidOperationExceptionCtorString;
+    private ConstructorInfo? _dictionaryStringObjectCtor;
+
+    /// <summary>
+    /// Gets the Exception(string) constructor.
+    /// </summary>
+    public ConstructorInfo ExceptionCtorString =>
+        _exceptionCtorString ??= GetConstructor(Exception, String);
+
+    /// <summary>
+    /// Gets the ArgumentOutOfRangeException(string) constructor.
+    /// </summary>
+    public ConstructorInfo ArgumentOutOfRangeExceptionCtorString =>
+        _argumentOutOfRangeExceptionCtorString ??= GetConstructor(Resolve("System.ArgumentOutOfRangeException"), String);
+
+    /// <summary>
+    /// Gets the InvalidOperationException(string) constructor.
+    /// </summary>
+    public ConstructorInfo InvalidOperationExceptionCtorString =>
+        _invalidOperationExceptionCtorString ??= GetConstructor(InvalidOperationException, String);
+
+    /// <summary>
+    /// Gets the Dictionary&lt;string, object&gt;() default constructor.
+    /// </summary>
+    public ConstructorInfo DictionaryStringObjectCtor =>
+        _dictionaryStringObjectCtor ??= GetDefaultConstructor(DictionaryStringObject);
+
     #endregion
 
     #region Method Resolution

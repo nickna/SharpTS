@@ -130,7 +130,7 @@ public sealed class QuerystringModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldstr, "");
         }
 
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("EscapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, ctx.Types.UriEscapeDataString);
         return true;
     }
 
@@ -155,7 +155,7 @@ public sealed class QuerystringModuleEmitter : IBuiltInModuleEmitter
         il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.String, "Replace", ctx.Types.Char, ctx.Types.Char));
 
         // Call Uri.UnescapeDataString
-        il.Emit(OpCodes.Call, typeof(Uri).GetMethod("UnescapeDataString", [typeof(string)])!);
+        il.Emit(OpCodes.Call, ctx.Types.UriUnescapeDataString);
         return true;
     }
 

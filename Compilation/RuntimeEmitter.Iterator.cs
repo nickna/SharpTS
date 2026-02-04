@@ -262,7 +262,7 @@ public partial class RuntimeEmitter
         // Throw error if next is null
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Iterator must have a next() method.");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
     }
 
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         // Throw error for non-iterable
         il.MarkLabel(throwLabel);
         il.Emit(OpCodes.Ldstr, "Runtime Error: Value is not iterable. Expected an array, string, or object with [Symbol.iterator].");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
         il.Emit(OpCodes.Throw);
     }
 
