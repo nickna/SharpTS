@@ -460,9 +460,44 @@ public partial class TypeChecker
     internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
+
+        // Analyze type guard from condition using path-based analysis
+        var (path, narrowedType, excludedType) = AnalyzePathTypeGuard(stmt.Condition);
+
         _loopDepth++;
-        try { CheckStmt(stmt.Body); }
-        finally { _loopDepth--; }
+        try
+        {
+            // Apply narrowing inside loop body (condition is true)
+            if (path != null && narrowedType != null)
+            {
+                PushNarrowingScope();
+                AddNarrowing(path, narrowedType);
+                try
+                {
+                    CheckStmt(stmt.Body);
+                }
+                finally
+                {
+                    PopNarrowingScope();
+                }
+            }
+            else
+            {
+                CheckStmt(stmt.Body);
+            }
+        }
+        finally
+        {
+            _loopDepth--;
+        }
+
+        // After loop exits, the condition was false
+        // Apply the negated narrowing (excluded type)
+        if (path != null && excludedType != null)
+        {
+            AddNarrowing(path, excludedType);
+        }
+
         return VoidResult.Instance;
     }
 
@@ -479,13 +514,55 @@ public partial class TypeChecker
     {
         if (stmt.Initializer != null)
             CheckStmt(stmt.Initializer);
+
+        // Analyze type guard from condition if present using path-based analysis
+        Narrowing.NarrowingPath? path = null;
+        TypeInfo? narrowedType = null;
+        TypeInfo? excludedType = null;
+
         if (stmt.Condition != null)
+        {
             CheckExpr(stmt.Condition);
+            (path, narrowedType, excludedType) = AnalyzePathTypeGuard(stmt.Condition);
+        }
+
         _loopDepth++;
-        try { CheckStmt(stmt.Body); }
-        finally { _loopDepth--; }
+        try
+        {
+            // Apply narrowing inside loop body (condition is true)
+            if (path != null && narrowedType != null)
+            {
+                PushNarrowingScope();
+                AddNarrowing(path, narrowedType);
+                try
+                {
+                    CheckStmt(stmt.Body);
+                }
+                finally
+                {
+                    PopNarrowingScope();
+                }
+            }
+            else
+            {
+                CheckStmt(stmt.Body);
+            }
+        }
+        finally
+        {
+            _loopDepth--;
+        }
+
         if (stmt.Increment != null)
             CheckExpr(stmt.Increment);
+
+        // After loop exits, the condition was false (if there was a condition)
+        // Apply the negated narrowing (excluded type)
+        if (path != null && excludedType != null)
+        {
+            AddNarrowing(path, excludedType);
+        }
+
         return VoidResult.Instance;
     }
 

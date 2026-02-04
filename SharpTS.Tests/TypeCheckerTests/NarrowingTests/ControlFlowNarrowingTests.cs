@@ -253,5 +253,101 @@ public class ControlFlowNarrowingTests
         Assert.Equal("2\n2\n2\n3\n", result);
     }
 
+    [Fact]
+    public void WhileLoop_NarrowsAfterExit()
+    {
+        // After while (x === null) loop exits, x should be narrowed to non-null
+        var source = """
+            function test(x: string | null): string {
+                while (x === null) {
+                    x = "found";
+                }
+                return x;  // x should be narrowed to string
+            }
+            console.log(test(null));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("found\n", result);
+    }
+
+    [Fact]
+    public void WhileLoop_NegatedCondition_NarrowsAfterExit()
+    {
+        // After while (x !== null) loop exits, x should be narrowed to null
+        // This is a less common pattern but should work
+        var source = """
+            function test(x: string | null): string {
+                while (x !== null) {
+                    x = null;  // Exit the loop
+                }
+                // After loop, x is null
+                return x ?? "default";
+            }
+            console.log(test("hello"));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("default\n", result);
+    }
+
+    [Fact]
+    public void ForLoop_NarrowsInBody()
+    {
+        // For loop condition narrows in the body
+        var source = """
+            function test(x: string | null): number {
+                let count = 0;
+                for (; x !== null && count < 3; count++) {
+                    console.log(x.length);  // x is narrowed in body
+                }
+                return count;
+            }
+            console.log(test("hi"));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n2\n2\n3\n", result);
+    }
+
+    [Fact]
+    public void ForLoop_NarrowsAfterExit()
+    {
+        // After for loop with null check condition exits, narrowing applies
+        var source = """
+            function test(x: string | null): string {
+                for (; x === null; ) {
+                    x = "found";
+                }
+                return x;  // x should be narrowed to string
+            }
+            console.log(test(null));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("found\n", result);
+    }
+
+    [Fact]
+    public void WhileLoop_PropertyNarrowing_InBody()
+    {
+        // While loop narrows property in body
+        var source = """
+            type Obj = { prop: string | null };
+            function test(obj: Obj): number {
+                let count = 0;
+                while (obj.prop !== null && count < 3) {
+                    console.log(obj.prop.length);  // obj.prop narrowed in body
+                    count++;
+                }
+                return count;
+            }
+            console.log(test({ prop: "hi" }));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("2\n2\n2\n3\n", result);
+    }
+
     #endregion
 }

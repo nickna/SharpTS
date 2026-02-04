@@ -1051,12 +1051,19 @@ public partial class TypeChecker
 
     private TypeInfo CheckAssign(Expr.Assign assign)
     {
-        TypeInfo varType = LookupVariable(assign.Name);
+        // For assignment, check against the DECLARED type, not the narrowed type
+        // This allows reassigning within narrowed scopes (e.g., x = "found" when x was narrowed to null)
+        var declaredType = _environment.Get(assign.Name.Lexeme);
+        if (declaredType == null)
+        {
+            throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.");
+        }
+
         TypeInfo valueType = CheckExpr(assign.Value);
 
-        if (!IsCompatible(varType, valueType))
+        if (!IsCompatible(declaredType, valueType))
         {
-            throw new TypeCheckException($" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{varType}'.");
+            throw new TypeCheckException($" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{declaredType}'.");
         }
 
         // Invalidate any narrowings affected by this assignment
@@ -1109,6 +1116,15 @@ public partial class TypeChecker
         {
              throw new TypeCheckException($" Undefined variable '{name.Lexeme}'.");
         }
+
+        // Check for variable narrowing in the narrowing context
+        var path = new Narrowing.NarrowingPath.Variable(name.Lexeme);
+        var narrowedType = GetNarrowing(path);
+        if (narrowedType != null)
+        {
+            return narrowedType;
+        }
+
         return type;
     }
 

@@ -126,6 +126,27 @@ public partial class TypeChecker
     private void PushEmptyNarrowingScope() => _narrowingContextStack.Push(Narrowing.NarrowingContext.Empty);
 
     /// <summary>
+    /// Enters a new narrowing scope that inherits from the current scope.
+    /// Used for control flow branches where narrowings should be isolated.
+    /// </summary>
+    private void PushNarrowingScope()
+    {
+        var current = _narrowingContextStack.Count > 0
+            ? _narrowingContextStack.Peek()
+            : Narrowing.NarrowingContext.Empty;
+        _narrowingContextStack.Push(current);
+    }
+
+    /// <summary>
+    /// Exits the current narrowing scope, discarding its narrowings.
+    /// </summary>
+    private void PopNarrowingScope()
+    {
+        if (_narrowingContextStack.Count > 0)
+            _narrowingContextStack.Pop();
+    }
+
+    /// <summary>
     /// Exits the current narrowing scope.
     /// </summary>
     private void PopNarrowingContext()
