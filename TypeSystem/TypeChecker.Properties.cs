@@ -166,6 +166,17 @@ public partial class TypeChecker
         {
             var assignedPath = new Narrowing.NarrowingPath.PropertyAccess(basePath, set.Name.Lexeme);
             InvalidateNarrowingsFor(assignedPath);
+
+            // Also invalidate narrowings on the original variable if this is an alias
+            // e.g., if "alias.prop = x" and alias was assigned from obj, also invalidate "obj.prop"
+            if (basePath is Narrowing.NarrowingPath.Variable varPath &&
+                _variableAliases.TryGetValue(varPath.Name, out var originalVar))
+            {
+                var originalPath = new Narrowing.NarrowingPath.PropertyAccess(
+                    new Narrowing.NarrowingPath.Variable(originalVar),
+                    set.Name.Lexeme);
+                InvalidateNarrowingsFor(originalPath);
+            }
         }
 
         // Handle TypeParameter - delegate to constraint type for property assignment

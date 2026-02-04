@@ -104,7 +104,61 @@ public partial class TypeChecker
     private TypeInfo CheckLogical(Expr.Logical logical)
     {
         TypeInfo leftType = CheckExpr(logical.Left);
-        TypeInfo rightType = CheckExpr(logical.Right);
+
+        // Apply expression-level narrowing for the right operand
+        // For &&: right is evaluated when left is truthy, so apply "narrowed" types
+        // For ||: right is evaluated when left is falsy, so apply "excluded" types
+        TypeInfo rightType;
+        var narrowings = AnalyzeCompoundTypeGuards(logical.Left);
+
+        if (narrowings.Count > 0)
+        {
+            bool isAnd = logical.Operator.Type == TokenType.AND_AND;
+
+            // Build environment with variable narrowings
+            var narrowedEnv = new TypeEnvironment(_environment);
+            foreach (var (path, narrowedType, excludedType) in narrowings)
+            {
+                if (path is Narrowing.NarrowingPath.Variable varPath)
+                {
+                    narrowedEnv.Define(varPath.Name, isAnd ? narrowedType : excludedType);
+                }
+            }
+
+            // Build context with property narrowings
+            var narrowedContext = Narrowing.NarrowingContext.Empty;
+            foreach (var (path, narrowedType, excludedType) in narrowings)
+            {
+                if (path is not Narrowing.NarrowingPath.Variable)
+                {
+                    narrowedContext = narrowedContext.WithNarrowing(path, isAnd ? narrowedType : excludedType);
+                }
+            }
+
+            // Check right side with narrowings applied
+            using (new EnvironmentScope(this, narrowedEnv))
+            {
+                if (!narrowedContext.IsEmpty)
+                {
+                    PushNarrowingContext(narrowedContext);
+                }
+                try
+                {
+                    rightType = CheckExpr(logical.Right);
+                }
+                finally
+                {
+                    if (!narrowedContext.IsEmpty)
+                    {
+                        PopNarrowingContext();
+                    }
+                }
+            }
+        }
+        else
+        {
+            rightType = CheckExpr(logical.Right);
+        }
 
         // In JavaScript/TypeScript, || and && return one of their operands, not a boolean.
         // - `a || b` returns `a` if truthy, otherwise `b`. Type is A | B.
@@ -162,8 +216,100 @@ public partial class TypeChecker
     private TypeInfo CheckTernary(Expr.Ternary ternary)
     {
         CheckExpr(ternary.Condition);
-        TypeInfo thenType = CheckExpr(ternary.ThenBranch);
-        TypeInfo elseType = CheckExpr(ternary.ElseBranch);
+
+        // Apply expression-level narrowing for the branches
+        var narrowings = AnalyzeCompoundTypeGuards(ternary.Condition);
+
+        TypeInfo thenType;
+        TypeInfo elseType;
+
+        if (narrowings.Count > 0)
+        {
+            // Build environment with variable narrowings for then branch (condition is true)
+            var thenEnv = new TypeEnvironment(_environment);
+            foreach (var (path, narrowedType, _) in narrowings)
+            {
+                if (path is Narrowing.NarrowingPath.Variable varPath)
+                {
+                    thenEnv.Define(varPath.Name, narrowedType);
+                }
+            }
+
+            // Build context with property narrowings for then branch
+            var thenContext = Narrowing.NarrowingContext.Empty;
+            foreach (var (path, narrowedType, _) in narrowings)
+            {
+                if (path is not Narrowing.NarrowingPath.Variable)
+                {
+                    thenContext = thenContext.WithNarrowing(path, narrowedType);
+                }
+            }
+
+            // Check then branch with narrowings applied
+            using (new EnvironmentScope(this, thenEnv))
+            {
+                if (!thenContext.IsEmpty)
+                {
+                    PushNarrowingContext(thenContext);
+                }
+                try
+                {
+                    thenType = CheckExpr(ternary.ThenBranch);
+                }
+                finally
+                {
+                    if (!thenContext.IsEmpty)
+                    {
+                        PopNarrowingContext();
+                    }
+                }
+            }
+
+            // Build environment with variable narrowings for else branch (condition is false)
+            var elseEnv = new TypeEnvironment(_environment);
+            foreach (var (path, _, excludedType) in narrowings)
+            {
+                if (path is Narrowing.NarrowingPath.Variable varPath)
+                {
+                    elseEnv.Define(varPath.Name, excludedType);
+                }
+            }
+
+            // Build context with property narrowings for else branch
+            var elseContext = Narrowing.NarrowingContext.Empty;
+            foreach (var (path, _, excludedType) in narrowings)
+            {
+                if (path is not Narrowing.NarrowingPath.Variable)
+                {
+                    elseContext = elseContext.WithNarrowing(path, excludedType);
+                }
+            }
+
+            // Check else branch with excluded types applied
+            using (new EnvironmentScope(this, elseEnv))
+            {
+                if (!elseContext.IsEmpty)
+                {
+                    PushNarrowingContext(elseContext);
+                }
+                try
+                {
+                    elseType = CheckExpr(ternary.ElseBranch);
+                }
+                finally
+                {
+                    if (!elseContext.IsEmpty)
+                    {
+                        PopNarrowingContext();
+                    }
+                }
+            }
+        }
+        else
+        {
+            thenType = CheckExpr(ternary.ThenBranch);
+            elseType = CheckExpr(ternary.ElseBranch);
+        }
 
         // Return the more specific type, or thenType if both are compatible
         if (IsCompatible(thenType, elseType) || IsCompatible(elseType, thenType))
@@ -171,8 +317,8 @@ public partial class TypeChecker
             return thenType;
         }
 
-        // For now, allow different types and return Any
-        return new TypeInfo.Any();
+        // Return union of both branch types
+        return new TypeInfo.Union([thenType, elseType]);
     }
 
     private TypeInfo CheckCompoundAssign(Expr.CompoundAssign compound)

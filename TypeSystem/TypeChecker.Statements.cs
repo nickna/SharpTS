@@ -146,6 +146,17 @@ public partial class TypeChecker
             var provisionalType = declaredType ?? new TypeInfo.Any();
             _environment.Define(stmt.Name.Lexeme, provisionalType);
 
+            // Track variable-to-variable aliases for narrowing invalidation
+            // e.g., "const alias = obj" tracks that "alias" is an alias for "obj"
+            if (stmt.Initializer is Expr.Variable initVar)
+            {
+                var initType = _environment.Get(initVar.Name.Lexeme);
+                if (initType != null && IsObjectType(initType))
+                {
+                    _variableAliases[stmt.Name.Lexeme] = initVar.Name.Lexeme;
+                }
+            }
+
             if (declaredType is TypeInfo.Tuple tupleType && stmt.Initializer is Expr.ArrayLiteral arrayLit)
             {
                 CheckArrayLiteralAgainstTuple(arrayLit, tupleType, stmt.Name.Lexeme);
@@ -203,6 +214,17 @@ public partial class TypeChecker
     internal VoidResult VisitConst(Stmt.Const stmt)
     {
         TypeInfo constDeclaredType;
+
+        // Track variable-to-variable aliases for narrowing invalidation
+        // e.g., "const alias = obj" tracks that "alias" is an alias for "obj"
+        if (stmt.Initializer is Expr.Variable initVar)
+        {
+            var initType = _environment.Get(initVar.Name.Lexeme);
+            if (initType != null && IsObjectType(initType))
+            {
+                _variableAliases[stmt.Name.Lexeme] = initVar.Name.Lexeme;
+            }
+        }
 
         if (stmt.TypeAnnotation == "unique symbol")
         {

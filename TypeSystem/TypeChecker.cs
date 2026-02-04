@@ -79,6 +79,11 @@ public partial class TypeChecker
     // Each scope level can have its own narrowings (for if/else branches, etc.)
     private readonly Stack<Narrowing.NarrowingContext> _narrowingContextStack = new();
 
+    // Alias tracking for narrowing invalidation
+    // Maps a variable name to the variable it was assigned from (for simple variable-to-variable aliases)
+    // e.g., "const alias = obj" would add entry: "alias" -> "obj"
+    private readonly Dictionary<string, string> _variableAliases = new();
+
     /// <summary>
     /// Gets the current narrowing context (top of stack), or empty if none.
     /// </summary>
@@ -156,6 +161,38 @@ public partial class TypeChecker
             var current = _narrowingContextStack.Pop();
             _narrowingContextStack.Push(current.Invalidate(assignedPath));
         }
+    }
+
+    /// <summary>
+    /// Invalidates property narrowings for an object when it's passed to a function
+    /// that might mutate it. Only affects mutable property narrowings, not the object itself.
+    /// </summary>
+    private void InvalidatePropertiesForFunctionArg(Narrowing.NarrowingPath basePath)
+    {
+        if (_narrowingContextStack.Count > 0)
+        {
+            var current = _narrowingContextStack.Pop();
+            _narrowingContextStack.Push(current.InvalidatePropertiesOf(basePath));
+        }
+    }
+
+    /// <summary>
+    /// Extracts a NarrowingPath from an expression if it represents a narrowable location.
+    /// Returns null if the expression is not narrowable (e.g., a literal or complex expression).
+    /// </summary>
+    private static Narrowing.NarrowingPath? GetNarrowingPath(Parsing.Expr expr)
+    {
+        return expr switch
+        {
+            Parsing.Expr.Variable v => new Narrowing.NarrowingPath.Variable(v.Name.Lexeme),
+            Parsing.Expr.Get get when GetNarrowingPath(get.Object) is { } basePath =>
+                new Narrowing.NarrowingPath.PropertyAccess(basePath, get.Name.Lexeme),
+            Parsing.Expr.GetIndex idx when GetNarrowingPath(idx.Object) is { } basePath &&
+                                           idx.Index is Parsing.Expr.Literal { Value: double d } &&
+                                           d == Math.Floor(d) =>
+                new Narrowing.NarrowingPath.ElementAccess(basePath, (int)d),
+            _ => null
+        };
     }
 
     /// <summary>

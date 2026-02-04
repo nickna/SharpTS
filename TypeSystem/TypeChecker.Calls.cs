@@ -369,6 +369,17 @@ public partial class TypeChecker
             return new TypeInfo.Any(); // Returns an object with remaining properties
         }
 
+        // Invalidate property narrowings for method calls on objects
+        // e.g., obj.mutate() should invalidate narrowings on obj's properties
+        if (call.Callee is Expr.Get methodGet)
+        {
+            var receiverPath = GetNarrowingPath(methodGet.Object);
+            if (receiverPath != null)
+            {
+                InvalidatePropertiesForFunctionArg(receiverPath);
+            }
+        }
+
         TypeInfo calleeType = CheckExpr(call.Callee);
 
         if (calleeType is TypeInfo.Class classType)
@@ -512,7 +523,20 @@ public partial class TypeChecker
                                 throw new TypeCheckException($" Argument {argIndex + 1} expected type '{restElementType}' but got '{argType}'.");
                             }
                         }
+
+                        // Invalidate property narrowings for object arguments
+                        // If the argument is a variable/property path referencing an object,
+                        // the function might mutate its properties
+                        if (IsObjectType(argType))
+                        {
+                            var argPath = GetNarrowingPath(arg);
+                            if (argPath != null)
+                            {
+                                InvalidatePropertiesForFunctionArg(argPath);
+                            }
+                        }
                     }
+
                     if (paramIndex < regularParamCount) paramIndex++;
                     argIndex++;
                 }

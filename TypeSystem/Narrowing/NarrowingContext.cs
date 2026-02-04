@@ -116,6 +116,37 @@ public sealed class NarrowingContext
     }
 
     /// <summary>
+    /// Returns a new context with all property narrowings invalidated for paths
+    /// that have the given base path as their root.
+    /// Used when an object is passed to a function that might mutate it.
+    /// </summary>
+    /// <param name="basePath">The base path whose property narrowings should be invalidated.</param>
+    public NarrowingContext InvalidatePropertiesOf(NarrowingPath basePath)
+    {
+        var builder = _narrowings.ToBuilder();
+        var toRemove = new List<NarrowingPath>();
+
+        foreach (var path in _narrowings.Keys)
+        {
+            // Only invalidate property narrowings (depth > 0) that have this base
+            // Don't invalidate narrowings on the variable itself
+            if (path.Depth > 0 && basePath.IsPrefixOf(path))
+            {
+                toRemove.Add(path);
+            }
+        }
+
+        foreach (var path in toRemove)
+        {
+            builder.Remove(path);
+        }
+
+        return builder.Count == _narrowings.Count
+            ? this  // No changes
+            : new NarrowingContext(builder.ToImmutable());
+    }
+
+    /// <summary>
     /// Merges two contexts at a control flow join point.
     /// A narrowing is preserved only if it exists in both contexts with compatible types.
     /// </summary>

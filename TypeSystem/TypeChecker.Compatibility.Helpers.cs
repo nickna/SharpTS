@@ -41,6 +41,20 @@ public partial class TypeChecker
     private bool IsPrimitiveType(TypeInfo t) => t is TypeInfo.String or TypeInfo.Primitive or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.Symbol or TypeInfo.UniqueSymbol;
 
     /// <summary>
+    /// Checks if a type is an object type (has properties that could be mutated).
+    /// Used for determining if passing to a function should invalidate property narrowings.
+    /// </summary>
+    private static bool IsObjectType(TypeInfo t) => t is TypeInfo.Record
+        or TypeInfo.Interface
+        or TypeInfo.Instance
+        or TypeInfo.Class
+        or TypeInfo.GenericClass
+        or TypeInfo.InstantiatedGeneric
+        or TypeInfo.Array
+        or TypeInfo.Map
+        or TypeInfo.Set;
+
+    /// <summary>
     /// Checks if a name is a built-in Error type name.
     /// Delegates to ErrorBuiltIns for centralized type name knowledge.
     /// </summary>
