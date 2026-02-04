@@ -34,42 +34,7 @@ public partial class ILEmitter
                 : null;
             if (parentCtor != null)
             {
-                // Load this
-                IL.Emit(OpCodes.Ldarg_0);
-
-                // Load arguments with proper type conversions
-                var parentCtorParams = parentCtor.GetParameters();
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    EmitExpression(c.Arguments[i]);
-                    if (i < parentCtorParams.Length)
-                    {
-                        EmitConversionForParameter(c.Arguments[i], parentCtorParams[i].ParameterType);
-                    }
-                    else
-                    {
-                        EmitBoxIfNeeded(c.Arguments[i]);
-                    }
-                }
-
-                // Pad missing optional arguments with appropriate default values
-                for (int i = c.Arguments.Count; i < parentCtorParams.Length; i++)
-                {
-                    EmitDefaultForType(parentCtorParams[i].ParameterType);
-                }
-
-                // Call parent constructor
-                // Handle generic superclass with type arguments (e.g., extends Box<string>)
-                ConstructorInfo ctorToCall = parentCtor;
-                Type? baseType = _ctx.CurrentClassBuilder?.BaseType;
-                if (baseType != null && baseType.IsGenericType && baseType.IsConstructedGenericType)
-                {
-                    // Get the constructor for the closed generic type
-                    ctorToCall = TypeBuilder.GetConstructor(baseType, parentCtor);
-                }
-                IL.Emit(OpCodes.Call, ctorToCall);
-                IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
-                SetStackUnknown();
+                EmitSuperConstructorCall(parentCtor, c.Arguments);
                 return;
             }
 
@@ -98,42 +63,7 @@ public partial class ILEmitter
 
                 if (parentExprCtor != null)
                 {
-                    // Load this
-                    IL.Emit(OpCodes.Ldarg_0);
-
-                    // Load arguments with proper type conversions
-                    var parentExprCtorParams = parentExprCtor.GetParameters();
-                    for (int i = 0; i < c.Arguments.Count; i++)
-                    {
-                        EmitExpression(c.Arguments[i]);
-                        if (i < parentExprCtorParams.Length)
-                        {
-                            EmitConversionForParameter(c.Arguments[i], parentExprCtorParams[i].ParameterType);
-                        }
-                        else
-                        {
-                            EmitBoxIfNeeded(c.Arguments[i]);
-                        }
-                    }
-
-                    // Pad missing optional arguments with appropriate default values
-                    for (int i = c.Arguments.Count; i < parentExprCtorParams.Length; i++)
-                    {
-                        EmitDefaultForType(parentExprCtorParams[i].ParameterType);
-                    }
-
-                    // Call parent constructor
-                    // Handle generic superclass with type arguments (e.g., extends Box<string>)
-                    ConstructorInfo exprCtorToCall = parentExprCtor;
-                    Type? exprBaseType = _ctx.CurrentClassBuilder?.BaseType;
-                    if (exprBaseType != null && exprBaseType.IsGenericType && exprBaseType.IsConstructedGenericType)
-                    {
-                        // Get the constructor for the closed generic type
-                        exprCtorToCall = TypeBuilder.GetConstructor(exprBaseType, parentExprCtor);
-                    }
-                    IL.Emit(OpCodes.Call, exprCtorToCall);
-                    IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
-                    SetStackUnknown();
+                    EmitSuperConstructorCall(parentExprCtor, c.Arguments);
                     return;
                 }
             }
@@ -2424,6 +2354,51 @@ public partial class ILEmitter
                 break;
         }
 
+        SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits a super() constructor call with proper argument handling and generic type support.
+    /// </summary>
+    /// <param name="parentCtor">The parent class constructor to call.</param>
+    /// <param name="arguments">The arguments to pass to the constructor.</param>
+    private void EmitSuperConstructorCall(ConstructorBuilder parentCtor, List<Expr> arguments)
+    {
+        // Load this
+        IL.Emit(OpCodes.Ldarg_0);
+
+        // Load arguments with proper type conversions
+        var ctorParams = parentCtor.GetParameters();
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            EmitExpression(arguments[i]);
+            if (i < ctorParams.Length)
+            {
+                EmitConversionForParameter(arguments[i], ctorParams[i].ParameterType);
+            }
+            else
+            {
+                EmitBoxIfNeeded(arguments[i]);
+            }
+        }
+
+        // Pad missing optional arguments with appropriate default values
+        for (int i = arguments.Count; i < ctorParams.Length; i++)
+        {
+            EmitDefaultForType(ctorParams[i].ParameterType);
+        }
+
+        // Call parent constructor
+        // Handle generic superclass with type arguments (e.g., extends Box<string>)
+        ConstructorInfo ctorToCall = parentCtor;
+        Type? baseType = _ctx.CurrentClassBuilder?.BaseType;
+        if (baseType != null && baseType.IsGenericType && baseType.IsConstructedGenericType)
+        {
+            // Get the constructor for the closed generic type
+            ctorToCall = TypeBuilder.GetConstructor(baseType, parentCtor);
+        }
+        IL.Emit(OpCodes.Call, ctorToCall);
+        IL.Emit(OpCodes.Ldnull); // constructor call returns undefined
         SetStackUnknown();
     }
 }
