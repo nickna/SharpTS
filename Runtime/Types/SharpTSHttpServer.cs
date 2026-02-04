@@ -1,7 +1,6 @@
 using System.Net;
 using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
-using SharpTS.Runtime.EventLoop;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -16,7 +15,7 @@ namespace SharpTS.Runtime.Types;
 /// Methods: listen(port, callback?), close(callback?)
 /// Events: 'listening', 'request', 'error', 'close'
 /// </remarks>
-public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IAsyncHandle, IDisposable
+public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IDisposable
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Record;
@@ -27,12 +26,6 @@ public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IAsyncHa
     private Task? _listenTask;
     private bool _isListening;
     private Interpreter? _interpreter;
-
-    /// <inheritdoc />
-    public bool IsActive => _isListening;
-
-    /// <inheritdoc />
-    public event Action? OnStateChanged;
 
     /// <summary>
     /// Creates a new HTTP server with the given request handler.
@@ -121,10 +114,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IAsyncHa
         _cts = new CancellationTokenSource();
 
         // Register with interpreter's event loop to keep process alive
-        interpreter.RegisterHandle(this);
-
-        // Notify event loop of state change
-        OnStateChanged?.Invoke();
+        interpreter.Ref();
 
         // Start accepting requests
         _listenTask = AcceptRequestsAsync(_cts.Token);
@@ -156,10 +146,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, ITypeCategorized, IAsyncHa
         _isListening = false;
 
         // Unregister from interpreter's event loop
-        _interpreter?.UnregisterHandle(this);
-
-        // Notify event loop of state change
-        OnStateChanged?.Invoke();
+        _interpreter?.Unref();
 
         // Call the callback if provided
         if (args.Count > 0 && args[0] is ISharpTSCallable callback && _interpreter != null)

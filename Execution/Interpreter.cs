@@ -5,7 +5,6 @@ using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.BuiltIns.Modules;
 using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
-using SharpTS.Runtime.EventLoop;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
@@ -332,24 +331,6 @@ public partial class Interpreter : IDisposable
         {
             WakeEventLoop();
         }
-    }
-
-    /// <summary>
-    /// Registers an async handle with the interpreter's event loop.
-    /// Compatibility shim for existing handle-based callers.
-    /// </summary>
-    internal void RegisterHandle(IAsyncHandle handle)
-    {
-        Ref();
-    }
-
-    /// <summary>
-    /// Unregisters an async handle from the interpreter's event loop.
-    /// Compatibility shim for existing handle-based callers.
-    /// </summary>
-    internal void UnregisterHandle(IAsyncHandle handle)
-    {
-        Unref();
     }
 
     /// <summary>
