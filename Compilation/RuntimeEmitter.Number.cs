@@ -475,7 +475,7 @@ public partial class RuntimeEmitter
         var lengthLocal = il.DeclareLocal(_types.Int32);
 
         // result = new StringBuilder()
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderDefaultCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // length = str.Length
@@ -561,7 +561,7 @@ public partial class RuntimeEmitter
         // Append 'e' and check for optional sign
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [_types.Char])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // Check if next char is + or -
@@ -590,7 +590,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(appendExpSignLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, nextCharLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [_types.Char])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -602,7 +602,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(appendCharLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [_types.Char])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -620,7 +620,7 @@ public partial class RuntimeEmitter
         var returnEmptyLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, returnEmptyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnEmptyLabel);
@@ -1490,7 +1490,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, valueLocal);
 
         // StringBuilder result = new StringBuilder()
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderDefaultCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // while (value > 0) { result.Insert(0, digits[value % radix]); value /= radix; }
@@ -1530,7 +1530,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(endLoopLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
     }
 }

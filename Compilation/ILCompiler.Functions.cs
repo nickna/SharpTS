@@ -510,7 +510,7 @@ public partial class ILCompiler
                 {
                     // Emit: RuntimeHelpers.RunClassConstructor(typeof(ClassName).TypeHandle)
                     il.Emit(OpCodes.Ldtoken, classBuilder);
-                    il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                     il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
                     il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
                 }
@@ -686,7 +686,7 @@ public partial class ILCompiler
                 if (_classes.Builders.TryGetValue(className, out var classBuilder))
                 {
                     il.Emit(OpCodes.Ldtoken, classBuilder);
-                    il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                     il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
                     il.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
                 }

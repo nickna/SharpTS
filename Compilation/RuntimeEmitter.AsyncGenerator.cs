@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        typeBuilder.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        typeBuilder.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
 
         // SetStateMachine method
         var setStateMachine = typeBuilder.DefineMethod(
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(IAsyncStateMachine)]
         );
-        typeBuilder.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        typeBuilder.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
         var setIL = setStateMachine.GetILGenerator();
         setIL.Emit(OpCodes.Ret);
 

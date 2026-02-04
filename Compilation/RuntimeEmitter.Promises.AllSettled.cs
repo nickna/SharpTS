@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        typeBuilder.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        typeBuilder.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
 
         // SetStateMachine (required by IAsyncStateMachine)
         var setStateMachine = typeBuilder.DefineMethod(
@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(IAsyncStateMachine)]
         );
-        typeBuilder.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        typeBuilder.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
         var setIL = setStateMachine.GetILGenerator();
         setIL.Emit(OpCodes.Ret);
 
@@ -152,7 +152,7 @@ public partial class RuntimeEmitter
         var taskLocal = il.DeclareLocal(typeof(Task<object?>));
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var awaiterLocal = il.DeclareLocal(sm.AwaiterType);
         il.Emit(OpCodes.Stloc, awaiterLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -298,7 +298,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        typeBuilder.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        typeBuilder.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
 
         // SetStateMachine
         var setStateMachine = typeBuilder.DefineMethod(
@@ -307,7 +307,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(IAsyncStateMachine)]
         );
-        typeBuilder.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        typeBuilder.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
         var setIL = setStateMachine.GetILGenerator();
         setIL.Emit(OpCodes.Ret);
 

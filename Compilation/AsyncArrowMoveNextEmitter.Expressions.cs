@@ -151,19 +151,19 @@ public partial class AsyncArrowMoveNextEmitter
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "url");
         _il.Emit(OpCodes.Ldstr, url);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Add "filename" property
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "filename");
         _il.Emit(OpCodes.Ldstr, path);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Add "dirname" property
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "dirname");
         _il.Emit(OpCodes.Ldstr, dirname);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Wrap in SharpTSObject
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
@@ -494,7 +494,7 @@ public partial class AsyncArrowMoveNextEmitter
             // Pass Symbol.iterator and runtimeType for iterator protocol support
             _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
             _il.Emit(OpCodes.Ldtoken, _ctx!.Runtime!.RuntimeType);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConcatArrays);
         }
         SetStackUnknown();
@@ -517,7 +517,7 @@ public partial class AsyncArrowMoveNextEmitter
                 EmitStaticPropertyKey(prop.Key!);
                 EmitExpression(prop.Value);
                 EnsureBoxed();
-                _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+                _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
             }
 
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
@@ -525,7 +525,7 @@ public partial class AsyncArrowMoveNextEmitter
         else
         {
             // Complex case: has spreads or computed keys, use SetIndex
-            _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
+            _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
 
             foreach (var prop in o.Properties)
             {
@@ -550,7 +550,7 @@ public partial class AsyncArrowMoveNextEmitter
                     EmitStaticPropertyKey(prop.Key!);
                     EmitExpression(prop.Value);
                     EnsureBoxed();
-                    _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item")!);
+                    _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectNullableSetItem);
                 }
             }
 
@@ -984,7 +984,7 @@ public partial class AsyncArrowMoveNextEmitter
         if (_ctx?.CurrentClassBuilder != null)
         {
             _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         }
         else
         {
@@ -1008,7 +1008,7 @@ public partial class AsyncArrowMoveNextEmitter
         {
             // Known class at compile time - use typeof
             _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         }
         else
         {

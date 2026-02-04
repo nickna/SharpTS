@@ -206,6 +206,7 @@ public class TypeProvider
     public Type TaskContinuationOptions => Resolve("System.Threading.Tasks.TaskContinuationOptions");
     public Type TaskScheduler => Resolve("System.Threading.Tasks.TaskScheduler");
     public Type Monitor => Resolve("System.Threading.Monitor");
+    public Type SemaphoreSlim => Resolve("System.Threading.SemaphoreSlim");
     public Type IntPtr => Resolve("System.IntPtr");
 
     public Type TaskOfObject => MakeGenericType(TaskOpen, Object);
@@ -597,6 +598,202 @@ public class TypeProvider
     /// </summary>
     public ConstructorInfo DictionaryStringObjectCtor =>
         _dictionaryStringObjectCtor ??= GetDefaultConstructor(DictionaryStringObject);
+
+    // Additional constructor caches
+    private ConstructorInfo? _objectDefaultCtor;
+    private ConstructorInfo? _nullableInt32Ctor;
+    private ConstructorInfo? _listStringFromEnumerableCtor;
+    private ConstructorInfo? _listObjectFromEnumerableCtor;
+    private ConstructorInfo? _dictionaryStringObjectNullableCtor;
+
+    /// <summary>
+    /// Gets the object() default constructor.
+    /// </summary>
+    public ConstructorInfo ObjectDefaultCtor =>
+        _objectDefaultCtor ??= GetDefaultConstructor(Object);
+
+    /// <summary>
+    /// Gets the int?(int) constructor for nullable int.
+    /// </summary>
+    public ConstructorInfo NullableInt32Ctor =>
+        _nullableInt32Ctor ??= GetConstructor(MakeNullable(Int32), Int32);
+
+    /// <summary>
+    /// Gets the List&lt;string&gt;(IEnumerable&lt;string&gt;) constructor.
+    /// </summary>
+    public ConstructorInfo ListStringFromEnumerableCtor =>
+        _listStringFromEnumerableCtor ??= GetConstructor(MakeGenericType(ListOpen, String), MakeGenericType(IEnumerableOpen, String));
+
+    /// <summary>
+    /// Gets the List&lt;object?&gt;(IEnumerable&lt;object?&gt;) constructor.
+    /// </summary>
+    public ConstructorInfo ListObjectFromEnumerableCtor =>
+        _listObjectFromEnumerableCtor ??= GetConstructor(ListOfObjectNullable, typeof(IEnumerable<object?>));
+
+    /// <summary>
+    /// Gets the Dictionary&lt;string, object?&gt;() default constructor.
+    /// </summary>
+    public ConstructorInfo DictionaryStringObjectNullableCtor =>
+        _dictionaryStringObjectNullableCtor ??= GetDefaultConstructor(MakeGenericType(DictionaryOpen, String, Object));
+
+    // SemaphoreSlim constructor
+    private ConstructorInfo? _semaphoreSlimCtor;
+
+    /// <summary>
+    /// Gets the SemaphoreSlim(int, int) constructor.
+    /// </summary>
+    public ConstructorInfo SemaphoreSlimCtor =>
+        _semaphoreSlimCtor ??= GetConstructor(SemaphoreSlim, Int32, Int32);
+
+    // StringBuilder constructors
+    private ConstructorInfo? _stringBuilderDefaultCtor;
+    private ConstructorInfo? _stringBuilderStringCtor;
+    private ConstructorInfo? _stringBuilderIntCtor;
+
+    /// <summary>
+    /// Gets the StringBuilder() default constructor.
+    /// </summary>
+    public ConstructorInfo StringBuilderDefaultCtor =>
+        _stringBuilderDefaultCtor ??= GetDefaultConstructor(StringBuilder);
+
+    /// <summary>
+    /// Gets the StringBuilder(string) constructor.
+    /// </summary>
+    public ConstructorInfo StringBuilderStringCtor =>
+        _stringBuilderStringCtor ??= GetConstructor(StringBuilder, String);
+
+    /// <summary>
+    /// Gets the StringBuilder(int) constructor (capacity).
+    /// </summary>
+    public ConstructorInfo StringBuilderIntCtor =>
+        _stringBuilderIntCtor ??= GetConstructor(StringBuilder, Int32);
+
+    // List constructors
+    private ConstructorInfo? _listObjectNullableDefaultCtor;
+
+    /// <summary>
+    /// Gets the List&lt;object?&gt;() default constructor.
+    /// </summary>
+    public ConstructorInfo ListObjectNullableDefaultCtor =>
+        _listObjectNullableDefaultCtor ??= GetDefaultConstructor(ListOfObjectNullable);
+
+    #endregion
+
+    #region Additional Cached Method References
+
+    private MethodInfo? _typeGetFieldWithFlags;
+    private MethodInfo? _listStringGetItem;
+    private MethodInfo? _objectStaticEquals;
+
+    /// <summary>
+    /// Gets the Type.GetField(string, BindingFlags) method.
+    /// </summary>
+    public MethodInfo TypeGetFieldWithFlags =>
+        _typeGetFieldWithFlags ??= GetMethod(Type, "GetField", String, BindingFlags);
+
+    /// <summary>
+    /// Gets the List&lt;string&gt;.get_Item(int) method (indexer getter).
+    /// </summary>
+    public MethodInfo ListStringGetItem =>
+        _listStringGetItem ??= GetMethod(MakeGenericType(ListOpen, String), "get_Item", Int32);
+
+    /// <summary>
+    /// Gets the object.Equals(object, object) static method.
+    /// </summary>
+    public MethodInfo ObjectStaticEquals =>
+        _objectStaticEquals ??= GetMethod(Object, "Equals", Object, Object);
+
+    // Monitor methods
+    private MethodInfo? _monitorEnter;
+    private MethodInfo? _monitorExit;
+
+    /// <summary>
+    /// Gets the Monitor.Enter(object, ref bool) method.
+    /// </summary>
+    public MethodInfo MonitorEnter =>
+        _monitorEnter ??= GetMethod(Monitor, "Enter", Object, Boolean.MakeByRefType());
+
+    /// <summary>
+    /// Gets the Monitor.Exit(object) method.
+    /// </summary>
+    public MethodInfo MonitorExit =>
+        _monitorExit ??= GetMethod(Monitor, "Exit", Object);
+
+    // Type methods
+    private MethodInfo? _typeGetTypeFromHandle;
+
+    /// <summary>
+    /// Gets the Type.GetTypeFromHandle(RuntimeTypeHandle) method.
+    /// </summary>
+    public MethodInfo TypeGetTypeFromHandle =>
+        _typeGetTypeFromHandle ??= GetMethod(Type, "GetTypeFromHandle", RuntimeTypeHandle);
+
+    // Dictionary methods
+    private MethodInfo? _dictionaryStringObjectSetItem;
+    private MethodInfo? _dictionaryStringObjectNullableTryGetValue;
+    private MethodInfo? _dictionaryStringObjectNullableSetItem;
+
+    /// <summary>
+    /// Gets the Dictionary&lt;string, object&gt;.set_Item(string, object) method.
+    /// </summary>
+    public MethodInfo DictionaryStringObjectSetItem =>
+        _dictionaryStringObjectSetItem ??= GetMethod(DictionaryStringObject, "set_Item", String, Object);
+
+    /// <summary>
+    /// Gets the Dictionary&lt;string, object?&gt;.TryGetValue(string, out object?) method.
+    /// </summary>
+    public MethodInfo DictionaryStringObjectNullableTryGetValue =>
+        _dictionaryStringObjectNullableTryGetValue ??= MakeGenericType(DictionaryOpen, String, Object)
+            .GetMethod("TryGetValue", [String, Object.MakeByRefType()])!;
+
+    /// <summary>
+    /// Gets the Dictionary&lt;string, object?&gt;.set_Item(string, object?) method.
+    /// </summary>
+    public MethodInfo DictionaryStringObjectNullableSetItem =>
+        _dictionaryStringObjectNullableSetItem ??= GetMethod(MakeGenericType(DictionaryOpen, String, Object), "set_Item", String, Object);
+
+    // StringBuilder methods
+    private MethodInfo? _stringBuilderToString;
+
+    /// <summary>
+    /// Gets the StringBuilder.ToString() method.
+    /// </summary>
+    public MethodInfo StringBuilderToString =>
+        _stringBuilderToString ??= GetMethodNoParams(StringBuilder, "ToString");
+
+    // Additional StringBuilder methods
+    private MethodInfo? _stringBuilderAppendInt;
+
+    /// <summary>
+    /// Gets the StringBuilder.Append(int) method.
+    /// </summary>
+    public MethodInfo StringBuilderAppendInt =>
+        _stringBuilderAppendInt ??= GetMethod(StringBuilder, "Append", Int32);
+
+    // Task methods
+    private MethodInfo? _taskOfObjectGetAwaiter;
+
+    /// <summary>
+    /// Gets the Task&lt;object?&gt;.GetAwaiter() method.
+    /// </summary>
+    public MethodInfo TaskOfObjectGetAwaiter =>
+        _taskOfObjectGetAwaiter ??= GetMethodNoParams(TaskOfObject, "GetAwaiter");
+
+    // IAsyncStateMachine methods
+    private MethodInfo? _asyncStateMachineSetStateMachine;
+    private MethodInfo? _asyncStateMachineMoveNext;
+
+    /// <summary>
+    /// Gets the IAsyncStateMachine.SetStateMachine(IAsyncStateMachine) method.
+    /// </summary>
+    public MethodInfo AsyncStateMachineSetStateMachine =>
+        _asyncStateMachineSetStateMachine ??= GetMethod(IAsyncStateMachine, "SetStateMachine", IAsyncStateMachine);
+
+    /// <summary>
+    /// Gets the IAsyncStateMachine.MoveNext() method.
+    /// </summary>
+    public MethodInfo AsyncStateMachineMoveNext =>
+        _asyncStateMachineMoveNext ??= GetMethodNoParams(IAsyncStateMachine, "MoveNext");
 
     #endregion
 

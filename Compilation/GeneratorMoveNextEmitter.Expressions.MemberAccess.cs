@@ -687,7 +687,7 @@ public partial class GeneratorMoveNextEmitter
         if (_ctx?.CurrentClassBuilder != null)
         {
             _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         }
         else
         {
@@ -887,7 +887,7 @@ public partial class GeneratorMoveNextEmitter
             EmitStaticPropertyKey(prop.Key!);
             EmitExpression(prop.Value);
             EnsureBoxed();
-            _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+            _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
         }
 
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);

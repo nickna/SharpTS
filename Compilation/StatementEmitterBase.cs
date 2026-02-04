@@ -675,7 +675,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         if (Ctx?.ClassExprBuilders != null && Ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
         {
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             SetStackUnknown();
         }
         else

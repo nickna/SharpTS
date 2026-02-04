@@ -1178,7 +1178,7 @@ public partial class ILCompiler
             // No explicit super() - call parent constructor automatically
             Type baseType = typeBuilder.BaseType ?? typeof(object);
             il.Emit(OpCodes.Ldarg_0);
-            var baseCtor = baseType.GetConstructor([]) ?? typeof(object).GetConstructor([])!;
+            var baseCtor = baseType.GetConstructor([]) ?? _types.ObjectDefaultCtor;
             il.Emit(OpCodes.Call, baseCtor);
         }
 
@@ -1230,7 +1230,7 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ldstr, fieldName);
                 emitter.EmitExpression(field.Initializer!);
                 emitter.EmitBoxIfNeeded(field.Initializer!);
-                il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+                il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
             }
         }
 
@@ -1245,7 +1245,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldfld, fieldsField);
             il.Emit(OpCodes.Ldstr, fieldName);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
         }
 
         il.Emit(OpCodes.Ret);

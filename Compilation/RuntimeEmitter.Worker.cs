@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
 
         // end is a real value - wrap in nullable
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, typeof(int?).GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Newobj, _types.NullableInt32Ctor);
         il.Emit(OpCodes.Br, callLabel);
 
         // end is MaxValue - use null
@@ -459,7 +459,7 @@ public partial class RuntimeEmitter
         ilSAB.Emit(OpCodes.Ldarg_2);
         ilSAB.Emit(OpCodes.Unbox_Any, _types.Double);
         ilSAB.Emit(OpCodes.Conv_I4);
-        ilSAB.Emit(OpCodes.Newobj, typeof(int?).GetConstructor([typeof(int)])!);
+        ilSAB.Emit(OpCodes.Newobj, _types.NullableInt32Ctor);
         ilSAB.Emit(OpCodes.Br, lblEndLength);
 
         ilSAB.MarkLabel(lblHasLength);
@@ -722,7 +722,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Newobj, typeof(int?).GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Newobj, _types.NullableInt32Ctor);
         il.Emit(OpCodes.Br, lblEndCount);
 
         il.MarkLabel(lblHasCount);
@@ -870,7 +870,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(isObjectLabel);
         var valueLocal = il.DeclareLocal(_types.Object);
         var fieldsProperty = sharpTSObjectType.GetProperty("Fields")!.GetGetMethod()!;
-        var tryGetValue = typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!;
+        var tryGetValue = _types.DictionaryStringObjectNullableTryGetValue;
 
         // Get the Fields dictionary
         il.Emit(OpCodes.Ldarg_1);

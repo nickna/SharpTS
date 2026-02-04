@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
         var sbLocal = il.DeclareLocal(typeof(StringBuilder));
 
         // var sb = new StringBuilder()
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderDefaultCtor);
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // if (flags.Contains('g')) sb.Append('g')
@@ -100,7 +100,7 @@ public partial class RuntimeEmitter
 
         // return sb.ToString()
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
     }
 
@@ -117,7 +117,7 @@ public partial class RuntimeEmitter
         // sb.Append('x')
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldc_I4, (int)flag);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [_types.Char])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(skipLabel);

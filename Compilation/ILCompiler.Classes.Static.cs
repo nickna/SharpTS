@@ -113,7 +113,7 @@ public partial class ILCompiler
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
         {
             // _staticSyncLock = new object();
-            il.Emit(OpCodes.Newobj, typeof(object).GetConstructor([])!);
+            il.Emit(OpCodes.Newobj, _types.ObjectDefaultCtor);
             il.Emit(OpCodes.Stsfld, staticSyncLockField);
         }
 
@@ -122,7 +122,7 @@ public partial class ILCompiler
             // _staticAsyncLock = new SemaphoreSlim(1, 1);
             il.Emit(OpCodes.Ldc_I4_1);  // initialCount = 1
             il.Emit(OpCodes.Ldc_I4_1);  // maxCount = 1
-            il.Emit(OpCodes.Newobj, typeof(SemaphoreSlim).GetConstructor([typeof(int), typeof(int)])!);
+            il.Emit(OpCodes.Newobj, _types.SemaphoreSlimCtor);
             il.Emit(OpCodes.Stsfld, staticAsyncLockField);
         }
 
@@ -355,7 +355,7 @@ public partial class ILCompiler
             // Monitor.Enter(_staticSyncLock, ref __lockTaken);
             il.Emit(OpCodes.Ldsfld, staticSyncLockField);           // _staticSyncLock
             il.Emit(OpCodes.Ldloca, lockTakenLocal);                // ref __lockTaken
-            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [typeof(object), typeof(bool).MakeByRefType()])!);
+            il.Emit(OpCodes.Call, _types.MonitorEnter);
 
             il.MarkLabel(skipEnterLabel);
 
@@ -397,7 +397,7 @@ public partial class ILCompiler
 
             // Monitor.Exit(_staticSyncLock);
             il.Emit(OpCodes.Ldsfld, staticSyncLockField);           // _staticSyncLock
-            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [typeof(object)])!);
+            il.Emit(OpCodes.Call, _types.MonitorExit);
 
             il.MarkLabel(skipExitLabel);
 

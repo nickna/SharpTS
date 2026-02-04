@@ -63,7 +63,7 @@ public partial class AsyncMoveNextEmitter
             // Pass Symbol.iterator and runtimeType for iterator protocol support
             _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
             _il.Emit(OpCodes.Ldtoken, _ctx!.Runtime!.RuntimeType);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.ConcatArrays);
         }
         SetStackUnknown();
@@ -92,7 +92,7 @@ public partial class AsyncMoveNextEmitter
                 EmitStaticPropertyKey(prop.Key!);
                 EmitExpression(prop.Value);
                 EnsureBoxed();
-                _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+                _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
             }
 
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);
@@ -100,7 +100,7 @@ public partial class AsyncMoveNextEmitter
         else
         {
             // Complex case: has spreads or computed keys, use SetIndex
-            _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
+            _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
 
             foreach (var prop in o.Properties)
             {
@@ -127,7 +127,7 @@ public partial class AsyncMoveNextEmitter
                     EmitStaticPropertyKey(prop.Key!);
                     EmitExpression(prop.Value);
                     EnsureBoxed();
-                    _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("set_Item")!);
+                    _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectNullableSetItem);
                 }
             }
 
@@ -143,7 +143,7 @@ public partial class AsyncMoveNextEmitter
     private void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
     {
         // Create $Object: new $Object(new Dictionary<string, object?>())
-        _il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor([])!);
+        _il.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSObjectCtor);
 
         // Store in local for repeated use

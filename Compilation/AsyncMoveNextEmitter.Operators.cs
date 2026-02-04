@@ -296,7 +296,7 @@ public partial class AsyncMoveNextEmitter
         if (_ctx?.CurrentClassBuilder != null)
         {
             _il.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            _il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         }
         else
         {

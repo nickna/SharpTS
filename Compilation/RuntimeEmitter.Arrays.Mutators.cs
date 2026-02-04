@@ -718,7 +718,7 @@ public partial class RuntimeEmitter
 
         // var copy = new List<object>(list)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, copyLocal);
 
         // Now sort the copy using the same logic as EmitArraySort
@@ -1450,7 +1450,7 @@ public partial class RuntimeEmitter
 
         // result = new List<object>(list)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // result[actualIndex] = args[1]
@@ -1577,7 +1577,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, hasArgs);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectFromEnumerableCtor);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(hasArgs);

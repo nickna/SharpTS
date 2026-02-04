@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        smType.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        smType.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
 
         // Define SetStateMachine method (empty body for value types)
         var setStateMachine = smType.DefineMethod(
@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(IAsyncStateMachine)]
         );
-        smType.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        smType.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
         var setSmIL = setStateMachine.GetILGenerator();
         setSmIL.Emit(OpCodes.Ret);
 
@@ -158,7 +158,7 @@ public partial class RuntimeEmitter
         // Get awaiter for input promise
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.PromiseField);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var awaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, awaiterLocal);
         il.Emit(OpCodes.Ldarg_0);
@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
         // Result is a Task - await it
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
         il.Emit(OpCodes.Castclass, typeof(Task<object?>));
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var callbackAwaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, callbackAwaiterLocal);
         il.Emit(OpCodes.Ldarg_0);

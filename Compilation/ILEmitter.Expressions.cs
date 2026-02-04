@@ -575,14 +575,14 @@ public partial class ILEmitter
             {
                 // RuntimeHelpers.RunClassConstructor(typeof(ClassName).TypeHandle)
                 IL.Emit(OpCodes.Ldtoken, typeBuilder);
-                IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                 IL.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
                 IL.Emit(OpCodes.Call, typeof(System.Runtime.CompilerServices.RuntimeHelpers).GetMethod("RunClassConstructor")!);
             }
 
             // Load the Type object using ldtoken + GetTypeFromHandle
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
-            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             SetStackUnknown();
         }
         else

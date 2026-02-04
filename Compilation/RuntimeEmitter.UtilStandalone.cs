@@ -225,7 +225,7 @@ public partial class RuntimeEmitter
         // var sb = new StringBuilder("[ ")
         var sbLocal = il.DeclareLocal(typeof(StringBuilder));
         il.Emit(OpCodes.Ldstr, "[ ");
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderStringCtor);
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // var list = (IList<object?>)arg0
@@ -289,7 +289,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, " ]");
         il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         // Depth exceeded
@@ -316,7 +316,7 @@ public partial class RuntimeEmitter
         // var sb = new StringBuilder("{ ")
         var sbLocal = il.DeclareLocal(typeof(StringBuilder));
         il.Emit(OpCodes.Ldstr, "{ ");
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor([typeof(string)])!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderStringCtor);
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // var dict = (Dictionary<string, object?>)arg0
@@ -330,7 +330,7 @@ public partial class RuntimeEmitter
         var keysLocal = il.DeclareLocal(typeof(List<string>));
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, typeof(List<string>).GetConstructor([typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // var count = keys.Count
@@ -366,7 +366,7 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListStringGetItem);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // sb.Append(key)
@@ -410,7 +410,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, " }");
         il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         // Depth exceeded
@@ -539,7 +539,7 @@ public partial class RuntimeEmitter
         // Note: We can't early-return here even with 1 arg because we need to process %% escapes
 
         // result = new StringBuilder()
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderDefaultCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // argIndex = 1
@@ -655,7 +655,7 @@ public partial class RuntimeEmitter
 
         // Return result.ToString()
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         // Empty case
@@ -761,7 +761,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Unbox_Any, typeof(double));
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendInt);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1121,7 +1121,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(defaultCompare);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(object).GetMethod("Equals", [typeof(object), typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.ObjectStaticEquals);
         il.Emit(OpCodes.Ret);
 
         // Return labels
@@ -1296,7 +1296,7 @@ public partial class RuntimeEmitter
         // Get keys as list
         il.Emit(OpCodes.Ldloc, dictA);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, typeof(List<string>).GetConstructor([typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keys);
 
         il.Emit(OpCodes.Ldloc, keys);
@@ -1314,7 +1314,7 @@ public partial class RuntimeEmitter
         // key = keys[i]
         il.Emit(OpCodes.Ldloc, keys);
         il.Emit(OpCodes.Ldloc, i);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListStringGetItem);
         il.Emit(OpCodes.Stloc, key);
 
         // if (!dictB.ContainsKey(key)) return false
@@ -1412,12 +1412,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnEmpty);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Castclass, _types.ListOfObjectNullable);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor([typeof(IEnumerable<object?>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectFromEnumerableCtor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>()
         il.MarkLabel(returnEmpty);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectNullableDefaultCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1469,7 +1469,7 @@ public partial class RuntimeEmitter
         // keys = new List<string>(options.Keys)
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObject.GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, typeof(List<string>).GetConstructor([typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // count = keys.Count
@@ -1488,7 +1488,7 @@ public partial class RuntimeEmitter
         // key = keys[i]
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListStringGetItem);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // optDef = options[key]
@@ -1663,7 +1663,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, posDefLocal);
         il.Emit(OpCodes.Ldstr, "type");
         il.Emit(OpCodes.Ldloca, typeValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, skipNegation);
 
         il.Emit(OpCodes.Ldloc, typeValLocal);
@@ -1700,7 +1700,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optDefLocal);
         il.Emit(OpCodes.Ldstr, "type");
         il.Emit(OpCodes.Ldloca, typeValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, defaultType);
 
         il.Emit(OpCodes.Ldloc, typeValLocal);
@@ -1727,7 +1727,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optDefLocal);
         il.Emit(OpCodes.Ldstr, "multiple");
         il.Emit(OpCodes.Ldloca, mValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, afterMultiple);
 
         il.Emit(OpCodes.Ldloc, mValLocal);
@@ -1929,7 +1929,7 @@ public partial class RuntimeEmitter
 
         // Create new list
         il.MarkLabel(createNewList);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectNullableDefaultCtor);
         il.Emit(OpCodes.Stloc, listLocal);
 
         // values[name] = list
@@ -1966,7 +1966,7 @@ public partial class RuntimeEmitter
 
         // tokens.Add(token dict) - simplified, just add basic token
         var tokenDict = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, tokenDict);
 
         // token["kind"] = "option"
@@ -2074,7 +2074,7 @@ public partial class RuntimeEmitter
         // keys = new List<string>(optionsDef.Keys)
         il.Emit(OpCodes.Ldarg_3); // optionsDef
         il.Emit(OpCodes.Callvirt, optionsDefType.GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, typeof(List<string>).GetConstructor([typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // k = 0
@@ -2088,7 +2088,7 @@ public partial class RuntimeEmitter
         // key = keys[k]
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, kLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListStringGetItem);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // def = optionsDef[key]
@@ -2102,7 +2102,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, defLocal);
         il.Emit(OpCodes.Ldstr, "short");
         il.Emit(OpCodes.Ldloca, shortValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, nextKey);
 
         il.Emit(OpCodes.Ldloc, shortValLocal);
@@ -2170,7 +2170,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optDefLocal);
         il.Emit(OpCodes.Ldstr, "type");
         il.Emit(OpCodes.Ldloca, typeValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, defaultType);
 
         il.Emit(OpCodes.Ldloc, typeValLocal);
@@ -2195,7 +2195,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optDefLocal);
         il.Emit(OpCodes.Ldstr, "multiple");
         il.Emit(OpCodes.Ldloca, mValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, afterMultiple);
 
         il.Emit(OpCodes.Ldloc, mValLocal);
@@ -2327,7 +2327,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, hasExistingList);
 
         il.MarkLabel(createNewList);
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectNullableDefaultCtor);
         il.Emit(OpCodes.Stloc, listLocal);
 
         il.Emit(OpCodes.Ldarg, 4);
@@ -2361,7 +2361,7 @@ public partial class RuntimeEmitter
 
         // Simplified token
         var tokenDict = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, tokenDict);
 
         il.Emit(OpCodes.Ldloc, tokenDict);
@@ -2488,22 +2488,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, returnTokensLocal);
 
         // values = new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, valuesLocal);
 
         // positionals = new List<object?>()
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectNullableDefaultCtor);
         il.Emit(OpCodes.Stloc, positionalsLocal);
 
         // tokens = new List<object?>()
-        il.Emit(OpCodes.Newobj, typeof(List<object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.ListObjectNullableDefaultCtor);
         il.Emit(OpCodes.Stloc, tokensLocal);
 
         // Apply defaults from optionsDef
         // keys = new List<string>(optionsDef.Keys)
         il.Emit(OpCodes.Ldloc, optionsDefLocal);
         il.Emit(OpCodes.Callvirt, optionsDefType.GetProperty("Keys")!.GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, typeof(List<string>).GetConstructor([typeof(IEnumerable<string>)])!);
+        il.Emit(OpCodes.Newobj, _types.ListStringFromEnumerableCtor);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // k = 0
@@ -2516,7 +2516,7 @@ public partial class RuntimeEmitter
         // key = keys[k]
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, kLocal);
-        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, _types.ListStringGetItem);
         il.Emit(OpCodes.Stloc, keyLocal);
 
         // optDef = optionsDef[key]
@@ -2530,7 +2530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, optDefLocal);
         il.Emit(OpCodes.Ldstr, "default");
         il.Emit(OpCodes.Ldloca, defaultValLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object?>).GetMethod("TryGetValue")!);
+        il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectNullableTryGetValue);
         il.Emit(OpCodes.Brfalse, skipDefault);
 
         il.Emit(OpCodes.Ldloc, defaultValLocal);
@@ -2617,7 +2617,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipTermToken);
 
         var termTokenDict = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, termTokenDict);
         il.Emit(OpCodes.Ldloc, termTokenDict);
         il.Emit(OpCodes.Ldstr, "kind");
@@ -2691,7 +2691,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipPosToken2);
 
         var posTokenDict2 = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, posTokenDict2);
         il.Emit(OpCodes.Ldloc, posTokenDict2);
         il.Emit(OpCodes.Ldstr, "kind");
@@ -2785,7 +2785,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipPosToken);
 
         var posTokenDict = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, posTokenDict);
         il.Emit(OpCodes.Ldloc, posTokenDict);
         il.Emit(OpCodes.Ldstr, "kind");
@@ -2822,7 +2822,7 @@ public partial class RuntimeEmitter
         // Build result object
         il.MarkLabel(buildResult);
         // result = new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, typeof(Dictionary<string, object?>).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectNullableCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // result["values"] = values

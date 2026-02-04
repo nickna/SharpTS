@@ -894,7 +894,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_0);                               // this
             il.Emit(OpCodes.Ldfld, syncLockField);                  // this._syncLock
             il.Emit(OpCodes.Ldloca, lockTakenLocal);                // ref __lockTaken
-            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Enter", [typeof(object), typeof(bool).MakeByRefType()])!);
+            il.Emit(OpCodes.Call, _types.MonitorEnter);
 
             il.MarkLabel(skipEnterLabel);
 
@@ -938,7 +938,7 @@ public partial class ILCompiler
             // Monitor.Exit(this._syncLock);
             il.Emit(OpCodes.Ldarg_0);                               // this
             il.Emit(OpCodes.Ldfld, syncLockField);                  // this._syncLock
-            il.Emit(OpCodes.Call, typeof(Monitor).GetMethod("Exit", [typeof(object)])!);
+            il.Emit(OpCodes.Call, _types.MonitorExit);
 
             il.MarkLabel(skipExitLabel);
 

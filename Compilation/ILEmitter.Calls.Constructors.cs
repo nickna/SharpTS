@@ -465,7 +465,7 @@ public partial class ILEmitter
                 // Resolve the type argument string to a runtime Type
                 Type resolvedType = ResolveTypeArg(typeArgs[i]);
                 IL.Emit(OpCodes.Ldtoken, resolvedType);
-                IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
 
                 IL.Emit(OpCodes.Stelem_Ref);
             }
@@ -1089,7 +1089,7 @@ public partial class ILEmitter
             {
                 EmitExpressionAsDouble(arguments[2]);
                 IL.Emit(OpCodes.Conv_I4);
-                IL.Emit(OpCodes.Newobj, typeof(int?).GetConstructor([typeof(int)])!);
+                IL.Emit(OpCodes.Newobj, Types.NullableInt32Ctor);
             }
             else
             {

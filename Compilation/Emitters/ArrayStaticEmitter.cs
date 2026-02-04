@@ -58,7 +58,7 @@ public sealed class ArrayStaticEmitter : IStaticTypeEmitterStrategy
                 // Load Symbol.iterator and runtime type for IterateToList
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
                 il.Emit(OpCodes.Ldtoken, ctx.Runtime!.RuntimeType);
-                il.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                il.Emit(OpCodes.Call, ctx.Types.TypeGetTypeFromHandle);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayFrom);
                 return true;
             case "of":

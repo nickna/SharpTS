@@ -972,7 +972,7 @@ public partial class RuntimeEmitter
 
         // sb = new StringBuilder(length)
         il.Emit(OpCodes.Ldloc, lengthLocal);
-        il.Emit(OpCodes.Newobj, typeof(StringBuilder).GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderIntCtor);
         il.Emit(OpCodes.Stloc, sbLocal);
 
         // i = 0
@@ -1073,7 +1073,7 @@ public partial class RuntimeEmitter
 
         // Return sb.ToString()
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         // Return input (for empty string case)

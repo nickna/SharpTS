@@ -580,7 +580,7 @@ public partial class ILEmitter
                         // Pass Symbol.iterator and runtimeType for iterator protocol support
                         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
                         IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
-                        IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+                        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
                         IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);
                         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
                     }
@@ -741,7 +741,7 @@ public partial class ILEmitter
             // Pass Symbol.iterator and runtimeType for iterator protocol support
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
             IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
-            IL.Emit(OpCodes.Call, typeof(Type).GetMethod("GetTypeFromHandle")!);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
 
             // Call ExpandCallArgs
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ExpandCallArgs);

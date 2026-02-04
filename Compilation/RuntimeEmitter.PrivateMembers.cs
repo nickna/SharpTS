@@ -63,7 +63,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // declaringClass
         il.Emit(OpCodes.Ldstr, "__privateFields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.TypeGetFieldWithFlags);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // If fieldInfo is null, the class has no private fields - throw
@@ -139,7 +139,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // declaringClass
         il.Emit(OpCodes.Ldstr, "__privateFields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.TypeGetFieldWithFlags);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // If fieldInfo is null, throw
@@ -213,7 +213,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // declaringClass
         il.Emit(OpCodes.Ldstr, "__privateFields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.TypeGetFieldWithFlags);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // Skip brand check if no private fields (class might only have private methods)
@@ -300,7 +300,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // fieldName
         il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.TypeGetFieldWithFlags);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // If not found, throw
@@ -346,7 +346,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // fieldName
         il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
-        il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
+        il.Emit(OpCodes.Callvirt, _types.TypeGetFieldWithFlags);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
 
         // If not found, throw

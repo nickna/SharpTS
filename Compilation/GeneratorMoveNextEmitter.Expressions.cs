@@ -42,19 +42,19 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "url");
         _il.Emit(OpCodes.Ldstr, url);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Add "filename" property
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "filename");
         _il.Emit(OpCodes.Ldstr, path);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Add "dirname" property
         _il.Emit(OpCodes.Dup);
         _il.Emit(OpCodes.Ldstr, "dirname");
         _il.Emit(OpCodes.Ldstr, dirname);
-        _il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+        _il.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
 
         // Wrap in SharpTSObject
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.CreateObject);

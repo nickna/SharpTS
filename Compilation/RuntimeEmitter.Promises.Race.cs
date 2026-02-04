@@ -41,7 +41,7 @@ public partial class RuntimeEmitter
             typeof(void),
             Type.EmptyTypes
         );
-        smType.DefineMethodOverride(moveNext, typeof(IAsyncStateMachine).GetMethod("MoveNext")!);
+        smType.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
 
         // Define SetStateMachine method (empty body for value types)
         var setStateMachine = smType.DefineMethod(
@@ -50,7 +50,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [typeof(IAsyncStateMachine)]
         );
-        smType.DefineMethodOverride(setStateMachine, typeof(IAsyncStateMachine).GetMethod("SetStateMachine")!);
+        smType.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
         var setSmIL = setStateMachine.GetILGenerator();
         setSmIL.Emit(OpCodes.Ret);
 
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
         var resultAwaiterLocal = il.DeclareLocal(resultAwaiterType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.WinningTaskField);
-        il.Emit(OpCodes.Callvirt, typeof(Task<object?>).GetMethod("GetAwaiter")!);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         il.Emit(OpCodes.Stloc, resultAwaiterLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, resultAwaiterLocal);

@@ -108,7 +108,7 @@ public partial class ILCompiler
         {
             // this._syncLock = new object();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Newobj, typeof(object).GetConstructor([])!);
+            il.Emit(OpCodes.Newobj, _types.ObjectDefaultCtor);
             il.Emit(OpCodes.Stfld, syncLockField);
         }
 
@@ -118,7 +118,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4_1);  // initialCount = 1
             il.Emit(OpCodes.Ldc_I4_1);  // maxCount = 1
-            il.Emit(OpCodes.Newobj, typeof(SemaphoreSlim).GetConstructor([typeof(int), typeof(int)])!);
+            il.Emit(OpCodes.Newobj, _types.SemaphoreSlimCtor);
             il.Emit(OpCodes.Stfld, asyncLockField);
         }
 
@@ -161,7 +161,7 @@ public partial class ILCompiler
         {
             // Has explicit constructor (which should have super() call) or no superclass
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, typeof(object).GetConstructor([])!);
+            il.Emit(OpCodes.Call, _types.ObjectDefaultCtor);
         }
 
         // Emit instance field initializers to backing fields (before constructor body)
@@ -219,7 +219,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldstr, fieldName);
                     initEmitter.EmitExpression(field.Initializer!);
                     initEmitter.EmitBoxIfNeeded(field.Initializer!);
-                    il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+                    il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
                 }
             }
         }
@@ -236,7 +236,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldfld, fieldsField);
             il.Emit(OpCodes.Ldstr, fieldName);
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, typeof(Dictionary<string, object>).GetMethod("set_Item")!);
+            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
         }
 
         // ES2022: Initialize instance private fields
