@@ -366,7 +366,8 @@ public abstract record TypeInfo
         TypeInfo? SymbolIndexType = null,
         FrozenSet<TypeInfo.Interface>? Extends = null,
         List<CallSignature>? CallSignatures = null,
-        List<ConstructorSignature>? ConstructorSignatures = null
+        List<ConstructorSignature>? ConstructorSignatures = null,
+        FrozenSet<string>? ReadonlyMembers = null
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
@@ -374,6 +375,11 @@ public abstract record TypeInfo
         public bool HasConstructorSignature => ConstructorSignatures is { Count: > 0 };
         public bool IsCallable => HasCallSignature;
         public bool IsConstructable => HasConstructorSignature;
+
+        /// <summary>
+        /// Checks if a member is readonly.
+        /// </summary>
+        public bool IsMemberReadonly(string memberName) => ReadonlyMembers?.Contains(memberName) ?? false;
 
         /// <summary>
         /// Gets all members including inherited members from extended interfaces.
@@ -419,6 +425,34 @@ public abstract record TypeInfo
                     foreach (var name in baseInterface.GetAllOptionalMembers())
                     {
                         if (!OptionalMembers.Contains(name))
+                        {
+                            yield return name;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets all readonly member names including inherited readonly members.
+        /// </summary>
+        public IEnumerable<string> GetAllReadonlyMembers()
+        {
+            if (ReadonlyMembers != null)
+            {
+                foreach (var name in ReadonlyMembers)
+                {
+                    yield return name;
+                }
+            }
+
+            if (Extends != null)
+            {
+                foreach (var baseInterface in Extends)
+                {
+                    foreach (var name in baseInterface.GetAllReadonlyMembers())
+                    {
+                        if (ReadonlyMembers == null || !ReadonlyMembers.Contains(name))
                         {
                             yield return name;
                         }
@@ -1076,7 +1110,8 @@ public abstract record TypeInfo
         TypeInfo? SymbolIndexType = null,
         FrozenSet<TypeInfo.Interface>? Extends = null,
         List<CallSignature>? CallSignatures = null,
-        List<ConstructorSignature>? ConstructorSignatures = null
+        List<ConstructorSignature>? ConstructorSignatures = null,
+        FrozenSet<string>? ReadonlyMembers = null
     ) : TypeInfo
     {
         public bool HasIndexSignature => StringIndexType != null || NumberIndexType != null || SymbolIndexType != null;
@@ -1084,6 +1119,12 @@ public abstract record TypeInfo
         public bool HasConstructorSignature => ConstructorSignatures is { Count: > 0 };
         public bool IsCallable => HasCallSignature;
         public bool IsConstructable => HasConstructorSignature;
+
+        /// <summary>
+        /// Checks if a member is readonly.
+        /// </summary>
+        public bool IsMemberReadonly(string memberName) => ReadonlyMembers?.Contains(memberName) ?? false;
+
         public override string ToString() => $"interface {Name}<{string.Join(", ", TypeParams)}>";
     }
 

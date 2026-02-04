@@ -533,6 +533,12 @@ public partial class TypeChecker
                             if (argPath != null)
                             {
                                 InvalidatePropertiesForFunctionArg(argPath);
+                                // Mark variable as escaped for inter-procedural analysis
+                                // The function might store a reference to this object
+                                if (argPath is Narrowing.NarrowingPath.Variable escapedVar)
+                                {
+                                    _escapeAnalyzer.MarkEscaped(escapedVar.Name);
+                                }
                             }
                         }
                     }
@@ -557,6 +563,56 @@ public partial class TypeChecker
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsCallable)
         {
             return CheckGenericCallableInterfaceCall(gi, call.TypeArgs, call.Arguments);
+        }
+
+        // Handle union types containing functions (e.g., from property access on union type)
+        if (calleeType is TypeInfo.Union unionCallee)
+        {
+            var functionMembers = unionCallee.FlattenedTypes
+                .Where(t => t is TypeInfo.Function or TypeInfo.OverloadedFunction or TypeInfo.GenericFunction)
+                .ToList();
+
+            if (functionMembers.Count > 0)
+            {
+                // Check arguments - they must be compatible with all function signatures
+                foreach (var arg in call.Arguments)
+                {
+                    CheckExpr(arg);
+                }
+
+                // Collect return types from all function members
+                List<TypeInfo> returnTypes = [];
+                foreach (var funcMember in functionMembers)
+                {
+                    if (funcMember is TypeInfo.Function func)
+                    {
+                        returnTypes.Add(func.ReturnType);
+                    }
+                    else if (funcMember is TypeInfo.OverloadedFunction of)
+                    {
+                        returnTypes.Add(of.Implementation.ReturnType);
+                    }
+                    else if (funcMember is TypeInfo.GenericFunction gf)
+                    {
+                        returnTypes.Add(gf.ReturnType);
+                    }
+                }
+
+                // Also include undefined if the union has non-function members
+                // (e.g., the property might be missing on some types)
+                var nonFunctionMembers = unionCallee.FlattenedTypes
+                    .Where(t => t is not TypeInfo.Function and not TypeInfo.OverloadedFunction and not TypeInfo.GenericFunction)
+                    .ToList();
+                if (nonFunctionMembers.Any(t => t is TypeInfo.Undefined))
+                {
+                    // Calling undefined would fail at runtime, but for type checking,
+                    // we allow it to match TypeScript's behavior and add undefined to result
+                    returnTypes.Add(new TypeInfo.Undefined());
+                }
+
+                var unique = returnTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+                return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+            }
         }
 
         throw new TypeCheckException($" Can only call functions.");

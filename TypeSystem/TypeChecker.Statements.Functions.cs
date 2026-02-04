@@ -438,6 +438,20 @@ public partial class TypeChecker
         _switchDepth = 0;
         _activeLabels.Clear();
 
+        // Push a new scope for declared variable types and record parameter types
+        PushDeclaredVariableScope();
+        for (int i = 0; i < funcStmt.Parameters.Count; i++)
+        {
+            RecordDeclaredType(funcStmt.Parameters[i].Name.Lexeme, paramTypes[i]);
+        }
+
+        // Enter escape analysis scope and register parameters as local variables
+        _escapeAnalyzer.EnterScope();
+        for (int i = 0; i < funcStmt.Parameters.Count; i++)
+        {
+            _escapeAnalyzer.DefineVariable(funcStmt.Parameters[i].Name.Lexeme);
+        }
+
         try
         {
             foreach (var bodyStmt in funcStmt.Body)
@@ -464,6 +478,12 @@ public partial class TypeChecker
         }
         finally
         {
+            // Pop the declared variable types scope
+            PopDeclaredVariableScope();
+
+            // Exit escape analysis scope
+            _escapeAnalyzer.ExitScope();
+
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _currentFunctionThisType = previousThisType;

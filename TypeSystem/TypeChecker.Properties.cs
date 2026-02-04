@@ -130,8 +130,95 @@ public partial class TypeChecker
                 CheckGetOnEnum(enumType, get.Name),
             TypeCategory.Namespace when objType is TypeInfo.Namespace nsType =>
                 CheckGetOnNamespace(nsType, get.Name),
+            TypeCategory.Union when objType is TypeInfo.Union union =>
+                CheckGetOnUnion(union, get.Name, get.Optional),
+            TypeCategory.Intersection when objType is TypeInfo.Intersection intersection =>
+                CheckGetOnIntersection(intersection, get.Name),
             _ => new TypeInfo.Any()
         };
+    }
+
+    /// <summary>
+    /// Type checks property access on a union type.
+    /// For optional chaining (isOptional=true), null/undefined members are skipped.
+    /// Without optional chaining, null/undefined in the union causes an error.
+    /// If a property doesn't exist on some non-null/undefined members, the result
+    /// includes undefined for those members (mimicking TypeScript's permissive behavior).
+    /// </summary>
+    private TypeInfo CheckGetOnUnion(TypeInfo.Union union, Token memberName, bool isOptional = false)
+    {
+        List<TypeInfo> memberTypes = [];
+        bool hasNullOrUndefined = false;
+        bool hasMissingProperty = false;
+
+        foreach (var member in union.FlattenedTypes)
+        {
+            // null and undefined don't have properties
+            if (member is TypeInfo.Null or TypeInfo.Undefined)
+            {
+                if (isOptional)
+                {
+                    // Optional chaining: skip null/undefined, result will include undefined
+                    hasNullOrUndefined = true;
+                    continue;
+                }
+                throw new TypeCheckException($"Property '{memberName.Lexeme}' cannot be accessed on '{member}'. Object is possibly null or undefined.");
+            }
+
+            try
+            {
+                var memberType = CheckGetOnType(member, memberName);
+                memberTypes.Add(memberType);
+            }
+            catch (TypeCheckException)
+            {
+                // Property doesn't exist on this member - result will include undefined
+                // This is permissive behavior matching TypeScript's handling of union property access
+                hasMissingProperty = true;
+            }
+        }
+
+        // If property is missing on some members, add undefined to result
+        if (hasMissingProperty)
+        {
+            memberTypes.Add(new TypeInfo.Undefined());
+        }
+
+        // For optional chaining with null/undefined in the union, add undefined to result
+        if (isOptional && hasNullOrUndefined)
+        {
+            memberTypes.Add(new TypeInfo.Undefined());
+        }
+
+        // If no members have the property at all, fall back to Any
+        if (memberTypes.Count == 0)
+        {
+            return new TypeInfo.Any();
+        }
+
+        // Return union of all member types
+        var unique = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+        return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+    }
+
+    /// <summary>
+    /// Type checks property access on an intersection type.
+    /// The property is looked up on each member type until found.
+    /// </summary>
+    private TypeInfo CheckGetOnIntersection(TypeInfo.Intersection intersection, Token memberName)
+    {
+        foreach (var member in intersection.FlattenedTypes)
+        {
+            try
+            {
+                return CheckGetOnType(member, memberName);
+            }
+            catch (TypeCheckException)
+            {
+                // Continue to next type in intersection
+            }
+        }
+        throw new TypeCheckException($"Property '{memberName.Lexeme}' does not exist on type '{intersection}'.");
     }
 
     /// <summary>
@@ -176,6 +263,21 @@ public partial class TypeChecker
                     new Narrowing.NarrowingPath.Variable(originalVar),
                     set.Name.Lexeme);
                 InvalidateNarrowingsFor(originalPath);
+            }
+
+            // Inter-procedural escape analysis: if the base is a global/outer-scope variable,
+            // it might alias any escaped local variable. Invalidate narrowings on all escaped
+            // variables' properties with the same name.
+            // e.g., "globalAlias.prop = null" should invalidate "obj.prop" if obj escaped.
+            if (basePath is Narrowing.NarrowingPath.Variable baseVar)
+            {
+                foreach (var escapedVar in _escapeAnalyzer.GetPotentiallyAffectedEscapedVariables(baseVar.Name))
+                {
+                    var escapedPath = new Narrowing.NarrowingPath.PropertyAccess(
+                        new Narrowing.NarrowingPath.Variable(escapedVar),
+                        set.Name.Lexeme);
+                    InvalidateNarrowingsFor(escapedPath);
+                }
             }
         }
 

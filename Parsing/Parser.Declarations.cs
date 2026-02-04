@@ -216,6 +216,9 @@ public partial class Parser
                 }
             }
 
+            // Check for readonly modifier
+            bool isReadonly = Match(TokenType.READONLY);
+
             Token memberName = Consume(TokenType.IDENTIFIER, "Expect member name.");
             bool isOptional = Match(TokenType.QUESTION);
 
@@ -233,7 +236,7 @@ public partial class Parser
             }
 
             Consume(TokenType.SEMICOLON, "Expect ';' after member declaration.");
-            members.Add(new Stmt.InterfaceMember(memberName, type, isOptional));
+            members.Add(new Stmt.InterfaceMember(memberName, type, isOptional, isReadonly));
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");

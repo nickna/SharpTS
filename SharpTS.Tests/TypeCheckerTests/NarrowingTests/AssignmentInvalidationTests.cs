@@ -107,7 +107,7 @@ public class AssignmentInvalidationTests
 
     #region Variable Reassignment
 
-    [Fact(Skip = "Known limitation: Variable narrowing uses TypeEnvironment which replaces the type; assignments check narrowed type instead of declared type")]
+    [Fact]
     public void VariableReassignment_InvalidatesNarrowing()
     {
         // Note: This test is skipped because variable narrowing is implemented
@@ -224,7 +224,7 @@ public class AssignmentInvalidationTests
 
     #region Loop Assignment
 
-    [Fact(Skip = "Phase 3: CFG-based narrowing required for loop analysis")]
+    [Fact]
     public void AssignmentInLoop_InvalidatesNarrowing()
     {
         // Assignment inside a loop should invalidate narrowing
@@ -235,15 +235,17 @@ public class AssignmentInvalidationTests
             function test(obj: Obj): void {
                 if (obj.prop !== null) {
                     for (let i = 0; i < 3; i++) {
-                        console.log(obj.prop.length);  // Should error on second iteration concept
+                        console.log(obj.prop.length);  // Should error - obj.prop could be null
                         obj.prop = null;
                     }
                 }
             }
             """;
 
-        var ex = Assert.Throws<TypeMismatchException>(() => TestHarness.RunInterpreted(source));
-        Assert.Contains("string | null", ex.Message);
+        // The narrowing is invalidated because obj.prop is assigned within the loop,
+        // so accessing .length on string | null should error
+        var ex = Assert.Throws<TypeCheckException>(() => TestHarness.RunInterpreted(source));
+        Assert.Contains("null", ex.Message);
     }
 
     [Fact]

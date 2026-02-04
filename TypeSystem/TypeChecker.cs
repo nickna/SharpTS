@@ -79,10 +79,19 @@ public partial class TypeChecker
     // Each scope level can have its own narrowings (for if/else branches, etc.)
     private readonly Stack<Narrowing.NarrowingContext> _narrowingContextStack = new();
 
+    // Escape analysis for inter-procedural aliasing
+    // Tracks when objects escape to outer scopes and might be aliased by global variables
+    private readonly Narrowing.EscapeAnalyzer _escapeAnalyzer = new();
+
     // Alias tracking for narrowing invalidation
     // Maps a variable name to the variable it was assigned from (for simple variable-to-variable aliases)
     // e.g., "const alias = obj" would add entry: "alias" -> "obj"
     private readonly Dictionary<string, string> _variableAliases = new();
+
+    // Track declared variable types separately from potentially narrowed types
+    // This allows assignments to check against the original declared type, not the narrowed type
+    // Stack of dictionaries to handle function scope boundaries
+    private readonly Stack<Dictionary<string, TypeInfo>> _declaredVariableTypesStack = new();
 
     /// <summary>
     /// Gets the current narrowing context (top of stack), or empty if none.
@@ -92,11 +101,17 @@ public partial class TypeChecker
 
     /// <summary>
     /// Gets the narrowed type for a path, if one exists in the current scope.
+    /// Also checks for explicit invalidations that block lookup in parent scopes.
     /// </summary>
     private TypeInfo? GetNarrowing(Narrowing.NarrowingPath path)
     {
         foreach (var context in _narrowingContextStack)
         {
+            // Check if this path has been explicitly invalidated in this scope
+            // If so, stop the upward search - the narrowing is no longer valid
+            if (context.IsInvalidated(path))
+                return null;
+
             var narrowed = context.GetNarrowing(path);
             if (narrowed != null) return narrowed;
         }
@@ -185,16 +200,161 @@ public partial class TypeChecker
     }
 
     /// <summary>
+    /// Checks if a narrowing path would be affected by any of the assigned paths.
+    /// A path is affected if any assignment is to the path itself or to a prefix of the path.
+    /// </summary>
+    private static bool IsPathAffectedByAssignments(Narrowing.NarrowingPath path, HashSet<Narrowing.NarrowingPath> assignedPaths)
+    {
+        foreach (var assigned in assignedPaths)
+        {
+            if (path.IsAffectedByAssignmentTo(assigned))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Pushes a new scope for declared variable types (called when entering a function).
+    /// </summary>
+    private void PushDeclaredVariableScope()
+    {
+        _declaredVariableTypesStack.Push(new Dictionary<string, TypeInfo>());
+    }
+
+    /// <summary>
+    /// Pops the current scope for declared variable types (called when exiting a function).
+    /// </summary>
+    private void PopDeclaredVariableScope()
+    {
+        if (_declaredVariableTypesStack.Count > 0)
+            _declaredVariableTypesStack.Pop();
+    }
+
+    /// <summary>
+    /// Records the declared type of a variable for assignment checking.
+    /// </summary>
+    private void RecordDeclaredType(string name, TypeInfo type)
+    {
+        if (_declaredVariableTypesStack.Count > 0)
+        {
+            _declaredVariableTypesStack.Peek()[name] = type;
+        }
+    }
+
+    /// <summary>
+    /// Gets the declared type of a variable (ignoring any narrowings).
+    /// Falls back to the current environment type if no declared type was recorded.
+    /// </summary>
+    private TypeInfo? GetDeclaredType(string name)
+    {
+        // Search through scopes from innermost to outermost
+        foreach (var scope in _declaredVariableTypesStack)
+        {
+            if (scope.TryGetValue(name, out var type))
+                return type;
+        }
+        // Fall back to environment (this handles globals and cases where we didn't track)
+        return _environment.Get(name);
+    }
+
+    /// <summary>
     /// Invalidates property narrowings for an object when it's passed to a function
     /// that might mutate it. Only affects mutable property narrowings, not the object itself.
+    /// Readonly properties are preserved since they can't be mutated.
     /// </summary>
     private void InvalidatePropertiesForFunctionArg(Narrowing.NarrowingPath basePath)
     {
         if (_narrowingContextStack.Count > 0)
         {
             var current = _narrowingContextStack.Pop();
-            _narrowingContextStack.Push(current.InvalidatePropertiesOf(basePath));
+            _narrowingContextStack.Push(current.InvalidatePropertiesOf(basePath, IsReadonlyProperty));
         }
+    }
+
+    /// <summary>
+    /// Checks if a property at the given path is readonly (safe to keep narrowed across function calls).
+    /// </summary>
+    /// <param name="basePath">The path to the object containing the property.</param>
+    /// <param name="propertyName">The property name to check.</param>
+    /// <returns>True if the property is readonly and should not be invalidated.</returns>
+    private bool IsReadonlyProperty(Narrowing.NarrowingPath basePath, string propertyName)
+    {
+        // Get the type for the base path
+        var baseType = GetTypeForNarrowingPath(basePath);
+        if (baseType == null) return false;
+
+        // Check if the property is readonly in the type
+        return IsPropertyReadonly(baseType, propertyName);
+    }
+
+    /// <summary>
+    /// Gets the type for a narrowing path by looking up the variable/property chain.
+    /// </summary>
+    private TypeInfo? GetTypeForNarrowingPath(Narrowing.NarrowingPath path)
+    {
+        return path switch
+        {
+            Narrowing.NarrowingPath.Variable v => _environment.Get(v.Name),
+            Narrowing.NarrowingPath.PropertyAccess pa =>
+                GetPropertyTypeForNarrowing(GetTypeForNarrowingPath(pa.Base), pa.Property),
+            Narrowing.NarrowingPath.ElementAccess ea =>
+                GetElementTypeForNarrowing(GetTypeForNarrowingPath(ea.Base), ea.Index),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the type of a property from a parent type (for narrowing path resolution).
+    /// </summary>
+    private TypeInfo? GetPropertyTypeForNarrowing(TypeInfo? parentType, string propertyName)
+    {
+        if (parentType == null) return null;
+
+        return parentType switch
+        {
+            TypeInfo.Interface iface =>
+                iface.Members.TryGetValue(propertyName, out var t) ? t : null,
+            TypeInfo.GenericInterface gi =>
+                gi.Members.TryGetValue(propertyName, out var t) ? t : null,
+            TypeInfo.Record rec =>
+                rec.Fields.TryGetValue(propertyName, out var t) ? t : null,
+            TypeInfo.Instance inst => GetPropertyTypeForNarrowing(inst.ResolvedClassType, propertyName),
+            TypeInfo.Class cls =>
+                cls.FieldTypes.TryGetValue(propertyName, out var t) ? t :
+                cls.Getters.TryGetValue(propertyName, out var g) ? g : null,
+            TypeInfo.InstantiatedGeneric ig => GetPropertyTypeForNarrowing(ig.GenericDefinition, propertyName),
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Gets the element type from a tuple or array type (for narrowing path resolution).
+    /// </summary>
+    private static TypeInfo? GetElementTypeForNarrowing(TypeInfo? parentType, int index)
+    {
+        return parentType switch
+        {
+            TypeInfo.Tuple tuple when index < tuple.Elements.Count => tuple.Elements[index].Type,
+            TypeInfo.Array arr => arr.ElementType,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Checks if a property is readonly in the given type.
+    /// </summary>
+    private static bool IsPropertyReadonly(TypeInfo type, string propertyName)
+    {
+        return type switch
+        {
+            TypeInfo.Interface iface => iface.IsMemberReadonly(propertyName),
+            TypeInfo.GenericInterface gi => gi.IsMemberReadonly(propertyName),
+            TypeInfo.Class cls => cls.ReadonlyFields.Contains(propertyName),
+            TypeInfo.Record rec => rec.IsReadonly,  // Readonly record makes all fields readonly
+            TypeInfo.Instance inst => IsPropertyReadonly(inst.ResolvedClassType, propertyName),
+            TypeInfo.InstantiatedGeneric ig => IsPropertyReadonly(ig.GenericDefinition, propertyName),
+            _ => false
+        };
     }
 
     /// <summary>

@@ -47,6 +47,7 @@ public static class BuiltInTypes
             "trimEnd" => new TypeInfo.Function([], StringType),
             "replaceAll" => new TypeInfo.Function([StringType, StringType], StringType),
             "at" => new TypeInfo.Function([NumberType], StringType), // returns string | undefined in TS
+            "toString" => new TypeInfo.Function([], StringType), // primitive wrapper method
             _ => null
         };
     }

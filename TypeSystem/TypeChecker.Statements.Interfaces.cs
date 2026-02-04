@@ -65,6 +65,7 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> members = [];
         Dictionary<string, List<TypeInfo.Function>> pendingOverloads = [];
         HashSet<string> optionalMembers = [];
+        HashSet<string> readonlyMembers = [];
 
         using (new EnvironmentScope(this, interfaceTypeEnv))
         {
@@ -101,6 +102,10 @@ public partial class TypeChecker
                 if (member.IsOptional)
                 {
                     optionalMembers.Add(member.Name.Lexeme);
+                }
+                if (member.IsReadonly)
+                {
+                    readonlyMembers.Add(member.Name.Lexeme);
                 }
             }
 
@@ -150,7 +155,8 @@ public partial class TypeChecker
                 members.ToFrozenDictionary(),
                 optionalMembers.ToFrozenSet(),
                 CallSignatures: callSignatures,
-                ConstructorSignatures: constructorSignatures
+                ConstructorSignatures: constructorSignatures,
+                ReadonlyMembers: readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null
             );
             _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
         }
@@ -162,7 +168,8 @@ public partial class TypeChecker
                 optionalMembers.ToFrozenSet(),
                 Extends: extends,
                 CallSignatures: callSignatures,
-                ConstructorSignatures: constructorSignatures
+                ConstructorSignatures: constructorSignatures,
+                ReadonlyMembers: readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }
@@ -203,6 +210,7 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> members = [];
         Dictionary<string, List<TypeInfo.Function>> pendingOverloads = []; // Track overloaded methods
         HashSet<string> optionalMembers = [];
+        HashSet<string> readonlyMembers = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
@@ -239,6 +247,11 @@ public partial class TypeChecker
             if (member.IsOptional)
             {
                 optionalMembers.Add(member.Name.Lexeme);
+            }
+
+            if (member.IsReadonly)
+            {
+                readonlyMembers.Add(member.Name.Lexeme);
             }
         }
 
@@ -372,7 +385,8 @@ public partial class TypeChecker
                 symbolIndexType,
                 extends,
                 callSignatures,
-                constructorSignatures
+                constructorSignatures,
+                readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null
             );
             _environment.Define(interfaceStmt.Name.Lexeme, genericItfType);
         }
@@ -387,7 +401,8 @@ public partial class TypeChecker
                 symbolIndexType,
                 extends,
                 callSignatures,
-                constructorSignatures
+                constructorSignatures,
+                readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet() : null
             );
             _environment.Define(interfaceStmt.Name.Lexeme, itfType);
         }

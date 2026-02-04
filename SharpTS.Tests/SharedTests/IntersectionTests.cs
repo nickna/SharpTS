@@ -535,13 +535,16 @@ public class IntersectionTests
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Intersection_InUnionWithNull_Works(ExecutionMode mode)
     {
+        // Test intersection type with null in union - requires null check before property access
         var source = """
             interface Named { name: string; }
             interface Aged { age: number; }
 
             let person: (Named & Aged) | null = { name: "Alice", age: 30 };
-            console.log(person.name);
-            console.log(person.age);
+            if (person !== null) {
+                console.log(person.name);
+                console.log(person.age);
+            }
             """;
 
         var output = TestHarness.Run(source, mode);

@@ -1053,7 +1053,8 @@ public partial class TypeChecker
     {
         // For assignment, check against the DECLARED type, not the narrowed type
         // This allows reassigning within narrowed scopes (e.g., x = "found" when x was narrowed to null)
-        var declaredType = _environment.Get(assign.Name.Lexeme);
+        // Use GetDeclaredType to get the original declared type, not the potentially narrowed type
+        var declaredType = GetDeclaredType(assign.Name.Lexeme);
         if (declaredType == null)
         {
             throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.");
@@ -1069,6 +1070,11 @@ public partial class TypeChecker
         // Invalidate any narrowings affected by this assignment
         var assignedPath = new Narrowing.NarrowingPath.Variable(assign.Name.Lexeme);
         InvalidateNarrowingsFor(assignedPath);
+
+        // Also restore the declared type in the environment to undo any variable narrowing
+        // that was applied via TypeEnvironment.Define() in control flow statements.
+        // This ensures subsequent uses of the variable see the correct (un-narrowed) type.
+        _environment.Define(assign.Name.Lexeme, declaredType);
 
         return valueType;
     }

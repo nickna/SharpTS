@@ -15,7 +15,7 @@ public class AliasingTests
 {
     #region Readonly Property Narrowing
 
-    [Fact(Skip = "Parser doesn't support readonly keyword in interfaces yet")]
+    [Fact]
     public void ReadonlyProperty_SafeToNarrow()
     {
         // Readonly properties can be safely narrowed since they can't be mutated
@@ -38,7 +38,7 @@ public class AliasingTests
         Assert.Equal("hello\n", result);
     }
 
-    [Fact(Skip = "Parser doesn't support readonly keyword in interfaces yet")]
+    [Fact]
     public void ReadonlyNestedProperty_SafeToNarrow()
     {
         // Readonly nested properties should also be safe
@@ -159,7 +159,7 @@ public class AliasingTests
         Assert.Contains("string | null", ex.Message);
     }
 
-    [Fact(Skip = "Complex alias tracking not yet implemented")]
+    [Fact]
     public void AliasInDifferentScope_InvalidatesNarrowing()
     {
         // This is a more complex case that requires escape analysis
