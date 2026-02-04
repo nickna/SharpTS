@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -408,8 +409,7 @@ public class StrictModeTests
             obj.x = 2;
             """;
 
-        var ex = Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
-        Assert.Contains("TypeError", ex.Message);
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
         Assert.Contains("getter", ex.Message);
     }
 

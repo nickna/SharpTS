@@ -295,6 +295,6 @@ public partial class Interpreter
             return callable;
         }
 
-        throw new Exception($"Runtime Error at line {decorator.AtToken.Line}: Decorator must be a function.");
+        throw new InterpreterException($"Decorator must be a function.", line: decorator.AtToken.Line);
     }
 }

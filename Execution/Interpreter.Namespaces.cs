@@ -153,7 +153,7 @@ public partial class Interpreter
         SharpTSNamespace? currentNs = _environment.GetNamespace(path[0].Lexeme);
         if (currentNs == null)
         {
-            throw new Exception($"Runtime Error: Namespace '{path[0].Lexeme}' is not defined.");
+            throw new InterpreterException($"Namespace '{path[0].Lexeme}' is not defined.");
         }
 
         // Walk to the final namespace
@@ -166,11 +166,11 @@ public partial class Interpreter
             }
             else if (member == null)
             {
-                throw new Exception($"Runtime Error: '{path[i].Lexeme}' does not exist in namespace '{currentNs.Name}'.");
+                throw new InterpreterException($"'{path[i].Lexeme}' does not exist in namespace '{currentNs.Name}'.");
             }
             else
             {
-                throw new Exception($"Runtime Error: '{path[i].Lexeme}' is not a namespace.");
+                throw new InterpreterException($"'{path[i].Lexeme}' is not a namespace.");
             }
         }
 

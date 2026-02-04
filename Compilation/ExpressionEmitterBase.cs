@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -197,7 +198,7 @@ public abstract class ExpressionEmitterBase
                 EmitClassExpression(ce);
                 break;
             default:
-                throw new InvalidOperationException($"Compilation Error: Unhandled expression type in ILEmitter: {expr.GetType().Name}");
+                throw new CompileException($"Unhandled expression type in ILEmitter: {expr.GetType().Name}");
         }
     }
     #endregion
@@ -341,7 +342,7 @@ public abstract class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitAwait(Expr.Await aw)
     {
-        throw new InvalidOperationException("Await not supported in this context");
+        throw new CompileException("Await not supported in this context");
     }
 
     /// <summary>
@@ -349,7 +350,7 @@ public abstract class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitYield(Expr.Yield y)
     {
-        throw new InvalidOperationException("Yield not supported in this context");
+        throw new CompileException("Yield not supported in this context");
     }
     #endregion
 }

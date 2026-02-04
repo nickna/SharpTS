@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation.Bundling;
 
@@ -37,7 +38,7 @@ public class ManualBundler : IBundler
         var (apphostPath, sdkVersion) = FindAppHostTemplateWithVersion();
         if (apphostPath == null || sdkVersion == null)
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Could not find apphost template. Ensure the .NET SDK is installed.");
         }
 
@@ -48,7 +49,7 @@ public class ManualBundler : IBundler
         var dllPathIndex = FindSequence(apphostBytes, DllPathPlaceholder);
         if (dllPathIndex < 0)
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Could not find DLL path placeholder in apphost template.");
         }
 
@@ -61,7 +62,7 @@ public class ManualBundler : IBundler
         var headerOffsetIndex = FindSequence(apphostBytes, BundleHeaderPlaceholder);
         if (headerOffsetIndex < 0)
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Could not find bundle header placeholder in apphost template.");
         }
 

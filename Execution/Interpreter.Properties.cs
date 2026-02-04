@@ -78,13 +78,13 @@ public partial class Interpreter
 
         if (klass is not SharpTSClass sharpClass)
         {
-             throw new Exception("Type Error: Can only instantiate classes.");
+             throw new InterpreterException("Can only instantiate classes.");
         }
 
         // Runtime check for abstract class instantiation (backup to type checker)
         if (sharpClass.IsAbstract)
         {
-            throw new Exception($"Type Error: Cannot create an instance of abstract class '{sharpClass.Name}'.");
+            throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
         }
 
         List<object?> arguments = await ctx.EvaluateAllAsync(newExpr.Arguments);
@@ -214,7 +214,7 @@ public partial class Interpreter
             return klass.GetStaticProperty(memberName);
         }
 
-        throw new Exception($"Runtime Error: Static member '{memberName}' does not exist on class '{klass.Name}'.");
+        throw new InterpreterException($"Static member '{memberName}' does not exist on class '{klass.Name}'.");
     }
 
     /// <summary>
@@ -226,7 +226,7 @@ public partial class Interpreter
         {
             return nsObj.Get(memberName);
         }
-        throw new Exception($"Runtime Error: '{memberName}' does not exist on namespace '{nsObj.Name}'.");
+        throw new InterpreterException($"'{memberName}' does not exist on namespace '{nsObj.Name}'.");
     }
 
     /// <summary>
@@ -303,11 +303,11 @@ public partial class Interpreter
             if (isBuiltInType)
             {
                 string typeName = GetRuntimeTypeName(obj);
-                throw new Exception($"Runtime Error: Property '{memberName}' does not exist on {typeName}.");
+                throw new InterpreterException($"Property '{memberName}' does not exist on {typeName}.");
             }
         }
 
-        throw new Exception("Only instances and objects have properties.");
+        throw new InterpreterException("Only instances and objects have properties.");
     }
 
     /// <summary>
@@ -401,7 +401,7 @@ public partial class Interpreter
             {
                 if (strictMode)
                 {
-                    throw new Exception($"TypeError: Cannot set property '{set.Name.Lexeme}' which has only a getter.");
+                    throw new InterpreterException($"Cannot set property '{set.Name.Lexeme}' which has only a getter.");
                 }
                 // Non-strict mode silently fails
                 return value;
@@ -426,7 +426,7 @@ public partial class Interpreter
                 regex.LastIndex = (int)(double)value!;
                 return value;
             }
-            throw new Exception($"Runtime Error: Cannot set property '{set.Name.Lexeme}' on RegExp.");
+            throw new InterpreterException($"Cannot set property '{set.Name.Lexeme}' on RegExp.");
         }
 
         // Handle Error property assignment (name, message, stack)
@@ -436,10 +436,10 @@ public partial class Interpreter
             {
                 return value;
             }
-            throw new Exception($"Runtime Error: Cannot set property '{set.Name.Lexeme}' on Error.");
+            throw new InterpreterException($"Cannot set property '{set.Name.Lexeme}' on Error.");
         }
 
-        throw new Exception("Only instances and objects have fields.");
+        throw new InterpreterException("Only instances and objects have fields.");
     }
 
     /// <summary>
@@ -488,7 +488,7 @@ public partial class Interpreter
                 return klass.GetStaticPrivateField(fieldName);
             }
 
-            throw new Exception($"Runtime Error: Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
+            throw new InterpreterException($"Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
         }
 
         // Instance private field access
@@ -500,7 +500,7 @@ public partial class Interpreter
             return declaringClass.GetPrivateField(instance, fieldName);
         }
 
-        throw new Exception($"Runtime Error: Cannot read private field '{fieldName}' from non-class value.");
+        throw new InterpreterException($"Cannot read private field '{fieldName}' from non-class value.");
     }
 
     /// <summary>
@@ -523,7 +523,7 @@ public partial class Interpreter
                 return value;
             }
 
-            throw new Exception($"Runtime Error: Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
+            throw new InterpreterException($"Static private field '{fieldName}' does not exist on class '{klass.Name}'.");
         }
 
         // Instance private field assignment
@@ -536,7 +536,7 @@ public partial class Interpreter
             return value;
         }
 
-        throw new Exception($"Runtime Error: Cannot write private field '{fieldName}' to non-class value.");
+        throw new InterpreterException($"Cannot write private field '{fieldName}' to non-class value.");
     }
 
     /// <summary>
@@ -562,7 +562,7 @@ public partial class Interpreter
             var method = klass.GetStaticPrivateMethod(methodName);
             if (method == null)
             {
-                throw new Exception($"Runtime Error: Static private method '{methodName}' does not exist on class '{klass.Name}'.");
+                throw new InterpreterException($"Static private method '{methodName}' does not exist on class '{klass.Name}'.");
             }
 
             return method.Call(this, arguments);
@@ -577,14 +577,14 @@ public partial class Interpreter
             var method = declaringClass.GetPrivateMethod(methodName);
             if (method == null)
             {
-                throw new Exception($"Runtime Error: Private method '{methodName}' does not exist on class '{declaringClass.Name}'.");
+                throw new InterpreterException($"Private method '{methodName}' does not exist on class '{declaringClass.Name}'.");
             }
 
             // Bind method to instance
             return SharpTSClass.BindMethod(method, instance).Call(this, arguments);
         }
 
-        throw new Exception($"Runtime Error: Cannot call private method '{methodName}' on non-class value.");
+        throw new InterpreterException($"Cannot call private method '{methodName}' on non-class value.");
     }
 
     #endregion

@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters;
@@ -125,7 +126,7 @@ public sealed class EventEmitterEmitter : ITypeEmitterStrategy
                 return true;
 
             default:
-                throw new InvalidOperationException($"Unexpected method {methodName} - early check should have filtered this");
+                throw new CompileException($"Unexpected method {methodName} - early check should have filtered this");
         }
     }
 

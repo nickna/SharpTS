@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -93,7 +94,7 @@ public partial class ILCompiler
                 // Nested arrow - use parent arrow's state machine
                 if (!_async.ArrowBuilders.TryGetValue(arrowInfo.ParentArrow, out var parentBuilder))
                 {
-                    throw new InvalidOperationException(
+                    throw new CompileException(
                         $"Parent async arrow not found. Nesting level: {arrowInfo.NestingLevel}");
                 }
 

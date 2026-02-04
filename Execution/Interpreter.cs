@@ -371,7 +371,7 @@ public partial class Interpreter : IDisposable
         if (name.Lexeme == "__filename") return _currentModule?.Path ?? "";
         if (name.Lexeme == "__dirname") return Path.GetDirectoryName(_currentModule?.Path) ?? "";
 
-        throw new Exception($"Undefined variable '{name.Lexeme}'.");
+        throw new InterpreterException($"Undefined variable '{name.Lexeme}'.");
     }
 
     /// <summary>
@@ -530,7 +530,7 @@ public partial class Interpreter : IDisposable
                     var result = Execute(stmt);
                     if (result.Type == ExecutionResult.ResultType.Throw)
                     {
-                        throw new Exception(Stringify(result.Value));
+                        throw new InterpreterException(Stringify(result.Value));
                     }
                     if (result.IsAbrupt) break;
                 }
@@ -673,7 +673,7 @@ public partial class Interpreter : IDisposable
                     var result = Execute(stmt);
                     if (result.Type == ExecutionResult.ResultType.Throw)
                     {
-                        throw new Exception(Stringify(result.Value));
+                        throw new InterpreterException(Stringify(result.Value));
                     }
                     if (result.IsAbrupt) break;
                 }
@@ -700,7 +700,7 @@ public partial class Interpreter : IDisposable
 
                 if (importedModuleInstance == null)
                 {
-                    throw new Exception($"Runtime Error: Module '{import.ModulePath}' not loaded.");
+                    throw new InterpreterException($"Module '{import.ModulePath}' not loaded.");
                 }
 
                 // Default import
@@ -984,7 +984,7 @@ public partial class Interpreter : IDisposable
             Stmt.Class c => c.Name.Lexeme,
             Stmt.Var v => v.Name.Lexeme,
             Stmt.Enum e => e.Name.Lexeme,
-            _ => throw new Exception($"Runtime Error: Cannot get name of declaration type {decl.GetType().Name}")
+            _ => throw new InterpreterException($"Cannot get name of declaration type {decl.GetType().Name}")
         };
     }
 
@@ -1000,7 +1000,7 @@ public partial class Interpreter : IDisposable
             Stmt.Class c => c.Name,
             Stmt.Var v => v.Name,
             Stmt.Enum e => e.Name,
-            _ => throw new Exception($"Runtime Error: Cannot get value of declaration type {decl.GetType().Name}")
+            _ => throw new InterpreterException($"Cannot get value of declaration type {decl.GetType().Name}")
         };
         return _environment.Get(token);
     }
@@ -1200,7 +1200,7 @@ public partial class Interpreter : IDisposable
             superclass = _environment.Get(classStmt.Superclass);
             if (superclass is not SharpTSClass)
             {
-                throw new Exception("Superclass must be a class.");
+                throw new InterpreterException("Superclass must be a class.");
             }
         }
 
@@ -1411,7 +1411,7 @@ public partial class Interpreter : IDisposable
                                     // Handle throw from static block
                                     if (result.Type == ExecutionResult.ResultType.Throw)
                                     {
-                                        throw new Exception($"Error in static block: {Stringify(result.Value)}");
+                                        throw new InterpreterException($"Error in static block: {Stringify(result.Value)}");
                                     }
                                     // Return, break, continue are not allowed (validated by type checker)
                                 }

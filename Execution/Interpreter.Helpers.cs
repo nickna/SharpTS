@@ -193,7 +193,7 @@ public partial class Interpreter
             }
         }
 
-        throw new Exception("Invalid increment operand.");
+        throw new InterpreterException("Invalid increment operand.");
     }
 
     #endregion

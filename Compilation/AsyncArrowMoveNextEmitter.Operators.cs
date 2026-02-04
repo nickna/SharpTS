@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -117,7 +118,7 @@ public partial class AsyncArrowMoveNextEmitter
 
         if (!_builder.AwaiterFields.TryGetValue(stateNum, out var awaiterField))
         {
-            throw new InvalidOperationException($"No awaiter field for state {stateNum}");
+            throw new CompileException($"No awaiter field for state {stateNum}");
         }
 
         // 1. Emit the awaited expression (should produce Task<object> or $Promise or any value)

@@ -53,7 +53,7 @@ public partial class Interpreter
             }
         }
 
-        throw new Exception("Only instances and objects have fields.");
+        throw new InterpreterException("Only instances and objects have fields.");
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public partial class Interpreter
             return newValue;
         }
 
-        throw new Exception("Compound index assignment not supported on this type.");
+        throw new InterpreterException("Compound index assignment not supported on this type.");
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public partial class Interpreter
 
         if (!TryGetProperty(obj, logical.Name, out object? currentValue))
         {
-            throw new Exception("Only instances and objects have fields.");
+            throw new InterpreterException("Only instances and objects have fields.");
         }
 
         switch (logical.Operator.Type)
@@ -145,7 +145,7 @@ public partial class Interpreter
         object? newValue = Evaluate(logical.Value);
         if (!TrySetProperty(obj, logical.Name, newValue))
         {
-            throw new Exception("Only instances and objects have fields.");
+            throw new InterpreterException("Only instances and objects have fields.");
         }
         return newValue;
     }
@@ -181,7 +181,7 @@ public partial class Interpreter
             return newValue;
         }
 
-        throw new Exception("Logical index assignment not supported on this type.");
+        throw new InterpreterException("Logical index assignment not supported on this type.");
     }
 
     /// <summary>
@@ -237,7 +237,7 @@ public partial class Interpreter
                 left as string ?? Stringify(left),
                 right as string ?? Stringify(right));
         }
-        throw new Exception("Operands must be two numbers or two strings.");
+        throw new InterpreterException("Operands must be two numbers or two strings.");
     }
 
     /// <summary>

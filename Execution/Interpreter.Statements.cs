@@ -144,12 +144,12 @@ public partial class Interpreter
     {
         return expr switch
         {
-            Expr.Literal lit => lit.Value ?? throw new Exception($"Runtime Error: Const enum expression cannot be null."),
+            Expr.Literal lit => lit.Value ?? throw new InterpreterException($"Const enum expression cannot be null."),
 
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
                 resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
                     ? val
-                    : throw new Exception($"Runtime Error: Const enum member '{g.Name.Lexeme}' referenced before definition."),
+                    : throw new InterpreterException($"Const enum member '{g.Name.Lexeme}' referenced before definition."),
 
             Expr.Grouping gr => EvaluateConstEnumExpression(gr.Expression, resolvedMembers, enumName),
 
@@ -157,7 +157,7 @@ public partial class Interpreter
 
             Expr.Binary b => EvaluateConstEnumBinary(b, resolvedMembers, enumName),
 
-            _ => throw new Exception($"Runtime Error: Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
+            _ => throw new InterpreterException($"Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
         };
     }
 
@@ -170,7 +170,7 @@ public partial class Interpreter
             TokenType.MINUS when operand is double d => -d,
             TokenType.PLUS when operand is double d => d,
             TokenType.TILDE when operand is double d => (double)(~(int)d),
-            _ => throw new Exception($"Runtime Error: Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
+            _ => throw new InterpreterException($"Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
         };
     }
 
@@ -194,7 +194,7 @@ public partial class Interpreter
                 TokenType.CARET => (double)((int)l ^ (int)r),
                 TokenType.LESS_LESS => (double)((int)l << (int)r),
                 TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
-                _ => throw new Exception($"Runtime Error: Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
+                _ => throw new InterpreterException($"Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
             };
         }
 
@@ -203,7 +203,7 @@ public partial class Interpreter
             return ls + rs;
         }
 
-        throw new Exception($"Runtime Error: Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
+        throw new InterpreterException($"Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
     }
 
     /// <summary>
@@ -741,7 +741,7 @@ public partial class Interpreter
             SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             string s => s.Select(c => (object?)c.ToString()),
             null => throw new InterpreterException("Cannot spread null or undefined."),
-            _ => throw new Exception($"Runtime Error: Value of type '{value.GetType().Name}' is not iterable. Expected an array, string, Map, Set, generator, or object with [Symbol.iterator].")
+            _ => throw new InterpreterException($"Value of type '{value.GetType().Name}' is not iterable. Expected an array, string, Map, Set, generator, or object with [Symbol.iterator].")
         };
     }
 

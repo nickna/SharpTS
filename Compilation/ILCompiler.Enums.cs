@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -99,12 +100,12 @@ public partial class ILCompiler
     {
         return expr switch
         {
-            Expr.Literal lit => lit.Value ?? throw new Exception($"Compile Error: Const enum expression cannot be null."),
+            Expr.Literal lit => lit.Value ?? throw new CompileException($"Const enum expression cannot be null."),
 
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
                 resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
                     ? val
-                    : throw new Exception($"Compile Error: Const enum member '{g.Name.Lexeme}' referenced before definition."),
+                    : throw new CompileException($"Const enum member '{g.Name.Lexeme}' referenced before definition."),
 
             Expr.Grouping gr => EvaluateConstEnumExpression(gr.Expression, resolvedMembers, enumName),
 
@@ -112,7 +113,7 @@ public partial class ILCompiler
 
             Expr.Binary b => EvaluateConstEnumBinary(b, resolvedMembers, enumName),
 
-            _ => throw new Exception($"Compile Error: Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
+            _ => throw new CompileException($"Expression type '{expr.GetType().Name}' is not allowed in const enum initializer.")
         };
     }
 
@@ -125,7 +126,7 @@ public partial class ILCompiler
             TokenType.MINUS when operand is double d => -d,
             TokenType.PLUS when operand is double d => d,
             TokenType.TILDE when operand is double d => (double)(~(int)d),
-            _ => throw new Exception($"Compile Error: Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
+            _ => throw new CompileException($"Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions.")
         };
     }
 
@@ -149,7 +150,7 @@ public partial class ILCompiler
                 TokenType.CARET => (double)((int)l ^ (int)r),
                 TokenType.LESS_LESS => (double)((int)l << (int)r),
                 TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
-                _ => throw new Exception($"Compile Error: Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
+                _ => throw new CompileException($"Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions.")
             };
         }
 
@@ -158,6 +159,6 @@ public partial class ILCompiler
             return ls + rs;
         }
 
-        throw new Exception($"Compile Error: Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
+        throw new CompileException($"Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression.");
     }
 }

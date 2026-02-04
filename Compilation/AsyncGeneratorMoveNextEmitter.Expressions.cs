@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -1562,7 +1563,7 @@ public partial class AsyncGeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Ldstr, lk.Literal.Literal!.ToString()!);
                 break;
             default:
-                throw new Exception($"Internal Error: Unexpected static property key type: {key.GetType().Name}");
+                throw new CompileException($"Unexpected static property key type: {key.GetType().Name}");
         }
     }
 

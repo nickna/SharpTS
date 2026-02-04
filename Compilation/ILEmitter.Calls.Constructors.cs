@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
@@ -680,7 +681,7 @@ public partial class ILEmitter
     {
         if (arguments.Count != 1)
         {
-            throw new InvalidOperationException("Promise constructor requires exactly 1 argument (executor function).");
+            throw new CompileException("Promise constructor requires exactly 1 argument (executor function).");
         }
 
         // Emit the executor argument
@@ -975,7 +976,7 @@ public partial class ILEmitter
     {
         if (arguments.Count == 0)
         {
-            throw new InvalidOperationException("Worker constructor requires at least 1 argument (filename).");
+            throw new CompileException("Worker constructor requires at least 1 argument (filename).");
         }
 
         // Emit filename
@@ -1034,7 +1035,7 @@ public partial class ILEmitter
             "Float64Array" => typeof(SharpTS.Runtime.Types.SharpTSFloat64Array),
             "BigInt64Array" => typeof(SharpTS.Runtime.Types.SharpTSBigInt64Array),
             "BigUint64Array" => typeof(SharpTS.Runtime.Types.SharpTSBigUint64Array),
-            _ => throw new InvalidOperationException($"Unknown TypedArray type: {typeName}")
+            _ => throw new CompileException($"Unknown TypedArray type: {typeName}")
         };
 
         if (arguments.Count == 0)

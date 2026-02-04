@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation;
 
@@ -55,7 +56,7 @@ public partial class RuntimeEmitter
         InitializeHttpTypes();
 
         // Emit the $FetchResponse class first
-        EmitFetchResponseClass(typeBuilder.Module as ModuleBuilder ?? throw new InvalidOperationException(), runtime);
+        EmitFetchResponseClass(typeBuilder.Module as ModuleBuilder ?? throw new CompileException("Module is not a ModuleBuilder"), runtime);
 
         // Emit fetch function
         EmitFetch(typeBuilder, runtime);

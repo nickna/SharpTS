@@ -357,7 +357,7 @@ public partial class Interpreter
                 "next" => gen.Next(),
                 "return" => gen.Return(args.Count > 0 ? args[0] : null),
                 "throw" => gen.Throw(args.Count > 0 ? args[0] : null),
-                _ => throw new Exception($"Runtime Error: Generator does not have method '{methodName}'.")
+                _ => throw new InterpreterException($"Generator does not have method '{methodName}'.")
             };
         }
         else if (target is SharpTSAsyncGenerator asyncGen)
@@ -368,11 +368,11 @@ public partial class Interpreter
                 "next" => asyncGen.Next(),
                 "return" => asyncGen.Return(args.Count > 0 ? args[0] : null),
                 "throw" => asyncGen.Throw(args.Count > 0 ? args[0] : null),
-                _ => throw new Exception($"Runtime Error: AsyncGenerator does not have method '{methodName}'.")
+                _ => throw new InterpreterException($"AsyncGenerator does not have method '{methodName}'.")
             };
         }
 
-        throw new Exception($"Runtime Error: Cannot call method '{methodName}' on {target?.GetType().Name ?? "null"}.");
+        throw new InterpreterException($"Cannot call method '{methodName}' on {target?.GetType().Name ?? "null"}.");
     }
 
     private async Task<ExecutionResult> ExecuteForInAsync(Stmt.ForIn forIn)
@@ -588,7 +588,7 @@ public partial class Interpreter
 
         if (!TryGetProperty(obj, logical.Name, out object? currentValue))
         {
-            throw new Exception("Only instances and objects have fields.");
+            throw new InterpreterException("Only instances and objects have fields.");
         }
 
         switch (logical.Operator.Type)
@@ -607,7 +607,7 @@ public partial class Interpreter
         object? newValue = await EvaluateAsync(logical.Value);
         if (!TrySetProperty(obj, logical.Name, newValue))
         {
-            throw new Exception("Only instances and objects have fields.");
+            throw new InterpreterException("Only instances and objects have fields.");
         }
         return newValue;
     }
@@ -697,7 +697,7 @@ public partial class Interpreter
         {
             return instance.Get(new Token(TokenType.IDENTIFIER, instanceKey, null, 0));
         }
-        throw new Exception("Index access not supported on this type.");
+        throw new InterpreterException("Index access not supported on this type.");
     }
 
     private object? EvaluateIndexSet(object? obj, object? index, object? value)
@@ -752,6 +752,6 @@ public partial class Interpreter
             }
             return value;
         }
-        throw new Exception("Index assignment not supported on this type.");
+        throw new InterpreterException("Index assignment not supported on this type.");
     }
 }

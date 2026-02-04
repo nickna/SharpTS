@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -211,8 +212,8 @@ public partial class AsyncMoveNextEmitter
             Expr.IdentifierKey ik => ik.Name.Lexeme,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey => throw new Exception("Internal Error: Computed keys not supported in accessor context"),
-            _ => throw new Exception($"Internal Error: Unexpected property key type: {key.GetType().Name}")
+            Expr.ComputedKey => throw new CompileException("Computed keys not supported in accessor context"),
+            _ => throw new CompileException($"Unexpected property key type: {key.GetType().Name}")
         };
     }
 
@@ -234,7 +235,7 @@ public partial class AsyncMoveNextEmitter
                 _il.Emit(OpCodes.Ldstr, lk.Literal.Literal!.ToString()!);
                 break;
             default:
-                throw new Exception($"Internal Error: Unexpected static property key type: {key.GetType().Name}");
+                throw new CompileException($"Unexpected static property key type: {key.GetType().Name}");
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation.Bundling;
 
@@ -21,7 +22,7 @@ public class SdkBundler : IBundler
         var detection = SdkBundlerDetector.DetectionResult;
         if (!detection.IsAvailable || detection.BundlerType == null || detection.HostModelAssembly == null)
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "SDK Bundler is not available. Use BundlerFactory to get the appropriate bundler.");
         }
 
@@ -39,7 +40,7 @@ public class SdkBundler : IBundler
         var (apphostPath, sdkVersion) = ManualBundler.FindAppHostTemplateWithVersion();
         if (apphostPath == null || sdkVersion == null)
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Could not find apphost template. Ensure the .NET SDK is installed.");
         }
 
@@ -97,7 +98,7 @@ public class SdkBundler : IBundler
         var bundleOptionsType = _hostModelAssembly.GetType("Microsoft.NET.HostModel.Bundle.BundleOptions");
         if (bundleOptionsType == null)
         {
-            throw new InvalidOperationException("Could not find BundleOptions type in SDK.");
+            throw new CompileException("Could not find BundleOptions type in SDK.");
         }
 
         // BundleOptions.None = 0
@@ -141,7 +142,7 @@ public class SdkBundler : IBundler
                     var fileSpecType = _hostModelAssembly.GetType("Microsoft.NET.HostModel.Bundle.FileSpec");
                     if (fileSpecType == null)
                     {
-                        throw new InvalidOperationException("Could not find FileSpec type in SDK.");
+                        throw new CompileException("Could not find FileSpec type in SDK.");
                     }
 
                     var fileSpecs = CreateFileSpecList(fileSpecType, sourceDir, assemblyName, patchedApphostPath);
@@ -150,7 +151,7 @@ public class SdkBundler : IBundler
                     var generateBundleMethod = _bundlerType.GetMethod("GenerateBundle");
                     if (generateBundleMethod == null)
                     {
-                        throw new InvalidOperationException("Could not find GenerateBundle method in SDK Bundler.");
+                        throw new CompileException("Could not find GenerateBundle method in SDK Bundler.");
                     }
 
                     generateBundleMethod.Invoke(bundler, [fileSpecs]);
@@ -200,7 +201,7 @@ public class SdkBundler : IBundler
                         return; // Success!
                     }
 
-                    throw new InvalidOperationException($"SDK Bundler did not create expected output file at {actualOutputPath}");
+                    throw new CompileException($"SDK Bundler did not create expected output file at {actualOutputPath}");
                 }
             }
             catch (Exception ex)
@@ -211,9 +212,8 @@ public class SdkBundler : IBundler
             }
         }
 
-        throw new InvalidOperationException(
-            $"Could not find compatible Bundler constructor in SDK. Last error: {lastException?.Message}",
-            lastException);
+        throw new CompileException(
+            $"Could not find compatible Bundler constructor in SDK. Last error: {lastException?.Message}");
     }
 
     /// <summary>
@@ -305,7 +305,7 @@ public class SdkBundler : IBundler
 
         if (fileSpecCtor == null)
         {
-            throw new InvalidOperationException("Could not find FileSpec constructor in SDK.");
+            throw new CompileException("Could not find FileSpec constructor in SDK.");
         }
 
         // Create a List<FileSpec>
@@ -352,7 +352,7 @@ public class SdkBundler : IBundler
         var hostWriterType = _hostModelAssembly.GetType("Microsoft.NET.HostModel.AppHost.HostWriter");
         if (hostWriterType == null)
         {
-            throw new InvalidOperationException("Could not find HostWriter type in SDK.");
+            throw new CompileException("Could not find HostWriter type in SDK.");
         }
 
         // Find the CreateAppHost method
@@ -362,7 +362,7 @@ public class SdkBundler : IBundler
 
         if (createAppHostMethod == null)
         {
-            throw new InvalidOperationException("Could not find CreateAppHost method in HostWriter.");
+            throw new CompileException("Could not find CreateAppHost method in HostWriter.");
         }
 
         var parameters = createAppHostMethod.GetParameters();

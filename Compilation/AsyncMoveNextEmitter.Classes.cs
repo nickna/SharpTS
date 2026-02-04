@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -168,7 +169,7 @@ public partial class AsyncMoveNextEmitter
     {
         if (arguments.Count != 1)
         {
-            throw new InvalidOperationException("Promise constructor requires exactly 1 argument (executor function).");
+            throw new CompileException("Promise constructor requires exactly 1 argument (executor function).");
         }
 
         // Emit the executor argument

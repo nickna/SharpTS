@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters;
@@ -479,7 +480,7 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
             default:
                 // This should never be reached due to the early return above,
                 // but included for safety
-                throw new InvalidOperationException($"Unexpected method {methodName} - early check should have filtered this");
+                throw new CompileException($"Unexpected method {methodName} - early check should have filtered this");
         }
     }
 

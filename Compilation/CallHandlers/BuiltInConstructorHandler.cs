@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.CallHandlers;
@@ -57,7 +58,7 @@ public class BuiltInConstructorHandler : ICallHandler
         var ctx = emitter.Context;
 
         if (call.Arguments.Count != 1)
-            throw new Exception("BigInt() requires exactly one argument.");
+            throw new CompileException("BigInt() requires exactly one argument.");
 
         emitter.EmitExpression(call.Arguments[0]);
         emitter.EmitBoxIfNeeded(call.Arguments[0]);

@@ -280,7 +280,7 @@ public partial class Interpreter
 
         if (method == null)
         {
-            throw new Exception($"Undefined property '{methodName}'.");
+            throw new InterpreterException($"Undefined property '{methodName}'.");
         }
 
         return SharpTSClass.BindMethod(method, instance);
@@ -602,15 +602,15 @@ public partial class Interpreter
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
-            IndexTarget.ConstEnumError t => throw new Exception(
+            IndexTarget.ConstEnumError t => throw new InterpreterException(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
             IndexTarget.ObjectString t => t.Target.GetProperty(t.Key),
             IndexTarget.ObjectSymbol t => t.Target.GetBySymbol(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.InstanceString t => t.Target.Get(new Token(TokenType.IDENTIFIER, t.Key, null, 0)),
             IndexTarget.InstanceSymbol t => t.Target.GetBySymbol(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.GlobalThis t => t.Target.GetProperty(t.Key),
-            IndexTarget.Unsupported => throw new Exception("Index access not supported on this type."),
-            _ => throw new Exception("Index access not supported on this type.")
+            IndexTarget.Unsupported => throw new InterpreterException("Index access not supported on this type."),
+            _ => throw new InterpreterException("Index access not supported on this type.")
         };
     }
 
@@ -633,7 +633,7 @@ public partial class Interpreter
         var target = ResolveIndexTarget(obj, index);
 
         if (target is IndexTarget.EnumReverse or IndexTarget.ConstEnumError)
-            throw new Exception("Index assignment not supported on enum types.");
+            throw new InterpreterException("Index assignment not supported on enum types.");
 
         switch (target)
         {
@@ -675,7 +675,7 @@ public partial class Interpreter
                 return value;
 
             default:
-                throw new Exception("Index assignment not supported on this type.");
+                throw new InterpreterException("Index assignment not supported on this type.");
         }
     }
 
@@ -772,7 +772,7 @@ public partial class Interpreter
             superclass = _environment.Get(classExpr.Superclass);
             if (superclass is not SharpTSClass)
             {
-                throw new Exception("Superclass must be a class.");
+                throw new InterpreterException("Superclass must be a class.");
             }
         }
 
@@ -919,7 +919,7 @@ public partial class Interpreter
                                         // Handle throw from static block
                                         if (result.Type == ExecutionResult.ResultType.Throw)
                                         {
-                                            throw new Exception($"Error in static block: {Stringify(result.Value)}");
+                                            throw new InterpreterException($"Error in static block: {Stringify(result.Value)}");
                                         }
                                         // Return, break, continue are not allowed (validated by type checker)
                                     }

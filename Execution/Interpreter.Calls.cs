@@ -121,12 +121,12 @@ public partial class Interpreter
 
         if (callee is not ISharpTSCallable function)
         {
-            throw new Exception("Can only call functions and classes.");
+            throw new InterpreterException("Can only call functions and classes.");
         }
 
         if (argumentsList.Count < function.Arity())
         {
-            throw new Exception($"Expected at least {function.Arity()} arguments but got {argumentsList.Count}.");
+            throw new InterpreterException($"Expected at least {function.Arity()} arguments but got {argumentsList.Count}.");
         }
 
         return function.Call(this, argumentsList);
@@ -208,7 +208,7 @@ public partial class Interpreter
         TokenType.STAR => left * right,
         TokenType.SLASH => left / right,
         TokenType.PERCENT => left % right,
-        _ => throw new Exception($"Unknown arithmetic operator: {op}")
+        _ => throw new InterpreterException($"Unknown arithmetic operator: {op}")
     };
 
     /// <summary>
@@ -220,7 +220,7 @@ public partial class Interpreter
         TokenType.GREATER => left > right,
         TokenType.LESS_EQUAL => left <= right,
         TokenType.GREATER_EQUAL => left >= right,
-        _ => throw new Exception($"Unknown comparison operator: {op}")
+        _ => throw new InterpreterException($"Unknown comparison operator: {op}")
     };
 
     /// <summary>
@@ -242,7 +242,7 @@ public partial class Interpreter
         TokenType.CARET => left ^ right,
         TokenType.LESS_LESS => left << (right & 0x1F),
         TokenType.GREATER_GREATER => left >> (right & 0x1F),
-        _ => throw new Exception($"Unknown bitwise operator: {op}")
+        _ => throw new InterpreterException($"Unknown bitwise operator: {op}")
     };
 
     private System.Numerics.BigInteger? GetBigIntValue(object? value) => value switch
@@ -458,7 +458,7 @@ public partial class Interpreter
             TokenType.LESS_LESS_EQUAL => (double)(ToInt32(left) << (ToInt32(right) & 0x1F)),
             TokenType.GREATER_GREATER_EQUAL => (double)(ToInt32(left) >> (ToInt32(right) & 0x1F)),
             TokenType.GREATER_GREATER_GREATER_EQUAL => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
-            _ => throw new Exception($"Unknown compound operator: {op}")
+            _ => throw new InterpreterException($"Unknown compound operator: {op}")
         };
     }
 

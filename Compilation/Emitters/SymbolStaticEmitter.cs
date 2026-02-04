@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters;
@@ -42,7 +43,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
                 // Symbol.keyFor(symbol) - returns key for symbol in global registry, or undefined
                 if (arguments.Count == 0)
                 {
-                    throw new Exception("Symbol.keyFor requires a symbol argument");
+                    throw new CompileException("Symbol.keyFor requires a symbol argument");
                 }
                 // Emit the symbol argument
                 emitter.EmitExpression(arguments[0]);

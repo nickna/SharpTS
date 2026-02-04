@@ -1,3 +1,5 @@
+using SharpTS.Diagnostics.Exceptions;
+
 namespace SharpTS.Compilation.Bundling;
 
 /// <summary>
@@ -67,8 +69,8 @@ public static class BundlerFactory
         {
             BundlerMode.Sdk => SdkBundlerDetector.IsSdkAvailable
                 ? new SdkBundler()
-                : throw new InvalidOperationException(
-                    "SDK bundler is not available on this system.\n" +
+                : throw new CompileException(
+                    "SDK bundler is not available on this system. " +
                     "Ensure the .NET SDK is installed, or use '--bundler builtin' for the built-in bundler."),
             BundlerMode.BuiltIn => new ManualBundler(),
             BundlerMode.Auto => CreateBundler(),

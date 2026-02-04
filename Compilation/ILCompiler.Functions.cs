@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -285,7 +286,7 @@ public partial class ILCompiler
         // Top-level functions should always have a body
         if (funcStmt.Body == null)
         {
-            throw new InvalidOperationException($"Cannot compile function '{funcStmt.Name.Lexeme}' without a body.");
+            throw new CompileException($"Cannot compile function '{funcStmt.Name.Lexeme}' without a body.");
         }
 
         // Use EmitStatements to handle 'using' declarations with proper try/finally disposal

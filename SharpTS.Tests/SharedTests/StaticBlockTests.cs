@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
@@ -348,7 +349,7 @@ public class StaticBlockTests
                 static { throw new Error("init failed"); }
             }
             """;
-        Assert.Throws<Exception>(() => TestHarness.Run(source, mode));
+        Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
     }
 
     // ============== ERROR VALIDATION ==============

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Compilation;
 
@@ -409,7 +410,7 @@ public class TypeProvider
         }
 
         if (type == null)
-            throw new InvalidOperationException($"Could not resolve type: {fullName}");
+            throw new CompileException($"Could not resolve type: {fullName}");
 
         return type;
     }
@@ -452,7 +453,7 @@ public class TypeProvider
         {
             var method = k.Item1.GetMethod(k.Item2, k.Item3);
             if (method == null)
-                throw new InvalidOperationException($"Could not find method {k.Item1.FullName}.{k.Item2}({string.Join(", ", k.Item3.Select(t => t.FullName))})");
+                throw new CompileException($"Could not find method {k.Item1.FullName}.{k.Item2}({string.Join(", ", k.Item3.Select(t => t.FullName))})");
             return method;
         });
     }
@@ -466,7 +467,7 @@ public class TypeProvider
     {
         var method = type.GetMethod(name);
         if (method == null)
-            throw new InvalidOperationException($"Could not find method {type.FullName}.{name}");
+            throw new CompileException($"Could not find method {type.FullName}.{name}");
         return method;
     }
 
@@ -488,7 +489,7 @@ public class TypeProvider
         {
             var property = k.Item1.GetProperty(k.Item2);
             if (property == null)
-                throw new InvalidOperationException($"Could not find property {k.Item1.FullName}.{k.Item2}");
+                throw new CompileException($"Could not find property {k.Item1.FullName}.{k.Item2}");
             return property;
         });
     }
@@ -501,7 +502,7 @@ public class TypeProvider
         var property = GetProperty(type, name);
         var getter = property.GetGetMethod();
         if (getter == null)
-            throw new InvalidOperationException($"Property {type.FullName}.{name} does not have a getter");
+            throw new CompileException($"Property {type.FullName}.{name} does not have a getter");
         return getter;
     }
 
@@ -513,7 +514,7 @@ public class TypeProvider
         var property = GetProperty(type, name);
         var setter = property.GetSetMethod();
         if (setter == null)
-            throw new InvalidOperationException($"Property {type.FullName}.{name} does not have a setter");
+            throw new CompileException($"Property {type.FullName}.{name} does not have a setter");
         return setter;
     }
 
@@ -524,7 +525,7 @@ public class TypeProvider
     {
         var method = type.GetMethod(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
         if (method == null)
-            throw new InvalidOperationException($"Could not find static method {type.FullName}.{name}");
+            throw new CompileException($"Could not find static method {type.FullName}.{name}");
         return method;
     }
 
@@ -536,7 +537,7 @@ public class TypeProvider
         var method = type.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
             .FirstOrDefault(m => m.Name == name && m.IsGenericMethod);
         if (method == null)
-            throw new InvalidOperationException($"Could not find generic method {type.FullName}.{name}");
+            throw new CompileException($"Could not find generic method {type.FullName}.{name}");
         return method;
     }
 
@@ -550,7 +551,7 @@ public class TypeProvider
         {
             var ctor = k.Item1.GetConstructor(k.Item2);
             if (ctor == null)
-                throw new InvalidOperationException($"Could not find constructor {k.Item1.FullName}({string.Join(", ", k.Item2.Select(t => t.FullName))})");
+                throw new CompileException($"Could not find constructor {k.Item1.FullName}({string.Join(", ", k.Item2.Select(t => t.FullName))})");
             return ctor;
         });
     }
@@ -570,7 +571,7 @@ public class TypeProvider
     {
         var field = type.GetField(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance);
         if (field == null)
-            throw new InvalidOperationException($"Could not find field {type.FullName}.{name}");
+            throw new CompileException($"Could not find field {type.FullName}.{name}");
         return field;
     }
 

@@ -1,4 +1,5 @@
 using System.Reflection;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using TSTypeInfo = SharpTS.TypeSystem.TypeInfo;
@@ -119,7 +120,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
 
         if (scored.Count == 0)
         {
-            throw new Exception($"No compatible overload found for {candidates[0].Name} with {arguments.Count} argument(s)");
+            throw new CompileException($"No compatible overload found for {candidates[0].Name} with {arguments.Count} argument(s)");
         }
 
         // Sort by: total cost, then prefer non-params, then prefer smaller parameter types

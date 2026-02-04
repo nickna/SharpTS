@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -97,7 +98,7 @@ public partial class AsyncArrowMoveNextEmitter
         if (_ctx?.AsyncArrowBuilders == null ||
             !_ctx.AsyncArrowBuilders.TryGetValue(af, out var nestedBuilder))
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Nested async arrow function not registered with state machine builder.");
         }
 
@@ -114,7 +115,7 @@ public partial class AsyncArrowMoveNextEmitter
         else
         {
             // Fallback: this shouldn't happen if hasNestedAsyncArrows was set correctly
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Async arrow with nested arrows does not have SelfBoxedField set.");
         }
 

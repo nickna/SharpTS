@@ -1,5 +1,6 @@
 using System.Reflection.Emit;
 using SharpTS.Compilation.Emitters;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -275,7 +276,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 break;
 
             default:
-                throw new InvalidOperationException($"Compilation Error: Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
+                throw new CompileException($"Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
         }
     }
 

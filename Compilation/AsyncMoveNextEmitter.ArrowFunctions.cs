@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -43,7 +44,7 @@ public partial class AsyncMoveNextEmitter
         if (_ctx?.AsyncArrowBuilders == null ||
             !_ctx.AsyncArrowBuilders.TryGetValue(af, out var arrowBuilder))
         {
-            throw new InvalidOperationException(
+            throw new CompileException(
                 "Async arrow function not registered with state machine builder.");
         }
 

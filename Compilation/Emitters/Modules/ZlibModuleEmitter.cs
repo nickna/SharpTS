@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters.Modules;
@@ -109,7 +110,7 @@ public sealed class ZlibModuleEmitter : IBuiltInModuleEmitter
             "ZlibZstdCompressSync" => ctx.Runtime!.ZlibZstdCompressSync,
             "ZlibZstdDecompressSync" => ctx.Runtime!.ZlibZstdDecompressSync,
             "ZlibUnzipSync" => ctx.Runtime!.ZlibUnzipSync,
-            _ => throw new InvalidOperationException($"Unknown zlib method: {runtimeMethodName}")
+            _ => throw new CompileException($"Unknown zlib method: {runtimeMethodName}")
         };
 
         il.Emit(OpCodes.Call, method);
