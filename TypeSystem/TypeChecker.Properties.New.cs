@@ -1,5 +1,6 @@
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.TypeSystem;
 
@@ -389,7 +390,7 @@ public partial class TypeChecker
         }
 
         // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && simpleClassName != null && IsErrorTypeName(simpleClassName))
+        if (isSimpleName && simpleClassName != null && BuiltInNames.IsErrorTypeName(simpleClassName))
         {
             // Error constructors accept 0-1 argument (optional message)
             // AggregateError accepts 0-2 arguments (errors array, optional message)

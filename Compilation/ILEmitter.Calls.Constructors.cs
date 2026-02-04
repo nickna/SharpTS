@@ -661,11 +661,7 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    /// <summary>
-    /// Checks if a name is a built-in Error type name.
-    /// Delegates to ErrorBuiltIns for centralized type name knowledge.
-    /// </summary>
-    private static bool IsErrorTypeName(string name) => ErrorBuiltIns.IsErrorTypeName(name);
+    private static bool IsErrorTypeName(string name) => Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(name);
 
     /// <summary>
     /// Emits code for new EventEmitter() construction.

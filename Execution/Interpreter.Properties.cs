@@ -118,7 +118,7 @@ public partial class Interpreter
         }
 
         // Handle new Error(...) and error subtype constructors
-        if (isSimpleName && simpleClassName != null && IsErrorType(simpleClassName))
+        if (isSimpleName && simpleClassName != null && BuiltInNames.IsErrorTypeName(simpleClassName))
         {
             List<object?> args = await ctx.EvaluateAllAsync(newExpr.Arguments);
             return ErrorBuiltIns.CreateError(simpleClassName, args);
@@ -571,12 +571,6 @@ public partial class Interpreter
 
         return value;
     }
-
-    /// <summary>
-    /// Checks if a type name is a built-in Error type.
-    /// Delegates to ErrorBuiltIns for centralized type name knowledge.
-    /// </summary>
-    private static bool IsErrorType(string name) => ErrorBuiltIns.IsErrorTypeName(name);
 
     private static bool IsTypedArrayName(string name) => BuiltInNames.IsTypedArrayName(name);
 

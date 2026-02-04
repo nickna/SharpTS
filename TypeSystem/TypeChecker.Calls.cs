@@ -70,7 +70,7 @@ public partial class TypeChecker
         }
 
         // Handle Error() and error subtypes called without 'new' - still creates error objects
-        if (call.Callee is Expr.Variable errorVar && IsErrorTypeName(errorVar.Name.Lexeme))
+        if (call.Callee is Expr.Variable errorVar && BuiltInNames.IsErrorTypeName(errorVar.Name.Lexeme))
         {
             // Error constructors accept 0-1 argument (optional message)
             // AggregateError accepts 0-2 arguments (errors array, optional message)

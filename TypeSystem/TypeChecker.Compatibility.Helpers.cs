@@ -55,12 +55,6 @@ public partial class TypeChecker
         or TypeInfo.Set;
 
     /// <summary>
-    /// Checks if a name is a built-in Error type name.
-    /// Delegates to ErrorBuiltIns for centralized type name knowledge.
-    /// </summary>
-    private static bool IsErrorTypeName(string name) => ErrorBuiltIns.IsErrorTypeName(name);
-
-    /// <summary>
     /// Gets the superclass of a class type, handling both Class and InstantiatedGeneric.
     /// </summary>
     private static TypeInfo? GetSuperclass(TypeInfo? classType) => classType switch
