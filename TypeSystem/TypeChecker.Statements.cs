@@ -512,95 +512,16 @@ public partial class TypeChecker
     internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
-
-        // Analyze type guard from condition using path-based analysis
-        // Try compound type guard analysis first (handles && conditions)
-        var conditionNarrowings = AnalyzeCompoundTypeGuards(stmt.Condition);
-
-        // If no compound narrowings found, try simple path analysis
-        if (conditionNarrowings.Count == 0)
-        {
-            var (path, narrowedType, excludedType) = AnalyzePathTypeGuard(stmt.Condition);
-            if (path != null && narrowedType != null && excludedType != null)
-            {
-                conditionNarrowings.Add((path, narrowedType, excludedType));
-            }
-        }
-
-        // Analyze the loop body for assignments that would invalidate narrowings on subsequent iterations
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(stmt.Body);
-
-        _loopDepth++;
-        try
-        {
-            // Always push a scope for the loop body to contain invalidations
-            PushNarrowingScope();
-            try
-            {
-                // Invalidate narrowings for any paths assigned within the loop
-                // This handles the case where narrowings from outer scope would be invalid on subsequent iterations
-                foreach (var assignedPath in assignedPaths)
-                {
-                    InvalidateNarrowingsFor(assignedPath);
-                }
-
-                // Apply narrowings from the condition (for compound conditions like x !== null && y !== null)
-                // But only if the path is not assigned within the loop
-                foreach (var (condPath, narrowedType, _) in conditionNarrowings)
-                {
-                    if (!IsPathAffectedByAssignments(condPath, assignedPaths))
-                    {
-                        AddNarrowing(condPath, narrowedType);
-                    }
-                }
-
-                CheckStmt(stmt.Body);
-            }
-            finally
-            {
-                PopNarrowingScope();
-            }
-        }
-        finally
-        {
-            _loopDepth--;
-        }
-
-        // After loop exits, the condition was false
-        // Apply the negated narrowings (excluded types)
-        foreach (var (condPath, _, excludedType) in conditionNarrowings)
-        {
-            AddNarrowing(condPath, excludedType);
-        }
-
+        var conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
+        CheckLoopBody(stmt.Body, conditionNarrowings);
+        ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
 
     internal VoidResult VisitDoWhile(Stmt.DoWhile stmt)
     {
-        // Analyze the loop body for assignments that would invalidate narrowings on subsequent iterations
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(stmt.Body);
-
-        _loopDepth++;
-        try
-        {
-            // Always push a scope for the loop body to contain invalidations
-            PushNarrowingScope();
-            try
-            {
-                // Invalidate narrowings for any paths assigned within the loop
-                foreach (var assignedPath in assignedPaths)
-                {
-                    InvalidateNarrowingsFor(assignedPath);
-                }
-                CheckStmt(stmt.Body);
-            }
-            finally
-            {
-                PopNarrowingScope();
-            }
-        }
-        finally { _loopDepth--; }
+        // Do-while runs body first, so no condition narrowings in body
+        CheckLoopBody(stmt.Body, conditionNarrowings: null);
         CheckExpr(stmt.Condition);
         return VoidResult.Instance;
     }
@@ -610,156 +531,116 @@ public partial class TypeChecker
         if (stmt.Initializer != null)
             CheckStmt(stmt.Initializer);
 
-        // Analyze type guard from condition if present using path-based analysis
-        // Try compound type guard analysis first (handles && conditions)
         List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> conditionNarrowings = [];
-
         if (stmt.Condition != null)
         {
             CheckExpr(stmt.Condition);
-            conditionNarrowings = AnalyzeCompoundTypeGuards(stmt.Condition);
-
-            // If no compound narrowings found, try simple path analysis
-            if (conditionNarrowings.Count == 0)
-            {
-                var (path, narrowedType, excludedType) = AnalyzePathTypeGuard(stmt.Condition);
-                if (path != null && narrowedType != null && excludedType != null)
-                {
-                    conditionNarrowings.Add((path, narrowedType, excludedType));
-                }
-            }
+            conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
         }
 
-        // Analyze the loop body for assignments that would invalidate narrowings on subsequent iterations
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(stmt.Body);
+        // Include increment expression in assigned paths analysis
+        HashSet<Narrowing.NarrowingPath>? incrementPaths = null;
         if (stmt.Increment != null)
         {
-            // Include increment expression in analysis
-            var incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(new Stmt.Expression(stmt.Increment));
-            foreach (var p in incrementPaths)
-                assignedPaths.Add(p);
+            incrementPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(
+                new Stmt.Expression(stmt.Increment));
         }
 
-        _loopDepth++;
-        try
-        {
-            // Always push a scope for the loop body to contain invalidations
-            PushNarrowingScope();
-            try
-            {
-                // Invalidate narrowings for any paths assigned within the loop
-                // This handles the case where narrowings from outer scope would be invalid on subsequent iterations
-                foreach (var assignedPath in assignedPaths)
-                {
-                    InvalidateNarrowingsFor(assignedPath);
-                }
-
-                // Apply narrowings from the condition (for compound conditions like x !== null && y !== null)
-                // But only if the path is not assigned within the loop
-                foreach (var (condPath, narrowedType, _) in conditionNarrowings)
-                {
-                    if (!IsPathAffectedByAssignments(condPath, assignedPaths))
-                    {
-                        AddNarrowing(condPath, narrowedType);
-                    }
-                }
-
-                CheckStmt(stmt.Body);
-            }
-            finally
-            {
-                PopNarrowingScope();
-            }
-        }
-        finally
-        {
-            _loopDepth--;
-        }
+        CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths);
 
         if (stmt.Increment != null)
             CheckExpr(stmt.Increment);
 
-        // After loop exits, the condition was false (if there was a condition)
-        // Apply the negated narrowings (excluded types)
-        foreach (var (condPath, _, excludedType) in conditionNarrowings)
-        {
-            AddNarrowing(condPath, excludedType);
-        }
-
+        ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
 
     internal VoidResult VisitForOf(Stmt.ForOf stmt)
     {
         TypeInfo iterableType = CheckExpr(stmt.Iterable);
-        TypeInfo elementType = new TypeInfo.Any();
-
-        if (iterableType is TypeInfo.Array arr)
-            elementType = arr.ElementType;
-        else if (iterableType is TypeInfo.Map mapType)
-            elementType = TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2);
-        else if (iterableType is TypeInfo.Set setType)
-            elementType = setType.ElementType;
-        else if (iterableType is TypeInfo.Iterator iterType)
-            elementType = iterType.ElementType;
-
-        // Analyze the loop body for assignments that would invalidate narrowings on subsequent iterations
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(stmt.Body);
+        TypeInfo elementType = iterableType switch
+        {
+            TypeInfo.Array arr => arr.ElementType,
+            TypeInfo.Map mapType => TypeInfo.Tuple.FromTypes([mapType.KeyType, mapType.ValueType], 2),
+            TypeInfo.Set setType => setType.ElementType,
+            TypeInfo.Iterator iterType => iterType.ElementType,
+            _ => new TypeInfo.Any()
+        };
 
         TypeEnvironment forOfEnv = new(_environment);
         forOfEnv.Define(stmt.Variable.Lexeme, elementType);
 
-        TypeEnvironment prevForOfEnv = _environment;
-        _environment = forOfEnv;
-        _loopDepth++;
-        try
-        {
-            // Always push a scope for the loop body to contain invalidations
-            PushNarrowingScope();
-            try
-            {
-                // Invalidate narrowings for any paths assigned within the loop
-                foreach (var assignedPath in assignedPaths)
-                {
-                    InvalidateNarrowingsFor(assignedPath);
-                }
-                CheckStmt(stmt.Body);
-            }
-            finally
-            {
-                PopNarrowingScope();
-            }
-        }
-        finally
-        {
-            _loopDepth--;
-            _environment = prevForOfEnv;
-        }
+        CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
         return VoidResult.Instance;
     }
 
     internal VoidResult VisitForIn(Stmt.ForIn stmt)
     {
         TypeInfo objType = CheckExpr(stmt.Object);
-        TypeInfo keyType = new TypeInfo.String();
 
         if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
         {
             throw new TypeCheckException($"'for...in' requires an object, got {objType}");
         }
 
-        // Analyze the loop body for assignments that would invalidate narrowings on subsequent iterations
-        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(stmt.Body);
-
         TypeEnvironment forInEnv = new(_environment);
-        forInEnv.Define(stmt.Variable.Lexeme, keyType);
+        forInEnv.Define(stmt.Variable.Lexeme, new TypeInfo.String());
 
-        TypeEnvironment prevForInEnv = _environment;
-        _environment = forInEnv;
+        CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
+        return VoidResult.Instance;
+    }
+
+    #region Loop Helper Methods
+
+    /// <summary>
+    /// Analyzes a loop condition for type narrowings (handles both compound && conditions and simple guards).
+    /// </summary>
+    private List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>
+        AnalyzeLoopConditionNarrowings(Expr condition)
+    {
+        var narrowings = AnalyzeCompoundTypeGuards(condition);
+        if (narrowings.Count == 0)
+        {
+            var (path, narrowedType, excludedType) = AnalyzePathTypeGuard(condition);
+            if (path != null && narrowedType != null && excludedType != null)
+            {
+                narrowings.Add((path, narrowedType, excludedType));
+            }
+        }
+        return narrowings;
+    }
+
+    /// <summary>
+    /// Checks a loop body with proper narrowing scope management and assignment invalidation.
+    /// </summary>
+    /// <param name="body">The loop body statement</param>
+    /// <param name="conditionNarrowings">Narrowings from condition to apply in body (null for do-while, for-of, for-in)</param>
+    /// <param name="additionalAssignedPaths">Additional paths to consider as assigned (e.g., from increment)</param>
+    /// <param name="loopEnvironment">Custom environment for the loop (e.g., for-of/for-in iterator variable)</param>
+    private void CheckLoopBody(
+        Stmt body,
+        List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)>? conditionNarrowings,
+        HashSet<Narrowing.NarrowingPath>? additionalAssignedPaths = null,
+        TypeEnvironment? loopEnvironment = null)
+    {
+        // Get assigned paths from body
+        var assignedPaths = ControlFlow.LoopAssignmentAnalyzer.GetAssignedPaths(body);
+        if (additionalAssignedPaths != null)
+        {
+            foreach (var p in additionalAssignedPaths)
+                assignedPaths.Add(p);
+        }
+
+        // Set up loop environment if provided
+        var prevEnv = _environment;
+        if (loopEnvironment != null)
+        {
+            _environment = loopEnvironment;
+        }
+
         _loopDepth++;
         try
         {
-            // Always push a scope for the loop body to contain invalidations
             PushNarrowingScope();
             try
             {
@@ -768,7 +649,20 @@ public partial class TypeChecker
                 {
                     InvalidateNarrowingsFor(assignedPath);
                 }
-                CheckStmt(stmt.Body);
+
+                // Apply condition narrowings (if not affected by assignments)
+                if (conditionNarrowings != null)
+                {
+                    foreach (var (condPath, narrowedType, _) in conditionNarrowings)
+                    {
+                        if (!IsPathAffectedByAssignments(condPath, assignedPaths))
+                        {
+                            AddNarrowing(condPath, narrowedType);
+                        }
+                    }
+                }
+
+                CheckStmt(body);
             }
             finally
             {
@@ -778,10 +672,26 @@ public partial class TypeChecker
         finally
         {
             _loopDepth--;
-            _environment = prevForInEnv;
+            if (loopEnvironment != null)
+            {
+                _environment = prevEnv;
+            }
         }
-        return VoidResult.Instance;
     }
+
+    /// <summary>
+    /// Applies exit narrowings after a loop completes (the excluded types from the condition).
+    /// </summary>
+    private void ApplyLoopExitNarrowings(
+        List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> narrowings)
+    {
+        foreach (var (condPath, _, excludedType) in narrowings)
+        {
+            AddNarrowing(condPath, excludedType);
+        }
+    }
+
+    #endregion
 
     internal VoidResult VisitBreak(Stmt.Break stmt)
     {
