@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using SharpTS.Parsing;
 using SharpTS.Runtime.Types;
 
@@ -56,9 +58,10 @@ public class RuntimeEnvironment : ScopeChain<object?, RuntimeEnvironment>
 
     public void Assign(Token name, object? value)
     {
-        if (_values.ContainsKey(name.Lexeme))
+        ref var slot = ref CollectionsMarshal.GetValueRefOrNullRef(_values, name.Lexeme);
+        if (!Unsafe.IsNullRef(ref slot))
         {
-            _values[name.Lexeme] = value;
+            slot = value;
             return;
         }
 
