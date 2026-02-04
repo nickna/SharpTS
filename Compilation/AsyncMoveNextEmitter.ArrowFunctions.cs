@@ -68,7 +68,7 @@ public partial class AsyncMoveNextEmitter
 
         // Load the stub method
         _il.Emit(OpCodes.Ldtoken, arrowBuilder.StubMethod);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
 
         // Create TSFunction(target: boxed outer SM, method: stub)
@@ -104,7 +104,7 @@ public partial class AsyncMoveNextEmitter
         {
             // No fields to populate, just create TSFunction
             _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
@@ -147,7 +147,7 @@ public partial class AsyncMoveNextEmitter
         // Create TSFunction: new TSFunction(displayInstance, method)
         // Stack has: displayInstance
         _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();

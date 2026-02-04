@@ -615,7 +615,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dataLocal);        // destinationArray
         il.Emit(OpCodes.Ldarg_1);                 // destinationIndex (offset)
         il.Emit(OpCodes.Ldloc, sizeLocal);        // length
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // Return the buffer
         il.Emit(OpCodes.Ldarg_0);
@@ -656,31 +656,31 @@ public partial class RuntimeEmitter
         // Check for sha256 (most common)
         il.Emit(OpCodes.Ldloc, digestLower);
         il.Emit(OpCodes.Ldstr, "sha256");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, sha256Label);
 
         // Check for sha1
         il.Emit(OpCodes.Ldloc, digestLower);
         il.Emit(OpCodes.Ldstr, "sha1");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, sha1Label);
 
         // Check for sha384
         il.Emit(OpCodes.Ldloc, digestLower);
         il.Emit(OpCodes.Ldstr, "sha384");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, sha384Label);
 
         // Check for sha512
         il.Emit(OpCodes.Ldloc, digestLower);
         il.Emit(OpCodes.Ldstr, "sha512");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, sha512Label);
 
         // Check for md5
         il.Emit(OpCodes.Ldloc, digestLower);
         il.Emit(OpCodes.Ldstr, "md5");
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Brtrue, md5Label);
 
         // Unknown algorithm - throw

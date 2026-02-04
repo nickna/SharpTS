@@ -256,7 +256,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, skipCommaLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ", ");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipCommaLabel);
 
@@ -270,7 +270,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, runtime.UtilInspectValue);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         // sb.Append(" ]") and return
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, " ]");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
@@ -358,7 +358,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, skipCommaLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ", ");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skipCommaLabel);
 
@@ -372,13 +372,13 @@ public partial class RuntimeEmitter
         // sb.Append(key)
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
         // sb.Append(": ")
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, ": ");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
         // sb.Append(InspectValue(dict[key], depth, currentDepth + 1))
@@ -391,7 +391,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Call, runtime.UtilInspectValue);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -409,7 +409,7 @@ public partial class RuntimeEmitter
         // sb.Append(" }") and return
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldstr, " }");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
 
@@ -593,7 +593,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, formatLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // i++
@@ -615,7 +615,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(appendRemainingLoop);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4, ' ');
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // Append args[argIndex]?.ToString() ?? "undefined"
@@ -639,7 +639,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "undefined");
         il.MarkLabel(argStrNotNullLabel);
         il.MarkLabel(argAppendLabel);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
 
         // argIndex++
@@ -729,7 +729,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         EmitToStringOrUndefined(il);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -739,7 +739,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noArgSLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "%s");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -772,9 +772,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(noArgDLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4, '%');
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Ldloc, specifierLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -800,7 +800,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, fLocal);
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, typeof(double).GetMethod("ToString", [typeof(IFormatProvider)])!);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -811,7 +811,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noArgFLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "%f");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -829,7 +829,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.JsonStringify);
         // Convert result to string (it's already a string, but cast to be safe)
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -839,7 +839,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(noArgJLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldstr, "%j");
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -856,7 +856,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2); // depth
         il.Emit(OpCodes.Ldc_I4_0); // currentDepth
         il.Emit(OpCodes.Call, runtime.UtilInspectValue);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, argIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -866,9 +866,9 @@ public partial class RuntimeEmitter
         il.MarkLabel(noArgOLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4, '%');
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Ldloc, specifierLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -876,7 +876,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(specifierPercentLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4, '%');
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, continueLabel);
 
@@ -884,7 +884,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(unknownSpecifierLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4, '%');
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         // Don't skip the specifier character, let normal processing handle it
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -1061,7 +1061,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("op_Equality", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
         il.Emit(OpCodes.Ret);
 
         // Check double
@@ -1152,10 +1152,10 @@ public partial class RuntimeEmitter
         // Check if both are NaN
         var notBothNan = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, d1);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
         il.Emit(OpCodes.Brfalse, notBothNan);
         il.Emit(OpCodes.Ldloc, d2);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
         il.Emit(OpCodes.Brtrue, returnTrue);
 
         il.MarkLabel(notBothNan);

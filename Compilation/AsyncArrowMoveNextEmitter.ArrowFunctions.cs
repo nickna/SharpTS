@@ -54,7 +54,7 @@ public partial class AsyncArrowMoveNextEmitter
         {
             // No fields to populate, just create TSFunction
             _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
@@ -75,7 +75,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Create TSFunction: new TSFunction(displayInstance, method)
         // Stack has: displayInstance
         _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
@@ -86,7 +86,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Create TSFunction for static method: new TSFunction(null, method)
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
@@ -121,7 +121,7 @@ public partial class AsyncArrowMoveNextEmitter
 
         // Load the stub method for the nested arrow
         _il.Emit(OpCodes.Ldtoken, nestedBuilder.StubMethod);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
 
         // Create TSFunction(target: self boxed, method: stub)

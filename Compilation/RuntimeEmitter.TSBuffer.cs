@@ -449,7 +449,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // offset += buf._data.Length
         il.Emit(OpCodes.Ldloc, offsetLocal);
@@ -724,7 +724,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, startLocal);
         var afterStartLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterStartLabel);
@@ -733,7 +733,7 @@ public partial class RuntimeEmitter
         // start = Math.Min(start, len)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, startLocal);
 
         il.MarkLabel(afterStartLabel);
@@ -749,7 +749,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, endLocal);
         var afterEndLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterEndLabel);
@@ -758,7 +758,7 @@ public partial class RuntimeEmitter
         // end = Math.Min(end, len)
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, endLocal);
 
         il.MarkLabel(afterEndLabel);
@@ -796,7 +796,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, sliceLenLocal);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // return new $Buffer(bytes)
         il.Emit(OpCodes.Ldloc, bytesLocal);
@@ -865,24 +865,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, targetLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, targetStartLocal);
 
         // Clamp sourceStart: Math.Max(0, Math.Min(sourceStart, thisLen))
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, thisLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, sourceStartLocal);
 
         // Clamp sourceEnd: Math.Max(sourceStart, Math.Min(sourceEnd, thisLen))
         il.Emit(OpCodes.Ldloc, sourceStartLocal);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Ldloc, thisLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, sourceEndLocal);
 
         // bytesToCopy = Math.Min(sourceEnd - sourceStart, targetLen - targetStart)
@@ -892,7 +892,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, targetLenLocal);
         il.Emit(OpCodes.Ldloc, targetStartLocal);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, bytesToCopyLocal);
 
         // if (bytesToCopy <= 0) return 0
@@ -913,7 +913,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
         il.Emit(OpCodes.Ldloc, targetStartLocal);
         il.Emit(OpCodes.Ldloc, bytesToCopyLocal);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // return bytesToCopy
         il.Emit(OpCodes.Ldloc, bytesToCopyLocal);
@@ -958,7 +958,7 @@ public partial class RuntimeEmitter
         // minLen = Math.Min(thisLen, otherLen)
         il.Emit(OpCodes.Ldloc, thisLenLocal);
         il.Emit(OpCodes.Ldloc, otherLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, minLenLocal);
 
         // int i = 0
@@ -1143,16 +1143,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, thisLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, startLocal);
 
         // Clamp end: Math.Max(start, Math.Min(end, thisLen))
         il.Emit(OpCodes.Ldloc, startLocal);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, thisLenLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
         il.Emit(OpCodes.Stloc, endLocal);
 
         // if (start >= end) return this
@@ -1328,7 +1328,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldloc, maxWriteLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, bytesToWriteLocal);
         il.Emit(OpCodes.Br, afterLengthLabel);
 
@@ -1338,9 +1338,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, encodedLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Ldloc, maxWriteLocal);
-        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Min", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
         il.Emit(OpCodes.Stloc, bytesToWriteLocal);
 
         il.MarkLabel(afterLengthLabel);
@@ -1352,7 +1352,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsBufferDataField);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, bytesToWriteLocal);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // return bytesToWrite
         il.Emit(OpCodes.Ldloc, bytesToWriteLocal);

@@ -340,7 +340,7 @@ public partial class RuntimeEmitter
         // new $TSFunction(null, MethodInfo)
         il.Emit(OpCodes.Ldnull); // target (null for static method)
         il.Emit(OpCodes.Ldtoken, createMethod);
-        il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
         il.Emit(OpCodes.Ret);

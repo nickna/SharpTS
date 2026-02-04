@@ -744,7 +744,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, extraArgsLocal);
             il.Emit(OpCodes.Ldlen);
             il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+            il.Emit(OpCodes.Call, _types.ArrayCopy5);
             il.Emit(OpCodes.Br_S, afterExtraArgsLabel);
 
             il.MarkLabel(noExtraArgsLabel);
@@ -891,7 +891,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, extraArgsLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
         il.Emit(OpCodes.Br_S, afterExtraArgsLabel);
 
         il.MarkLabel(callLabel);
@@ -1014,7 +1014,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, extraArgsLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Call, typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
         il.Emit(OpCodes.Br_S, afterExtraArgsLabel);
 
         il.MarkLabel(hasCallbackLabel);

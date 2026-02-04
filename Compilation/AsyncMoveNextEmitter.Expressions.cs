@@ -188,7 +188,7 @@ public partial class AsyncMoveNextEmitter
             // Create TSFunction wrapper
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Ldtoken, funcMethod);
-            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;

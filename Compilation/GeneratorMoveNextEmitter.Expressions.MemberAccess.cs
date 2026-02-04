@@ -951,12 +951,12 @@ public partial class GeneratorMoveNextEmitter
             EmitExpression(tl.Expressions[i]);
             EnsureBoxed();
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
-            _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+            _il.Emit(OpCodes.Call, Types.StringConcat2);
 
             if (i + 1 < tl.Strings.Count)
             {
                 _il.Emit(OpCodes.Ldstr, tl.Strings[i + 1]);
-                _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+                _il.Emit(OpCodes.Call, Types.StringConcat2);
             }
         }
         SetStackType(StackType.String);

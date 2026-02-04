@@ -967,7 +967,7 @@ public partial class RuntimeEmitter
 
         // Check for NaN (NaN means no swap for stability)
         il.Emit(OpCodes.Ldloc, doubleResultLocal);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
         var notNaN = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notNaN);
         il.Emit(OpCodes.Ldc_I4_0);  // NaN -> 0 (no swap)
@@ -1106,7 +1106,7 @@ public partial class RuntimeEmitter
 
         // if (double.IsNaN(d)) return 0
         il.Emit(OpCodes.Ldloc, doubleLocal);
-        il.Emit(OpCodes.Call, typeof(double).GetMethod("IsNaN", [typeof(double)])!);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
         il.Emit(OpCodes.Brfalse, notNaN);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);

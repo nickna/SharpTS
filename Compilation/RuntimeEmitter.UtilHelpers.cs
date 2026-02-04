@@ -1003,7 +1003,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(regularCharLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, cLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop); // Discard StringBuilder return value
         il.Emit(OpCodes.Br, loopEndLabel);
 
@@ -1030,7 +1030,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(appendBothLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, cLocal);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // Append the low surrogate
@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Callvirt, _types.String.GetMethod("get_Chars", [typeof(int)])!);
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
 
         // i++ (skip the low surrogate in next iteration)
@@ -1055,7 +1055,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(appendReplacementLabel);
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldc_I4, 0xFFFD); // U+FFFD replacement character
-        il.Emit(OpCodes.Callvirt, typeof(StringBuilder).GetMethod("Append", [typeof(char)])!);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendChar);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, loopEndLabel);
 

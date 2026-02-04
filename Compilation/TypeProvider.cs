@@ -444,13 +444,75 @@ public class TypeProvider
     #region Cached Method References
 
     private MethodInfo? _convertToDoubleFromObject;
+    private MethodInfo? _methodBaseGetMethodFromHandle;
+    private MethodInfo? _stringBuilderAppendString;
+    private MethodInfo? _stringBuilderAppendChar;
+    private MethodInfo? _stringConcat2;
+    private MethodInfo? _mathMinInt32;
+    private MethodInfo? _mathMaxInt32;
+    private MethodInfo? _arrayCopy5;
+    private MethodInfo? _stringOpEquality;
+    private MethodInfo? _doubleIsNaN;
 
     /// <summary>
     /// Gets the Convert.ToDouble(object) method for converting boxed values to double.
-    /// Cached for performance since this is used frequently in numeric operations.
     /// </summary>
     public MethodInfo ConvertToDoubleFromObject =>
         _convertToDoubleFromObject ??= GetMethod(Convert, "ToDouble", Object);
+
+    /// <summary>
+    /// Gets the MethodBase.GetMethodFromHandle(RuntimeMethodHandle) method.
+    /// </summary>
+    public MethodInfo MethodBaseGetMethodFromHandle =>
+        _methodBaseGetMethodFromHandle ??= GetMethod(MethodBase, "GetMethodFromHandle", RuntimeMethodHandle);
+
+    /// <summary>
+    /// Gets the StringBuilder.Append(string) method.
+    /// </summary>
+    public MethodInfo StringBuilderAppendString =>
+        _stringBuilderAppendString ??= GetMethod(StringBuilder, "Append", String);
+
+    /// <summary>
+    /// Gets the StringBuilder.Append(char) method.
+    /// </summary>
+    public MethodInfo StringBuilderAppendChar =>
+        _stringBuilderAppendChar ??= GetMethod(StringBuilder, "Append", Char);
+
+    /// <summary>
+    /// Gets the string.Concat(string, string) method.
+    /// </summary>
+    public MethodInfo StringConcat2 =>
+        _stringConcat2 ??= GetMethod(String, "Concat", String, String);
+
+    /// <summary>
+    /// Gets the Math.Min(int, int) method.
+    /// </summary>
+    public MethodInfo MathMinInt32 =>
+        _mathMinInt32 ??= GetMethod(Math, "Min", Int32, Int32);
+
+    /// <summary>
+    /// Gets the Math.Max(int, int) method.
+    /// </summary>
+    public MethodInfo MathMaxInt32 =>
+        _mathMaxInt32 ??= GetMethod(Math, "Max", Int32, Int32);
+
+    /// <summary>
+    /// Gets the Array.Copy(Array, int, Array, int, int) method.
+    /// </summary>
+    public MethodInfo ArrayCopy5 =>
+        _arrayCopy5 ??= GetMethod(ArrayType, "Copy", ArrayType, Int32, ArrayType, Int32, Int32);
+
+    /// <summary>
+    /// Gets the string.op_Equality(string, string) method for string equality comparison.
+    /// </summary>
+    public MethodInfo StringOpEquality =>
+        _stringOpEquality ??= GetMethod(String, "op_Equality", String, String);
+
+    /// <summary>
+    /// Gets the double.IsNaN(double) method.
+    /// </summary>
+    public MethodInfo DoubleIsNaN =>
+        _doubleIsNaN ??= GetMethod(Double, "IsNaN", Double);
 
     #endregion
 

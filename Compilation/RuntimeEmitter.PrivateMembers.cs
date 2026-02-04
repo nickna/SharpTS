@@ -251,7 +251,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1); // declaringClass
         il.Emit(OpCodes.Ldstr, "__private_");
         il.Emit(OpCodes.Ldarg_2); // methodName
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Instance));
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string), typeof(BindingFlags)])!);
         il.Emit(OpCodes.Stloc, methodInfoLocal);
@@ -263,7 +263,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "TypeError: Private method not found: ");
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Throw);
 
@@ -298,7 +298,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // declaringClass
         il.Emit(OpCodes.Ldstr, "__private_");
         il.Emit(OpCodes.Ldarg_1); // fieldName
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
@@ -310,7 +310,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "TypeError: Static private field not found: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Throw);
 
@@ -344,7 +344,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // declaringClass
         il.Emit(OpCodes.Ldstr, "__private_");
         il.Emit(OpCodes.Ldarg_1); // fieldName
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!);
         il.Emit(OpCodes.Stloc, fieldInfoLocal);
@@ -356,7 +356,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "TypeError: Static private field not found: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Throw);
 
@@ -391,7 +391,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); // declaringClass
         il.Emit(OpCodes.Ldstr, "__private_");
         il.Emit(OpCodes.Ldarg_1); // methodName
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.NonPublic | BindingFlags.Static));
         il.Emit(OpCodes.Callvirt, typeof(Type).GetMethod("GetMethod", [typeof(string), typeof(BindingFlags)])!);
         il.Emit(OpCodes.Stloc, methodInfoLocal);
@@ -403,7 +403,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldstr, "TypeError: Static private method not found: ");
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, _types.StringConcat2);
         il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
         il.Emit(OpCodes.Throw);
 

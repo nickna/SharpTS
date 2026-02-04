@@ -729,13 +729,13 @@ public partial class AsyncArrowMoveNextEmitter
             // Load expression value from temp and convert to string
             _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
-            _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+            _il.Emit(OpCodes.Call, Types.StringConcat2);
 
             // Emit next string part
             if (i + 1 < tl.Strings.Count)
             {
                 _il.Emit(OpCodes.Ldstr, tl.Strings[i + 1]);
-                _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+                _il.Emit(OpCodes.Call, Types.StringConcat2);
             }
         }
         SetStackType(StackType.String);

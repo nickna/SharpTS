@@ -186,7 +186,7 @@ public partial class RuntimeEmitter
         // Create TSFunction for now method: new $TSFunction(null, PerformanceNowWrapper)
         il.Emit(OpCodes.Ldnull); // target (null for static method)
         il.Emit(OpCodes.Ldtoken, nowWrapper);
-        il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
 

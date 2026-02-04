@@ -574,7 +574,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             // Create TSFunction wrapper
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Ldtoken, funcMethod);
-            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
             return;
@@ -1722,12 +1722,12 @@ public partial class AsyncGeneratorMoveNextEmitter
         {
             _il.Emit(OpCodes.Ldloc, exprTemps[i]);
             _il.Emit(OpCodes.Call, _ctx!.Runtime!.Stringify);
-            _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+            _il.Emit(OpCodes.Call, Types.StringConcat2);
 
             if (i + 1 < tl.Strings.Count)
             {
                 _il.Emit(OpCodes.Ldstr, tl.Strings[i + 1]);
-                _il.Emit(OpCodes.Call, typeof(string).GetMethod("Concat", [typeof(string), typeof(string)])!);
+                _il.Emit(OpCodes.Call, Types.StringConcat2);
             }
         }
         SetStackString();
@@ -1843,7 +1843,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         if (_ctx.DisplayClassFields == null || !_ctx.DisplayClassFields.TryGetValue(af, out var fieldMap))
         {
             _il.Emit(OpCodes.Ldtoken, method);
-            _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+            _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
             _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
             SetStackUnknown();
@@ -1879,7 +1879,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
 
         _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
         SetStackUnknown();
@@ -1889,7 +1889,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     {
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Ldtoken, method);
-        _il.Emit(OpCodes.Call, typeof(MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
+        _il.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
         _il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         _il.Emit(OpCodes.Newobj, _ctx!.Runtime!.TSFunctionCtor);
         SetStackUnknown();
