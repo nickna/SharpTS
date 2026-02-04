@@ -1017,9 +1017,9 @@ public partial class AsyncGeneratorMoveNextEmitter
             default:
                 var rightLocal = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
                 _il.Emit(OpCodes.Ldloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
 
                 switch (op)
                 {
@@ -1246,7 +1246,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
             EmitVariable(v);
             EnsureBoxed();
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));
@@ -1280,7 +1280,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             EnsureBoxed();
             _il.Emit(OpCodes.Dup);
 
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));
@@ -1324,9 +1324,9 @@ public partial class AsyncGeneratorMoveNextEmitter
             default:
                 var rightLocal = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
                 _il.Emit(OpCodes.Ldloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
 
                 switch (cs.Operator.Type)
                 {
@@ -1386,9 +1386,9 @@ public partial class AsyncGeneratorMoveNextEmitter
             default:
                 var rightLocal = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
                 _il.Emit(OpCodes.Ldloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
 
                 switch (csi.Operator.Type)
                 {

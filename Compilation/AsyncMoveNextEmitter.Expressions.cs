@@ -698,9 +698,9 @@ public partial class AsyncMoveNextEmitter
                 // For other compound ops, convert to double
                 var rightLocal = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
                 _il.Emit(OpCodes.Ldloc, rightLocal);
-                _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
 
                 switch (op)
                 {
@@ -938,7 +938,7 @@ public partial class AsyncMoveNextEmitter
             // Load, increment, store, return new value
             EmitVariable(v);
             EnsureBoxed();
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));
@@ -974,7 +974,7 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Dup);
 
             // Increment and store
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));

@@ -402,7 +402,7 @@ public partial class AsyncArrowMoveNextEmitter
             // Load, increment, store, return new value
             LoadVariable(name);
             EnsureBoxed();
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));
@@ -426,7 +426,7 @@ public partial class AsyncArrowMoveNextEmitter
             _il.Emit(OpCodes.Dup);
 
             // Increment and store
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));

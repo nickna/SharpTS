@@ -700,7 +700,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToDoubleFromObject);
         il.Emit(OpCodes.Stloc, delayLocal);
         il.Emit(OpCodes.Br_S, extractExtraArgs());
 
@@ -866,7 +866,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+        il.Emit(OpCodes.Call, _types.ConvertToDoubleFromObject);
         il.Emit(OpCodes.Stloc, delayLocal);
 
         // Extract extra args

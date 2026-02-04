@@ -1023,9 +1023,9 @@ public partial class GeneratorMoveNextEmitter
         {
             var rightLocal = _il.DeclareLocal(typeof(object));
             _il.Emit(OpCodes.Stloc, rightLocal);
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldloc, rightLocal);
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
 
             switch (op)
             {
@@ -1251,7 +1251,7 @@ public partial class GeneratorMoveNextEmitter
 
             EmitVariable(v);
             EnsureBoxed();
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));
@@ -1285,7 +1285,7 @@ public partial class GeneratorMoveNextEmitter
             EnsureBoxed();
             _il.Emit(OpCodes.Dup);
 
-            _il.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            _il.Emit(OpCodes.Call, Types.ConvertToDoubleFromObject);
             _il.Emit(OpCodes.Ldc_R8, delta);
             _il.Emit(OpCodes.Add);
             _il.Emit(OpCodes.Box, typeof(double));

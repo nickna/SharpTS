@@ -441,6 +441,19 @@ public class TypeProvider
 
     #endregion
 
+    #region Cached Method References
+
+    private MethodInfo? _convertToDoubleFromObject;
+
+    /// <summary>
+    /// Gets the Convert.ToDouble(object) method for converting boxed values to double.
+    /// Cached for performance since this is used frequently in numeric operations.
+    /// </summary>
+    public MethodInfo ConvertToDoubleFromObject =>
+        _convertToDoubleFromObject ??= GetMethod(Convert, "ToDouble", Object);
+
+    #endregion
+
     #region Method Resolution
 
     /// <summary>
