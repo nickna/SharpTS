@@ -399,16 +399,8 @@ public partial class ILEmitter
             !_ctx.IsInstanceMethod &&
             _ctx.CurrentClassBuilder != null)
         {
-            // Find the class name for the current class builder
-            string? currentClassName = null;
-            foreach (var (name, builder) in _ctx.Classes)
-            {
-                if (builder == _ctx.CurrentClassBuilder)
-                {
-                    currentClassName = name;
-                    break;
-                }
-            }
+            // Use cached CurrentClassName instead of linear search
+            string? currentClassName = _ctx.CurrentClassName;
 
             if (currentClassName != null &&
                 _ctx.ClassRegistry!.TryGetCallableStaticMethod(currentClassName, thisStaticGet.Name.Lexeme, _ctx.CurrentClassBuilder, out var thisStaticMethod))

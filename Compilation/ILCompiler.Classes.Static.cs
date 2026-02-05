@@ -68,6 +68,7 @@ public partial class ILCompiler
             DisplayClassFields = _closures.DisplayClassFields,
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             CurrentClassBuilder = typeBuilder,
+            CurrentClassName = qualifiedClassName, // Required for static member access via 'this'
             FunctionRestParams = _functions.RestParams,
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,

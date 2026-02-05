@@ -72,16 +72,8 @@ public partial class ILEmitter
         // In static blocks, 'this' refers to the class constructor, so this.property accesses static members
         if (g.Object is Expr.This && !_ctx.IsInstanceMethod && _ctx.CurrentClassBuilder != null)
         {
-            // Find the class name for the current class builder
-            string? currentClassName = null;
-            foreach (var (name, builder) in _ctx.Classes)
-            {
-                if (builder == _ctx.CurrentClassBuilder)
-                {
-                    currentClassName = name;
-                    break;
-                }
-            }
+            // Use cached CurrentClassName instead of linear search
+            string? currentClassName = _ctx.CurrentClassName;
 
             if (currentClassName != null)
             {
@@ -94,60 +86,62 @@ public partial class ILEmitter
         }
 
         // Handle static member access via class name
-        if (g.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        if (g.Object is Expr.Variable classVar)
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-
-            // Try static getter first (for auto-accessors and explicit static accessors)
-            if (_ctx.ClassRegistry!.TryGetStaticGetter(resolvedClassName, g.Name.Lexeme, out var staticGetter))
+            if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
-                IL.Emit(OpCodes.Call, staticGetter!);
-
-                // The getter returns the typed value (e.g., double for number).
-                // Track the stack type so EmitBoxIfNeeded can box only when necessary.
-                // This avoids unnecessary boxing in numeric contexts like `Counter.count + 1`.
-                string pascalPropName = NamingConventions.ToPascalCase(g.Name.Lexeme);
-                if (_ctx.PropertyTypes != null &&
-                    _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
-                    propTypes.TryGetValue(pascalPropName, out var propType))
+                // Try static getter first (for auto-accessors and explicit static accessors)
+                if (_ctx.ClassRegistry!.TryGetStaticGetter(resolvedClassName, g.Name.Lexeme, out var staticGetter))
                 {
-                    if (propType == _ctx.Types.Double)
+                    IL.Emit(OpCodes.Call, staticGetter!);
+
+                    // The getter returns the typed value (e.g., double for number).
+                    // Track the stack type so EmitBoxIfNeeded can box only when necessary.
+                    // This avoids unnecessary boxing in numeric contexts like `Counter.count + 1`.
+                    string pascalPropName = NamingConventions.ToPascalCase(g.Name.Lexeme);
+                    if (_ctx.PropertyTypes != null &&
+                        _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
+                        propTypes.TryGetValue(pascalPropName, out var propType))
                     {
-                        SetStackType(StackType.Double);
-                    }
-                    else if (propType == _ctx.Types.Boolean)
-                    {
-                        SetStackType(StackType.Boolean);
-                    }
-                    else if (propType == _ctx.Types.String)
-                    {
-                        SetStackType(StackType.String);
+                        if (propType == _ctx.Types.Double)
+                        {
+                            SetStackType(StackType.Double);
+                        }
+                        else if (propType == _ctx.Types.Boolean)
+                        {
+                            SetStackType(StackType.Boolean);
+                        }
+                        else if (propType == _ctx.Types.String)
+                        {
+                            SetStackType(StackType.String);
+                        }
+                        else
+                        {
+                            // Other reference types
+                            SetStackUnknown();
+                        }
                     }
                     else
                     {
-                        // Other reference types
+                        // Fallback: assume object return (legacy behavior)
                         SetStackUnknown();
                     }
+                    return;
                 }
-                else
+
+                // Try to find static field using stored FieldBuilders
+                // Use TryGetCallableStaticField to handle generic classes properly
+                if (_ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, g.Name.Lexeme, classBuilder, out var callableStaticField))
                 {
-                    // Fallback: assume object return (legacy behavior)
+                    IL.Emit(OpCodes.Ldsfld, callableStaticField!);
                     SetStackUnknown();
+                    return;
                 }
-                return;
-            }
 
-            // Try to find static field using stored FieldBuilders
-            // Use TryGetCallableStaticField to handle generic classes properly
-            if (_ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, g.Name.Lexeme, classBuilder, out var callableStaticField))
-            {
-                IL.Emit(OpCodes.Ldsfld, callableStaticField!);
-                SetStackUnknown();
-                return;
+                // Static methods are handled in EmitCall, so just fall through for now
+                // If we get here for a method reference (not call), we'll use the generic path
             }
-
-            // Static methods are handled in EmitCall, so just fall through for now
-            // If we get here for a method reference (not call), we'll use the generic path
         }
 
         // Handle static member access via imported class alias (import X = require('./module') where module exports a class)
@@ -269,16 +263,8 @@ public partial class ILEmitter
                 return;
             }
 
-            // Find the class name for the current class builder (class declarations)
-            string? currentClassName = null;
-            foreach (var (name, builder) in _ctx.Classes)
-            {
-                if (builder == _ctx.CurrentClassBuilder)
-                {
-                    currentClassName = name;
-                    break;
-                }
-            }
+            // Use cached CurrentClassName instead of linear search (class declarations)
+            string? currentClassName = _ctx.CurrentClassName;
 
             if (currentClassName != null)
             {
@@ -291,70 +277,72 @@ public partial class ILEmitter
         }
 
         // Handle static property assignment via class name
-        if (s.Object is Expr.Variable classVar && _ctx.Classes.TryGetValue(_ctx.ResolveClassName(classVar.Name.Lexeme), out var classBuilder))
+        if (s.Object is Expr.Variable classVar)
         {
             string resolvedClassName = _ctx.ResolveClassName(classVar.Name.Lexeme);
-
-            // Try static setter first (for auto-accessors and explicit static accessors)
-            if (_ctx.ClassRegistry!.TryGetStaticSetter(resolvedClassName, s.Name.Lexeme, out var staticSetter))
+            if (_ctx.Classes.TryGetValue(resolvedClassName, out var classBuilder))
             {
-                // Get the property type from PropertyTypes dictionary
-                Type propertyType = _ctx.Types.Object;
-                string pascalPropName = NamingConventions.ToPascalCase(s.Name.Lexeme);
+                // Try static setter first (for auto-accessors and explicit static accessors)
+                if (_ctx.ClassRegistry!.TryGetStaticSetter(resolvedClassName, s.Name.Lexeme, out var staticSetter))
+                {
+                    // Get the property type from PropertyTypes dictionary
+                    Type propertyType = _ctx.Types.Object;
+                    string pascalPropName = NamingConventions.ToPascalCase(s.Name.Lexeme);
 
-                // Try to get the type from PropertyTypes dictionary
-                if (_ctx.PropertyTypes != null &&
-                    _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
-                    propTypes.TryGetValue(pascalPropName, out var propType))
-                {
-                    propertyType = propType;
-                }
-                else
-                {
-                    // Fallback: infer from value expression type via TypeMap
-                    TypeInfo? valueType = _ctx.TypeMap?.Get(s.Value);
-                    if (valueType is TypeInfo.Primitive prim)
+                    // Try to get the type from PropertyTypes dictionary
+                    if (_ctx.PropertyTypes != null &&
+                        _ctx.PropertyTypes.TryGetValue(resolvedClassName, out var propTypes) &&
+                        propTypes.TryGetValue(pascalPropName, out var propType))
                     {
-                        propertyType = prim.Type switch
-                        {
-                            TokenType.TYPE_NUMBER => _ctx.Types.Double,
-                            TokenType.TYPE_BOOLEAN => _ctx.Types.Boolean,
-                            TokenType.TYPE_STRING => _ctx.Types.String,
-                            _ => _ctx.Types.Object
-                        };
+                        propertyType = propType;
                     }
+                    else
+                    {
+                        // Fallback: infer from value expression type via TypeMap
+                        TypeInfo? valueType = _ctx.TypeMap?.Get(s.Value);
+                        if (valueType is TypeInfo.Primitive prim)
+                        {
+                            propertyType = prim.Type switch
+                            {
+                                TokenType.TYPE_NUMBER => _ctx.Types.Double,
+                                TokenType.TYPE_BOOLEAN => _ctx.Types.Boolean,
+                                TokenType.TYPE_STRING => _ctx.Types.String,
+                                _ => _ctx.Types.Object
+                            };
+                        }
+                    }
+
+                    EmitExpression(s.Value);
+                    EmitBoxIfNeeded(s.Value);
+                    IL.Emit(OpCodes.Dup); // Keep value for expression result
+                    var staticSetterResultTemp = IL.DeclareLocal(_ctx.Types.Object);
+                    IL.Emit(OpCodes.Stloc, staticSetterResultTemp);
+
+                    // If setter expects a value type, unbox the value
+                    if (propertyType.IsValueType)
+                    {
+                        IL.Emit(OpCodes.Unbox_Any, propertyType);
+                    }
+                    else if (!_ctx.Types.IsObject(propertyType))
+                    {
+                        IL.Emit(OpCodes.Castclass, propertyType);
+                    }
+
+                    IL.Emit(OpCodes.Call, staticSetter!);
+
+                    // Restore result for expression value
+                    IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
+                    return;
                 }
 
-                EmitExpression(s.Value);
-                EmitBoxIfNeeded(s.Value);
-                IL.Emit(OpCodes.Dup); // Keep value for expression result
-                var staticSetterResultTemp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, staticSetterResultTemp);
-
-                // If setter expects a value type, unbox the value
-                if (propertyType.IsValueType)
+                if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, s.Name.Lexeme, out var staticField))
                 {
-                    IL.Emit(OpCodes.Unbox_Any, propertyType);
+                    EmitExpression(s.Value);
+                    EmitBoxIfNeeded(s.Value);
+                    IL.Emit(OpCodes.Dup); // Keep value for expression result
+                    IL.Emit(OpCodes.Stsfld, staticField!);
+                    return;
                 }
-                else if (!_ctx.Types.IsObject(propertyType))
-                {
-                    IL.Emit(OpCodes.Castclass, propertyType);
-                }
-
-                IL.Emit(OpCodes.Call, staticSetter!);
-
-                // Restore result for expression value
-                IL.Emit(OpCodes.Ldloc, staticSetterResultTemp);
-                return;
-            }
-
-            if (_ctx.ClassRegistry!.TryGetStaticField(resolvedClassName, s.Name.Lexeme, out var staticField))
-            {
-                EmitExpression(s.Value);
-                EmitBoxIfNeeded(s.Value);
-                IL.Emit(OpCodes.Dup); // Keep value for expression result
-                IL.Emit(OpCodes.Stsfld, staticField!);
-                return;
             }
         }
 

@@ -60,6 +60,9 @@ public partial class CompilationContext
     /// </summary>
     public Dictionary<string, string>? NamespaceImports { get; set; }
 
+    // Cache for sanitized module names to avoid repeated string operations
+    private readonly Dictionary<string, string> _sanitizedModuleNameCache = [];
+
     /// <summary>
     /// Resolves a simple enum name to its qualified name for lookup in the EnumMembers dictionary.
     /// </summary>
@@ -67,7 +70,7 @@ public partial class CompilationContext
     {
         if (EnumToModule != null && EnumToModule.TryGetValue(simpleEnumName, out var modulePath))
         {
-            string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(modulePath));
+            string sanitizedModule = GetSanitizedModuleName(modulePath);
             return $"$M_{sanitizedModule}_{simpleEnumName}";
         }
         return simpleEnumName;
@@ -81,8 +84,22 @@ public partial class CompilationContext
         if (CurrentModulePath == null)
             return simpleEnumName;
 
-        string sanitizedModule = SanitizeModuleName(Path.GetFileNameWithoutExtension(CurrentModulePath));
+        string sanitizedModule = GetSanitizedModuleName(CurrentModulePath);
         return $"$M_{sanitizedModule}_{simpleEnumName}";
+    }
+
+    /// <summary>
+    /// Gets the sanitized module name with caching to avoid repeated string operations.
+    /// </summary>
+    private string GetSanitizedModuleName(string modulePath)
+    {
+        string filename = Path.GetFileNameWithoutExtension(modulePath);
+        if (!_sanitizedModuleNameCache.TryGetValue(filename, out var sanitized))
+        {
+            sanitized = SanitizeModuleName(filename);
+            _sanitizedModuleNameCache[filename] = sanitized;
+        }
+        return sanitized;
     }
 
     public static string SanitizeModuleName(string name)

@@ -45,6 +45,13 @@ public class ClosureAnalyzer : AstVisitorBase
     // Maps function node → set of its local variables that are captured by inner closures
     private readonly Dictionary<object, HashSet<string>> _functionCapturedLocals = [];
 
+    // ============================================
+    // Performance optimization: Inverse index
+    // ============================================
+
+    // O(1) lookup for whether any variable is captured (inverse of _captures)
+    private readonly HashSet<string> _allCapturedVariables = [];
+
     /// <summary>
     /// Gets the captured variables for a given function/arrow AST node.
     /// </summary>
@@ -57,10 +64,11 @@ public class ClosureAnalyzer : AstVisitorBase
 
     /// <summary>
     /// Checks if a variable is captured by any inner function in the current scope.
+    /// O(1) lookup using inverse index.
     /// </summary>
     public bool IsVariableCaptured(string name)
     {
-        return _captures.Values.Any(set => set.Contains(name));
+        return _allCapturedVariables.Contains(name);
     }
 
     /// <summary>
@@ -122,6 +130,7 @@ public class ClosureAnalyzer : AstVisitorBase
         if (name == _currentFunctionName)
         {
             _captures[_currentFunction].Add(name);
+            _allCapturedVariables.Add(name); // O(1) inverse index
             return;
         }
 
@@ -133,6 +142,7 @@ public class ClosureAnalyzer : AstVisitorBase
         if (_outerVariables.Contains(name))
         {
             _captures[_currentFunction].Add(name);
+            _allCapturedVariables.Add(name); // O(1) inverse index
 
             // Track that this variable is captured from its defining function
             // This enables function-level display class creation
@@ -155,6 +165,7 @@ public class ClosureAnalyzer : AstVisitorBase
     /// <summary>
     /// Finds the function that defines a given variable by checking _localVars
     /// for functions in the stack. Returns null if the variable is top-level.
+    /// Note: O(depth) where depth is nesting level, typically small (5-10).
     /// </summary>
     private object? FindDefiningFunction(string name)
     {
@@ -165,7 +176,7 @@ public class ClosureAnalyzer : AstVisitorBase
                 return func;
             }
         }
-        return null; // Top-level variable
+        return null;
     }
 
     #endregion
@@ -337,7 +348,10 @@ public class ClosureAnalyzer : AstVisitorBase
         // Track this as a captured variable so display classes include a field for it
         // EXCEPT for function expressions (HasOwnThis=true) which receive 'this' via the __this parameter
         if (_currentFunction != null && _currentFunction is Expr.ArrowFunction arrowFunc && !arrowFunc.HasOwnThis)
+        {
             _captures[_currentFunction].Add("this");
+            _allCapturedVariables.Add("this"); // O(1) inverse index
+        }
     }
 
     #endregion
