@@ -8,217 +8,125 @@ SharpTS is a TypeScript interpreter and compiler implemented in C# using .NET 10
 
 ## Build and Run Commands
 
-### Build the project
 ```bash
-dotnet build
-```
-
-### Run REPL mode
-```bash
-dotnet run
-```
-
-### Execute a TypeScript file (interpreted)
-```bash
-dotnet run -- <filename>.ts
-```
-
-### Compile to .NET IL (ahead-of-time)
-```bash
-dotnet run -- --compile <filename>.ts           # Outputs <filename>.dll
-dotnet run -- --compile <filename>.ts -o out.dll  # Custom output path
-dotnet run -- --compile <filename>.ts --pack    # Generate NuGet package
-```
-
-### Run compiled output
-```bash
-dotnet <filename>.dll
-```
-
-### Run tests
-The project uses xUnit tests in the `SharpTS.Tests/` directory:
-```bash
-dotnet test
+dotnet build                              # Build the project
+dotnet test                               # Run xUnit tests
+dotnet test --filter "FullyQualifiedName~SomeTest"  # Run specific test
+dotnet run                                # Start REPL mode
+dotnet run -- script.ts                   # Interpret a TypeScript file
+dotnet run -- --compile script.ts         # Compile to .NET assembly
+dotnet run -- --compile script.ts -o out.dll  # Custom output path
+dotnet run -- --compile script.ts --verify    # Verify emitted IL
 ```
 
 ## Architecture
 
-SharpTS follows a traditional compiler/interpreter pipeline with a critical separation between compile-time and runtime phases:
+### Pipeline Flow
+
+```
+Source → Lexer → Parser → TypeChecker → Interpreter (tree-walk)
+                                     ↘ ILCompiler (AOT to .NET IL)
+```
 
 ### Directory Structure
 
-```
-SharpTS/
-├── Parsing/                    # Frontend pipeline (namespace: SharpTS.Parsing)
-│   ├── Token.cs                # Token types and definitions
-│   ├── Lexer.cs                # Lexical analyzer
-│   ├── Parser.cs               # Recursive descent parser
-│   └── AST.cs                  # Expr and Stmt record types
-│
-├── TypeSystem/                 # Static type analysis (namespace: SharpTS.TypeSystem)
-│   ├── TypeInfo.cs             # Type representations
-│   ├── TypeChecker.cs          # Static type validator
-│   └── TypeEnvironment.cs      # Type scope management
-│
-├── Runtime/                    # Runtime values and infrastructure
-│   ├── RuntimeEnvironment.cs   # Variable scope management (namespace: SharpTS.Runtime)
-│   ├── Types/                  # Runtime value types (namespace: SharpTS.Runtime.Types)
-│   │   ├── SharpTSArray.cs
-│   │   ├── SharpTSClass.cs
-│   │   ├── SharpTSEnum.cs
-│   │   ├── SharpTSFunction.cs
-│   │   ├── SharpTSInstance.cs
-│   │   ├── SharpTSMath.cs
-│   │   └── SharpTSObject.cs
-│   ├── BuiltIns/               # Built-in methods (namespace: SharpTS.Runtime.BuiltIns)
-│   │   ├── ArrayBuiltIns.cs
-│   │   ├── StringBuiltIns.cs
-│   │   ├── ObjectBuiltIns.cs
-│   │   ├── MathBuiltIns.cs
-│   │   ├── BuiltInTypes.cs
-│   │   └── BuiltInMethod.cs
-│   └── Exceptions/             # Control flow exceptions (namespace: SharpTS.Runtime.Exceptions)
-│       ├── ReturnException.cs
-│       ├── BreakException.cs
-│       ├── ContinueException.cs
-│       └── ThrowException.cs
-│
-├── Execution/                  # Tree-walking interpreter (namespace: SharpTS.Execution)
-│   ├── Interpreter.cs          # Core infrastructure
-│   ├── Interpreter.Statements.cs
-│   ├── Interpreter.Expressions.cs
-│   ├── Interpreter.Properties.cs
-│   ├── Interpreter.Calls.cs
-│   └── Interpreter.Operators.cs
-│
-├── Compilation/                # IL compilation (namespace: SharpTS.Compilation)
-│   ├── ILCompiler.cs           # Main orchestrator
-│   ├── ILEmitter.cs            # IL instruction emission (+ partial files)
-│   ├── ClosureAnalyzer.cs      # Closure detection
-│   ├── CompilationContext.cs   # Compilation state
-│   ├── RuntimeTypes.cs         # Runtime type emission
-│   ├── RuntimeEmitter.cs       # Runtime code emission
-│   ├── LocalsManager.cs        # Local variable tracking
-│   ├── TypeMapper.cs           # TypeScript-to-.NET type mapping
-│   └── EmittedRuntime.cs       # Emitted runtime references
-│
-├── Packaging/                  # NuGet package generation (namespace: SharpTS.Packaging)
-│   ├── AssemblyMetadata.cs     # Assembly version and attributes
-│   ├── AssemblyAttributeBuilder.cs # Build assembly-level attributes
-│   ├── PackageJson.cs          # package.json model
-│   ├── PackageJsonLoader.cs    # package.json parser
-│   ├── NuGetPackager.cs        # .nupkg generation
-│   ├── SymbolPackager.cs       # .snupkg generation
-│   ├── PackageValidator.cs     # Pre-packaging validation
-│   └── NuGetPublisher.cs       # Push to NuGet feeds
-│
-├── SharpTS.Tests/              # xUnit test project
-├── Program.cs                  # Entry point
-└── SharpTS.csproj
-```
+| Directory | Purpose |
+|-----------|---------|
+| `Parsing/` | Lexer, Parser (14 partial files), AST node definitions |
+| `TypeSystem/` | Static type checking (47 files), type compatibility, generics |
+| `Execution/` | Tree-walking interpreter (16 files) |
+| `Compilation/` | IL compilation (316 files), async state machines, bundling |
+| `Runtime/` | Runtime values, environment, built-ins |
+| `Runtime/Types/` | TypeScript value types (87 files): arrays, classes, promises, etc. |
+| `Runtime/BuiltIns/` | Built-in method implementations (41 files) |
+| `Runtime/Exceptions/` | Control flow exceptions (return, break, continue, yield) |
+| `Modules/` | Module resolution, script detection |
+| `Diagnostics/` | Error reporting, source locations |
+| `Packaging/` | NuGet package generation |
+| `Cli/` | Command-line argument parsing |
+| `Declaration/` | TypeScript declaration generation from .NET types |
+| `LspBridge/` | Language Server Protocol bridge for IDE integration |
+| `SharpTS.Tests/` | xUnit test project |
 
-### Pipeline Phases
-
-1. **Lexical Analysis** (`Parsing/Lexer.cs`)
-   - Tokenizes source code into `Token` objects
-   - Produces a flat stream for parsing
-
-2. **Syntax Analysis** (`Parsing/Parser.cs`)
-   - Recursive descent parser
-   - Builds Abstract Syntax Tree (AST) from tokens
-   - Performs "desugaring" (e.g., `for` loops become `while` loops)
-   - AST nodes defined in `Parsing/AST.cs` with expression (`Expr`) and statement (`Stmt`) records
-
-3. **Static Type Checking** (`TypeSystem/TypeChecker.cs`) - **Separate compile-time phase**
-   - Runs BEFORE interpretation or compilation
-   - Validates type compatibility (nominal and structural)
-   - Checks function signatures, inheritance safety
-   - Uses `TypeSystem/TypeEnvironment.cs` for type scopes
-   - Type representations in `TypeSystem/TypeInfo.cs` (Primitive, Function, Class, Interface, Instance, Array, Record, Void, Any)
-
-4. **Runtime Interpretation** (`Execution/Interpreter*.cs`) - One execution path
-   - Tree-walking interpreter split across partial class files
-   - Executes validated AST
-   - Uses `Runtime/RuntimeEnvironment.cs` for variable scopes
-   - Runtime types in `Runtime/Types/`: SharpTSClass, SharpTSInstance, SharpTSFunction, SharpTSArray, SharpTSObject
-
-5. **IL Compilation** (`Compilation/` directory) - Alternative execution path
-   - `ILCompiler.cs`: Main orchestrator, multi-phase compilation
-   - `ILEmitter.cs`: Emits IL instructions for statements and expressions
-   - `ClosureAnalyzer.cs`: Detects captured variables for closure support
-   - `CompilationContext.cs`: Tracks locals, parameters, and compilation state
-   - Uses `System.Reflection.Emit` with `PersistedAssemblyBuilder` to generate .NET assemblies
-
-### Critical Architecture Notes
+### Critical Architecture Patterns
 
 **Two-Environment System:**
-- `TypeEnvironment`: Tracks types during static analysis
-- `RuntimeEnvironment`: Tracks values during execution
-- These are completely separate - never mix them
+- `TypeEnvironment` - Tracks types during static analysis (compile-time)
+- `RuntimeEnvironment` - Tracks values during execution (runtime)
+- Never mix these - they serve completely different phases
 
-**Type System Design:**
-- Supports **structural typing** for interfaces (duck typing)
-- Supports **nominal typing** for classes (inheritance-based)
-- Type checking happens at compile-time; runtime uses dynamic object model
-- `TypeInfo` records represent types statically
-- Runtime objects (`SharpTSInstance`, etc.) are independent of `TypeInfo`
+**Control Flow via Exceptions:**
+- `ReturnException`, `BreakException`, `ContinueException`, `YieldException`
+- This is intentional - exceptions as control flow mechanism for unwinding
 
-**Control Flow via Exceptions:** (`Runtime/Exceptions/`)
-- `ReturnException.cs`: Unwinding the call stack on `return` statements
-- `BreakException.cs`: Breaking out of loops and switch statements
-- `ContinueException.cs`: Continuing to next loop iteration
-- `ThrowException.cs`: User-thrown exceptions in try/catch
-- This is intentional - exceptions as control flow mechanism
+**Type System:**
+- Structural typing for interfaces (duck typing)
+- Nominal typing for classes (inheritance-based)
+- `TypeInfo` records represent types statically; runtime objects are independent
 
-**Entry Point:**
-- `Program.cs` orchestrates the pipeline: Lex → Parse → TypeCheck → (Interpret OR Compile)
-- Errors in type checking prevent execution or compilation from running
-- The `--compile` flag switches from interpretation to IL compilation
+### RuntimeValue Boxing Elimination (Active Optimization)
 
-## Language Features
+The codebase is migrating from `object?` to `RuntimeValue` struct to eliminate boxing:
 
-- **Primitives:** `string`, `number`, `boolean`, `null`
-- **Arrays:** Homogeneous typed arrays (`number[]`) with built-in methods (push, pop, map, filter, etc.)
-- **Objects:** JSON-style object literals with structural typing
-- **Classes:** Constructors, methods, fields, inheritance (`extends`), `super` calls
-- **Interfaces:** Structural type checking (shape-based compatibility)
-- **Functions:** First-class functions, arrow functions with closures, default parameters
-- **Control Flow:** `if/else`, `while`, `for`, `for...of`, `switch`, `break`, `continue`
-- **Error Handling:** `try/catch/finally`, `throw`
-- **Operators:** Nullish coalescing (`??`), optional chaining (`?.`), ternary (`?:`), template literals
-- **Built-ins:** `console.log`, `Math` object (constants and methods), string methods
+**RuntimeValue** (`Runtime/RuntimeValue.cs`):
+- 24-byte discriminated union storing primitives inline
+- `ValueKind` enum: Undefined, Null, Boolean, Number, String, Object, Symbol, BigInt
+- Factory methods: `FromNumber()`, `FromString()`, `FromBoolean()`, `FromObject()`, `FromBoxed()`
+- Accessors: `AsNumber()`, `AsString()`, `AsBoolean()`, `AsObject<T>()`
+- JavaScript semantics: `IsTruthy()`, `TypeofString()`
 
-## Development Patterns
+**ISharpTSCallableV2** (`Runtime/Types/ISharpTSCallableV2.cs`):
+- New callable interface using `RuntimeValue` instead of `object?`
+- `CallableV2Adapter` wraps legacy → V2, `CallableLegacyAdapter` wraps V2 → legacy
+- Extension methods: `.AsV2()`, `.AsLegacy()`, `.CallWithRuntimeValues()`
 
-### AST Node Pattern
-- All AST nodes are discriminated unions using C# records
+**BuiltInMethod** (`Runtime/BuiltIns/BuiltInMethod.cs`):
+- Implements both `ISharpTSCallable` and `ISharpTSCallableV2`
+- `CreateV2()` factory for RuntimeValue-based methods
+- Thread-local pooling in array built-ins to avoid allocations
+
+### Visitor-Style Traversal Pattern
+
+All major phases use switch pattern matching on AST node types:
+- `TypeChecker.Check()` / `CheckExpr()` - static analysis
+- `Interpreter.Execute()` / `Evaluate()` - runtime
+- `ILEmitter.EmitStatement()` / `EmitExpression()` - IL compilation
+
+### AST Nodes
+
+All AST nodes are C# records in `Parsing/AST.cs`:
 - Expression nodes inherit from `Expr`
 - Statement nodes inherit from `Stmt`
-- Use pattern matching (`switch` expressions) to traverse
+- Use pattern matching to traverse
 
-### Visitor-Style Traversal
-- `TypeChecker.Check()` and `TypeChecker.CheckExpr()` for static analysis
-- `Interpreter.Execute()` and `Interpreter.Evaluate()` for runtime
-- `ILEmitter.EmitStatement()` and `ILEmitter.EmitExpression()` for IL compilation
-- All use switch pattern matching on AST node types
+### IL Compilation Phases
 
-### Error Handling
-- Type errors throw exceptions with "Type Error:" prefix
-- Runtime errors throw exceptions with "Runtime Error:" prefix
-- Main loop in `Program.cs` catches and displays errors
+ILCompiler runs in multiple phases:
+1. Emit runtime types
+2. Analyze closures
+3. Define classes/functions
+4. Collect arrow functions
+5. Emit arrow bodies
+6. Emit class methods
+7. Emit entry point
+8. Finalize types
 
-## Code Conventions
+Arrow functions use display classes for captured variables; non-capturing arrows compile to static methods.
 
-- **C# Version:** C# 12/13 with .NET 10 preview features
-- **Nullable Reference Types:** Enabled (`<Nullable>enable</Nullable>`)
-- **Records:** Heavily used for immutable AST nodes and type representations
-- **Primary Constructors:** Used in `Parser`, `RuntimeEnvironment`, `TypeEnvironment`
+### Error Handling Conventions
+
+- Type errors: "Type Error:" prefix
+- Runtime errors: "Runtime Error:" prefix
+- Compile errors: "Compile Error:" prefix
 
 ## Important Implementation Details
 
-- **For Loop Desugaring:** Parser converts `for` loops into `while` loops during parsing
-- **console.log Special Case:** Handled as a hardcoded special case in type checker, interpreter, and compiler
-- **Constructor Validation:** Type checker validates constructor signatures during class instantiation
-- **Method Lookup:** Searches up the inheritance chain for methods (see `TypeSystem/TypeChecker.cs` CheckGet and `Execution/Interpreter.Properties.cs` EvaluateGet)
-- **Closure Compilation:** Arrow functions use display classes for captured variables; non-capturing arrows compile to static methods
-- **IL Compilation Phases:** ILCompiler runs in 9 phases - emit runtime types, analyze closures, define classes/functions, collect arrow functions, emit arrow bodies, emit class methods, emit entry point, finalize types
+- **For Loop Desugaring:** Parser converts `for` loops into `while` loops
+- **console.log:** Hardcoded special case in type checker, interpreter, and compiler
+- **Inner function declarations:** Not supported in IL compiler - use arrow functions instead
+- **Method Lookup:** Searches up inheritance chain (see `TypeChecker.cs` CheckGet, `Interpreter.Properties.cs` EvaluateGet)
+
+## See Also
+
+- `STATUS.md` - Feature implementation status and known bugs
+- `README.md` - User documentation and examples

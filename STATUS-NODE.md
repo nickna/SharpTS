@@ -2,7 +2,7 @@
 
 This document tracks Node.js module and API implementation status in SharpTS.
 
-**Last Updated:** 2026-01-30 (Added dns module and worker_threads support)
+**Last Updated:** 2026-02-04 (Updated to reflect actual implementation status)
 
 ## Legend
 - ✅ Implemented
@@ -15,7 +15,7 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 | Module | Status | Notes |
 |--------|--------|-------|
-| `fs` | ⚠️ | Synchronous APIs only (`*Sync` methods) |
+| `fs` | ✅ | Sync, callback-based async, and `fs.promises` APIs |
 | `path` | ✅ | Full API |
 | `os` | ✅ | Full API |
 | `process` | ✅ | Properties + methods, available as module and global |
@@ -26,14 +26,14 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `child_process` | ⚠️ | Synchronous only (`execSync`, `spawnSync`) |
 | `util` | ✅ | format, inspect, isDeepStrictEqual, parseArgs, toUSVString, stripVTControlCharacters, getSystemErrorName, getSystemErrorMap, promisify, types helpers, deprecate, callbackify, inherits, TextEncoder/TextDecoder |
 | `console` | ✅ | log, error, warn, info, debug, clear, time/timeEnd/timeLog, assert, count/countReset, table, dir, group/groupEnd, trace |
-| `readline` | ⚠️ | Basic synchronous I/O |
+| `readline` | ⚠️ | questionSync, createInterface |
 | `events` | ✅ | EventEmitter with on/off/once/emit/removeListener |
 | `stream` | ✅ | Readable, Writable, Duplex, Transform, PassThrough (sync mode) |
 | `buffer` | ✅ | Full Buffer class with multi-byte LE/BE, float/double, BigInt, search, swap |
 | `timers` | ✅ | setTimeout, setInterval, setImmediate + clear variants (module import) |
 | `string_decoder` | ✅ | StringDecoder class for multi-byte character handling |
 | `perf_hooks` | ✅ | performance.now(), performance.timeOrigin |
-| `http` / `https` | ❌ | No network server/client (use `fetch()` for client requests) |
+| `http` / `https` | ⚠️ | createServer, request, get; STATUS_CODES, METHODS (https uses http) |
 | `net` | ❌ | No TCP/IPC sockets |
 | `dns` | ⚠️ | lookup, lookupService (sync only) |
 | `zlib` | ✅ | gzip, deflate, deflateRaw, brotli, zstd (sync APIs) |
@@ -82,10 +82,22 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `chownSync` | ✅ | Change file owner (Unix only) |
 | `lchownSync` | ✅ | Change symlink owner (Unix only) |
 | `utimesSync` | ✅ | Update file access/modification times |
-| **Async APIs** | | |
-| `readFile` | ❌ | Use `readFileSync` |
-| `writeFile` | ❌ | Use `writeFileSync` |
-| `fs/promises` | ❌ | Use sync versions |
+| **Async APIs (Callback)** | | |
+| `readFile` | ✅ | Callback-based async |
+| `writeFile` | ✅ | Callback-based async |
+| `appendFile` | ✅ | Callback-based async |
+| `stat` / `lstat` | ✅ | Callback-based async |
+| `unlink` | ✅ | Callback-based async |
+| `mkdir` / `rmdir` | ✅ | Callback-based async |
+| `readdir` | ✅ | Callback-based async |
+| `rename` / `copyFile` | ✅ | Callback-based async |
+| `access` / `chmod` | ✅ | Callback-based async |
+| `truncate` / `utimes` | ✅ | Callback-based async |
+| `readlink` / `realpath` | ✅ | Callback-based async |
+| `symlink` / `link` | ✅ | Callback-based async |
+| `mkdtemp` | ✅ | Callback-based async |
+| **Promise APIs (`fs/promises`)** | | |
+| `fs/promises` | ✅ | Full promise-based API (also via `fs.promises`) |
 | **Advanced** | | |
 | `createReadStream` | ❌ | No stream support |
 | `createWriteStream` | ❌ | No stream support |
@@ -158,9 +170,10 @@ This document tracks Node.js module and API implementation status in SharpTS.
 | `hrtime` | ✅ | High-resolution time |
 | `uptime` | ✅ | |
 | `memoryUsage` | ✅ | |
+| `nextTick` | ✅ | Schedules callback (implemented via timer) |
 | **Events** | | |
-| `on('exit')` | ❌ | No EventEmitter |
-| `on('uncaughtException')` | ❌ | No EventEmitter |
+| `on('exit')` | ❌ | No EventEmitter on process |
+| `on('uncaughtException')` | ❌ | No EventEmitter on process |
 
 ---
 
@@ -613,7 +626,29 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ---
 
-## 21. WORKER_THREADS
+## 21. HTTP
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Server** | | |
+| `createServer` | ✅ | Create HTTP server with request handler |
+| `server.listen()` | ✅ | Start listening on port |
+| `server.close()` | ✅ | Stop server |
+| **Client** | | |
+| `request` | ✅ | Make HTTP request (delegates to fetch) |
+| `get` | ✅ | Shorthand for GET requests |
+| **Constants** | | |
+| `METHODS` | ✅ | Array of supported HTTP methods |
+| `STATUS_CODES` | ✅ | Map of status codes to messages |
+| `globalAgent` | ✅ | Global HTTP agent object |
+| **Not Implemented** | | |
+| `Agent` class | ❌ | Connection pooling agent |
+| `ClientRequest` events | ❌ | No event-based request lifecycle |
+| `IncomingMessage` events | ❌ | No event-based response streaming |
+
+---
+
+## 22. WORKER_THREADS
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -643,17 +678,17 @@ This document tracks Node.js module and API implementation status in SharpTS.
 
 ## Summary
 
-SharpTS provides comprehensive support for file system operations (sync), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support, the Web Fetch API for HTTP client requests, DNS resolution (lookup/lookupService), and Worker Threads for parallel execution. The module system supports both ES modules and CommonJS import syntax.
+SharpTS provides comprehensive support for file system operations (sync, callback-based async, and promise-based via `fs/promises`), including file descriptor APIs, directory utilities, hard/symbolic links, and permissions. Also includes path manipulation, OS information, process management, crypto (hashing, encryption, key derivation, signing), URL parsing, binary data handling via Buffer, EventEmitter for event-driven patterns, timers (setTimeout/setInterval/setImmediate), string decoding for multi-byte characters, high-resolution performance timing, stream classes (Readable, Writable, Duplex, Transform, PassThrough) with sync push/pull mode and pipe support, the Web Fetch API for HTTP client requests, basic HTTP server via `http.createServer`, DNS resolution (lookup/lookupService), and Worker Threads for parallel execution. The module system supports both ES modules and CommonJS import syntax.
 
 **Key Gaps:**
-- No async fs operations (sync-only workaround)
-- No HTTP server module (http.createServer)
 - No flowing/async stream mode (sync push/pull only)
+- No net (TCP/IPC) sockets
+- No cluster support
+- HTTP server is basic (no full event lifecycle)
 
 **Recommended Workarounds:**
-- Use `*Sync` versions of fs methods
 - Use ES module syntax instead of `require()`
-- Use `fetch()` for HTTP client requests
+- Use `fetch()` for HTTP client requests (simpler than http.request)
 
 ---
 
@@ -661,6 +696,7 @@ SharpTS provides comprehensive support for file system operations (sync), includ
 
 Priority features to implement for broader Node.js compatibility:
 
-1. **Async fs APIs** - `fs.promises` or callback-based (higher effort)
-2. **http.createServer** - HTTP server support (higher effort)
-3. **Flowing stream mode** - Event-based async streaming (higher effort)
+1. **Flowing stream mode** - Event-based async streaming (higher effort)
+2. **net module** - TCP/IPC socket support (higher effort)
+3. **Full HTTP server events** - Complete request/response lifecycle events (medium effort)
+4. **cluster module** - Multi-process support (higher effort)

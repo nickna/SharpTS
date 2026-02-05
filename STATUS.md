@@ -2,7 +2,7 @@
 
 This document tracks TypeScript language features and their implementation status in SharpTS.
 
-**Last Updated:** 2026-01-30 (Added printf-style format specifiers to console.log, Array.at method, Promise executor constructor)
+**Last Updated:** 2026-02-04 (Added TypedArray/SharedArrayBuffer/Atomics docs; added Not Implemented section; setImmediate, structuredClone, property narrowing)
 
 ## Legend
 - ✅ Implemented
@@ -33,7 +33,7 @@ This document tracks TypeScript language features and their implementation statu
 | `never` type | ✅ | For exhaustive checking |
 | Type Assertions (`as`, `<Type>`) | ✅ | Both `as` and angle-bracket syntax |
 | `as const` assertions | ✅ | Deep readonly inference for literals |
-| Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing, user-defined type guards (`x is T`), assertion functions |
+| Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing, user-defined type guards (`x is T`), assertion functions, property access narrowing |
 | `readonly` modifier | ✅ | Compile-time enforcement |
 | Optional Properties (`prop?:`) | ✅ | Partial object shapes |
 | Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
@@ -228,7 +228,9 @@ This document tracks TypeScript language features and their implementation statu
 | Strict mode (`"use strict"`) | ✅ | File-level and function-level strict mode; frozen/sealed object mutations throw TypeError in strict mode |
 | `setTimeout`/`clearTimeout` | ✅ | Timer functions with Timeout handle, ref/unref support |
 | `setInterval`/`clearInterval` | ✅ | Repeating timer functions with Timeout handle, no overlap between executions |
+| `setImmediate`/`clearImmediate` | ✅ | Immediate execution timer (runs after current event loop iteration) |
 | `globalThis` | ✅ | ES2020 global object reference with property access and method calls |
+| `structuredClone` | ✅ | Deep clone of values (objects, arrays, Map, Set, etc.) |
 
 ---
 
@@ -279,6 +281,102 @@ This document tracks TypeScript language features and their implementation statu
 
 ---
 
+## 13. BINARY DATA & THREADING
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **TypedArrays** | | |
+| `Int8Array` | ✅ | Signed 8-bit integer array |
+| `Uint8Array` | ✅ | Unsigned 8-bit integer array |
+| `Int16Array` | ✅ | Signed 16-bit integer array |
+| `Uint16Array` | ✅ | Unsigned 16-bit integer array |
+| `Int32Array` | ✅ | Signed 32-bit integer array |
+| `Uint32Array` | ✅ | Unsigned 32-bit integer array |
+| `Float32Array` | ✅ | 32-bit float array |
+| `Float64Array` | ✅ | 64-bit float array |
+| `BigInt64Array` | ✅ | Signed 64-bit BigInt array |
+| `BigUint64Array` | ✅ | Unsigned 64-bit BigInt array |
+| **Shared Memory** | | |
+| `SharedArrayBuffer` | ✅ | Shared memory for worker threads |
+| `Atomics` | ✅ | load, store, add, sub, and, or, xor, exchange, compareExchange, wait, notify |
+| **Not Implemented** | | |
+| `ArrayBuffer` constructor | ❌ | TypedArrays create internal buffers; no standalone ArrayBuffer class |
+| `DataView` | ❌ | No DataView class |
+| `Uint8ClampedArray` | ❌ | |
+
+---
+
+## 14. NOT IMPLEMENTED
+
+This section documents JavaScript/TypeScript features that are **not currently implemented**.
+
+### Objects & Types
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `Proxy` | ❌ | No proxy/handler support |
+| `WeakRef` | ❌ | No weak references |
+| `FinalizationRegistry` | ❌ | No GC finalization callbacks |
+| `Intl` | ❌ | No internationalization API |
+
+### Global Functions
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `eval()` | ❌ | No dynamic code evaluation |
+| `Function` constructor | ❌ | Cannot create functions from strings |
+| `queueMicrotask()` | ❌ | Not implemented |
+
+### Object Static Methods
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `Object.create()` | ❌ | |
+| `Object.is()` | ❌ | Use `===` or manual NaN check |
+| `Object.getOwnPropertyDescriptor()` | ❌ | |
+| `Object.defineProperty()` | ❌ | |
+| `Object.getPrototypeOf()` | ❌ | |
+| `Object.setPrototypeOf()` | ❌ | |
+| `Object.getOwnPropertyNames()` | ❌ | Use `Object.keys()` |
+| `Object.getOwnPropertySymbols()` | ❌ | |
+| `Object.preventExtensions()` | ❌ | |
+| `Object.isExtensible()` | ❌ | |
+
+### Array Methods
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `fill()` | ❌ | |
+| `copyWithin()` | ❌ | |
+| `entries()` | ❌ | Use `forEach` or `for...of` |
+| `keys()` | ❌ | Use index-based iteration |
+| `values()` | ❌ | Use `for...of` directly |
+| `reduceRight()` | ❌ | Use `reverse()` + `reduce()` |
+
+### String Methods & Static
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `normalize()` | ❌ | Unicode normalization |
+| `localeCompare()` | ❌ | Locale-aware comparison |
+| `codePointAt()` | ❌ | Use `charCodeAt()` for BMP |
+| `String.fromCharCode()` | ❌ | |
+| `String.fromCodePoint()` | ❌ | |
+
+### Reflect API (Standard)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `Reflect.get()` | ❌ | Only metadata API implemented |
+| `Reflect.set()` | ❌ | |
+| `Reflect.has()` | ❌ | Use `in` operator |
+| `Reflect.deleteProperty()` | ❌ | Use `delete` operator |
+| `Reflect.apply()` | ❌ | |
+| `Reflect.construct()` | ❌ | Use `new` operator |
+| `Reflect.ownKeys()` | ❌ | Use `Object.keys()` |
+
+---
+
 ## Known Bugs
 
 ### IL Compiler Limitations
@@ -288,6 +386,9 @@ This document tracks TypeScript language features and their implementation statu
 ### Type Checker Limitations
 
 - Type alias declarations are lazily validated - errors in type alias definitions (e.g., `type R = ReturnType<string, number>;` with wrong arg count) are only caught when the alias is used, not at declaration time. TypeScript catches these at declaration.
+
+### Recently Fixed Bugs (2026-02-04)
+- ~~Method chaining on `new` expressions~~ - Fixed: Parser now correctly allows method chaining directly after `new` expressions (e.g., `new Date().toISOString()`)
 
 ### Recently Fixed Bugs (2026-01-21)
 - ~~Object literal accessor `this` type inference~~ - Fixed: `this` in getter/setter bodies now correctly infers the object's type instead of defaulting to `any`; uses two-pass type checking with literal type widening
