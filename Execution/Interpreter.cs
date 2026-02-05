@@ -139,9 +139,11 @@ public partial class Interpreter : IDisposable
     // Volatile flag for O(1) "queue empty" check without acquiring lock
     private volatile bool _hasScheduledTimers;
 
-    // Active handles counter - keeps the event loop alive while there are active operations
-    private int _activeHandles;
-    private readonly object _activeHandlesLock = new();
+    // Active handles counter - keeps the event loop alive while there are active operations.
+    // Uses Interlocked operations for thread-safe lock-free access, consistent with _hasScheduledTimers.
+    // Synchronization strategy: all counters/flags use lock-free atomic operations for reads/writes,
+    // while the timer queue itself uses _virtualTimersLock for compound operations.
+    private volatile int _activeHandles;
 
     // Event loop infrastructure - BlockingCollection for efficient waiting (no polling)
     // SynchronizationContext routes async/await continuations back to the main thread
@@ -251,7 +253,12 @@ public partial class Interpreter : IDisposable
         if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
         {
             try { _callbackQueue.Add(() => { }); }
-            catch (InvalidOperationException) { /* queue completed */ }
+            catch (InvalidOperationException)
+            {
+                // Queue was completed between our check and the Add call - this is expected
+                // during shutdown when multiple threads may be cleaning up concurrently.
+                System.Diagnostics.Debug.WriteLine("WakeEventLoop: Queue already completed, ignoring wake request.");
+            }
         }
     }
 
@@ -265,7 +272,12 @@ public partial class Interpreter : IDisposable
         if (!_isDisposed && !_callbackQueue.IsAddingCompleted)
         {
             try { _callbackQueue.Add(action); }
-            catch (InvalidOperationException) { /* queue completed */ }
+            catch (InvalidOperationException)
+            {
+                // Queue was completed between our check and the Add call - this is expected
+                // during shutdown. The callback will not be executed.
+                System.Diagnostics.Debug.WriteLine("EnqueueCallback: Queue already completed, callback will not be executed.");
+            }
         }
     }
 
@@ -303,31 +315,23 @@ public partial class Interpreter : IDisposable
 
     /// <summary>
     /// Increments the active handles count. Used by servers, timers, etc. to keep the event loop alive.
+    /// Thread-safe using lock-free atomic increment.
     /// </summary>
     internal void Ref()
     {
-        lock (_activeHandlesLock)
-        {
-            _activeHandles++;
-        }
+        Interlocked.Increment(ref _activeHandles);
     }
 
     /// <summary>
     /// Decrements the active handles count. When count reaches zero, the event loop can exit.
+    /// Thread-safe using lock-free atomic decrement.
     /// </summary>
     internal void Unref()
     {
-        bool shouldWake = false;
-        lock (_activeHandlesLock)
-        {
-            if (_activeHandles > 0)
-            {
-                _activeHandles--;
-                shouldWake = _activeHandles == 0;
-            }
-        }
+        int newValue = Interlocked.Decrement(ref _activeHandles);
 
-        if (shouldWake)
+        // Wake the event loop when count reaches zero so it can check exit conditions
+        if (newValue == 0)
         {
             WakeEventLoop();
         }
@@ -335,17 +339,9 @@ public partial class Interpreter : IDisposable
 
     /// <summary>
     /// Gets whether there are active handles keeping the event loop alive.
+    /// Thread-safe - reads volatile int which is atomic on all .NET platforms.
     /// </summary>
-    internal bool HasActiveHandles
-    {
-        get
-        {
-            lock (_activeHandlesLock)
-            {
-                return _activeHandles > 0;
-            }
-        }
-    }
+    internal bool HasActiveHandles => _activeHandles > 0;
 
     /// <summary>
     /// Runs the event loop, processing callbacks until there are no more active handles.
@@ -415,7 +411,12 @@ public partial class Interpreter : IDisposable
 
             // Complete the queue so any pending Add() calls don't block
             try { _callbackQueue.CompleteAdding(); }
-            catch (ObjectDisposedException) { /* already disposed */ }
+            catch (ObjectDisposedException)
+            {
+                // Queue was already disposed by another thread (e.g., Dispose() called concurrently).
+                // This is expected during forced shutdown scenarios.
+                System.Diagnostics.Debug.WriteLine("RunEventLoop: Queue already disposed during cleanup.");
+            }
         }
     }
 
@@ -515,11 +516,22 @@ public partial class Interpreter : IDisposable
     /// </summary>
     public void Dispose()
     {
+        if (_isDisposed)
+        {
+            // Already disposed - idempotent disposal pattern
+            return;
+        }
+
         _isDisposed = true;
 
         // Complete the callback queue to unblock any waiting TryTake
         try { _callbackQueue.CompleteAdding(); }
-        catch (ObjectDisposedException) { /* already disposed */ }
+        catch (ObjectDisposedException)
+        {
+            // Queue was already disposed - can happen if Dispose is called from multiple threads
+            // or if RunEventLoop's finally block ran first.
+            System.Diagnostics.Debug.WriteLine("Dispose: Queue already disposed during CompleteAdding.");
+        }
 
         // Cancel all pending timers to release resources immediately
         while (_pendingTimers.TryTake(out var timer))
@@ -536,7 +548,11 @@ public partial class Interpreter : IDisposable
 
         // Dispose the callback queue
         try { _callbackQueue.Dispose(); }
-        catch (ObjectDisposedException) { /* already disposed */ }
+        catch (ObjectDisposedException)
+        {
+            // Queue was already disposed - safe to ignore as we're cleaning up anyway.
+            System.Diagnostics.Debug.WriteLine("Dispose: Queue already disposed during Dispose call.");
+        }
 
         GC.SuppressFinalize(this);
     }

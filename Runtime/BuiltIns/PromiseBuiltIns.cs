@@ -45,7 +45,7 @@ public static class PromiseBuiltIns
                 RaceImpl(args, interp)),
 
             "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
-                Task.FromResult(ResolveImpl(args))),
+                ResolveImplAsync(args)),
 
             "reject" => new BuiltInAsyncMethod("reject", 1, 1, (_, _, args) =>
                 Task.FromResult(RejectImpl(args))),
@@ -463,17 +463,16 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.resolve(value?)
     /// Returns the value directly - BuiltInAsyncMethod.Call wraps in a Promise.
     /// </summary>
-    private static object? ResolveImpl(List<object?> args)
+    private static async Task<object?> ResolveImplAsync(List<object?> args)
     {
         var value = args.Count > 0 ? args[0] : null;
 
-        // If already a Promise, unwrap it so we don't double-wrap
+        // If already a Promise, await it to unwrap and avoid double-wrapping
         // (BuiltInAsyncMethod.Call will wrap the result in a new Promise)
         if (value is SharpTSPromise promise)
         {
-            // Return the promise's underlying task result to avoid double-wrapping
-            // The caller (BuiltInAsyncMethod.Call) will wrap this in a new Promise
-            return promise.Task.GetAwaiter().GetResult();
+            // Properly await the promise instead of blocking
+            return await promise.GetValueAsync();
         }
 
         // Return the raw value - BuiltInAsyncMethod.Call will wrap it in a Promise

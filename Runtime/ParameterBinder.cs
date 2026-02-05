@@ -40,14 +40,14 @@ internal static class ParameterBinder
             {
                 value = arguments[i];
             }
-            else if (param.DefaultValue != null)
+            else if (param.DefaultValue is { } defaultExpr)
             {
                 // Evaluate default value in the function's environment
                 RuntimeEnvironment previous = interpreter.Environment;
                 try
                 {
                     interpreter.SetEnvironment(environment);
-                    value = interpreter.Evaluate(param.DefaultValue!);
+                    value = interpreter.Evaluate(defaultExpr);
                 }
                 finally
                 {
@@ -97,14 +97,14 @@ internal static class ParameterBinder
             {
                 value = arguments[i];
             }
-            else if (param.DefaultValue != null)
+            else if (param.DefaultValue is { } defaultExpr)
             {
                 // Evaluate default value in the function's environment
                 RuntimeEnvironment previous = interpreter.Environment;
                 try
                 {
                     interpreter.SetEnvironment(environment);
-                    value = await interpreter.EvaluateAsync(param.DefaultValue!);
+                    value = await interpreter.EvaluateAsync(defaultExpr);
                 }
                 finally
                 {

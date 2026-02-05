@@ -105,15 +105,10 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         environment.Define("this", instance);
 
         // Propagate 'super' from closure if present (needed for methods in derived classes)
-        try
+        // Use TryGet to avoid exceptions - 'super' may not be in scope for non-derived classes
+        if (_closure.TryGet("super", out var superclass) && superclass != null)
         {
-            var superclass = _closure.Get(new Parsing.Token(Parsing.TokenType.SUPER, "super", null, 0));
-            if (superclass != null)
-                environment.Define("super", superclass);
-        }
-        catch
-        {
-            // 'super' not in scope - ignore
+            environment.Define("super", superclass);
         }
 
         return new SharpTSFunction(_declaration, environment);

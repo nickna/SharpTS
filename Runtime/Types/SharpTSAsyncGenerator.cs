@@ -36,15 +36,7 @@ public class SharpTSAsyncGenerator
     /// Advances the async generator to the next yield point.
     /// Returns a Promise that resolves to { value, done } result object.
     /// </summary>
-    public Task<object?> Next()
-    {
-        return Task.FromResult<object?>(NextSync());
-    }
-
-    /// <summary>
-    /// Synchronous implementation of next() for simpler cases.
-    /// </summary>
-    private SharpTSIteratorResult NextSync()
+    public async Task<object?> Next()
     {
         // If generator is closed, always return done
         if (_closed)
@@ -52,13 +44,22 @@ public class SharpTSAsyncGenerator
             return new SharpTSIteratorResult(_returnValue, done: true);
         }
 
-        // Execute the generator body on first call
+        // Execute the generator body on first call (async)
         if (_values == null)
         {
-            ExecuteBody();
+            await ExecuteBodyAsync();
         }
 
-        if (_index < _values!.Count)
+        // Defensive check: ExecuteBodyAsync should always initialize _values,
+        // but verify to provide a clear error message if something goes wrong.
+        if (_values == null)
+        {
+            throw new InvalidOperationException(
+                "Internal error: Async generator body did not initialize values collection. " +
+                "This indicates a bug in ExecuteBodyAsync.");
+        }
+
+        if (_index < _values.Count)
         {
             return new SharpTSIteratorResult(_values[_index++], done: false);
         }
@@ -91,7 +92,7 @@ public class SharpTSAsyncGenerator
     /// Executes the async generator body, collecting all yielded values.
     /// Handles both yield and await expressions.
     /// </summary>
-    private void ExecuteBody()
+    private async Task ExecuteBodyAsync()
     {
         _values = [];
 
@@ -106,7 +107,7 @@ public class SharpTSAsyncGenerator
 
         try
         {
-            var result = ExecuteStatementsAsync(_declaration.Body).GetAwaiter().GetResult();
+            var result = await ExecuteStatementsAsync(_declaration.Body);
             if (result.Type == ExecutionResult.ResultType.Return)
             {
                 _returnValue = result.Value;
