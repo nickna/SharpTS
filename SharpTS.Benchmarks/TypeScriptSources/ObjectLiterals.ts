@@ -28,8 +28,8 @@ function nestedLiteralLoop(n: number): number {
             point: { x: i, y: i + 1 },
             label: "pt"
         };
-        const inner = o.point as any;
-        total = total + (inner.x as number);
+        const inner = o.point;
+        total = total + inner.x;
     }
     return total;
 }
