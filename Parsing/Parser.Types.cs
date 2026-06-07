@@ -341,9 +341,15 @@ public partial class Parser
                 }
                 _current = saved; // backtrack
             }
-            else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)) && PeekNext().Type == TokenType.COLON)
+            else if ((Check(TokenType.IDENTIFIER) || Check(TokenType.THIS)) &&
+                     (PeekNext().Type == TokenType.COLON || PeekNext().Type == TokenType.QUESTION))
             {
-                // (identifier: or (this: - this is a function parameter
+                // (identifier: / (this: / (identifier? - a (possibly optional) function parameter
+                isFunctionType = true;
+            }
+            else if (Check(TokenType.DOT_DOT_DOT))
+            {
+                // (...rest: T) => R - rest parameter as the first parameter
                 isFunctionType = true;
             }
 
