@@ -356,18 +356,48 @@ public partial class RuntimeEmitter
         // AggregateError, primitive payloads via $PromiseRejectedException, etc.)
         // is preserved instead of falling back to Exception.Message (a string).
         // Required for spec patterns like `err instanceof TypeError`.
+        //
+        // The invocation runs inside this catch handler, so it MUST be guarded
+        // by its own nested try/catch: an exception thrown inside a catch
+        // handler is not covered by that handler's try, escapes MoveNext, and
+        // — because MoveNext runs as an awaiter continuation on the thread
+        // pool — gets rethrown via Task.ThrowAsync, killing the process. A
+        // throwing onRejected must instead reject the output promise
+        // (ECMA-262 §27.2.5.4).
+        var handlerExceptionLocal = il.DeclareLocal(typeof(Exception));
+        var handlerInvokeDoneLabel = il.DefineLabel();
+        var handlerOkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, handlerExceptionLocal);
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
         il.Emit(OpCodes.Ldloc, exceptionLocal);
         il.Emit(OpCodes.Call, runtime.WrapException);
         il.Emit(OpCodes.Call, runtime.InvokeCallback);
         il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Leave, handlerInvokeDoneLabel);
+        il.BeginCatchBlock(typeof(Exception));
+        il.Emit(OpCodes.Stloc, handlerExceptionLocal);
+        il.EndExceptionBlock();
+        il.MarkLabel(handlerInvokeDoneLabel);
 
-        // Set state to -2 (completed)
+        // Set state to -2 (completed) on both outcomes
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, -2);
         il.Emit(OpCodes.Stfld, sm.StateField);
 
+        il.Emit(OpCodes.Ldloc, handlerExceptionLocal);
+        il.Emit(OpCodes.Brfalse, handlerOkLabel);
+
+        // onRejected threw — builder.SetException(handlerException)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, handlerExceptionLocal);
+        il.Emit(OpCodes.Call, sm.BuilderType.GetMethod("SetException")!);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.MarkLabel(handlerOkLabel);
         // builder.SetResult(result)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.BuilderField);
