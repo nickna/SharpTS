@@ -121,6 +121,10 @@ public static class FetchBuiltIns
             options = args.Count > 1 ? args[1] as SharpTSObject : null;
         }
 
+        // Keep the event loop alive while the request is in flight (Node: an
+        // active request is a handle). Without this, top-level promise waits
+        // see a quiescent loop mid-request and let the process exit early.
+        interpreter.Ref();
         try
         {
             var response = await ExecuteFetch(url, options);
@@ -147,6 +151,10 @@ public static class FetchBuiltIns
         {
             throw new SharpTSPromiseRejectedException(
                 new SharpTSTypeError($"fetch: Invalid URL '{url}'"));
+        }
+        finally
+        {
+            interpreter.Unref();
         }
     }
 

@@ -625,17 +625,60 @@ public partial class Interpreter : IDisposable
     /// Waits for a promise to complete while processing timers and callbacks.
     /// Avoids a deadlock where GetResult() blocks the main thread but timers
     /// (which resolve the promise) only fire during event loop processing.
+    /// Returns (without throwing) while the promise is still pending when the
+    /// event loop has been provably quiescent — no active handles, scheduled
+    /// timers, or queued callbacks — for a sustained window: nothing can ever
+    /// settle the promise, and a forever-pending promise must not block exit
+    /// (matches Node). Also honors the VM timeout token so a runaway wait is
+    /// cancellable mid-loop, not just between statements.
     /// </summary>
     private void WaitForPromise(SharpTSPromise promise)
     {
+        // Consecutive idle ~1ms iterations before concluding the promise can
+        // never settle. In-flight thread-pool work that holds no handle gets
+        // this window to land; anything that re-arms a timer, handle, or
+        // callback resets the streak.
+        const int QuiescentIterationsBeforeGiveUp = 20;
+        int quiescentIterations = 0;
+
         while (!promise.Task.IsCompleted)
         {
+            if (_vmTimeoutToken.IsCancellationRequested)
+                throw new Runtime.Exceptions.ThrowException(
+                    new Runtime.Types.SharpTSError("Script execution timed out."));
+
             TickEventLoop();
-            if (!promise.Task.IsCompleted)
-                Thread.Sleep(1);
+            if (promise.Task.IsCompleted) break;
+
+            if (HasPendingEventLoopWork())
+                quiescentIterations = 0;
+            else if (++quiescentIterations >= QuiescentIterationsBeforeGiveUp)
+                return; // never-settling — leave it pending rather than hang
+
+            Thread.Sleep(1);
         }
         // Rethrow if the promise was rejected
         promise.Task.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// True when the event loop has work that could still settle a pending
+    /// promise: an active handle (server, socket, in-flight I/O), a queued
+    /// callback, or a scheduled non-cancelled timer.
+    /// </summary>
+    private bool HasPendingEventLoopWork()
+    {
+        if (HasActiveHandles) return true;
+        if (_callbackQueue.Count > 0) return true;
+        lock (_virtualTimersLock)
+        {
+            while (_virtualTimerQueue.TryPeek(out var timer, out _))
+            {
+                if (!timer.IsCancelled) return true;
+                _virtualTimerQueue.Dequeue();
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -1029,7 +1072,10 @@ public partial class Interpreter : IDisposable
                 if (lastExprValue is SharpTSPromise promise)
                 {
                     WaitForPromise(promise);
-                    lastExprValue = promise.Task.Result;
+                    // WaitForPromise escapes on a never-settling promise; only
+                    // unwrap when it actually completed (Result would deadlock).
+                    if (promise.Task.IsCompleted)
+                        lastExprValue = promise.Task.Result;
                 }
             }
             else
