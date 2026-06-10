@@ -1014,35 +1014,20 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Castclass, _types.TaskOfObject);
 
-                // Wait for the task, processing timers while blocked
-                // This avoids a deadlock where GetResult() blocks the main thread
-                // but timers (which resolve the Task) only fire during ProcessPendingTimers.
+                // Wait for the task via $EventLoop.WaitForTask: blocks while the
+                // event loop has work that could settle it (timers fire as part
+                // of the wait), checks cancellation each iteration, and returns
+                // false once the process is provably quiescent — a never-settling
+                // promise (`new Promise(() => {})`) must not block exit (matches
+                // Node). On false we skip GetResult and move on.
                 il.MarkLabel(waitForTaskLabel);
                 var taskLocal = il.DeclareLocal(_types.TaskOfObject);
                 il.Emit(OpCodes.Stloc, taskLocal);
 
-                // Poll loop: while (!task.IsCompleted) { ProcessPendingTimers(); Thread.Sleep(1); }
-                var pollLoopTop = il.DefineLabel();
-                var pollDone = il.DefineLabel();
-                var isCompletedGetter = typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!;
-                var threadSleep = typeof(Thread).GetMethod("Sleep", [typeof(int)])!;
-
-                il.MarkLabel(pollLoopTop);
+                il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
                 il.Emit(OpCodes.Ldloc, taskLocal);
-                il.Emit(OpCodes.Callvirt, isCompletedGetter);
-                il.Emit(OpCodes.Brtrue, pollDone);
-
-                // Process pending timers (fires VirtualTimer callbacks)
-                il.Emit(OpCodes.Call, _runtime.ProcessPendingTimers);
-                il.Emit(OpCodes.Pop);  // Discard int return
-
-                // Brief sleep to avoid busy-spinning
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, threadSleep);
-
-                il.Emit(OpCodes.Br, pollLoopTop);
-
-                il.MarkLabel(pollDone);
+                il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+                il.Emit(OpCodes.Brfalse, notTaskLabel);
 
                 // Task is complete — GetResult() to rethrow if faulted
                 il.Emit(OpCodes.Ldloc, taskLocal);
@@ -1210,28 +1195,21 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Isinst, _types.TaskOfObject);
                 il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-                // Wait with timer processing to avoid deadlock
+                // Wait via $EventLoop.WaitForTask (see single-file entry point):
+                // blocks while timers/handles/callbacks could settle the task,
+                // checks cancellation, and bails out (false) on a never-settling
+                // task instead of hanging the process.
                 il.Emit(OpCodes.Ldloc, exprResult);
                 il.Emit(OpCodes.Castclass, _types.TaskOfObject);
                 var taskLocal2 = il.DeclareLocal(_types.TaskOfObject);
                 il.Emit(OpCodes.Stloc, taskLocal2);
 
-                var pollTop2 = il.DefineLabel();
-                var pollDone2 = il.DefineLabel();
-                var isCompletedGetter2 = typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!;
-                var threadSleep2 = typeof(Thread).GetMethod("Sleep", [typeof(int)])!;
-
-                il.MarkLabel(pollTop2);
+                il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
                 il.Emit(OpCodes.Ldloc, taskLocal2);
-                il.Emit(OpCodes.Callvirt, isCompletedGetter2);
-                il.Emit(OpCodes.Brtrue, pollDone2);
-                il.Emit(OpCodes.Call, _runtime.ProcessPendingTimers);
-                il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, threadSleep2);
-                il.Emit(OpCodes.Br, pollTop2);
+                il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+                il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-                il.MarkLabel(pollDone2);
+                // Task is complete — GetResult() to rethrow if faulted
                 il.Emit(OpCodes.Ldloc, taskLocal2);
                 var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
                 il.Emit(OpCodes.Call, getAwaiter);
@@ -1263,27 +1241,20 @@ public partial class ILCompiler
 
         if (isAsync)
         {
-            // Async main returns Task<object> - wait with timer processing to avoid deadlock
+            // Async main returns Task<object> — wait via $EventLoop.WaitForTask
+            // (fires timers, checks cancellation, escapes if main's task can
+            // never settle because the process is quiescent — a deadlocked main
+            // shouldn't hang the program forever).
             il.Emit(OpCodes.Castclass, _types.TaskOfObject);
             var asyncMainTask = il.DeclareLocal(_types.TaskOfObject);
             il.Emit(OpCodes.Stloc, asyncMainTask);
 
-            var asyncPollTop = il.DefineLabel();
-            var asyncPollDone = il.DefineLabel();
-            var asyncIsCompleted = typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!;
-            var asyncThreadSleep = typeof(Thread).GetMethod("Sleep", [typeof(int)])!;
-
-            il.MarkLabel(asyncPollTop);
+            var skipMainResult = il.DefineLabel();
+            il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
             il.Emit(OpCodes.Ldloc, asyncMainTask);
-            il.Emit(OpCodes.Callvirt, asyncIsCompleted);
-            il.Emit(OpCodes.Brtrue, asyncPollDone);
-            il.Emit(OpCodes.Call, _runtime.ProcessPendingTimers);
-            il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Call, asyncThreadSleep);
-            il.Emit(OpCodes.Br, asyncPollTop);
+            il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
+            il.Emit(OpCodes.Brfalse, skipMainResult);
 
-            il.MarkLabel(asyncPollDone);
             il.Emit(OpCodes.Ldloc, asyncMainTask);
             var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
             il.Emit(OpCodes.Call, getAwaiter);
@@ -1304,6 +1275,7 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Pop);  // Discard the result
             }
+            il.MarkLabel(skipMainResult);
             // Run the event loop — no-op if no handles are active
             il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
             il.Emit(OpCodes.Call, _runtime.EventLoopRun);

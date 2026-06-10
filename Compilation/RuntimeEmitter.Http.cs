@@ -1350,6 +1350,14 @@ public partial class RuntimeEmitter
         {
             var il = _fetchDisplayInvoke.GetILGenerator();
             var resultLocal = il.DeclareLocal(_types.ObjectArray);
+            var retLocal = il.DeclareLocal(_types.Object);
+            var endLabel = il.DefineLabel();
+
+            // try { ... } finally { $EventLoop.GetInstance().Unref(); }
+            // Fetch() Ref'd the loop before dispatching this work to the thread
+            // pool; the Unref must run on success AND on the throw path, or an
+            // errored fetch would pin the event loop open forever.
+            il.BeginExceptionBlock();
 
             // object[] result = (object[]) _fetchHelper.Invoke(null, new object[] { _url, _options })
             il.Emit(OpCodes.Ldarg_0);
@@ -1420,9 +1428,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.ByteArray);
 
             il.Emit(OpCodes.Newobj, runtime.TSFetchResponseCtor);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Stloc, retLocal);
+            il.Emit(OpCodes.Leave, endLabel);
 
-            // Error path: throw exception with error message
+            // Error path: throw exception with error message (unwinds through
+            // the finally so the event loop still gets Unref'd)
             il.MarkLabel(errorLabel);
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldc_I4_7);
@@ -1430,6 +1440,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Newobj, _types.Exception.GetConstructor([_types.String])!);
             il.Emit(OpCodes.Throw);
+
+            il.BeginFinallyBlock();
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.EndExceptionBlock();
+
+            il.MarkLabel(endLabel);
+            il.Emit(OpCodes.Ldloc, retLocal);
+            il.Emit(OpCodes.Ret);
         }
 
         _fetchDisplayClass.CreateType();
@@ -1507,6 +1526,14 @@ public partial class RuntimeEmitter
         fetchIL.Emit(OpCodes.Call, typeof(System.Reflection.MethodBase).GetMethod("GetMethodFromHandle", [typeof(RuntimeMethodHandle)])!);
         fetchIL.Emit(OpCodes.Castclass, typeof(System.Reflection.MethodInfo));
         fetchIL.Emit(OpCodes.Stfld, _fetchDisplayClass.GetField("_fetchHelper")!);
+
+        // Ref the event loop BEFORE dispatching to the thread pool — an
+        // in-flight fetch must keep the process alive (Node: an active request
+        // is a libuv handle). Without this, the entry point's WaitForTask sees
+        // a quiescent loop while the request is on the wire and exits early.
+        // The display class's Invoke Unrefs in its finally.
+        fetchIL.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        fetchIL.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
 
         // Task.Run<object?>(new Func<object?>(dc.Invoke))
         fetchIL.Emit(OpCodes.Ldloc, dcLocal);

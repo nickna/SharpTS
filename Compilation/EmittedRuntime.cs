@@ -2661,6 +2661,7 @@ public class EmittedRuntime
     public MethodBuilder EventLoopSchedule { get; set; } = null!;
     public MethodBuilder EventLoopRun { get; set; } = null!;
     public MethodBuilder EventLoopWake { get; set; } = null!;
+    public MethodBuilder EventLoopWaitForTask { get; set; } = null!;
     public FieldBuilder EventLoopTimerProcessorField { get; set; } = null!;
 
     // ============================================================
