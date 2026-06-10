@@ -58,15 +58,14 @@ public abstract class Test262TestsBase
         var current = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var counts = new Dictionary<Test262Outcome, int>();
 
-        // Compile mode uses batched subprocess execution (issue #109): each
-        // batch of ~200 tests runs in its own dotnet subprocess that we discard
-        // when done, so pathological tests can't accumulate memory across the
-        // regen. Interpreted mode stays in-process — the interpreter doesn't
-        // accumulate per-test state and pathological JS allocations get
-        // released by GC between iterations.
-        var workerDll = mode == Test262ExecutionMode.Compiled
-            ? Test262Paths.TryFindWorkerDll()
-            : null;
+        // Both modes use the persistent worker pool (issue #109): tests run in
+        // dotnet subprocesses fed from a shared queue, so pathological tests
+        // can't accumulate memory in (or crash) the testhost, and the regen
+        // parallelizes across workers. Interpreted mode previously ran serial
+        // in-process; that was both the regen's longest pole (~6x slower than
+        // pooled) and fragile — a guest test could take down the entire run
+        // with a CLR internal error.
+        var workerDll = Test262Paths.TryFindWorkerDll();
 
         var started = DateTime.UtcNow;
         if (workerDll is not null)
@@ -93,8 +92,7 @@ public abstract class Test262TestsBase
         }
         else
         {
-            if (mode == Test262ExecutionMode.Compiled)
-                _output.WriteLine($"[{mode}] worker DLL not found — falling back to in-process (build SharpTS.Test262.Worker for issue #109 batched mode)");
+            _output.WriteLine($"[{mode}] worker DLL not found — falling back to in-process (build SharpTS.Test262.Worker for issue #109 batched mode)");
             var runner = new Test262Runner(test262Root, config.Timeout, skipFeatures);
             foreach (var (relPath, absPath) in files)
             {
