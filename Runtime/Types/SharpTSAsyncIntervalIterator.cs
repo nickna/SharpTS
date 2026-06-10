@@ -56,6 +56,10 @@ public class SharpTSAsyncIntervalIterator : SharpTSObject
         if (_done || _cts.IsCancellationRequested)
             return new SharpTSIteratorResult(SharpTSUndefined.Instance, done: true);
 
+        // Ref while the delay is pending: a bare Task.Delay holds no handle,
+        // and an unseen pending tick lets the event loop's quiescence check
+        // conclude the program is done mid-iteration.
+        interpreter.Ref();
         try
         {
             await Task.Delay(_delayMs, _cts.Token);
@@ -64,6 +68,10 @@ public class SharpTSAsyncIntervalIterator : SharpTSObject
         {
             _done = true;
             return new SharpTSIteratorResult(SharpTSUndefined.Instance, done: true);
+        }
+        finally
+        {
+            interpreter.Unref();
         }
 
         if (_done || _cts.IsCancellationRequested)

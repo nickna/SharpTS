@@ -716,6 +716,24 @@ public static class DnsModuleInterpreter
 
     #region Promise-based DNS Resolution
 
+    /// <summary>
+    /// Runs blocking DNS work on the thread pool with the event loop Ref'd for
+    /// the duration: bare thread-pool work holds no handle, so without the Ref
+    /// a top-level promise wait sees a quiescent loop and exits mid-lookup.
+    /// </summary>
+    private static async Task<object?> RunRefed(Interp interpreter, Func<object?> work)
+    {
+        interpreter.Ref();
+        try
+        {
+            return await Task.Run(work);
+        }
+        finally
+        {
+            interpreter.Unref();
+        }
+    }
+
     private static async Task<object?> LookupPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
@@ -726,7 +744,7 @@ public static class DnsModuleInterpreter
             if (opts.Fields.TryGetValue("family", out var fv) && fv is double fd) family = (int)fd;
         }
 
-        return await Task.Run<object?>(() =>
+        return await RunRefed(interpreter, () =>
         {
             var hostEntry = Dns.GetHostEntry(hostname);
             var addresses = hostEntry.AddressList;
@@ -751,25 +769,25 @@ public static class DnsModuleInterpreter
         string rrtype = "A";
         if (args.Count > 1 && args[1] is string rt) rrtype = rt;
 
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.Resolve(hostname, rrtype)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.Resolve(hostname, rrtype)));
     }
 
     private static async Task<object?> Resolve4Promise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => ResolveAddresses(hostname, AddressFamily.InterNetwork));
+        return await RunRefed(interpreter, () => ResolveAddresses(hostname, AddressFamily.InterNetwork));
     }
 
     private static async Task<object?> Resolve6Promise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => ResolveAddresses(hostname, AddressFamily.InterNetworkV6));
+        return await RunRefed(interpreter, () => ResolveAddresses(hostname, AddressFamily.InterNetworkV6));
     }
 
     private static async Task<object?> ReversePromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var ip = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() =>
+        return await RunRefed(interpreter, () =>
         {
             if (!IPAddress.TryParse(ip, out var ipAddress))
                 throw new Exception($"dns.reverse: invalid address {ip}");
@@ -781,55 +799,55 @@ public static class DnsModuleInterpreter
     private static async Task<object?> ResolveMxPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveMx(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveMx(hostname)));
     }
 
     private static async Task<object?> ResolveTxtPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveTxt(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveTxt(hostname)));
     }
 
     private static async Task<object?> ResolveSrvPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveSrv(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveSrv(hostname)));
     }
 
     private static async Task<object?> ResolveCnamePromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveCname(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveCname(hostname)));
     }
 
     private static async Task<object?> ResolveNsPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveNs(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveNs(hostname)));
     }
 
     private static async Task<object?> ResolveSoaPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveSoa(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveSoa(hostname)));
     }
 
     private static async Task<object?> ResolvePtrPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolvePtr(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolvePtr(hostname)));
     }
 
     private static async Task<object?> ResolveCaaPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveCaa(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveCaa(hostname)));
     }
 
     private static async Task<object?> ResolveNaptrPromise(Interp interpreter, object? receiver, List<object?> args)
     {
         var hostname = args[0]?.ToString() ?? "";
-        return await Task.Run<object?>(() => WrapDnsResult(DnsRecordResolver.ResolveNaptr(hostname)));
+        return await RunRefed(interpreter, () => WrapDnsResult(DnsRecordResolver.ResolveNaptr(hostname)));
     }
 
     #endregion

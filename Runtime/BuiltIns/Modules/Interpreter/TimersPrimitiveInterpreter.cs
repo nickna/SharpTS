@@ -74,6 +74,10 @@ public static class TimersPrimitiveInterpreter
 
         int delayMs = Math.Max(0, (int)delay);
 
+        // A bare Task.Delay holds no handle, so the event loop's quiescence
+        // check can't see it; Ref keeps the pending delay counted as live work
+        // or a top-level promise wait gives up mid-delay (same as fetch()).
+        interpreter.Ref();
         try
         {
             await Task.Delay(delayMs, token);
@@ -81,6 +85,10 @@ public static class TimersPrimitiveInterpreter
         catch (OperationCanceledException)
         {
             throw NewAbortError();
+        }
+        finally
+        {
+            interpreter.Unref();
         }
 
         return value;
@@ -95,6 +103,7 @@ public static class TimersPrimitiveInterpreter
         object? value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         var token = ExtractSignalToken(args.Count > 1 ? args[1] : null) ?? CancellationToken.None;
 
+        interpreter.Ref();
         try
         {
             await Task.Delay(0, token);
@@ -102,6 +111,10 @@ public static class TimersPrimitiveInterpreter
         catch (OperationCanceledException)
         {
             throw NewAbortError();
+        }
+        finally
+        {
+            interpreter.Unref();
         }
 
         return value;
