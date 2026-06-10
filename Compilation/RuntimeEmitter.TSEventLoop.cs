@@ -377,14 +377,17 @@ public partial class RuntimeEmitter
         );
         runtime.EventLoopWaitForTask = method;
 
-        // Consecutive idle iterations (at ~1ms each) before concluding the task
-        // can never settle. Thread-pool continuations that are mid-flight when
-        // we start checking get a full window to land or enqueue work; anything
-        // that re-arms a timer/handle/callback resets the counter.
-        const int QuiescentIterationsBeforeGiveUp = 20;
+        // Continuous quiescent wall-clock time before concluding the task can
+        // never settle. Time-based, not iteration-based: a loaded thread pool
+        // can delay a mid-flight continuation tens of ms with nothing visible
+        // to the busy check, and Sleep(1) granularity differs by platform
+        // (~15ms Windows, ~1ms Linux), so an iteration count was flaky on CI.
+        const long QuiescentMsBeforeGiveUp = 250;
 
         var il = method.GetILGenerator();
-        var quiescentLocal = il.DeclareLocal(_types.Int32);
+        // Tick (Environment.TickCount64) when the loop last became quiescent;
+        // -1 while busy.
+        var quiescentStartLocal = il.DeclareLocal(typeof(long));
         var waitMsLocal = il.DeclareLocal(_types.Int32);
 
         var loopTop = il.DefineLabel();
@@ -393,9 +396,11 @@ public partial class RuntimeEmitter
         var busyLabel = il.DefineLabel();
         var sleepLabel = il.DefineLabel();
 
-        // quiescent = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, quiescentLocal);
+        var tickCount64Getter = typeof(Environment).GetProperty("TickCount64")!.GetGetMethod()!;
+
+        // quiescentStart = -1
+        il.Emit(OpCodes.Ldc_I8, -1L);
+        il.Emit(OpCodes.Stloc, quiescentStartLocal);
 
         il.MarkLabel(loopTop);
 
@@ -439,21 +444,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetProperty("IsEmpty")!.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, busyLabel);
 
-        // idle: if (++quiescent >= grace) return false
-        il.Emit(OpCodes.Ldloc, quiescentLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, quiescentLocal);
-        il.Emit(OpCodes.Ldloc, quiescentLocal);
-        il.Emit(OpCodes.Ldc_I4, QuiescentIterationsBeforeGiveUp);
+        // idle:
+        //   if (quiescentStart < 0) quiescentStart = TickCount64;
+        //   else if (TickCount64 - quiescentStart >= grace) return false
+        var startStreak = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, quiescentStartLocal);
+        il.Emit(OpCodes.Ldc_I8, 0L);
+        il.Emit(OpCodes.Blt, startStreak);
+        il.Emit(OpCodes.Call, tickCount64Getter);
+        il.Emit(OpCodes.Ldloc, quiescentStartLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I8, QuiescentMsBeforeGiveUp);
         il.Emit(OpCodes.Blt, sleepLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
+        il.MarkLabel(startStreak);
+        il.Emit(OpCodes.Call, tickCount64Getter);
+        il.Emit(OpCodes.Stloc, quiescentStartLocal);
+        il.Emit(OpCodes.Br, sleepLabel);
+
         // busy: reset the idle streak
         il.MarkLabel(busyLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, quiescentLocal);
+        il.Emit(OpCodes.Ldc_I8, -1L);
+        il.Emit(OpCodes.Stloc, quiescentStartLocal);
 
         il.MarkLabel(sleepLabel);
         il.Emit(OpCodes.Ldc_I4_1);

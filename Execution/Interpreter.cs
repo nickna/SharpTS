@@ -634,12 +634,14 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private void WaitForPromise(SharpTSPromise promise)
     {
-        // Consecutive idle ~1ms iterations before concluding the promise can
-        // never settle. In-flight thread-pool work that holds no handle gets
-        // this window to land; anything that re-arms a timer, handle, or
-        // callback resets the streak.
-        const int QuiescentIterationsBeforeGiveUp = 20;
-        int quiescentIterations = 0;
+        // Continuous quiescent time before concluding the promise can never
+        // settle. Time-based, not iteration-based: a loaded thread pool can
+        // delay an awaited continuation tens of ms with nothing visible to
+        // HasPendingEventLoopWork, and Sleep(1) granularity differs by
+        // platform (~15ms Windows, ~1ms Linux), so an iteration count meant
+        // ~300ms on Windows but ~20ms on Linux — flaky under CI load.
+        const long QuiescentMsBeforeGiveUp = 250;
+        var quiescentTimer = new System.Diagnostics.Stopwatch();
 
         while (!promise.Task.IsCompleted)
         {
@@ -651,9 +653,15 @@ public partial class Interpreter : IDisposable
             if (promise.Task.IsCompleted) break;
 
             if (HasPendingEventLoopWork())
-                quiescentIterations = 0;
-            else if (++quiescentIterations >= QuiescentIterationsBeforeGiveUp)
-                return; // never-settling — leave it pending rather than hang
+            {
+                quiescentTimer.Reset();
+            }
+            else
+            {
+                quiescentTimer.Start();
+                if (quiescentTimer.ElapsedMilliseconds >= QuiescentMsBeforeGiveUp)
+                    return; // never-settling — leave it pending rather than hang
+            }
 
             Thread.Sleep(1);
         }
