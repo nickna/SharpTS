@@ -47,13 +47,14 @@ public class BuiltInSingletonValueFormTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Math_AsValue_MethodIdentityIsStable(ExecutionMode mode)
     {
-        // The value-form wrapper must be the same identity-cached $TSFunction the
-        // bare `Math.max` syntactic form hands out (ECMA-262: built-in methods are
-        // single objects). Interpreted mode synthesizes a fresh wrapper per read,
-        // so this is scoped to compiled mode.
+        // The value-form wrapper must be the same identity-cached method the bare
+        // `Math.max` syntactic form hands out (ECMA-262: built-in methods are
+        // single objects). The interpreter's namespace path now binds to the Math
+        // singleton, so it returns the same receiver-cached method as the
+        // instance path — identity holds in both modes (#288).
         var source = @"
             const m: any = Math;
             console.log(m.max === Math.max);
@@ -64,17 +65,38 @@ public class BuiltInSingletonValueFormTests
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.CompiledOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Math_AsValue_MethodsAreNonEnumerable(ExecutionMode mode)
     {
-        // Math's methods are non-enumerable per ECMA-262 §17, so populating the
-        // singleton must install non-enumerable descriptors — `Object.keys(Math)`
-        // stays empty.
+        // Math's methods are non-enumerable per ECMA-262 §17, so `Object.keys(Math)`
+        // is empty. Compiled mode installs non-enumerable descriptors; the
+        // interpreter treats the Math singleton's own enumerable properties as just
+        // its user-assigned extras (none here). Both modes return [] (#288).
         var source = @"
             const m: any = Math;
             console.log(Object.keys(m).length);
         ";
         var output = TestHarness.Run(source, mode);
         Assert.Equal("0\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    public void Math_AsValue_ValuesAndEntriesAreEmpty(ExecutionMode mode)
+    {
+        // Object.values/entries on Math return only its own enumerable properties;
+        // the built-in members are non-enumerable, so with no user extras the
+        // result is empty (previously the interpreter threw). Scoped to
+        // interpreted mode: compiled Object.values/entries(Math) currently also
+        // enumerate the non-enumerable built-in methods — tracked separately.
+        // (Tests avoid assigning to Math: its singleton is process-global, so an
+        // extra would leak into other in-process interpreted runs.) (#288)
+        var source = @"
+            const m: any = Math;
+            console.log(Object.values(m).length);
+            console.log(Object.entries(m).length);
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0\n0\n", output);
     }
 }

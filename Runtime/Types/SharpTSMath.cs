@@ -47,5 +47,13 @@ public class SharpTSMath
         _extras[name] = value;
     }
 
+    /// <summary>
+    /// The own enumerable properties of Math. All built-in members (abs, max,
+    /// PI, …) are non-enumerable per ECMA-262, so only user-assigned extras
+    /// appear here — empty in the common case. Backs Object.keys/values/entries.
+    /// </summary>
+    public IReadOnlyCollection<KeyValuePair<string, object?>> OwnEnumerableProperties
+        => _extras ?? (IReadOnlyCollection<KeyValuePair<string, object?>>)Array.Empty<KeyValuePair<string, object?>>();
+
     public override string ToString() => "[object Math]";
 }

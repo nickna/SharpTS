@@ -333,7 +333,12 @@ public sealed class BuiltInRegistry
             Name: "Math",
             IsSingleton: true,
             SingletonFactory: () => SharpTSMath.Instance,
-            GetMethod: name => MathBuiltIns.GetMember(name) as BuiltInMethod
+            // Bind to the singleton so the namespace path (`Math.max`) returns
+            // the SAME receiver-cached method as the instance path (`m.max`,
+            // where m holds Math). Without this they yield distinct wrappers and
+            // `Math.max === Math.max` via different access forms is false. Bind
+            // caches by receiver, so identity is stable per spec (#288).
+            GetMethod: name => (MathBuiltIns.GetMember(name) as BuiltInMethod)?.Bind(SharpTSMath.Instance)
         ));
     }
 

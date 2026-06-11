@@ -72,6 +72,14 @@ public static class ObjectBuiltIns
             var keys = dict.Keys.Select(k => (object?)k).ToList();
             return RuntimeValue.FromObject(new SharpTSArray(keys));
         }
+        // Math singleton: built-in members are non-enumerable, so the own
+        // enumerable keys are exactly the user-assigned extras (empty unless the
+        // program assigned to Math). Matches compiled mode (#288).
+        if (arg is SharpTSMath math)
+        {
+            var keys = math.OwnEnumerableProperties.Select(kv => (object?)kv.Key).ToList();
+            return RuntimeValue.FromObject(new SharpTSArray(keys));
+        }
         throw new Exception("Object.keys() requires an object argument");
     }
 
@@ -98,6 +106,12 @@ public static class ObjectBuiltIns
         if (arg is IDictionary<string, object?> dict)
         {
             return RuntimeValue.FromObject(new SharpTSArray(dict.Values.ToList()));
+        }
+        // Math singleton — see Object.keys (#288).
+        if (arg is SharpTSMath math)
+        {
+            var values = math.OwnEnumerableProperties.Select(kv => kv.Value).ToList();
+            return RuntimeValue.FromObject(new SharpTSArray(values));
         }
         throw new Exception("Object.values() requires an object argument");
     }
@@ -130,6 +144,13 @@ public static class ObjectBuiltIns
         if (arg is IDictionary<string, object?> dict)
         {
             var entries = dict.Select(kv =>
+                (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
+            return RuntimeValue.FromObject(new SharpTSArray(entries));
+        }
+        // Math singleton — see Object.keys (#288).
+        if (arg is SharpTSMath math)
+        {
+            var entries = math.OwnEnumerableProperties.Select(kv =>
                 (object?)new SharpTSArray([(object?)kv.Key, kv.Value])).ToList();
             return RuntimeValue.FromObject(new SharpTSArray(entries));
         }
