@@ -1,5 +1,6 @@
 using System.Globalization;
 using SharpTS.Runtime.BuiltIns;
+using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
 
@@ -64,13 +65,13 @@ public class SharpTSIntlPluralRules
             _type = t;
 
         if (dict.TryGetValue("minimumIntegerDigits", out var minIntVal))
-            _minimumIntegerDigits = ToInt(minIntVal);
+            _minimumIntegerDigits = (int)Interp.ToNumber(minIntVal);
 
         if (dict.TryGetValue("minimumFractionDigits", out var minFracVal))
-            _minimumFractionDigits = ToInt(minFracVal);
+            _minimumFractionDigits = (int)Interp.ToNumber(minFracVal);
 
         if (dict.TryGetValue("maximumFractionDigits", out var maxFracVal))
-            _maximumFractionDigits = ToInt(maxFracVal);
+            _maximumFractionDigits = (int)Interp.ToNumber(maxFracVal);
     }
 
     /// <summary>
@@ -291,7 +292,7 @@ public class SharpTSIntlPluralRules
     /// </summary>
     public object? select(object? number)
     {
-        double num = ToDouble(number);
+        double num = Interp.ToNumber(number);
         return SelectCategory(num);
     }
 
@@ -312,7 +313,7 @@ public class SharpTSIntlPluralRules
         {
             "select" => BuiltInMethod.CreateV2("select", 1, (_, _, args) =>
             {
-                double num = ToDouble(args.Length > 0 ? args[0].ToObject() : null);
+                double num = Interp.ToNumber(args.Length > 0 ? args[0].ToObject() : null);
                 return RuntimeValue.FromBoxed(SelectCategory(num));
             }),
             "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
@@ -320,29 +321,6 @@ public class SharpTSIntlPluralRules
                 return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
             }),
             _ => null
-        };
-    }
-
-    private static double ToDouble(object? value)
-    {
-        return value switch
-        {
-            double d => d,
-            int i => i,
-            long l => l,
-            float f => f,
-            string s when double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) => d,
-            _ => 0.0
-        };
-    }
-
-    private static int ToInt(object? value)
-    {
-        return value switch
-        {
-            double d => (int)d,
-            int i => i,
-            _ => 0
         };
     }
 

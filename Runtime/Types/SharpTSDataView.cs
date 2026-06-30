@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using SharpTS.TypeSystem;
+using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
 
@@ -287,7 +288,7 @@ public class SharpTSDataView : ITypeCategorized
     {
         CheckBounds(byteOffset, 4);
         var span = _buffer.AsSpan(_byteOffset + byteOffset, 4);
-        float val = (float)ToDouble(value);
+        float val = (float)Interp.ToNumber(value);
         if (littleEndian)
             BinaryPrimitives.WriteSingleLittleEndian(span, val);
         else
@@ -301,7 +302,7 @@ public class SharpTSDataView : ITypeCategorized
     {
         CheckBounds(byteOffset, 8);
         var span = _buffer.AsSpan(_byteOffset + byteOffset, 8);
-        double val = ToDouble(value);
+        double val = Interp.ToNumber(value);
         if (littleEndian)
             BinaryPrimitives.WriteDoubleLittleEndian(span, val);
         else
@@ -392,19 +393,6 @@ public class SharpTSDataView : ITypeCategorized
             long l => l,
             float f => (long)f,
             System.Numerics.BigInteger bi => (long)bi,
-            _ => 0
-        };
-    }
-
-    private static double ToDouble(object? value)
-    {
-        return value switch
-        {
-            double d => d,
-            int i => i,
-            long l => l,
-            float f => f,
-            System.Numerics.BigInteger bi => (double)bi,
             _ => 0
         };
     }

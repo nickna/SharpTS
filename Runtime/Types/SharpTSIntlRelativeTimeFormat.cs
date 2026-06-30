@@ -1,5 +1,6 @@
 using System.Globalization;
 using SharpTS.Runtime.BuiltIns;
+using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
 
@@ -280,7 +281,7 @@ public class SharpTSIntlRelativeTimeFormat
     /// </summary>
     public object? format(object? value, object? unit)
     {
-        double num = ToDouble(value);
+        double num = Interp.ToNumber(value);
         string unitStr = unit?.ToString() ?? "second";
         return FormatRelativeTime(num, unitStr);
     }
@@ -290,7 +291,7 @@ public class SharpTSIntlRelativeTimeFormat
     /// </summary>
     public object? formatToParts(object? value, object? unit)
     {
-        double num = ToDouble(value);
+        double num = Interp.ToNumber(value);
         string unitStr = unit?.ToString() ?? "second";
         return GetFormattedParts(num, unitStr);
     }
@@ -312,13 +313,13 @@ public class SharpTSIntlRelativeTimeFormat
         {
             "format" => BuiltInMethod.CreateV2("format", 2, (_, _, args) =>
             {
-                double num = ToDouble(args.Length > 0 ? args[0].ToObject() : null);
+                double num = Interp.ToNumber(args.Length > 0 ? args[0].ToObject() : null);
                 string unit = (args.Length > 1 ? args[1].ToObject() : null)?.ToString() ?? "second";
                 return RuntimeValue.FromBoxed(FormatRelativeTime(num, unit));
             }),
             "formatToParts" => BuiltInMethod.CreateV2("formatToParts", 2, (_, _, args) =>
             {
-                double num = ToDouble(args.Length > 0 ? args[0].ToObject() : null);
+                double num = Interp.ToNumber(args.Length > 0 ? args[0].ToObject() : null);
                 string unit = (args.Length > 1 ? args[1].ToObject() : null)?.ToString() ?? "second";
                 return RuntimeValue.FromBoxed(GetFormattedParts(num, unit));
             }),
@@ -327,19 +328,6 @@ public class SharpTSIntlRelativeTimeFormat
                 return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
             }),
             _ => null
-        };
-    }
-
-    private static double ToDouble(object? value)
-    {
-        return value switch
-        {
-            double d => d,
-            int i => i,
-            long l => l,
-            float f => f,
-            string s when double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) => d,
-            _ => 0.0
         };
     }
 
