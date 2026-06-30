@@ -327,7 +327,7 @@ public abstract record Stmt
     /// (defaulting to <c>undefined</c>) so <c>this</c> inside the body resolves (#775).
     /// </summary>
     public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, bool HasDynamicThis = false) : Stmt;
-    public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null);
+    public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null, TypeNode? TypeAnnotationNode = null);
     /// <summary>
     /// Class field declaration. For computed property names (e.g., [Symbol("key")]: type),
     /// ComputedKey contains the expression and Name is a synthetic token.
@@ -337,7 +337,7 @@ public abstract record Stmt
     /// Getter/setter declaration. For computed accessor names (e.g., static get [Symbol.species]()),
     /// ComputedKey contains the expression and Name is a synthetic token.
     /// </summary>
-    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null, bool IsStatic = false, Expr? ComputedKey = null) : Stmt;
+    public record Accessor(Token Name, Token Kind, Parameter? SetterParam, List<Stmt> Body, string? ReturnType, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, List<Decorator>? Decorators = null, bool IsStatic = false, Expr? ComputedKey = null, TypeNode? ReturnTypeNode = null) : Stmt;
     /// <summary>
     /// Auto-accessor field declaration (TypeScript 4.9+): accessor name: Type = initializer
     /// Automatically generates a private backing field with implicit getter/setter.
@@ -385,11 +385,11 @@ public abstract record Stmt
     /// <param name="IsMethod">Declared with method syntax (<c>m(x): T</c>) rather than as a
     /// function-typed property — method members keep bivariant parameter relating under
     /// strictFunctionTypes.</param>
-    public record InterfaceMember(Token Name, string Type, bool IsOptional = false, bool IsReadonly = false, bool IsMethod = false);
+    public record InterfaceMember(Token Name, string Type, bool IsOptional = false, bool IsReadonly = false, bool IsMethod = false, TypeNode? TypeAnnotationNode = null);
     /// <summary>
     /// Index signature in interfaces: [key: string]: valueType, [key: number]: valueType, [key: symbol]: valueType
     /// </summary>
-    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType);
+    public record IndexSignature(Token KeyName, TokenType KeyType, string ValueType, TypeNode? ValueTypeNode = null);
     /// <summary>
     /// Call signature in interfaces: (params): ReturnType or &lt;T&gt;(params): ReturnType
     /// Indicates the interface represents a callable type (e.g., function).
