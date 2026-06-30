@@ -156,14 +156,63 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     }
 
     /// <summary>
+    /// Allocates a new, zero-initialized typed array of this concrete element type.
+    /// </summary>
+    protected abstract SharpTSTypedArray Allocate(int length);
+
+    /// <summary>
+    /// Creates a view of this concrete element type over the given SharedArrayBuffer.
+    /// </summary>
+    protected abstract SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length);
+
+    /// <summary>
+    /// Creates a view of this concrete element type over the given ArrayBuffer.
+    /// </summary>
+    protected abstract SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length);
+
+    /// <summary>
+    /// Creates a view of this concrete element type over the given raw byte buffer.
+    /// </summary>
+    protected abstract SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length);
+
+    /// <summary>
+    /// Resolves JS slice/subarray bounds (negative-from-end, clamped to [0, length])
+    /// to a concrete (start, count) pair.
+    /// </summary>
+    private (int start, int count) ClampRange(int begin, int? end)
+    {
+        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
+        int actualEnd = end.HasValue
+            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
+            : _length;
+        int count = Math.Max(0, actualEnd - begin);
+        return (begin, count);
+    }
+
+    /// <summary>
     /// Creates a new typed array containing a copy of a portion of this array.
     /// </summary>
-    public abstract SharpTSTypedArray Slice(int begin, int? end = null);
+    public SharpTSTypedArray Slice(int begin, int? end = null)
+    {
+        var (start, count) = ClampRange(begin, end);
+        var result = Allocate(count);
+        BlockCopyElementsInto(result, start, count);
+        return result;
+    }
 
     /// <summary>
     /// Creates a new typed array view of the same buffer with specified bounds.
     /// </summary>
-    public abstract SharpTSTypedArray Subarray(int begin, int? end = null);
+    public SharpTSTypedArray Subarray(int begin, int? end = null)
+    {
+        var (start, count) = ClampRange(begin, end);
+        int viewByteOffset = _byteOffset + start * BytesPerElement;
+        if (_sharedBuffer != null)
+            return CreateView(_sharedBuffer, viewByteOffset, count);
+        if (_arrayBuffer != null)
+            return CreateView(_arrayBuffer, viewByteOffset, count);
+        return CreateView(_buffer, viewByteOffset, count);
+    }
 
     /// <summary>
     /// Sets values from an array or typed array, starting at the specified offset.
@@ -513,31 +562,17 @@ public class SharpTSInt8Array : SharpTSTypedArray
     public override void SetVolatile(int index, object? value) =>
         Volatile.Write(ref _buffer[GetByteIndex(index)], (byte)(sbyte)Convert.ToDouble(value));
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSInt8Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSInt8Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSInt8Array(_sharedBuffer, _byteOffset + begin, count);
-        if (_arrayBuffer != null)
-            return new SharpTSInt8Array(_arrayBuffer, _byteOffset + begin, count);
-        return new SharpTSInt8Array(_buffer, _byteOffset + begin, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt8Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt8Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSInt8Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -568,31 +603,17 @@ public class SharpTSUint8Array : SharpTSTypedArray
     public override void SetVolatile(int index, object? value) =>
         Volatile.Write(ref _buffer[GetByteIndex(index)], (byte)Convert.ToDouble(value));
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSUint8Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSUint8Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSUint8Array(_sharedBuffer, _byteOffset + begin, count);
-        if (_arrayBuffer != null)
-            return new SharpTSUint8Array(_arrayBuffer, _byteOffset + begin, count);
-        return new SharpTSUint8Array(_buffer, _byteOffset + begin, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint8Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint8Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSUint8Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -630,31 +651,17 @@ public class SharpTSUint8ClampedArray : SharpTSTypedArray
         Volatile.Write(ref _buffer[GetByteIndex(index)], (byte)Math.Max(0, Math.Min(255, Math.Round(val))));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSUint8ClampedArray(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSUint8ClampedArray(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSUint8ClampedArray(_sharedBuffer, _byteOffset + begin, count);
-        if (_arrayBuffer != null)
-            return new SharpTSUint8ClampedArray(_arrayBuffer, _byteOffset + begin, count);
-        return new SharpTSUint8ClampedArray(_buffer, _byteOffset + begin, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint8ClampedArray(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint8ClampedArray(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSUint8ClampedArray(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -701,31 +708,17 @@ public class SharpTSInt16Array : SharpTSTypedArray
         Volatile.Write(ref slot, (short)Convert.ToDouble(value));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSInt16Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSInt16Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSInt16Array(_sharedBuffer, _byteOffset + begin * 2, count);
-        if (_arrayBuffer != null)
-            return new SharpTSInt16Array(_arrayBuffer, _byteOffset + begin * 2, count);
-        return new SharpTSInt16Array(_buffer, _byteOffset + begin * 2, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt16Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt16Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSInt16Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -772,31 +765,17 @@ public class SharpTSUint16Array : SharpTSTypedArray
         Volatile.Write(ref slot, (ushort)Convert.ToDouble(value));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSUint16Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSUint16Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSUint16Array(_sharedBuffer, _byteOffset + begin * 2, count);
-        if (_arrayBuffer != null)
-            return new SharpTSUint16Array(_arrayBuffer, _byteOffset + begin * 2, count);
-        return new SharpTSUint16Array(_buffer, _byteOffset + begin * 2, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint16Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint16Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSUint16Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -852,31 +831,17 @@ public class SharpTSInt32Array : SharpTSTypedArray
         return ref Unsafe.As<byte, int>(ref _buffer[byteIdx]);
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSInt32Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSInt32Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSInt32Array(_sharedBuffer, _byteOffset + begin * 4, count);
-        if (_arrayBuffer != null)
-            return new SharpTSInt32Array(_arrayBuffer, _byteOffset + begin * 4, count);
-        return new SharpTSInt32Array(_buffer, _byteOffset + begin * 4, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSInt32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSInt32Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -923,31 +888,17 @@ public class SharpTSUint32Array : SharpTSTypedArray
         Volatile.Write(ref slot, (uint)Convert.ToDouble(value));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSUint32Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSUint32Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSUint32Array(_sharedBuffer, _byteOffset + begin * 4, count);
-        if (_arrayBuffer != null)
-            return new SharpTSUint32Array(_arrayBuffer, _byteOffset + begin * 4, count);
-        return new SharpTSUint32Array(_buffer, _byteOffset + begin * 4, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSUint32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSUint32Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -994,31 +945,17 @@ public class SharpTSFloat32Array : SharpTSTypedArray
         Volatile.Write(ref slot, BitConverter.SingleToInt32Bits((float)Convert.ToDouble(value)));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSFloat32Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSFloat32Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSFloat32Array(_sharedBuffer, _byteOffset + begin * 4, count);
-        if (_arrayBuffer != null)
-            return new SharpTSFloat32Array(_arrayBuffer, _byteOffset + begin * 4, count);
-        return new SharpTSFloat32Array(_buffer, _byteOffset + begin * 4, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSFloat32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSFloat32Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSFloat32Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -1065,31 +1002,17 @@ public class SharpTSFloat64Array : SharpTSTypedArray
         Volatile.Write(ref slot, BitConverter.DoubleToInt64Bits(Convert.ToDouble(value)));
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSFloat64Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSFloat64Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSFloat64Array(_sharedBuffer, _byteOffset + begin * 8, count);
-        if (_arrayBuffer != null)
-            return new SharpTSFloat64Array(_arrayBuffer, _byteOffset + begin * 8, count);
-        return new SharpTSFloat64Array(_buffer, _byteOffset + begin * 8, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSFloat64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSFloat64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSFloat64Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -1157,31 +1080,17 @@ public class SharpTSBigInt64Array : SharpTSTypedArray
         return ref Unsafe.As<byte, long>(ref _buffer[byteIdx]);
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSBigInt64Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSBigInt64Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSBigInt64Array(_sharedBuffer, _byteOffset + begin * 8, count);
-        if (_arrayBuffer != null)
-            return new SharpTSBigInt64Array(_arrayBuffer, _byteOffset + begin * 8, count);
-        return new SharpTSBigInt64Array(_buffer, _byteOffset + begin * 8, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSBigInt64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSBigInt64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSBigInt64Array(buffer, byteOffset, length);
 }
 
 /// <summary>
@@ -1240,29 +1149,15 @@ public class SharpTSBigUint64Array : SharpTSTypedArray
         Volatile.Write(ref slot, val);
     }
 
-    public override SharpTSTypedArray Slice(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        var result = new SharpTSBigUint64Array(count);
-        BlockCopyElementsInto(result, begin, count);
-        return result;
-    }
+    protected override SharpTSTypedArray Allocate(int length) =>
+        new SharpTSBigUint64Array(length);
 
-    public override SharpTSTypedArray Subarray(int begin, int? end = null)
-    {
-        begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
-        int actualEnd = end.HasValue
-            ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
-            : _length;
-        int count = Math.Max(0, actualEnd - begin);
-        if (_sharedBuffer != null)
-            return new SharpTSBigUint64Array(_sharedBuffer, _byteOffset + begin * 8, count);
-        if (_arrayBuffer != null)
-            return new SharpTSBigUint64Array(_arrayBuffer, _byteOffset + begin * 8, count);
-        return new SharpTSBigUint64Array(_buffer, _byteOffset + begin * 8, count);
-    }
+    protected override SharpTSTypedArray CreateView(SharpTSSharedArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSBigUint64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(SharpTSArrayBuffer buffer, int byteOffset, int length) =>
+        new SharpTSBigUint64Array(buffer, byteOffset, length);
+
+    protected override SharpTSTypedArray CreateView(byte[] buffer, int byteOffset, int length) =>
+        new SharpTSBigUint64Array(buffer, byteOffset, length);
 }
