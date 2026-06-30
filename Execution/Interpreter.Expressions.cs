@@ -352,21 +352,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Evaluates a variable reference, looking up its value in the current environment.
-    /// </summary>
-    /// <param name="variable">The variable expression AST node.</param>
-    /// <returns>The current value of the variable.</returns>
-    /// <remarks>
-    /// Uses side-channel resolution information if available, otherwise falls back
-    /// to dynamic lookup via <see cref="RuntimeEnvironment"/>.
-    /// </remarks>
-    /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
-    private object? EvaluateVariable(Expr.Variable variable)
-    {
-        return LookupVariable(variable.Name, variable);
-    }
-
-    /// <summary>
     /// Evaluates a template literal (backtick string) with embedded expressions.
     /// </summary>
     /// <param name="template">The template literal expression AST node.</param>

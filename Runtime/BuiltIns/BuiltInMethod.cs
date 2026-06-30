@@ -21,7 +21,10 @@ public class BuiltInMethod : ISharpTSCallable
     private readonly string _name;
     private readonly int _minArity;
     private readonly int _maxArity;
-    private readonly Func<Interpreter, object?, List<object?>, object?> _implementation;
+    // Legacy boxed implementation. For V2-only built-ins this stays null and is built
+    // lazily on the first boxed Call() (the rare reflective standalone-DLL path) — see
+    // GetLegacyImplementation. At least one of _implementation/_implementationV2 is non-null.
+    private Func<Interpreter, object?, List<object?>, object?>? _implementation;
     private readonly Func<Interpreter, RuntimeValue, ReadOnlySpan<RuntimeValue>, RuntimeValue>? _implementationV2;
     private object? _receiver;
     // Spec-defined Function.prototype.length value visible to user code as
@@ -74,10 +77,13 @@ public class BuiltInMethod : ISharpTSCallable
     /// </summary>
     public bool HasV2Implementation => _implementationV2 != null;
 
-    public BuiltInMethod(string name, int arity, Func<Interpreter, object?, List<object?>, object?> implementation)
+    // Boxed-delegate constructors. The legacy delegate type survives only as plumbing
+    // (CreateConstant + the reflective standalone-DLL Call path), so these are not part of
+    // the public surface — they exist for the dispatcher tests, which have InternalsVisibleTo.
+    internal BuiltInMethod(string name, int arity, Func<Interpreter, object?, List<object?>, object?> implementation)
         : this(name, arity, arity, implementation) { }
 
-    public BuiltInMethod(string name, int minArity, int maxArity, Func<Interpreter, object?, List<object?>, object?> implementation)
+    internal BuiltInMethod(string name, int minArity, int maxArity, Func<Interpreter, object?, List<object?>, object?> implementation)
         : this(name, minArity, maxArity, implementation, isConstant: false) { }
 
     /// <summary>
@@ -114,8 +120,7 @@ public class BuiltInMethod : ISharpTSCallable
         _minArity = arity;
         _maxArity = arity;
         _implementationV2 = implementation;
-        // Create a legacy wrapper
-        _implementation = WrapV2Implementation(implementation);
+        // Legacy wrapper is built lazily on first boxed Call() — see GetLegacyImplementation.
     }
 
     /// <summary>
@@ -157,17 +162,14 @@ public class BuiltInMethod : ISharpTSCallable
         _name = name;
         _minArity = minArity;
         _maxArity = maxArity;
-        // If only V2 is provided, create the legacy wrapper
-        if (implementation == null && implementationV2 != null)
+        if (implementation == null && implementationV2 == null)
         {
-            _implementationV2 = implementationV2;
-            _implementation = WrapV2Implementation(implementationV2);
+            throw new ArgumentNullException(nameof(implementation));
         }
-        else
-        {
-            _implementation = implementation ?? throw new ArgumentNullException(nameof(implementation));
-            _implementationV2 = implementationV2;
-        }
+        // For V2-only methods _implementation stays null and is built lazily on first
+        // boxed Call() (see GetLegacyImplementation).
+        _implementation = implementation;
+        _implementationV2 = implementationV2;
         _receiver = receiver;
         // Bound instances don't have their own cache
     }
@@ -234,7 +236,7 @@ public class BuiltInMethod : ISharpTSCallable
         {
             throw new Exception($"Runtime Error: '{_name}' expects {_minArity}-{_maxArity} arguments but got {arguments.Count}.");
         }
-        return _implementation(interpreter, _receiver, arguments);
+        return GetLegacyImplementation()(interpreter, _receiver, arguments);
     }
 
     /// <summary>
@@ -260,9 +262,19 @@ public class BuiltInMethod : ISharpTSCallable
             boxedArgs.Add(arg.ToObject());
         }
 
-        var result = _implementation(interpreter, _receiver, boxedArgs);
+        var result = GetLegacyImplementation()(interpreter, _receiver, boxedArgs);
         return RuntimeValue.FromBoxed(result);
     }
+
+    /// <summary>
+    /// Returns the legacy boxed implementation, building it lazily from the V2 implementation
+    /// on first use. Only the rare boxed <see cref="Call"/> path (reflectively invoked from
+    /// standalone compiled DLLs) needs it, so V2-only built-ins avoid allocating the wrapper
+    /// closure until then. The wrapper is stateless, so a benign race that builds it twice is
+    /// harmless.
+    /// </summary>
+    private Func<Interpreter, object?, List<object?>, object?> GetLegacyImplementation()
+        => _implementation ??= WrapV2Implementation(_implementationV2!);
 
     /// <summary>
     /// Creates a legacy wrapper for a V2 implementation.

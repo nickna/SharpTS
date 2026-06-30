@@ -1012,15 +1012,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Evaluates property access on a class instance.
-    /// </summary>
-    private object? EvaluateGetOnInstance(SharpTSInstance instance, Token memberName)
-    {
-        instance.SetInterpreter(this);
-        return instance.Get(memberName);
-    }
-
-    /// <summary>
     /// Evaluates property access on a class instance, returning RuntimeValue directly.
     /// </summary>
     private RuntimeValue EvaluateGetOnInstanceRV(SharpTSInstance instance, Token memberName)

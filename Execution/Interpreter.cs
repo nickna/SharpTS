@@ -1260,8 +1260,6 @@ public partial class Interpreter : IDisposable
         _locals[expr] = depth;
     }
 
-    private object? LookupVariable(Token name, Expr expr) => LookupVariableRV(name, expr).ToObject();
-
     /// <summary>
     /// Looks up a variable and returns its value as RuntimeValue without boxing.
     /// This is the fast path for variable access in expressions.
