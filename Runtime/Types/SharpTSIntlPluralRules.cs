@@ -8,9 +8,8 @@ namespace SharpTS.Runtime.Types;
 /// Runtime representation of Intl.PluralRules.
 /// Provides plural category selection (zero, one, two, few, many, other) based on CLDR rules.
 /// </summary>
-public class SharpTSIntlPluralRules
+public class SharpTSIntlPluralRules : SharpTSIntlFormatterBase
 {
-    private readonly string _locale;
     private string _type; // "cardinal" or "ordinal"
     private int _minimumIntegerDigits;
     private int _minimumFractionDigits;
@@ -21,23 +20,7 @@ public class SharpTSIntlPluralRules
 
     public SharpTSIntlPluralRules(object? locale, object? options)
     {
-        string localeStr = locale?.ToString() ?? "";
-
-        CultureInfo culture;
-        try
-        {
-            culture = string.IsNullOrEmpty(localeStr)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(localeStr.Replace('_', '-'));
-        }
-        catch
-        {
-            culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
+        ResolveLocale(locale);
 
         // Defaults
         _type = "cardinal";
@@ -45,14 +28,9 @@ public class SharpTSIntlPluralRules
         _minimumFractionDigits = 0;
         _maximumFractionDigits = 3;
 
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
     }
 
     private void ParseOptions(IEnumerable<KeyValuePair<string, object?>> opts)
@@ -80,19 +58,12 @@ public class SharpTSIntlPluralRules
     /// </summary>
     public string SelectCategory(double number)
     {
-        string lang = GetLanguageCode();
+        string lang = PrimaryLanguage;
 
         if (_type == "ordinal")
             return SelectOrdinal(number, lang);
 
         return SelectCardinal(number, lang);
-    }
-
-    private string GetLanguageCode()
-    {
-        // Extract primary language from locale (e.g., "en-US" → "en")
-        int dashIndex = _locale.IndexOf('-');
-        return dashIndex >= 0 ? _locale[..dashIndex].ToLowerInvariant() : _locale.ToLowerInvariant();
     }
 
     /// <summary>
@@ -242,7 +213,7 @@ public class SharpTSIntlPluralRules
         return long.TryParse(frac, out var f) ? f : 0;
     }
 
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         return new Dictionary<string, object?>
         {
@@ -257,7 +228,7 @@ public class SharpTSIntlPluralRules
 
     private SharpTSArray GetPluralCategories()
     {
-        string lang = GetLanguageCode();
+        string lang = PrimaryLanguage;
         List<object?> categories;
 
         if (_type == "ordinal")
@@ -297,17 +268,9 @@ public class SharpTSIntlPluralRules
     }
 
     /// <summary>
-    /// JS-facing resolvedOptions method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
-    }
-
-    /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -316,11 +279,7 @@ public class SharpTSIntlPluralRules
                 double num = Interp.ToNumber(args.Length > 0 ? args[0].ToObject() : null);
                 return RuntimeValue.FromBoxed(SelectCategory(num));
             }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
-            }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 
