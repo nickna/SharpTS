@@ -295,11 +295,7 @@ public static class IteratorBuiltIns
         => RuntimeValue.FromBoxed(FlatMap(interp, iter, [args[0].ToObject()]));
 
     private static RuntimeValue ReduceV2(Interpreter interp, SharpTSIterator iter, ReadOnlySpan<RuntimeValue> args)
-    {
-        var list = new List<object?>(args.Length);
-        foreach (var arg in args) list.Add(arg.ToObject());
-        return RuntimeValue.FromBoxed(Reduce(interp, iter, list));
-    }
+        => RuntimeValue.FromBoxed(Reduce(interp, iter, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToArrayV2(Interpreter interp, SharpTSIterator iter, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(ToArray(interp, iter, []));

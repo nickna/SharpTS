@@ -1048,28 +1048,20 @@ public static class ArrayBuiltIns
     // ===================== V2 Wrappers (RuntimeValue boundary) =====================
 
     private static RuntimeValue FlatV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Flat(interp, arr, SpanToList(args)));
+        => RuntimeValue.FromBoxed(Flat(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue FlatMapV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(FlatMap(interp, arr, SpanToList(args)));
+        => RuntimeValue.FromBoxed(FlatMap(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue SortV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Sort(interp, arr, SpanToList(args)));
+        => RuntimeValue.FromBoxed(Sort(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSortedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(ToSorted(interp, arr, SpanToList(args)));
+        => RuntimeValue.FromBoxed(ToSorted(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue SpliceV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Splice(interp, arr, SpanToList(args)));
+        => RuntimeValue.FromBoxed(Splice(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSplicedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(ToSpliced(interp, arr, SpanToList(args)));
-
-    private static List<object?> SpanToList(ReadOnlySpan<RuntimeValue> args)
-    {
-        var list = new List<object?>(args.Length);
-        foreach (var arg in args)
-            list.Add(arg.ToObject());
-        return list;
-    }
+        => RuntimeValue.FromBoxed(ToSpliced(interp, arr, CallableInterop.ToBoxedList(args)));
 }
