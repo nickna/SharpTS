@@ -2277,26 +2277,13 @@ public partial class Interpreter : IDisposable
     internal ExecutionResult VisitWhile(Stmt.While whileStmt)
     {
         var labels = TakePendingLoopLabels();
-        return ExecuteWhileCore(
-            () => IsTruthy(Evaluate(whileStmt.Condition)),
-            () => Execute(whileStmt.Body),
-            labels);
+        return ExecuteWhileCore(_syncContext, whileStmt, labels).GetAwaiter().GetResult();
     }
 
     internal ExecutionResult VisitDoWhile(Stmt.DoWhile doWhileStmt)
     {
         var labels = TakePendingLoopLabels();
-        do
-        {
-            var result = Execute(doWhileStmt.Body);
-            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
-            if (shouldContinue) continue;
-            if (abruptResult.HasValue) return abruptResult.Value;
-            // Process any pending timer callbacks
-            ProcessPendingCallbacks();
-        } while (IsTruthy(Evaluate(doWhileStmt.Condition)));
-        return ExecutionResult.Success();
+        return ExecuteDoWhileCore(_syncContext, doWhileStmt, labels).GetAwaiter().GetResult();
     }
 
     internal ExecutionResult VisitFor(Stmt.For forStmt)
@@ -2304,6 +2291,16 @@ public partial class Interpreter : IDisposable
         // Drain labels parked by an enclosing labeled statement before running the initializer,
         // so `continue <label>`/`break <label>` resolve to this loop (#558).
         var labels = TakePendingLoopLabels();
+        return ExecuteForCore(_syncContext, forStmt, labels).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Core C-style for-loop execution logic shared by the sync and async evaluators. The evaluation
+    /// context supplies the per-clause evaluation strategy and the between-iteration scheduler yield
+    /// (<see cref="IEvaluationContext.YieldToSchedulerAsync"/>), so a single body serves both paths.
+    /// </summary>
+    private async ValueTask<ExecutionResult> ExecuteForCore(IEvaluationContext ctx, Stmt.For forStmt, IReadOnlyList<string>? labels)
+    {
         // Create scope for loop variables (ES6 let/const block scoping)
         // Variables declared with let/const in the initializer are scoped to the loop
         RuntimeEnvironment loopEnv = new(_environment);
@@ -2311,7 +2308,7 @@ public partial class Interpreter : IDisposable
         {
             // Execute initializer once (defines loop variable in loopEnv)
             if (forStmt.Initializer != null)
-                Execute(forStmt.Initializer);
+                await ctx.ExecuteStmtAsync(forStmt.Initializer);
             // ECMA-262 13.7.4: a `for (let/const …)` loop gives each iteration its
             // own bindings for the loop variables, so closures created in different
             // iterations capture distinct values (#633). `var`/expression
@@ -2320,9 +2317,9 @@ public partial class Interpreter : IDisposable
             if (perIterationNames != null)
                 CreatePerIterationEnvironment(loopEnv, perIterationNames);
             // Loop with proper continue handling - increment always runs
-            while (forStmt.Condition == null || IsTruthy(Evaluate(forStmt.Condition)))
+            while (forStmt.Condition == null || (await ctx.EvaluateExprAsync(forStmt.Condition)).IsTruthy())
             {
-                var result = Execute(forStmt.Body);
+                var result = await ctx.ExecuteStmtAsync(forStmt.Body);
                 var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
                 if (shouldBreak) break;
                 // On continue (unlabeled or to this loop), execute increment then re-test
@@ -2331,9 +2328,9 @@ public partial class Interpreter : IDisposable
                     if (perIterationNames != null)
                         CreatePerIterationEnvironment(loopEnv, perIterationNames);
                     if (forStmt.Increment != null)
-                        Evaluate(forStmt.Increment);
+                        await ctx.EvaluateExprAsync(forStmt.Increment);
                     // Yield to allow timer callbacks and other threads to execute
-                    Thread.Sleep(0);
+                    await ctx.YieldToSchedulerAsync();
                     continue;
                 }
                 if (abruptResult.HasValue) return abruptResult.Value;
@@ -2341,7 +2338,7 @@ public partial class Interpreter : IDisposable
                 if (perIterationNames != null)
                     CreatePerIterationEnvironment(loopEnv, perIterationNames);
                 if (forStmt.Increment != null)
-                    Evaluate(forStmt.Increment);
+                    await ctx.EvaluateExprAsync(forStmt.Increment);
                 // Process any pending timer callbacks
                 ProcessPendingCallbacks();
             }

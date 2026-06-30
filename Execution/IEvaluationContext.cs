@@ -47,6 +47,13 @@ public interface IEvaluationContext
     /// <param name="stmt">The statement to execute.</param>
     /// <returns>A ValueTask containing the execution result.</returns>
     ValueTask<ExecutionResult> ExecuteStmtAsync(Stmt stmt);
+
+    /// <summary>
+    /// Yields to the scheduler between loop iterations so timer callbacks and other work can run.
+    /// The sync context spins the OS thread (<c>Thread.Sleep(0)</c>); the async context yields to
+    /// the event loop (<c>Task.Yield()</c>). Lets one loop body serve both paths.
+    /// </summary>
+    ValueTask YieldToSchedulerAsync();
 }
 
 /// <summary>
@@ -80,6 +87,13 @@ internal sealed class SyncEvaluationContext : IEvaluationContext
         var result = _interpreter.ExecuteStatement(stmt);
         return new ValueTask<ExecutionResult>(result);
     }
+
+    public ValueTask YieldToSchedulerAsync()
+    {
+        // Sync path: spin the OS thread, matching the synchronous for-loop's Thread.Sleep(0).
+        System.Threading.Thread.Sleep(0);
+        return default;
+    }
 }
 
 /// <summary>
@@ -109,6 +123,12 @@ internal sealed class AsyncEvaluationContext : IEvaluationContext
     {
         // Async path: use the async executor
         return new ValueTask<ExecutionResult>(_interpreter.ExecuteStatementAsync(stmt));
+    }
+
+    public async ValueTask YieldToSchedulerAsync()
+    {
+        // Async path: yield to the event loop, matching the async for-loop's await Task.Yield().
+        await Task.Yield();
     }
 }
 
