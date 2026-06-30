@@ -82,7 +82,7 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Gets a member (property or method) by name.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

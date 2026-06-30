@@ -242,7 +242,7 @@ public sealed class CompiledMessagePortBridge : SharpTSEventEmitter
     /// inherited EventEmitter members; attaching a 'message' listener implicitly
     /// starts the port (Node worker_threads semantics, mirroring SharpTSMessagePort).
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

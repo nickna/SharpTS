@@ -35,7 +35,7 @@ public class SharpTSReadlineInterface : SharpTSEventEmitter
     /// <summary>
     /// Gets a member of this interface object.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

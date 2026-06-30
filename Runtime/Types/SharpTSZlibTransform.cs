@@ -92,7 +92,7 @@ public class SharpTSZlibTransform : SharpTSTransform
     /// Adds the Node zlib control methods (params/flush/reset/close) and the
     /// bytesWritten/bytesRead counters on top of the generic stream surface.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

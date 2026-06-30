@@ -96,11 +96,11 @@ public class SharpTSClientRequest : SharpTSWritable
     /// <summary>Registers the response callback (the cb passed to http.request) as a 'response' listener.</summary>
     public void RegisterResponseCallback(ISharpTSCallable callback)
     {
-        var on = ((SharpTSEventEmitter)this).GetMember("on") as BuiltInMethod;
+        var on = GetEventEmitterMember("on") as BuiltInMethod;
         on?.Bind(this).Call(_interpreter, ["response", callback]);
     }
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -190,7 +190,7 @@ public class SharpTSClientRequest : SharpTSWritable
 
     private void RegisterFinishCallback(ISharpTSCallable cb)
     {
-        var once = ((SharpTSEventEmitter)this).GetMember("once") as BuiltInMethod;
+        var once = GetEventEmitterMember("once") as BuiltInMethod;
         once?.Bind(this).Call(_interpreter, ["finish", cb]);
     }
 
@@ -276,7 +276,7 @@ public class SharpTSClientRequest : SharpTSWritable
             _timeoutMs = (int)args[0].AsNumberUnsafe();
         if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable cb)
         {
-            var on = ((SharpTSEventEmitter)this).GetMember("on") as BuiltInMethod;
+            var on = GetEventEmitterMember("on") as BuiltInMethod;
             on?.Bind(this).Call(interpreter, ["timeout", cb]);
         }
         return RuntimeValue.FromObject(this);
