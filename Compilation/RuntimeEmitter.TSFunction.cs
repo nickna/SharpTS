@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
-        runtime.TSFunctionMethodField = methodField;
+        _ = methodField;
         // Cached name and length for functions where reflection doesn't work (e.g., MethodBuilder tokens)
         var cachedNameField = typeBuilder.DefineField("_cachedName", _types.String, FieldAttributes.Private);
         var cachedLengthField = typeBuilder.DefineField("_cachedLength", _types.Int32, FieldAttributes.Private);
@@ -202,7 +202,7 @@ public partial class RuntimeEmitter
         // and must stay fresh.
         var instanceCacheType = _types.MakeGenericType(_types.ConcurrentDictionaryOpen, _types.MethodInfo, typeBuilder);
         var instanceCacheField = typeBuilder.DefineField("_instanceCache", instanceCacheType, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.TSFunctionInstanceCacheField = instanceCacheField;
+        _ = instanceCacheField;
 
         // Static MethodInvoker cache keyed by MethodInfo. MethodInvoker.Create()
         // builds an internal dispatch stub that's amortized only when the

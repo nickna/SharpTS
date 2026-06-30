@@ -797,8 +797,8 @@ public partial class RuntimeEmitter
         // Keep the Float64-specific handles populated for any direct references.
         if (elementType == "Float64")
         {
-            runtime.Float64ArrayGetUnboxed = getU;
-            runtime.Float64ArraySetUnboxed = setU;
+            _ = getU;
+            _ = setU;
         }
     }
 

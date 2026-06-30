@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
             listType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.TimerQueue = timerQueueField;
+        _ = timerQueueField;
 
         // Static field: long _timerStartTicks (for high-resolution timing)
         var startTicksField = runtimeType.DefineField(
@@ -75,7 +75,7 @@ public partial class RuntimeEmitter
             _types.Int64,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.TimerStartTicks = startTicksField;
+        _ = startTicksField;
 
         // Static field: bool _timerInitialized
         var initializedField = runtimeType.DefineField(
@@ -83,7 +83,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.TimerInitialized = initializedField;
+        _ = initializedField;
 
         // Emit helper methods
         EmitEnsureTimerInitialized(runtimeType, runtime, timerQueueField, startTicksField, initializedField);

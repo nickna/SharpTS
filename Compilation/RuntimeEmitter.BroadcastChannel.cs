@@ -124,10 +124,10 @@ public partial class RuntimeEmitter
         // Publish handles for use by ExpressionEmitterBase.TryEmitBuiltInConstructor.
         runtime.BroadcastChannelType = _broadcastChannelType;
         runtime.BroadcastChannelCtor = _broadcastChannelCtor;
-        runtime.BroadcastChannelPostMessage = _broadcastChannelPostMessage;
-        runtime.BroadcastChannelClose = _broadcastChannelClose;
-        runtime.BroadcastChannelRef = _broadcastChannelRef;
-        runtime.BroadcastChannelUnref = _broadcastChannelUnref;
+        _ = _broadcastChannelPostMessage;
+        _ = _broadcastChannelClose;
+        _ = _broadcastChannelRef;
+        _ = _broadcastChannelUnref;
     }
 
     private void EmitBroadcastChannelConstructor(TypeBuilder typeBuilder, EmittedRuntime runtime)

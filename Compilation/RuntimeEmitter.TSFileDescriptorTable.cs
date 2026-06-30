@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.FileDescriptorTableType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         var nextFdField = typeBuilder.DefineField(
@@ -55,7 +55,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.FileDescriptorTableCtor = ctor;
+        _ = ctor;
 
         var ctorIl = ctor.GetILGenerator();
 
@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             [_types.Int32]
         );
-        runtime.FileDescriptorTableIsValid = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

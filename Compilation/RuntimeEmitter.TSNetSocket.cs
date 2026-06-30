@@ -138,7 +138,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.NetSocketEnd = _netSocketEndMethod;
+        _ = _netSocketEndMethod;
 
         _netSocketDestroyMethod = typeBuilder.DefineMethod(
             "Destroy",
@@ -146,7 +146,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NetSocketDestroy = _netSocketDestroyMethod;
+        _ = _netSocketDestroyMethod;
 
         _netSocketSetEncodingMethod = typeBuilder.DefineMethod(
             "SetEncoding",
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NetSocketSetEncoding = _netSocketSetEncodingMethod;
+        _ = _netSocketSetEncodingMethod;
 
         _netSocketGetMemberMethod = typeBuilder.DefineMethod(
             "GetMember",

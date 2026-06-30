@@ -1050,7 +1050,7 @@ public partial class RuntimeEmitter
         EmitFetchResponseBodyGetter(typeBuilder, runtime);
 
         // Store the type reference
-        runtime.TSFetchResponseType = typeBuilder;
+        _ = typeBuilder;
         runtime.TSFetchResponseCtor = ctor;
 
         typeBuilder.CreateType();
@@ -3575,7 +3575,7 @@ public partial class RuntimeEmitter
         EmitRequestArrayBufferMethod(typeBuilder, runtime);
         EmitRequestCloneMethod(typeBuilder, runtime, ctor);
 
-        runtime.TSRequestType = typeBuilder;
+        _ = typeBuilder;
         runtime.TSRequestCtor = ctor;
 
         typeBuilder.CreateType();

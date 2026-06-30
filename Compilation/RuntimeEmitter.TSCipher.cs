@@ -35,7 +35,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IDisposable]
         );
-        runtime.TSCipherType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tsCipherAlgorithmField = typeBuilder.DefineField("_algorithm", _types.String, FieldAttributes.Private);
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.TSCipherUpdateMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -425,7 +425,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSCipherFinalMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -531,7 +531,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Boolean]
         );
-        runtime.TSCipherSetAutoPaddingMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -551,7 +551,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.TSCipherGetAuthTagMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -596,7 +596,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSCipherSetAADMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

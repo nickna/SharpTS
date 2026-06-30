@@ -754,7 +754,7 @@ public partial class RuntimeEmitter
             runtime.TSEventEmitterType
         );
         _tlsServerTypeBuilder = typeBuilder;
-        runtime.TlsServerType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tlsServerIsListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);

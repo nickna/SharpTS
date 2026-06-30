@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSObjectIsFrozenGetter = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSObjectIsSealedGetter = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -785,7 +785,7 @@ public partial class RuntimeEmitter
             typeof(IEnumerable<string>),
             Type.EmptyTypes
         );
-        runtime.TSObjectGetKeys = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
 
@@ -806,7 +806,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSObjectToString = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -956,7 +956,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSObjectGetGetter = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
@@ -997,7 +997,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSObjectGetSetter = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);

@@ -69,8 +69,8 @@ public partial class RuntimeEmitter
             _types.Object);
 
         runtime.ReadableStreamType = streamBuilder;
-        runtime.ReadableStreamDefaultControllerType = controllerBuilder;
-        runtime.ReadableStreamDefaultReaderType = readerBuilder;
+        _ = controllerBuilder;
+        _ = readerBuilder;
 
         EmitReadableStreamFields(streamBuilder);
 
@@ -84,7 +84,7 @@ public partial class RuntimeEmitter
         _readableReaderStreamField = readerBuilder.DefineField(
             "_stream", streamBuilder, FieldAttributes.Private);
         var readerCtor = EmitReadableStreamReaderCtor(readerBuilder, streamBuilder);
-        runtime.ReadableStreamDefaultReaderCtor = readerCtor;
+        _ = readerCtor;
 
         // Now the stream constructor (uses controllerCtor).
         var streamCtor = EmitReadableStreamConstructor(streamBuilder, controllerBuilder, controllerCtor, runtime);
@@ -112,7 +112,7 @@ public partial class RuntimeEmitter
         runtime.ReadableStreamEnqueue = enqueueMethod;
         runtime.ReadableStreamCloseStream = closeMethod;
         runtime.ReadableStreamErrorStream = errorMethod;
-        runtime.ReadableStreamRead = readMethod;
+        _ = readMethod;
 
         // Static ReadableStream.from(iterable) (#269) — must be defined before
         // streamBuilder.CreateType() below. Uses the ctor + Enqueue + CloseStream

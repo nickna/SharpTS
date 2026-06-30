@@ -20,14 +20,14 @@ public partial class RuntimeEmitter
             _types.Int64,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.PerfPrimitiveStartTicks = startTicksField;
+        _ = startTicksField;
 
         var ticksPerMsField = typeBuilder.DefineField(
             "_perfPrimitiveTicksPerMs",
             _types.Double,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.PerfPrimitiveTicksPerMs = ticksPerMsField;
+        _ = ticksPerMsField;
 
         var initializedField = typeBuilder.DefineField(
             "_perfPrimitiveInitialized",

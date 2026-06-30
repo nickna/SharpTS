@@ -18,7 +18,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IEqualityComparerOfObject]
         );
-        runtime.ReferenceEqualityComparerType = typeBuilder;
+        _ = typeBuilder;
 
         // Static Instance field (singleton)
         var instanceField = typeBuilder.DefineField(

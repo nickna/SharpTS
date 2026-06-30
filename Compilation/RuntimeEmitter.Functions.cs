@@ -316,7 +316,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.ObjectArray]
         );
-        runtime.BoundAnyFunctionInvokeWithThis = invokeWithThisBuilder;
+        _ = invokeWithThisBuilder;
 
         var iwtIL = invokeWithThisBuilder.GetILGenerator();
         iwtIL.Emit(OpCodes.Ldarg_0);

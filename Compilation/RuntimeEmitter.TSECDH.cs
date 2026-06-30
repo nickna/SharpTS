@@ -700,7 +700,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundECDHMethodType = _boundECDHMethodTypeBuilder;
+        _ = _boundECDHMethodTypeBuilder;
 
         // Fields
         _boundECDHMethodEcdhField = _boundECDHMethodTypeBuilder.DefineField("_ecdh", runtime.TSECDHType, FieldAttributes.Private);
@@ -747,7 +747,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [typeof(object[])]
         );
-        runtime.BoundECDHMethodInvoke = invoke;
+        _ = invoke;
 
         var il = invoke.GetILGenerator();
 

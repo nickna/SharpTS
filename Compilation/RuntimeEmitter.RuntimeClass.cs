@@ -277,7 +277,7 @@ public partial class RuntimeEmitter
             symbolStorageType,
             FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.SymbolStorageField = symbolStorageField;
+        _ = symbolStorageField;
 
         // Static fields for Object.freeze/seal tracking: ConditionalWeakTable<object, object>
         // Made public so other types (like class constructors) can access for freeze checks
@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
             _types.ConditionalWeakTable,
             FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
         );
-        runtime.PrototypeStoreField = prototypeStoreField;
+        _ = prototypeStoreField;
 
         // ECMA-262 §17 declares `name`/`length` on built-in functions as
         // configurable. test262's verifyProperty exercises that by deleting

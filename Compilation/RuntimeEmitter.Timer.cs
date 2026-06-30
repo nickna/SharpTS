@@ -29,16 +29,16 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.TimeoutClosureType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields: Callback ($TSFunction), Args (object[]), Cts (CancellationTokenSource)
         var callbackField = typeBuilder.DefineField("Callback", runtime.TSFunctionType, FieldAttributes.Public);
         var argsField = typeBuilder.DefineField("Args", _types.ObjectArray, FieldAttributes.Public);
         var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
 
-        runtime.TimeoutClosureCallback = callbackField;
-        runtime.TimeoutClosureArgs = argsField;
-        runtime.TimeoutClosureCts = ctsField;
+        _ = callbackField;
+        _ = argsField;
+        _ = ctsField;
 
         // Default constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.TimeoutClosureCtor = ctor;
+        _ = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -61,7 +61,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Task]
         );
-        runtime.TimeoutClosureExecute = executeMethod;
+        _ = executeMethod;
 
         var il = executeMethod.GetILGenerator();
         var skipLabel = il.DefineLabel();
@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         var virtualTimerField = typeBuilder.DefineField("_virtualTimer", runtime.VirtualTimerType, FieldAttributes.Private);
         var hasRefField = typeBuilder.DefineField("_hasRef", _types.Boolean, FieldAttributes.Private);
 
-        runtime.TSTimeoutVirtualTimerField = virtualTimerField;
+        _ = virtualTimerField;
 
         // Constructor: public $TSTimeout($VirtualTimer virtualTimer)
         EmitTSTimeoutConstructor(typeBuilder, runtime, nextIdField, idField, virtualTimerField, hasRefField);
@@ -461,7 +461,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.IntervalClosureType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields: Callback ($TSFunction), Args (object[]), Cts (CancellationTokenSource), DelayMs (int)
         var callbackField = typeBuilder.DefineField("Callback", runtime.TSFunctionType, FieldAttributes.Public);
@@ -469,10 +469,10 @@ public partial class RuntimeEmitter
         var ctsField = typeBuilder.DefineField("Cts", _types.CancellationTokenSource, FieldAttributes.Public);
         var delayMsField = typeBuilder.DefineField("DelayMs", _types.Int32, FieldAttributes.Public);
 
-        runtime.IntervalClosureCallback = callbackField;
-        runtime.IntervalClosureArgs = argsField;
-        runtime.IntervalClosureCts = ctsField;
-        runtime.IntervalClosureDelayMs = delayMsField;
+        _ = callbackField;
+        _ = argsField;
+        _ = ctsField;
+        _ = delayMsField;
 
         // Default constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -480,7 +480,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             Type.EmptyTypes
         );
-        runtime.IntervalClosureCtor = ctor;
+        _ = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Task]
         );
-        runtime.IntervalClosureExecuteIteration = executeMethod;
+        _ = executeMethod;
 
         var il = executeMethod.GetILGenerator();
         var skipLabel = il.DefineLabel();
@@ -687,7 +687,7 @@ public partial class RuntimeEmitter
             queueType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.MicrotaskQueue = microtaskQueueField;
+        _ = microtaskQueueField;
 
         // Emit QueueMicrotask method
         var method = runtimeType.DefineMethod(

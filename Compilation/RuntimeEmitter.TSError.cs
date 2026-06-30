@@ -393,7 +393,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSErrorToStringMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         var hasMessageLabel = il.DefineLabel();

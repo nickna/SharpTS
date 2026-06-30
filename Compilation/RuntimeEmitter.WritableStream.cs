@@ -65,8 +65,8 @@ public partial class RuntimeEmitter
             _types.Object);
 
         runtime.WritableStreamType = streamBuilder;
-        runtime.WritableStreamDefaultControllerType = controllerBuilder;
-        runtime.WritableStreamDefaultWriterType = writerBuilder;
+        _ = controllerBuilder;
+        _ = writerBuilder;
 
         EmitWritableStreamFields(streamBuilder);
 
@@ -76,7 +76,7 @@ public partial class RuntimeEmitter
         _writableWriterStreamField = writerBuilder.DefineField(
             "_stream", streamBuilder, FieldAttributes.Private);
         var writerCtor = EmitWritableStreamWriterCtor(writerBuilder, streamBuilder);
-        runtime.WritableStreamDefaultWriterCtor = writerCtor;
+        _ = writerCtor;
 
         // Define controller fields + ctor BEFORE the stream uses it.
         _writableControllerStreamField = controllerBuilder.DefineField(
@@ -93,9 +93,9 @@ public partial class RuntimeEmitter
         var lockedGetter = EmitWritableStreamLockedGetter(streamBuilder);
         EmitWritableStreamGetWriter(streamBuilder, writerCtor);
 
-        runtime.WritableStreamWrite = writeMethod;
-        runtime.WritableStreamClose = closeMethod;
-        runtime.WritableStreamAbort = abortMethod;
+        _ = writeMethod;
+        _ = closeMethod;
+        _ = abortMethod;
 
         EmitWritableStreamWriterDelegatingMethod(writerBuilder, streamBuilder, "Write", writeMethod, [_types.Object]);
         EmitWritableStreamWriterDelegatingMethod(writerBuilder, streamBuilder, "Close", closeMethod, Type.EmptyTypes);

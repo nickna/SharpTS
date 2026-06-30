@@ -1482,7 +1482,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.BoundDHMethodType = _boundDHMethodTypeBuilder;
+        _ = _boundDHMethodTypeBuilder;
 
         _boundDHMethodDhField = _boundDHMethodTypeBuilder.DefineField("_dh", runtime.TSDiffieHellmanType, FieldAttributes.Private);
         _boundDHMethodMethodNameField = _boundDHMethodTypeBuilder.DefineField("_methodName", _types.String, FieldAttributes.Private);
@@ -1525,7 +1525,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [typeof(object[])]
         );
-        runtime.BoundDHMethodInvoke = invoke;
+        _ = invoke;
 
         var il = invoke.GetILGenerator();
 

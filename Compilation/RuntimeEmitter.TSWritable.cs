@@ -65,7 +65,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Int32]
         );
         _tsWriteCallbackWrapperCtor = ctorBuilder;
-        runtime.WriteCallbackWrapperCtor = ctorBuilder;
+        _ = ctorBuilder;
 
         var ctorIL = ctorBuilder.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);
@@ -622,7 +622,7 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes
         );
-        runtime.TSWritableCork = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -790,7 +790,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSWritableSetDefaultEncoding = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Just return this (no-op for compatibility)
