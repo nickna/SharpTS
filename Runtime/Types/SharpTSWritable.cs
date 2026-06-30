@@ -9,30 +9,32 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 /// <remarks>
 /// Extends <see cref="SharpTSEventEmitter"/> for event support (drain, finish, error, close).
+/// The write-side machinery (write/end/cork/uncork/backpressure) lives in the shared
+/// <see cref="WritableCore"/>; this class adds the destroy lifecycle and stdout/stderr reuse.
 /// </remarks>
 public class SharpTSWritable : SharpTSEventEmitter
 {
-    private bool _writable = true;
-    private bool _ended;
-    private bool _finished;
-    private bool _destroyed;
-    private bool _corked;
-    private readonly List<object?> _corkBuffer = [];
-    private ISharpTSCallable? _writeCallback;
-    private ISharpTSCallable? _finalCallback;
+    private readonly WritableCore _writeCore;
     private ISharpTSCallable? _destroyCallback;
     private int _highWaterMark = 16384;
-    private int _pendingWrites;
-    private int _writableLength; // total bytes of in-flight writes (backpressure tracking)
-    private bool _needDrain;
     private bool _objectMode;
     private bool _autoDestroy;
-    private bool _errored;
+
+    public SharpTSWritable()
+    {
+        // Writable emits "prefinish" before "finish" and may auto-destroy afterward.
+        _writeCore = new WritableCore(
+            this,
+            objectMode: () => _objectMode,
+            highWaterMark: () => _highWaterMark,
+            emitPrefinish: true,
+            onFinished: interp => { if (_autoDestroy) DoDestroy(interp, null); });
+    }
 
     /// <summary>
     /// Whether this stream has errored — backs stream.isErrored (#1030).
     /// </summary>
-    public bool Errored => _errored;
+    public bool Errored => _writeCore.Errored;
 
     /// <summary>
     /// Gets or sets whether this stream operates in object mode.
@@ -52,12 +54,12 @@ public class SharpTSWritable : SharpTSEventEmitter
     /// <summary>
     /// Sets the custom write callback (from constructor options).
     /// </summary>
-    public void SetWriteCallback(ISharpTSCallable callback) => _writeCallback = callback;
+    public void SetWriteCallback(ISharpTSCallable callback) => _writeCore.SetWriteCallback(callback);
 
     /// <summary>
     /// Sets the custom final callback (from constructor options).
     /// </summary>
-    public void SetFinalCallback(ISharpTSCallable callback) => _finalCallback = callback;
+    public void SetFinalCallback(ISharpTSCallable callback) => _writeCore.SetFinalCallback(callback);
 
     /// <summary>
     /// Sets the custom destroy callback (from constructor options).
@@ -80,317 +82,91 @@ public class SharpTSWritable : SharpTSEventEmitter
             "setDefaultEncoding" => BuiltInMethod.CreateV2("setDefaultEncoding", 1, SetDefaultEncoding),
 
             // Properties
-            "writable" => _writable && !_ended && !_destroyed,
-            "writableEnded" => _ended,
-            "writableFinished" => _finished,
-            "writableLength" => (double)_writableLength,
-            "writableCorked" => (double)(_corked ? 1 : 0),
+            "writable" => _writeCore.IsWritable,
+            "writableEnded" => _writeCore.Ended,
+            "writableFinished" => _writeCore.Finished,
+            "writableLength" => (double)_writeCore.WritableLength,
+            "writableCorked" => (double)(_writeCore.Corked ? 1 : 0),
             "writableHighWaterMark" => (double)_highWaterMark,
             "writableObjectMode" => _objectMode,
-            "destroyed" => _destroyed,
+            "destroyed" => _writeCore.Destroyed,
 
             // Inherit from EventEmitter
             _ => base.GetMember(name)
         };
     }
 
-    /// <summary>
-    /// Writes data to the stream.
-    /// </summary>
     private RuntimeValue Write(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => _writeCore.Write(interpreter, args);
+
+    private RuntimeValue End(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+        => _writeCore.End(interpreter, args);
+
+    private RuntimeValue Cork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (_destroyed || _ended)
-        {
-            EmitError(interpreter, "write after end");
-            return RuntimeValue.False;
-        }
-
-        var chunk = args.Length > 0 ? args[0].ToObject() : null;
-        string? encoding = null;
-        ISharpTSCallable? callback = null;
-
-        // Parse arguments: (chunk, encoding?, callback?)
-        if (args.Length > 1)
-        {
-            if (args[1].IsString)
-            {
-                encoding = args[1].AsStringUnsafe();
-                if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb)
-                {
-                    callback = cb;
-                }
-            }
-            else if (args[1].ToObject() is ISharpTSCallable cb)
-            {
-                callback = cb;
-            }
-        }
-
-        if (_corked)
-        {
-            _corkBuffer.Add(new WriteChunk(chunk, encoding, callback));
-            return RuntimeValue.False;
-        }
-
-        return RuntimeValue.FromBoxed(DoWrite(interpreter, chunk, encoding, callback));
+        _writeCore.Cork();
+        return RuntimeValue.Null;
     }
 
-    private record WriteChunk(object? Chunk, string? Encoding, ISharpTSCallable? Callback);
-
-    private object? DoWrite(Interp interpreter, object? chunk, string? encoding, ISharpTSCallable? callback)
+    private RuntimeValue Uncork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        _pendingWrites++;
-        var chunkSize = GetChunkSize(chunk, _objectMode);
-        _writableLength += chunkSize;
-
-        if (_writeCallback != null)
-        {
-            // Custom write callback: (chunk, encoding, callback)
-            var cbWrapper = new WriteCallbackWrapper(callback, interpreter, this, chunkSize);
-            var writeArgs = new List<object?> { chunk, encoding ?? "utf8", cbWrapper };
-            try
-            {
-                _writeCallback.Call(interpreter, writeArgs);
-            }
-            catch (Exception ex)
-            {
-                EmitError(interpreter, ex.Message);
-                return false;
-            }
-        }
-        else
-        {
-            // Default behavior: just accept the data (sync completion)
-            _pendingWrites--;
-            _writableLength -= chunkSize;
-            callback?.Call(interpreter, []);
-            CheckDrain(interpreter);
-        }
-
-        // Return false when buffered data exceeds highWaterMark (backpressure)
-        if (_writableLength >= _highWaterMark)
-        {
-            _needDrain = true;
-            return false;
-        }
-
-        return true;
-    }
-
-    private void CheckDrain(Interp interpreter)
-    {
-        if (_needDrain && _writableLength < _highWaterMark)
-        {
-            _needDrain = false;
-            EmitEvent(interpreter, "drain", []);
-        }
-    }
-
-    /// <summary>
-    /// Gets the byte size of a chunk (or 1 for object mode).
-    /// </summary>
-    internal static int GetChunkSize(object? chunk, bool objectMode)
-    {
-        if (objectMode) return 1;
-        return chunk switch
-        {
-            string s => s.Length,
-            SharpTSBuffer buf => buf.Length,
-            _ => 0
-        };
+        _writeCore.Uncork(interpreter);
+        return RuntimeValue.Null;
     }
 
     /// <summary>
     /// Internal write method for piped data. Returns false on backpressure.
     /// </summary>
     internal bool WriteInternal(Interp interpreter, object? chunk, string? encoding)
-    {
-        if (_destroyed || _ended)
-        {
-            return false;
-        }
-
-        return (bool)(DoWrite(interpreter, chunk, encoding, null) ?? false);
-    }
-
-    /// <summary>
-    /// Ends the stream, optionally writing final data.
-    /// </summary>
-    private RuntimeValue End(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (_ended)
-        {
-            return RuntimeValue.FromObject(this);
-        }
-
-        object? chunk = null;
-        string? encoding = null;
-        ISharpTSCallable? callback = null;
-
-        // Parse arguments: (chunk?, encoding?, callback?)
-        if (args.Length > 0)
-        {
-            if (args[0].ToObject() is ISharpTSCallable cb0)
-            {
-                callback = cb0;
-            }
-            else
-            {
-                chunk = args[0].ToObject();
-                if (args.Length > 1)
-                {
-                    if (args[1].IsString)
-                    {
-                        encoding = args[1].AsStringUnsafe();
-                        if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb)
-                        {
-                            callback = cb;
-                        }
-                    }
-                    else if (args[1].ToObject() is ISharpTSCallable cb)
-                    {
-                        callback = cb;
-                    }
-                }
-            }
-        }
-
-        _ended = true;
-        _writable = false;
-
-        // Write final chunk if provided
-        if (chunk != null)
-        {
-            DoWrite(interpreter, chunk, encoding, null);
-        }
-
-        // Flush cork buffer
-        if (_corked)
-        {
-            Uncork(interpreter, RuntimeValue.Null, []);
-        }
-
-        // Call final callback
-        if (_finalCallback != null)
-        {
-            var finalCbWrapper = new WriteCallbackWrapper(null, interpreter, this, 0);
-            try
-            {
-                _finalCallback.Call(interpreter, [finalCbWrapper]);
-            }
-            catch (Exception ex)
-            {
-                EmitError(interpreter, ex.Message);
-            }
-        }
-
-        _finished = true;
-        callback?.Call(interpreter, []);
-        EmitFinish(interpreter);
-
-        return RuntimeValue.FromObject(this);
-    }
+        => _writeCore.WriteDirect(interpreter, chunk, encoding);
 
     /// <summary>
     /// Internal end method for piped streams.
     /// </summary>
     internal void EndInternal(Interp interpreter, object? chunk, string? encoding)
-    {
-        End(interpreter, RuntimeValue.FromObject(this),
-            chunk != null
-                ? [RuntimeValue.FromBoxed(chunk), RuntimeValue.FromBoxed(encoding)]
-                : []);
-    }
-
-    /// <summary>
-    /// Corks the stream, buffering all writes.
-    /// </summary>
-    private RuntimeValue Cork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        _corked = true;
-        return RuntimeValue.Null;
-    }
-
-    /// <summary>
-    /// Uncorks the stream, flushing the buffer.
-    /// </summary>
-    private RuntimeValue Uncork(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (!_corked)
-        {
-            return RuntimeValue.Null;
-        }
-
-        _corked = false;
-
-        // Flush the cork buffer
-        foreach (var item in _corkBuffer.Cast<WriteChunk>())
-        {
-            DoWrite(interpreter, item.Chunk, item.Encoding, item.Callback);
-        }
-        _corkBuffer.Clear();
-
-        return RuntimeValue.Null;
-    }
+        => _writeCore.EndDirect(interpreter, chunk, encoding);
 
     /// <summary>
     /// Destroys the stream.
     /// </summary>
     private RuntimeValue Destroy(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (_destroyed)
-        {
-            return RuntimeValue.FromObject(this);
-        }
+        DoDestroy(interpreter, args.Length > 0 ? args[0].ToObject() : null);
+        return RuntimeValue.FromObject(this);
+    }
 
-        _destroyed = true;
-        _writable = false;
-        _corkBuffer.Clear();
+    private void DoDestroy(Interp interpreter, object? error)
+    {
+        if (_writeCore.Destroyed)
+            return;
+
+        _writeCore.MarkDestroyed();
 
         if (_destroyCallback != null)
         {
             try
             {
-                var err = args.Length > 0 ? args[0].ToObject() : null;
-                _destroyCallback.Call(interpreter, [err, new DestroyCallbackWrapper(interpreter, this)]);
+                _destroyCallback.Call(interpreter, [error, new DestroyCallbackWrapper(interpreter, this)]);
             }
             catch (Exception ex)
             {
-                EmitError(interpreter, ex.Message);
+                _writeCore.EmitError(interpreter, ex.Message);
             }
         }
         else
         {
-            if (args.Length > 0 && args[0].ToObject() is { } error)
+            if (error is { })
             {
-                EmitError(interpreter, error);
+                _writeCore.EmitError(interpreter, error);
             }
             EmitClose(interpreter);
         }
-
-        return RuntimeValue.FromObject(this);
     }
 
     private RuntimeValue SetDefaultEncoding(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         // Just accept it for compatibility
         return RuntimeValue.FromObject(this);
-    }
-
-    private void EmitError(Interp interpreter, object? error)
-    {
-        _errored = true;
-        EmitEvent(interpreter, "error", [error]);
-    }
-
-    private void EmitFinish(Interp interpreter)
-    {
-        EmitEvent(interpreter, "prefinish", []);
-        EmitEvent(interpreter, "finish", []);
-        if (_autoDestroy)
-        {
-            Destroy(interpreter, RuntimeValue.FromObject(this), []);
-        }
     }
 
     private void EmitClose(Interp interpreter)
@@ -403,59 +179,16 @@ public class SharpTSWritable : SharpTSEventEmitter
     /// </summary>
     internal void ResetWritableState()
     {
-        _writable = true;
-        _ended = false;
-        _finished = false;
-        _destroyed = false;
-        _corked = false;
-        _corkBuffer.Clear();
-        _pendingWrites = 0;
-        _writableLength = 0;
-        _needDrain = false;
+        _writeCore.Reset();
         ClearAllListenersInternal();
     }
 
     public override string ToString() => "Writable {}";
 
     /// <summary>
-    /// Wrapper for write callbacks to match Node.js callback(error?) signature.
-    /// </summary>
-    private class WriteCallbackWrapper : ISharpTSCallable
-    {
-        private readonly ISharpTSCallable? _callback;
-        private readonly Interp _interpreter;
-        private readonly SharpTSWritable _stream;
-        private readonly int _chunkSize;
-
-        public WriteCallbackWrapper(ISharpTSCallable? callback, Interp interpreter, SharpTSWritable stream, int chunkSize)
-        {
-            _callback = callback;
-            _interpreter = interpreter;
-            _stream = stream;
-            _chunkSize = chunkSize;
-        }
-
-        public int Arity() => 0;
-
-        public object? Call(Interp interpreter, List<object?> arguments)
-        {
-            // error argument
-            var error = arguments.Count > 0 ? arguments[0] : null;
-            // Decrement pending writes and buffered length
-            _stream._pendingWrites--;
-            _stream._writableLength -= _chunkSize;
-            // Call the original callback
-            _callback?.Call(_interpreter, []);
-            // Check if we need to emit drain
-            _stream.CheckDrain(_interpreter);
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Wrapper for destroy callback to emit close event.
     /// </summary>
-    private class DestroyCallbackWrapper : ISharpTSCallable
+    private sealed class DestroyCallbackWrapper : ISharpTSCallable
     {
         private readonly Interp _interpreter;
         private readonly SharpTSWritable _stream;
@@ -473,7 +206,7 @@ public class SharpTSWritable : SharpTSEventEmitter
             var error = arguments.Count > 0 ? arguments[0] : null;
             if (error != null)
             {
-                _stream.EmitError(_interpreter, error);
+                _stream._writeCore.EmitError(_interpreter, error);
             }
             _stream.EmitClose(_interpreter);
             return null;
