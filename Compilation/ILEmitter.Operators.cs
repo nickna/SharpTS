@@ -1041,6 +1041,177 @@ public partial class ILEmitter
         SetStackType(StackType.Double);
     }
 
+    /// <summary>
+    /// Stores an incremented numeric value into the named local/parameter, walking the storage ladder
+    /// (per-iteration binding cell #650 → function display class #674/#321 → arrow-scope display class →
+    /// entry-point display class → IL local / captured display-class field / top-level static). Shared by
+    /// <see cref="EmitPrefixIncrement"/> and <see cref="EmitPostfixIncrement"/>, which walked byte-identical
+    /// copies of this ~8-rung ladder that repeatedly had to be kept in sync (#1127).
+    /// </summary>
+    /// <remarks>
+    /// Precondition — the evaluation stack holds <c>[result, valueToStore]</c> (result underneath):
+    /// <paramref name="isTypedDouble"/> is true when the target is a double-typed IL local, so
+    /// <c>valueToStore</c> arrives as an unboxed double (stored unboxed to the local, boxed for the
+    /// object-typed field/static rungs) — otherwise it arrives already boxed;
+    /// <paramref name="resultIsUnboxedDouble"/> is true when <c>result</c> is still an unboxed double
+    /// (the prefix new value for a typed-double local, or the postfix original value, which is dup'd
+    /// before boxing). The early-exit storage rungs box that result and report <c>Unknown</c>; the
+    /// fall-through IL-local / static rungs leave it unboxed for lazy boxing and report
+    /// <see cref="StackType.Double"/>. Emitted IL is identical to the two former inline copies.
+    /// </remarks>
+    private void EmitStoreIncrementedVariable(string name, bool isTypedDouble, bool resultIsUnboxedDouble)
+    {
+        // Per-iteration loop-binding cell (#650): write the new value through the StrongBox so closures
+        // that captured this iteration's cell observe it.
+        if (_ctx.CellBindingLocals.TryGetValue(name, out var cell))
+        {
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var cellTemp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, cellTemp);
+            IL.Emit(OpCodes.Ldloc, cell);
+            IL.Emit(OpCodes.Ldloc, cellTemp);
+            IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
+            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+            return;
+        }
+
+        // Check function display class first (before regular locals).
+        // #838: remap a write-captured block-scope shadow to its renamed DC storage key in an arrow body.
+        var incDCName = _ctx.ResolveFunctionDCFieldName(name);
+        if (_ctx.CapturedFunctionLocals?.Contains(incDCName) == true &&
+            _ctx.FunctionDisplayClassFields?.TryGetValue(incDCName, out var funcDCField) == true)
+        {
+            // Store to function display class field (always boxed).
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            if (_ctx.FunctionDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowFunctionDCField != null)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+            }
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, funcDCField);
+            // Captured PARAMETER of this function: also sync the arg slot — reads resolve parameters
+            // before the DC, so a DC-only store leaves later same-body reads seeing the stale arg (#321).
+            if (_ctx.FunctionDisplayClassLocal != null &&
+                _ctx.TryGetParameter(name, out var funcParamSync))
+            {
+                IL.Emit(OpCodes.Ldloc, temp);
+                _ctx.EmitConvertForParamSlot(IL, name);
+                IL.Emit(OpCodes.Starg, funcParamSync);
+            }
+            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+            return;
+        }
+
+        // Check arrow scope display class (captured arrow-local vars).
+        if (_ctx.CapturedArrowLocals?.Contains(name) == true &&
+            _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowDCField) == true)
+        {
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            if (_ctx.ArrowScopeDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowScopeDCField != null)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
+            }
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, arrowDCField);
+            // Captured PARAMETER of this arrow: also sync the arg slot (#321).
+            if (_ctx.ArrowScopeDisplayClassLocal != null &&
+                _ctx.TryGetParameter(name, out var arrowParamSync))
+            {
+                IL.Emit(OpCodes.Ldloc, temp);
+                _ctx.EmitConvertForParamSlot(IL, name);
+                IL.Emit(OpCodes.Starg, arrowParamSync);
+            }
+            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+            return;
+        }
+
+        // Check entry-point display class (captured top-level vars).
+        if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
+        {
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            if (_ctx.EntryPointDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            }
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+            {
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            }
+            IL.Emit(OpCodes.Ldloc, temp);
+            IL.Emit(OpCodes.Stfld, entryPointField);
+            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            SetStackUnknown();
+            return;
+        }
+
+        // Fall-through storage: an IL local (typed double stored unboxed), a captured display-class
+        // field, or a top-level static. The result is left on the stack unboxed for lazy boxing.
+        var local = _ctx.Locals.GetLocal(name);
+        if (local != null)
+        {
+            IL.Emit(OpCodes.Stloc, local);
+        }
+        else if (_ctx.CapturedFields?.TryGetValue(name, out var capturedField) == true)
+        {
+            // Store to captured field (always boxed): need to use temp pattern.
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, temp);
+            // Per-iteration cell capture (#650): write through the shared StrongBox.
+            if (_ctx.CellCapturedFieldNames?.Contains(name) == true)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, capturedField);
+                IL.Emit(OpCodes.Castclass, _ctx.Types.StrongBoxOfObject);
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldarg_0); // display class instance
+                IL.Emit(OpCodes.Ldloc, temp);
+                IL.Emit(OpCodes.Stfld, capturedField);
+            }
+        }
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            // Top-level static fields are always boxed.
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            IL.Emit(OpCodes.Stsfld, topLevelField);
+        }
+
+        // Result is on the stack; keep an unboxed double as-is for lazy boxing by consumers.
+        if (resultIsUnboxedDouble)
+            SetStackType(StackType.Double);
+        else
+            SetStackUnknown();
+    }
+
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
         if (pi.Operand is Expr.Variable v)
@@ -1087,187 +1258,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);
             }
 
-            // Per-iteration loop-binding cell (#650): write the new value through the
-            // StrongBox so closures that captured this iteration's cell observe it.
-            if (_ctx.CellBindingLocals.TryGetValue(v.Name.Lexeme, out var preCell))
-            {
-                if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                var cellTemp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, cellTemp);
-                IL.Emit(OpCodes.Ldloc, preCell);
-                IL.Emit(OpCodes.Ldloc, cellTemp);
-                IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
-                if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                SetStackUnknown();
-                return;
-            }
-
-            // Check function display class first (before regular locals).
-            // #838: remap a write-captured block-scope shadow to its renamed DC storage key in an arrow body.
-            var preIncDCName = _ctx.ResolveFunctionDCFieldName(v.Name.Lexeme);
-            if (_ctx.CapturedFunctionLocals?.Contains(preIncDCName) == true &&
-                _ctx.FunctionDisplayClassFields?.TryGetValue(preIncDCName, out var funcDCField) == true)
-            {
-                // Store to function display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.FunctionDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowFunctionDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, funcDCField);
-                // Captured PARAMETER of this function: also sync the arg slot —
-                // reads resolve parameters before the DC, so a DC-only store
-                // leaves later same-body reads seeing the stale argument (#321).
-                if (_ctx.FunctionDisplayClassLocal != null &&
-                    _ctx.TryGetParameter(v.Name.Lexeme, out var funcParamSync))
-                {
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    _ctx.EmitConvertForParamSlot(IL, v.Name.Lexeme);
-                    IL.Emit(OpCodes.Starg, funcParamSync);
-                }
-                // Box result if needed
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                SetStackUnknown();
-                return;
-            }
-
-            // Check arrow scope display class (captured arrow-local vars)
-            if (_ctx.CapturedArrowLocals?.Contains(v.Name.Lexeme) == true &&
-                _ctx.ArrowScopeDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var arrowDCField) == true)
-            {
-                // Store to arrow scope display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.ArrowScopeDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowScopeDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, arrowDCField);
-                // Captured PARAMETER of this arrow: also sync the arg slot (#321).
-                if (_ctx.ArrowScopeDisplayClassLocal != null &&
-                    _ctx.TryGetParameter(v.Name.Lexeme, out var arrowParamSync))
-                {
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    _ctx.EmitConvertForParamSlot(IL, v.Name.Lexeme);
-                    IL.Emit(OpCodes.Starg, arrowParamSync);
-                }
-                // Box result if needed
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                SetStackUnknown();
-                return;
-            }
-
-            // Check entry-point display class (captured top-level vars)
-            if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
-                _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
-            {
-                // Store to entry-point display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.EntryPointDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowEntryPointDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
-                }
-                else if (_ctx.EntryPointDisplayClassStaticField != null)
-                {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, entryPointField);
-                // Box result if needed
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                SetStackUnknown();
-                return;
-            }
-
-            var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
-            if (local != null)
-            {
-                IL.Emit(OpCodes.Stloc, local);
-            }
-            else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
-            {
-                // Store to captured field (always boxed): need to use temp pattern
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                // Per-iteration cell capture (#650): write through the shared StrongBox.
-                if (_ctx.CellCapturedFieldNames?.Contains(v.Name.Lexeme) == true)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, capturedField);
-                    IL.Emit(OpCodes.Castclass, _ctx.Types.StrongBoxOfObject);
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
-                }
-                else
-                {
-                    IL.Emit(OpCodes.Ldarg_0); // display class instance
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    IL.Emit(OpCodes.Stfld, capturedField);
-                }
-            }
-            else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
-            {
-                // Top-level static fields are always boxed
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                IL.Emit(OpCodes.Stsfld, topLevelField);
-            }
-
-            // Result is on stack — leave as unboxed double for lazy boxing
-            if (isTypedDouble)
-            {
-                SetStackType(StackType.Double);
-            }
-            else
-            {
-                SetStackUnknown();
-            }
+            EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble, resultIsUnboxedDouble: isTypedDouble);
             return;
         }
 
@@ -1404,179 +1395,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
             }
 
-            // Per-iteration loop-binding cell (#650): write the new value through the
-            // StrongBox; the original value (still on the stack below) is the postfix result.
-            if (_ctx.CellBindingLocals.TryGetValue(v.Name.Lexeme, out var postCell))
-            {
-                if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                var cellTemp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, cellTemp);
-                IL.Emit(OpCodes.Ldloc, postCell);
-                IL.Emit(OpCodes.Ldloc, cellTemp);
-                IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double); // box the original (result)
-                SetStackUnknown();
-                return;
-            }
-
-            // Check function display class first (before regular locals).
-            // #838: remap a write-captured block-scope shadow to its renamed DC storage key in an arrow body.
-            var postIncDCName = _ctx.ResolveFunctionDCFieldName(v.Name.Lexeme);
-            if (_ctx.CapturedFunctionLocals?.Contains(postIncDCName) == true &&
-                _ctx.FunctionDisplayClassFields?.TryGetValue(postIncDCName, out var funcDCField) == true)
-            {
-                // Store to function display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    // Need to box for field storage
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.FunctionDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowFunctionDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, funcDCField);
-                // Captured PARAMETER of this function: also sync the arg slot —
-                // reads resolve parameters before the DC, so a DC-only store
-                // leaves later same-body reads seeing the stale argument (#321).
-                if (_ctx.FunctionDisplayClassLocal != null &&
-                    _ctx.TryGetParameter(v.Name.Lexeme, out var funcParamSync))
-                {
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    _ctx.EmitConvertForParamSlot(IL, v.Name.Lexeme);
-                    IL.Emit(OpCodes.Starg, funcParamSync);
-                }
-
-                // Original value is still on stack, box it
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                SetStackUnknown();
-                return;
-            }
-
-            // Check arrow scope display class (captured arrow-local vars)
-            if (_ctx.CapturedArrowLocals?.Contains(v.Name.Lexeme) == true &&
-                _ctx.ArrowScopeDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var arrowDCField) == true)
-            {
-                // Store to arrow scope display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    // Need to box for field storage
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.ArrowScopeDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowScopeDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, arrowDCField);
-                // Captured PARAMETER of this arrow: also sync the arg slot (#321).
-                if (_ctx.ArrowScopeDisplayClassLocal != null &&
-                    _ctx.TryGetParameter(v.Name.Lexeme, out var arrowParamSync))
-                {
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    _ctx.EmitConvertForParamSlot(IL, v.Name.Lexeme);
-                    IL.Emit(OpCodes.Starg, arrowParamSync);
-                }
-
-                // Original value is still on stack, box it
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                SetStackUnknown();
-                return;
-            }
-
-            // Check entry-point display class (captured top-level vars)
-            if (_ctx.CapturedTopLevelVars?.Contains(v.Name.Lexeme) == true &&
-                _ctx.EntryPointDisplayClassFields?.TryGetValue(v.Name.Lexeme, out var entryPointField) == true)
-            {
-                // Store to entry-point display class field (always boxed)
-                if (isTypedDouble)
-                {
-                    // Need to box for field storage
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                if (_ctx.EntryPointDisplayClassLocal != null)
-                {
-                    IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
-                }
-                else if (_ctx.CurrentArrowEntryPointDCField != null)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
-                }
-                else if (_ctx.EntryPointDisplayClassStaticField != null)
-                {
-                    IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
-                }
-                IL.Emit(OpCodes.Ldloc, temp);
-                IL.Emit(OpCodes.Stfld, entryPointField);
-
-                // Original value is still on stack, box it
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                SetStackUnknown();
-                return;
-            }
-
-            var local = _ctx.Locals.GetLocal(v.Name.Lexeme);
-            if (local != null)
-            {
-                IL.Emit(OpCodes.Stloc, local);
-            }
-            else if (_ctx.CapturedFields?.TryGetValue(v.Name.Lexeme, out var capturedField) == true)
-            {
-                // Store to captured field (always boxed): need to use temp pattern
-                if (isTypedDouble)
-                {
-                    // Need to box for field storage
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                var temp = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Stloc, temp);
-                // Per-iteration cell capture (#650): write through the shared StrongBox.
-                if (_ctx.CellCapturedFieldNames?.Contains(v.Name.Lexeme) == true)
-                {
-                    IL.Emit(OpCodes.Ldarg_0);
-                    IL.Emit(OpCodes.Ldfld, capturedField);
-                    IL.Emit(OpCodes.Castclass, _ctx.Types.StrongBoxOfObject);
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    IL.Emit(OpCodes.Stfld, _ctx.Types.StrongBoxOfObjectValueField);
-                }
-                else
-                {
-                    IL.Emit(OpCodes.Ldarg_0); // display class instance
-                    IL.Emit(OpCodes.Ldloc, temp);
-                    IL.Emit(OpCodes.Stfld, capturedField);
-                }
-            }
-            else if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var topLevelField) == true)
-            {
-                // Top-level static fields are always boxed
-                if (isTypedDouble)
-                {
-                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                }
-                IL.Emit(OpCodes.Stsfld, topLevelField);
-            }
-
-            // Original value is still on stack — leave as unboxed double,
-            // consumers auto-box via EmitBoxIfNeeded/EnsureBoxed when needed.
-            SetStackType(StackType.Double);
+            EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble, resultIsUnboxedDouble: true);
             return;
         }
 

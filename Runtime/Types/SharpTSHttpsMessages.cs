@@ -20,7 +20,7 @@ public class SharpTSHttpsServerRequest : SharpTSReadable
 
     public SharpTSHttpsServerRequest(HttpProtocol.ParsedRequest parsed) => _parsed = parsed;
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -85,7 +85,7 @@ public class SharpTSHttpsServerResponse : SharpTSWritable
         _tcpClient = tcpClient;
     }
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

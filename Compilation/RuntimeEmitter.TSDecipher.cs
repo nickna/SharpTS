@@ -36,7 +36,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.IDisposable]
         );
-        runtime.TSDecipherType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tsDecipherAlgorithmField = typeBuilder.DefineField("_algorithm", _types.String, FieldAttributes.Private);
@@ -385,7 +385,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object]
         );
-        runtime.TSDecipherUpdateMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -454,7 +454,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSDecipherFinalMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -559,7 +559,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Boolean]
         );
-        runtime.TSDecipherSetAutoPaddingMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -580,7 +580,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSDecipherSetAuthTagMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -611,7 +611,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSDecipherSetAADMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

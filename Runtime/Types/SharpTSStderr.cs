@@ -30,7 +30,7 @@ public class SharpTSStderr : SharpTSWritable
     /// Gets a member by name, adding stderr-specific properties on top of Writable.
     /// Overrides end/destroy to be no-ops (process.stderr never ends in Node.js).
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

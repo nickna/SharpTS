@@ -76,7 +76,6 @@ public class EmittedRuntime
     public MethodBuilder TSNamespaceSet { get; set; } = null!;
 
     // The emitted ReferenceEqualityComparer class (for Map/Set key equality)
-    public TypeBuilder ReferenceEqualityComparerType { get; set; } = null!;
     public FieldBuilder ReferenceEqualityComparerInstance { get; set; } = null!;
 
     // Sentinel object for null/undefined Map keys (Dictionary<object,object?> can't use null keys)
@@ -119,7 +118,6 @@ public class EmittedRuntime
     public MethodBuilder ConsoleTime { get; set; } = null!;
     public MethodBuilder ConsoleTimeEnd { get; set; } = null!;
     public MethodBuilder ConsoleTimeLog { get; set; } = null!;
-    public FieldBuilder ConsoleTimersField { get; set; } = null!;
 
     // Phase 2 console methods
     public MethodBuilder ConsoleAssert { get; set; } = null!;
@@ -133,7 +131,6 @@ public class EmittedRuntime
     public MethodBuilder ConsoleGroupEnd { get; set; } = null!;
     public MethodBuilder ConsoleTrace { get; set; } = null!;
     public MethodBuilder ConsoleTraceMultiple { get; set; } = null!;
-    public FieldBuilder ConsoleCountsField { get; set; } = null!;
     public FieldBuilder ConsoleGroupLevelField { get; set; } = null!;
 
     // Union type marker interface (for fast union type detection)
@@ -278,9 +275,7 @@ public class EmittedRuntime
     // $TSFunction static factory + instance cache: stable identity for
     // function-declaration references (see RuntimeEmitter.TSFunction.cs).
     public MethodBuilder TSFunctionGetOrCreate { get; set; } = null!;
-    public FieldBuilder TSFunctionInstanceCacheField { get; set; } = null!;
     public FieldBuilder TSFunctionPrototypeCacheField { get; set; } = null!;
-    public FieldBuilder TSFunctionMethodField { get; set; } = null!;
     public MethodBuilder TSFunctionGetMethodInfo { get; set; } = null!;
     // Exposed for iterator helpers' "skip index box for unary arrows" fast
     // path — read at runtime to detect callback arity without reflection.
@@ -498,7 +493,6 @@ public class EmittedRuntime
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn) — handles ECMA-262 22.1.3.18 step 3 when replaceValue is callable; calls fn(matched, position, string) per match and stringifies the result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>Strict variant of <see cref="StringPrototypeGenericStub"/> that throws TypeError on null/undefined receivers per ECMA-262 22.1.3.* step 1 (RequireObjectCoercible). Used for borrowed-method calls of <c>String.prototype.match/search/matchAll/etc.</c></summary>
-    public MethodBuilder StringPrototypeStrictStub { get; set; } = null!;
     /// <summary>$Runtime.StringProtoToString(this) — ECMA-262 22.1.3.27 String.prototype.toString. thisStringValue extraction: string→as-is; $Object with __primitiveType="String"→__primitiveValue; String.prototype itself→""; else throws TypeError. Reads the marker dict directly to avoid prototype-chain recursion.</summary>
     public MethodBuilder StringProtoToStringHelper { get; set; } = null!;
     /// <summary>$Runtime.ObjectProtoToString(this) — ECMA-262 19.1.3.6 toString returns "[object X]" branded by receiver type. Wired into Object.prototype.toString slot for borrowed-method dispatch (`obj.toString = Object.prototype.toString; obj.toString()`).</summary>
@@ -587,13 +581,9 @@ public class EmittedRuntime
     /// <summary>$Runtime.PromiseFinallyHelper(__this, args) — wraps PromiseFinally for Promise.prototype.finally.call patterns.</summary>
     public MethodBuilder PromiseFinallyHelperMethod { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoCall(__this, args) — ECMA-262 §20.2.3.3 Function.prototype.call. Dispatches __this with args[0] as thisArg, args[1..] as call args.</summary>
-    public MethodBuilder FunctionProtoCallHelper { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoApply(__this, args) — ECMA-262 §20.2.3.1 Function.prototype.apply. Dispatches __this with args[0] as thisArg, args[1] (array-like) as call args.</summary>
-    public MethodBuilder FunctionProtoApplyHelper { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoBind(__this, args) — ECMA-262 §20.2.3.2 Function.prototype.bind. Returns a $BoundTSFunction (or shim) capturing __this + thisArg + boundArgs.</summary>
-    public MethodBuilder FunctionProtoBindHelper { get; set; } = null!;
     /// <summary>$Runtime.FunctionProtoToString(__this) — ECMA-262 §20.2.3.5. Stringifies the function (or returns native-source-like text).</summary>
-    public MethodBuilder FunctionProtoToStringHelper { get; set; } = null!;
     public MethodBuilder GetIndex { get; set; } = null!;
     public MethodBuilder SetIndex { get; set; } = null!;
     public MethodBuilder SetIndexStrict { get; set; } = null!;
@@ -634,7 +624,6 @@ public class EmittedRuntime
     public MethodBuilder AddEventSubscription { get; set; } = null!;
     public MethodBuilder RemoveEventSubscription { get; set; } = null!;
     public FieldBuilder NonExtensibleObjectsField { get; set; } = null!;
-    public FieldBuilder PrototypeStoreField { get; set; } = null!;
     /// <summary>
     /// Per-object set of deleted built-in property names — `name`/`length`
     /// on functions are configurable per ECMA-262 §17, but their values are
@@ -703,7 +692,6 @@ public class EmittedRuntime
     // "[object Arguments]" and Array.isArray returns false per ECMA-262.
     public TypeBuilder ArgumentsType { get; set; } = null!;
     public ConstructorBuilder ArgumentsDefaultCtor { get; set; } = null!;
-    public ConstructorBuilder ArgumentsCapacityCtor { get; set; } = null!;
     public ConstructorBuilder ArgumentsEnumerableCtor { get; set; } = null!;
     /// <summary>$Arguments._length — JS-visible length (per ECMA-262 sloppy
     /// arguments, "length" doesn't auto-update on out-of-range indexed sets).</summary>
@@ -734,7 +722,6 @@ public class EmittedRuntime
     public TypeBuilder BoundAnyFunctionType { get; set; } = null!;
     public ConstructorBuilder BoundAnyFunctionCtor { get; set; } = null!;
     public MethodBuilder BoundAnyFunctionInvoke { get; set; } = null!;
-    public MethodBuilder BoundAnyFunctionInvokeWithThis { get; set; } = null!;
 
     // Method callable wrapper for GetMember results (BuiltInMethod etc.)
     public TypeBuilder MethodCallableType { get; set; } = null!;
@@ -818,7 +805,6 @@ public class EmittedRuntime
     // Symbol support
     public TypeBuilder TSSymbolType { get; set; } = null!;
     public ConstructorBuilder TSSymbolCtor { get; set; } = null!;
-    public MethodBuilder CreateSymbol { get; set; } = null!;
 
     // Well-known symbols (static fields on $TSSymbol)
     public FieldBuilder SymbolIterator { get; set; } = null!;
@@ -845,7 +831,6 @@ public class EmittedRuntime
     public MethodBuilder SymbolDescriptionGetter { get; set; } = null!;
 
     // Symbol storage for compiled objects (symbol as object key)
-    public FieldBuilder SymbolStorageField { get; set; } = null!;
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
     public MethodBuilder IsSymbolMethod { get; set; } = null!;
 
@@ -929,7 +914,6 @@ public class EmittedRuntime
     // Timer support ($TSTimeout type and global functions)
     public TypeBuilder TSTimeoutType { get; set; } = null!;
     public ConstructorBuilder TSTimeoutCtor { get; set; } = null!;
-    public FieldBuilder TSTimeoutVirtualTimerField { get; set; } = null!;
     public MethodBuilder TSTimeoutCancel { get; set; } = null!;
     public MethodBuilder TSTimeoutRef { get; set; } = null!;
     public MethodBuilder TSTimeoutUnref { get; set; } = null!;
@@ -947,21 +931,8 @@ public class EmittedRuntime
     public MethodBuilder ExtractTimerOptionsToken { get; set; } = null!;
 
     // Timer closure for callback execution
-    public TypeBuilder TimeoutClosureType { get; set; } = null!;
-    public ConstructorBuilder TimeoutClosureCtor { get; set; } = null!;
-    public FieldBuilder TimeoutClosureCallback { get; set; } = null!;
-    public FieldBuilder TimeoutClosureArgs { get; set; } = null!;
-    public FieldBuilder TimeoutClosureCts { get; set; } = null!;
-    public MethodBuilder TimeoutClosureExecute { get; set; } = null!;
 
     // Interval closure for callback execution (includes delay for rescheduling)
-    public TypeBuilder IntervalClosureType { get; set; } = null!;
-    public ConstructorBuilder IntervalClosureCtor { get; set; } = null!;
-    public FieldBuilder IntervalClosureCallback { get; set; } = null!;
-    public FieldBuilder IntervalClosureArgs { get; set; } = null!;
-    public FieldBuilder IntervalClosureCts { get; set; } = null!;
-    public FieldBuilder IntervalClosureDelayMs { get; set; } = null!;
-    public MethodBuilder IntervalClosureExecuteIteration { get; set; } = null!;
 
     // Interval methods
     public MethodBuilder SetInterval { get; set; } = null!;
@@ -969,7 +940,6 @@ public class EmittedRuntime
 
     // Microtask support
     public MethodBuilder QueueMicrotask { get; set; } = null!;
-    public FieldBuilder MicrotaskQueue { get; set; } = null!;
     public MethodBuilder ProcessMicrotasks { get; set; } = null!;
 
     // Virtual timer infrastructure (for single-threaded timer semantics)
@@ -982,9 +952,6 @@ public class EmittedRuntime
     public FieldBuilder VirtualTimerIsInterval { get; set; } = null!;
     public FieldBuilder VirtualTimerIntervalMs { get; set; } = null!;
     public FieldBuilder VirtualTimerHasRef { get; set; } = null!;
-    public FieldBuilder TimerQueue { get; set; } = null!;
-    public FieldBuilder TimerStartTicks { get; set; } = null!;
-    public FieldBuilder TimerInitialized { get; set; } = null!;
     public MethodBuilder EnsureTimerInitialized { get; set; } = null!;
     public MethodBuilder GetCurrentTimeMs { get; set; } = null!;
     public MethodBuilder ProcessPendingTimers { get; set; } = null!;
@@ -1090,7 +1057,6 @@ public class EmittedRuntime
     // module-specific static $exports field so require() always sees the latest value.
     public Type CjsModuleType { get; set; } = null!;
     public ConstructorInfo CjsModuleCtor { get; set; } = null!;
-    public MethodInfo CjsModuleExportsGetter { get; set; } = null!;
     public MethodInfo CjsModuleExportsSetter { get; set; } = null!;
 
     // The emitted TSDate class
@@ -1273,7 +1239,6 @@ public class EmittedRuntime
     public MethodBuilder TSErrorCodeSetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallGetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallSetter { get; set; } = null!;
-    public MethodBuilder TSErrorToStringMethod { get; set; } = null!;
     public MethodBuilder TSErrorCaptureStackTrace { get; set; } = null!;
 
     // $TypeError
@@ -1355,14 +1320,10 @@ public class EmittedRuntime
     /// <summary>$Array(object?[] ctorArgs) — ECMA-262 Array-constructor semantics for guest classes extending Array (#233): implicit ctors and super(...) chain through this.</summary>
     public ConstructorBuilder TSArrayCtorFromCtorArgs { get; set; } = null!;
     public MethodBuilder TSArrayElementsGetter { get; set; } = null!;
-    public MethodBuilder TSArrayIsFrozenGetter { get; set; } = null!;
-    public MethodBuilder TSArrayIsSealedGetter { get; set; } = null!;
     public MethodBuilder TSArrayFreeze { get; set; } = null!;
-    public MethodBuilder TSArraySeal { get; set; } = null!;
     public MethodBuilder TSArrayGet { get; set; } = null!;
     public MethodBuilder TSArraySet { get; set; } = null!;
     public MethodBuilder TSArraySetStrict { get; set; } = null!;
-    public MethodBuilder TSArrayToString { get; set; } = null!;
 
     // Stage E.2 additions (long-indexed sparse/hole-aware API).
     // Mirrors SharpTSArray public surface. Legacy int-indexed Get/Set above
@@ -1371,7 +1332,6 @@ public class EmittedRuntime
     public MethodBuilder TSArrayLongLengthGetter { get; set; } = null!;
     public MethodBuilder TSArrayLengthGetter { get; set; } = null!;
     public MethodBuilder TSArrayHasIndex { get; set; } = null!;
-    public MethodBuilder TSArrayGetRaw { get; set; } = null!;
     public MethodBuilder TSArrayGetLong { get; set; } = null!;
     public MethodBuilder TSArraySetLong { get; set; } = null!;
     public MethodBuilder TSArraySetStrictLong { get; set; } = null!;
@@ -1381,7 +1341,6 @@ public class EmittedRuntime
     // Unboxed packed-double elements-kind accessors (number[] unboxing project).
     // GetDouble/SetDouble/PushDouble are the fast paths the compiler emits at
     // statically-number[] sites; EnsureBoxed is the deopt (numeric -> boxed).
-    public MethodBuilder TSArrayGetDouble { get; set; } = null!;
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
@@ -1407,8 +1366,6 @@ public class EmittedRuntime
     public Type TSObjectType { get; set; } = null!;
     public ConstructorBuilder TSObjectCtor { get; set; } = null!;
     public MethodBuilder TSObjectFieldsGetter { get; set; } = null!;
-    public MethodBuilder TSObjectIsFrozenGetter { get; set; } = null!;
-    public MethodBuilder TSObjectIsSealedGetter { get; set; } = null!;
     public MethodBuilder TSObjectFreeze { get; set; } = null!;
     public MethodBuilder TSObjectSeal { get; set; } = null!;
     public MethodBuilder TSObjectPreventExtensions { get; set; } = null!;
@@ -1418,15 +1375,11 @@ public class EmittedRuntime
     public MethodBuilder TSObjectHasProperty { get; set; } = null!;
     public MethodBuilder TSObjectDeleteProperty { get; set; } = null!;
     public MethodBuilder TSObjectDeletePropertyStrict { get; set; } = null!;
-    public MethodBuilder TSObjectGetKeys { get; set; } = null!;
-    public MethodBuilder TSObjectToString { get; set; } = null!;
     public MethodBuilder TSObjectDefineGetter { get; set; } = null!;
     public MethodBuilder TSObjectDefineSetter { get; set; } = null!;
     public MethodBuilder TSObjectHasGetter { get; set; } = null!;
     public MethodBuilder TSObjectHasSetter { get; set; } = null!;
-    public MethodBuilder TSObjectGetGetter { get; set; } = null!;
     public MethodBuilder TSObjectGetGettersDict { get; set; } = null!;
-    public MethodBuilder TSObjectGetSetter { get; set; } = null!;
     public MethodBuilder TSObjectGetSettersDict { get; set; } = null!;
 
     // Module registry for dynamic imports
@@ -1534,53 +1487,31 @@ public class EmittedRuntime
     public MethodBuilder FsCloseSync { get; set; } = null!;
     public MethodBuilder FsReadSync { get; set; } = null!;
     public MethodBuilder FsWriteSyncBuffer { get; set; } = null!;
-    public MethodBuilder FsWriteSyncString { get; set; } = null!;
     public MethodBuilder FsFstatSync { get; set; } = null!;
     public MethodBuilder FsFtruncateSync { get; set; } = null!;
     // Long-tail fd primitives (#976): fsync, fd→path, and statfs.
     public MethodBuilder FsFsyncSync { get; set; } = null!;
     public MethodBuilder FsFdPath { get; set; } = null!;
     public MethodBuilder FsStatfsRaw { get; set; } = null!;
-    public FieldBuilder FsFileDescriptorTable { get; set; } = null!;
 
     // File descriptor low-level helpers (reflection-based for standalone DLLs)
     public MethodBuilder FsFlagsParse { get; set; } = null!;
     public MethodBuilder FsFlagsParsePure { get; set; } = null!;
-    public MethodBuilder FdTableGetInstance { get; set; } = null!;
-    public MethodBuilder FdTableOpen { get; set; } = null!;
-    public MethodBuilder FdTableClose { get; set; } = null!;
-    public MethodBuilder FdTableGet { get; set; } = null!;
     public MethodBuilder CreateSharpTSDir { get; set; } = null!;
     public MethodBuilder LibCCreateHardLink { get; set; } = null!;
     public MethodBuilder CreateHardLinkPure { get; set; } = null!;
 
     // $FileDescriptorTable type (pure-IL for standalone DLLs)
-    public TypeBuilder FileDescriptorTableType { get; set; } = null!;
     public FieldBuilder FileDescriptorTableInstance { get; set; } = null!;
-    public ConstructorBuilder FileDescriptorTableCtor { get; set; } = null!;
     public MethodBuilder FileDescriptorTableOpen { get; set; } = null!;
     public MethodBuilder FileDescriptorTableGet { get; set; } = null!;
     public MethodBuilder FileDescriptorTableClose { get; set; } = null!;
-    public MethodBuilder FileDescriptorTableIsValid { get; set; } = null!;
 
     // $Dir type (pure-IL for standalone DLLs)
-    public TypeBuilder DirType { get; set; } = null!;
     public ConstructorBuilder DirCtor { get; set; } = null!;
-    public MethodBuilder DirPathGetter { get; set; } = null!;
-    public MethodBuilder DirReadSync { get; set; } = null!;
-    public MethodBuilder DirCloseSync { get; set; } = null!;
 
     // $Dirent type (pure-IL for standalone DLLs)
-    public TypeBuilder DirentType { get; set; } = null!;
     public ConstructorBuilder DirentCtor { get; set; } = null!;
-    public MethodBuilder DirentNameGetter { get; set; } = null!;
-    public MethodBuilder DirentIsFile { get; set; } = null!;
-    public MethodBuilder DirentIsDirectory { get; set; } = null!;
-    public MethodBuilder DirentIsSymbolicLink { get; set; } = null!;
-    public MethodBuilder DirentIsBlockDevice { get; set; } = null!;
-    public MethodBuilder DirentIsCharacterDevice { get; set; } = null!;
-    public MethodBuilder DirentIsFIFO { get; set; } = null!;
-    public MethodBuilder DirentIsSocket { get; set; } = null!;
 
     // $ArrayBuffer type (pure-IL for standalone DLLs)
     public TypeBuilder ArrayBufferType { get; set; } = null!;
@@ -1635,8 +1566,6 @@ public class EmittedRuntime
     public MethodBuilder TypedArrayElementSet { get; set; } = null!;
     // Unboxed Float64Array element accessors (#878) — direct double get/set on the
     // concrete $Float64Array, bypassing the boxed Get/Set + GetIndex dispatch.
-    public MethodBuilder Float64ArrayGetUnboxed { get; set; } = null!;
-    public MethodBuilder Float64ArraySetUnboxed { get; set; } = null!;
 
     // Unboxed numeric typed-array element accessors (#3) — `double GetUnboxed(int)` /
     // `void SetUnboxed(int, double)` on each concrete numeric $XArray, keyed by element-type
@@ -1788,7 +1717,6 @@ public class EmittedRuntime
     public MethodBuilder ProcessEventEmitterCall { get; set; } = null!;
     public MethodBuilder ProcessEmitExit { get; set; } = null!;
     public MethodBuilder GetProcessEventEmitter { get; set; } = null!;
-    public FieldBuilder ProcessEventEmitterInstance { get; set; } = null!;
 
     // Process stdin/stdout/stderr stream methods
     public MethodBuilder StdinRead { get; set; } = null!;
@@ -1831,10 +1759,6 @@ public class EmittedRuntime
     public MethodBuilder SymbolClosedOwner { get; set; } = null!;
     public MethodBuilder CloseSymbolAccessor { get; set; } = null!;
     public FieldBuilder CachedFetchFunction { get; set; } = null!;
-    public FieldBuilder CachedParseIntFunction { get; set; } = null!;
-    public FieldBuilder CachedParseFloatFunction { get; set; } = null!;
-    public FieldBuilder CachedIsNaNFunction { get; set; } = null!;
-    public FieldBuilder CachedIsFiniteFunction { get; set; } = null!;
     public FieldBuilder GlobalThisProperties { get; set; } = null!;
 
     // Crypto module methods
@@ -1844,40 +1768,22 @@ public class EmittedRuntime
 
     // $Hash type - emitted for standalone crypto support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
-    public Type TSHashType { get; set; } = null!;
     public ConstructorBuilder TSHashCtor { get; set; } = null!;
-    public MethodBuilder TSHashUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSHashDigestMethod { get; set; } = null!;
 
     // $Hmac type - emitted for standalone crypto support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHmac
     public MethodBuilder CryptoCreateHmac { get; set; } = null!;
-    public Type TSHmacType { get; set; } = null!;
     public ConstructorBuilder TSHmacCtor { get; set; } = null!;
-    public MethodBuilder TSHmacUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSHmacDigestMethod { get; set; } = null!;
 
     // $Cipher type - emitted for standalone crypto support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSCipher
     public MethodBuilder CryptoCreateCipheriv { get; set; } = null!;
-    public Type TSCipherType { get; set; } = null!;
     public ConstructorBuilder TSCipherCtor { get; set; } = null!;
-    public MethodBuilder TSCipherUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSCipherFinalMethod { get; set; } = null!;
-    public MethodBuilder TSCipherSetAutoPaddingMethod { get; set; } = null!;
-    public MethodBuilder TSCipherGetAuthTagMethod { get; set; } = null!;
-    public MethodBuilder TSCipherSetAADMethod { get; set; } = null!;
 
     // $Decipher type - emitted for standalone crypto support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDecipher
     public MethodBuilder CryptoCreateDecipheriv { get; set; } = null!;
-    public Type TSDecipherType { get; set; } = null!;
     public ConstructorBuilder TSDecipherCtor { get; set; } = null!;
-    public MethodBuilder TSDecipherUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSDecipherFinalMethod { get; set; } = null!;
-    public MethodBuilder TSDecipherSetAutoPaddingMethod { get; set; } = null!;
-    public MethodBuilder TSDecipherSetAuthTagMethod { get; set; } = null!;
-    public MethodBuilder TSDecipherSetAADMethod { get; set; } = null!;
 
     // PBKDF2 and scrypt key derivation
     public MethodBuilder CryptoPbkdf2Sync { get; set; } = null!;
@@ -1895,24 +1801,16 @@ public class EmittedRuntime
     // $Sign type - emitted for standalone crypto signing support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSign
     public MethodBuilder CryptoCreateSign { get; set; } = null!;
-    public Type TSSignType { get; set; } = null!;
     public ConstructorBuilder TSSignCtor { get; set; } = null!;
-    public MethodBuilder TSSignUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSSignSignMethod { get; set; } = null!;
     public MethodBuilder SignDataBytes { get; set; } = null!;  // Pure IL signing helper
 
     // $Verify type - emitted for standalone crypto verification support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSVerify
     public MethodBuilder CryptoCreateVerify { get; set; } = null!;
-    public Type TSVerifyType { get; set; } = null!;
     public ConstructorBuilder TSVerifyCtor { get; set; } = null!;
-    public MethodBuilder TSVerifyUpdateMethod { get; set; } = null!;
-    public MethodBuilder TSVerifyVerifyMethod { get; set; } = null!;
     public MethodBuilder VerifyDataBytes { get; set; } = null!;  // Pure IL verification helper
 
     // AES-GCM helper methods (needed because AesGcm uses Span<T> parameters)
-    public MethodBuilder AesGcmEncryptHelper { get; set; } = null!;
-    public MethodBuilder AesGcmDecryptHelper { get; set; } = null!;
 
     // Crypto info methods (getHashes, getCiphers)
     public MethodBuilder CryptoGetHashes { get; set; } = null!;
@@ -1942,9 +1840,7 @@ public class EmittedRuntime
     public MethodBuilder TSDHGenerateRandomPrime { get; set; } = null!;
     public MethodBuilder TSDHIsProbablePrime { get; set; } = null!;
     public MethodBuilder TSDHBigIntFromBytes { get; set; } = null!;
-    public Type BoundDHMethodType { get; set; } = null!;
     public ConstructorBuilder BoundDHMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundDHMethodInvoke { get; set; } = null!;
 
     // ECDH support
     public MethodBuilder CryptoCreateECDH { get; set; } = null!;
@@ -1959,9 +1855,7 @@ public class EmittedRuntime
     public MethodBuilder TSECDHEncodeResult { get; set; } = null!;
     public MethodBuilder TSECDHDecodeInput { get; set; } = null!;
     public MethodBuilder TSECDHComputeSecretHelper { get; set; } = null!;
-    public Type BoundECDHMethodType { get; set; } = null!;
     public ConstructorBuilder BoundECDHMethodCtor { get; set; } = null!;
-    public MethodBuilder BoundECDHMethodInvoke { get; set; } = null!;
 
     // RSA encryption/decryption
     public MethodBuilder CryptoPublicEncrypt { get; set; } = null!;
@@ -1987,7 +1881,6 @@ public class EmittedRuntime
     public MethodBuilder CryptoCreateSecretKey { get; set; } = null!;
     public MethodBuilder CryptoCreatePublicKey { get; set; } = null!;
     public MethodBuilder CryptoCreatePrivateKey { get; set; } = null!;
-    public Type TSKeyObjectType { get; set; } = null!;
     public ConstructorBuilder TSKeyObjectCtorSecret { get; set; } = null!;
     public ConstructorBuilder TSKeyObjectCtorAsym { get; set; } = null!;
 
@@ -2021,21 +1914,16 @@ public class EmittedRuntime
     // $HttpServer type - emitted for standalone HTTP server support
     public TypeBuilder TSHttpServerType { get; set; } = null!;
     public ConstructorBuilder TSHttpServerCtor { get; set; } = null!;
-    public MethodBuilder TSHttpServerListen { get; set; } = null!;
     public MethodBuilder TSHttpServerClose { get; set; } = null!;
     public MethodBuilder TSHttpServerAddress { get; set; } = null!;
-    public MethodBuilder TSHttpServerGetMember { get; set; } = null!;
 
     // $HttpRequest type - emitted for standalone HTTP request support
     public TypeBuilder TSHttpRequestType { get; set; } = null!;
     public ConstructorBuilder TSHttpRequestCtor { get; set; } = null!;
-    public MethodBuilder TSHttpRequestGetMember { get; set; } = null!;
 
     // $HttpResponse type - emitted for standalone HTTP response support
     public TypeBuilder TSHttpResponseType { get; set; } = null!;
     public ConstructorBuilder TSHttpResponseCtor { get; set; } = null!;
-    public MethodBuilder TSHttpResponseGetMember { get; set; } = null!;
-    public MethodBuilder TSHttpResponseSetMember { get; set; } = null!;
 
     // Net module methods
     public MethodBuilder NetCreateServer { get; set; } = null!;
@@ -2061,14 +1949,12 @@ public class EmittedRuntime
 
     // $TlsServer emitted type - pure IL standalone TLS server
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTlsServer
-    public Type TlsServerType { get; set; } = null!;
     public ConstructorBuilder TlsServerCtor { get; set; } = null!;
 
     // Dgram module methods
     public MethodBuilder DgramCreateSocket { get; set; } = null!;
 
     // $DatagramSocket emitted type
-    public Type DatagramSocketType { get; set; } = null!;
     public ConstructorBuilder DatagramSocketCtor { get; set; } = null!;
 
     // $Headers type - emitted for standalone Headers support
@@ -2080,11 +1966,9 @@ public class EmittedRuntime
     // the canonical implementation. No compile-time runtime type is emitted.
 
     // $FetchResponse type - emitted for standalone fetch support
-    public TypeBuilder TSFetchResponseType { get; set; } = null!;
     public ConstructorBuilder TSFetchResponseCtor { get; set; } = null!;
 
     // $Request type - emitted for standalone Request constructor support
-    public TypeBuilder TSRequestType { get; set; } = null!;
     public ConstructorBuilder TSRequestCtor { get; set; } = null!;
 
     // $Response type - emitted for standalone Response constructor support
@@ -2131,7 +2015,6 @@ public class EmittedRuntime
     public MethodBuilder TSBufferReadUInt8 { get; set; } = null!;
     public MethodBuilder TSBufferWriteUInt8 { get; set; } = null!;
     public MethodBuilder TSBufferToJSON { get; set; } = null!;
-    public MethodBuilder GetBufferMethod { get; set; } = null!;
 
     // Multi-byte read methods
     public MethodBuilder TSBufferReadInt8 { get; set; } = null!;
@@ -2244,21 +2127,14 @@ public class EmittedRuntime
     // $TextEncoder type - emitted for standalone util support
     public TypeBuilder TSTextEncoderType { get; set; } = null!;
     public ConstructorBuilder TSTextEncoderCtor { get; set; } = null!;
-    public MethodBuilder TSTextEncoderEncodingGetter { get; set; } = null!;
-    public MethodBuilder TSTextEncoderEncode { get; set; } = null!;
-    public MethodBuilder TSTextEncoderEncodeInto { get; set; } = null!;
 
     // $TextDecoder type - emitted for standalone util support
     public TypeBuilder TSTextDecoderType { get; set; } = null!;
     public ConstructorBuilder TSTextDecoderCtor { get; set; } = null!;
-    public MethodBuilder TSTextDecoderEncodingGetter { get; set; } = null!;
-    public MethodBuilder TSTextDecoderFatalGetter { get; set; } = null!;
-    public MethodBuilder TSTextDecoderIgnoreBOMGetter { get; set; } = null!;
     public MethodBuilder TSTextDecoderDecode { get; set; } = null!;
 
     // $TextDecoderDecodeMethod wrapper - callable by compiled code
     public TypeBuilder TSTextDecoderDecodeMethodType { get; set; } = null!;
-    public ConstructorBuilder TSTextDecoderDecodeMethodCtor { get; set; } = null!;
     public MethodBuilder TSTextDecoderDecodeMethodInvoke { get; set; } = null!;
 
     // Util format helper methods (emitted for standalone)
@@ -2282,7 +2158,6 @@ public class EmittedRuntime
 
     // $ReadlineInterface type - emitted for standalone readline support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadlineInterface
-    public Type ReadlineInterfaceType { get; set; } = null!;
     public ConstructorBuilder ReadlineInterfaceCtor { get; set; } = null!;
 
     // Child process module methods
@@ -2295,8 +2170,6 @@ public class EmittedRuntime
     public MethodBuilder ChildProcessFork { get; set; } = null!;
 
     // Querystring module methods
-    public MethodBuilder QuerystringParse { get; set; } = null!;
-    public MethodBuilder QuerystringStringify { get; set; } = null!;
 
     // Zlib module methods
     public MethodBuilder ZlibGzipSync { get; set; } = null!;
@@ -2342,7 +2215,6 @@ public class EmittedRuntime
     public MethodBuilder ZlibUnzipAsync { get; set; } = null!;
 
     // $ZlibTransform type - emitted for standalone zlib streaming support
-    public Type TSZlibTransformType { get; set; } = null!;
     public ConstructorBuilder TSZlibTransformCtor { get; set; } = null!;
 
     // $EventEmitter type - emitted for standalone event emitter support
@@ -2370,7 +2242,6 @@ public class EmittedRuntime
     public MethodBuilder TSEventEmitterEnableCaptureRejections { get; set; } = null!;
 
     // $AsyncLocalStorage support
-    public Type TSAsyncLocalStorageType { get; set; } = null!;
     public ConstructorBuilder TSAsyncLocalStorageCtor { get; set; } = null!;
 
     // Value-position namespace singletons (#224). Null when the matching
@@ -2453,7 +2324,6 @@ public class EmittedRuntime
     public MethodBuilder NodeErrorCodeGetter { get; set; } = null!;
     public MethodBuilder NodeErrorSyscallGetter { get; set; } = null!;
     public MethodBuilder NodeErrorPathGetter { get; set; } = null!;
-    public MethodBuilder NodeErrorErrnoGetter { get; set; } = null!;
 
     // TTY module methods
     public MethodBuilder TtyIsatty { get; set; } = null!;
@@ -2468,23 +2338,14 @@ public class EmittedRuntime
     // perf_hooks (mark/measure/entries/observer) is pure TypeScript in
     // stdlib/node/perf_hooks.ts. Backing fields initialize lazily on first call.
     public MethodBuilder PerfPrimitiveNow { get; set; } = null!;
-    public FieldBuilder PerfPrimitiveStartTicks { get; set; } = null!;
-    public FieldBuilder PerfPrimitiveTicksPerMs { get; set; } = null!;
 
     // $Readable type - emitted for standalone stream support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSReadable
     public Type TSReadableType { get; set; } = null!;
     public ConstructorBuilder TSReadableCtor { get; set; } = null!;
-    public MethodBuilder TSReadableRead { get; set; } = null!;
     public MethodBuilder TSReadablePush { get; set; } = null!;
     public MethodBuilder TSReadablePipe { get; set; } = null!;
-    public MethodBuilder TSReadableUnpipe { get; set; } = null!;
-    public MethodBuilder TSReadableSetEncoding { get; set; } = null!;
     public MethodBuilder TSReadableDestroy { get; set; } = null!;
-    public MethodBuilder TSReadableUnshift { get; set; } = null!;
-    public MethodBuilder TSReadablePause { get; set; } = null!;
-    public MethodBuilder TSReadableResume { get; set; } = null!;
-    public MethodBuilder TSReadableIsPaused { get; set; } = null!;
     // #1024: [Symbol.asyncIterator] support — GetAsyncIterator() is registered via the
     // GetIteratorFunction hook so `for await…of` over a $Readable works in compiled mode.
     public MethodBuilder TSReadableGetAsyncIterator { get; set; } = null!;
@@ -2514,10 +2375,8 @@ public class EmittedRuntime
     public ConstructorBuilder TSWritableCtor { get; set; } = null!;
     public MethodBuilder TSWritableWrite { get; set; } = null!;
     public MethodBuilder TSWritableEnd { get; set; } = null!;
-    public MethodBuilder TSWritableCork { get; set; } = null!;
     public MethodBuilder TSWritableUncork { get; set; } = null!;
     public MethodBuilder TSWritableDestroy { get; set; } = null!;
-    public MethodBuilder TSWritableSetDefaultEncoding { get; set; } = null!;
 
     // $Duplex type - emitted for standalone stream support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDuplex
@@ -2533,12 +2392,10 @@ public class EmittedRuntime
     public Type TransformDoneCallbackType { get; set; } = null!;
     public MethodBuilder TransformDoneCallbackInvoke { get; set; } = null!;
     public Type WriteCallbackWrapperType { get; set; } = null!;
-    public ConstructorBuilder WriteCallbackWrapperCtor { get; set; } = null!;
     public MethodBuilder WriteCallbackWrapperInvoke { get; set; } = null!;
 
     // $PassThrough type - emitted for standalone stream support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPassThrough
-    public Type TSPassThroughType { get; set; } = null!;
     public ConstructorBuilder TSPassThroughCtor { get; set; } = null!;
 
     public MethodBuilder TSReadableSetObjectMode { get; set; } = null!;
@@ -2574,12 +2431,6 @@ public class EmittedRuntime
     public MethodBuilder FsCreateWriteStream { get; set; } = null!;
 
     // fs.watch / fs.watchFile / fs.unwatchFile
-    public Type FsWatcherType { get; set; } = null!;
-    public ConstructorBuilder FsWatcherCtor { get; set; } = null!;
-    public MethodBuilder FsWatcherClose { get; set; } = null!;
-    public Type StatWatcherType { get; set; } = null!;
-    public ConstructorBuilder StatWatcherCtor { get; set; } = null!;
-    public MethodBuilder StatWatcherClose { get; set; } = null!;
     public MethodBuilder FsWatch { get; set; } = null!;
     public MethodBuilder FsWatchFile { get; set; } = null!;
     public MethodBuilder FsUnwatchFile { get; set; } = null!;
@@ -2620,14 +2471,12 @@ public class EmittedRuntime
 
     // $SharedArrayBuffer type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSSharedArrayBuffer
-    public Type TSSharedArrayBufferType { get; set; } = null!;
     public MethodBuilder TSSharedArrayBufferCtor { get; set; } = null!;
     public MethodBuilder TSSharedArrayBufferByteLengthGetter { get; set; } = null!;
     public MethodBuilder TSSharedArrayBufferSlice { get; set; } = null!;
 
     // $ArrayBuffer type - emitted for standalone support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArrayBuffer
-    public Type TSArrayBufferType { get; set; } = null!;
     public MethodBuilder TSArrayBufferCtor { get; set; } = null!;
     public MethodBuilder TSArrayBufferByteLengthGetter { get; set; } = null!;
     public MethodBuilder TSArrayBufferSlice { get; set; } = null!;
@@ -2635,7 +2484,6 @@ public class EmittedRuntime
 
     // $DataView type - emitted for standalone support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSDataView
-    public Type TSDataViewType { get; set; } = null!;
     public MethodBuilder TSDataViewCtor { get; set; } = null!;
     public MethodBuilder TSDataViewByteLengthGetter { get; set; } = null!;
     public MethodBuilder TSDataViewByteOffsetGetter { get; set; } = null!;
@@ -2663,71 +2511,12 @@ public class EmittedRuntime
     public MethodBuilder TSDataViewSetBigInt64 { get; set; } = null!;
     public MethodBuilder TSDataViewSetBigUint64 { get; set; } = null!;
 
-    // TypedArray base type and common methods
-    // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSTypedArray
-    public Type TSTypedArrayBaseType { get; set; } = null!;
-    public MethodBuilder TSTypedArrayLengthGetter { get; set; } = null!;
-    public MethodBuilder TSTypedArrayByteLengthGetter { get; set; } = null!;
-    public MethodBuilder TSTypedArrayByteOffsetGetter { get; set; } = null!;
-    public MethodBuilder TSTypedArrayBufferGetter { get; set; } = null!;
-    public MethodBuilder TSTypedArrayGet { get; set; } = null!;
-    public MethodBuilder TSTypedArraySet { get; set; } = null!;
-    public MethodBuilder TSTypedArraySubarray { get; set; } = null!;
-    public MethodBuilder TSTypedArraySlice { get; set; } = null!;
-    public MethodBuilder TSTypedArrayFill { get; set; } = null!;
-    public MethodBuilder TSTypedArrayCopyWithin { get; set; } = null!;
-
     // TypedArray helper methods that avoid hard dependencies on SharpTS.dll
     // These use reflection to work with TypedArrays without requiring SharpTS.dll at runtime
     public MethodBuilder IsTypedArrayMethod { get; set; } = null!;
     public MethodBuilder GetTypedArrayElementMethod { get; set; } = null!;
     public MethodBuilder SetTypedArrayElementMethod { get; set; } = null!;
     public MethodBuilder GetTypedArrayMemberMethod { get; set; } = null!;
-
-    // Concrete TypedArray types
-    public Type TSInt8ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSInt8ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSInt8ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSUint8ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSUint8ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSUint8ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSUint8ClampedArrayType { get; set; } = null!;
-    public ConstructorBuilder TSUint8ClampedArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSUint8ClampedArrayCtorSAB { get; set; } = null!;
-
-    public Type TSInt16ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSInt16ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSInt16ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSUint16ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSUint16ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSUint16ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSInt32ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSInt32ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSInt32ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSUint32ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSUint32ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSUint32ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSFloat32ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSFloat32ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSFloat32ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSFloat64ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSFloat64ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSFloat64ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSBigInt64ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSBigInt64ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSBigInt64ArrayCtorSAB { get; set; } = null!;
-
-    public Type TSBigUint64ArrayType { get; set; } = null!;
-    public ConstructorBuilder TSBigUint64ArrayCtor { get; set; } = null!;
-    public ConstructorBuilder TSBigUint64ArrayCtorSAB { get; set; } = null!;
 
     // TypedArray FromObject helpers (handles both length and SharedArrayBuffer arguments)
     public Dictionary<string, MethodBuilder> TypedArrayFromObjectHelpers { get; } = [];
@@ -2753,27 +2542,16 @@ public class EmittedRuntime
     // $MessagePort type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort
     public Type TSMessagePortType { get; set; } = null!;
-    public ConstructorBuilder TSMessagePortCtor { get; set; } = null!;
-    public MethodBuilder TSMessagePortPostMessage { get; set; } = null!;
-    public MethodBuilder TSMessagePortStart { get; set; } = null!;
-    public MethodBuilder TSMessagePortClose { get; set; } = null!;
 
     // $MessageChannel type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessageChannel
     public Type TSMessageChannelType { get; set; } = null!;
     public MethodBuilder TSMessageChannelCtor { get; set; } = null!;
-    public MethodBuilder TSMessageChannelPort1Getter { get; set; } = null!;
-    public MethodBuilder TSMessageChannelPort2Getter { get; set; } = null!;
 
     // $Worker type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSWorker
     public Type TSWorkerType { get; set; } = null!;
     public MethodBuilder TSWorkerCtor { get; set; } = null!;
-    public MethodBuilder TSWorkerThreadIdGetter { get; set; } = null!;
-    public MethodBuilder TSWorkerPostMessage { get; set; } = null!;
-    public MethodBuilder TSWorkerTerminate { get; set; } = null!;
-    public MethodBuilder TSWorkerRef { get; set; } = null!;
-    public MethodBuilder TSWorkerUnref { get; set; } = null!;
 
     // StructuredClone helper methods
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.StructuredClone
@@ -2874,18 +2652,15 @@ public class EmittedRuntime
     public MethodBuilder StatsIsFIFO { get; set; } = null!;
     public MethodBuilder StatsIsSocket { get; set; } = null!;
     public MethodBuilder StatsSizeGetter { get; set; } = null!;
-    public MethodBuilder StatsModeGetter { get; set; } = null!;
 
     // $FrozenSealedState - tracks frozen/sealed/extensible state for objects
     public Type FrozenSealedStateType { get; set; } = null!;
-    public ConstructorInfo FrozenSealedStateCtor { get; set; } = null!;
     public PropertyInfo FrozenSealedStateIsFrozen { get; set; } = null!;
     public PropertyInfo FrozenSealedStateIsSealed { get; set; } = null!;
     public PropertyInfo FrozenSealedStateIsExtensible { get; set; } = null!;
 
     // $PrototypeInfo - holds prototype reference for objects
     public Type PrototypeInfoType { get; set; } = null!;
-    public ConstructorInfo PrototypeInfoCtor { get; set; } = null!;
     public PropertyInfo PrototypeInfoPrototype { get; set; } = null!;
 
     // $CompiledPropertyDescriptor - property descriptor for compiled objects
@@ -2899,11 +2674,6 @@ public class EmittedRuntime
     public PropertyInfo CompiledPropertyDescriptorConfigurable { get; set; } = null!;
 
     // $PropertyDescriptorStore - stores property descriptors for compiled objects
-    public Type PropertyDescriptorStoreType { get; set; } = null!;
-    public FieldBuilder PDSDescriptorsField { get; set; } = null!;
-    public FieldBuilder PDSFrozenSealedField { get; set; } = null!;
-    public FieldBuilder PDSSymbolStorageField { get; set; } = null!;
-    public FieldBuilder PDSPrototypeStoreField { get; set; } = null!;
     public MethodBuilder PDSFreeze { get; set; } = null!;
     public MethodBuilder PDSSeal { get; set; } = null!;
     public MethodBuilder PDSPreventExtensions { get; set; } = null!;
@@ -2924,34 +2694,20 @@ public class EmittedRuntime
 
     // cluster module — emitted types (no reflection to SharpTS.dll)
     // $ClusterContext: static class with [ThreadStatic] fields for worker detection
-    public TypeBuilder ClusterContextType { get; set; } = null!;
     public FieldBuilder ClusterContextIsWorkerField { get; set; } = null!;
-    public FieldBuilder ClusterContextWorkerIdField { get; set; } = null!;
     public FieldBuilder ClusterContextCurrentWorkerField { get; set; } = null!;
-    public FieldBuilder ClusterContextPrimaryToWorkerQueueField { get; set; } = null!;
-    public FieldBuilder ClusterContextWorkerToPrimaryQueueField { get; set; } = null!;
 
     // $ClusterWorker: extends $EventEmitter, manages a worker thread with IPC
     public TypeBuilder ClusterWorkerType { get; set; } = null!;
-    public ConstructorBuilder ClusterWorkerCtor { get; set; } = null!;
-    public MethodBuilder ClusterWorkerSend { get; set; } = null!;
     public MethodBuilder ClusterWorkerDisconnect { get; set; } = null!;
-    public MethodBuilder ClusterWorkerKill { get; set; } = null!;
-    public MethodBuilder ClusterWorkerGetMember { get; set; } = null!;
-    public MethodBuilder ClusterWorkerDeliverMessages { get; set; } = null!;
 
     // $ClusterManager: extends $EventEmitter, singleton managing all workers
-    public TypeBuilder ClusterManagerType { get; set; } = null!;
     public FieldBuilder ClusterManagerInstanceField { get; set; } = null!;
-    public FieldBuilder ClusterManagerEntryPointField { get; set; } = null!;
     public MethodBuilder ClusterManagerFork { get; set; } = null!;
     public MethodBuilder ClusterManagerDisconnectAll { get; set; } = null!;
     public MethodBuilder ClusterManagerSetupPrimary { get; set; } = null!;
     public MethodBuilder ClusterManagerGetWorkersObject { get; set; } = null!;
     public MethodBuilder ClusterManagerGetSettings { get; set; } = null!;
-    public MethodBuilder ClusterManagerGetMember { get; set; } = null!;
-    public MethodBuilder ClusterManagerRemoveWorker { get; set; } = null!;
-    public MethodBuilder ClusterManagerEmitWorkerEvent { get; set; } = null!;
 
     // Convenience statics on $Runtime (delegate to emitted types)
     public MethodBuilder ClusterIsPrimary { get; set; } = null!;
@@ -2963,16 +2719,11 @@ public class EmittedRuntime
     // ============================================================
     public Type BroadcastChannelType { get; set; } = null!;
     public ConstructorBuilder BroadcastChannelCtor { get; set; } = null!;
-    public MethodBuilder BroadcastChannelPostMessage { get; set; } = null!;
-    public MethodBuilder BroadcastChannelClose { get; set; } = null!;
-    public MethodBuilder BroadcastChannelRef { get; set; } = null!;
-    public MethodBuilder BroadcastChannelUnref { get; set; } = null!;
 
     // ============================================================
     // $EventLoop — singleton event loop for compiled mode
     // ============================================================
     public TypeBuilder EventLoopType { get; set; } = null!;
-    public FieldBuilder EventLoopInstanceField { get; set; } = null!;
     public MethodBuilder EventLoopGetInstance { get; set; } = null!;
     public MethodBuilder EventLoopRef { get; set; } = null!;
     public MethodBuilder EventLoopUnref { get; set; } = null!;
@@ -3007,15 +2758,7 @@ public class EmittedRuntime
     // ============================================================
     // $NetServer — emitted TCP server (extends $EventEmitter)
     // ============================================================
-    public TypeBuilder NetServerType { get; set; } = null!;
     public ConstructorBuilder NetServerCtor { get; set; } = null!;
-    public MethodBuilder NetServerListen { get; set; } = null!;
-    public MethodBuilder NetServerClose { get; set; } = null!;
-    public MethodBuilder NetServerAddress { get; set; } = null!;
-    public MethodBuilder NetServerGetConnections { get; set; } = null!;
-    public MethodBuilder NetServerGetMember { get; set; } = null!;
-    public MethodBuilder NetServerSetMember { get; set; } = null!;
-    public FieldBuilder NetServerIsListeningField { get; set; } = null!;
 
     // ============================================================
     // $NetSocket — emitted TCP socket (extends $EventEmitter)
@@ -3026,10 +2769,7 @@ public class EmittedRuntime
     public ConstructorBuilder NetSocketCtorStream { get; set; } = null!;
     public MethodBuilder NetSocketConnect { get; set; } = null!;
     public MethodBuilder NetSocketWrite { get; set; } = null!;
-    public MethodBuilder NetSocketEnd { get; set; } = null!;
-    public MethodBuilder NetSocketDestroy { get; set; } = null!;
     public MethodBuilder NetSocketStartReading { get; set; } = null!;
-    public MethodBuilder NetSocketSetEncoding { get; set; } = null!;
     public MethodBuilder NetSocketGetMember { get; set; } = null!;
 
     // Vm module methods
@@ -3049,34 +2789,22 @@ public class EmittedRuntime
     // Pure-IL Web Streams emitted types. The original late-binding helpers
     // (CreateReadableStream/CreateWritableStream/etc.) were removed when
     // all five stream classes were migrated to pure IL.
-    public Type CountQueuingStrategyType { get; set; } = null!;
     public ConstructorBuilder CountQueuingStrategyCtor { get; set; } = null!;
-    public Type ByteLengthQueuingStrategyType { get; set; } = null!;
     public ConstructorBuilder ByteLengthQueuingStrategyCtor { get; set; } = null!;
 
     public TypeBuilder WritableStreamType { get; set; } = null!;
     public ConstructorBuilder WritableStreamCtor { get; set; } = null!;
-    public MethodBuilder WritableStreamWrite { get; set; } = null!;
-    public MethodBuilder WritableStreamClose { get; set; } = null!;
-    public MethodBuilder WritableStreamAbort { get; set; } = null!;
-    public TypeBuilder WritableStreamDefaultControllerType { get; set; } = null!;
-    public TypeBuilder WritableStreamDefaultWriterType { get; set; } = null!;
-    public ConstructorBuilder WritableStreamDefaultWriterCtor { get; set; } = null!;
 
     public TypeBuilder ReadableStreamType { get; set; } = null!;
     public ConstructorBuilder ReadableStreamCtor { get; set; } = null!;
     public MethodBuilder ReadableStreamEnqueue { get; set; } = null!;
     public MethodBuilder ReadableStreamCloseStream { get; set; } = null!;
     public MethodBuilder ReadableStreamErrorStream { get; set; } = null!;
-    public MethodBuilder ReadableStreamRead { get; set; } = null!;
     /// <summary>
     /// Static $ReadableStream.From(object iterable) → object (#269) — eagerly
     /// drains a guest iterable into a closed readable stream.
     /// </summary>
     public MethodBuilder ReadableStreamFrom { get; set; } = null!;
-    public TypeBuilder ReadableStreamDefaultControllerType { get; set; } = null!;
-    public TypeBuilder ReadableStreamDefaultReaderType { get; set; } = null!;
-    public ConstructorBuilder ReadableStreamDefaultReaderCtor { get; set; } = null!;
 
     public TypeBuilder TransformStreamType { get; set; } = null!;
     public ConstructorBuilder TransformStreamCtor { get; set; } = null!;

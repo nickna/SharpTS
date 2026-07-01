@@ -1282,26 +1282,24 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Core while loop execution logic for synchronous execution.
+    /// Core while-loop execution logic shared by the sync and async evaluators. The evaluation
+    /// context supplies the condition/body evaluation strategy so a single body serves both paths,
+    /// replacing the former lambda-based sync core and the hand-copied async twin.
     /// Uses HandleLoopResult for consistent break/continue handling.
     /// </summary>
-    /// <param name="evaluateCondition">Function to evaluate the loop condition.</param>
-    /// <param name="executeBody">Function to execute the loop body.</param>
-    /// <param name="labels">Labels wrapping this loop, for labeled break/continue support.</param>
-    /// <returns>The execution result (Success or propagated abrupt completion).</returns>
-    private ExecutionResult ExecuteWhileCore(
-        Func<bool> evaluateCondition,
-        Func<ExecutionResult> executeBody,
+    private async ValueTask<ExecutionResult> ExecuteWhileCore(
+        IEvaluationContext ctx,
+        Stmt.While whileStmt,
         IReadOnlyList<string>? labels = null)
     {
-        while (evaluateCondition())
+        while ((await ctx.EvaluateExprAsync(whileStmt.Condition)).IsTruthy())
         {
             // Check vm timeout token on each loop iteration
             if (_vmTimeoutToken.IsCancellationRequested)
                 throw new Runtime.Exceptions.ThrowException(
                     new Runtime.Types.SharpTSError("Script execution timed out."));
 
-            var result = executeBody();
+            var result = await ctx.ExecuteStmtAsync(whileStmt.Body);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
             if (shouldBreak) return ExecutionResult.Success();
             if (shouldContinue) continue;
@@ -1311,6 +1309,28 @@ public partial class Interpreter
             // and we execute them here, avoiding thread scheduling issues on macOS.
             ProcessPendingCallbacks();
         }
+        return ExecutionResult.Success();
+    }
+
+    /// <summary>
+    /// Core do-while-loop execution logic shared by the sync and async evaluators; the body runs
+    /// at least once before the condition is tested.
+    /// </summary>
+    private async ValueTask<ExecutionResult> ExecuteDoWhileCore(
+        IEvaluationContext ctx,
+        Stmt.DoWhile doWhileStmt,
+        IReadOnlyList<string>? labels = null)
+    {
+        do
+        {
+            var result = await ctx.ExecuteStmtAsync(doWhileStmt.Body);
+            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
+            if (shouldBreak) return ExecutionResult.Success();
+            if (shouldContinue) continue;
+            if (abruptResult.HasValue) return abruptResult.Value;
+            // Process any pending timer callbacks
+            ProcessPendingCallbacks();
+        } while ((await ctx.EvaluateExprAsync(doWhileStmt.Condition)).IsTruthy());
         return ExecutionResult.Success();
     }
 

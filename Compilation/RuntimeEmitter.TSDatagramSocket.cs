@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitDatagramSocketFinalize(EmittedRuntime runtime)
     {
-        runtime.DatagramSocketType = _dgramSocketTypeBuilder.CreateType()!;
+        _ = _dgramSocketTypeBuilder.CreateType()!;
     }
 
     /// <summary>

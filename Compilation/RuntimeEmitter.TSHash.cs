@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSHashType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tsHashField = typeBuilder.DefineField("_hash", _types.IncrementalHash, FieldAttributes.Private);
@@ -173,7 +173,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSHashUpdateMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -218,7 +218,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSHashDigestMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

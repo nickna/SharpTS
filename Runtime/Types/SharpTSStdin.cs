@@ -26,7 +26,7 @@ public class SharpTSStdin : SharpTSReadable
     /// <summary>
     /// Gets a member by name, adding stdin-specific properties on top of Readable.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

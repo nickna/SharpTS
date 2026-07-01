@@ -13,7 +13,7 @@ namespace SharpTS.Runtime.Types;
 /// Provides event subscription, emission, and management following Node.js EventEmitter semantics.
 /// Supports once listeners, prepend operations, listener inspection, and max listener warnings.
 /// </remarks>
-public class SharpTSEventEmitter : ITypeCategorized
+public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
 {
     /// <inheritdoc />
     /// <remarks>
@@ -78,8 +78,18 @@ public class SharpTSEventEmitter : ITypeCategorized
 
     /// <summary>
     /// Gets a member (method or property) by name for interpreter dispatch.
+    /// Virtual so the EventEmitter family dispatches polymorphically (#1139); subclasses
+    /// override and chain to <c>base.GetMember</c>.
     /// </summary>
-    public object? GetMember(string name)
+    public virtual object? GetMember(string name) => GetEventEmitterMember(name);
+
+    /// <summary>
+    /// Resolves the core EventEmitter members, independent of any subclass override.
+    /// Call this (instead of casting to <see cref="SharpTSEventEmitter"/>) when you need
+    /// the raw EventEmitter behavior — e.g. a writable-side "drain"/"response" listener
+    /// that must not go through Readable's flowing-mode "on"/"once" wrappers.
+    /// </summary>
+    internal object? GetEventEmitterMember(string name)
     {
         return name switch
         {

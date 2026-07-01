@@ -471,6 +471,13 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#optional-chaining">TypeScript Optional Chaining</seealso>
     private RuntimeValue EvaluateGet(Expr.Get get)
+        => EvaluateGetCore(_syncContext, get).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core property-access logic shared by the sync and async evaluators; the evaluation
+    /// context supplies the receiver-evaluation strategy so a single body serves both paths.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateGetCore(IEvaluationContext ctx, Expr.Get get)
     {
         // Handle namespace static property access (e.g., Number.MAX_VALUE, Number.NaN)
         // These namespaces don't have runtime values, but have static properties.
@@ -498,7 +505,7 @@ public partial class Interpreter
             }
         }
 
-        object? obj = Evaluate(get.Object);
+        object? obj = (await ctx.EvaluateExprAsync(get.Object)).ToObject();
         return EvaluateGetOnObject(get, obj);
     }
 
@@ -1012,15 +1019,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Evaluates property access on a class instance.
-    /// </summary>
-    private object? EvaluateGetOnInstance(SharpTSInstance instance, Token memberName)
-    {
-        instance.SetInterpreter(this);
-        return instance.Get(memberName);
-    }
-
-    /// <summary>
     /// Evaluates property access on a class instance, returning RuntimeValue directly.
     /// </summary>
     private RuntimeValue EvaluateGetOnInstanceRV(SharpTSInstance instance, Token memberName)
@@ -1477,9 +1475,15 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     private RuntimeValue EvaluateSet(Expr.Set set)
+        => EvaluateSetCore(_syncContext, set).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core property-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateSetCore(IEvaluationContext ctx, Expr.Set set)
     {
-        object? obj = Evaluate(set.Object);
-        object? value = Evaluate(set.Value);
+        object? obj = (await ctx.EvaluateExprAsync(set.Object)).ToObject();
+        object? value = (await ctx.EvaluateExprAsync(set.Value)).ToObject();
         return EvaluateSetOnObjectRV(set, obj, value);
     }
 

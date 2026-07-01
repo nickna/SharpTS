@@ -17,22 +17,22 @@ public partial class RuntimeEmitter
             FieldAttributes.Private | FieldAttributes.Static);
 
         // Static fields for cached global function TSFunction objects
-        runtime.CachedParseIntFunction = typeBuilder.DefineField(
+        _ = typeBuilder.DefineField(
             "_cachedParseIntFunction",
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        runtime.CachedParseFloatFunction = typeBuilder.DefineField(
+        _ = typeBuilder.DefineField(
             "_cachedParseFloatFunction",
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        runtime.CachedIsNaNFunction = typeBuilder.DefineField(
+        _ = typeBuilder.DefineField(
             "_cachedIsNaNFunction",
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        runtime.CachedIsFiniteFunction = typeBuilder.DefineField(
+        _ = typeBuilder.DefineField(
             "_cachedIsFiniteFunction",
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);

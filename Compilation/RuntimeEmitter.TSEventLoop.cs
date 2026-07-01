@@ -37,7 +37,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.EventLoopInstanceField = instanceField;
+        _ = instanceField;
 
         // Instance fields
         _eventLoopActiveHandlesField = typeBuilder.DefineField(

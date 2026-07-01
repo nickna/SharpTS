@@ -69,7 +69,7 @@ public partial class RuntimeEmitter
         capIL.Emit(OpCodes.Ldc_I4_0);
         capIL.Emit(OpCodes.Stfld, lengthField);
         capIL.Emit(OpCodes.Ret);
-        runtime.ArgumentsCapacityCtor = capacityCtor;
+        _ = capacityCtor;
 
         // Ctor: public $Arguments(IEnumerable<object> source) : base(source)
         // { _length = base.Count; }  — copies the source and snapshots the

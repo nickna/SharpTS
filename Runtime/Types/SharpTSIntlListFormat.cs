@@ -7,48 +7,24 @@ namespace SharpTS.Runtime.Types;
 /// Runtime representation of Intl.ListFormat.
 /// Provides locale-aware list formatting ("A, B, and C").
 /// </summary>
-public class SharpTSIntlListFormat
+public class SharpTSIntlListFormat : SharpTSIntlFormatterBase
 {
-    private readonly string _locale;
     private string _style; // "long", "short", "narrow"
     private string _type;  // "conjunction", "disjunction", "unit"
     private readonly string _lang;
 
     public SharpTSIntlListFormat(object? locale, object? options)
     {
-        string localeStr = locale?.ToString() ?? "";
-
-        CultureInfo culture;
-        try
-        {
-            culture = string.IsNullOrEmpty(localeStr)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(localeStr.Replace('_', '-'));
-        }
-        catch
-        {
-            culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
-
-        int dashIndex = _locale.IndexOf('-');
-        _lang = dashIndex >= 0 ? _locale[..dashIndex].ToLowerInvariant() : _locale.ToLowerInvariant();
+        ResolveLocale(locale);
+        _lang = PrimaryLanguage;
 
         // Defaults
         _style = "long";
         _type = "conjunction";
 
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
     }
 
     private void ParseOptions(IEnumerable<KeyValuePair<string, object?>> opts)
@@ -220,7 +196,7 @@ public class SharpTSIntlListFormat
         });
     }
 
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         return new Dictionary<string, object?>
         {
@@ -278,17 +254,9 @@ public class SharpTSIntlListFormat
     }
 
     /// <summary>
-    /// JS-facing resolvedOptions method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
-    }
-
-    /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -302,11 +270,7 @@ public class SharpTSIntlListFormat
                 var items = ToStringList(args.Length > 0 ? args[0].ToObject() : null);
                 return RuntimeValue.FromBoxed(GetFormattedParts(items));
             }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
-            }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 

@@ -921,6 +921,61 @@ public abstract partial class ExpressionEmitterBase
     };
 
     /// <summary>
+    /// True when any statement in <paramref name="statements"/> can suspend the enclosing state
+    /// machine. Statement analogue of <see cref="AnyContainsSuspension(IEnumerable{Expr})"/>.
+    /// </summary>
+    protected static bool AnyStmtContainsSuspension(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+            if (StmtContainsSuspension(stmt))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// True when executing <paramref name="stmt"/> can suspend the enclosing state machine (contains an
+    /// <c>await</c>, a <c>yield</c>, or an implicit <c>for await…of</c> suspension). Every state-machine
+    /// family — sync generator, async function/arrow, and async generator — shares this single walker so
+    /// the hand-maintained copies can no longer drift apart; that drift repeatedly shipped illegal
+    /// <c>BranchIntoTry</c> resume labels (InvalidProgramException) when a suspension inside a <c>try</c>
+    /// was under-reported and took the real-IL try path (#631 / #850 / #914). Expression suspension is
+    /// delegated to <see cref="ExprContainsSuspension"/> (the paired walker that was unified first); nested
+    /// function/arrow/class bodies are not traversed there — their await/yield belong to their own state
+    /// machine. A <c>for await…of</c> always suspends on its implicit next()/return() awaits (#631/#697)
+    /// even with no explicit await in the iterable or body; a plain generator can never parse a
+    /// <c>for await</c>, so its <c>fo.IsAsync</c> arm is vacuously false.
+    /// </summary>
+    protected static bool StmtContainsSuspension(Stmt stmt) => stmt switch
+    {
+        Stmt.Expression e => ExprContainsSuspension(e.Expr),
+        Stmt.Var v => v.Initializer != null && ExprContainsSuspension(v.Initializer),
+        Stmt.Const c => ExprContainsSuspension(c.Initializer),
+        Stmt.Return r => r.Value != null && ExprContainsSuspension(r.Value),
+        Stmt.If i => ExprContainsSuspension(i.Condition)
+            || StmtContainsSuspension(i.ThenBranch)
+            || (i.ElseBranch != null && StmtContainsSuspension(i.ElseBranch)),
+        Stmt.While w => ExprContainsSuspension(w.Condition) || StmtContainsSuspension(w.Body),
+        Stmt.DoWhile dw => StmtContainsSuspension(dw.Body) || ExprContainsSuspension(dw.Condition),
+        Stmt.For f => (f.Initializer != null && StmtContainsSuspension(f.Initializer))
+            || (f.Condition != null && ExprContainsSuspension(f.Condition))
+            || (f.Increment != null && ExprContainsSuspension(f.Increment))
+            || StmtContainsSuspension(f.Body),
+        Stmt.ForOf fo => fo.IsAsync || ExprContainsSuspension(fo.Iterable) || StmtContainsSuspension(fo.Body),
+        Stmt.ForIn fi => ExprContainsSuspension(fi.Object) || StmtContainsSuspension(fi.Body),
+        Stmt.Block b => AnyStmtContainsSuspension(b.Statements),
+        Stmt.Sequence seq => AnyStmtContainsSuspension(seq.Statements),
+        Stmt.LabeledStatement ls => StmtContainsSuspension(ls.Statement),
+        Stmt.Switch s => s.Cases.Any(c => ExprContainsSuspension(c.Value) || AnyStmtContainsSuspension(c.Body))
+            || (s.DefaultBody != null && AnyStmtContainsSuspension(s.DefaultBody)),
+        Stmt.TryCatch t => AnyStmtContainsSuspension(t.TryBlock)
+            || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
+            || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock)),
+        Stmt.Throw th => ExprContainsSuspension(th.Value),
+        Stmt.Print p => ExprContainsSuspension(p.Expr),
+        _ => false
+    };
+
+    /// <summary>
     /// Emits the ExpandCallArgs call with Symbol.iterator and runtime type arguments.
     /// Expects args array and isSpread array on the stack.
     /// </summary>

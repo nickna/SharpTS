@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
             _types.Double,
             Type.EmptyTypes
         );
-        runtime.StatsModeGetter = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);

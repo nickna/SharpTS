@@ -66,7 +66,7 @@ public partial class RuntimeEmitter
 
         var type = typeBuilder.CreateType()!;
         runtime.FrozenSealedStateType = type;
-        runtime.FrozenSealedStateCtor = ctor;
+        _ = ctor;
         runtime.FrozenSealedStateIsFrozen = type.GetProperty("IsFrozen")!;
         runtime.FrozenSealedStateIsSealed = type.GetProperty("IsSealed")!;
         runtime.FrozenSealedStateIsExtensible = type.GetProperty("IsExtensible")!;
@@ -102,7 +102,7 @@ public partial class RuntimeEmitter
 
         var type = typeBuilder.CreateType()!;
         runtime.PrototypeInfoType = type;
-        runtime.PrototypeInfoCtor = ctor;
+        _ = ctor;
         runtime.PrototypeInfoPrototype = type.GetProperty("Prototype")!;
     }
 
@@ -240,10 +240,10 @@ public partial class RuntimeEmitter
         cctorIl.Emit(OpCodes.Ret);
 
         // Store field references for method emission
-        runtime.PDSDescriptorsField = descriptorsField;
-        runtime.PDSFrozenSealedField = frozenSealedField;
-        runtime.PDSSymbolStorageField = symbolStorageField;
-        runtime.PDSPrototypeStoreField = prototypeStoreField;
+        _ = descriptorsField;
+        _ = frozenSealedField;
+        _ = symbolStorageField;
+        _ = prototypeStoreField;
 
         // Get methods from open generic types for use with TypeBuilder.GetMethod
         var cwtOpenType = typeof(ConditionalWeakTable<,>);
@@ -293,7 +293,7 @@ public partial class RuntimeEmitter
         EmitPDSGetAllExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
 
         var type = typeBuilder.CreateType()!;
-        runtime.PropertyDescriptorStoreType = type;
+        _ = type;
     }
 
     /// <summary>

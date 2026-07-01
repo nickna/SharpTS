@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
         // receivers per ECMA-262 22.1.3.* step 1. Used for borrowed-method
         // patterns (`String.prototype.match.call(null, /./)`) where the inline
         // dispatch path doesn't fire.
-        runtime.StringPrototypeStrictStub = EmitStringStringStub(typeBuilder, runtime, "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
+        _ = EmitStringStringStub(typeBuilder, runtime, "_StringPrototypeStrictStub", "ToString", strictReceiver: true);
 
         // ECMA-262 22.1.3.27 String.prototype.toString === valueOf === thisStringValue.
         // Returns the underlying string for both primitive strings and Stage-4z19

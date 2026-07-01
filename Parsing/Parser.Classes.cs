@@ -207,19 +207,23 @@ public partial class Parser
                     // Setter must have exactly one parameter
                     Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name in setter.");
                     string? paramType = null;
+                    TypeNode? paramTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         paramType = ParseTypeAnnotation();
+                        paramTypeNode = TakeTypeNode();
                     }
-                    setterParam = new Stmt.Parameter(paramName, paramType, null);
+                    setterParam = new Stmt.Parameter(paramName, paramType, null, TypeAnnotationNode: paramTypeNode);
                 }
 
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
 
                 string? returnType = null;
+                TypeNode? returnTypeNode = null;
                 if (Match(TokenType.COLON))
                 {
                     returnType = ParseTypeAnnotation();
+                    returnTypeNode = TakeTypeNode();
                 }
 
                 List<Stmt> body;
@@ -235,7 +239,7 @@ public partial class Parser
                     body = Block();
                 }
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators, isStatic, accessorComputedKey));
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, isMemberAbstract, isOverride, memberDecorators, isStatic, accessorComputedKey, returnTypeNode));
             }
             // Check for private field: #name...
             else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)
@@ -566,8 +570,9 @@ public partial class Parser
         if (!Match(TokenType.COLON)) { _current = saved; return null; }
 
         string valueType = ParseTypeAnnotation();
+        TypeNode? valueTypeNode = TakeTypeNode();
         ConsumeSemicolon("Expect ';' after index signature.");
-        return new Stmt.IndexSignature(keyName, keyType, valueType);
+        return new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode);
     }
 
     /// <summary>
@@ -767,25 +772,29 @@ public partial class Parser
                 {
                     Token paramName = Consume(TokenType.IDENTIFIER, "Expect parameter name in setter.");
                     string? paramType = null;
+                    TypeNode? paramTypeNode = null;
                     if (Match(TokenType.COLON))
                     {
                         paramType = ParseTypeAnnotation();
+                        paramTypeNode = TakeTypeNode();
                     }
-                    setterParam = new Stmt.Parameter(paramName, paramType, null);
+                    setterParam = new Stmt.Parameter(paramName, paramType, null, TypeAnnotationNode: paramTypeNode);
                 }
 
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
 
                 string? returnType = null;
+                TypeNode? returnTypeNode = null;
                 if (Match(TokenType.COLON))
                 {
                     returnType = ParseTypeAnnotation();
+                    returnTypeNode = TakeTypeNode();
                 }
 
                 Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
                 List<Stmt> body = Block();
 
-                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsStatic: isStatic, ComputedKey: accessorComputedKey));
+                accessors.Add(new Stmt.Accessor(accessorName, kind, setterParam, body, returnType, access, IsStatic: isStatic, ComputedKey: accessorComputedKey, ReturnTypeNode: returnTypeNode));
             }
             // Check for private field/method: #name...
             else if (Peek().Type == TokenType.PRIVATE_IDENTIFIER)

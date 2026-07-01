@@ -193,7 +193,7 @@ public partial class RuntimeEmitter
             nullableInt32,
             Type.EmptyTypes
         );
-        runtime.NodeErrorErrnoGetter = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);

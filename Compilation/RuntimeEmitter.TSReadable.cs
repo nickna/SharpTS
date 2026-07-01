@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.TSReadableRead = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         var returnNullLabel = il.DefineLabel();
@@ -817,7 +817,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSReadableUnpipe = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // return this (simplified)
@@ -834,7 +834,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSReadableSetEncoding = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // _encoding = encoding?.ToLowerInvariant() ?? "utf8"
@@ -941,7 +941,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object]
         );
-        runtime.TSReadableUnshift = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Simplified: just enqueue (proper implementation would prepend)
@@ -963,7 +963,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             Type.EmptyTypes
         );
-        runtime.TSReadablePause = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // _flowing = 0 (paused)
@@ -992,7 +992,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             Type.EmptyTypes
         );
-        runtime.TSReadableResume = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         var queueType = typeof(Queue<object?>);
@@ -1066,7 +1066,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes
         );
-        runtime.TSReadableIsPaused = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // return _flowing == 0

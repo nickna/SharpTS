@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
     {
         var typeBuilder = moduleBuilder.DefineType("$ClusterContext",
             TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
-        runtime.ClusterContextType = typeBuilder;
+        _ = typeBuilder;
 
         var tsAttr = new CustomAttributeBuilder(
             typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!, []);
@@ -101,7 +101,7 @@ public partial class RuntimeEmitter
         // [ThreadStatic] public static double WorkerId
         var workerId = typeBuilder.DefineField("WorkerId", _types.Double, FieldAttributes.Public | FieldAttributes.Static);
         workerId.SetCustomAttribute(tsAttr);
-        runtime.ClusterContextWorkerIdField = workerId;
+        _ = workerId;
 
         // [ThreadStatic] public static object CurrentWorker
         var currentWorker = typeBuilder.DefineField("CurrentWorker", _types.Object, FieldAttributes.Public | FieldAttributes.Static);
@@ -111,12 +111,12 @@ public partial class RuntimeEmitter
         // [ThreadStatic] public static BlockingCollection<object> PrimaryToWorkerQueue
         var p2wQueue = typeBuilder.DefineField("PrimaryToWorkerQueue", _blockingCollectionOfObject, FieldAttributes.Public | FieldAttributes.Static);
         p2wQueue.SetCustomAttribute(tsAttr);
-        runtime.ClusterContextPrimaryToWorkerQueueField = p2wQueue;
+        _ = p2wQueue;
 
         // [ThreadStatic] public static BlockingCollection<object> WorkerToPrimaryQueue
         var w2pQueue = typeBuilder.DefineField("WorkerToPrimaryQueue", _blockingCollectionOfObject, FieldAttributes.Public | FieldAttributes.Static);
         w2pQueue.SetCustomAttribute(tsAttr);
-        runtime.ClusterContextWorkerToPrimaryQueueField = w2pQueue;
+        _ = w2pQueue;
 
         typeBuilder.CreateType();
     }
@@ -174,7 +174,7 @@ public partial class RuntimeEmitter
     {
         var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public,
             CallingConventions.Standard, Type.EmptyTypes);
-        runtime.ClusterWorkerCtor = ctor;
+        _ = ctor;
         var il = ctor.GetILGenerator();
 
         // base() — call $EventEmitter ctor
@@ -221,7 +221,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("Send",
             MethodAttributes.Public, typeof(void), [_types.Object]);
-        runtime.ClusterWorkerSend = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var retLabel = il.DefineLabel();
@@ -302,7 +302,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("Kill",
             MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        runtime.ClusterWorkerKill = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var retLabel = il.DefineLabel();
@@ -337,7 +337,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("DeliverMessages",
             MethodAttributes.Public, typeof(void), Type.EmptyTypes);
-        runtime.ClusterWorkerDeliverMessages = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var loopStart = il.DefineLabel();
@@ -378,7 +378,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("GetMember",
             MethodAttributes.Public, _types.Object, [_types.String]);
-        runtime.ClusterWorkerGetMember = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var strEquals = _types.String.GetMethod("Equals", [_types.String])!;
@@ -460,12 +460,12 @@ public partial class RuntimeEmitter
         var typeBuilder = moduleBuilder.DefineType("$ClusterManager",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit,
             runtime.TSEventEmitterType);
-        runtime.ClusterManagerType = typeBuilder;
+        _ = typeBuilder;
 
         // Static fields
         runtime.ClusterManagerInstanceField = typeBuilder.DefineField("Instance",
             typeBuilder, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
-        runtime.ClusterManagerEntryPointField = typeBuilder.DefineField("EntryPoint",
+        _ = typeBuilder.DefineField("EntryPoint",
             typeof(Action), FieldAttributes.Public | FieldAttributes.Static);
 
         // Instance fields
@@ -693,7 +693,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("RemoveWorker",
             MethodAttributes.Public, typeof(void), [_types.Double]);
-        runtime.ClusterManagerRemoveWorker = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var outLocal = il.DeclareLocal(_types.Object);
@@ -714,7 +714,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("EmitWorkerEvent",
             MethodAttributes.Public, typeof(void), [_types.String, _types.Object, _types.Double]);
-        runtime.ClusterManagerEmitWorkerEvent = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         // this.Emit(eventName, [worker, exitCode])
@@ -743,7 +743,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("GetMember",
             MethodAttributes.Public, _types.Object, [_types.String]);
-        runtime.ClusterManagerGetMember = method;
+        _ = method;
         var il = method.GetILGenerator();
 
         var strEquals = _types.String.GetMethod("Equals", [_types.String])!;

@@ -131,7 +131,7 @@ public class SharpTSWritableStream : ITypeCategorized
         try
         {
             size = SizeAlgorithm != null
-                ? ToDouble(RuntimeCallableDispatcher.Invoke(OwnerInterpreter, SizeAlgorithm, chunk))
+                ? Interp.ToNumber(RuntimeCallableDispatcher.Invoke(OwnerInterpreter, SizeAlgorithm, chunk))
                 : 1.0;
         }
         catch (Exception ex)
@@ -353,14 +353,6 @@ public class SharpTSWritableStream : ITypeCategorized
         PendingCloseTcs?.TrySetException(new SharpTSPromiseRejectedException(error));
         Writer?.NotifyErrored(error);
     }
-
-    private static double ToDouble(object? v) => v switch
-    {
-        double d => d,
-        int i => i,
-        long l => l,
-        _ => 1.0,
-    };
 
     public object? GetMember(string name)
     {

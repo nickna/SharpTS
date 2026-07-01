@@ -34,7 +34,12 @@ public static class CallableInterop
         return values;
     }
 
-    /// <summary>Converts a RuntimeValue span to a boxed argument list.</summary>
+    /// <summary>
+    /// Converts a RuntimeValue span to a boxed argument list. This is the single shared
+    /// span→boxed-list helper for the built-in V2 shims (Object/Array/Iterator) whose legacy
+    /// bodies still consume <c>List&lt;object?&gt;</c>; it replaces the per-file <c>SpanToList</c>
+    /// copies that previously duplicated it.
+    /// </summary>
     public static List<object?> ToBoxedList(ReadOnlySpan<RuntimeValue> arguments)
     {
         var boxed = new List<object?>(arguments.Length);

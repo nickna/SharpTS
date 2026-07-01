@@ -69,7 +69,7 @@ public class SharpTSHttpResponse : SharpTSWritable
     /// Gets a member (property or method) by name.
     /// Overrides Writable.GetMember to add HTTP-specific methods.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

@@ -37,11 +37,6 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     }
 
     /// <summary>
-    /// Gets a variable as object? for legacy callers.
-    /// </summary>
-    public object? GetBoxed(Token name) => Get(name).ToObject();
-
-    /// <summary>
     /// Attempts to get a variable value in a single scope chain traversal.
     /// </summary>
     public bool TryGet(string name, out RuntimeValue value)
@@ -90,11 +85,6 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     {
         return Ancestor(distance)._values.GetValueOrDefault(name);
     }
-
-    /// <summary>
-    /// Gets a variable as object? at a specific scope distance (legacy).
-    /// </summary>
-    public object? GetAtBoxed(int distance, string name) => GetAt(distance, name).ToObject();
 
     /// <summary>
     /// Assigns a variable at a specific scope distance.

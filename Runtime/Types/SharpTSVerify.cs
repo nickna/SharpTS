@@ -33,24 +33,8 @@ public class SharpTSVerify
     /// Parses the algorithm string into a HashAlgorithmName.
     /// Supports both simple names (sha256) and prefixed names (RSA-SHA256).
     /// </summary>
-    private static HashAlgorithmName ParseAlgorithm(string algorithm)
-    {
-        // Normalize: remove prefix like "RSA-" or "ECDSA-" and lowercase
-        var normalized = algorithm.ToLowerInvariant();
-        if (normalized.StartsWith("rsa-"))
-            normalized = normalized[4..];
-        else if (normalized.StartsWith("ecdsa-"))
-            normalized = normalized[6..];
-
-        return normalized switch
-        {
-            "sha1" => HashAlgorithmName.SHA1,
-            "sha256" => HashAlgorithmName.SHA256,
-            "sha384" => HashAlgorithmName.SHA384,
-            "sha512" => HashAlgorithmName.SHA512,
-            _ => throw new ArgumentException($"Unsupported verification algorithm: {algorithm}")
-        };
-    }
+    private static HashAlgorithmName ParseAlgorithm(string algorithm) =>
+        CryptoAlgorithms.ParseHashName(algorithm, stripSignaturePrefix: true, context: "verification");
 
     /// <summary>
     /// Updates the verifier with the given data.
@@ -95,17 +79,7 @@ public class SharpTSVerify
         var dataBytes = _data.ToArray();
 
         // Convert signature to bytes
-        byte[] signatureBytes = signature switch
-        {
-            string sigStr when signatureEncoding?.ToLowerInvariant() == "hex" =>
-                Convert.FromHexString(sigStr),
-            string sigStr when signatureEncoding?.ToLowerInvariant() == "base64" =>
-                Convert.FromBase64String(sigStr),
-            string sigStr => Encoding.UTF8.GetBytes(sigStr),
-            SharpTSBuffer buf => buf.Data,
-            byte[] bytes => bytes,
-            _ => throw new ArgumentException("Signature must be a string or Buffer")
-        };
+        byte[] signatureBytes = CryptoEncoding.FromEncoded(signature, signatureEncoding);
 
         // Detect key type from PEM header
         if (publicKeyPem.Contains("EC PUBLIC KEY") || publicKeyPem.Contains("-----BEGIN PUBLIC KEY-----"))

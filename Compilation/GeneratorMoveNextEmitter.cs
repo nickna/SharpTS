@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// Emits the MoveNext method body for a generator state machine.
 /// Handles state dispatch, yield points, and generator completion.
 /// </summary>
-public partial class GeneratorMoveNextEmitter : StateMachineExitRoutingEmitter
+public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
 {
     private readonly GeneratorStateMachineBuilder _builder;
     private readonly GeneratorStateAnalyzer.GeneratorFunctionAnalysis _analysis;

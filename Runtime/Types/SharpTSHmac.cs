@@ -25,15 +25,7 @@ public class SharpTSHmac
     /// <param name="key">The secret key as a string (UTF-8 encoded) or byte array</param>
     public SharpTSHmac(string algorithm, object key)
     {
-        var hashName = algorithm.ToLowerInvariant() switch
-        {
-            "md5" => HashAlgorithmName.MD5,
-            "sha1" => HashAlgorithmName.SHA1,
-            "sha256" => HashAlgorithmName.SHA256,
-            "sha384" => HashAlgorithmName.SHA384,
-            "sha512" => HashAlgorithmName.SHA512,
-            _ => throw new ArgumentException($"Unsupported HMAC algorithm: {algorithm}")
-        };
+        var hashName = CryptoAlgorithms.ParseHashName(algorithm, context: "HMAC");
 
         byte[] keyBytes = ConvertToBytes(key);
         _hmac = IncrementalHash.CreateHMAC(hashName, keyBytes);
@@ -102,12 +94,7 @@ public class SharpTSHmac
         _finalized = true;
         var hmacBytes = _hmac.GetHashAndReset();
 
-        return encoding?.ToLowerInvariant() switch
-        {
-            "hex" => Convert.ToHexString(hmacBytes).ToLowerInvariant(),
-            "base64" => Convert.ToBase64String(hmacBytes),
-            _ => new SharpTSBuffer(hmacBytes)
-        };
+        return CryptoEncoding.ToBufferOrString(hmacBytes, encoding);
     }
 
     /// <summary>

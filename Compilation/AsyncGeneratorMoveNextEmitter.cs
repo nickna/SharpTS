@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// Emits the MoveNextAsync method body for an async generator state machine.
 /// Handles state dispatch, yield points, await points, and generator completion.
 /// </summary>
-public partial class AsyncGeneratorMoveNextEmitter : StateMachineExitRoutingEmitter
+public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
 {
     private readonly AsyncGeneratorStateMachineBuilder _builder;
     private readonly AsyncGeneratorStateAnalyzer.AsyncGeneratorFunctionAnalysis _analysis;

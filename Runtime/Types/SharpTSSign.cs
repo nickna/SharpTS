@@ -33,24 +33,8 @@ public class SharpTSSign
     /// Parses the algorithm string into a HashAlgorithmName.
     /// Supports both simple names (sha256) and prefixed names (RSA-SHA256).
     /// </summary>
-    private static HashAlgorithmName ParseAlgorithm(string algorithm)
-    {
-        // Normalize: remove prefix like "RSA-" or "ECDSA-" and lowercase
-        var normalized = algorithm.ToLowerInvariant();
-        if (normalized.StartsWith("rsa-"))
-            normalized = normalized[4..];
-        else if (normalized.StartsWith("ecdsa-"))
-            normalized = normalized[6..];
-
-        return normalized switch
-        {
-            "sha1" => HashAlgorithmName.SHA1,
-            "sha256" => HashAlgorithmName.SHA256,
-            "sha384" => HashAlgorithmName.SHA384,
-            "sha512" => HashAlgorithmName.SHA512,
-            _ => throw new ArgumentException($"Unsupported signing algorithm: {algorithm}")
-        };
-    }
+    private static HashAlgorithmName ParseAlgorithm(string algorithm) =>
+        CryptoAlgorithms.ParseHashName(algorithm, stripSignaturePrefix: true, context: "signing");
 
     /// <summary>
     /// Updates the signer with the given data.
@@ -121,12 +105,7 @@ public class SharpTSSign
             signature = rsa.SignData(dataBytes, _hashAlgorithm, RSASignaturePadding.Pkcs1);
         }
 
-        return encoding?.ToLowerInvariant() switch
-        {
-            "hex" => Convert.ToHexString(signature).ToLowerInvariant(),
-            "base64" => Convert.ToBase64String(signature),
-            _ => new SharpTSBuffer(signature)
-        };
+        return CryptoEncoding.ToBufferOrString(signature, encoding);
     }
 
     /// <summary>

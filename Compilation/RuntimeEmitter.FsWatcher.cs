@@ -45,9 +45,9 @@ public partial class RuntimeEmitter
         EmitFsWatcherConstructor(runtime);
         EmitFsWatcherClose(runtime);
 
-        runtime.FsWatcherType = _fsWatcherType;
-        runtime.FsWatcherCtor = _fsWatcherCtor;
-        runtime.FsWatcherClose = _fsWatcherCloseMethod;
+        _ = _fsWatcherType;
+        _ = _fsWatcherCtor;
+        _ = _fsWatcherCloseMethod;
 
         _fsWatcherType.CreateType();
     }

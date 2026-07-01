@@ -982,7 +982,7 @@ public partial class RuntimeEmitter
             runtime.TSEventEmitterType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.ProcessEventEmitterInstance = field;
+        _ = field;
 
         // Getter method that lazily creates the instance
         var getter = typeBuilder.DefineMethod(

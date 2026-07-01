@@ -229,7 +229,7 @@ public class SharpTSReadableStream : ITypeCategorized
         try
         {
             size = SizeAlgorithm != null
-                ? ToDouble(RuntimeCallableDispatcher.Invoke(OwnerInterpreter, SizeAlgorithm, chunk))
+                ? Interp.ToNumber(RuntimeCallableDispatcher.Invoke(OwnerInterpreter, SizeAlgorithm, chunk))
                 : 1.0;
         }
         catch (Exception ex)
@@ -401,14 +401,6 @@ public class SharpTSReadableStream : ITypeCategorized
             ["done"] = (object)done,
         };
     }
-
-    private static double ToDouble(object? v) => v switch
-    {
-        double d => d,
-        int i => i,
-        long l => l,
-        _ => 1.0,
-    };
 
     // ------- public API (member dispatch) ---------------------------------
 

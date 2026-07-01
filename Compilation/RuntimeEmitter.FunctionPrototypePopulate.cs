@@ -30,10 +30,10 @@ public partial class RuntimeEmitter
         var applyHelper = EmitFunctionProtoApplyHelper(typeBuilder, runtime);
         var bindHelper = EmitFunctionProtoBindHelper(typeBuilder, runtime);
         var toStringHelper = EmitFunctionProtoToStringHelper(typeBuilder, runtime);
-        runtime.FunctionProtoCallHelper = callHelper;
-        runtime.FunctionProtoApplyHelper = applyHelper;
-        runtime.FunctionProtoBindHelper = bindHelper;
-        runtime.FunctionProtoToStringHelper = toStringHelper;
+        _ = callHelper;
+        _ = applyHelper;
+        _ = bindHelper;
+        _ = toStringHelper;
 
         var method = runtime.FunctionPrototypePopulateMethod;
         var il = method.GetILGenerator();

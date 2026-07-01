@@ -28,7 +28,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSVerifyType = _tsVerifyTypeBuilder;
+        _ = _tsVerifyTypeBuilder;
 
         // Fields
         _tsVerifyHashAlgorithmField = _tsVerifyTypeBuilder.DefineField("_hashAlgorithm", _types.HashAlgorithmName, FieldAttributes.Private);
@@ -206,7 +206,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSVerifyUpdateMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -251,7 +251,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String, _types.Object, _types.String]
         );
-        runtime.TSVerifyVerifyMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

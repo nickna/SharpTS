@@ -15,12 +15,9 @@ public partial class GeneratorMoveNextEmitter
     protected override FieldBuilder DefineStateMachineField(string name, Type type) =>
         _builder.StateMachineType.DefineField(name, type, FieldAttributes.Private);
 
-    protected override int ProtectedRegionDepth => _protectedRegionDepth;
-
-    // Depth of real IL exception blocks (EmitSimpleTryCatch / EmitSyncSegmentInTry) open around the
-    // current emission point. While > 0, a `br`/`ret` out of the region would be illegal, so exits are
-    // left to the existing per-path handling instead of being routed through the finally machinery.
-    private int _protectedRegionDepth;
+    // ProtectedRegionDepth and its _protectedRegionDepth backing field, plus the suspension-agnostic
+    // EmitSimpleTryCatch / StoreCaughtExceptionToParam, live in the shared IteratorMoveNextEmitter base
+    // (byte-identical with the async generator before #1123).
 
     // True while emitting a catch or finally body. A `throw` there must run the enclosing finally(s);
     // a `throw` in a try body is instead captured by its sync-segment mini try/catch (and so must not
@@ -155,21 +152,6 @@ public partial class GeneratorMoveNextEmitter
     }
 
     // ---- Routing helpers ------------------------------------------------------------------------
-
-    /// <summary>
-    /// The finally scopes strictly inside the flag-based try whose body began at <paramref
-    /// name="scopeDepth"/> (= <c>_exitScopes.Count</c> at that point), innermost first. Excludes the
-    /// try's own finally (which lives just below scopeDepth) and everything outside it. These are the
-    /// finallys a throw escaping a nested handler must run before reaching that try's catch (#632).
-    /// </summary>
-    private List<FinallyScope> FinallyFramesInside(int scopeDepth)
-    {
-        var result = new List<FinallyScope>();
-        for (int i = _exitScopes.Count - 1; i >= scopeDepth; i--)
-            if (_exitScopes[i] is FinallyScope fs)
-                result.Add(fs);
-        return result;
-    }
 
     private void RegisterReturnTerminal() => _exitTerminals.TryAdd(ExitCodeReturn, () =>
     {
@@ -348,9 +330,9 @@ public partial class GeneratorMoveNextEmitter
     /// </summary>
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
-        bool hasYields = ContainsYield(t.TryBlock)
-            || (t.CatchBlock != null && ContainsYield(t.CatchBlock))
-            || (t.FinallyBlock != null && ContainsYield(t.FinallyBlock));
+        bool hasYields = AnyStmtContainsSuspension(t.TryBlock)
+            || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
+            || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock));
 
         // A return/break/continue lexically inside the finally body can never be lowered with the
         // real-IL path: none of `ret`/`br`/`Leave` may exit a .NET `finally` region, so it would emit
@@ -367,75 +349,9 @@ public partial class GeneratorMoveNextEmitter
             EmitSimpleTryCatch(t);
     }
 
-    /// <summary>
-    /// No yield crosses the protected region — real IL exception blocks are correct and cheapest.
-    /// This is the original generator try/catch emission, unchanged.
-    /// </summary>
-    private void EmitSimpleTryCatch(Stmt.TryCatch t)
-    {
-        // A real IL protected region is open. A `br`/`ret` directly out of it is illegal, so a
-        // non-local exit crossing it must use `Leave` instead — which also runs this (no-yield)
-        // finally. _protectedRegionDepth tells the exit overrides a real block is open (so they pick
-        // `Leave` and, when also inside flag-based finally(s), route out via the innermost flag
-        // cleanup); ExceptionBlockDepth drives the Leave-vs-Br choice in EmitBranchToLabel. The latter
-        // is incremented only here (not in the flag path's sync segments) so internal branches inside
-        // a sync segment stay `Br` and do not illegally leave the mini try/catch.
-        _protectedRegionDepth++;
-        _ctx!.ExceptionBlockDepth++;
-        _il.BeginExceptionBlock();
-
-        foreach (var stmt in t.TryBlock)
-            EmitStatement(stmt);
-
-        if (t.CatchBlock != null)
-        {
-            _il.BeginCatchBlock(typeof(Exception));
-
-            if (t.CatchParam != null)
-            {
-                // Stack has the .NET exception; wrap to the TS value and bind to the catch param.
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
-                StoreCaughtExceptionToParam(t.CatchParam.Lexeme);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Pop);
-            }
-
-            foreach (var stmt in t.CatchBlock)
-                EmitStatement(stmt);
-        }
-
-        if (t.FinallyBlock != null)
-        {
-            _il.BeginFinallyBlock();
-            foreach (var stmt in t.FinallyBlock)
-                EmitStatement(stmt);
-        }
-
-        _il.EndExceptionBlock();
-        _ctx!.ExceptionBlockDepth--;
-        _protectedRegionDepth--;
-    }
-
-    /// <summary>
-    /// Binds the caught exception value (on the IL stack) to the catch parameter, honouring
-    /// whether the parameter was hoisted to a state-machine field (used across a yield) or lives
-    /// in an IL local. Storing to a fresh local unconditionally — the previous behaviour — lost
-    /// the value whenever the catch parameter was hoisted, because reads resolve the field first.
-    /// </summary>
-    private void StoreCaughtExceptionToParam(string name)
-    {
-        if (GetHoistedVariableField(name) == null)
-        {
-            // Not hoisted: register a local so the catch body's reads resolve to it.
-            var exLocal = _il.DeclareLocal(typeof(object));
-            _ctx!.Locals.RegisterLocal(name, exLocal);
-        }
-
-        // Resolver stores to the hoisted field if present, otherwise the registered local.
-        Resolver.TryStoreVariable(name);
-    }
+    // The no-suspension EmitSimpleTryCatch (real IL exception blocks — correct and cheapest when no
+    // yield crosses the protected region) and its hoisted-field-aware StoreCaughtExceptionToParam moved
+    // to the shared IteratorMoveNextEmitter base (#1123): byte-identical with the async generator.
 
     /// <summary>
     /// Flag-based try/catch/finally for the case where a yield (or yield*) lives inside the
@@ -460,7 +376,7 @@ public partial class GeneratorMoveNextEmitter
         // post-finally rethrow. Allocated only for that shape; null means "use the local". The
         // present flag needs the same persistence (read by the rethrow gate after the finally, #619).
         bool persistAcrossYieldingFinally =
-            t.CatchBlock == null && t.FinallyBlock != null && ContainsYield(t.FinallyBlock);
+            t.CatchBlock == null && t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
         FieldBuilder? caughtExceptionField = persistAcrossYieldingFinally ? DefineCaughtExceptionField() : null;
         FieldBuilder? exceptionPresentField = persistAcrossYieldingFinally ? DefineExceptionPresentField() : null;
 
@@ -759,78 +675,11 @@ public partial class GeneratorMoveNextEmitter
     /// would otherwise produce illegal IL inside the segment's protected region.
     /// </summary>
     private static bool IsSegmentBreaker(Stmt stmt) =>
-        ContainsYieldInStmt(stmt) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false);
+        StmtContainsSuspension(stmt) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false);
 
-    private static bool ContainsYield(List<Stmt> statements)
-    {
-        foreach (var stmt in statements)
-            if (ContainsYieldInStmt(stmt))
-                return true;
-        return false;
-    }
-
-    private static bool ContainsYieldInStmt(Stmt stmt)
-    {
-        switch (stmt)
-        {
-            case Stmt.Expression e:
-                return ContainsYieldInExpr(e.Expr);
-            case Stmt.Var v:
-                return v.Initializer != null && ContainsYieldInExpr(v.Initializer);
-            case Stmt.Const c:
-                return ContainsYieldInExpr(c.Initializer);
-            case Stmt.Return r:
-                return r.Value != null && ContainsYieldInExpr(r.Value);
-            case Stmt.If i:
-                return ContainsYieldInExpr(i.Condition)
-                    || ContainsYieldInStmt(i.ThenBranch)
-                    || (i.ElseBranch != null && ContainsYieldInStmt(i.ElseBranch));
-            case Stmt.While w:
-                return ContainsYieldInExpr(w.Condition) || ContainsYieldInStmt(w.Body);
-            case Stmt.DoWhile dw:
-                return ContainsYieldInStmt(dw.Body) || ContainsYieldInExpr(dw.Condition);
-            case Stmt.For f:
-                return (f.Initializer != null && ContainsYieldInStmt(f.Initializer))
-                    || (f.Condition != null && ContainsYieldInExpr(f.Condition))
-                    || (f.Increment != null && ContainsYieldInExpr(f.Increment))
-                    || ContainsYieldInStmt(f.Body);
-            case Stmt.ForOf fo:
-                return ContainsYieldInExpr(fo.Iterable) || ContainsYieldInStmt(fo.Body);
-            case Stmt.ForIn fi:
-                return ContainsYieldInExpr(fi.Object) || ContainsYieldInStmt(fi.Body);
-            case Stmt.Block b:
-                return b.Statements != null && ContainsYield(b.Statements);
-            case Stmt.Sequence seq:
-                return ContainsYield(seq.Statements);
-            case Stmt.LabeledStatement ls:
-                return ContainsYieldInStmt(ls.Statement);
-            case Stmt.Switch s:
-                foreach (var c in s.Cases)
-                {
-                    if (ContainsYieldInExpr(c.Value) || ContainsYield(c.Body))
-                        return true;
-                }
-                return s.DefaultBody != null && ContainsYield(s.DefaultBody);
-            case Stmt.TryCatch t:
-                return ContainsYield(t.TryBlock)
-                    || (t.CatchBlock != null && ContainsYield(t.CatchBlock))
-                    || (t.FinallyBlock != null && ContainsYield(t.FinallyBlock));
-            case Stmt.Throw th:
-                return ContainsYieldInExpr(th.Value);
-            case Stmt.Print p:
-                return ContainsYieldInExpr(p.Expr);
-            default:
-                return false;
-        }
-    }
-
-    // Delegates to the canonical, exhaustive suspension walker shared by every state-machine emitter
-    // (ExpressionEmitterBase.ExprContainsSuspension). The previous hand-maintained switch had drifted
-    // and was missing CompoundSetIndex/CompoundSet/LogicalAssign/LogicalSet/LogicalSetIndex plus yield
-    // nested in array/object/template literals and new(...) — the same under-reporting that produced an
-    // illegal BranchIntoTry resume label for those forms inside a try (#914). A plain generator never
-    // contains `await`, so the helper's Await arm is vacuously inapplicable here.
-    private static bool ContainsYieldInExpr(Expr expr) => ExprContainsSuspension(expr);
+    // The yield-suspension statement/expression walkers now live in ExpressionEmitterBase as the single
+    // StmtContainsSuspension/ExprContainsSuspension pair shared by every state-machine family (#1121); the
+    // three hand-maintained copies had repeatedly drifted into illegal-BranchIntoTry bugs (#631/#850/#914).
 
     // ContainsEscapingExit / ContainsEscapingExit2 are shared across the suspension-aware emitters and
     // live in StatementEmitterBase (the generator, async-generator, and async-function emitters all

@@ -11,9 +11,8 @@ namespace SharpTS.Runtime.Types;
 /// Supports BCP 47 Unicode extensions (-u-ca-, -u-nu-, -u-hc-), calendar systems,
 /// numbering systems, formatToParts, formatRange, and formatRangeToParts.
 /// </summary>
-public class SharpTSIntlDateTimeFormat
+public class SharpTSIntlDateTimeFormat : SharpTSIntlFormatterBase
 {
-    private string _locale;
     private string? _dateStyle;
     private string? _timeStyle;
     private string? _year;
@@ -68,22 +67,7 @@ public class SharpTSIntlDateTimeFormat
         // Parse locale with BCP 47 extension support
         string localeStr = locale?.ToString() ?? "";
         var bcp47 = Bcp47Extensions.Parse(localeStr.Replace('_', '-'));
-        string baseLocale = bcp47.BaseLocale;
-
-        try
-        {
-            _culture = string.IsNullOrEmpty(baseLocale)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(baseLocale);
-        }
-        catch
-        {
-            _culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = _culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
+        _culture = ResolveCulture(bcp47.BaseLocale);
 
         // Defaults from BCP 47 extensions (options override later)
         _calendar = bcp47.Calendar ?? "gregory";
@@ -94,14 +78,9 @@ public class SharpTSIntlDateTimeFormat
         _dtfi = (DateTimeFormatInfo)_culture.DateTimeFormat.Clone();
 
         // Parse options (may override BCP 47 extensions)
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
 
         // Apply calendar
         var cal = MapCalendar(_calendar);
@@ -553,7 +532,7 @@ public class SharpTSIntlDateTimeFormat
     /// <summary>
     /// Returns an object describing the computed options of the formatter.
     /// </summary>
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         var result = new Dictionary<string, object?>
         {
@@ -615,14 +594,6 @@ public class SharpTSIntlDateTimeFormat
     {
         DateTime dt = ToDateTime(date);
         return FormatDate(dt);
-    }
-
-    /// <summary>
-    /// JS-facing resolvedOptions method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
     }
 
     #region formatToParts
@@ -869,7 +840,7 @@ public class SharpTSIntlDateTimeFormat
     /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -877,10 +848,6 @@ public class SharpTSIntlDateTimeFormat
             {
                 DateTime dt = ToDateTime(args.Length > 0 ? args[0].ToObject() : null);
                 return RuntimeValue.FromBoxed(FormatDate(dt));
-            }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
             }),
             "formatToParts" => BuiltInMethod.CreateV2("formatToParts", 1, (_, _, args) =>
             {
@@ -907,7 +874,7 @@ public class SharpTSIntlDateTimeFormat
                     items.Add(new SharpTSObject(p));
                 return RuntimeValue.FromObject(new SharpTSArray(items));
             }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 

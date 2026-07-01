@@ -82,7 +82,7 @@ public class SharpTSHttpsServer : SharpTSEventEmitter, IDisposable
 
     public bool Listening => _isListening;
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

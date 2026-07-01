@@ -57,7 +57,7 @@ public class SharpTSReadable : SharpTSEventEmitter
     /// <summary>
     /// Gets a member (method or property) by name for interpreter dispatch.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -682,12 +682,15 @@ public class SharpTSReadable : SharpTSEventEmitter
         var listener = new DrainResumeListener(this);
         if (dest is SharpTSWritable writable)
         {
-            var onceMethod = ((SharpTSEventEmitter)writable).GetMember("once") as BuiltInMethod;
+            // Use the raw EventEmitter "once" (not Readable's flowing-mode wrapper):
+            // "drain" is a writable-side event and must not flip the readable side
+            // into flowing mode.
+            var onceMethod = writable.GetEventEmitterMember("once") as BuiltInMethod;
             onceMethod?.Bind(writable).Call(interpreter, ["drain", listener]);
         }
         else if (dest is SharpTSDuplex duplex)
         {
-            var onceMethod = ((SharpTSEventEmitter)duplex).GetMember("once") as BuiltInMethod;
+            var onceMethod = duplex.GetEventEmitterMember("once") as BuiltInMethod;
             onceMethod?.Bind(duplex).Call(interpreter, ["drain", listener]);
         }
     }
