@@ -34,7 +34,14 @@ public sealed class SharpTSEventEmitterConstructor : ISharpTSCallable
     /// <returns>A new EventEmitter instance.</returns>
     public object? Call(Interp interpreter, List<object?> arguments)
     {
-        return new SharpTSEventEmitter();
+        var emitter = new SharpTSEventEmitter();
+        // Node's EventEmitter accepts an optional { captureRejections?: boolean }.
+        if (arguments.Count > 0 && arguments[0] is SharpTSObject options
+            && options.GetProperty("captureRejections") is bool capture && capture)
+        {
+            emitter.CaptureRejectionsEnabled = true;
+        }
+        return emitter;
     }
 
     /// <summary>
@@ -46,6 +53,8 @@ public sealed class SharpTSEventEmitterConstructor : ISharpTSCallable
         {
             // Static property: EventEmitter.defaultMaxListeners
             "defaultMaxListeners" => (double)SharpTSEventEmitter.DefaultMaxListeners,
+            // Static property: EventEmitter.captureRejections (global default)
+            "captureRejections" => SharpTSEventEmitter.CaptureRejections,
             _ => null
         };
     }
@@ -64,6 +73,9 @@ public sealed class SharpTSEventEmitterConstructor : ISharpTSCallable
                     return true;
                 }
                 throw new Exception("defaultMaxListeners must be a number");
+            case "captureRejections":
+                SharpTSEventEmitter.CaptureRejections = value is bool b && b;
+                return true;
             default:
                 return false;
         }

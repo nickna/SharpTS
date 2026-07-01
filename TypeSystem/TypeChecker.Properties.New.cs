@@ -345,10 +345,17 @@ public partial class TypeChecker
         // Handle new EventEmitter() constructor
         if (isSimpleName && simpleClassName == "EventEmitter")
         {
-            // EventEmitter() accepts 0 arguments
-            if (newExpr.Arguments.Count > 0)
+            // Node's EventEmitter accepts an optional options object
+            // ({ captureRejections?: boolean }). Reject anything beyond that.
+            if (newExpr.Arguments.Count > 1)
             {
-                throw new TypeCheckException("EventEmitter constructor does not accept arguments.", tsCode: "TS2554");
+                throw new TypeCheckException("EventEmitter constructor accepts at most one (options) argument.", tsCode: "TS2554");
+            }
+
+            // Type-check the options argument when present (shape is permissive).
+            if (newExpr.Arguments.Count == 1)
+            {
+                CheckExpr(newExpr.Arguments[0]);
             }
 
             return new TypeInfo.EventEmitter();

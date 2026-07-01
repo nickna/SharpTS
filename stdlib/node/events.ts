@@ -12,10 +12,29 @@
 
 type Listener = Function;
 
+// Event names may be strings or symbols (e.g. EventEmitter.errorMonitor).
+type EventName = string | symbol;
+
 interface ListenerWrapper {
     listener: Listener;
     once: boolean;
 }
+
+// Well-known symbols Node attaches to the EventEmitter constructor.
+//   captureRejectionSymbol — the documented Symbol.for('nodejs.rejection');
+//     emitters define this method to intercept async-listener rejections.
+//   errorMonitor — a unique (unregistered) symbol whose listeners observe
+//     'error' events without satisfying the throw-on-unhandled-error contract.
+// Exported inline (not via a trailing `export { }` re-export) because the
+// embedded-facade compiler mishandles re-exported symbol bindings in compiled
+// mode (they surface as `undefined`/`object`); an inline `export const` round-
+// trips correctly in both modes.
+export const captureRejectionSymbol: symbol = Symbol.for('nodejs.rejection');
+// Registered (Symbol.for) rather than Node's unregistered symbol so the
+// identity/stringification is stable across the module boundary in both modes
+// and recoverable by the C#/IL EventEmitter runtime via the fixed sentinel key
+// it stringifies to: "Symbol(nodejs.events.errorMonitor)".
+export const errorMonitor: symbol = Symbol.for('nodejs.events.errorMonitor');
 
 /** Node.js-compatible EventEmitter implementation. */
 export class EventEmitter {
@@ -25,15 +44,29 @@ export class EventEmitter {
      */
     static defaultMaxListeners: number = 10;
 
-    private _events: { [eventName: string]: ListenerWrapper[] };
+    /** The `errorMonitor` symbol (see note above). Exposed as a static getter
+     *  because non-literal static field initializers don't round-trip in
+     *  compiled mode. */
+    static get errorMonitor(): symbol { return errorMonitor; }
+
+    /** The `captureRejectionSymbol` (Symbol.for('nodejs.rejection')). */
+    static get captureRejectionSymbol(): symbol { return captureRejectionSymbol; }
+
+    private _events: any;
     private _maxListeners: number;
 
+    // Note: the captureRejections / errorMonitor / throw-on-unhandled instance
+    // behaviors live in the C#/IL EventEmitter runtime type that backs
+    // `new EventEmitter()` in both modes (SharpTSEventEmitter / $EventEmitter),
+    // not here — a direct `new EventEmitter()` is never an instance of this
+    // facade class. This class supplies the module statics/helpers and serves
+    // as the base for EventEmitterAsyncResource.
     constructor() {
         this._events = {};
         this._maxListeners = 0; // 0 → use defaultMaxListeners
     }
 
-    private _getListeners(eventName: string, create: boolean): ListenerWrapper[] | null {
+    private _getListeners(eventName: EventName, create: boolean): ListenerWrapper[] | null {
         let arr = this._events[eventName];
         if (arr == null) {
             if (!create) return null;
@@ -43,7 +76,7 @@ export class EventEmitter {
         return arr;
     }
 
-    private _addListener(eventName: string, listener: Listener, once: boolean, prepend: boolean): EventEmitter {
+    private _addListener(eventName: EventName, listener: Listener, once: boolean, prepend: boolean): EventEmitter {
         if (typeof listener !== 'function') {
             throw new TypeError('Listener must be a function');
         }
@@ -58,27 +91,27 @@ export class EventEmitter {
     }
 
     /** Register a listener. Returns `this` for chaining. */
-    on(eventName: string, listener: Listener): EventEmitter {
+    on(eventName: EventName, listener: Listener): EventEmitter {
         return this._addListener(eventName, listener, false, false);
     }
 
     /** Alias for {@link on}. */
-    addListener(eventName: string, listener: Listener): EventEmitter {
+    addListener(eventName: EventName, listener: Listener): EventEmitter {
         return this._addListener(eventName, listener, false, false);
     }
 
     /** Register a one-shot listener that removes itself after firing once. */
-    once(eventName: string, listener: Listener): EventEmitter {
+    once(eventName: EventName, listener: Listener): EventEmitter {
         return this._addListener(eventName, listener, true, false);
     }
 
     /** Register a listener at the head of the chain. */
-    prependListener(eventName: string, listener: Listener): EventEmitter {
+    prependListener(eventName: EventName, listener: Listener): EventEmitter {
         return this._addListener(eventName, listener, false, true);
     }
 
     /** Register a one-shot listener at the head of the chain. */
-    prependOnceListener(eventName: string, listener: Listener): EventEmitter {
+    prependOnceListener(eventName: EventName, listener: Listener): EventEmitter {
         return this._addListener(eventName, listener, true, true);
     }
 
@@ -87,7 +120,7 @@ export class EventEmitter {
      * Matches Node's semantics: only the first occurrence is removed even when
      * the same function is registered multiple times.
      */
-    off(eventName: string, listener: Listener): EventEmitter {
+    off(eventName: EventName, listener: Listener): EventEmitter {
         const arr = this._getListeners(eventName, false);
         if (arr == null) return this;
         for (let i = 0; i < arr.length; i++) {
@@ -101,12 +134,12 @@ export class EventEmitter {
     }
 
     /** Alias for {@link off}. */
-    removeListener(eventName: string, listener: Listener): EventEmitter {
+    removeListener(eventName: EventName, listener: Listener): EventEmitter {
         return this.off(eventName, listener);
     }
 
     /** Remove every listener for an event, or every listener across all events when called without an argument. */
-    removeAllListeners(eventName?: string): EventEmitter {
+    removeAllListeners(eventName?: EventName): EventEmitter {
         if (eventName == null) {
             this._events = {};
         } else {
@@ -121,7 +154,7 @@ export class EventEmitter {
      * added or removed during emission don't disturb the in-flight iteration.
      * Returns true if the event had listeners, false otherwise.
      */
-    emit(eventName: string, ...args: any[]): boolean {
+    emit(eventName: EventName, ...args: any[]): boolean {
         const arr = this._getListeners(eventName, false);
         if (arr == null || arr.length === 0) return false;
 
@@ -155,7 +188,7 @@ export class EventEmitter {
     }
 
     /** Return the listener functions for `eventName`. Unwrapped — once wrappers' originals. */
-    listeners(eventName: string): Listener[] {
+    listeners(eventName: EventName): Listener[] {
         const arr = this._getListeners(eventName, false);
         if (arr == null) return [];
         const out: Listener[] = [];
@@ -164,12 +197,12 @@ export class EventEmitter {
     }
 
     /** Same as {@link listeners} in this implementation; kept for API parity. */
-    rawListeners(eventName: string): Listener[] {
+    rawListeners(eventName: EventName): Listener[] {
         return this.listeners(eventName);
     }
 
     /** Number of listeners for `eventName`. */
-    listenerCount(eventName: string): number {
+    listenerCount(eventName: EventName): number {
         const arr = this._getListeners(eventName, false);
         return arr == null ? 0 : arr.length;
     }
@@ -469,6 +502,83 @@ export function addAbortListener(signal: any, listener: any): any {
         try { signal.addEventListener('abort', handler); } catch (e) { }
     }
     return { [Symbol.dispose]: remove };
+}
+
+// ─── EventEmitterAsyncResource ──────────────────────────────────────────
+//
+// Node's EventEmitterAsyncResource runs each listener within an AsyncResource
+// scope so async-context (async_hooks) propagates across emit. SharpTS has no
+// host async-id/hooks backend (the async_hooks facade exposes only
+// AsyncLocalStorage, not AsyncResource — see #1097 ceilings), so the scope is
+// a no-op and listeners run with the ambient context. The class still provides
+// the full documented surface: `asyncResource`, `asyncId`, `triggerAsyncId`,
+// and `emitDestroy()`.
+
+let _asyncIdCounter = 1;
+function _nextAsyncId(): number { _asyncIdCounter = _asyncIdCounter + 1; return _asyncIdCounter; }
+
+/**
+ * Minimal stand-in for async_hooks.AsyncResource carrying the documented
+ * surface. `runInAsyncScope` invokes the callback directly (no real context
+ * switch — see #1097 ceilings).
+ */
+class _MinimalAsyncResource {
+    private _type: any;
+    private _asyncId: number;
+    private _triggerAsyncId: number;
+    private _destroyed: boolean;
+    eventEmitter: any;
+
+    constructor(type: any, options?: any) {
+        this._type = type;
+        this._asyncId = _nextAsyncId();
+        this._triggerAsyncId =
+            (options != null && typeof options.triggerAsyncId === 'number') ? options.triggerAsyncId : 0;
+        this._destroyed = false;
+    }
+
+    runInAsyncScope(fn: any, thisArg?: any, ...args: any[]): any {
+        return fn.apply(thisArg, args);
+    }
+
+    emitDestroy(): _MinimalAsyncResource { this._destroyed = true; return this; }
+    asyncId(): number { return this._asyncId; }
+    triggerAsyncId(): number { return this._triggerAsyncId; }
+}
+
+/**
+ * EventEmitter associated with an AsyncResource. Listeners conceptually run
+ * inside the resource's async scope; SharpTS lacks a host async-context backend
+ * so the scope is a no-op (#1097 ceiling). `emit` is inherited unchanged — the
+ * no-op scope makes a wrapping override observably identical, and a
+ * super-spread override is unreliable in compiled mode.
+ */
+export class EventEmitterAsyncResource extends EventEmitter {
+    private _asyncResource: any;
+
+    constructor(options?: any) {
+        super();
+        const name =
+            (options != null && typeof options.name === 'string') ? options.name : 'EventEmitterAsyncResource';
+        const resource = new _MinimalAsyncResource(name, options);
+        resource.eventEmitter = this;
+        this._asyncResource = resource;
+    }
+
+    /** The underlying AsyncResource. */
+    get asyncResource(): any { return this._asyncResource; }
+
+    /** Unique async id of the underlying resource. */
+    get asyncId(): number { return this._asyncResource.asyncId(); }
+
+    /** Trigger async id of the underlying resource. */
+    get triggerAsyncId(): number { return this._asyncResource.triggerAsyncId(); }
+
+    /** Destroys the underlying resource. Returns `this`. */
+    emitDestroy(): EventEmitterAsyncResource {
+        this._asyncResource.emitDestroy();
+        return this;
+    }
 }
 
 // Node's `events` default export is the EventEmitter class itself, not a

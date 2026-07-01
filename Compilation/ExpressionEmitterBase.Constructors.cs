@@ -106,6 +106,28 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
+    /// True when <paramref name="arg"/> is a literal <c>{ captureRejections: true }</c>
+    /// options object (used to enable EventEmitter rejection capture at compile time).
+    /// </summary>
+    private static bool HasCaptureRejectionsTrue(Expr arg)
+    {
+        if (arg is not Expr.ObjectLiteral obj) return false;
+        foreach (var p in obj.Properties)
+        {
+            if (p.IsSpread) continue;
+            var key = p.Key switch
+            {
+                Expr.IdentifierKey ik => ik.Name.Lexeme,
+                Expr.LiteralKey lk => lk.Literal.Lexeme,
+                _ => null
+            };
+            if (key == "captureRejections" && p.Value is Expr.Literal { Value: true })
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to emit IL for a built-in type constructor.
     /// Returns true if the constructor was handled, false to fall through to user-class resolution.
     /// </summary>
@@ -140,6 +162,14 @@ public abstract partial class ExpressionEmitterBase
 
             case "EventEmitter":
                 IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSEventEmitterCtor);
+                // #1099: honor a literal { captureRejections: true } option. Only
+                // the object-literal form is recognized (the overwhelmingly common
+                // usage); a dynamic options object is a documented bound.
+                if (arguments.Count > 0 && HasCaptureRejectionsTrue(arguments[0]))
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.TSEventEmitterEnableCaptureRejections);
+                }
                 SetStackUnknown();
                 return true;
 

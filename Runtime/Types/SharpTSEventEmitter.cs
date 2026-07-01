@@ -1,5 +1,6 @@
 using SharpTS.Compilation;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 using Interp = SharpTS.Execution.Interpreter;
 
@@ -33,8 +34,42 @@ public class SharpTSEventEmitter : ITypeCategorized
     /// </summary>
     public static int DefaultMaxListeners { get; set; } = 10;
 
+    /// <summary>
+    /// Global default for <c>captureRejections</c> (Node's
+    /// <c>EventEmitter.captureRejections</c>). New emitters inherit this unless a
+    /// per-instance <c>{ captureRejections }</c> option overrides it.
+    /// </summary>
+    public static bool CaptureRejections { get; set; }
+
+    /// <summary>
+    /// The string key that the <c>errorMonitor</c> symbol
+    /// (<c>Symbol.for('nodejs.events.errorMonitor')</c>) stringifies to. Both the
+    /// interpreter and the compiled emitter coerce event-name symbols with
+    /// <see cref="object.ToString"/>, so an <c>errorMonitor</c> listener registered
+    /// via <c>on(errorMonitor, …)</c> lands under this key in both modes. Emitting
+    /// <c>'error'</c> pre-dispatches to listeners stored here.
+    /// </summary>
+    internal const string ErrorMonitorKey = "Symbol(nodejs.events.errorMonitor)";
+
     private readonly Dictionary<string, LinkedList<ListenerWrapper>> _events = [];
     private int _maxListeners = 0; // 0 means use DefaultMaxListeners
+
+    /// <summary>
+    /// Whether async-listener rejections are routed to the <c>'error'</c> event
+    /// for this instance. Initialized from <see cref="CaptureRejections"/>;
+    /// overridable per-instance via the constructor option.
+    /// </summary>
+    private bool _captureRejections = CaptureRejections;
+
+    /// <summary>
+    /// Per-instance <c>captureRejections</c> toggle. Set by the EventEmitter
+    /// constructor from a <c>{ captureRejections: true }</c> options argument.
+    /// </summary>
+    public bool CaptureRejectionsEnabled
+    {
+        get => _captureRejections;
+        set => _captureRejections = value;
+    }
 
     /// <summary>
     /// Gets the effective max listeners value.
@@ -144,14 +179,33 @@ public class SharpTSEventEmitter : ITypeCategorized
 
         var eventName = args[0].ToObject()?.ToString() ?? throw new Exception("Event name must be a string");
 
-        if (!_events.TryGetValue(eventName, out var listeners) || listeners.Count == 0)
-            return RuntimeValue.False;
-
-        // Snapshot the listeners to handle modifications during emit
-        var snapshot = new List<ListenerWrapper>(listeners);
         var eventArgs = new List<object?>(Math.Max(0, args.Length - 1));
         for (int i = 1; i < args.Length; i++)
             eventArgs.Add(args[i].ToObject());
+
+        // errorMonitor observers fire first on 'error' and do NOT satisfy the
+        // "error was handled" requirement checked below.
+        if (eventName == "error" && _events.TryGetValue(ErrorMonitorKey, out var monListeners) && monListeners.Count > 0)
+        {
+            foreach (var w in new List<ListenerWrapper>(monListeners))
+            {
+                var monResult = InvokeListenerReturning(w.Listener, interpreter, eventArgs);
+                interpreter?.ObserveDiscardedCallbackResult(monResult);
+            }
+        }
+
+        if (!_events.TryGetValue(eventName, out var listeners) || listeners.Count == 0)
+        {
+            // Node throws when 'error' is emitted with no ordinary listeners.
+            // Gated to direct EventEmitter instances so internal subclasses
+            // (streams, sockets, http, …) keep their lenient behavior.
+            if (eventName == "error" && GetType() == typeof(SharpTSEventEmitter))
+                throw BuildUnhandledErrorException(eventArgs);
+            return RuntimeValue.False;
+        }
+
+        // Snapshot the listeners to handle modifications during emit
+        var snapshot = new List<ListenerWrapper>(listeners);
 
         foreach (var wrapper in snapshot)
         {
@@ -171,10 +225,79 @@ public class SharpTSEventEmitter : ITypeCategorized
             }
 
             // Call the listener - support multiple listener types
-            InvokeListener(wrapper.Listener, interpreter, eventArgs);
+            var result = InvokeListenerReturning(wrapper.Listener, interpreter, eventArgs);
+
+            if (_captureRejections)
+            {
+                // Route a rejecting async listener's promise to 'error'.
+                RouteCapturedRejection(interpreter, result, eventName);
+            }
+            else
+            {
+                // Preserve #228: report an async listener's rejection as unhandled.
+                interpreter?.ObserveDiscardedCallbackResult(result);
+            }
         }
 
         return RuntimeValue.True;
+    }
+
+    /// <summary>
+    /// Builds the guest exception thrown for an unhandled <c>'error'</c> event:
+    /// the emitted Error value itself when one was passed, else a synthesized
+    /// ERR_UNHANDLED_ERROR.
+    /// </summary>
+    private static ThrowException BuildUnhandledErrorException(List<object?> eventArgs)
+    {
+        object? err = eventArgs.Count > 0 ? eventArgs[0] : null;
+        if (err != null)
+            return new ThrowException(err);
+        return new ThrowException(new SharpTSError("Unhandled error.") { Code = "ERR_UNHANDLED_ERROR" });
+    }
+
+    /// <summary>
+    /// When <c>captureRejections</c> is enabled, routes a rejecting async-listener
+    /// promise to the <c>'error'</c> event (Node's captureRejections behavior).
+    /// Capture is disabled during the routed emit so a rejecting error listener
+    /// doesn't recurse back into this path.
+    /// </summary>
+    private void RouteCapturedRejection(Interp? interpreter, object? result, string eventName)
+    {
+        if (result is not SharpTSPromise promise) return;
+        var task = promise.Task;
+
+        void HandleFault(Exception ex)
+        {
+            object? reason = ex switch
+            {
+                SharpTSPromiseRejectedException rejected => rejected.Reason,
+                ThrowException thrown => thrown.Value,
+                _ => ex,
+            };
+            var previous = _captureRejections;
+            _captureRejections = false;
+            try
+            {
+                EmitEvent(interpreter!, "error", new List<object?> { reason });
+            }
+            finally
+            {
+                _captureRejections = previous;
+            }
+        }
+
+        if (task.IsCompleted)
+        {
+            if (task.IsFaulted)
+                HandleFault(task.Exception!.InnerException ?? task.Exception!);
+            return;
+        }
+
+        task.ContinueWith(
+            t => HandleFault(t.Exception!.InnerException ?? t.Exception!),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -209,6 +332,23 @@ public class SharpTSEventEmitter : ITypeCategorized
             // Try direct invocation for compiled code (TSFunction, Action, etc.)
             InvokeListenerDirect(listener, eventArgs.ToArray());
         }
+    }
+
+    /// <summary>
+    /// Invokes a listener and returns its result so the caller can decide how to
+    /// treat an async listener's promise (route via captureRejections, or report
+    /// as unhandled). Mirrors <see cref="InvokeListener"/> minus the built-in
+    /// rejection observation.
+    /// </summary>
+    private static object? InvokeListenerReturning(object listener, Interp? interpreter, List<object?> eventArgs)
+    {
+        if (listener is ISharpTSCallable callable)
+        {
+            return callable.Call(interpreter!, eventArgs);
+        }
+
+        InvokeListenerDirect(listener, eventArgs.ToArray());
+        return null;
     }
 
     /// <summary>

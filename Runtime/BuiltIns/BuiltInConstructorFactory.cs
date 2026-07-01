@@ -37,7 +37,7 @@ public static class BuiltInConstructorFactory
                 throw new Exception("Runtime Error: FinalizationRegistry constructor requires a callback function.");
             return new SharpTSFinalizationRegistry(callback);
         },
-        [BuiltInNames.EventEmitter] = _ => new SharpTSEventEmitter(),
+        [BuiltInNames.EventEmitter] = CreateEventEmitter,
         [BuiltInNames.AbortController] = _ => new SharpTSAbortController(),
         [BuiltInNames.Headers] = CreateHeaders,
         // URL / URLSearchParams — migrated to stdlib/node/url.ts; no built-in
@@ -303,6 +303,18 @@ public static class BuiltInConstructorFactory
             return h switch { double d => d, int i => i, long l => l, _ => 0.0 };
         }
         return 0.0;
+    }
+
+    private static object CreateEventEmitter(IReadOnlyList<object?> args)
+    {
+        var emitter = new SharpTSEventEmitter();
+        // Node's EventEmitter accepts an optional { captureRejections?: boolean }.
+        if (args.Count > 0 && args[0] is SharpTSObject options
+            && options.GetProperty("captureRejections") is bool capture && capture)
+        {
+            emitter.CaptureRejectionsEnabled = true;
+        }
+        return emitter;
     }
 
     private static object CreateHeaders(IReadOnlyList<object?> args)

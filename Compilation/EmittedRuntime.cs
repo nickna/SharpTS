@@ -2365,6 +2365,9 @@ public class EmittedRuntime
     public MethodBuilder TSEventEmitterGetMaxListeners { get; set; } = null!;
     public MethodBuilder TSEventEmitterAddListenerInternal { get; set; } = null!;
     public MethodBuilder TSEventEmitterOnListenerAdded { get; set; } = null!;
+    // #1099: per-instance captureRejections toggle, set from a
+    // { captureRejections: true } constructor option at the emit site.
+    public MethodBuilder TSEventEmitterEnableCaptureRejections { get; set; } = null!;
 
     // $AsyncLocalStorage support
     public Type TSAsyncLocalStorageType { get; set; } = null!;
