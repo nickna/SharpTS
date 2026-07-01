@@ -240,7 +240,13 @@ public partial class Interpreter : IDisposable
     internal static object PromiseGlobalValue => _globalConstants[BuiltInNames.Promise];
 
     private RuntimeEnvironment _environment = new();
-    private readonly Dictionary<Expr, int> _locals = []; // Depth for resolved variables
+    // Keyed by AST-node identity, not structural value. The resolver stores and reads the
+    // same Expr instance, so reference identity is the intent. Expr is a record, so the
+    // default comparer would recursively hash an assignment's RHS subtree (Assign/
+    // CompoundAssign/LogicalAssign nest an Expr Value) on every probe — e.g. `sum += arr[i]`
+    // would re-hash the whole RHS each loop iteration. ReferenceEqualityComparer reduces every
+    // probe to GetHashCode(object)+ReferenceEquals with no recursion. Same pattern as TypeMap.
+    private readonly Dictionary<Expr, int> _locals = new(Runtime.Types.ReferenceEqualityComparer.Instance); // Depth for resolved variables
     private TypeMap? _typeMap;
 
     // Evaluation contexts for unified sync/async handling
