@@ -1460,9 +1460,9 @@ test/built-ins/Array/prototype/join/S15.4.4.5_A2_T2.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A2_T3.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A2_T4.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A3.1_T1.js Fail
-test/built-ins/Array/prototype/join/S15.4.4.5_A3.1_T2.js Fail
+test/built-ins/Array/prototype/join/S15.4.4.5_A3.1_T2.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A3.2_T1.js Pass
-test/built-ins/Array/prototype/join/S15.4.4.5_A3.2_T2.js Fail
+test/built-ins/Array/prototype/join/S15.4.4.5_A3.2_T2.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A4_T3.js Pass
 test/built-ins/Array/prototype/join/S15.4.4.5_A5_T1.js Fail
 test/built-ins/Array/prototype/join/S15.4.4.5_A6.6.js Pass
@@ -3017,7 +3017,7 @@ test/built-ins/Array/prototype/toSpliced/unmodified.js Pass
 test/built-ins/Array/prototype/toString/S15.4.4.2_A1_T1.js Pass
 test/built-ins/Array/prototype/toString/S15.4.4.2_A1_T2.js Pass
 test/built-ins/Array/prototype/toString/S15.4.4.2_A1_T3.js Pass
-test/built-ins/Array/prototype/toString/S15.4.4.2_A1_T4.js Fail
+test/built-ins/Array/prototype/toString/S15.4.4.2_A1_T4.js Pass
 test/built-ins/Array/prototype/toString/S15.4.4.2_A3_T1.js Fail
 test/built-ins/Array/prototype/toString/call-with-boolean.js Fail
 test/built-ins/Array/prototype/toString/length.js Pass
@@ -3063,10 +3063,10 @@ test/built-ins/Array/prototype/with/frozen-this-value.js Pass
 test/built-ins/Array/prototype/with/holes-not-preserved.js RuntimeError
 test/built-ins/Array/prototype/with/ignores-species.js Pass
 test/built-ins/Array/prototype/with/immutable.js Pass
-test/built-ins/Array/prototype/with/index-bigger-or-eq-than-length.js Fail
+test/built-ins/Array/prototype/with/index-bigger-or-eq-than-length.js Pass
 test/built-ins/Array/prototype/with/index-casted-to-number.js Pass
 test/built-ins/Array/prototype/with/index-negative.js Pass
-test/built-ins/Array/prototype/with/index-smaller-than-minus-length.js Fail
+test/built-ins/Array/prototype/with/index-smaller-than-minus-length.js Pass
 test/built-ins/Array/prototype/with/index-throw-completion.js Pass
 test/built-ins/Array/prototype/with/length-decreased-while-iterating.js RuntimeError
 test/built-ins/Array/prototype/with/length-exceeding-array-length-limit.js Pass
@@ -3078,7 +3078,7 @@ test/built-ins/Array/prototype/with/negative-fractional-index-truncated-to-zero.
 test/built-ins/Array/prototype/with/no-get-replaced-index.js Pass
 test/built-ins/Array/prototype/with/not-a-constructor.js Pass
 test/built-ins/Array/prototype/with/property-descriptor.js Pass
-test/built-ins/Array/prototype/with/this-value-boolean.js Fail
+test/built-ins/Array/prototype/with/this-value-boolean.js Pass
 test/built-ins/Array/prototype/with/this-value-nullish.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T1.js Pass
 test/built-ins/Boolean/S15.6.1.1_A1_T2.js Pass
@@ -3852,7 +3852,7 @@ test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T01.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T02.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js Fail
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A2_T01.js Pass
-test/built-ins/Number/prototype/toFixed/exactness.js Fail
+test/built-ins/Number/prototype/toFixed/exactness.js Pass
 test/built-ins/Number/prototype/toFixed/length.js Pass
 test/built-ins/Number/prototype/toFixed/name.js Pass
 test/built-ins/Number/prototype/toFixed/not-a-constructor.js Pass
@@ -10320,7 +10320,7 @@ test/built-ins/String/prototype/indexOf/position-tointeger-errors.js Fail
 test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js RuntimeError
 test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js RuntimeError
 test/built-ins/String/prototype/indexOf/position-tointeger.js RuntimeError
-test/built-ins/String/prototype/indexOf/searchstring-tostring-bigint.js Fail
+test/built-ins/String/prototype/indexOf/searchstring-tostring-bigint.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js RuntimeError
 test/built-ins/String/prototype/indexOf/searchstring-tostring-wrapped-values.js Pass
@@ -10689,7 +10689,7 @@ test/built-ins/String/prototype/split/argument-is-new-reg-exp-and-instance-is-st
 test/built-ins/String/prototype/split/argument-is-null-and-instance-is-function-call-that-returned-string.js Pass
 test/built-ins/String/prototype/split/argument-is-reg-exp-a-z-and-instance-is-string-abc.js Pass
 test/built-ins/String/prototype/split/argument-is-regexp-a-z-and-instance-is-string-abc.js Pass
-test/built-ins/String/prototype/split/argument-is-regexp-and-instance-is-number.js Fail
+test/built-ins/String/prototype/split/argument-is-regexp-and-instance-is-number.js Pass
 test/built-ins/String/prototype/split/argument-is-regexp-d-and-instance-is-string-dfe23iu-34-65.js Pass
 test/built-ins/String/prototype/split/argument-is-regexp-l-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/argument-is-regexp-reg-exp-d-and-instance-is-string-dfe23iu-34-65.js Pass

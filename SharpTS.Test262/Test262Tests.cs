@@ -92,12 +92,21 @@ public abstract class Test262TestsBase
         }
         else
         {
+            // Compiled mode in-process would create ~11k collectible ALCs and call
+            // GC.Collect() every 50 tests, which races with JIT on ALC teardown
+            // under Server+Concurrent GC → fatal CLR error 0x80131506 (issue #964).
+            // The SharpTS.Test262.csproj ProjectReference on the Worker ensures this
+            // branch is only reachable if the Worker project was explicitly cleaned
+            // without rebuilding, or in a partial build.
+            if (mode == Test262ExecutionMode.Compiled)
+                Assert.Fail(
+                    $"[{mode}] worker DLL not found — build SharpTS.Test262.Worker before running " +
+                    $"the compiled baseline (the in-process fallback crashes the host, see issue #964). " +
+                    $"Run: dotnet build SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj");
+
             _output.WriteLine($"[{mode}] worker DLL not found — falling back to in-process (build SharpTS.Test262.Worker for issue #109 batched mode)");
-            // Deliberately collectible (useNonCollectibleLoad: false, the default):
-            // this fallback can run the whole subset (~11k tests) in-process, so it
-            // relies on per-test ALC Unload to avoid OOM (issue #109). The crash-prone
-            // collectible path (issue #964) is the lesser evil here vs. a 28 GB testhost;
-            // build the worker to avoid both. SmokeTest, which runs only small curated
+            // Interpreted in-process fallback: no collectible ALCs, no GC.Collect()
+            // churn — safe for the full subset. SmokeTest, which runs only small curated
             // lists, opts into the non-collectible path instead.
             var runner = new Test262Runner(test262Root, config.Timeout, skipFeatures);
             foreach (var (relPath, absPath) in files)

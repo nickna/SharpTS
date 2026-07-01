@@ -2158,7 +2158,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, toPrimResultLocal);
 
-        // If primitive (null/undefined/string/number/bool) → Stringify and return.
+        // If primitive (null/undefined/string/number/bool/BigInt) → ToJsString and return.
         var resIsPrimitiveLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, toPrimResultLocal);
         il.Emit(OpCodes.Brfalse, resIsPrimitiveLabel);
@@ -2174,6 +2174,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, toPrimResultLocal);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, resIsPrimitiveLabel);
+        il.Emit(OpCodes.Ldloc, toPrimResultLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brtrue, resIsPrimitiveLabel);
         // Object result → TypeError per ECMA-262 7.1.1 step 1.b.iii.
         il.Emit(OpCodes.Ldstr, "Cannot convert object to primitive value");
         il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
@@ -2181,7 +2184,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
         il.MarkLabel(resIsPrimitiveLabel);
         il.Emit(OpCodes.Ldloc, toPrimResultLocal);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterToPrimSymLabel);
 
@@ -2222,9 +2225,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             il.Emit(OpCodes.Stloc, resultLocal);
 
-            // If primitive (string / number / bool / null / undefined), Stringify
-            // and return. Per ECMA-262 ToPrimitive, all primitive types — including
-            // undefined and null — are valid OrdinaryToPrimitive results.
+            // If primitive (string / number / bool / null / undefined / BigInt),
+            // ToJsString and return. Per ECMA-262 ToPrimitive, all primitive types
+            // — including undefined and null — are valid OrdinaryToPrimitive results.
             var resultIsString = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Brfalse, resultIsString); // null primitive
@@ -2240,6 +2243,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Isinst, _types.Boolean);
             il.Emit(OpCodes.Brtrue, resultIsString);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brtrue, resultIsString);
             // Not primitive — set the flag and continue to next attempt.
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stloc, sawNonPrimitiveLocal);
@@ -2247,7 +2253,7 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(resultIsString);
             il.Emit(OpCodes.Ldloc, resultLocal);
-            il.Emit(OpCodes.Call, runtime.Stringify);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
             il.Emit(OpCodes.Ret);
         }
 

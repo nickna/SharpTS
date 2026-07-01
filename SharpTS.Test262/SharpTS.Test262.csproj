@@ -37,6 +37,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpTS.csproj" />
+    <!-- Build the worker subprocess before tests run so TryFindWorkerDll()
+         always succeeds. ReferenceOutputAssembly=false: we spawn it as a
+         child process, not a compile-time assembly reference. Without this,
+         a `dotnet clean` without rebuild silently re-activates the
+         crash-prone in-process collectible-ALC path (issue #964). -->
+    <ProjectReference Include="..\SharpTS.Test262.Worker\SharpTS.Test262.Worker.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>
