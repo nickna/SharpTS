@@ -5,12 +5,30 @@
 // with a pure-TS port. TextEncoder/TextDecoder are re-exports of the
 // SharpTS global constructors; everything else is pure TS.
 
+// The only host dependency is `primitive:process` for environment reads
+// (NODE_DEBUG gating debuglog, NO_COLOR/FORCE_COLOR gating styleText). BCL-only,
+// so standalone is preserved.
+import { env as __envRaw } from 'primitive:process';
+const __env: any = __envRaw;
+
 // -------- format --------
 //
 // printf-like formatter with %s/%d/%i/%f/%j/%o/%O/%% placeholders.
 // Unused args are appended space-separated, matching Node.
 
 export function format(...args: any[]): string {
+    return formatImpl(undefined, args);
+}
+
+// -------- formatWithOptions --------
+//
+// Like format, but %o/%O inspection honors the supplied inspect options.
+
+export function formatWithOptions(inspectOptions: any, ...args: any[]): string {
+    return formatImpl(inspectOptions, args);
+}
+
+function formatImpl(inspectOptions: any, args: any[]): string {
     if (args.length === 0) return '';
 
     const fmt = String(args[0]);
@@ -70,10 +88,16 @@ export function format(...args: any[]): string {
             }
             if (spec === 'o' || spec === 'O') {
                 if (argIndex < args.length) {
-                    out += inspectValue(args[argIndex++], 2, 0);
+                    out += inspect(args[argIndex++], inspectOptions);
                 } else {
                     out += '%' + spec;
                 }
+                i += 2;
+                continue;
+            }
+            if (spec === 'c') {
+                // CSS directive: consumed with no output (Node behavior in non-browser).
+                if (argIndex < args.length) argIndex++;
                 i += 2;
                 continue;
             }
@@ -100,42 +124,130 @@ export function format(...args: any[]): string {
 // Not a full reimplementation of Node's inspect — just enough for the
 // common observable behaviors the test gate exercises.
 
-export function inspect(value: any, options?: any): string {
-    let depth = 2;
-    if (options != null && typeof options === 'object' && typeof options.depth === 'number') {
-        depth = options.depth;
-    }
-    return inspectValue(value, depth, 0);
+// The custom-inspection hook symbol. An object exposing a function under this
+// key controls its own inspect() output (Node's util.inspect.custom).
+const kInspectCustom: symbol = Symbol.for('nodejs.util.inspect.custom');
+
+interface InspectOpts {
+    depth: number;
+    colors: boolean;
+    maxArrayLength: number;
+    maxStringLength: number;
+    showHidden: boolean;
+    getters: boolean;
+    breakLength: number;
+    customInspect: boolean;
 }
 
-function inspectValue(value: any, depth: number, current: number): string {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
+// ANSI style codes for the common inspect color styles (colors: true).
+const INSPECT_STYLE: any = {
+    number: '33', bigint: '33', boolean: '33',
+    undefined: '90', null: '1',
+    string: '32', symbol: '32',
+    date: '35', regexp: '31', special: '36',
+};
+
+function colorize(text: string, style: string, opts: InspectOpts): string {
+    if (!opts.colors) return text;
+    const code = INSPECT_STYLE[style];
+    return code !== undefined ? '\x1b[' + code + 'm' + text + '\x1b[39m' : text;
+}
+
+function normalizeInspectOptions(options: any): InspectOpts {
+    const o: any = (options != null && typeof options === 'object') ? options : {};
+    const depth = o.depth === null ? Infinity : (typeof o.depth === 'number' ? o.depth : 2);
+    return {
+        depth,
+        colors: o.colors === true,
+        maxArrayLength: o.maxArrayLength === null ? Infinity : (typeof o.maxArrayLength === 'number' ? o.maxArrayLength : 100),
+        maxStringLength: o.maxStringLength === null ? Infinity : (typeof o.maxStringLength === 'number' ? o.maxStringLength : 10000),
+        showHidden: o.showHidden === true,
+        getters: o.getters === true,
+        breakLength: typeof o.breakLength === 'number' ? o.breakLength : 128,
+        customInspect: o.customInspect !== false,
+    };
+}
+
+export function inspect(value: any, options?: any): string {
+    // Node also supports inspect(value, showHidden, depth, colors) — the legacy
+    // boolean-positional form. Map it to an options object.
+    let opts: InspectOpts;
+    if (typeof options === 'boolean') {
+        opts = normalizeInspectOptions({ showHidden: options });
+    } else {
+        opts = normalizeInspectOptions(options);
+    }
+    return inspectValue(value, opts, 0, []);
+}
+
+function inspectValue(value: any, opts: InspectOpts, current: number, seen: any[]): string {
+    if (value === null) return colorize('null', 'null', opts);
+    if (value === undefined) return colorize('undefined', 'undefined', opts);
     const t = typeof value;
-    if (t === 'string') return "'" + value + "'";
-    if (t === 'number') return String(value);
-    if (t === 'boolean') return value ? 'true' : 'false';
-    if (t === 'bigint') return String(value) + 'n';
-    if (t === 'function') return '[Function]';
+    if (t === 'string') {
+        let s = value;
+        if (s.length > opts.maxStringLength) {
+            const shown = s.slice(0, opts.maxStringLength);
+            const more = s.length - opts.maxStringLength;
+            return colorize("'" + shown + "'", 'string', opts) + "... " + more + " more character" + (more === 1 ? '' : 's');
+        }
+        return colorize("'" + s + "'", 'string', opts);
+    }
+    if (t === 'number') return colorize(String(value), 'number', opts);
+    if (t === 'boolean') return colorize(value ? 'true' : 'false', 'boolean', opts);
+    if (t === 'bigint') return colorize(String(value) + 'n', 'bigint', opts);
+    if (t === 'symbol') return colorize(String(value), 'symbol', opts);
+    if (t === 'function') {
+        const name = (value as any).name;
+        return colorize(name ? '[Function: ' + name + ']' : '[Function (anonymous)]', 'special', opts);
+    }
+
+    // Custom inspection hook (util.inspect.custom). Only consulted for plain
+    // objects — arrays/typed values don't support arbitrary symbol-keyed reads
+    // in SharpTS, and Node's own custom-inspect targets are objects.
+    if (opts.customInspect && value != null && t === 'object' && !Array.isArray(value)
+        && !(value instanceof Date) && !(value instanceof RegExp)
+        && typeof value[kInspectCustom] === 'function') {
+        const produced = value[kInspectCustom](opts.depth, opts);
+        return typeof produced === 'string' ? produced : inspectValue(produced, opts, current, seen);
+    }
+
+    if (value instanceof Date) return colorize(value.toISOString(), 'date', opts);
+    if (value instanceof RegExp) return colorize(String(value), 'regexp', opts);
+
+    // Cycle guard.
+    for (let i = 0; i < seen.length; i++) {
+        if (seen[i] === value) return '[Circular *1]';
+    }
+    seen.push(value);
+
+    let result: string;
     if (Array.isArray(value)) {
-        if (current >= depth) return '[Array]';
-        const parts: string[] = [];
-        for (let i = 0; i < value.length; i++) {
-            parts.push(inspectValue(value[i], depth, current + 1));
+        if (current > opts.depth) { result = "[Array]"; }
+        else {
+            const parts: string[] = [];
+            const limit = value.length < opts.maxArrayLength ? value.length : opts.maxArrayLength;
+            for (let i = 0; i < limit; i++) parts.push(inspectValue(value[i], opts, current + 1, seen));
+            if (value.length > limit) parts.push('... ' + (value.length - limit) + ' more item' + (value.length - limit === 1 ? '' : 's'));
+            result = parts.length === 0 ? '[]' : '[ ' + parts.join(', ') + ' ]';
         }
-        return '[ ' + parts.join(', ') + ' ]';
-    }
-    if (t === 'object') {
-        if (current >= depth) return '[Object]';
-        const keys = Object.keys(value);
-        const parts: string[] = [];
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            parts.push(k + ': ' + inspectValue(value[k], depth, current + 1));
+    } else if (t === 'object') {
+        if (current > opts.depth) { result = '[Object]'; }
+        else {
+            const keys = opts.showHidden ? Object.getOwnPropertyNames(value) : Object.keys(value);
+            const parts: string[] = [];
+            for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                parts.push(k + ': ' + inspectValue(value[k], opts, current + 1, seen));
+            }
+            result = parts.length === 0 ? '{}' : '{ ' + parts.join(', ') + ' }';
         }
-        return '{ ' + parts.join(', ') + ' }';
+    } else {
+        result = String(value);
     }
-    return String(value);
+
+    seen.pop();
+    return result;
 }
 
 // -------- isDeepStrictEqual --------
@@ -373,6 +485,16 @@ export function getSystemErrorName(errno: number): string {
     return 'Unknown system error ' + String(errno);
 }
 
+export function getSystemErrorMessage(errno: number): string {
+    const key = String(errno);
+    const name = POSIX_ERROR_NAMES[key];
+    if (name !== undefined) {
+        const desc = POSIX_ERROR_DESCRIPTIONS[name];
+        return desc !== undefined ? desc : name;
+    }
+    return 'Unknown system error ' + String(errno);
+}
+
 export function getSystemErrorMap(): any {
     const map = new Map<number, any>();
     const keys = Object.keys(POSIX_ERROR_NAMES);
@@ -474,6 +596,100 @@ const _TextEncoder: any = TextEncoder;
 const _TextDecoder: any = TextDecoder;
 export { _TextEncoder as TextEncoder, _TextDecoder as TextDecoder };
 
+// -------- styleText --------
+//
+// ANSI text styling (Node 20+). `format` is a style name or array of names.
+// Color output is suppressed when NO_COLOR is set (and not overridden by
+// FORCE_COLOR), matching Node's default TTY/env behavior.
+
+const STYLE_CODES: any = {
+    reset: [0, 0], bold: [1, 22], dim: [2, 22], italic: [3, 23], underline: [4, 24],
+    blink: [5, 25], inverse: [7, 27], hidden: [8, 28], strikethrough: [9, 29],
+    doubleunderline: [21, 24], framed: [51, 54], overlined: [53, 55],
+    black: [30, 39], red: [31, 39], green: [32, 39], yellow: [33, 39], blue: [34, 39],
+    magenta: [35, 39], cyan: [36, 39], white: [37, 39], gray: [90, 39], grey: [90, 39],
+    redBright: [91, 39], greenBright: [92, 39], yellowBright: [93, 39], blueBright: [94, 39],
+    magentaBright: [95, 39], cyanBright: [96, 39], whiteBright: [97, 39],
+    bgBlack: [40, 49], bgRed: [41, 49], bgGreen: [42, 49], bgYellow: [43, 49], bgBlue: [44, 49],
+    bgMagenta: [45, 49], bgCyan: [46, 49], bgWhite: [47, 49],
+    bgGray: [100, 49], bgGrey: [100, 49],
+    bgRedBright: [101, 49], bgGreenBright: [102, 49], bgYellowBright: [103, 49],
+    bgBlueBright: [104, 49], bgMagentaBright: [105, 49], bgCyanBright: [106, 49], bgWhiteBright: [107, 49],
+};
+
+function __colorsDisabled(): boolean {
+    // FORCE_COLOR (any value) wins; otherwise NO_COLOR disables color.
+    const force = __env != null ? __env.FORCE_COLOR : undefined;
+    if (force !== undefined && force !== '' && force !== '0' && force !== 'false') return false;
+    const noColor = __env != null ? __env.NO_COLOR : undefined;
+    return noColor !== undefined && noColor !== '';
+}
+
+export function styleText(format: any, text: string, options?: any): string {
+    if (typeof text !== 'string') {
+        throw new TypeError('The "text" argument must be of type string');
+    }
+    const validate = options != null && options.validateStream === true;
+    void validate;
+
+    const formats: any[] = Array.isArray(format) ? format : [format];
+    for (let i = 0; i < formats.length; i++) {
+        if (STYLE_CODES[formats[i]] === undefined) {
+            throw new TypeError("The value '" + String(formats[i]) + "' is invalid for argument 'format'");
+        }
+    }
+
+    if (__colorsDisabled()) return text;
+
+    let open = '';
+    let close = '';
+    for (let i = 0; i < formats.length; i++) {
+        const pair = STYLE_CODES[formats[i]];
+        open += '\x1b[' + pair[0] + 'm';
+        close = '\x1b[' + pair[1] + 'm' + close;
+    }
+    return open + text + close;
+}
+
+// -------- debuglog / debug --------
+//
+// Returns a logger gated on NODE_DEBUG. When the section is enabled, the
+// returned function writes to stderr (approximated via console.error); when
+// disabled it is a no-op. `enabled` reflects the gate.
+
+function __debugSectionEnabled(section: string): boolean {
+    const nodeDebug = __env != null ? __env.NODE_DEBUG : undefined;
+    if (nodeDebug === undefined || nodeDebug === '') return false;
+    const wanted = String(nodeDebug).toUpperCase();
+    const target = String(section).toUpperCase();
+    if (wanted === '*') return true;
+    const parts = wanted.split(',');
+    for (let i = 0; i < parts.length; i++) {
+        const p = parts[i].trim();
+        if (p === target || p === '*') return true;
+        // Node treats a trailing '*' as a wildcard prefix.
+        if (p.length > 0 && p.charAt(p.length - 1) === '*' && target.indexOf(p.slice(0, p.length - 1)) === 0) return true;
+    }
+    return false;
+}
+
+export function debuglog(section: string, callback?: any): any {
+    const enabled = __debugSectionEnabled(section);
+    const logger: any = enabled
+        ? (...args: any[]): void => {
+            const msg = format(...args);
+            console.error(section.toUpperCase() + ' ' + msg);
+        }
+        : (..._args: any[]): void => { /* no-op when the section is off */ };
+    logger.enabled = enabled;
+    if (typeof callback === 'function' && enabled) {
+        callback(logger);
+    }
+    return logger;
+}
+
+export const debug = debuglog;
+
 // -------- types sub-module --------
 //
 // A small namespace of duck-typed checks. Node's util.types uses V8 internal
@@ -525,9 +741,68 @@ function isWeakSet(value: any): boolean {
 }
 function isArrayBuffer(value: any): boolean {
     // SharpTS collapses Buffer and the typed-array family onto a single
-    // Buffer type, so ArrayBuffer-ness is detected the same way.
-    return value instanceof Buffer;
+    // Buffer type, so ArrayBuffer-ness is detected the same way (unchanged
+    // from the original behavior; a real ArrayBuffer is also covered).
+    return value instanceof Buffer || value instanceof ArrayBuffer;
 }
+function isSharedArrayBuffer(value: any): boolean {
+    return typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer;
+}
+function isAnyArrayBuffer(value: any): boolean {
+    return isArrayBuffer(value) || isSharedArrayBuffer(value);
+}
+function isDataView(value: any): boolean {
+    return typeof DataView !== 'undefined' && value instanceof DataView;
+}
+function isArrayBufferView(value: any): boolean {
+    return isDataView(value) || value instanceof Buffer
+        || isInt8Array(value) || isUint8Array(value) || isUint8ClampedArray(value)
+        || isInt16Array(value) || isUint16Array(value) || isInt32Array(value)
+        || isUint32Array(value) || isFloat32Array(value) || isFloat64Array(value)
+        || isBigInt64Array(value) || isBigUint64Array(value);
+}
+// SharpTS does not materialize boxed String/Number/Boolean/Symbol/BigInt
+// objects (`new String('x')` yields a primitive), so these are always false.
+function isBigIntObject(_value: any): boolean { return false; }
+function isBooleanObject(_value: any): boolean { return false; }
+function isNumberObject(_value: any): boolean { return false; }
+function isStringObject(_value: any): boolean { return false; }
+function isSymbolObject(_value: any): boolean { return false; }
+// Proxies are transparent to guest code (no observable marker), and external
+// (native) values / module namespace objects are not represented distinctly.
+function isProxy(_value: any): boolean { return false; }
+function isExternal(_value: any): boolean { return false; }
+function isModuleNamespaceObject(_value: any): boolean { return false; }
+function isKeyObject(_value: any): boolean { return false; }
+function isCryptoKey(_value: any): boolean { return false; }
+function isGeneratorFunction(value: any): boolean {
+    if (typeof value !== 'function') return false;
+    const ctor = (value as any).constructor;
+    return ctor != null && ctor.name === 'GeneratorFunction';
+}
+function isAsyncFunction(value: any): boolean {
+    if (typeof value !== 'function') return false;
+    const ctor = (value as any).constructor;
+    return ctor != null && ctor.name === 'AsyncFunction';
+}
+function isGeneratorObject(value: any): boolean {
+    if (value == null || typeof value !== 'object') return false;
+    const v: any = value;
+    return typeof v.next === 'function' && typeof v.throw === 'function' && typeof v.return === 'function';
+}
+// Typed-array element predicates. SharpTS's typed arrays map to the standard
+// global constructors, so instanceof discriminates them.
+function isInt8Array(value: any): boolean { return typeof Int8Array !== 'undefined' && value instanceof Int8Array; }
+function isUint8Array(value: any): boolean { return typeof Uint8Array !== 'undefined' && value instanceof Uint8Array; }
+function isUint8ClampedArray(value: any): boolean { return typeof Uint8ClampedArray !== 'undefined' && value instanceof Uint8ClampedArray; }
+function isInt16Array(value: any): boolean { return typeof Int16Array !== 'undefined' && value instanceof Int16Array; }
+function isUint16Array(value: any): boolean { return typeof Uint16Array !== 'undefined' && value instanceof Uint16Array; }
+function isInt32Array(value: any): boolean { return typeof Int32Array !== 'undefined' && value instanceof Int32Array; }
+function isUint32Array(value: any): boolean { return typeof Uint32Array !== 'undefined' && value instanceof Uint32Array; }
+function isFloat32Array(value: any): boolean { return typeof Float32Array !== 'undefined' && value instanceof Float32Array; }
+function isFloat64Array(value: any): boolean { return typeof Float64Array !== 'undefined' && value instanceof Float64Array; }
+function isBigInt64Array(value: any): boolean { return typeof BigInt64Array !== 'undefined' && value instanceof BigInt64Array; }
+function isBigUint64Array(value: any): boolean { return typeof BigUint64Array !== 'undefined' && value instanceof BigUint64Array; }
 
 export const types = {
     isArray,
@@ -545,7 +820,245 @@ export const types = {
     isWeakMap,
     isWeakSet,
     isArrayBuffer,
+    isSharedArrayBuffer,
+    isAnyArrayBuffer,
+    isDataView,
+    isArrayBufferView,
+    isBigIntObject,
+    isBooleanObject,
+    isNumberObject,
+    isStringObject,
+    isSymbolObject,
+    isProxy,
+    isExternal,
+    isModuleNamespaceObject,
+    isKeyObject,
+    isCryptoKey,
+    isGeneratorFunction,
+    isAsyncFunction,
+    isGeneratorObject,
+    isInt8Array,
+    isUint8Array,
+    isUint8ClampedArray,
+    isInt16Array,
+    isUint16Array,
+    isInt32Array,
+    isUint32Array,
+    isFloat32Array,
+    isFloat64Array,
+    isBigInt64Array,
+    isBigUint64Array,
 };
+
+// -------- MIMEType / MIMEParams --------
+//
+// Minimal parser for RFC 2045 media types: `type/subtype;p1=v1;p2="v2"`.
+
+/** The parameter map of a {@link MIMEType}. Iterable over [name, value] pairs. */
+export class MIMEParams {
+    private _map: any[]; // array of [name, value] preserving insertion order
+
+    constructor() {
+        this._map = [];
+    }
+
+    private _index(name: string): number {
+        const key = String(name).toLowerCase();
+        for (let i = 0; i < this._map.length; i++) {
+            if (this._map[i][0] === key) return i;
+        }
+        return -1;
+    }
+
+    get(name: string): string | null {
+        const i = this._index(name);
+        return i >= 0 ? this._map[i][1] : null;
+    }
+    has(name: string): boolean {
+        return this._index(name) >= 0;
+    }
+    set(name: string, value: string): void {
+        const key = String(name).toLowerCase();
+        const i = this._index(key);
+        if (i >= 0) this._map[i][1] = String(value);
+        else this._map.push([key, String(value)]);
+    }
+    delete(name: string): void {
+        const i = this._index(name);
+        if (i >= 0) this._map.splice(i, 1);
+    }
+    entries(): any {
+        const arr: any = this._map.map((p: any) => [p[0], p[1]]);
+        return arr[Symbol.iterator]();
+    }
+    keys(): any {
+        const arr: any = this._map.map((p: any) => p[0]);
+        return arr[Symbol.iterator]();
+    }
+    values(): any {
+        const arr: any = this._map.map((p: any) => p[1]);
+        return arr[Symbol.iterator]();
+    }
+    [Symbol.iterator](): any {
+        return this.entries();
+    }
+    toString(): string {
+        const parts: string[] = [];
+        for (let i = 0; i < this._map.length; i++) {
+            parts.push(this._map[i][0] + '=' + this._map[i][1]);
+        }
+        return parts.join(';');
+    }
+}
+
+/** Parsed media type. Mirrors Node's util.MIMEType. */
+export class MIMEType {
+    type: string;
+    subtype: string;
+    params: MIMEParams;
+
+    constructor(input: string) {
+        const str = String(input).trim();
+        const semi = str.indexOf(';');
+        const essence = semi >= 0 ? str.slice(0, semi) : str;
+        const slash = essence.indexOf('/');
+        if (slash < 0) throw new TypeError('Invalid MIME type: ' + str);
+        this.type = essence.slice(0, slash).trim().toLowerCase();
+        this.subtype = essence.slice(slash + 1).trim().toLowerCase();
+        if (this.type.length === 0 || this.subtype.length === 0) {
+            throw new TypeError('Invalid MIME type: ' + str);
+        }
+
+        this.params = new MIMEParams();
+        if (semi >= 0) {
+            const rest = str.slice(semi + 1);
+            const segments = rest.split(';');
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i].trim();
+                if (seg.length === 0) continue;
+                const eq = seg.indexOf('=');
+                if (eq < 0) continue;
+                const name = seg.slice(0, eq).trim();
+                let value = seg.slice(eq + 1).trim();
+                if (value.length >= 2 && value.charAt(0) === '"' && value.charAt(value.length - 1) === '"') {
+                    value = value.slice(1, value.length - 1);
+                }
+                if (name.length > 0) this.params.set(name, value);
+            }
+        }
+    }
+
+    /** The `type/subtype` string with no parameters. */
+    get essence(): string {
+        return this.type + '/' + this.subtype;
+    }
+
+    toString(): string {
+        const p = this.params.toString();
+        return p.length > 0 ? this.essence + ';' + p : this.essence;
+    }
+}
+
+// -------- abort helpers --------
+
+/**
+ * Resolves once `signal` aborts (Node's util.aborted). The `resource` argument
+ * ties the pending listener to a resource lifetime in Node; SharpTS ignores it
+ * (no host async-resource tracking) but keeps the parameter for compatibility.
+ */
+export function aborted(signal: any, resource?: any): Promise<void> {
+    void resource;
+    return new Promise((resolve: any) => {
+        if (signal == null) { resolve(); return; }
+        if (signal.aborted) { resolve(); return; }
+        try {
+            signal.addEventListener('abort', () => resolve(), { once: true });
+        } catch (e) {
+            // Fall back to onabort if addEventListener is unavailable.
+            signal.onabort = () => resolve();
+        }
+    });
+}
+
+/** Returns an AbortController whose signal may be transferred. SharpTS has no
+ *  distinct transferable representation, so this is a plain AbortController. */
+export function transferableAbortController(): any {
+    return new AbortController();
+}
+
+/** Marks `signal` transferable and returns it (identity in SharpTS). */
+export function transferableAbortSignal(signal: any): any {
+    return signal;
+}
+
+// -------- parseEnv / getCallSites --------
+
+/**
+ * Parses the contents of a `.env` file into an object (Node 20+). Supports
+ * `KEY=value`, `#` comments, blank lines, `export KEY=...`, and single/double
+ * quoted values.
+ */
+export function parseEnv(content: string): any {
+    const result: any = {};
+    const lines = String(content).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        // Strip a trailing CR from CRLF input.
+        if (line.length > 0 && line.charAt(line.length - 1) === '\r') line = line.slice(0, line.length - 1);
+        line = line.trim();
+        if (line.length === 0 || line.charAt(0) === '#') continue;
+        if (line.indexOf('export ') === 0) line = line.slice(7).trim();
+        const eq = line.indexOf('=');
+        if (eq < 0) continue;
+        const key = line.slice(0, eq).trim();
+        let value = line.slice(eq + 1).trim();
+        if (value.length >= 2) {
+            const first = value.charAt(0);
+            const last = value.charAt(value.length - 1);
+            if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+                value = value.slice(1, value.length - 1);
+            }
+        }
+        if (key.length > 0) result[key] = value;
+    }
+    return result;
+}
+
+/**
+ * Returns structured call-site information (Node 22+). SharpTS does not expose
+ * a V8-style structured stack to guest code, so this returns an empty array
+ * (documented bound); callers that only test for an array shape still work.
+ */
+export function getCallSites(_frames?: any, _options?: any): any[] {
+    return [];
+}
+
+// -------- deprecated legacy helpers --------
+//
+// Node keeps these for backward compatibility; new code should use `typeof`
+// checks or `util.types.*`. Provided for parity with existing programs.
+
+export function _extend(target: any, source: any): any {
+    if (source == null || typeof source !== 'object') return target;
+    const keys = Object.keys(source);
+    for (let i = 0; i < keys.length; i++) target[keys[i]] = source[keys[i]];
+    return target;
+}
+
+export function isBoolean(value: any): boolean { return typeof value === 'boolean'; }
+export function isNullOrUndefined(value: any): boolean { return value === null || value === undefined; }
+export function isNumber(value: any): boolean { return typeof value === 'number'; }
+export function isString(value: any): boolean { return typeof value === 'string'; }
+export function isSymbol(value: any): boolean { return typeof value === 'symbol'; }
+export function isObject(value: any): boolean { return value !== null && typeof value === 'object'; }
+export function isPrimitive(value: any): boolean {
+    return value === null || (typeof value !== 'object' && typeof value !== 'function');
+}
+export function isError(value: any): boolean { return value instanceof Error; }
+export function isBuffer(value: any): boolean { return value instanceof Buffer; }
+
+// The remaining deprecated aliases reuse the internal type predicates.
+export { isArray, isNull, isUndefined, isFunction, isRegExp, isDate };
 
 // -------- parseArgs --------
 //
@@ -687,11 +1200,18 @@ export function parseArgs(config?: any): any {
 }
 
 export default {
-    format, inspect, isDeepStrictEqual, toUSVString, stripVTControlCharacters,
-    getSystemErrorName, getSystemErrorMap,
+    format, formatWithOptions, inspect, isDeepStrictEqual, toUSVString, stripVTControlCharacters,
+    getSystemErrorName, getSystemErrorMessage, getSystemErrorMap,
+    styleText, debuglog, debug,
     deprecate, callbackify, promisify, inherits,
     TextEncoder: _TextEncoder,
     TextDecoder: _TextDecoder,
     types,
     parseArgs,
+    MIMEType, MIMEParams,
+    aborted, transferableAbortController, transferableAbortSignal,
+    parseEnv, getCallSites,
+    _extend,
+    isArray, isBoolean, isNull, isNullOrUndefined, isNumber, isString, isSymbol,
+    isUndefined, isObject, isFunction, isPrimitive, isRegExp, isDate, isError, isBuffer,
 };

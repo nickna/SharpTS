@@ -909,31 +909,34 @@ public static class BuiltInTypes
         // Listener type is 'any' because EventEmitter callbacks are inherently untyped
         // and can have any number/type of parameters
         var listenerType = AnyType;
+        // Event names are string | symbol — Node allows symbol event names
+        // (e.g. EventEmitter.errorMonitor).
+        var eventNameType = new TypeInfo.Union([StringType, new TypeInfo.Symbol()]);
 
         return name switch
         {
             // Core event methods - all return 'this' for chaining (EventEmitter)
-            "on" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
-            "addListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
-            "once" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
-            "off" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
-            "removeListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "on" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
+            "addListener" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
+            "once" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
+            "off" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
+            "removeListener" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
             "emit" => new TypeInfo.Function(
-                [StringType, new TypeInfo.Array(AnyType)],
+                [eventNameType, new TypeInfo.Array(AnyType)],
                 BooleanType,
                 RequiredParams: 1,
                 HasRestParam: true), // eventName required, ...args variadic
-            "removeAllListeners" => new TypeInfo.Function([StringType], eventEmitterType, RequiredParams: 0),
+            "removeAllListeners" => new TypeInfo.Function([eventNameType], eventEmitterType, RequiredParams: 0),
 
             // Listener inspection
-            "listeners" => new TypeInfo.Function([StringType], new TypeInfo.Array(listenerType)),
-            "rawListeners" => new TypeInfo.Function([StringType], new TypeInfo.Array(listenerType)),
-            "listenerCount" => new TypeInfo.Function([StringType], NumberType),
+            "listeners" => new TypeInfo.Function([eventNameType], new TypeInfo.Array(listenerType)),
+            "rawListeners" => new TypeInfo.Function([eventNameType], new TypeInfo.Array(listenerType)),
+            "listenerCount" => new TypeInfo.Function([eventNameType], NumberType),
             "eventNames" => new TypeInfo.Function([], new TypeInfo.Array(StringType)),
 
             // Prepend methods
-            "prependListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
-            "prependOnceListener" => new TypeInfo.Function([StringType, listenerType], eventEmitterType),
+            "prependListener" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
+            "prependOnceListener" => new TypeInfo.Function([eventNameType, listenerType], eventEmitterType),
 
             // Max listeners
             "setMaxListeners" => new TypeInfo.Function([NumberType], eventEmitterType),
