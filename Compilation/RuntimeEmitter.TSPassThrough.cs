@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSTransformType  // Extends $Transform
         );
-        runtime.TSPassThroughType = typeBuilder;
+        _ = typeBuilder;
 
         // Constructor
         EmitTSPassThroughCtor(typeBuilder, runtime);

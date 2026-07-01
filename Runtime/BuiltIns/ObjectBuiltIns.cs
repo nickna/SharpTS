@@ -2082,49 +2082,41 @@ public static class ObjectBuiltIns
     // ===================== V2 Wrappers (RuntimeValue boundary — delegates to internal logic) =====================
 
     private static RuntimeValue FromEntriesV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(FromEntries(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(FromEntries(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue AssignV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Assign(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(Assign(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue DefinePropertyV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(DefineProperty(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(DefineProperty(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue GetOwnPropertyDescriptorV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(GetOwnPropertyDescriptor(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(GetOwnPropertyDescriptor(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue GetOwnPropertyNamesV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(GetOwnPropertyNames(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(GetOwnPropertyNames(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue CreateV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Create(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(Create(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue PreventExtensionsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(PreventExtensions(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(PreventExtensions(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(IsExtensibleMethod(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(IsExtensibleMethod(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue GetOwnPropertySymbolsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(GetOwnPropertySymbols(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(GetOwnPropertySymbols(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue SetPrototypeOfV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(SetPrototypeOf(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(SetPrototypeOf(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue GroupByV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(GroupBy(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(GroupBy(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue DefinePropertiesV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(DefineProperties(interp, SpanToList(args)));
+        => RuntimeValue.FromBoxed(DefineProperties(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue GetOwnPropertyDescriptorsV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(GetOwnPropertyDescriptors(interp, SpanToList(args)));
-
-    private static List<object?> SpanToList(ReadOnlySpan<RuntimeValue> args)
-    {
-        var list = new List<object?>(args.Length);
-        foreach (var arg in args)
-            list.Add(arg.ToObject());
-        return list;
-    }
+        => RuntimeValue.FromBoxed(GetOwnPropertyDescriptors(interp, CallableInterop.ToBoxedList(args)));
 }

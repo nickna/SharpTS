@@ -61,12 +61,12 @@ public partial class RuntimeEmitter
             runtime.TSEventEmitterType
         );
         _netServerTypeBuilder = typeBuilder;
-        runtime.NetServerType = typeBuilder;
+        _ = typeBuilder;
 
         // ── Fields ──
         _netServerListenerField = typeBuilder.DefineField("_listener", typeof(TcpListener), FieldAttributes.Private);
         _netServerIsListeningField = typeBuilder.DefineField("_isListening", _types.Boolean, FieldAttributes.Private);
-        runtime.NetServerIsListeningField = _netServerIsListeningField;
+        _ = _netServerIsListeningField;
         _netServerCtsField = typeBuilder.DefineField("_cts", typeof(CancellationTokenSource), FieldAttributes.Private);
         _netServerConnectionListenerField = typeBuilder.DefineField("_connectionListener", _types.Object, FieldAttributes.Assembly);
         _netServerPortField = typeBuilder.DefineField("_port", _types.Int32, FieldAttributes.Private);
@@ -89,7 +89,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
-        runtime.NetServerListen = _netServerListenMethod;
+        _ = _netServerListenMethod;
 
         _netServerCloseMethod = typeBuilder.DefineMethod(
             "Close",
@@ -97,7 +97,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NetServerClose = _netServerCloseMethod;
+        _ = _netServerCloseMethod;
 
         _netServerAddressMethod = typeBuilder.DefineMethod(
             "Address",
@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.NetServerAddress = _netServerAddressMethod;
+        _ = _netServerAddressMethod;
 
         _netServerGetConnectionsMethod = typeBuilder.DefineMethod(
             "GetConnections",
@@ -113,7 +113,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object]
         );
-        runtime.NetServerGetConnections = _netServerGetConnectionsMethod;
+        _ = _netServerGetConnectionsMethod;
 
         _netServerGetMemberMethod = typeBuilder.DefineMethod(
             "GetMember",
@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.NetServerGetMember = _netServerGetMemberMethod;
+        _ = _netServerGetMemberMethod;
 
         _netServerSetMemberMethod = typeBuilder.DefineMethod(
             "SetMember",
@@ -129,7 +129,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [_types.String, _types.Object]
         );
-        runtime.NetServerSetMember = _netServerSetMemberMethod;
+        _ = _netServerSetMemberMethod;
 
         // NOTE: CreateType() is deferred to Phase 2
     }

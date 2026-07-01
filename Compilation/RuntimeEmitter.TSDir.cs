@@ -27,7 +27,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.DirType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _dirPathField = typeBuilder.DefineField("_path", _types.String, FieldAttributes.Private | FieldAttributes.InitOnly);
@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
-        runtime.DirPathGetter = getter;
+        _ = getter;
     }
 
     private void EmitDirReadSync(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirReadSync = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
             _types.Object, // Return null for JS compatibility
             Type.EmptyTypes
         );
-        runtime.DirCloseSync = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -190,7 +190,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
-        runtime.DirentType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _direntNameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private | FieldAttributes.InitOnly);
@@ -324,7 +324,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         prop.SetGetMethod(getter);
-        runtime.DirentNameGetter = getter;
+        _ = getter;
     }
 
     private void EmitDirentIsFile(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -335,7 +335,7 @@ public partial class RuntimeEmitter
             _types.Object, // Return boxed bool for JS compatibility
             Type.EmptyTypes
         );
-        runtime.DirentIsFile = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -352,7 +352,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsDirectory = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -369,7 +369,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsSymbolicLink = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -386,7 +386,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsBlockDevice = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Always return false
@@ -403,7 +403,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsCharacterDevice = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Always return false
@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsFIFO = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Always return false
@@ -437,7 +437,7 @@ public partial class RuntimeEmitter
             _types.Object,
             Type.EmptyTypes
         );
-        runtime.DirentIsSocket = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         // Always return false

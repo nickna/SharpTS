@@ -482,74 +482,24 @@ public partial class Interpreter
         return ExecutionResult.Success();
     }
 
-    internal async ValueTask<ExecutionResult> ExecuteWhileAsyncVT(Stmt.While whileStmt)
+    internal ValueTask<ExecutionResult> ExecuteWhileAsyncVT(Stmt.While whileStmt)
     {
         var labels = TakePendingLoopLabels();
-        while (IsTruthy(await EvaluateAsync(whileStmt.Condition)))
-        {
-            var result = await ExecuteStatementAsync(whileStmt.Body);
-            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
-            if (shouldContinue) continue;
-            if (abruptResult.HasValue) return abruptResult.Value;
-            ProcessPendingCallbacks();
-        }
-        return ExecutionResult.Success();
+        return ExecuteWhileCore(_asyncContext, whileStmt, labels);
     }
 
-    internal async ValueTask<ExecutionResult> ExecuteDoWhileAsyncVT(Stmt.DoWhile doWhileStmt)
+    internal ValueTask<ExecutionResult> ExecuteDoWhileAsyncVT(Stmt.DoWhile doWhileStmt)
     {
         var labels = TakePendingLoopLabels();
-        do
-        {
-            var result = await ExecuteStatementAsync(doWhileStmt.Body);
-            var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);
-            if (shouldBreak) return ExecutionResult.Success();
-            if (shouldContinue) continue;
-            if (abruptResult.HasValue) return abruptResult.Value;
-            ProcessPendingCallbacks();
-        } while (IsTruthy(await EvaluateAsync(doWhileStmt.Condition)));
-        return ExecutionResult.Success();
+        return ExecuteDoWhileCore(_asyncContext, doWhileStmt, labels);
     }
 
-    internal async ValueTask<ExecutionResult> ExecuteForAsyncVT(Stmt.For forStmt)
+    internal ValueTask<ExecutionResult> ExecuteForAsyncVT(Stmt.For forStmt)
     {
         // Drain labels parked for this loop so a `break`/`continue <label>` targeting it (e.g. from an
         // inner `for await`) is matched here instead of escaping. Empty when unlabeled (#728).
         var labels = TakePendingLoopLabels();
-        RuntimeEnvironment loopEnv = new(_environment);
-        using (PushScope(loopEnv))
-        {
-            if (forStmt.Initializer != null)
-                await ExecuteStatementAsync(forStmt.Initializer);
-            // ECMA-262 13.7.4 per-iteration bindings for `for (let/const …)`, so
-            // closures capture distinct values across iterations (#633). Mirrors
-            // the synchronous VisitFor path.
-            var perIterationNames = CollectPerIterationBindings(forStmt.Initializer);
-            if (perIterationNames != null)
-                CreatePerIterationEnvironment(loopEnv, perIterationNames);
-            while (forStmt.Condition == null || IsTruthy(await EvaluateAsync(forStmt.Condition)))
-            {
-                var result = await ExecuteStatementAsync(forStmt.Body);
-                if (result.Type == ExecutionResult.ResultType.Break && TargetsThisLoop(result.TargetLabel, labels)) break;
-                if (result.Type == ExecutionResult.ResultType.Continue && TargetsThisLoop(result.TargetLabel, labels))
-                {
-                    if (perIterationNames != null)
-                        CreatePerIterationEnvironment(loopEnv, perIterationNames);
-                    if (forStmt.Increment != null)
-                        await EvaluateAsync(forStmt.Increment);
-                    await Task.Yield();
-                    continue;
-                }
-                if (result.IsAbrupt) return result;
-                if (perIterationNames != null)
-                    CreatePerIterationEnvironment(loopEnv, perIterationNames);
-                if (forStmt.Increment != null)
-                    await EvaluateAsync(forStmt.Increment);
-                ProcessPendingCallbacks();
-            }
-            return ExecutionResult.Success();
-        }
+        return ExecuteForCore(_asyncContext, forStmt, labels);
     }
 
     internal async ValueTask<ExecutionResult> ExecuteForOfAsyncVT(Stmt.ForOf forOf)
@@ -755,37 +705,6 @@ public partial class Interpreter
         return RuntimeValue.FromBoxed(await EvaluateCallCore(_asyncContext, call));
     }
 
-    private async Task<RuntimeValue> EvaluateGetAsync(Expr.Get get)
-    {
-        // Handle namespace static property access (e.g., Number.MAX_VALUE, Number.NaN)
-        // These namespaces don't have runtime values, but have static properties
-        if (get.Object is Expr.Variable nsVar)
-        {
-            var member = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
-            if (member != null)
-            {
-                // If it's a constant (like Number.MAX_VALUE), it's wrapped in a BuiltInMethod
-                // that returns the value when invoked with no args
-                if (member is BuiltInMethod bm && bm.MinArity == 0 && bm.MaxArity == 0)
-                {
-                    // It's a constant property, invoke it to get the value
-                    return RuntimeValue.FromBoxed(bm.Call(this, []));
-                }
-                return RuntimeValue.FromObject(member);
-            }
-        }
-
-        object? obj = (await EvaluateAsync(get.Object)).ToObject();
-        return EvaluateGetOnObject(get, obj);
-    }
-
-    private async Task<RuntimeValue> EvaluateSetAsync(Expr.Set set)
-    {
-        object? obj = (await EvaluateAsync(set.Object)).ToObject();
-        object? value = (await EvaluateAsync(set.Value)).ToObject();
-        return EvaluateSetOnObjectRV(set, obj, value);
-    }
-
     private async Task<RuntimeValue> EvaluateNewAsync(Expr.New newExpr)
     {
         // Use async context with unified core - handles all built-in types
@@ -802,141 +721,6 @@ public partial class Interpreter
     {
         // Use async context with unified core
         return RuntimeValue.FromBoxed(await EvaluateObjectCore(_asyncContext, obj));
-    }
-
-    private async Task<RuntimeValue> EvaluateGetIndexAsync(Expr.GetIndex getIndex)
-    {
-        object? obj = (await EvaluateAsync(getIndex.Object)).ToObject();
-
-        // Optional bracket access: return undefined if object is nullish
-        if (getIndex.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
-        {
-            return RuntimeValue.Undefined;
-        }
-
-        object? index = (await EvaluateAsync(getIndex.Index)).ToObject();
-        return PerformIndexGet(getIndex.Object, obj, index);
-    }
-
-    private async Task<RuntimeValue> EvaluateSetIndexAsync(Expr.SetIndex setIndex)
-    {
-        object? obj = (await EvaluateAsync(setIndex.Object)).ToObject();
-        object? index = (await EvaluateAsync(setIndex.Index)).ToObject();
-        object? value = (await EvaluateAsync(setIndex.Value)).ToObject();
-        return PerformIndexSet(obj, index, value);
-    }
-
-    private async Task<RuntimeValue> EvaluateCompoundAssignAsync(Expr.CompoundAssign compound)
-    {
-        var currentRV = _environment.Get(compound.Name);
-        var operandRV = await EvaluateAsync(compound.Value);
-        var result = ApplyCompoundOperatorRV(compound.Operator.Type, currentRV, operandRV);
-        _environment.Assign(compound.Name, result.ToObject());
-        return result;
-    }
-
-    private async Task<RuntimeValue> EvaluateCompoundSetAsync(Expr.CompoundSet compoundSet)
-    {
-        object? obj = (await EvaluateAsync(compoundSet.Object)).ToObject();
-        RuntimeValue currentRV = EvaluateGetOnObject(new Expr.Get(compoundSet.Object, compoundSet.Name), obj);
-        var operandRV = await EvaluateAsync(compoundSet.Value);
-        RuntimeValue result = ApplyCompoundOperatorRV(compoundSet.Operator.Type, currentRV, operandRV);
-        object? resultObj = result.ToObject();
-        EvaluateSetOnObject(new Expr.Set(compoundSet.Object, compoundSet.Name, new Expr.Literal(resultObj)), obj, resultObj);
-        return result;
-    }
-
-    private async Task<RuntimeValue> EvaluateCompoundSetIndexAsync(Expr.CompoundSetIndex compoundSetIndex)
-    {
-        object? obj = (await EvaluateAsync(compoundSetIndex.Object)).ToObject();
-        object? index = (await EvaluateAsync(compoundSetIndex.Index)).ToObject();
-        object? currentValue = PerformIndexGet(compoundSetIndex.Object, obj, index).ToObject();
-        object? operandValue = (await EvaluateAsync(compoundSetIndex.Value)).ToObject();
-        object? result = ApplyCompoundOperator(compoundSetIndex.Operator.Type, currentValue, operandValue);
-        return PerformIndexSet(obj, index, result);
-    }
-
-    private async Task<RuntimeValue> EvaluateLogicalAssignAsync(Expr.LogicalAssign logical)
-    {
-        var currentRV = _environment.Get(logical.Name);
-
-        switch (logical.Operator.Type)
-        {
-            case TokenType.AND_AND_EQUAL:
-                if (!IsTruthy(currentRV)) return currentRV;
-                break;
-            case TokenType.OR_OR_EQUAL:
-                if (IsTruthy(currentRV)) return currentRV;
-                break;
-            case TokenType.QUESTION_QUESTION_EQUAL:
-                if (!currentRV.IsNullish) return currentRV;
-                break;
-        }
-
-        var newRV = await EvaluateAsync(logical.Value);
-        _environment.Assign(logical.Name, newRV.ToObject());
-        return newRV;
-    }
-
-    private async Task<RuntimeValue> EvaluateLogicalSetAsync(Expr.LogicalSet logical)
-    {
-        object? obj = (await EvaluateAsync(logical.Object)).ToObject();
-
-        // Logical assignment reads first → nullish base throws the *read*-worded
-        // guest TypeError before the short-circuit check (#733).
-        if (obj is null or SharpTSUndefined)
-        {
-            ThrowCannotReadProperty(obj, logical.Name.Lexeme);
-        }
-
-        if (!TryGetPropertyRV(obj, logical.Name, out RuntimeValue currentRV))
-        {
-            throw new InterpreterException($"Only instances and objects have fields. Cannot logical-get '{logical.Name.Lexeme}' on {obj?.GetType().Name ?? "null"}.");
-        }
-
-        switch (logical.Operator.Type)
-        {
-            case TokenType.AND_AND_EQUAL:
-                if (!currentRV.IsTruthy()) return currentRV;
-                break;
-            case TokenType.OR_OR_EQUAL:
-                if (currentRV.IsTruthy()) return currentRV;
-                break;
-            case TokenType.QUESTION_QUESTION_EQUAL:
-                if (!currentRV.IsNullish) return currentRV;
-                break;
-        }
-
-        var newRV = await EvaluateAsync(logical.Value);
-        object? newValue = newRV.ToObject();
-        if (!TrySetProperty(obj, logical.Name, newValue))
-        {
-            throw new InterpreterException($"Only instances and objects have fields. Cannot logical-set '{logical.Name.Lexeme}' on {obj?.GetType().Name ?? "null"}.");
-        }
-        return newRV;
-    }
-
-    private async Task<RuntimeValue> EvaluateLogicalSetIndexAsync(Expr.LogicalSetIndex logical)
-    {
-        object? obj = (await EvaluateAsync(logical.Object)).ToObject();
-        object? index = (await EvaluateAsync(logical.Index)).ToObject();
-        object? currentValue = PerformIndexGet(logical.Object, obj, index).ToObject();
-
-        switch (logical.Operator.Type)
-        {
-            case TokenType.AND_AND_EQUAL:
-                if (!IsTruthy(currentValue)) return RuntimeValue.FromBoxed(currentValue);
-                break;
-            case TokenType.OR_OR_EQUAL:
-                if (IsTruthy(currentValue)) return RuntimeValue.FromBoxed(currentValue);
-                break;
-            case TokenType.QUESTION_QUESTION_EQUAL:
-                if (currentValue != null) return RuntimeValue.FromBoxed(currentValue);
-                break;
-        }
-
-        object? newValue = (await EvaluateAsync(logical.Value)).ToObject();
-        return PerformIndexSet(obj, index, newValue);
     }
 
     private async Task<RuntimeValue> EvaluateTemplateLiteralAsync(Expr.TemplateLiteral template)

@@ -346,8 +346,9 @@ public partial class Parser
                     Consume(TokenType.COLON, "Expect ':' after computed member name.");
                     computedType = ParseTypeAnnotation();
                 }
+                TypeNode? computedTypeNode = TakeTypeNode();
                 ConsumeInterfaceMemberSeparator();
-                members.Add(new Stmt.InterfaceMember(computedTok, computedType, computedOptional, computedReadonly, computedIsMethod));
+                members.Add(new Stmt.InterfaceMember(computedTok, computedType, computedOptional, computedReadonly, computedIsMethod, computedTypeNode));
                 continue;
             }
 
@@ -371,9 +372,10 @@ public partial class Parser
                 Consume(TokenType.COLON, "Expect ':' after member name.");
                 type = ParseTypeAnnotation();
             }
+            TypeNode? memberTypeNode = TakeTypeNode();
 
             ConsumeInterfaceMemberSeparator();
-            members.Add(new Stmt.InterfaceMember(memberName, type, isOptional, isReadonly, isMethod));
+            members.Add(new Stmt.InterfaceMember(memberName, type, isOptional, isReadonly, isMethod, memberTypeNode));
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");
@@ -595,9 +597,10 @@ public partial class Parser
         }
 
         string valueType = ParseTypeAnnotation();
+        TypeNode? valueTypeNode = TakeTypeNode();
         ConsumeInterfaceMemberSeparator();
 
-        return new Stmt.IndexSignature(keyName, keyType, valueType);
+        return new Stmt.IndexSignature(keyName, keyType, valueType, valueTypeNode);
     }
 
     /// <summary>

@@ -66,7 +66,7 @@ public partial class RuntimeEmitter
         sizeIL.Emit(OpCodes.Ret);
 
         var createdType = typeBuilder.CreateType()!;
-        runtime.CountQueuingStrategyType = createdType;
+        _ = createdType;
         runtime.CountQueuingStrategyCtor = ctor;
     }
 
@@ -141,7 +141,7 @@ public partial class RuntimeEmitter
         sizeIL.Emit(OpCodes.Ret);
 
         var createdType = typeBuilder.CreateType()!;
-        runtime.ByteLengthQueuingStrategyType = createdType;
+        _ = createdType;
         runtime.ByteLengthQueuingStrategyCtor = ctor;
     }
 

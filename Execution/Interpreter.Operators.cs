@@ -22,9 +22,16 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition_assignment">MDN Compound Assignment</seealso>
     private RuntimeValue EvaluateCompoundAssign(Expr.CompoundAssign compound)
+        => EvaluateCompoundAssignCore(_syncContext, compound).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core compound-assignment logic shared by the sync and async evaluators; the evaluation
+    /// context supplies the operand-evaluation strategy so a single body serves both paths.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateCompoundAssignCore(IEvaluationContext ctx, Expr.CompoundAssign compound)
     {
         RuntimeValue currentValue = _environment.Get(compound.Name);
-        RuntimeValue addValue = EvaluateRV(compound.Value);
+        RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
         RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, currentValue, addValue);
         _environment.Assign(compound.Name, newValue);
         return newValue;
@@ -41,8 +48,14 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition_assignment">MDN Compound Assignment</seealso>
     private RuntimeValue EvaluateCompoundSet(Expr.CompoundSet compound)
+        => EvaluateCompoundSetCore(_syncContext, compound).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core property compound-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateCompoundSetCore(IEvaluationContext ctx, Expr.CompoundSet compound)
     {
-        object? obj = Evaluate(compound.Object);
+        object? obj = (await ctx.EvaluateExprAsync(compound.Object)).ToObject();
 
         // ECMA-262: a compound assignment reads first (GetValue), so a nullish base
         // throws the *read*-worded guest TypeError before any operation (#733).
@@ -53,7 +66,7 @@ public partial class Interpreter
 
         if (TryGetPropertyRV(obj, compound.Name, out RuntimeValue currentRV))
         {
-            RuntimeValue addValue = EvaluateRV(compound.Value);
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, currentRV, addValue);
             if (TrySetProperty(obj, compound.Name, newValue.ToObject()))
             {
@@ -74,9 +87,15 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition_assignment">MDN Compound Assignment</seealso>
     private RuntimeValue EvaluateCompoundSetIndex(Expr.CompoundSetIndex compound)
+        => EvaluateCompoundSetIndexCore(_syncContext, compound).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core indexed compound-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateCompoundSetIndexCore(IEvaluationContext ctx, Expr.CompoundSetIndex compound)
     {
-        object? obj = Evaluate(compound.Object);
-        object? index = Evaluate(compound.Index);
+        object? obj = (await ctx.EvaluateExprAsync(compound.Object)).ToObject();
+        object? index = (await ctx.EvaluateExprAsync(compound.Index)).ToObject();
 
         // Nullish base reads first → *read*-worded guest TypeError (#733).
         if (obj is null or SharpTSUndefined)
@@ -86,7 +105,7 @@ public partial class Interpreter
 
         if (obj is SharpTSArray array && index is double idx)
         {
-            RuntimeValue addValue = EvaluateRV(compound.Value);
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, array.GetRV((int)idx), addValue);
             array.Set((int)idx, newValue.ToObject());
             return newValue;
@@ -99,7 +118,7 @@ public partial class Interpreter
         if (obj is SharpTSTypedArray typedArray && index is double typedIdx)
         {
             int ti = (int)typedIdx;
-            RuntimeValue addValue = EvaluateRV(compound.Value);
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(
                 compound.Operator.Type, RuntimeValue.FromBoxed(typedArray[ti]), addValue);
             typedArray[ti] = newValue.ToObject();
@@ -121,6 +140,13 @@ public partial class Interpreter
     /// - <c>x ??= y</c>: Only assigns y to x if x is null/undefined
     /// </remarks>
     private RuntimeValue EvaluateLogicalAssign(Expr.LogicalAssign logical)
+        => EvaluateLogicalAssignCore(_syncContext, logical).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core variable logical-assignment logic shared by the sync and async evaluators.
+    /// Short-circuits before evaluating the right-hand side per ECMA-262.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateLogicalAssignCore(IEvaluationContext ctx, Expr.LogicalAssign logical)
     {
         RuntimeValue currentValue = _environment.Get(logical.Name);
 
@@ -138,7 +164,7 @@ public partial class Interpreter
         }
 
         // Short-circuit condition not met, evaluate and assign
-        RuntimeValue newValue = EvaluateRV(logical.Value);
+        RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
         _environment.Assign(logical.Name, newValue);
         return newValue;
     }
@@ -147,8 +173,14 @@ public partial class Interpreter
     /// Evaluates a logical assignment expression on an object property (e.g., <c>obj.x &&= y</c>).
     /// </summary>
     private RuntimeValue EvaluateLogicalSet(Expr.LogicalSet logical)
+        => EvaluateLogicalSetCore(_syncContext, logical).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core property logical-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateLogicalSetCore(IEvaluationContext ctx, Expr.LogicalSet logical)
     {
-        object? obj = Evaluate(logical.Object);
+        object? obj = (await ctx.EvaluateExprAsync(logical.Object)).ToObject();
 
         // Logical assignment reads first → nullish base throws the *read*-worded
         // guest TypeError before the short-circuit check (#733).
@@ -176,7 +208,7 @@ public partial class Interpreter
         }
 
         // Short-circuit condition not met, evaluate and assign
-        RuntimeValue newValue = EvaluateRV(logical.Value);
+        RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
         if (!TrySetProperty(obj, logical.Name, newValue.ToObject()))
         {
             throw new InterpreterException($"Only instances and objects have fields. Cannot logical-set '{logical.Name.Lexeme}' on {obj?.GetType().Name ?? "null"}.");
@@ -188,9 +220,15 @@ public partial class Interpreter
     /// Evaluates a logical assignment expression on an array element (e.g., <c>arr[i] &&= y</c>).
     /// </summary>
     private RuntimeValue EvaluateLogicalSetIndex(Expr.LogicalSetIndex logical)
+        => EvaluateLogicalSetIndexCore(_syncContext, logical).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core indexed logical-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateLogicalSetIndexCore(IEvaluationContext ctx, Expr.LogicalSetIndex logical)
     {
-        object? obj = Evaluate(logical.Object);
-        object? index = Evaluate(logical.Index);
+        object? obj = (await ctx.EvaluateExprAsync(logical.Object)).ToObject();
+        object? index = (await ctx.EvaluateExprAsync(logical.Index)).ToObject();
 
         // Nullish base reads first → *read*-worded guest TypeError (#733).
         if (obj is null or SharpTSUndefined)
@@ -216,7 +254,7 @@ public partial class Interpreter
             }
 
             // Short-circuit condition not met, evaluate and assign
-            RuntimeValue newValue = EvaluateRV(logical.Value);
+            RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
             array.Set((int)idx, newValue.ToObject());
             return newValue;
         }
@@ -632,38 +670,26 @@ public partial class Interpreter
     /// - delete on non-existent property: returns true
     /// </remarks>
     private RuntimeValue EvaluateDelete(Expr.Delete delete)
-    {
-        bool strictMode = _environment.IsStrictMode;
-
-        bool result = delete.Operand switch
-        {
-            Expr.Get get => DeleteProperty(get, strictMode),
-            Expr.GetIndex getIndex => DeleteIndexedProperty(getIndex, strictMode),
-            Expr.Variable v when strictMode =>
-                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
-            Expr.Variable v =>
-                SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
-            _ => true // Deleting other expressions returns true but does nothing
-        };
-        return RuntimeValue.FromBoolean(result);
-    }
+        => RuntimeValue.FromBoolean(DeleteCore(_syncContext, delete).GetAwaiter().GetResult());
 
     /// <summary>
-    /// Async version of EvaluateDelete.
+    /// Core delete logic shared by the sync and async evaluators. The evaluation context
+    /// supplies the operand-evaluation strategy (synchronous or awaiting), so a single body
+    /// serves both paths — there is no separate async twin to keep in lockstep.
     /// </summary>
-    private async Task<object> EvaluateDeleteAsync(Expr.Delete delete)
+    private async ValueTask<bool> DeleteCore(IEvaluationContext ctx, Expr.Delete delete)
     {
         bool strictMode = _environment.IsStrictMode;
 
         return delete.Operand switch
         {
-            Expr.Get get => await DeletePropertyAsync(get, strictMode),
-            Expr.GetIndex getIndex => await DeleteIndexedPropertyAsync(getIndex, strictMode),
+            Expr.Get get => await DeletePropertyCore(ctx, get, strictMode),
+            Expr.GetIndex getIndex => await DeleteIndexedPropertyCore(ctx, getIndex, strictMode),
             Expr.Variable v when strictMode =>
                 throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
             Expr.Variable v =>
                 SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
-            _ => true
+            _ => true // Deleting other expressions returns true but does nothing
         };
     }
 
@@ -671,9 +697,9 @@ public partial class Interpreter
     /// Deletes a property from an object (delete obj.prop).
     /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private bool DeleteProperty(Expr.Get get, bool strictMode)
+    private async ValueTask<bool> DeletePropertyCore(IEvaluationContext ctx, Expr.Get get, bool strictMode)
     {
-        object? obj = Evaluate(get.Object);
+        object? obj = (await ctx.EvaluateExprAsync(get.Object)).ToObject();
         string name = get.Name.Lexeme;
 
         if (obj is SharpTSProxy proxy)
@@ -689,72 +715,13 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// Async version of DeleteProperty.
-    /// In strict mode, throws TypeError for frozen/sealed objects.
-    /// </summary>
-    private async Task<bool> DeletePropertyAsync(Expr.Get get, bool strictMode)
-    {
-        object? obj = (await EvaluateAsync(get.Object)).ToObject();
-        string name = get.Name.Lexeme;
-
-        if (obj is SharpTSProxy proxy)
-            return proxy.TrapDeleteProperty(name, this);
-
-        return obj switch
-        {
-            SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
-            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
-            Dictionary<string, object?> dict => dict.Remove(name),
-            _ => true
-        };
-    }
-
-    /// <summary>
     /// Deletes a computed property from an object (delete obj[key]).
     /// In strict mode, throws TypeError for frozen/sealed objects.
     /// </summary>
-    private bool DeleteIndexedProperty(Expr.GetIndex getIndex, bool strictMode)
+    private async ValueTask<bool> DeleteIndexedPropertyCore(IEvaluationContext ctx, Expr.GetIndex getIndex, bool strictMode)
     {
-        object? obj = Evaluate(getIndex.Object);
-        object? key = Evaluate(getIndex.Index);
-
-        // Handle proxy
-        if (obj is SharpTSProxy proxy)
-        {
-            string proxyKey = key is SharpTSSymbol ? key.ToString()! : Stringify(key);
-            return proxy.TrapDeleteProperty(proxyKey, this);
-        }
-
-        // Handle symbol keys
-        if (key is SharpTSSymbol symbol)
-        {
-            return obj switch
-            {
-                SharpTSObject tsObj => tsObj.DeleteBySymbolStrict(symbol, strictMode),
-                SharpTSInstance tsInst => tsInst.DeleteBySymbolStrict(symbol, strictMode),
-                _ => true
-            };
-        }
-
-        string keyStr = Stringify(key);
-
-        return obj switch
-        {
-            SharpTSObject tsObj => tsObj.DeletePropertyStrict(keyStr, strictMode),
-            SharpTSInstance tsInst => tsInst.DeleteFieldStrict(keyStr, strictMode),
-            Dictionary<string, object?> dict => dict.Remove(keyStr),
-            _ => true
-        };
-    }
-
-    /// <summary>
-    /// Async version of DeleteIndexedProperty.
-    /// In strict mode, throws TypeError for frozen/sealed objects.
-    /// </summary>
-    private async Task<bool> DeleteIndexedPropertyAsync(Expr.GetIndex getIndex, bool strictMode)
-    {
-        object? obj = (await EvaluateAsync(getIndex.Object)).ToObject();
-        object? key = (await EvaluateAsync(getIndex.Index)).ToObject();
+        object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
+        object? key = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
 
         // Handle proxy
         if (obj is SharpTSProxy proxy)

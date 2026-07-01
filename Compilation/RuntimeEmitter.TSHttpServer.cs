@@ -85,7 +85,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSHttpRequestGetMember = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -536,7 +536,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSHttpResponseGetMember = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -625,7 +625,7 @@ public partial class RuntimeEmitter
             typeof(void),
             [_types.String, _types.Object]
         );
-        runtime.TSHttpResponseSetMember = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -1386,7 +1386,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Double, _types.Object]
         );
-        runtime.TSHttpServerListen = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -1668,7 +1668,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSHttpServerGetMember = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

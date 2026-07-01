@@ -143,12 +143,12 @@ public partial class Interpreter
     internal ValueTask<RuntimeValue> VisitGroupingAsync(Expr.Grouping grouping) => EvaluateAsync(grouping.Expression);
     internal ValueTask<RuntimeValue> VisitLiteralAsync(Expr.Literal literal) => new(EvaluateLiteral(literal));
     internal ValueTask<RuntimeValue> VisitUnaryAsync(Expr.Unary unary) => new(EvaluateUnaryAsync(unary));
-    internal async ValueTask<RuntimeValue> VisitDeleteAsync(Expr.Delete delete) => RuntimeValue.FromBoxed(await EvaluateDeleteAsync(delete));
+    internal async ValueTask<RuntimeValue> VisitDeleteAsync(Expr.Delete delete) => RuntimeValue.FromBoolean(await DeleteCore(_asyncContext, delete));
     internal ValueTask<RuntimeValue> VisitVariableAsync(Expr.Variable variable) => new(LookupVariableRV(variable.Name, variable));
     internal ValueTask<RuntimeValue> VisitAssignAsync(Expr.Assign assign) => EvaluateAssignAsync(assign);
     internal ValueTask<RuntimeValue> VisitCallAsync(Expr.Call call) => new(EvaluateCallAsync(call));
-    internal ValueTask<RuntimeValue> VisitGetAsync(Expr.Get get) => new(EvaluateGetAsync(get));
-    internal ValueTask<RuntimeValue> VisitSetAsync(Expr.Set set) => new(EvaluateSetAsync(set));
+    internal ValueTask<RuntimeValue> VisitGetAsync(Expr.Get get) => EvaluateGetCore(_asyncContext, get);
+    internal ValueTask<RuntimeValue> VisitSetAsync(Expr.Set set) => EvaluateSetCore(_asyncContext, set);
     internal ValueTask<RuntimeValue> VisitGetPrivateAsync(Expr.GetPrivate gp) => new(EvaluateGetPrivateAsync(gp));
     internal ValueTask<RuntimeValue> VisitSetPrivateAsync(Expr.SetPrivate sp) => new(EvaluateSetPrivateAsync(sp));
     internal ValueTask<RuntimeValue> VisitCallPrivateAsync(Expr.CallPrivate cp) => new(EvaluateCallPrivateAsync(cp));
@@ -156,15 +156,15 @@ public partial class Interpreter
     internal ValueTask<RuntimeValue> VisitNewAsync(Expr.New newExpr) => new(EvaluateNewAsync(newExpr));
     internal ValueTask<RuntimeValue> VisitArrayLiteralAsync(Expr.ArrayLiteral array) => new(EvaluateArrayAsync(array));
     internal ValueTask<RuntimeValue> VisitObjectLiteralAsync(Expr.ObjectLiteral obj) => new(EvaluateObjectAsync(obj));
-    internal ValueTask<RuntimeValue> VisitGetIndexAsync(Expr.GetIndex getIndex) => new(EvaluateGetIndexAsync(getIndex));
-    internal ValueTask<RuntimeValue> VisitSetIndexAsync(Expr.SetIndex setIndex) => new(EvaluateSetIndexAsync(setIndex));
+    internal ValueTask<RuntimeValue> VisitGetIndexAsync(Expr.GetIndex getIndex) => EvaluateGetIndexCore(_asyncContext, getIndex);
+    internal ValueTask<RuntimeValue> VisitSetIndexAsync(Expr.SetIndex setIndex) => EvaluateSetIndexCore(_asyncContext, setIndex);
     internal ValueTask<RuntimeValue> VisitSuperAsync(Expr.Super super) => new(EvaluateSuper(super));
-    internal ValueTask<RuntimeValue> VisitCompoundAssignAsync(Expr.CompoundAssign compound) => new(EvaluateCompoundAssignAsync(compound));
-    internal ValueTask<RuntimeValue> VisitCompoundSetAsync(Expr.CompoundSet compoundSet) => new(EvaluateCompoundSetAsync(compoundSet));
-    internal ValueTask<RuntimeValue> VisitCompoundSetIndexAsync(Expr.CompoundSetIndex compoundSetIndex) => new(EvaluateCompoundSetIndexAsync(compoundSetIndex));
-    internal ValueTask<RuntimeValue> VisitLogicalAssignAsync(Expr.LogicalAssign logical) => new(EvaluateLogicalAssignAsync(logical));
-    internal ValueTask<RuntimeValue> VisitLogicalSetAsync(Expr.LogicalSet logicalSet) => new(EvaluateLogicalSetAsync(logicalSet));
-    internal ValueTask<RuntimeValue> VisitLogicalSetIndexAsync(Expr.LogicalSetIndex logicalSetIndex) => new(EvaluateLogicalSetIndexAsync(logicalSetIndex));
+    internal ValueTask<RuntimeValue> VisitCompoundAssignAsync(Expr.CompoundAssign compound) => EvaluateCompoundAssignCore(_asyncContext, compound);
+    internal ValueTask<RuntimeValue> VisitCompoundSetAsync(Expr.CompoundSet compoundSet) => EvaluateCompoundSetCore(_asyncContext, compoundSet);
+    internal ValueTask<RuntimeValue> VisitCompoundSetIndexAsync(Expr.CompoundSetIndex compoundSetIndex) => EvaluateCompoundSetIndexCore(_asyncContext, compoundSetIndex);
+    internal ValueTask<RuntimeValue> VisitLogicalAssignAsync(Expr.LogicalAssign logical) => EvaluateLogicalAssignCore(_asyncContext, logical);
+    internal ValueTask<RuntimeValue> VisitLogicalSetAsync(Expr.LogicalSet logicalSet) => EvaluateLogicalSetCore(_asyncContext, logicalSet);
+    internal ValueTask<RuntimeValue> VisitLogicalSetIndexAsync(Expr.LogicalSetIndex logicalSetIndex) => EvaluateLogicalSetIndexCore(_asyncContext, logicalSetIndex);
     internal ValueTask<RuntimeValue> VisitPrefixIncrementAsync(Expr.PrefixIncrement prefix) => new(EvaluatePrefixIncrementAsync(prefix));
     internal ValueTask<RuntimeValue> VisitPostfixIncrementAsync(Expr.PostfixIncrement postfix) => new(EvaluatePostfixIncrementAsync(postfix));
     internal ValueTask<RuntimeValue> VisitArrowFunctionAsync(Expr.ArrowFunction arrow) => new(EvaluateArrowFunction(arrow));
@@ -349,21 +349,6 @@ public partial class Interpreter
             BigInteger bi => RuntimeValue.FromBigInt(new SharpTSBigInt(bi)),
             _ => RuntimeValue.FromBoxed(literal.Value)
         };
-    }
-
-    /// <summary>
-    /// Evaluates a variable reference, looking up its value in the current environment.
-    /// </summary>
-    /// <param name="variable">The variable expression AST node.</param>
-    /// <returns>The current value of the variable.</returns>
-    /// <remarks>
-    /// Uses side-channel resolution information if available, otherwise falls back
-    /// to dynamic lookup via <see cref="RuntimeEnvironment"/>.
-    /// </remarks>
-    /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
-    private object? EvaluateVariable(Expr.Variable variable)
-    {
-        return LookupVariable(variable.Name, variable);
     }
 
     /// <summary>
@@ -891,8 +876,14 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors#bracket_notation">MDN Bracket Notation</seealso>
     private RuntimeValue EvaluateGetIndex(Expr.GetIndex getIndex)
+        => EvaluateGetIndexCore(_syncContext, getIndex).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core indexed-read logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateGetIndexCore(IEvaluationContext ctx, Expr.GetIndex getIndex)
     {
-        object? obj = Evaluate(getIndex.Object);
+        object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
 
         // Optional bracket access: return undefined if object is nullish
         if (getIndex.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
@@ -900,7 +891,7 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
-        object? index = Evaluate(getIndex.Index);
+        object? index = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
         return PerformIndexGet(getIndex.Object, obj, index);
     }
 
@@ -1118,10 +1109,16 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors#bracket_notation">MDN Bracket Notation</seealso>
     private RuntimeValue EvaluateSetIndex(Expr.SetIndex setIndex)
+        => EvaluateSetIndexCore(_syncContext, setIndex).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Core indexed-assignment logic shared by the sync and async evaluators.
+    /// </summary>
+    private async ValueTask<RuntimeValue> EvaluateSetIndexCore(IEvaluationContext ctx, Expr.SetIndex setIndex)
     {
-        object? obj = Evaluate(setIndex.Object);
-        object? index = Evaluate(setIndex.Index);
-        object? value = Evaluate(setIndex.Value);
+        object? obj = (await ctx.EvaluateExprAsync(setIndex.Object)).ToObject();
+        object? index = (await ctx.EvaluateExprAsync(setIndex.Index)).ToObject();
+        object? value = (await ctx.EvaluateExprAsync(setIndex.Value)).ToObject();
         return PerformIndexSet(obj, index, value);
     }
 

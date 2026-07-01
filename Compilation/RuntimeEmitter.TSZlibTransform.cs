@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.TSTransformType
         );
-        runtime.TSZlibTransformType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tsZlibKindField = typeBuilder.DefineField("_kind", _types.Int32, FieldAttributes.Private);

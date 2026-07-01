@@ -79,7 +79,7 @@ public partial class TypeChecker
         {
             foreach (var indexSig in classStmt.IndexSignatures)
             {
-                TypeInfo valueType = ToTypeInfo(indexSig.ValueType);
+                TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
                 switch (indexSig.KeyType)
                 {
                     case TokenType.TYPE_STRING: mutableClass.StringIndexType = valueType; break;
@@ -306,7 +306,7 @@ public partial class TypeChecker
                 if (accessor.Kind.Type == TokenType.GET)
                 {
                     TypeInfo getterRetType = accessor.ReturnType != null
-                        ? ToTypeInfo(accessor.ReturnType)
+                        ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
                         : new TypeInfo.Any();
                     mutableClass.Getters[propName] = getterRetType;
 
@@ -319,7 +319,7 @@ public partial class TypeChecker
                 else // SET
                 {
                     TypeInfo paramType = accessor.SetterParam?.Type != null
-                        ? ToTypeInfo(accessor.SetterParam.Type)
+                        ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
                         : new TypeInfo.Any();
                     mutableClass.Setters[propName] = paramType;
 
@@ -885,7 +885,7 @@ public partial class TypeChecker
                         // Computed-name accessors aren't registered in Getters/Setters
                         // (no static member name); derive types from the declaration.
                         accessorReturnType = accessor.ComputedKey != null
-                            ? (accessor.ReturnType != null ? ToTypeInfo(accessor.ReturnType) : new TypeInfo.Any())
+                            ? (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : new TypeInfo.Any())
                             : classTypeForBody.Getters[accessor.Name.Lexeme];
                     }
                     else
@@ -896,7 +896,7 @@ public partial class TypeChecker
                         if (accessor.SetterParam != null)
                         {
                             TypeInfo setterParamType = accessor.ComputedKey != null
-                                ? (accessor.SetterParam.Type != null ? ToTypeInfo(accessor.SetterParam.Type) : new TypeInfo.Any())
+                                ? (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : new TypeInfo.Any())
                                 : classTypeForBody.Setters[accessor.Name.Lexeme];
                             accessorEnv.Define(accessor.SetterParam.Name.Lexeme, setterParamType);
                         }
@@ -1149,7 +1149,7 @@ public partial class TypeChecker
         {
             foreach (var indexSig in classStmt.IndexSignatures)
             {
-                TypeInfo valueType = ToTypeInfo(indexSig.ValueType);
+                TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
                 switch (indexSig.KeyType)
                 {
                     case TokenType.TYPE_STRING: mutableClass.StringIndexType = valueType; break;
@@ -1259,7 +1259,7 @@ public partial class TypeChecker
                 }
 
                 TypeInfo accessorType = accessor.ReturnType != null
-                    ? ToTypeInfo(accessor.ReturnType)
+                    ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
                     : new TypeInfo.Any();
 
                 if (accessor.Kind.Type == TokenType.GET)

@@ -1309,7 +1309,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementGet);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSTypedArrayGet = method;
+        _ = method;
     }
 
     private void EmitTypedArraySetHelper(TypeBuilder runtimeType, EmittedRuntime runtime)
@@ -1340,7 +1340,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TypedArrayElementSet);
         il.Emit(OpCodes.Ret);
 
-        runtime.TSTypedArraySet = method;
+        _ = method;
     }
 
     /// <summary>

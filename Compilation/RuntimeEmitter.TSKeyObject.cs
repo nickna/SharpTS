@@ -222,7 +222,7 @@ public partial class RuntimeEmitter
         EmitTSKeyObjectExportMethod(typeBuilder, typeField, symmetricKeyField, rsaKeyField, ecdsaKeyField, runtime);
 
         // Store the type but don't create it yet - will be done after methods are defined
-        runtime.TSKeyObjectType = typeBuilder.CreateType()!;
+        _ = typeBuilder.CreateType()!;
     }
 
     private void EmitTSKeyObjectTypeProperty(TypeBuilder typeBuilder, FieldBuilder typeField)

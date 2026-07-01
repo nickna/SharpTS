@@ -78,7 +78,7 @@ public partial class RuntimeEmitter
         // Emit Question method (uses runtime.InvokeValue)
         EmitReadlineInterfaceQuestion(_readlineInterfaceTypeBuilder, runtime);
 
-        runtime.ReadlineInterfaceType = _readlineInterfaceTypeBuilder.CreateType()!;
+        _ = _readlineInterfaceTypeBuilder.CreateType()!;
     }
 
     /// <summary>

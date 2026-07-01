@@ -53,9 +53,9 @@ public partial class RuntimeEmitter
         EmitStatWatcherConstructor(runtime);
         EmitStatWatcherCloseMethod(runtime);
 
-        runtime.StatWatcherType = _statWatcherType;
-        runtime.StatWatcherCtor = _statWatcherCtor;
-        runtime.StatWatcherClose = _statWatcherCloseMethod;
+        _ = _statWatcherType;
+        _ = _statWatcherCtor;
+        _ = _statWatcherCloseMethod;
 
         _statWatcherType.CreateType();
     }

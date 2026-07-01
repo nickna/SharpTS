@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
         var encodingIL = encodingGetter.GetILGenerator();
         encodingIL.Emit(OpCodes.Ldstr, "utf-8");
         encodingIL.Emit(OpCodes.Ret);
-        runtime.TSTextEncoderEncodingGetter = encodingGetter;
+        _ = encodingGetter;
 
         var encodingProp = typeBuilder.DefineProperty(
             "encoding",
@@ -60,7 +60,7 @@ public partial class RuntimeEmitter
             runtime.TSBufferType,
             [_types.String]
         );
-        runtime.TSTextEncoderEncode = encodeMethod;
+        _ = encodeMethod;
 
         var encodeIL = encodeMethod.GetILGenerator();
         var inputLocal = encodeIL.DeclareLocal(_types.String);
@@ -169,7 +169,7 @@ public partial class RuntimeEmitter
         encodingGetterIL.Emit(OpCodes.Ldarg_0);
         encodingGetterIL.Emit(OpCodes.Ldfld, encodingNameField);
         encodingGetterIL.Emit(OpCodes.Ret);
-        runtime.TSTextDecoderEncodingGetter = encodingGetter;
+        _ = encodingGetter;
 
         var encodingProp = typeBuilder.DefineProperty(
             "Encoding",
@@ -190,7 +190,7 @@ public partial class RuntimeEmitter
         fatalGetterIL.Emit(OpCodes.Ldarg_0);
         fatalGetterIL.Emit(OpCodes.Ldfld, fatalField);
         fatalGetterIL.Emit(OpCodes.Ret);
-        runtime.TSTextDecoderFatalGetter = fatalGetter;
+        _ = fatalGetter;
 
         // Property: ignoreBOM
         var ignoreBOMGetter = typeBuilder.DefineMethod(
@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
         ignoreBOMGetterIL.Emit(OpCodes.Ldarg_0);
         ignoreBOMGetterIL.Emit(OpCodes.Ldfld, ignoreBOMField);
         ignoreBOMGetterIL.Emit(OpCodes.Ret);
-        runtime.TSTextDecoderIgnoreBOMGetter = ignoreBOMGetter;
+        _ = ignoreBOMGetter;
 
         // Method: Decode(object input) -> string
         // Accepts $Buffer, byte[], or null
@@ -1022,7 +1022,7 @@ public partial class RuntimeEmitter
             CallingConventions.Standard,
             [runtime.TSTextDecoderType]
         );
-        runtime.TSTextDecoderDecodeMethodCtor = ctor;
+        _ = ctor;
 
         var ctorIL = ctor.GetILGenerator();
         ctorIL.Emit(OpCodes.Ldarg_0);

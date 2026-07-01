@@ -67,7 +67,7 @@ public partial class RuntimeEmitter
         runtime.CjsModuleType = builtType;
         runtime.CjsModuleCtor = builtType.GetConstructor(
             [typeof(FieldInfo), _types.String, _types.String, _types.Object, _types.Object])!;
-        runtime.CjsModuleExportsGetter = builtType.GetProperty("exports")!.GetGetMethod()!;
+        _ = builtType.GetProperty("exports")!.GetGetMethod()!;
         runtime.CjsModuleExportsSetter = builtType.GetProperty("exports")!.GetSetMethod()!;
     }
 

@@ -23,7 +23,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSAsyncLocalStorageType = typeBuilder;
+        _ = typeBuilder;
 
         // Field: private AsyncLocal<object> _store
         var storeField = typeBuilder.DefineField("_store", asyncLocalType, FieldAttributes.Private);

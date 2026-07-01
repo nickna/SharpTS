@@ -74,7 +74,7 @@ public partial class TypeChecker
             {
                 try
                 {
-                    var memberType = ToTypeInfo(member.Type);
+                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
 
                     // Check if this is a duplicate member name (overload)
                     if (members.TryGetValue(member.Name.Lexeme, out var existingType))
@@ -232,7 +232,7 @@ public partial class TypeChecker
         {
         foreach (var member in interfaceStmt.Members)
         {
-            var memberType = ToTypeInfo(member.Type);
+            var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
 
             // Check if this is a duplicate member name (overload)
             if (members.TryGetValue(member.Name.Lexeme, out var existingType))
@@ -290,7 +290,7 @@ public partial class TypeChecker
         {
             foreach (var indexSig in interfaceStmt.IndexSignatures)
             {
-                TypeInfo valueType = ToTypeInfo(indexSig.ValueType);
+                TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
                 switch (indexSig.KeyType)
                 {
                     case TokenType.TYPE_STRING:

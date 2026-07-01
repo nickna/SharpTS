@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.ConsoleTimersField = timersField;
+        _ = timersField;
 
         // Emit static field for counts dictionary: Dictionary<string, int>
         var countsField = typeBuilder.DefineField(
@@ -24,7 +24,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        runtime.ConsoleCountsField = countsField;
+        _ = countsField;
 
         // NOTE: _consoleGroupLevel field is defined early in EmitRuntimeType to allow ConsoleLog to use it
         var groupLevelField = runtime.ConsoleGroupLevelField;

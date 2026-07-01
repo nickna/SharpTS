@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        runtime.TSHmacType = typeBuilder;
+        _ = typeBuilder;
 
         // Fields
         _tsHmacField = typeBuilder.DefineField("_hmac", _types.IncrementalHash, FieldAttributes.Private);
@@ -174,7 +174,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.String]
         );
-        runtime.TSHmacUpdateMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 
@@ -219,7 +219,7 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.String]
         );
-        runtime.TSHmacDigestMethod = method;
+        _ = method;
 
         var il = method.GetILGenerator();
 

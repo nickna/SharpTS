@@ -288,7 +288,7 @@ public partial class RuntimeEmitter
         var ensureBoxed = _tsArrayEnsureBoxedMethod;
         var getDouble = typeBuilder.DefineMethod("GetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Double, [_types.Int32]);
-        runtime.TSArrayGetDouble = getDouble;
+        _ = getDouble;
         var setDouble = typeBuilder.DefineMethod("SetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32, _types.Double]);
         runtime.TSArraySetDouble = setDouble;
@@ -778,7 +778,7 @@ public partial class RuntimeEmitter
             "get_IsFrozen",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Boolean, Type.EmptyTypes);
-        runtime.TSArrayIsFrozenGetter = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -795,7 +795,7 @@ public partial class RuntimeEmitter
             "get_IsSealed",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Boolean, Type.EmptyTypes);
-        runtime.TSArrayIsSealedGetter = getter;
+        _ = getter;
 
         var il = getter.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -826,7 +826,7 @@ public partial class RuntimeEmitter
     private void EmitTSArraySeal(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod("Seal", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
-        runtime.TSArraySeal = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         EmitTSArrayDeoptGuard(il);
@@ -1452,7 +1452,7 @@ public partial class RuntimeEmitter
     private void EmitTSArrayGetRaw(TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder getCore, MethodBuilder syncLength)
     {
         var method = typeBuilder.DefineMethod("GetRaw", MethodAttributes.Public, _types.Object, [_types.Int64]);
-        runtime.TSArrayGetRaw = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         EmitTSArrayDeoptGuard(il);
@@ -2015,7 +2015,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
-        runtime.TSArrayToString = method;
+        _ = method;
 
         var il = method.GetILGenerator();
         EmitTSArrayDeoptGuard(il);

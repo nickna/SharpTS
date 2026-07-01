@@ -2017,14 +2017,14 @@ public partial class TypeChecker
                     if (accessor.Kind.Type == TokenType.GET)
                     {
                         TypeInfo getterRetType = accessor.ReturnType != null
-                            ? ToTypeInfo(accessor.ReturnType)
+                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
                             : new TypeInfo.Any();
                         mutableClass.Getters[propName] = getterRetType;
                     }
                     else
                     {
                         TypeInfo paramType = accessor.SetterParam?.Type != null
-                            ? ToTypeInfo(accessor.SetterParam.Type)
+                            ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
                             : new TypeInfo.Any();
                         mutableClass.Setters[propName] = paramType;
                     }
