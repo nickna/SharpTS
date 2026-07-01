@@ -18,14 +18,12 @@ export class AssertionError extends Error {
     generatedMessage: boolean;
     code: string;
 
-    constructor(options?: {
-        message?: string;
-        actual?: any;
-        expected?: any;
-        operator?: string;
-        stackStartFn?: Function;
-    }) {
-        const opts = options || {};
+    // options: { message?, actual?, expected?, operator?, stackStartFn? }.
+    // Typed `any` because the type checker treats an inline optional-property
+    // object param as all-required at construction sites (and `options || {}`
+    // would otherwise widen to `{}`, dropping `.message`).
+    constructor(options?: any) {
+        const opts: any = options || {};
         const generated = opts.message == null;
         const msg = opts.message != null ? opts.message : 'AssertionError';
         super(msg);
@@ -80,9 +78,26 @@ function sameValue(a: any, b: any): boolean {
 }
 
 function looseEquals(a: any, b: any): boolean {
-    // JS == semantics. TS catches the lint rule, but this is intentional here.
-    // deno-lint-ignore eqeqeq
-    return a == b;
+    // JS abstract (`==`) equality, implemented explicitly: SharpTS's own `==`
+    // does not coerce across number/string/boolean, so relying on it would make
+    // the loose family behave like the strict one.
+    if (a === b) return true;
+    if ((a === null || a === undefined) && (b === null || b === undefined)) return true;
+    const ta = typeof a;
+    const tb = typeof b;
+    if (ta === tb) return a === b;
+    // number <-> string
+    if (ta === 'number' && tb === 'string') return a === Number(b);
+    if (ta === 'string' && tb === 'number') return Number(a) === b;
+    // bigint <-> string / number
+    if (ta === 'bigint' && tb === 'string') { try { return a === BigInt(b); } catch (e) { return false; } }
+    if (ta === 'string' && tb === 'bigint') { try { return BigInt(a) === b; } catch (e) { return false; } }
+    if (ta === 'bigint' && tb === 'number') return Number(a) === b;
+    if (ta === 'number' && tb === 'bigint') return a === Number(b);
+    // boolean coerces to number, then re-compare
+    if (ta === 'boolean') return looseEquals(a ? 1 : 0, b);
+    if (tb === 'boolean') return looseEquals(a, b ? 1 : 0);
+    return false;
 }
 
 function deepEquals(a: any, b: any, strict: boolean): boolean {
@@ -99,15 +114,19 @@ function deepEquals(a: any, b: any, strict: boolean): boolean {
     // Falling back to the object branch for arrays would also work in pure JS
     // (Object.keys on arrays returns the indices), but arrays get their own
     // branch for predictable element-by-index traversal.
+    // Cast through `any`: the typeof/null guards above narrow a/b to `object`,
+    // which the type checker rejects for numeric/string indexing.
+    const av: any = a;
+    const bv: any = b;
     const aIsArray = Array.isArray(a);
     const bIsArray = Array.isArray(b);
     if (aIsArray !== bIsArray) return false;
     if (aIsArray) {
-        const lenA = a.length;
-        const lenB = b.length;
+        const lenA = av.length;
+        const lenB = bv.length;
         if (lenA !== lenB) return false;
         for (let i = 0; i < lenA; i++) {
-            if (!deepEquals(a[i], b[i], strict)) return false;
+            if (!deepEquals(av[i], bv[i], strict)) return false;
         }
         return true;
     }
@@ -117,8 +136,8 @@ function deepEquals(a: any, b: any, strict: boolean): boolean {
     const keysB = Object.keys(b);
     if (keysA.length !== keysB.length) return false;
     for (const key of keysA) {
-        if (!(key in b)) return false;
-        if (!deepEquals(a[key], b[key], strict)) return false;
+        if (!(key in bv)) return false;
+        if (!deepEquals(av[key], bv[key], strict)) return false;
     }
     return true;
 }
@@ -285,8 +304,180 @@ export function doesNotThrow(fn: Function, message?: string | Error): void {
     }
 }
 
-export default {
-    AssertionError,
-    ok, strictEqual, notStrictEqual, deepStrictEqual, notDeepStrictEqual,
-    equal, notEqual, fail, throws, doesNotThrow,
-};
+// ─── Error matching (shared by throws/rejects with an expectation) ──────
+
+function errorMatches(actual: any, expected: any): boolean {
+    if (expected == null) return true;
+    if (expected instanceof RegExp) {
+        const subject = (actual != null && actual.message != null) ? String(actual.message) : String(actual);
+        return expected.test(subject);
+    }
+    if (typeof expected === 'function') {
+        // An Error subclass constructor → instanceof check; otherwise treat it
+        // as a validation function whose truthy result signals a match.
+        if (actual instanceof expected) return true;
+        try {
+            return expected(actual) === true;
+        } catch (e) {
+            return false;
+        }
+    }
+    if (typeof expected === 'object') {
+        const keys = Object.keys(expected);
+        for (const k of keys) {
+            if (actual == null || actual[k] !== expected[k]) return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+// When the caller passes (subject, message) with no error matcher, the second
+// argument is the message. Distinguishes it from an error expectation.
+function normalizeErrorAndMessage(error: any, message: any): any[] {
+    if (typeof error === 'string' && message === undefined) {
+        return [undefined, error];
+    }
+    return [error, message];
+}
+
+// ─── async ─────────────────────────────────────────────────────────────
+
+/** Awaits `asyncFn` (called) or a promise and throws if it does NOT reject. */
+export async function rejects(asyncFnOrPromise: any, error?: any, message?: string | Error): Promise<void> {
+    const parts = normalizeErrorAndMessage(error, message);
+    const expected = parts[0];
+    const msg = parts[1];
+
+    const promise = typeof asyncFnOrPromise === 'function' ? asyncFnOrPromise() : asyncFnOrPromise;
+    let threw = false;
+    let actualErr: any;
+    try {
+        await promise;
+    } catch (e) {
+        threw = true;
+        actualErr = e;
+    }
+    if (!threw) {
+        fail_(resolveMessage(msg, 'Missing expected rejection'), undefined, undefined, 'rejects');
+    }
+    if (expected != null && !errorMatches(actualErr, expected)) {
+        fail_(resolveMessage(msg, 'Rejection did not match the expected error'), actualErr, expected, 'rejects');
+    }
+}
+
+/** Awaits `asyncFn` (called) or a promise and throws if it DOES reject. */
+export async function doesNotReject(asyncFnOrPromise: any, error?: any, message?: string | Error): Promise<void> {
+    const parts = normalizeErrorAndMessage(error, message);
+    const msg = parts[1];
+
+    const promise = typeof asyncFnOrPromise === 'function' ? asyncFnOrPromise() : asyncFnOrPromise;
+    let actualErr: any;
+    let threw = false;
+    try {
+        await promise;
+    } catch (e) {
+        threw = true;
+        actualErr = e;
+    }
+    if (threw) {
+        const detail = (actualErr != null && actualErr.message != null) ? ': ' + actualErr.message : '';
+        fail_(resolveMessage(msg, 'Got unwanted rejection' + detail), actualErr, undefined, 'doesNotReject');
+    }
+}
+
+// ─── match / doesNotMatch ───────────────────────────────────────────────
+
+/** Throws if `regexp` does not match `str`. */
+export function match(str: any, regexp: any, message?: string | Error): void {
+    if (!(regexp instanceof RegExp)) {
+        fail_('The "regexp" argument must be an instance of RegExp', regexp, undefined, 'match');
+    }
+    if (typeof str !== 'string') {
+        fail_('The "string" argument must be of type string', str, undefined, 'match');
+    }
+    if (!regexp.test(str)) {
+        fail_(
+            resolveMessage(message, 'The input did not match the regular expression ' + String(regexp)),
+            str, regexp, 'match');
+    }
+}
+
+/** Throws if `regexp` matches `str`. */
+export function doesNotMatch(str: any, regexp: any, message?: string | Error): void {
+    if (!(regexp instanceof RegExp)) {
+        fail_('The "regexp" argument must be an instance of RegExp', regexp, undefined, 'doesNotMatch');
+    }
+    if (typeof str !== 'string') {
+        fail_('The "string" argument must be of type string', str, undefined, 'doesNotMatch');
+    }
+    if (regexp.test(str)) {
+        fail_(
+            resolveMessage(message, 'The input was expected to not match the regular expression ' + String(regexp)),
+            str, regexp, 'doesNotMatch');
+    }
+}
+
+// ─── ifError ────────────────────────────────────────────────────────────
+
+/** Throws `value` if it is not null/undefined (for Node-style error callbacks). */
+export function ifError(value: any): void {
+    if (value === null || value === undefined) return;
+    const detail = (value != null && (value as any).message != null) ? String((value as any).message) : stringify(value);
+    fail_('ifError got unwanted exception: ' + detail, value, null, 'ifError');
+}
+
+// ─── loose deep (in)equality ────────────────────────────────────────────
+
+/** Deep comparison with loose (`==`) equality at leaves. */
+export function deepEqual(actual: any, expected: any, message?: string | Error): void {
+    if (!deepEquals(actual, expected, false)) {
+        fail_(
+            resolveMessage(message,
+                'Expected values to be loosely deep-equal:\n' + stringify(actual) +
+                '\nshould loosely deep-equal\n' + stringify(expected)),
+            actual, expected, 'deepEqual');
+    }
+}
+
+/** Throws if actual and expected are loosely deep-equal. */
+export function notDeepEqual(actual: any, expected: any, message?: string | Error): void {
+    if (deepEquals(actual, expected, false)) {
+        fail_(
+            resolveMessage(message,
+                'Expected values not to be loosely deep-equal: ' + stringify(actual)),
+            actual, expected, 'notDeepEqual');
+    }
+}
+
+// ─── Callable module ────────────────────────────────────────────────────
+//
+// Node's `assert` export is itself callable: `assert(value[, message])` is an
+// alias for `assert.ok`. The default export is therefore a function object
+// carrying every assert.* member.
+
+function assert(value: any, message?: string | Error): void {
+    ok(value, message);
+}
+
+const assertModule: any = assert;
+assertModule.AssertionError = AssertionError;
+assertModule.ok = ok;
+assertModule.strictEqual = strictEqual;
+assertModule.notStrictEqual = notStrictEqual;
+assertModule.deepStrictEqual = deepStrictEqual;
+assertModule.notDeepStrictEqual = notDeepStrictEqual;
+assertModule.deepEqual = deepEqual;
+assertModule.notDeepEqual = notDeepEqual;
+assertModule.equal = equal;
+assertModule.notEqual = notEqual;
+assertModule.fail = fail;
+assertModule.throws = throws;
+assertModule.doesNotThrow = doesNotThrow;
+assertModule.rejects = rejects;
+assertModule.doesNotReject = doesNotReject;
+assertModule.match = match;
+assertModule.doesNotMatch = doesNotMatch;
+assertModule.ifError = ifError;
+
+export default assertModule;
