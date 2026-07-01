@@ -11,7 +11,7 @@ namespace SharpTS.Compilation;
 /// - Current field for the yielded value
 /// - Hoisted parameter and local variable fields
 /// </summary>
-public class GeneratorStateMachineBuilder : IIteratorStateMachineBuilder
+public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
@@ -20,7 +20,7 @@ public class GeneratorStateMachineBuilder : IIteratorStateMachineBuilder
     private HoistingManager _hoisting = null!;
 
     // The type being built
-    public TypeBuilder StateMachineType => _stateMachineType;
+    public override TypeBuilder StateMachineType => _stateMachineType;
 
     // Core state machine fields
     public FieldBuilder StateField { get; private set; } = null!;
@@ -430,7 +430,7 @@ public class GeneratorStateMachineBuilder : IIteratorStateMachineBuilder
     /// <summary>
     /// Gets a field for a variable by name, checking both parameters and locals.
     /// </summary>
-    public FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
+    public override FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
 
     /// <summary>
     /// Gets the hoisted enumerator field for a for...of loop, or null if not hoisted.
@@ -446,7 +446,7 @@ public class GeneratorStateMachineBuilder : IIteratorStateMachineBuilder
     /// <summary>
     /// Finalizes the type after MoveNext body has been emitted.
     /// </summary>
-    public Type CreateType()
+    public override Type CreateType()
     {
         ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
         ILLabelValidator.SweepConstructors(new[] { _stateMachineType });

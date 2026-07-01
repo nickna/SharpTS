@@ -10,7 +10,7 @@ namespace SharpTS.Compilation;
 /// Similar to AsyncStateMachineBuilder but includes a reference to the outer
 /// state machine for by-reference capture semantics.
 /// </summary>
-public class AsyncArrowStateMachineBuilder
+public class AsyncArrowStateMachineBuilder : AsyncBuilderBase
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
@@ -21,7 +21,8 @@ public class AsyncArrowStateMachineBuilder
     public Expr.ArrowFunction Arrow { get; }
 
     // The type being built
-    public TypeBuilder StateMachineType => _stateMachineType;
+    public override TypeBuilder StateMachineType => _stateMachineType;
+    protected override TypeProvider Types => _types;
 
     // Whether this is a standalone (top-level) async arrow without an outer async function
     public bool IsStandalone { get; private set; }
@@ -91,9 +92,8 @@ public class AsyncArrowStateMachineBuilder
     // The stub method that returns Task<object>
     public MethodBuilder StubMethod { get; private set; } = null!;
 
-    // Builder type
+    // Builder type. AwaiterType lives in AsyncBuilderBase (#1125).
     public Type BuilderType { get; private set; } = null!;
-    public Type AwaiterType { get; private set; } = null!;
 
     public AsyncArrowStateMachineBuilder(
         ModuleBuilder moduleBuilder,
@@ -543,7 +543,7 @@ public class AsyncArrowStateMachineBuilder
     /// <summary>
     /// Gets a field for a variable by name, checking parameters, locals, and captures.
     /// </summary>
-    public FieldBuilder? GetVariableField(string name)
+    public override FieldBuilder? GetVariableField(string name)
     {
         if (ParameterFields.TryGetValue(name, out var paramField))
             return paramField;
@@ -566,7 +566,7 @@ public class AsyncArrowStateMachineBuilder
     /// <summary>
     /// Finalizes the type after MoveNext body has been emitted.
     /// </summary>
-    public Type CreateType()
+    public override Type CreateType()
     {
         ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
         ILLabelValidator.SweepConstructors(new[] { _stateMachineType });
@@ -610,20 +610,8 @@ public class AsyncArrowStateMachineBuilder
         return awaitMethod.MakeGenericMethod(AwaiterType, _stateMachineType);
     }
 
-    public MethodInfo GetAwaiterIsCompletedGetter()
-    {
-        return AwaiterType.GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
-    }
-
-    public MethodInfo GetAwaiterGetResultMethod()
-    {
-        return AwaiterType.GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance)!;
-    }
-
-    public MethodInfo GetTaskGetAwaiterMethod()
-    {
-        return _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
-    }
+    // GetAwaiterIsCompletedGetter / GetAwaiterGetResultMethod / GetTaskGetAwaiterMethod moved to the
+    // shared AsyncBuilderBase (#1125): byte-identical with AsyncStateMachineBuilder.
 
     #endregion
 }
