@@ -103,33 +103,11 @@ public class SharpTSECDH
         _ecdh.ImportPkcs8PrivateKey(keyBytes, out _);
     }
 
-    private static object EncodeResult(byte[] bytes, string? encoding)
-    {
-        return encoding?.ToLowerInvariant() switch
-        {
-            "hex" => Convert.ToHexString(bytes).ToLowerInvariant(),
-            "base64" => Convert.ToBase64String(bytes),
-            _ => new SharpTSBuffer(bytes)
-        };
-    }
+    private static object EncodeResult(byte[] bytes, string? encoding) =>
+        CryptoEncoding.ToBufferOrString(bytes, encoding);
 
-    private static byte[] DecodeInput(object input, string? encoding)
-    {
-        if (input is SharpTSBuffer buffer)
-            return buffer.Data;
-        if (input is byte[] bytes)
-            return bytes;
-        if (input is string str)
-        {
-            return encoding?.ToLowerInvariant() switch
-            {
-                "hex" => Convert.FromHexString(str),
-                "base64" => Convert.FromBase64String(str),
-                _ => System.Text.Encoding.UTF8.GetBytes(str)
-            };
-        }
-        throw new ArgumentException("Input must be a Buffer, byte array, or string");
-    }
+    private static byte[] DecodeInput(object input, string? encoding) =>
+        CryptoEncoding.FromEncoded(input, encoding);
 
     /// <summary>
     /// Gets a member of this ECDH object.

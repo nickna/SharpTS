@@ -24,15 +24,7 @@ public class SharpTSHash
     /// <param name="algorithm">The hash algorithm name: md5, sha1, sha256, sha512</param>
     public SharpTSHash(string algorithm)
     {
-        var hashName = algorithm.ToLowerInvariant() switch
-        {
-            "md5" => HashAlgorithmName.MD5,
-            "sha1" => HashAlgorithmName.SHA1,
-            "sha256" => HashAlgorithmName.SHA256,
-            "sha384" => HashAlgorithmName.SHA384,
-            "sha512" => HashAlgorithmName.SHA512,
-            _ => throw new ArgumentException($"Unsupported hash algorithm: {algorithm}")
-        };
+        var hashName = CryptoAlgorithms.ParseHashName(algorithm, context: "hash");
 
         _hash = IncrementalHash.CreateHash(hashName);
         _finalized = false;
@@ -66,12 +58,7 @@ public class SharpTSHash
         _finalized = true;
         var hashBytes = _hash.GetHashAndReset();
 
-        return encoding?.ToLowerInvariant() switch
-        {
-            "hex" => Convert.ToHexString(hashBytes).ToLowerInvariant(),
-            "base64" => Convert.ToBase64String(hashBytes),
-            _ => new SharpTSBuffer(hashBytes)
-        };
+        return CryptoEncoding.ToBufferOrString(hashBytes, encoding);
     }
 
     /// <summary>

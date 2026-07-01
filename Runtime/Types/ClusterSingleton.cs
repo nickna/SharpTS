@@ -162,7 +162,7 @@ public class ClusterSingleton : SharpTSEventEmitter
     /// <summary>
     /// Gets a member for interpreter dispatch.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

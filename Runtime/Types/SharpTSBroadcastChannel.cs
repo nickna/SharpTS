@@ -263,7 +263,7 @@ public class SharpTSBroadcastChannel : SharpTSEventEmitter, IDisposable
     /// Gets a member (method or property) by name for interpreter dispatch.
     /// Falls through to <see cref="SharpTSEventEmitter.GetMember"/> for inherited methods.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

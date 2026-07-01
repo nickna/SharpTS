@@ -51,7 +51,7 @@ public class SharpTSClientResponse : SharpTSReadable
     /// <summary>Marks the response as aborted (request torn down before the body finished).</summary>
     internal void MarkAborted() => _aborted = true;
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

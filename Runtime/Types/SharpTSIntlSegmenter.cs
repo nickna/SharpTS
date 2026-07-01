@@ -7,42 +7,20 @@ namespace SharpTS.Runtime.Types;
 /// Runtime representation of Intl.Segmenter.
 /// Provides locale-aware text segmentation by grapheme, word, or sentence boundaries.
 /// </summary>
-public class SharpTSIntlSegmenter
+public class SharpTSIntlSegmenter : SharpTSIntlFormatterBase
 {
-    private readonly string _locale;
     private string _granularity;
 
     public SharpTSIntlSegmenter(object? locale, object? options)
     {
-        string localeStr = locale?.ToString() ?? "";
-
-        CultureInfo culture;
-        try
-        {
-            culture = string.IsNullOrEmpty(localeStr)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(localeStr.Replace('_', '-'));
-        }
-        catch
-        {
-            culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
+        ResolveLocale(locale);
 
         // Default granularity
         _granularity = "grapheme";
 
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
     }
 
     private void ParseOptions(IEnumerable<KeyValuePair<string, object?>> opts)
@@ -64,7 +42,7 @@ public class SharpTSIntlSegmenter
         return new SharpTSIntlSegments(input, _granularity);
     }
 
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         return new Dictionary<string, object?>
         {
@@ -82,17 +60,9 @@ public class SharpTSIntlSegmenter
     }
 
     /// <summary>
-    /// JS-facing resolvedOptions() method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
-    }
-
-    /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -101,11 +71,7 @@ public class SharpTSIntlSegmenter
                 string input = (args.Length > 0 ? args[0].ToObject() : null)?.ToString() ?? "";
                 return RuntimeValue.FromBoxed(SegmentText(input));
             }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
-            }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 

@@ -56,7 +56,7 @@ public class SharpTSHttpRequest : SharpTSReadable
     /// Gets a member (property or method) by name.
     /// Overrides Readable.GetMember to add HTTP-specific properties.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

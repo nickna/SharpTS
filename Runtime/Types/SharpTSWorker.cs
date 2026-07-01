@@ -816,7 +816,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Gets a member (method or property) by name.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -934,7 +934,7 @@ internal class WorkerParentPort : SharpTSEventEmitter
         _worker.PostMessageToParent(message, transfer);
     }
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

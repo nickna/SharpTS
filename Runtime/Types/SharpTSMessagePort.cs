@@ -262,7 +262,7 @@ public class SharpTSMessagePort : SharpTSEventEmitter
     /// <summary>
     /// Gets a member (method or property) by name.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

@@ -213,7 +213,7 @@ public class SharpTSWriteStream : SharpTSWritable
         });
     }
 
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {

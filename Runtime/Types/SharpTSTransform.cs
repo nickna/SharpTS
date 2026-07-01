@@ -29,7 +29,7 @@ public class SharpTSTransform : SharpTSDuplex
     /// <summary>
     /// Gets a member (method or property) by name for interpreter dispatch.
     /// </summary>
-    public new object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -52,25 +52,8 @@ public class SharpTSTransform : SharpTSDuplex
 
     private RuntimeValue TransformWrite(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var chunk = args.Length > 0 ? args[0].ToObject() : null;
-        string encoding = "utf8";
-        ISharpTSCallable? callback = null;
-
-        if (args.Length > 1)
-        {
-            if (args[1].IsString)
-            {
-                encoding = args[1].AsStringUnsafe();
-                if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb)
-                {
-                    callback = cb;
-                }
-            }
-            else if (args[1].ToObject() is ISharpTSCallable cb)
-            {
-                callback = cb;
-            }
-        }
+        var (chunk, parsedEncoding, callback) = StreamArgs.ParseWrite(args);
+        string encoding = parsedEncoding ?? "utf8";
 
         // Create push callback that adds to readable side
         var pushCallback = new TransformPushCallback(this, interpreter);
@@ -100,36 +83,7 @@ public class SharpTSTransform : SharpTSDuplex
 
     private RuntimeValue TransformEnd(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        object? chunk = null;
-        string? encoding = null;
-        ISharpTSCallable? callback = null;
-
-        if (args.Length > 0)
-        {
-            if (args[0].ToObject() is ISharpTSCallable cb0)
-            {
-                callback = cb0;
-            }
-            else
-            {
-                chunk = args[0].ToObject();
-                if (args.Length > 1)
-                {
-                    if (args[1].IsString)
-                    {
-                        encoding = args[1].AsStringUnsafe();
-                        if (args.Length > 2 && args[2].ToObject() is ISharpTSCallable cb)
-                        {
-                            callback = cb;
-                        }
-                    }
-                    else if (args[1].ToObject() is ISharpTSCallable cb)
-                    {
-                        callback = cb;
-                    }
-                }
-            }
-        }
+        var (chunk, encoding, callback) = StreamArgs.ParseEnd(args);
 
         // Write final chunk if provided
         if (chunk != null)

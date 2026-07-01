@@ -7,9 +7,8 @@ namespace SharpTS.Runtime.Types;
 /// Runtime representation of Intl.DisplayNames.
 /// Provides locale-aware display names for languages, regions, scripts, currencies, etc.
 /// </summary>
-public class SharpTSIntlDisplayNames
+public class SharpTSIntlDisplayNames : SharpTSIntlFormatterBase
 {
-    private readonly string _locale;
     private string _type;
     private string _style;
     private string _fallback;
@@ -133,23 +132,7 @@ public class SharpTSIntlDisplayNames
 
     public SharpTSIntlDisplayNames(object? locale, object? options)
     {
-        string localeStr = locale?.ToString() ?? "";
-
-        CultureInfo culture;
-        try
-        {
-            culture = string.IsNullOrEmpty(localeStr)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(localeStr.Replace('_', '-'));
-        }
-        catch
-        {
-            culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
+        ResolveLocale(locale);
 
         // Defaults
         _type = "language";
@@ -157,14 +140,9 @@ public class SharpTSIntlDisplayNames
         _fallback = "code";
         _languageDisplay = "dialect";
 
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
     }
 
     private void ParseOptions(IEnumerable<KeyValuePair<string, object?>> opts)
@@ -255,7 +233,7 @@ public class SharpTSIntlDisplayNames
         return DateTimeFieldNames.TryGetValue(code, out var name) ? name : null;
     }
 
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         return new Dictionary<string, object?>
         {
@@ -276,17 +254,9 @@ public class SharpTSIntlDisplayNames
     }
 
     /// <summary>
-    /// JS-facing resolvedOptions() method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
-    }
-
-    /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -295,11 +265,7 @@ public class SharpTSIntlDisplayNames
                 string code = (args.Length > 0 ? args[0].ToObject() : null)?.ToString() ?? "";
                 return RuntimeValue.FromBoxed(LookupDisplayName(code));
             }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
-            }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 

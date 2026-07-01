@@ -28,11 +28,14 @@ public class SharpTSStdout : SharpTSWritable
 
     /// <summary>
     /// Gets a member by name, adding stdout-specific properties on top of Writable.
-    /// Must be declared here (with new) so that compiled mode's GetMember reflection
-    /// fallback finds it on this type and avoids AmbiguousMatchException.
     /// Overrides end/destroy to be no-ops (process.stdout never ends in Node.js).
     /// </summary>
-    public new object? GetMember(string name)
+    /// <remarks>
+    /// Now that <see cref="SharpTSEventEmitter.GetMember"/> is virtual (#1139) this is a
+    /// normal override: the compiled-mode reflection fallback resolves the single virtual
+    /// slot unambiguously and dispatches to this most-derived implementation.
+    /// </remarks>
+    public override object? GetMember(string name)
     {
         return name switch
         {

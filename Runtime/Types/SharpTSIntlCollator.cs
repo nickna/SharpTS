@@ -7,9 +7,8 @@ namespace SharpTS.Runtime.Types;
 /// Runtime representation of Intl.Collator.
 /// Provides locale-aware string comparison using .NET's CompareInfo.
 /// </summary>
-public class SharpTSIntlCollator
+public class SharpTSIntlCollator : SharpTSIntlFormatterBase
 {
-    private readonly string _locale;
     private string _usage;
     private string _sensitivity;
     private bool _ignorePunctuation;
@@ -20,24 +19,7 @@ public class SharpTSIntlCollator
 
     public SharpTSIntlCollator(object? locale, object? options)
     {
-        string localeStr = locale?.ToString() ?? "";
-
-        CultureInfo culture;
-        try
-        {
-            culture = string.IsNullOrEmpty(localeStr)
-                ? CultureInfo.CurrentCulture
-                : CultureInfo.GetCultureInfo(localeStr.Replace('_', '-'));
-        }
-        catch
-        {
-            culture = CultureInfo.InvariantCulture;
-        }
-
-        _locale = culture.Name;
-        if (string.IsNullOrEmpty(_locale))
-            _locale = "en-US";
-
+        var culture = ResolveLocale(locale);
         _compareInfo = culture.CompareInfo;
 
         // Defaults
@@ -47,14 +29,9 @@ public class SharpTSIntlCollator
         _numeric = false;
         _caseFirst = "false";
 
-        if (options is SharpTSObject obj)
-        {
-            ParseOptions(obj.Fields);
-        }
-        else if (options is IDictionary<string, object?> dict)
-        {
-            ParseOptions(dict);
-        }
+        var opts = NormalizeOptions(options);
+        if (opts != null)
+            ParseOptions(opts);
 
         _compareOptions = BuildCompareOptions();
     }
@@ -131,7 +108,7 @@ public class SharpTSIntlCollator
         return result < 0 ? -1.0 : result > 0 ? 1.0 : 0.0;
     }
 
-    public Dictionary<string, object?> GetResolvedOptions()
+    public override Dictionary<string, object?> GetResolvedOptions()
     {
         return new Dictionary<string, object?>
         {
@@ -156,17 +133,9 @@ public class SharpTSIntlCollator
     }
 
     /// <summary>
-    /// JS-facing resolvedOptions method for compiled mode reflection dispatch.
-    /// </summary>
-    public object? resolvedOptions()
-    {
-        return GetResolvedOptions();
-    }
-
-    /// <summary>
     /// Gets a member (method) by name for interpreter dispatch.
     /// </summary>
-    public object? GetMember(string name)
+    public override object? GetMember(string name)
     {
         return name switch
         {
@@ -176,11 +145,7 @@ public class SharpTSIntlCollator
                 string y = (args.Length > 1 ? args[1].ToObject() : null)?.ToString() ?? "";
                 return RuntimeValue.FromBoxed(CompareStrings(x, y));
             }),
-            "resolvedOptions" => BuiltInMethod.CreateV2("resolvedOptions", 0, (_, _, _) =>
-            {
-                return RuntimeValue.FromObject(new SharpTSObject(GetResolvedOptions()));
-            }),
-            _ => null
+            _ => base.GetMember(name)
         };
     }
 
