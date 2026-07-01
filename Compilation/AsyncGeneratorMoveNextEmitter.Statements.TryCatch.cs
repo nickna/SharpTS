@@ -21,14 +21,9 @@ public partial class AsyncGeneratorMoveNextEmitter
     protected override FieldBuilder DefineStateMachineField(string name, Type type) =>
         _builder.StateMachineType.DefineField(name, type, FieldAttributes.Private);
 
-    protected override int ProtectedRegionDepth => _protectedRegionDepth;
-
-    // Depth of real IL exception blocks (EmitSimpleTryCatch / EmitSyncSegmentInTry) open around the
-    // current emission point. While > 0, a `br`/`ret` out of the region would be illegal, so exits are
-    // left to the existing per-path handling instead of being routed through the finally machinery.
-    // This is independent of CompilationContext.ExceptionBlockDepth (which only counts simple try
-    // blocks and drives the Leave-vs-Br choice in EmitBranchToLabel).
-    private int _protectedRegionDepth;
+    // ProtectedRegionDepth and its _protectedRegionDepth backing field, plus the suspension-agnostic
+    // EmitSimpleTryCatch / StoreCaughtExceptionToParam, live in the shared IteratorMoveNextEmitter base
+    // (byte-identical with the sync generator before #1123).
 
     // True while emitting a catch or finally body. A `throw` there must run the enclosing finally(s);
     // a `throw` in a try body is instead captured by its sync-segment mini try/catch (and so must not
@@ -132,21 +127,6 @@ public partial class AsyncGeneratorMoveNextEmitter
 
     // ---- Routing helpers ------------------------------------------------------------------------
 
-    /// <summary>
-    /// The finally scopes strictly inside the flag-based try whose body began at <paramref
-    /// name="scopeDepth"/> (= <c>_exitScopes.Count</c> at that point), innermost first. Excludes the
-    /// try's own finally (just below scopeDepth) and everything outside it — the finallys a throw
-    /// escaping a nested handler must run before reaching that try's catch (#632).
-    /// </summary>
-    private List<FinallyScope> FinallyFramesInside(int scopeDepth)
-    {
-        var result = new List<FinallyScope>();
-        for (int i = _exitScopes.Count - 1; i >= scopeDepth; i--)
-            if (_exitScopes[i] is FinallyScope fs)
-                result.Add(fs);
-        return result;
-    }
-
     private void RegisterReturnTerminal() => _exitTerminals.TryAdd(ExitCodeReturn, () =>
     {
         // Restore the completion value into Current: a yielding finally between the `return` and this
@@ -203,68 +183,9 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
     }
 
-    private void EmitSimpleTryCatch(Stmt.TryCatch t)
-    {
-        // A real IL protected region is open: a routed `br`/`ret` out of it would be illegal, so
-        // exits emitted inside fall back to their per-path handling (see the exit overrides).
-        _protectedRegionDepth++;
-        _ctx!.ExceptionBlockDepth++;
-        _il.BeginExceptionBlock();
-
-        foreach (var stmt in t.TryBlock)
-            EmitStatement(stmt);
-
-        if (t.CatchBlock != null)
-        {
-            _il.BeginCatchBlock(typeof(Exception));
-
-            if (t.CatchParam != null)
-            {
-                // Stack has the .NET exception; wrap to the TS value and bind to the catch param,
-                // honouring a hoisted field if the param is read across a suspension (#569).
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
-                StoreCaughtExceptionToParam(t.CatchParam.Lexeme);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Pop);
-            }
-
-            foreach (var stmt in t.CatchBlock)
-                EmitStatement(stmt);
-        }
-
-        if (t.FinallyBlock != null)
-        {
-            _il.BeginFinallyBlock();
-            foreach (var stmt in t.FinallyBlock)
-                EmitStatement(stmt);
-        }
-
-        _il.EndExceptionBlock();
-        _ctx!.ExceptionBlockDepth--;
-        _protectedRegionDepth--;
-    }
-
-    /// <summary>
-    /// Binds the caught exception value (on the IL stack) to the catch parameter, honouring whether
-    /// the parameter was hoisted to a state-machine field (because it is read across a yield/await in
-    /// the catch body) or lives in an IL local. Storing to a fresh local unconditionally — the
-    /// previous behaviour — lost the value whenever the catch parameter was hoisted, because reads
-    /// resolve the field first (#569, async analog of GeneratorMoveNextEmitter.StoreCaughtExceptionToParam).
-    /// </summary>
-    private void StoreCaughtExceptionToParam(string name)
-    {
-        if (GetHoistedVariableField(name) == null)
-        {
-            // Not hoisted: register a local so the catch body's reads resolve to it.
-            var exLocal = _il.DeclareLocal(typeof(object));
-            _ctx!.Locals.RegisterLocal(name, exLocal);
-        }
-
-        // Resolver stores to the hoisted field if present, otherwise the registered local.
-        Resolver.TryStoreVariable(name);
-    }
+    // EmitSimpleTryCatch (the no-suspension real-IL-block lowering) and StoreCaughtExceptionToParam
+    // (hoisted-field-aware catch-param binding) moved to the shared IteratorMoveNextEmitter base
+    // (#1123): byte-identical with the sync generator's copies.
 
     /// <summary>
     /// Flag-based try/catch/finally for the case where a suspension (yield / yield* / await) lives

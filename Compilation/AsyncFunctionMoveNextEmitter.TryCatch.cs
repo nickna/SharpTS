@@ -87,20 +87,6 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         RouteThroughFinallys(chain, code, OpCodes.Br);
     }
 
-    /// <summary>
-    /// The finally scopes strictly inside the flag-based try whose body began at <paramref
-    /// name="scopeDepth"/> (= <c>_exitScopes.Count</c> there), innermost first. Excludes the try's own
-    /// finally (just below scopeDepth, run by the normal catch→finally flow) and everything outside it.
-    /// </summary>
-    private List<FinallyScope> FinallyFramesInside(int scopeDepth)
-    {
-        var result = new List<FinallyScope>();
-        for (int i = _exitScopes.Count - 1; i >= scopeDepth; i--)
-            if (_exitScopes[i] is FinallyScope fs)
-                result.Add(fs);
-        return result;
-    }
-
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         // Check if this try block contains any await points
