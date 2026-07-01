@@ -52,6 +52,10 @@ public class EmitterSyncTests
             // --- #914: a suspending `throw await f()` in a try body is emitted at the flag-based top
             //     level (outside any mini try/catch), so route it into the active try's catch ---
             "EmitThrow",            // Route a top-level throw in a flag-based try body to its catch
+            // --- #1122: the await suspension IL dance is shared here across the two async-function
+            //     emitters, which supply only the emitter-specific seams (exit label, state counter,
+            //     resume-label marking, awaiter-field lookup) ---
+            "EmitAwait",            // Core: suspend/resume the state machine on await
         },
         [typeof(IteratorMoveNextEmitter)] = new()
         {
@@ -87,7 +91,7 @@ public class EmitterSyncTests
             "EmitForOf",            // for-await-of protocol dispatch
             "EmitForAwaitOf",       // #631: override the shared base to SUSPEND on next()/return() (vs blocking GetResult)
             "EmitLabeledStatement", // Labeled continue for for loops (base doesn't handle correctly)
-            "EmitAwait",            // Core: suspend/resume state machine
+            // (EmitAwait is inherited from AsyncFunctionMoveNextEmitter since #1122 — see above.)
             "EmitArrowFunction",    // Display class in state machine context
             "EmitExpressionAsDouble", // Literal optimization
             "EmitCallPrivate",      // Private method calls in async context
@@ -135,7 +139,7 @@ public class EmitterSyncTests
             "EmitStoreVariable",    // Capture indirection
             "EmitThis",             // Outer state machine capture
             "EmitSuper",            // This field indirection
-            "EmitAwait",            // Core: suspend/resume state machine
+            // (EmitAwait is inherited from AsyncFunctionMoveNextEmitter since #1122 — see above.)
             "EmitArrowFunction",    // Nested async arrows in state machine
             "EmitExpressionAsDouble", // Literal optimization
             // --- #766: a nested-block let/const that shadows an enclosing binding gets its own storage;
