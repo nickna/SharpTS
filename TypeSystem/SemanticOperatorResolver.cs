@@ -10,6 +10,36 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public static class SemanticOperatorResolver
 {
+    // Interned, immutable operator descriptors. Every OperatorDescriptor variant is an
+    // immutable record (private ctor; payloads are OpCode structs / bools), and every consumer
+    // only pattern-matches the result or reads its readonly OpCode — never mutates it or relies
+    // on reference distinctness. So a single shared instance per operator is observationally
+    // identical to a fresh allocation, while avoiding a per-binary-op heap allocation on the
+    // interpreter's number/number fast path (Resolve is called per +, per <, per i++, ...).
+    private static readonly OperatorDescriptor Plus = new OperatorDescriptor.Plus();
+    private static readonly OperatorDescriptor Subtract = new OperatorDescriptor.Arithmetic(OpCodes.Sub);
+    private static readonly OperatorDescriptor Multiply = new OperatorDescriptor.Arithmetic(OpCodes.Mul);
+    private static readonly OperatorDescriptor Divide = new OperatorDescriptor.Arithmetic(OpCodes.Div);
+    private static readonly OperatorDescriptor Remainder = new OperatorDescriptor.Arithmetic(OpCodes.Rem);
+    private static readonly OperatorDescriptor Power = new OperatorDescriptor.Power();
+    private static readonly OperatorDescriptor Less = new OperatorDescriptor.Comparison(OpCodes.Clt);
+    private static readonly OperatorDescriptor Greater = new OperatorDescriptor.Comparison(OpCodes.Cgt);
+    private static readonly OperatorDescriptor LessEqual = new OperatorDescriptor.Comparison(OpCodes.Cgt, Negated: true);
+    private static readonly OperatorDescriptor GreaterEqual = new OperatorDescriptor.Comparison(OpCodes.Clt, Negated: true);
+    private static readonly OperatorDescriptor LooseEqual = new OperatorDescriptor.Equality(IsStrict: false, IsNegated: false);
+    private static readonly OperatorDescriptor StrictEqual = new OperatorDescriptor.Equality(IsStrict: true, IsNegated: false);
+    private static readonly OperatorDescriptor LooseNotEqual = new OperatorDescriptor.Equality(IsStrict: false, IsNegated: true);
+    private static readonly OperatorDescriptor StrictNotEqual = new OperatorDescriptor.Equality(IsStrict: true, IsNegated: true);
+    private static readonly OperatorDescriptor BitwiseAnd = new OperatorDescriptor.Bitwise(OpCodes.And);
+    private static readonly OperatorDescriptor BitwiseOr = new OperatorDescriptor.Bitwise(OpCodes.Or);
+    private static readonly OperatorDescriptor BitwiseXor = new OperatorDescriptor.Bitwise(OpCodes.Xor);
+    private static readonly OperatorDescriptor ShiftLeft = new OperatorDescriptor.BitwiseShift(OpCodes.Shl);
+    private static readonly OperatorDescriptor ShiftRight = new OperatorDescriptor.BitwiseShift(OpCodes.Shr);
+    private static readonly OperatorDescriptor UnsignedShiftRight = new OperatorDescriptor.UnsignedRightShift();
+    private static readonly OperatorDescriptor InOp = new OperatorDescriptor.In();
+    private static readonly OperatorDescriptor InstanceOfOp = new OperatorDescriptor.InstanceOf();
+    private static readonly OperatorDescriptor UnknownOp = new OperatorDescriptor.Unknown();
+
     /// <summary>
     /// Resolves a token type to its operator descriptor with IL opcode information.
     /// </summary>
@@ -18,46 +48,46 @@ public static class SemanticOperatorResolver
     public static OperatorDescriptor Resolve(TokenType op) => op switch
     {
         // Plus - special for string concatenation
-        TokenType.PLUS => new OperatorDescriptor.Plus(),
+        TokenType.PLUS => Plus,
 
         // Arithmetic with direct IL opcodes
-        TokenType.MINUS => new OperatorDescriptor.Arithmetic(OpCodes.Sub),
-        TokenType.STAR => new OperatorDescriptor.Arithmetic(OpCodes.Mul),
-        TokenType.SLASH => new OperatorDescriptor.Arithmetic(OpCodes.Div),
-        TokenType.PERCENT => new OperatorDescriptor.Arithmetic(OpCodes.Rem),
+        TokenType.MINUS => Subtract,
+        TokenType.STAR => Multiply,
+        TokenType.SLASH => Divide,
+        TokenType.PERCENT => Remainder,
 
         // Power - requires Math.Pow
-        TokenType.STAR_STAR => new OperatorDescriptor.Power(),
+        TokenType.STAR_STAR => Power,
 
         // Comparison operators
-        TokenType.LESS => new OperatorDescriptor.Comparison(OpCodes.Clt),
-        TokenType.GREATER => new OperatorDescriptor.Comparison(OpCodes.Cgt),
-        TokenType.LESS_EQUAL => new OperatorDescriptor.Comparison(OpCodes.Cgt, Negated: true),
-        TokenType.GREATER_EQUAL => new OperatorDescriptor.Comparison(OpCodes.Clt, Negated: true),
+        TokenType.LESS => Less,
+        TokenType.GREATER => Greater,
+        TokenType.LESS_EQUAL => LessEqual,
+        TokenType.GREATER_EQUAL => GreaterEqual,
 
         // Equality operators
-        TokenType.EQUAL_EQUAL => new OperatorDescriptor.Equality(IsStrict: false, IsNegated: false),
-        TokenType.EQUAL_EQUAL_EQUAL => new OperatorDescriptor.Equality(IsStrict: true, IsNegated: false),
-        TokenType.BANG_EQUAL => new OperatorDescriptor.Equality(IsStrict: false, IsNegated: true),
-        TokenType.BANG_EQUAL_EQUAL => new OperatorDescriptor.Equality(IsStrict: true, IsNegated: true),
+        TokenType.EQUAL_EQUAL => LooseEqual,
+        TokenType.EQUAL_EQUAL_EQUAL => StrictEqual,
+        TokenType.BANG_EQUAL => LooseNotEqual,
+        TokenType.BANG_EQUAL_EQUAL => StrictNotEqual,
 
         // Bitwise operators
-        TokenType.AMPERSAND => new OperatorDescriptor.Bitwise(OpCodes.And),
-        TokenType.PIPE => new OperatorDescriptor.Bitwise(OpCodes.Or),
-        TokenType.CARET => new OperatorDescriptor.Bitwise(OpCodes.Xor),
+        TokenType.AMPERSAND => BitwiseAnd,
+        TokenType.PIPE => BitwiseOr,
+        TokenType.CARET => BitwiseXor,
 
         // Bitwise shift operators
-        TokenType.LESS_LESS => new OperatorDescriptor.BitwiseShift(OpCodes.Shl),
-        TokenType.GREATER_GREATER => new OperatorDescriptor.BitwiseShift(OpCodes.Shr),
+        TokenType.LESS_LESS => ShiftLeft,
+        TokenType.GREATER_GREATER => ShiftRight,
 
         // Unsigned right shift - special case, no bigint support
-        TokenType.GREATER_GREATER_GREATER => new OperatorDescriptor.UnsignedRightShift(),
+        TokenType.GREATER_GREATER_GREATER => UnsignedShiftRight,
 
         // Special operators
-        TokenType.IN => new OperatorDescriptor.In(),
-        TokenType.INSTANCEOF => new OperatorDescriptor.InstanceOf(),
+        TokenType.IN => InOp,
+        TokenType.INSTANCEOF => InstanceOfOp,
 
-        _ => new OperatorDescriptor.Unknown()
+        _ => UnknownOp
     };
 
     /// <summary>
