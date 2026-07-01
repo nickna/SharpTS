@@ -5,12 +5,30 @@
 // with a pure-TS port. TextEncoder/TextDecoder are re-exports of the
 // SharpTS global constructors; everything else is pure TS.
 
+// The only host dependency is `primitive:process` for environment reads
+// (NODE_DEBUG gating debuglog, NO_COLOR/FORCE_COLOR gating styleText). BCL-only,
+// so standalone is preserved.
+import { env as __envRaw } from 'primitive:process';
+const __env: any = __envRaw;
+
 // -------- format --------
 //
 // printf-like formatter with %s/%d/%i/%f/%j/%o/%O/%% placeholders.
 // Unused args are appended space-separated, matching Node.
 
 export function format(...args: any[]): string {
+    return formatImpl(undefined, args);
+}
+
+// -------- formatWithOptions --------
+//
+// Like format, but %o/%O inspection honors the supplied inspect options.
+
+export function formatWithOptions(inspectOptions: any, ...args: any[]): string {
+    return formatImpl(inspectOptions, args);
+}
+
+function formatImpl(inspectOptions: any, args: any[]): string {
     if (args.length === 0) return '';
 
     const fmt = String(args[0]);
@@ -70,10 +88,16 @@ export function format(...args: any[]): string {
             }
             if (spec === 'o' || spec === 'O') {
                 if (argIndex < args.length) {
-                    out += inspectValue(args[argIndex++], 2, 0);
+                    out += inspect(args[argIndex++], inspectOptions);
                 } else {
                     out += '%' + spec;
                 }
+                i += 2;
+                continue;
+            }
+            if (spec === 'c') {
+                // CSS directive: consumed with no output (Node behavior in non-browser).
+                if (argIndex < args.length) argIndex++;
                 i += 2;
                 continue;
             }
@@ -100,42 +124,130 @@ export function format(...args: any[]): string {
 // Not a full reimplementation of Node's inspect — just enough for the
 // common observable behaviors the test gate exercises.
 
-export function inspect(value: any, options?: any): string {
-    let depth = 2;
-    if (options != null && typeof options === 'object' && typeof options.depth === 'number') {
-        depth = options.depth;
-    }
-    return inspectValue(value, depth, 0);
+// The custom-inspection hook symbol. An object exposing a function under this
+// key controls its own inspect() output (Node's util.inspect.custom).
+const kInspectCustom: symbol = Symbol.for('nodejs.util.inspect.custom');
+
+interface InspectOpts {
+    depth: number;
+    colors: boolean;
+    maxArrayLength: number;
+    maxStringLength: number;
+    showHidden: boolean;
+    getters: boolean;
+    breakLength: number;
+    customInspect: boolean;
 }
 
-function inspectValue(value: any, depth: number, current: number): string {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
+// ANSI style codes for the common inspect color styles (colors: true).
+const INSPECT_STYLE: any = {
+    number: '33', bigint: '33', boolean: '33',
+    undefined: '90', null: '1',
+    string: '32', symbol: '32',
+    date: '35', regexp: '31', special: '36',
+};
+
+function colorize(text: string, style: string, opts: InspectOpts): string {
+    if (!opts.colors) return text;
+    const code = INSPECT_STYLE[style];
+    return code !== undefined ? '\x1b[' + code + 'm' + text + '\x1b[39m' : text;
+}
+
+function normalizeInspectOptions(options: any): InspectOpts {
+    const o: any = (options != null && typeof options === 'object') ? options : {};
+    const depth = o.depth === null ? Infinity : (typeof o.depth === 'number' ? o.depth : 2);
+    return {
+        depth,
+        colors: o.colors === true,
+        maxArrayLength: o.maxArrayLength === null ? Infinity : (typeof o.maxArrayLength === 'number' ? o.maxArrayLength : 100),
+        maxStringLength: o.maxStringLength === null ? Infinity : (typeof o.maxStringLength === 'number' ? o.maxStringLength : 10000),
+        showHidden: o.showHidden === true,
+        getters: o.getters === true,
+        breakLength: typeof o.breakLength === 'number' ? o.breakLength : 128,
+        customInspect: o.customInspect !== false,
+    };
+}
+
+export function inspect(value: any, options?: any): string {
+    // Node also supports inspect(value, showHidden, depth, colors) — the legacy
+    // boolean-positional form. Map it to an options object.
+    let opts: InspectOpts;
+    if (typeof options === 'boolean') {
+        opts = normalizeInspectOptions({ showHidden: options });
+    } else {
+        opts = normalizeInspectOptions(options);
+    }
+    return inspectValue(value, opts, 0, []);
+}
+
+function inspectValue(value: any, opts: InspectOpts, current: number, seen: any[]): string {
+    if (value === null) return colorize('null', 'null', opts);
+    if (value === undefined) return colorize('undefined', 'undefined', opts);
     const t = typeof value;
-    if (t === 'string') return "'" + value + "'";
-    if (t === 'number') return String(value);
-    if (t === 'boolean') return value ? 'true' : 'false';
-    if (t === 'bigint') return String(value) + 'n';
-    if (t === 'function') return '[Function]';
+    if (t === 'string') {
+        let s = value;
+        if (s.length > opts.maxStringLength) {
+            const shown = s.slice(0, opts.maxStringLength);
+            const more = s.length - opts.maxStringLength;
+            return colorize("'" + shown + "'", 'string', opts) + "... " + more + " more character" + (more === 1 ? '' : 's');
+        }
+        return colorize("'" + s + "'", 'string', opts);
+    }
+    if (t === 'number') return colorize(String(value), 'number', opts);
+    if (t === 'boolean') return colorize(value ? 'true' : 'false', 'boolean', opts);
+    if (t === 'bigint') return colorize(String(value) + 'n', 'bigint', opts);
+    if (t === 'symbol') return colorize(String(value), 'symbol', opts);
+    if (t === 'function') {
+        const name = (value as any).name;
+        return colorize(name ? '[Function: ' + name + ']' : '[Function (anonymous)]', 'special', opts);
+    }
+
+    // Custom inspection hook (util.inspect.custom). Only consulted for plain
+    // objects — arrays/typed values don't support arbitrary symbol-keyed reads
+    // in SharpTS, and Node's own custom-inspect targets are objects.
+    if (opts.customInspect && value != null && t === 'object' && !Array.isArray(value)
+        && !(value instanceof Date) && !(value instanceof RegExp)
+        && typeof value[kInspectCustom] === 'function') {
+        const produced = value[kInspectCustom](opts.depth, opts);
+        return typeof produced === 'string' ? produced : inspectValue(produced, opts, current, seen);
+    }
+
+    if (value instanceof Date) return colorize(value.toISOString(), 'date', opts);
+    if (value instanceof RegExp) return colorize(String(value), 'regexp', opts);
+
+    // Cycle guard.
+    for (let i = 0; i < seen.length; i++) {
+        if (seen[i] === value) return '[Circular *1]';
+    }
+    seen.push(value);
+
+    let result: string;
     if (Array.isArray(value)) {
-        if (current >= depth) return '[Array]';
-        const parts: string[] = [];
-        for (let i = 0; i < value.length; i++) {
-            parts.push(inspectValue(value[i], depth, current + 1));
+        if (current > opts.depth) { result = "[Array]"; }
+        else {
+            const parts: string[] = [];
+            const limit = value.length < opts.maxArrayLength ? value.length : opts.maxArrayLength;
+            for (let i = 0; i < limit; i++) parts.push(inspectValue(value[i], opts, current + 1, seen));
+            if (value.length > limit) parts.push('... ' + (value.length - limit) + ' more item' + (value.length - limit === 1 ? '' : 's'));
+            result = parts.length === 0 ? '[]' : '[ ' + parts.join(', ') + ' ]';
         }
-        return '[ ' + parts.join(', ') + ' ]';
-    }
-    if (t === 'object') {
-        if (current >= depth) return '[Object]';
-        const keys = Object.keys(value);
-        const parts: string[] = [];
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            parts.push(k + ': ' + inspectValue(value[k], depth, current + 1));
+    } else if (t === 'object') {
+        if (current > opts.depth) { result = '[Object]'; }
+        else {
+            const keys = opts.showHidden ? Object.getOwnPropertyNames(value) : Object.keys(value);
+            const parts: string[] = [];
+            for (let i = 0; i < keys.length; i++) {
+                const k = keys[i];
+                parts.push(k + ': ' + inspectValue(value[k], opts, current + 1, seen));
+            }
+            result = parts.length === 0 ? '{}' : '{ ' + parts.join(', ') + ' }';
         }
-        return '{ ' + parts.join(', ') + ' }';
+    } else {
+        result = String(value);
     }
-    return String(value);
+
+    seen.pop();
+    return result;
 }
 
 // -------- isDeepStrictEqual --------
@@ -373,6 +485,16 @@ export function getSystemErrorName(errno: number): string {
     return 'Unknown system error ' + String(errno);
 }
 
+export function getSystemErrorMessage(errno: number): string {
+    const key = String(errno);
+    const name = POSIX_ERROR_NAMES[key];
+    if (name !== undefined) {
+        const desc = POSIX_ERROR_DESCRIPTIONS[name];
+        return desc !== undefined ? desc : name;
+    }
+    return 'Unknown system error ' + String(errno);
+}
+
 export function getSystemErrorMap(): any {
     const map = new Map<number, any>();
     const keys = Object.keys(POSIX_ERROR_NAMES);
@@ -473,6 +595,100 @@ export function inherits(ctor: any, superCtor: any): void {
 const _TextEncoder: any = TextEncoder;
 const _TextDecoder: any = TextDecoder;
 export { _TextEncoder as TextEncoder, _TextDecoder as TextDecoder };
+
+// -------- styleText --------
+//
+// ANSI text styling (Node 20+). `format` is a style name or array of names.
+// Color output is suppressed when NO_COLOR is set (and not overridden by
+// FORCE_COLOR), matching Node's default TTY/env behavior.
+
+const STYLE_CODES: any = {
+    reset: [0, 0], bold: [1, 22], dim: [2, 22], italic: [3, 23], underline: [4, 24],
+    blink: [5, 25], inverse: [7, 27], hidden: [8, 28], strikethrough: [9, 29],
+    doubleunderline: [21, 24], framed: [51, 54], overlined: [53, 55],
+    black: [30, 39], red: [31, 39], green: [32, 39], yellow: [33, 39], blue: [34, 39],
+    magenta: [35, 39], cyan: [36, 39], white: [37, 39], gray: [90, 39], grey: [90, 39],
+    redBright: [91, 39], greenBright: [92, 39], yellowBright: [93, 39], blueBright: [94, 39],
+    magentaBright: [95, 39], cyanBright: [96, 39], whiteBright: [97, 39],
+    bgBlack: [40, 49], bgRed: [41, 49], bgGreen: [42, 49], bgYellow: [43, 49], bgBlue: [44, 49],
+    bgMagenta: [45, 49], bgCyan: [46, 49], bgWhite: [47, 49],
+    bgGray: [100, 49], bgGrey: [100, 49],
+    bgRedBright: [101, 49], bgGreenBright: [102, 49], bgYellowBright: [103, 49],
+    bgBlueBright: [104, 49], bgMagentaBright: [105, 49], bgCyanBright: [106, 49], bgWhiteBright: [107, 49],
+};
+
+function __colorsDisabled(): boolean {
+    // FORCE_COLOR (any value) wins; otherwise NO_COLOR disables color.
+    const force = __env != null ? __env.FORCE_COLOR : undefined;
+    if (force !== undefined && force !== '' && force !== '0' && force !== 'false') return false;
+    const noColor = __env != null ? __env.NO_COLOR : undefined;
+    return noColor !== undefined && noColor !== '';
+}
+
+export function styleText(format: any, text: string, options?: any): string {
+    if (typeof text !== 'string') {
+        throw new TypeError('The "text" argument must be of type string');
+    }
+    const validate = options != null && options.validateStream === true;
+    void validate;
+
+    const formats: any[] = Array.isArray(format) ? format : [format];
+    for (let i = 0; i < formats.length; i++) {
+        if (STYLE_CODES[formats[i]] === undefined) {
+            throw new TypeError("The value '" + String(formats[i]) + "' is invalid for argument 'format'");
+        }
+    }
+
+    if (__colorsDisabled()) return text;
+
+    let open = '';
+    let close = '';
+    for (let i = 0; i < formats.length; i++) {
+        const pair = STYLE_CODES[formats[i]];
+        open += '\x1b[' + pair[0] + 'm';
+        close = '\x1b[' + pair[1] + 'm' + close;
+    }
+    return open + text + close;
+}
+
+// -------- debuglog / debug --------
+//
+// Returns a logger gated on NODE_DEBUG. When the section is enabled, the
+// returned function writes to stderr (approximated via console.error); when
+// disabled it is a no-op. `enabled` reflects the gate.
+
+function __debugSectionEnabled(section: string): boolean {
+    const nodeDebug = __env != null ? __env.NODE_DEBUG : undefined;
+    if (nodeDebug === undefined || nodeDebug === '') return false;
+    const wanted = String(nodeDebug).toUpperCase();
+    const target = String(section).toUpperCase();
+    if (wanted === '*') return true;
+    const parts = wanted.split(',');
+    for (let i = 0; i < parts.length; i++) {
+        const p = parts[i].trim();
+        if (p === target || p === '*') return true;
+        // Node treats a trailing '*' as a wildcard prefix.
+        if (p.length > 0 && p.charAt(p.length - 1) === '*' && target.indexOf(p.slice(0, p.length - 1)) === 0) return true;
+    }
+    return false;
+}
+
+export function debuglog(section: string, callback?: any): any {
+    const enabled = __debugSectionEnabled(section);
+    const logger: any = enabled
+        ? (...args: any[]): void => {
+            const msg = format(...args);
+            console.error(section.toUpperCase() + ' ' + msg);
+        }
+        : (..._args: any[]): void => { /* no-op when the section is off */ };
+    logger.enabled = enabled;
+    if (typeof callback === 'function' && enabled) {
+        callback(logger);
+    }
+    return logger;
+}
+
+export const debug = debuglog;
 
 // -------- types sub-module --------
 //
@@ -687,8 +903,9 @@ export function parseArgs(config?: any): any {
 }
 
 export default {
-    format, inspect, isDeepStrictEqual, toUSVString, stripVTControlCharacters,
-    getSystemErrorName, getSystemErrorMap,
+    format, formatWithOptions, inspect, isDeepStrictEqual, toUSVString, stripVTControlCharacters,
+    getSystemErrorName, getSystemErrorMessage, getSystemErrorMap,
+    styleText, debuglog, debug,
     deprecate, callbackify, promisify, inherits,
     TextEncoder: _TextEncoder,
     TextDecoder: _TextDecoder,
