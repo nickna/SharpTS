@@ -741,9 +741,68 @@ function isWeakSet(value: any): boolean {
 }
 function isArrayBuffer(value: any): boolean {
     // SharpTS collapses Buffer and the typed-array family onto a single
-    // Buffer type, so ArrayBuffer-ness is detected the same way.
-    return value instanceof Buffer;
+    // Buffer type, so ArrayBuffer-ness is detected the same way (unchanged
+    // from the original behavior; a real ArrayBuffer is also covered).
+    return value instanceof Buffer || value instanceof ArrayBuffer;
 }
+function isSharedArrayBuffer(value: any): boolean {
+    return typeof SharedArrayBuffer !== 'undefined' && value instanceof SharedArrayBuffer;
+}
+function isAnyArrayBuffer(value: any): boolean {
+    return isArrayBuffer(value) || isSharedArrayBuffer(value);
+}
+function isDataView(value: any): boolean {
+    return typeof DataView !== 'undefined' && value instanceof DataView;
+}
+function isArrayBufferView(value: any): boolean {
+    return isDataView(value) || value instanceof Buffer
+        || isInt8Array(value) || isUint8Array(value) || isUint8ClampedArray(value)
+        || isInt16Array(value) || isUint16Array(value) || isInt32Array(value)
+        || isUint32Array(value) || isFloat32Array(value) || isFloat64Array(value)
+        || isBigInt64Array(value) || isBigUint64Array(value);
+}
+// SharpTS does not materialize boxed String/Number/Boolean/Symbol/BigInt
+// objects (`new String('x')` yields a primitive), so these are always false.
+function isBigIntObject(_value: any): boolean { return false; }
+function isBooleanObject(_value: any): boolean { return false; }
+function isNumberObject(_value: any): boolean { return false; }
+function isStringObject(_value: any): boolean { return false; }
+function isSymbolObject(_value: any): boolean { return false; }
+// Proxies are transparent to guest code (no observable marker), and external
+// (native) values / module namespace objects are not represented distinctly.
+function isProxy(_value: any): boolean { return false; }
+function isExternal(_value: any): boolean { return false; }
+function isModuleNamespaceObject(_value: any): boolean { return false; }
+function isKeyObject(_value: any): boolean { return false; }
+function isCryptoKey(_value: any): boolean { return false; }
+function isGeneratorFunction(value: any): boolean {
+    if (typeof value !== 'function') return false;
+    const ctor = (value as any).constructor;
+    return ctor != null && ctor.name === 'GeneratorFunction';
+}
+function isAsyncFunction(value: any): boolean {
+    if (typeof value !== 'function') return false;
+    const ctor = (value as any).constructor;
+    return ctor != null && ctor.name === 'AsyncFunction';
+}
+function isGeneratorObject(value: any): boolean {
+    if (value == null || typeof value !== 'object') return false;
+    const v: any = value;
+    return typeof v.next === 'function' && typeof v.throw === 'function' && typeof v.return === 'function';
+}
+// Typed-array element predicates. SharpTS's typed arrays map to the standard
+// global constructors, so instanceof discriminates them.
+function isInt8Array(value: any): boolean { return typeof Int8Array !== 'undefined' && value instanceof Int8Array; }
+function isUint8Array(value: any): boolean { return typeof Uint8Array !== 'undefined' && value instanceof Uint8Array; }
+function isUint8ClampedArray(value: any): boolean { return typeof Uint8ClampedArray !== 'undefined' && value instanceof Uint8ClampedArray; }
+function isInt16Array(value: any): boolean { return typeof Int16Array !== 'undefined' && value instanceof Int16Array; }
+function isUint16Array(value: any): boolean { return typeof Uint16Array !== 'undefined' && value instanceof Uint16Array; }
+function isInt32Array(value: any): boolean { return typeof Int32Array !== 'undefined' && value instanceof Int32Array; }
+function isUint32Array(value: any): boolean { return typeof Uint32Array !== 'undefined' && value instanceof Uint32Array; }
+function isFloat32Array(value: any): boolean { return typeof Float32Array !== 'undefined' && value instanceof Float32Array; }
+function isFloat64Array(value: any): boolean { return typeof Float64Array !== 'undefined' && value instanceof Float64Array; }
+function isBigInt64Array(value: any): boolean { return typeof BigInt64Array !== 'undefined' && value instanceof BigInt64Array; }
+function isBigUint64Array(value: any): boolean { return typeof BigUint64Array !== 'undefined' && value instanceof BigUint64Array; }
 
 export const types = {
     isArray,
@@ -761,7 +820,245 @@ export const types = {
     isWeakMap,
     isWeakSet,
     isArrayBuffer,
+    isSharedArrayBuffer,
+    isAnyArrayBuffer,
+    isDataView,
+    isArrayBufferView,
+    isBigIntObject,
+    isBooleanObject,
+    isNumberObject,
+    isStringObject,
+    isSymbolObject,
+    isProxy,
+    isExternal,
+    isModuleNamespaceObject,
+    isKeyObject,
+    isCryptoKey,
+    isGeneratorFunction,
+    isAsyncFunction,
+    isGeneratorObject,
+    isInt8Array,
+    isUint8Array,
+    isUint8ClampedArray,
+    isInt16Array,
+    isUint16Array,
+    isInt32Array,
+    isUint32Array,
+    isFloat32Array,
+    isFloat64Array,
+    isBigInt64Array,
+    isBigUint64Array,
 };
+
+// -------- MIMEType / MIMEParams --------
+//
+// Minimal parser for RFC 2045 media types: `type/subtype;p1=v1;p2="v2"`.
+
+/** The parameter map of a {@link MIMEType}. Iterable over [name, value] pairs. */
+export class MIMEParams {
+    private _map: any[]; // array of [name, value] preserving insertion order
+
+    constructor() {
+        this._map = [];
+    }
+
+    private _index(name: string): number {
+        const key = String(name).toLowerCase();
+        for (let i = 0; i < this._map.length; i++) {
+            if (this._map[i][0] === key) return i;
+        }
+        return -1;
+    }
+
+    get(name: string): string | null {
+        const i = this._index(name);
+        return i >= 0 ? this._map[i][1] : null;
+    }
+    has(name: string): boolean {
+        return this._index(name) >= 0;
+    }
+    set(name: string, value: string): void {
+        const key = String(name).toLowerCase();
+        const i = this._index(key);
+        if (i >= 0) this._map[i][1] = String(value);
+        else this._map.push([key, String(value)]);
+    }
+    delete(name: string): void {
+        const i = this._index(name);
+        if (i >= 0) this._map.splice(i, 1);
+    }
+    entries(): any {
+        const arr: any = this._map.map((p: any) => [p[0], p[1]]);
+        return arr[Symbol.iterator]();
+    }
+    keys(): any {
+        const arr: any = this._map.map((p: any) => p[0]);
+        return arr[Symbol.iterator]();
+    }
+    values(): any {
+        const arr: any = this._map.map((p: any) => p[1]);
+        return arr[Symbol.iterator]();
+    }
+    [Symbol.iterator](): any {
+        return this.entries();
+    }
+    toString(): string {
+        const parts: string[] = [];
+        for (let i = 0; i < this._map.length; i++) {
+            parts.push(this._map[i][0] + '=' + this._map[i][1]);
+        }
+        return parts.join(';');
+    }
+}
+
+/** Parsed media type. Mirrors Node's util.MIMEType. */
+export class MIMEType {
+    type: string;
+    subtype: string;
+    params: MIMEParams;
+
+    constructor(input: string) {
+        const str = String(input).trim();
+        const semi = str.indexOf(';');
+        const essence = semi >= 0 ? str.slice(0, semi) : str;
+        const slash = essence.indexOf('/');
+        if (slash < 0) throw new TypeError('Invalid MIME type: ' + str);
+        this.type = essence.slice(0, slash).trim().toLowerCase();
+        this.subtype = essence.slice(slash + 1).trim().toLowerCase();
+        if (this.type.length === 0 || this.subtype.length === 0) {
+            throw new TypeError('Invalid MIME type: ' + str);
+        }
+
+        this.params = new MIMEParams();
+        if (semi >= 0) {
+            const rest = str.slice(semi + 1);
+            const segments = rest.split(';');
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i].trim();
+                if (seg.length === 0) continue;
+                const eq = seg.indexOf('=');
+                if (eq < 0) continue;
+                const name = seg.slice(0, eq).trim();
+                let value = seg.slice(eq + 1).trim();
+                if (value.length >= 2 && value.charAt(0) === '"' && value.charAt(value.length - 1) === '"') {
+                    value = value.slice(1, value.length - 1);
+                }
+                if (name.length > 0) this.params.set(name, value);
+            }
+        }
+    }
+
+    /** The `type/subtype` string with no parameters. */
+    get essence(): string {
+        return this.type + '/' + this.subtype;
+    }
+
+    toString(): string {
+        const p = this.params.toString();
+        return p.length > 0 ? this.essence + ';' + p : this.essence;
+    }
+}
+
+// -------- abort helpers --------
+
+/**
+ * Resolves once `signal` aborts (Node's util.aborted). The `resource` argument
+ * ties the pending listener to a resource lifetime in Node; SharpTS ignores it
+ * (no host async-resource tracking) but keeps the parameter for compatibility.
+ */
+export function aborted(signal: any, resource?: any): Promise<void> {
+    void resource;
+    return new Promise((resolve: any) => {
+        if (signal == null) { resolve(); return; }
+        if (signal.aborted) { resolve(); return; }
+        try {
+            signal.addEventListener('abort', () => resolve(), { once: true });
+        } catch (e) {
+            // Fall back to onabort if addEventListener is unavailable.
+            signal.onabort = () => resolve();
+        }
+    });
+}
+
+/** Returns an AbortController whose signal may be transferred. SharpTS has no
+ *  distinct transferable representation, so this is a plain AbortController. */
+export function transferableAbortController(): any {
+    return new AbortController();
+}
+
+/** Marks `signal` transferable and returns it (identity in SharpTS). */
+export function transferableAbortSignal(signal: any): any {
+    return signal;
+}
+
+// -------- parseEnv / getCallSites --------
+
+/**
+ * Parses the contents of a `.env` file into an object (Node 20+). Supports
+ * `KEY=value`, `#` comments, blank lines, `export KEY=...`, and single/double
+ * quoted values.
+ */
+export function parseEnv(content: string): any {
+    const result: any = {};
+    const lines = String(content).split('\n');
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        // Strip a trailing CR from CRLF input.
+        if (line.length > 0 && line.charAt(line.length - 1) === '\r') line = line.slice(0, line.length - 1);
+        line = line.trim();
+        if (line.length === 0 || line.charAt(0) === '#') continue;
+        if (line.indexOf('export ') === 0) line = line.slice(7).trim();
+        const eq = line.indexOf('=');
+        if (eq < 0) continue;
+        const key = line.slice(0, eq).trim();
+        let value = line.slice(eq + 1).trim();
+        if (value.length >= 2) {
+            const first = value.charAt(0);
+            const last = value.charAt(value.length - 1);
+            if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+                value = value.slice(1, value.length - 1);
+            }
+        }
+        if (key.length > 0) result[key] = value;
+    }
+    return result;
+}
+
+/**
+ * Returns structured call-site information (Node 22+). SharpTS does not expose
+ * a V8-style structured stack to guest code, so this returns an empty array
+ * (documented bound); callers that only test for an array shape still work.
+ */
+export function getCallSites(_frames?: any, _options?: any): any[] {
+    return [];
+}
+
+// -------- deprecated legacy helpers --------
+//
+// Node keeps these for backward compatibility; new code should use `typeof`
+// checks or `util.types.*`. Provided for parity with existing programs.
+
+export function _extend(target: any, source: any): any {
+    if (source == null || typeof source !== 'object') return target;
+    const keys = Object.keys(source);
+    for (let i = 0; i < keys.length; i++) target[keys[i]] = source[keys[i]];
+    return target;
+}
+
+export function isBoolean(value: any): boolean { return typeof value === 'boolean'; }
+export function isNullOrUndefined(value: any): boolean { return value === null || value === undefined; }
+export function isNumber(value: any): boolean { return typeof value === 'number'; }
+export function isString(value: any): boolean { return typeof value === 'string'; }
+export function isSymbol(value: any): boolean { return typeof value === 'symbol'; }
+export function isObject(value: any): boolean { return value !== null && typeof value === 'object'; }
+export function isPrimitive(value: any): boolean {
+    return value === null || (typeof value !== 'object' && typeof value !== 'function');
+}
+export function isError(value: any): boolean { return value instanceof Error; }
+export function isBuffer(value: any): boolean { return value instanceof Buffer; }
+
+// The remaining deprecated aliases reuse the internal type predicates.
+export { isArray, isNull, isUndefined, isFunction, isRegExp, isDate };
 
 // -------- parseArgs --------
 //
@@ -911,4 +1208,10 @@ export default {
     TextDecoder: _TextDecoder,
     types,
     parseArgs,
+    MIMEType, MIMEParams,
+    aborted, transferableAbortController, transferableAbortSignal,
+    parseEnv, getCallSites,
+    _extend,
+    isArray, isBoolean, isNull, isNullOrUndefined, isNumber, isString, isSymbol,
+    isUndefined, isObject, isFunction, isPrimitive, isRegExp, isDate, isError, isBuffer,
 };
