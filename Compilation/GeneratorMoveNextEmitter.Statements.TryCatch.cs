@@ -348,9 +348,9 @@ public partial class GeneratorMoveNextEmitter
     /// </summary>
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
-        bool hasYields = ContainsYield(t.TryBlock)
-            || (t.CatchBlock != null && ContainsYield(t.CatchBlock))
-            || (t.FinallyBlock != null && ContainsYield(t.FinallyBlock));
+        bool hasYields = AnyStmtContainsSuspension(t.TryBlock)
+            || (t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock))
+            || (t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock));
 
         // A return/break/continue lexically inside the finally body can never be lowered with the
         // real-IL path: none of `ret`/`br`/`Leave` may exit a .NET `finally` region, so it would emit
@@ -460,7 +460,7 @@ public partial class GeneratorMoveNextEmitter
         // post-finally rethrow. Allocated only for that shape; null means "use the local". The
         // present flag needs the same persistence (read by the rethrow gate after the finally, #619).
         bool persistAcrossYieldingFinally =
-            t.CatchBlock == null && t.FinallyBlock != null && ContainsYield(t.FinallyBlock);
+            t.CatchBlock == null && t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
         FieldBuilder? caughtExceptionField = persistAcrossYieldingFinally ? DefineCaughtExceptionField() : null;
         FieldBuilder? exceptionPresentField = persistAcrossYieldingFinally ? DefineExceptionPresentField() : null;
 
@@ -759,78 +759,11 @@ public partial class GeneratorMoveNextEmitter
     /// would otherwise produce illegal IL inside the segment's protected region.
     /// </summary>
     private static bool IsSegmentBreaker(Stmt stmt) =>
-        ContainsYieldInStmt(stmt) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false);
+        StmtContainsSuspension(stmt) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false);
 
-    private static bool ContainsYield(List<Stmt> statements)
-    {
-        foreach (var stmt in statements)
-            if (ContainsYieldInStmt(stmt))
-                return true;
-        return false;
-    }
-
-    private static bool ContainsYieldInStmt(Stmt stmt)
-    {
-        switch (stmt)
-        {
-            case Stmt.Expression e:
-                return ContainsYieldInExpr(e.Expr);
-            case Stmt.Var v:
-                return v.Initializer != null && ContainsYieldInExpr(v.Initializer);
-            case Stmt.Const c:
-                return ContainsYieldInExpr(c.Initializer);
-            case Stmt.Return r:
-                return r.Value != null && ContainsYieldInExpr(r.Value);
-            case Stmt.If i:
-                return ContainsYieldInExpr(i.Condition)
-                    || ContainsYieldInStmt(i.ThenBranch)
-                    || (i.ElseBranch != null && ContainsYieldInStmt(i.ElseBranch));
-            case Stmt.While w:
-                return ContainsYieldInExpr(w.Condition) || ContainsYieldInStmt(w.Body);
-            case Stmt.DoWhile dw:
-                return ContainsYieldInStmt(dw.Body) || ContainsYieldInExpr(dw.Condition);
-            case Stmt.For f:
-                return (f.Initializer != null && ContainsYieldInStmt(f.Initializer))
-                    || (f.Condition != null && ContainsYieldInExpr(f.Condition))
-                    || (f.Increment != null && ContainsYieldInExpr(f.Increment))
-                    || ContainsYieldInStmt(f.Body);
-            case Stmt.ForOf fo:
-                return ContainsYieldInExpr(fo.Iterable) || ContainsYieldInStmt(fo.Body);
-            case Stmt.ForIn fi:
-                return ContainsYieldInExpr(fi.Object) || ContainsYieldInStmt(fi.Body);
-            case Stmt.Block b:
-                return b.Statements != null && ContainsYield(b.Statements);
-            case Stmt.Sequence seq:
-                return ContainsYield(seq.Statements);
-            case Stmt.LabeledStatement ls:
-                return ContainsYieldInStmt(ls.Statement);
-            case Stmt.Switch s:
-                foreach (var c in s.Cases)
-                {
-                    if (ContainsYieldInExpr(c.Value) || ContainsYield(c.Body))
-                        return true;
-                }
-                return s.DefaultBody != null && ContainsYield(s.DefaultBody);
-            case Stmt.TryCatch t:
-                return ContainsYield(t.TryBlock)
-                    || (t.CatchBlock != null && ContainsYield(t.CatchBlock))
-                    || (t.FinallyBlock != null && ContainsYield(t.FinallyBlock));
-            case Stmt.Throw th:
-                return ContainsYieldInExpr(th.Value);
-            case Stmt.Print p:
-                return ContainsYieldInExpr(p.Expr);
-            default:
-                return false;
-        }
-    }
-
-    // Delegates to the canonical, exhaustive suspension walker shared by every state-machine emitter
-    // (ExpressionEmitterBase.ExprContainsSuspension). The previous hand-maintained switch had drifted
-    // and was missing CompoundSetIndex/CompoundSet/LogicalAssign/LogicalSet/LogicalSetIndex plus yield
-    // nested in array/object/template literals and new(...) — the same under-reporting that produced an
-    // illegal BranchIntoTry resume label for those forms inside a try (#914). A plain generator never
-    // contains `await`, so the helper's Await arm is vacuously inapplicable here.
-    private static bool ContainsYieldInExpr(Expr expr) => ExprContainsSuspension(expr);
+    // The yield-suspension statement/expression walkers now live in ExpressionEmitterBase as the single
+    // StmtContainsSuspension/ExprContainsSuspension pair shared by every state-machine family (#1121); the
+    // three hand-maintained copies had repeatedly drifted into illegal-BranchIntoTry bugs (#631/#850/#914).
 
     // ContainsEscapingExit / ContainsEscapingExit2 are shared across the suspension-aware emitters and
     // live in StatementEmitterBase (the generator, async-generator, and async-function emitters all
