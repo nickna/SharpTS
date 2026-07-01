@@ -761,7 +761,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         // mode, #354); a no-op when neither is present.
         var loopUnref = _loopUnref;
         _loopRef?.Invoke();
-        var task = Task.Run<object?>(() =>
+        var joinTask = Task.Run<object?>(() =>
         {
             _thread.Join(5000); // Wait up to 5 seconds
             // Resolve with the worker's actual exit code (1 once the thread unwinds via
@@ -770,11 +770,43 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             // documented ceiling.
             return (double)_exitCode;
         });
-        if (_loopRef != null && loopUnref != null)
-        {
-            task.ContinueWith(_ => loopUnref(), TaskScheduler.Default);
-        }
-        return new SharpTSPromise(task);
+
+        // No owning loop to keep alive (no interpreter and no emitted $EventLoop): nothing
+        // can race an Unref, so hand back the raw join promise unchanged.
+        if (_loopRef == null || loopUnref == null)
+            return new SharpTSPromise(joinTask);
+
+        // Settle the terminate() promise AND release the bounded join keep-alive atomically,
+        // inside a single callback delivered ON the event-loop thread, resolve-before-unref.
+        //
+        // Releasing the Ref on a bare thread-pool `ContinueWith(_ => loopUnref(),
+        // TaskScheduler.Default)` (the previous shape) let the Unref drop _activeHandles to 0
+        // — and WakeEventLoop the loop — on a pool thread the instant the join completed,
+        // racing delivery of the awaiting `await worker.terminate()` continuation (which the
+        // interpreter posts onto its callback queue via the loop SynchronizationContext). When
+        // the Unref won, the loop observed "no active handles AND empty callback queue" and
+        // exited before the continuation was enqueued, so a `console.log` after the await was
+        // silently dropped — an intermittent, load-sensitive failure of
+        // Worker_Terminate_WakesAtomicsWaitAndEmitsExitCode1 (the AdoptInnerPromise / #983
+        // race class; the emitted $EventLoop has the structurally identical race, so routing
+        // through ScheduleOnMainThread fixes both runtimes).
+        //
+        // On the loop thread, tcs.TrySetResult synchronously posts the await continuation onto
+        // the loop queue BEFORE loopUnref decrements the handle to 0, so the loop's exit check
+        // always sees pending work and cannot drop it. The join Ref keeps the loop alive until
+        // this callback runs; the join is bounded, so loopUnref always runs exactly once
+        // (balancing the _loopRef?.Invoke() above). Do not switch the TCS to
+        // RunContinuationsAsynchronously — that would decouple the post from the unref and
+        // reopen the race.
+        var tcs = new TaskCompletionSource<object?>();
+        joinTask.ContinueWith(
+            t => ScheduleOnMainThread(() =>
+            {
+                tcs.TrySetResult(t.Result);
+                loopUnref();
+            }),
+            TaskContinuationOptions.ExecuteSynchronously);
+        return new SharpTSPromise(tcs.Task);
     }
 
     /// <summary>
