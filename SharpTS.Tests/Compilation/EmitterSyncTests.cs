@@ -53,6 +53,22 @@ public class EmitterSyncTests
             //     level (outside any mini try/catch), so route it into the active try's catch ---
             "EmitThrow",            // Route a top-level throw in a flag-based try body to its catch
         },
+        [typeof(IteratorMoveNextEmitter)] = new()
+        {
+            // #1124: the block-scope-rename + function-display-class variable overrides are byte-identical
+            // between the sync generator and async generator (an async generator is a generator that also
+            // awaits), so they live here on the shared iterator base instead of being copied into each. The
+            // two leaf iterator emitters inherit them and no longer list them below.
+            "EmitVariable",         // Read a captured-and-mutated local through the function DC (+ #711/#766 rename)
+            "EmitAssign",           // Write a captured-and-mutated local through the function DC (+ #711/#766 rename)
+            "EmitStoreVariable",    // Store side of compound/logical/increment through the function DC
+            "EmitVarDeclaration",   // Initialize a captured-and-mutated local into the function DC (+ #711/#766 rename)
+            "EmitConstDeclaration", // Route a shadowing const declaration to its own slot
+            "EmitCompoundAssign",   // Route a shadowing compound assignment to its own slot
+            "EmitLogicalAssign",    // Route a shadowing logical assignment to its own slot
+            "EmitPrefixIncrement",  // Route a shadowing prefix ++/-- to its own slot
+            "EmitPostfixIncrement", // Route a shadowing postfix ++/-- to its own slot
+        },
         [typeof(AsyncMoveNextEmitter)] = new()
         {
             // --- Infrastructure (abstract property/field implementations) ---
@@ -157,19 +173,10 @@ public class EmitterSyncTests
             // class; EmitArrowFunction still rejects the residual not-yet-DC-backed write case (e.g.
             // instance generator methods) so it fails fast instead of dropping the write.
             "EmitArrowFunction",
-            // --- #674: closure mutation sharing (route captured-and-mutated locals through the DC) ---
-            "EmitVariable",         // Read a captured-and-mutated local through the function DC (+ #711 rename)
-            "EmitAssign",           // Write a captured-and-mutated local through the function DC (+ #711 rename)
-            "EmitStoreVariable",    // Store side of compound/logical/increment through the function DC
-            "EmitVarDeclaration",   // Initialize a captured-and-mutated local into the function DC (+ #711 rename)
-            // --- #711: a nested-block let/const that shadows an enclosing binding is given its own
-            // storage name; these overrides retoken the operator node so the read/write land on the
-            // shadow's own field/local instead of the outer binding's hoisted field ---
-            "EmitConstDeclaration", // #711: route a shadowing const declaration to its own slot
-            "EmitCompoundAssign",   // #711: route a shadowing compound assignment to its own slot
-            "EmitLogicalAssign",    // #711: route a shadowing logical assignment to its own slot
-            "EmitPrefixIncrement",  // #711: route a shadowing prefix ++/-- to its own slot
-            "EmitPostfixIncrement", // #711: route a shadowing postfix ++/-- to its own slot
+            // #1124: the closure-mutation + block-scope-rename variable overrides (EmitVariable, EmitAssign,
+            // EmitStoreVariable, EmitVarDeclaration, EmitConstDeclaration, EmitCompoundAssign,
+            // EmitLogicalAssign, EmitPrefixIncrement, EmitPostfixIncrement) are now inherited from the shared
+            // IteratorMoveNextEmitter base — see that entry above.
             // --- #632: a throw in a catch/finally body routes through the enclosing finally(s) ---
             // (the generator-only throw routing; the break/continue/loop scaffolding is now in the base)
             "EmitThrow",            // Route a throw in a catch/finally body through the finally(s)
@@ -197,18 +204,10 @@ public class EmitterSyncTests
             // GetSuperMethod) works here.
             // --- #725: route a captured-and-mutated local through the function display class ---
             "GetFunctionDCField",   // Exposes <>__functionDC so a capturing arrow threads it in
-            "EmitVariable",         // Read a captured-and-mutated local through the function DC (+ #766 rename)
-            "EmitAssign",           // Write a captured-and-mutated local through the function DC (+ #766 rename)
-            "EmitStoreVariable",    // Store side of compound/logical/increment through the function DC
-            "EmitVarDeclaration",   // Initialize a captured-and-mutated local into the function DC (+ #766 rename)
-            // --- #766: a nested-block let/const that shadows an enclosing binding gets its own storage;
-            // these overrides retoken the operator node so the read/write land on the shadow's own
-            // field/local instead of the outer binding's hoisted field (async analog of #711) ---
-            "EmitConstDeclaration", // #766: route a shadowing const declaration to its own slot
-            "EmitCompoundAssign",   // #766: route a shadowing compound assignment to its own slot
-            "EmitLogicalAssign",    // #766: route a shadowing logical assignment to its own slot
-            "EmitPrefixIncrement",  // #766: route a shadowing prefix ++/-- to its own slot
-            "EmitPostfixIncrement", // #766: route a shadowing postfix ++/-- to its own slot
+            // #1124: the closure-mutation + block-scope-rename variable overrides (EmitVariable, EmitAssign,
+            // EmitStoreVariable, EmitVarDeclaration, EmitConstDeclaration, EmitCompoundAssign,
+            // EmitLogicalAssign, EmitPrefixIncrement, EmitPostfixIncrement) are now inherited from the shared
+            // IteratorMoveNextEmitter base — see that entry above.
             // --- #632: a throw in a catch/finally body routes through the enclosing finally(s) ---
             "EmitThrow",            // Route a throw in a catch/finally body through the finally(s)
         },
