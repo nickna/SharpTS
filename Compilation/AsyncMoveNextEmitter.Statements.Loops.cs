@@ -118,7 +118,7 @@ public partial class AsyncMoveNextEmitter
         // The prelude is await-free unless the iterable expression itself awaits; only then can it not
         // sit in a real IL try (its resume label would be branched into) — in that case the iterable's
         // own await handling routes rejections, and the (rare) synchronous resolution throw is unguarded.
-        if (ContainsAwaitInExpr(f.Iterable))
+        if (ExprContainsSuspension(f.Iterable))
             EmitPrelude();
         else
             EmitGuardedSyncSegment(EmitPrelude);
@@ -257,7 +257,7 @@ public partial class AsyncMoveNextEmitter
 
         foreach (var stmt in statements)
         {
-            if (ContainsAwaitInStmt(stmt) || ContainsEscapingBreakOrContinue(stmt, insideLoop: false, insideSwitch: false))
+            if (StmtContainsSuspension(stmt) || ContainsEscapingBreakOrContinue(stmt, insideLoop: false, insideSwitch: false))
             {
                 FlushSyncRun();
                 EmitStatement(stmt);

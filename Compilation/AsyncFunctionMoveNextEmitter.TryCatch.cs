@@ -87,26 +87,12 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         RouteThroughFinallys(chain, code, OpCodes.Br);
     }
 
-    /// <summary>
-    /// The finally scopes strictly inside the flag-based try whose body began at <paramref
-    /// name="scopeDepth"/> (= <c>_exitScopes.Count</c> there), innermost first. Excludes the try's own
-    /// finally (just below scopeDepth, run by the normal catch→finally flow) and everything outside it.
-    /// </summary>
-    private List<FinallyScope> FinallyFramesInside(int scopeDepth)
-    {
-        var result = new List<FinallyScope>();
-        for (int i = _exitScopes.Count - 1; i >= scopeDepth; i--)
-            if (_exitScopes[i] is FinallyScope fs)
-                result.Add(fs);
-        return result;
-    }
-
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         // Check if this try block contains any await points
-        bool hasAwaitsInTry = ContainsAwait(t.TryBlock);
-        bool hasAwaitsInCatch = t.CatchBlock != null && ContainsAwait(t.CatchBlock);
-        bool hasAwaitsInFinally = t.FinallyBlock != null && ContainsAwait(t.FinallyBlock);
+        bool hasAwaitsInTry = AnyStmtContainsSuspension(t.TryBlock);
+        bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock);
+        bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
 
         if (hasAwaitsInTry || hasAwaitsInCatch || hasAwaitsInFinally)
         {
@@ -410,7 +396,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             // escaping break/continue branches with `Br` at this top level (ExceptionBlockDepth is 0),
             // which is what makes it legal; previously it landed inside a segment and `Br`'d out of the
             // mini try (BranchOutOfTry → invalid IL) (#727).
-            if (ContainsAwait([stmt]) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false))
+            if (StmtContainsSuspension(stmt) || ContainsEscapingExit(stmt, insideLoop: false, insideSwitch: false))
             {
                 FlushSegment();
 
@@ -458,84 +444,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.EndExceptionBlock();
     }
 
-    protected bool ContainsAwait(List<Stmt> statements)
-    {
-        foreach (var stmt in statements)
-        {
-            if (ContainsAwaitInStmt(stmt))
-                return true;
-        }
-        return false;
-    }
-
-    protected bool ContainsAwaitInStmt(Stmt stmt)
-    {
-        switch (stmt)
-        {
-            case Stmt.Expression e:
-                return ContainsAwaitInExpr(e.Expr);
-            case Stmt.Var v:
-                return v.Initializer != null && ContainsAwaitInExpr(v.Initializer);
-            case Stmt.Const c:
-                return ContainsAwaitInExpr(c.Initializer);
-            case Stmt.Return r:
-                return r.Value != null && ContainsAwaitInExpr(r.Value);
-            case Stmt.If i:
-                return ContainsAwaitInExpr(i.Condition) ||
-                       ContainsAwaitInStmt(i.ThenBranch) ||
-                       (i.ElseBranch != null && ContainsAwaitInStmt(i.ElseBranch));
-            case Stmt.While w:
-                return ContainsAwaitInExpr(w.Condition) || ContainsAwaitInStmt(w.Body);
-            case Stmt.DoWhile dw:
-                return ContainsAwaitInStmt(dw.Body) || ContainsAwaitInExpr(dw.Condition);
-            case Stmt.For f:
-                return (f.Initializer != null && ContainsAwaitInStmt(f.Initializer)) ||
-                       (f.Condition != null && ContainsAwaitInExpr(f.Condition)) ||
-                       (f.Increment != null && ContainsAwaitInExpr(f.Increment)) ||
-                       ContainsAwaitInStmt(f.Body);
-            case Stmt.ForOf fo:
-                // `for await…of` always suspends (it awaits iterator.next()/return()), even when the
-                // iterable and body contain no explicit await — so a try enclosing one must take the
-                // flag-based path, not a real IL try (whose resume labels would be branched into) (#631).
-                return fo.IsAsync || ContainsAwaitInExpr(fo.Iterable) || ContainsAwaitInStmt(fo.Body);
-            case Stmt.ForIn fi:
-                return ContainsAwaitInExpr(fi.Object) || ContainsAwaitInStmt(fi.Body);
-            case Stmt.Block b:
-                return ContainsAwait(b.Statements);
-            case Stmt.Sequence seq:
-                return ContainsAwait(seq.Statements);
-            case Stmt.TryCatch t:
-                return ContainsAwait(t.TryBlock) ||
-                       (t.CatchBlock != null && ContainsAwait(t.CatchBlock)) ||
-                       (t.FinallyBlock != null && ContainsAwait(t.FinallyBlock));
-            // Parity with ContainsYieldInStmt/ContainsSuspensionInStmt: these arms
-            // were missing here, so an `await` inside a switch/throw/labeled/print
-            // within a `try` under-reported suspension and took the real-IL try
-            // path (illegal BranchIntoTry resume target). See #631/#850.
-            case Stmt.LabeledStatement ls:
-                return ContainsAwaitInStmt(ls.Statement);
-            case Stmt.Switch s:
-                foreach (var c in s.Cases)
-                {
-                    if (ContainsAwaitInExpr(c.Value) || ContainsAwait(c.Body))
-                        return true;
-                }
-                return s.DefaultBody != null && ContainsAwait(s.DefaultBody);
-            case Stmt.Throw th:
-                return ContainsAwaitInExpr(th.Value);
-            case Stmt.Print p:
-                return ContainsAwaitInExpr(p.Expr);
-            default:
-                return false;
-        }
-    }
-
-    // Delegates to the canonical, exhaustive suspension walker shared by every state-machine emitter
-    // (ExpressionEmitterBase.ExprContainsSuspension). The previous hand-maintained switch had drifted
-    // and was missing CompoundSetIndex/CompoundSet/LogicalAssign/LogicalSet/LogicalSetIndex plus await
-    // nested in array/object/template literals and new(...) — so e.g. `a[i] += await f()` inside a try
-    // under-reported suspension and took the real-IL try path (an illegal BranchIntoTry resume label →
-    // InvalidProgramException) (#914). An async function never contains `yield`, so the helper's Yield
-    // arm is vacuously inapplicable here.
-    protected bool ContainsAwaitInExpr(Expr expr) => ExprContainsSuspension(expr);
+    // The await-suspension statement/expression walkers now live in ExpressionEmitterBase as the single
+    // StmtContainsSuspension/ExprContainsSuspension pair shared by every state-machine family (#1121); the
+    // three hand-maintained copies had repeatedly drifted into illegal-BranchIntoTry bugs (#631/#850/#914).
 }

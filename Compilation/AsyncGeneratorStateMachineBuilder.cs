@@ -13,7 +13,7 @@ namespace SharpTS.Compilation;
 /// - Awaiter field for async await points
 /// - Hoisted parameter and local variable fields
 /// </summary>
-public class AsyncGeneratorStateMachineBuilder
+public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
@@ -22,7 +22,7 @@ public class AsyncGeneratorStateMachineBuilder
     private HoistingManager _hoisting = null!;
 
     // The type being built
-    public TypeBuilder StateMachineType => _stateMachineType;
+    public override TypeBuilder StateMachineType => _stateMachineType;
 
     // Core state machine fields
     public FieldBuilder StateField { get; private set; } = null!;
@@ -804,7 +804,7 @@ public class AsyncGeneratorStateMachineBuilder
     /// <summary>
     /// Gets a field for a variable by name, checking both parameters and locals.
     /// </summary>
-    public FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
+    public override FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
 
     /// <summary>
     /// Gets the hoisted enumerator field for a for...of loop containing suspension points.
@@ -814,7 +814,7 @@ public class AsyncGeneratorStateMachineBuilder
     /// <summary>
     /// Finalizes the type after MoveNextAsync body has been emitted.
     /// </summary>
-    public Type CreateType()
+    public override Type CreateType()
     {
         ILLabelValidator.SweepAllTypes(new[] { _stateMachineType });
         ILLabelValidator.SweepConstructors(new[] { _stateMachineType });

@@ -12,7 +12,7 @@ namespace SharpTS.Compilation;
 /// - Hoisted parameter and local variable fields
 /// - Awaiter fields for each await point
 /// </summary>
-public class AsyncStateMachineBuilder
+public class AsyncStateMachineBuilder : AsyncBuilderBase
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
@@ -21,7 +21,8 @@ public class AsyncStateMachineBuilder
     private HoistingManager _hoisting = null!;
 
     // The type being built
-    public TypeBuilder StateMachineType => _stateMachineType;
+    public override TypeBuilder StateMachineType => _stateMachineType;
+    protected override TypeProvider Types => _types;
 
     // Core state machine fields
     public FieldBuilder StateField { get; private set; } = null!;
@@ -58,9 +59,8 @@ public class AsyncStateMachineBuilder
     public MethodBuilder MoveNextMethod { get; private set; } = null!;
     public MethodBuilder SetStateMachineMethod { get; private set; } = null!;
 
-    // Builder type (Task vs Task<T>)
+    // Builder type (Task vs Task<T>). AwaiterType lives in AsyncBuilderBase (#1125).
     public Type BuilderType { get; private set; } = null!;
-    public Type AwaiterType { get; private set; } = null!;
 
     public AsyncStateMachineBuilder(ModuleBuilder moduleBuilder, TypeProvider types, int counter = 0)
     {
@@ -276,12 +276,12 @@ public class AsyncStateMachineBuilder
     /// <summary>
     /// Gets a field for a variable by name, checking both parameters and locals.
     /// </summary>
-    public FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
+    public override FieldBuilder? GetVariableField(string name) => _hoisting.GetVariableField(name);
 
     /// <summary>
     /// Finalizes the type after MoveNext body has been emitted.
     /// </summary>
-    public Type CreateType()
+    public override Type CreateType()
     {
         // Validate labels on every method in this state-machine type before finalization —
         // CreateType() clears the ILGenerator control-flow state, so a post-finalize sweep
@@ -355,29 +355,8 @@ public class AsyncStateMachineBuilder
         return awaitMethod.MakeGenericMethod(AwaiterType, _stateMachineType);
     }
 
-    /// <summary>
-    /// Gets the IsCompleted property getter for TaskAwaiter.
-    /// </summary>
-    public MethodInfo GetAwaiterIsCompletedGetter()
-    {
-        return AwaiterType.GetProperty("IsCompleted", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
-    }
-
-    /// <summary>
-    /// Gets the GetResult method for TaskAwaiter.
-    /// </summary>
-    public MethodInfo GetAwaiterGetResultMethod()
-    {
-        return AwaiterType.GetMethod("GetResult", BindingFlags.Public | BindingFlags.Instance)!;
-    }
-
-    /// <summary>
-    /// Gets the GetAwaiter method for Task&lt;object&gt;.
-    /// </summary>
-    public MethodInfo GetTaskGetAwaiterMethod()
-    {
-        return _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
-    }
+    // GetAwaiterIsCompletedGetter / GetAwaiterGetResultMethod / GetTaskGetAwaiterMethod moved to the
+    // shared AsyncBuilderBase (#1125): byte-identical with AsyncArrowStateMachineBuilder.
 
     #endregion
 

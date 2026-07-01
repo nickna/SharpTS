@@ -4,9 +4,10 @@ using Xunit;
 namespace SharpTS.Tests.SharedTests;
 
 /// <summary>
-/// Regression tests for the compiled async-function suspension walker
-/// (<c>AsyncFunctionMoveNextEmitter.ContainsAwaitInStmt/Expr</c>), which had
-/// drifted from the generator/async-generator walkers: it was missing the
+/// Regression tests for the compiled async-function suspension walker (the shared
+/// <c>ExpressionEmitterBase.StmtContainsSuspension/ExprContainsSuspension</c> pair
+/// since #1121; formerly a per-family <c>AsyncFunctionMoveNextEmitter.ContainsAwaitInStmt/Expr</c>
+/// copy), which had drifted from the generator/async-generator walkers: it was missing the
 /// <c>Switch</c>, <c>Throw</c>, <c>Print</c>, and <c>LabeledStatement</c>
 /// statement arms and the <c>CompoundAssign</c>, <c>GetIndex</c>, and
 /// <c>SetIndex</c> expression arms. When an <c>await</c> sat inside one of those

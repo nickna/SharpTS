@@ -114,7 +114,7 @@ public partial class ILCompiler
             var methodBuilder = _functions.Builders[funcName];
 
             // Emit the stub method body (creates and returns the state machine)
-            EmitAsyncGeneratorStubMethod(methodBuilder, smBuilder, funcStmt, funcName);
+            EmitIteratorFreeFunctionStub(methodBuilder, smBuilder, funcStmt, funcName);
 
             // Emit the MoveNextAsync method body
             EmitAsyncGeneratorMoveNextAsyncBody(smBuilder, funcStmt, funcName);
@@ -126,55 +126,10 @@ public partial class ILCompiler
         _currentNamespacePath = savedNamespacePath;
     }
 
-    /// <summary>
-    /// Emits the stub method that creates and initializes the async generator state machine.
-    /// </summary>
-    private void EmitAsyncGeneratorStubMethod(MethodBuilder methodBuilder, AsyncGeneratorStateMachineBuilder smBuilder, Stmt.Function funcStmt, string qualifiedName)
-    {
-        var il = methodBuilder.GetILGenerator();
-
-        // Create new instance of the state machine using the constructor builder
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
-
-        // #775: capture the active dynamic `this` into <>4__this (see EmitGeneratorStubMethod for the
-        // full rationale — the thread-local receiver is gone by the time MoveNextAsync runs lazily).
-        if (smBuilder.ThisField != null && _runtime?.CurrentFunctionThisField != null)
-        {
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldsfld, _runtime.CurrentFunctionThisField);
-            if (_runtime.GlobalThisSingletonField != null)
-            {
-                var thisNotNull = il.DefineLabel();
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Brtrue, thisNotNull);
-                il.Emit(OpCodes.Pop);
-                il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
-                il.MarkLabel(thisNotNull);
-            }
-            il.Emit(OpCodes.Stfld, smBuilder.ThisField);
-        }
-
-        // Copy parameters to state machine fields
-        for (int i = 0; i < funcStmt.Parameters.Count; i++)
-        {
-            var paramName = funcStmt.Parameters[i].Name.Lexeme;
-            var field = smBuilder.GetVariableField(paramName);
-            if (field != null)
-            {
-                il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
-                il.Emit(OpCodes.Ldarg, i);
-                il.Emit(OpCodes.Stfld, field);
-            }
-        }
-
-        // Instantiate the function display class (#725) and seed any captured-and-mutated parameter
-        // into it so a sync arrow that writes it shares the generator's storage. The stub params are
-        // object-typed (BuildStateMachineStubParamTypes), so no boxing is needed (paramTypes: null).
-        EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, funcStmt, qualifiedName, paramOffset: 0);
-
-        // Return the state machine (which implements IAsyncEnumerable<object>)
-        il.Emit(OpCodes.Ret);
-    }
+    // EmitAsyncGeneratorStubMethod (free function), EmitAsyncGeneratorInstanceStubMethod, and
+    // EmitAsyncGeneratorStaticStubMethod were folded into the shared EmitIteratorFreeFunctionStub /
+    // EmitIteratorMethodStub (ILCompiler.IteratorStubs.cs, #1126) — byte-identical with the sync
+    // generator's three copies.
 
     /// <summary>
     /// Emits the MoveNextAsync method body for an async generator state machine.
@@ -282,10 +237,7 @@ public partial class ILCompiler
         // (#778) has no `this` and no function-DC write-capture support (it is not registered in
         // RegisterGeneratorMethodFunctionDisplayClasses, so methodDCKey is null), mirroring the sync
         // static generator (#692).
-        if (isInstanceMethod)
-            EmitAsyncGeneratorInstanceStubMethod(methodBuilder, smBuilder, method, methodDCKey);
-        else
-            EmitAsyncGeneratorStaticStubMethod(methodBuilder, smBuilder, method.Parameters);
+        EmitIteratorMethodStub(methodBuilder, smBuilder, method, isInstanceMethod, isInstanceMethod ? methodDCKey : null);
 
         // Create context for MoveNextAsync emission
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
@@ -360,106 +312,4 @@ public partial class ILCompiler
         smBuilder.CreateType();
     }
 
-    /// <summary>
-    /// Emits the stub method that creates and initializes the async generator state machine for an instance method.
-    /// The stub copies 'this' and parameters to the state machine, then returns it.
-    /// </summary>
-    private void EmitAsyncGeneratorInstanceStubMethod(
-        MethodBuilder methodBuilder,
-        AsyncGeneratorStateMachineBuilder smBuilder,
-        Stmt.Function method,
-        string? funcDCKey)
-    {
-        var parameters = method.Parameters;
-        var il = methodBuilder.GetILGenerator();
-
-        // Create new instance of the state machine
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
-
-        // Copy 'this' to state machine's ThisField if it exists
-        if (smBuilder.ThisField != null)
-        {
-            il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
-            il.Emit(OpCodes.Ldarg_0);  // Load 'this' (instance methods have 'this' at arg 0)
-            il.Emit(OpCodes.Stfld, smBuilder.ThisField);
-        }
-
-        // Box value types since state machine fields are object-typed. Decide from the method's ACTUAL
-        // IL signature (methodBuilder.GetParameters()), not the AST-resolved types: a private method's
-        // parameters are all `object` slots, so boxing the AST-resolved value type would mismatch the
-        // `object` argument actually loaded (StackUnexpected). Mirrors EmitAsyncStubMethod.
-        var paramTypes = methodBuilder.GetParameters();
-
-        // Copy parameters to state machine fields (instance methods start params at index 1)
-        for (int i = 0; i < parameters.Count; i++)
-        {
-            var paramName = parameters[i].Name.Lexeme;
-            var field = smBuilder.GetVariableField(paramName);
-            if (field != null)
-            {
-                il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
-                il.Emit(OpCodes.Ldarg, i + 1);  // +1 because 'this' is at index 0
-
-                if (i < paramTypes.Length && paramTypes[i].ParameterType.IsValueType)
-                {
-                    il.Emit(OpCodes.Box, paramTypes[i].ParameterType);
-                }
-
-                il.Emit(OpCodes.Stfld, field);
-            }
-        }
-
-        // #725: instantiate the function display class and seed any captured-and-mutated parameter
-        // into it (instance methods carry 'this' at arg 0, so user params start at arg 1). The stub
-        // params are typed, so value types are boxed before the store. No-op when no function DC.
-        if (funcDCKey != null)
-            EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset: 1, paramTypes);
-
-        // Return the state machine (which implements IAsyncEnumerable<object>)
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits the stub that creates the async generator state machine for a STATIC method (#778): like
-    /// the instance stub but with no <c>this</c> and parameters starting at arg 0 (no receiver slot).
-    /// Value-type parameters are boxed into the object-typed state-machine fields. Mirrors
-    /// <see cref="EmitGeneratorStaticStubMethod"/> (the sync analogue, #692).
-    /// </summary>
-    private void EmitAsyncGeneratorStaticStubMethod(
-        MethodBuilder methodBuilder,
-        AsyncGeneratorStateMachineBuilder smBuilder,
-        List<Stmt.Parameter> parameters)
-    {
-        var il = methodBuilder.GetILGenerator();
-
-        // Create new instance of the state machine
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
-
-        // Box value types since state machine fields are object-typed. Decide from the method's ACTUAL
-        // IL signature (methodBuilder.GetParameters()), not the AST-resolved types: a private static
-        // method's parameters are all `object` slots, so boxing the AST-resolved value type would
-        // mismatch the `object` argument actually loaded (StackUnexpected). Mirrors EmitAsyncStubMethod.
-        var paramTypes = methodBuilder.GetParameters();
-
-        // Copy parameters to state machine fields (static methods start params at index 0).
-        for (int i = 0; i < parameters.Count; i++)
-        {
-            var field = smBuilder.GetVariableField(parameters[i].Name.Lexeme);
-            if (field != null)
-            {
-                il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
-                il.Emit(OpCodes.Ldarg, i);
-
-                if (i < paramTypes.Length && paramTypes[i].ParameterType.IsValueType)
-                {
-                    il.Emit(OpCodes.Box, paramTypes[i].ParameterType);
-                }
-
-                il.Emit(OpCodes.Stfld, field);
-            }
-        }
-
-        // Return the state machine (which implements IAsyncEnumerable<object>)
-        il.Emit(OpCodes.Ret);
-    }
 }

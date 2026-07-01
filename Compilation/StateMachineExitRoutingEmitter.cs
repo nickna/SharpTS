@@ -228,6 +228,22 @@ public abstract partial class StateMachineExitRoutingEmitter : StatementEmitterB
     }
 
     /// <summary>
+    /// The finally scopes strictly inside the flag-based try whose body began at <paramref
+    /// name="scopeDepth"/> (= <c>_exitScopes.Count</c> at that point), innermost first. Excludes the
+    /// try's own finally (which lives just below scopeDepth) and everything outside it — the finallys a
+    /// throw escaping a nested handler must run before reaching that try's catch (#632). Shared by every
+    /// state-machine family (each threw a byte-identical copy before #1123).
+    /// </summary>
+    protected List<FinallyScope> FinallyFramesInside(int scopeDepth)
+    {
+        var result = new List<FinallyScope>();
+        for (int i = _exitScopes.Count - 1; i >= scopeDepth; i--)
+            if (_exitScopes[i] is FinallyScope fs)
+                result.Add(fs);
+        return result;
+    }
+
+    /// <summary>
     /// Records <paramref name="code"/>'s per-frame routing across <paramref name="chain"/> (each frame
     /// chains to the next, the outermost is terminal), then sets the pending-exit field and branches to
     /// the innermost finally. The caller must have prepared any value the terminal needs (e.g. the
