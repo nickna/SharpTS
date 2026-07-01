@@ -450,6 +450,144 @@ export function notDeepEqual(actual: any, expected: any, message?: string | Erro
     }
 }
 
+// ─── partialDeepStrictEqual ─────────────────────────────────────────────
+//
+// `actual` must deep-strict-*contain* `expected`: every property/element in
+// expected has a deep-strict-equal counterpart in actual (Node 22+).
+
+function partialDeepEquals(actual: any, expected: any): boolean {
+    if (typeof expected !== 'object' || expected === null) {
+        return sameValue(actual, expected);
+    }
+    if (typeof actual !== 'object' || actual === null) return false;
+    if (actual === expected) return true;
+
+    if (Array.isArray(expected)) {
+        if (!Array.isArray(actual)) return false;
+        const av: any = actual;
+        const ev: any = expected;
+        // Each expected element must partial-match some actual element.
+        for (let i = 0; i < ev.length; i++) {
+            let found = false;
+            for (let j = 0; j < av.length; j++) {
+                if (partialDeepEquals(av[j], ev[i])) { found = true; break; }
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
+    if (Array.isArray(actual)) return false;
+
+    const av: any = actual;
+    const ev: any = expected;
+    const keys = Object.keys(expected);
+    for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
+        if (!(k in av)) return false;
+        if (!partialDeepEquals(av[k], ev[k])) return false;
+    }
+    return true;
+}
+
+/** Throws unless `actual` deep-strict-contains `expected`. */
+export function partialDeepStrictEqual(actual: any, expected: any, message?: string | Error): void {
+    if (!partialDeepEquals(actual, expected)) {
+        fail_(
+            resolveMessage(message,
+                'Expected actual to partially deep-strict-equal expected:\n' + stringify(actual) +
+                '\nshould contain\n' + stringify(expected)),
+            actual, expected, 'partialDeepStrictEqual');
+    }
+}
+
+// ─── CallTracker ────────────────────────────────────────────────────────
+//
+// Deprecated in Node, but the documented surface is supported: calls/getCalls/
+// report/verify/reset.
+
+interface TrackedCall {
+    fn: any;
+    exact: number;
+    wrapper: any;
+    calls: any[];
+}
+
+/** Tracks how many times wrapped functions are called (Node's assert.CallTracker). */
+export class CallTracker {
+    private _tracked: TrackedCall[];
+
+    constructor() {
+        this._tracked = [];
+    }
+
+    /**
+     * Wraps `fn` (or a no-op) and expects the wrapper to be called `exact`
+     * times (default 1). Returns the wrapper.
+     */
+    calls(fn?: any, exact?: number): any {
+        let actualFn = fn;
+        let expected = exact;
+        if (typeof fn === 'number') { expected = fn; actualFn = undefined; }
+        if (expected === undefined || expected === null) expected = 1;
+
+        const entry: TrackedCall = { fn: actualFn, exact: expected, wrapper: null, calls: [] };
+        const wrapper = (...args: any[]): any => {
+            entry.calls.push({ thisArg: undefined, arguments: args });
+            if (typeof actualFn === 'function') return actualFn.apply(undefined, args);
+            return undefined;
+        };
+        entry.wrapper = wrapper;
+        this._tracked.push(entry);
+        return wrapper;
+    }
+
+    /** The recorded calls (`{ thisArg, arguments }`) for a wrapper. */
+    getCalls(fn: any): any[] {
+        for (let i = 0; i < this._tracked.length; i++) {
+            if (this._tracked[i].wrapper === fn) return this._tracked[i].calls;
+        }
+        return [];
+    }
+
+    /** Info objects for every wrapper whose call count is off. */
+    report(): any[] {
+        const out: any[] = [];
+        for (let i = 0; i < this._tracked.length; i++) {
+            const e = this._tracked[i];
+            if (e.calls.length !== e.exact) {
+                out.push({
+                    message: 'Expected the function to be called ' + e.exact +
+                        ' time(s) but it was called ' + e.calls.length + ' time(s).',
+                    actual: e.calls.length,
+                    expected: e.exact,
+                    operator: (e.fn != null && e.fn.name) ? e.fn.name : 'calls',
+                });
+            }
+        }
+        return out;
+    }
+
+    /** Throws an AssertionError if any wrapper's call count is off. */
+    verify(): void {
+        const r = this.report();
+        if (r.length > 0) {
+            fail_('Expected all tracked functions to be called the specified number of times',
+                r.length, 0, 'verify');
+        }
+    }
+
+    /** Resets recorded calls — for one wrapper, or all when called with no arg. */
+    reset(fn?: any): void {
+        if (fn === undefined) {
+            for (let i = 0; i < this._tracked.length; i++) this._tracked[i].calls = [];
+            return;
+        }
+        for (let i = 0; i < this._tracked.length; i++) {
+            if (this._tracked[i].wrapper === fn) this._tracked[i].calls = [];
+        }
+    }
+}
+
 // ─── Callable module ────────────────────────────────────────────────────
 //
 // Node's `assert` export is itself callable: `assert(value[, message])` is an
@@ -459,6 +597,35 @@ export function notDeepEqual(actual: any, expected: any, message?: string | Erro
 function assert(value: any, message?: string | Error): void {
     ok(value, message);
 }
+
+// The `strict` namespace: itself callable (=== ok), with the loose forms
+// aliased to their strict counterparts and the full member set attached.
+function strictAssert(value: any, message?: string | Error): void {
+    ok(value, message);
+}
+const strict: any = strictAssert;
+strict.AssertionError = AssertionError;
+strict.ok = ok;
+strict.strictEqual = strictEqual;
+strict.notStrictEqual = notStrictEqual;
+strict.deepStrictEqual = deepStrictEqual;
+strict.notDeepStrictEqual = notDeepStrictEqual;
+strict.equal = strictEqual;                 // strict-mode alias
+strict.notEqual = notStrictEqual;           // strict-mode alias
+strict.deepEqual = deepStrictEqual;         // strict-mode alias
+strict.notDeepEqual = notDeepStrictEqual;   // strict-mode alias
+strict.fail = fail;
+strict.throws = throws;
+strict.doesNotThrow = doesNotThrow;
+strict.rejects = rejects;
+strict.doesNotReject = doesNotReject;
+strict.match = match;
+strict.doesNotMatch = doesNotMatch;
+strict.ifError = ifError;
+strict.partialDeepStrictEqual = partialDeepStrictEqual;
+strict.CallTracker = CallTracker;
+strict.strict = strict;
+export { strict };
 
 const assertModule: any = assert;
 assertModule.AssertionError = AssertionError;
@@ -479,5 +646,8 @@ assertModule.doesNotReject = doesNotReject;
 assertModule.match = match;
 assertModule.doesNotMatch = doesNotMatch;
 assertModule.ifError = ifError;
+assertModule.partialDeepStrictEqual = partialDeepStrictEqual;
+assertModule.CallTracker = CallTracker;
+assertModule.strict = strict;
 
 export default assertModule;
