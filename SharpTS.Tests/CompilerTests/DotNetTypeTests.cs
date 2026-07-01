@@ -188,6 +188,30 @@ public class DotNetTypeTests
     }
 
     [Fact]
+    public void StringBuilder_Append_Works_OnExportDeclareClass()
+    {
+        // `@DotNetType(...) export declare class X` is the form docs/dotnet-types.md shows.
+        // Before issue #1192 this failed to even parse; verify compiled mode handles the
+        // exported ambient class identically to the bare `declare class` form above.
+        var source = """
+            @DotNetType("System.Text.StringBuilder")
+            export declare class StringBuilder {
+                constructor();
+                append(value: string): StringBuilder;
+                toString(): string;
+            }
+            let sb: StringBuilder = new StringBuilder();
+            sb.append("Hello");
+            sb.append(" ");
+            sb.append("World");
+            console.log(sb.toString());
+            """;
+
+        var output = TestHarness.RunCompiled(source, DecoratorMode.Legacy);
+        Assert.Equal("Hello World\n", output);
+    }
+
+    [Fact]
     public void StringBuilder_MethodChaining_Works()
     {
         var source = """

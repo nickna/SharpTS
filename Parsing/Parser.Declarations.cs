@@ -28,6 +28,13 @@ public partial class Parser
             return new Stmt.FileDirective(decorators);
         }
 
+        // `@decorator export class ...` — decorators legally appear *before* `export`.
+        // The EXPORT branch at the top of Declaration() only fires when EXPORT is the
+        // first token, so a decorated exported class reaches here with EXPORT unconsumed.
+        // Thread the decorators into ExportDeclaration() so they reach the class body
+        // the same way the bare (non-export) class paths below already do.
+        if (Match(TokenType.EXPORT)) return ExportDeclaration(decorators);
+
         if (Match(TokenType.DECLARE))
         {
             Token declareKeyword = Previous();

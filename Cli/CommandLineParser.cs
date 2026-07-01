@@ -111,10 +111,11 @@ public abstract record ParsedCommand
         GlobalOptions GlobalOptions
     ) : ParsedCommand;
 
-    /// <summary>Generate TypeScript declarations for a .NET type or assembly.</summary>
-    /// <param name="TypeOrAssembly">Type name or assembly path</param>
+    /// <summary>Inspect a .NET type, namespace, or assembly for interop discovery (issue #1194).</summary>
+    /// <param name="TypeOrAssembly">Type name, namespace, or assembly path to inspect</param>
     /// <param name="OutputPath">Optional output file path</param>
-    public sealed record GenDecl(string TypeOrAssembly, string? OutputPath) : ParsedCommand;
+    /// <param name="Json">Emit machine-readable JSON instead of human-readable text</param>
+    public sealed record GenDecl(string TypeOrAssembly, string? OutputPath, bool Json = false) : ParsedCommand;
 
     /// <summary>Parsing error with message and exit code.</summary>
     /// <param name="Message">Error message to display</param>
@@ -198,7 +199,7 @@ public class CommandLineParser
         return new ParsedCommand.Error(
             "Usage: sharpts [script] [args...]\n" +
             "       sharpts --compile <script.ts> [-o output.dll]\n" +
-            "       sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]",
+            "       sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]",
             64
         );
     }
@@ -429,17 +430,22 @@ public class CommandLineParser
         if (args.Length < 2)
         {
             return new ParsedCommand.Error(
-                "Usage: sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]\n" +
+                "Usage: sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]\n" +
+                "Inspects a .NET type/namespace/assembly and reports which members are usable from\n" +
+                "TypeScript interop, with the dotnet: import line for usable types.\n" +
                 "Examples:\n" +
-                "  sharpts --gen-decl System.Console              # Generate declaration for a type\n" +
-                "  sharpts --gen-decl ./MyAssembly.dll            # Generate declarations for all types in assembly\n" +
-                "  sharpts --gen-decl System.Console -o console.d.ts  # Write to file",
+                "  sharpts --gen-decl System.Text.StringBuilder       # Member breakdown for a type\n" +
+                "  sharpts --gen-decl System.Text                     # List the types in a namespace\n" +
+                "  sharpts --gen-decl ./MyAssembly.dll                # List the types in an assembly\n" +
+                "  sharpts --gen-decl System.Guid --json              # Machine-readable JSON\n" +
+                "  sharpts --gen-decl System.Guid -o guid.txt         # Write to file",
                 64
             );
         }
 
         string typeOrAssembly = args[1];
         string? outputPath = null;
+        bool json = false;
 
         // Parse options
         for (int i = 2; i < args.Length; i++)
@@ -448,9 +454,13 @@ public class CommandLineParser
             {
                 outputPath = args[++i];
             }
+            else if (args[i] == "--json")
+            {
+                json = true;
+            }
         }
 
-        return new ParsedCommand.GenDecl(typeOrAssembly, outputPath);
+        return new ParsedCommand.GenDecl(typeOrAssembly, outputPath, json);
     }
 
 }

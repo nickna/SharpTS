@@ -323,6 +323,25 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_GenDecl_JsonFlag_SetsJson()
+    {
+        var result = _parser.Parse(["--gen-decl", "System.Guid", "--json"]);
+
+        var genDecl = Assert.IsType<ParsedCommand.GenDecl>(result);
+        Assert.Equal("System.Guid", genDecl.TypeOrAssembly);
+        Assert.True(genDecl.Json);
+    }
+
+    [Fact]
+    public void Parse_GenDecl_DefaultsJsonFalse()
+    {
+        var result = _parser.Parse(["--gen-decl", "System.Guid"]);
+
+        var genDecl = Assert.IsType<ParsedCommand.GenDecl>(result);
+        Assert.False(genDecl.Json);
+    }
+
+    [Fact]
     public void Parse_GenDecl_MissingArg_ReturnsError()
     {
         var result = _parser.Parse(["--gen-decl"]);

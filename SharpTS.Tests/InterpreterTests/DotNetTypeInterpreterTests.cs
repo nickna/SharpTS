@@ -14,6 +14,30 @@ public class DotNetTypeInterpreterTests
     #region Instance methods / constructor
 
     [Fact]
+    public void StringBuilder_Append_Works_OnExportDeclareClass()
+    {
+        // `@DotNetType(...) export declare class X` is the exact form docs/dotnet-types.md
+        // and `--gen-decl` emit. It must round-trip identically to the bare `declare class`
+        // form above (regression guard for issue #1192).
+        var source = """
+            @DotNetType("System.Text.StringBuilder")
+            export declare class StringBuilder {
+                constructor();
+                append(value: string): StringBuilder;
+                toString(): string;
+            }
+            let sb: StringBuilder = new StringBuilder();
+            sb.append("Hello");
+            sb.append(" ");
+            sb.append("World");
+            console.log(sb.toString());
+            """;
+
+        var output = TestHarness.RunInterpreted(source, DecoratorMode.Legacy);
+        Assert.Equal("Hello World\n", output);
+    }
+
+    [Fact]
     public void StringBuilder_Append_Works()
     {
         var source = """

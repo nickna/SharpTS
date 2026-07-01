@@ -478,8 +478,11 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 | Exception mapping | ✅ | .NET exceptions surface as JS-catchable errors with message preservation (`DotNetExceptionMapper`) |
 | Value / reference type marshaling | ✅ | Primitives, strings, arrays, dictionaries; `DotNetMarshaller` centralizes conversion |
 | External assembly discovery | ✅ | `TryResolveExternalType` scans loaded AppDomain assemblies; no additional reference wiring needed |
+| `--gen-decl` discovery tool | ✅ | Inspect a type/namespace/assembly: faithful CLR signatures + per-member usable/unsupported marker + `dotnet:` import line + `--json` (issue #1194) |
 
 Compiled mode uses late-bound reflection to the shim (`DotNetDelegateShim` / `DotNetEventBinder`) so the output DLL stays standalone. See `docs/dotnet-types.md` for the full guide.
+
+`--gen-decl` (`DiscoveryGenerator` / `DiscoveryEmitter`) reports which members are usable from interop using `DotNetInteropClassifier` — the same by-ref/pointer/ref-struct/open-generic rules the runtime marshaller enforces, so the tool and the runtime never disagree. It reports faithfully rather than emitting pasteable TypeScript (realistic BCL surfaces have `Span<T>`/`ref`/pointer members with no valid TS spelling). Hand-written `@DotNetType(...) export declare class` declarations remain the consumption path.
 
 ---
 

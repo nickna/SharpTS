@@ -54,7 +54,10 @@ public record ParameterMetadata(
     string Name,
     Type ParameterType,
     bool IsOptional,
-    object? DefaultValue
+    object? DefaultValue,
+    bool IsByRef = false,
+    bool IsOut = false,
+    bool IsIn = false
 );
 
 public record EnumMemberMetadata(
@@ -184,15 +187,25 @@ public class TypeInspector
         return true;
     }
 
+    /// <summary>
+    /// Maps a reflected <see cref="ParameterInfo"/> to <see cref="ParameterMetadata"/>, capturing
+    /// the by-ref (ref/out/in) shape faithfully so the discovery tool can render and classify it.
+    /// </summary>
+    private static ParameterMetadata ToParameterMetadata(ParameterInfo p) => new(
+        p.Name ?? $"arg{p.Position}",
+        p.ParameterType,
+        p.IsOptional,
+        p.HasDefaultValue ? p.DefaultValue : null,
+        IsByRef: p.ParameterType.IsByRef,
+        // `out` and `in` are both by-ref; distinguish for a faithful signature.
+        IsOut: p.IsOut,
+        IsIn: p.ParameterType.IsByRef && p.IsIn
+    );
+
     private MethodMetadata ExtractMethod(MethodInfo method)
     {
         var parameters = method.GetParameters()
-            .Select(p => new ParameterMetadata(
-                p.Name ?? $"arg{p.Position}",
-                p.ParameterType,
-                p.IsOptional,
-                p.HasDefaultValue ? p.DefaultValue : null
-            ))
+            .Select(ToParameterMetadata)
             .ToList();
 
         return new MethodMetadata(
@@ -219,12 +232,7 @@ public class TypeInspector
     private ConstructorMetadata ExtractConstructor(ConstructorInfo ctor)
     {
         var parameters = ctor.GetParameters()
-            .Select(p => new ParameterMetadata(
-                p.Name ?? $"arg{p.Position}",
-                p.ParameterType,
-                p.IsOptional,
-                p.HasDefaultValue ? p.DefaultValue : null
-            ))
+            .Select(ToParameterMetadata)
             .ToList();
 
         return new ConstructorMetadata(parameters, ExtractObsoleteInfo(ctor));

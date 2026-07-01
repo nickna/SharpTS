@@ -1121,6 +1121,22 @@ public partial class ILCompiler
                 continue;
             }
 
+            // An exported class (`@dec export class`) is wrapped in Stmt.Export, so the
+            // bare-Stmt.Class branch above never sees it and its runtime decorators would
+            // be dropped in compiled mode (issue #1192). Emit the export's own logic
+            // (EmitStatement — module-export storage in module mode, a no-op in script
+            // mode, exactly as before) and then the wrapped class's runtime decorators,
+            // mirroring the bare-class branch.
+            if (stmt is Stmt.Export { Declaration: Stmt.Class exportedClass })
+            {
+                emitter.EmitStatement(stmt);
+                if (_decoratorMode != DecoratorMode.None && HasAnyRuntimeDecorators(exportedClass))
+                {
+                    EmitRuntimeDecorators(exportedClass, emitter, il);
+                }
+                continue;
+            }
+
             // Special handling for expression statements to wait for top-level async
             // calls — "top-level await" behavior. Shared with the module/script init
             // bodies so every entry point pumps the loop the same way (see the remarks
