@@ -11,7 +11,7 @@ namespace SharpTS.Compilation;
 /// - Current field for the yielded value
 /// - Hoisted parameter and local variable fields
 /// </summary>
-public class GeneratorStateMachineBuilder
+public class GeneratorStateMachineBuilder : IIteratorStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;

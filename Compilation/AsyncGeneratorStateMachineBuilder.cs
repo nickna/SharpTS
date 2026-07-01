@@ -13,7 +13,7 @@ namespace SharpTS.Compilation;
 /// - Awaiter field for async await points
 /// - Hoisted parameter and local variable fields
 /// </summary>
-public class AsyncGeneratorStateMachineBuilder
+public class AsyncGeneratorStateMachineBuilder : IIteratorStateMachineBuilder
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
