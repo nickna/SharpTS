@@ -245,10 +245,24 @@ public partial class RuntimeEmitter
         EmitSingletonBranch("Math", runtime.MathSingletonField);
         EmitSingletonBranch("JSON", runtime.JsonSingletonField);
 
-        // console / Reflect / process have no value-form singleton representation;
-        // keep the historical null marker so syntactic dispatch (which fires before
+        // globalThis.process → the live $Process singleton (epic #1078), same
+        // object as the bare `process` identifier and the module facade's
+        // default export.
+        {
+            var notProcess = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "process");
+            il.Emit(OpCodes.Call, strEquals);
+            il.Emit(OpCodes.Brfalse, notProcess);
+            il.Emit(OpCodes.Call, runtime.GetProcessObject);
+            il.Emit(OpCodes.Br, returnLabel);
+            il.MarkLabel(notProcess);
+        }
+
+        // console / Reflect have no value-form singleton representation; keep
+        // the historical null marker so syntactic dispatch (which fires before
         // this value-form path) stays authoritative for them.
-        string[] nullMarkerNamespaces = ["console", "Reflect", "process"];
+        string[] nullMarkerNamespaces = ["console", "Reflect"];
         foreach (var ns in nullMarkerNamespaces)
         {
             il.Emit(OpCodes.Ldarg_0);

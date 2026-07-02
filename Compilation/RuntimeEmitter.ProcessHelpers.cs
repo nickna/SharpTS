@@ -18,7 +18,6 @@ public partial class RuntimeEmitter
         EmitProcessGetNextTick(typeBuilder, runtime);
         EmitProcessEventEmitterCallMethod(typeBuilder, runtime);
         EmitProcessEmitExitMethod(typeBuilder, runtime);
-        EmitGetProcessEventEmitter(typeBuilder, runtime);
         EmitStdinMethods(typeBuilder, runtime);
         EmitStdoutMethods(typeBuilder, runtime);
         EmitStderrMethods(typeBuilder, runtime);
@@ -26,14 +25,27 @@ public partial class RuntimeEmitter
         // instances. Without UsesNodeStreams the stream types don't exist.
         if (_features.UsesNodeStreams)
             EmitProcessStreamSingletons(typeBuilder, runtime);
+
+        // The $Process live object + its value helpers (epic #1078). Must run
+        // after the base helpers above (its members delegate to them) and
+        // before EmitGetProcessEventEmitter (whose body now returns the
+        // $Process singleton so events share one emitter across surfaces).
+        EmitProcessObjectInfrastructure(typeBuilder, runtime);
+        EmitGetProcessEventEmitter(typeBuilder, runtime);
     }
 
     /// <summary>
     /// Emits: public static object ProcessGetEnv()
-    /// Creates a Dictionary containing environment variables and wraps it as an object.
+    /// Creates a Dictionary containing environment variables and wraps it as an
+    /// object, cached in a static field so writes are visible across reads
+    /// (process.env.FOO = 'x'; process.env.FOO — same live object, like the
+    /// interpreter and Node).
     /// </summary>
     private void EmitProcessGetEnv(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var cacheField = typeBuilder.DefineField(
+            "_processEnvObject", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+
         var method = typeBuilder.DefineMethod(
             "ProcessGetEnv",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -43,6 +55,14 @@ public partial class RuntimeEmitter
         runtime.ProcessGetEnv = method;
 
         var il = method.GetILGenerator();
+
+        // if (_processEnvObject != null) return it
+        var buildLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, cacheField);
+        il.Emit(OpCodes.Brfalse, buildLabel);
+        il.Emit(OpCodes.Ldsfld, cacheField);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(buildLabel);
 
         // Create new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         // This ensures case-insensitive lookup for environment variables (Windows uses "Path" not "PATH")
@@ -107,9 +127,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
 
-        // Wrap in SharpTSObject and return
+        // Wrap in SharpTSObject, cache, and return
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Call, runtime.CreateObject);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stsfld, cacheField);
         il.Emit(OpCodes.Ret);
     }
 
@@ -971,20 +993,14 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits a static field and getter for a process-level EventEmitter singleton.
-    /// The field is a $EventEmitter instance created lazily.
+    /// Emits the process-level EventEmitter accessor. Since epic #1078 this is
+    /// the $Process singleton itself ($Process : $EventEmitter), so listeners
+    /// registered through the static process.on(...) fast path, the bare
+    /// `process` value, and the module facade's default export all share one
+    /// emitter.
     /// </summary>
     private void EmitGetProcessEventEmitter(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // Static field to store the singleton
-        var field = typeBuilder.DefineField(
-            "_processEventEmitter",
-            runtime.TSEventEmitterType,
-            FieldAttributes.Private | FieldAttributes.Static
-        );
-        _ = field;
-
-        // Getter method that lazily creates the instance
         var getter = typeBuilder.DefineMethod(
             "GetProcessEventEmitter",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -994,19 +1010,8 @@ public partial class RuntimeEmitter
         runtime.GetProcessEventEmitter = getter;
 
         var il = getter.GetILGenerator();
-
-        // if (_processEventEmitter != null) return it
-        il.Emit(OpCodes.Ldsfld, field);
-        var createNew = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, createNew);
-        il.Emit(OpCodes.Ldsfld, field);
-        il.Emit(OpCodes.Ret);
-
-        // Create new instance
-        il.MarkLabel(createNew);
-        il.Emit(OpCodes.Newobj, runtime.TSEventEmitterCtor);
-        il.Emit(OpCodes.Stsfld, field);
-        il.Emit(OpCodes.Ldsfld, field);
+        il.Emit(OpCodes.Call, runtime.GetProcessObject);
+        il.Emit(OpCodes.Castclass, runtime.TSEventEmitterType);
         il.Emit(OpCodes.Ret);
     }
 }

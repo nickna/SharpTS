@@ -14,9 +14,22 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
     private static readonly string[] _exportedMembers =
     [
-        "platform", "arch", "pid", "version", "env", "argv", "exitCode",
-        "stdin", "stdout", "stderr",
-        "cwd", "chdir", "exit", "hrtime", "uptime", "memoryUsage", "nextTick"
+        "processObject",
+        "platform", "arch", "pid", "ppid", "version", "versions", "env",
+        "argv", "argv0", "execPath", "execArgv", "exitCode", "title",
+        "config", "release", "features", "debugPort", "allowedNodeEnvironmentFlags",
+        "stdin", "stdout", "stderr", "report",
+        "throwDeprecation", "traceDeprecation", "noDeprecation", "sourceMapsEnabled",
+        "connected", "channel", "send", "disconnect",
+        "getuid", "geteuid", "getgid", "getegid", "getgroups", "setuid", "setgid",
+        "cwd", "chdir", "exit", "hrtime", "uptime", "memoryUsage", "nextTick",
+        "kill", "abort", "umask", "cpuUsage", "resourceUsage",
+        "availableMemory", "constrainedMemory", "getActiveResourcesInfo",
+        "emitWarning", "setSourceMapsEnabled",
+        "on", "addListener", "once", "off", "removeListener", "emit",
+        "removeAllListeners", "listeners", "rawListeners", "listenerCount",
+        "eventNames", "prependListener", "prependOnceListener",
+        "setMaxListeners", "getMaxListeners",
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -26,17 +39,88 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        return methodName switch
+        switch (methodName)
         {
-            "cwd" => EmitCwd(emitter),
-            "chdir" => EmitChdir(emitter, arguments),
-            "exit" => EmitExit(emitter, arguments),
-            "hrtime" => EmitHrtime(emitter, arguments),
-            "uptime" => EmitUptime(emitter),
-            "memoryUsage" => EmitMemoryUsage(emitter),
-            "nextTick" => EmitNextTick(emitter, arguments),
-            _ => false
-        };
+            case "cwd": return EmitCwd(emitter);
+            case "chdir": return EmitChdir(emitter, arguments);
+            case "exit": return EmitExit(emitter, arguments);
+            case "hrtime": return EmitHrtime(emitter, arguments);
+            case "uptime": return EmitUptime(emitter);
+            case "memoryUsage": return EmitMemoryUsage(emitter);
+            case "nextTick": return EmitNextTick(emitter, arguments);
+
+            case "kill":
+                EmitBoxedArgument(emitter, arguments, 0);
+                EmitBoxedArgument(emitter, arguments, 1);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessKill);
+                return true;
+
+            case "abort":
+                il.Emit(OpCodes.Ldstr, "process.abort() called");
+                il.Emit(OpCodes.Call, typeof(Environment).GetMethod("FailFast", [ctx.Types.String])!);
+                il.Emit(OpCodes.Ldnull);
+                return true;
+
+            case "umask":
+                EmitBoxedArgument(emitter, arguments, 0);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessUmask);
+                return true;
+
+            case "cpuUsage":
+                EmitBoxedArgument(emitter, arguments, 0);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessCpuUsage);
+                return true;
+
+            case "resourceUsage":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessResourceUsage);
+                return true;
+
+            case "availableMemory":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessAvailableMemory);
+                return true;
+
+            case "constrainedMemory":
+                il.Emit(OpCodes.Ldc_R8, 0.0);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                return true;
+
+            case "getActiveResourcesInfo":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetActiveResourcesInfoM);
+                return true;
+
+            case "emitWarning":
+                EmitBoxedArgument(emitter, arguments, 0);
+                EmitBoxedArgument(emitter, arguments, 1);
+                EmitBoxedArgument(emitter, arguments, 2);
+                EmitBoxedArgument(emitter, arguments, 3);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessEmitWarning);
+                return true;
+
+            case "setSourceMapsEnabled":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
+                EmitBoxedArgument(emitter, arguments, 0);
+                il.Emit(OpCodes.Call, ctx.Runtime!.SetProperty);
+                il.Emit(OpCodes.Ldnull);
+                return true;
+
+            // EventEmitter surface: shared dispatch against the $Process
+            // singleton — same emitter instance as the bare global.
+            case "on" or "addListener" or "once" or "off" or "removeListener"
+                or "emit" or "removeAllListeners" or "listeners" or "listenerCount"
+                or "eventNames" or "prependListener" or "prependOnceListener"
+                or "setMaxListeners" or "getMaxListeners":
+                ProcessStaticEmitter.EmitProcessEventEmitterCall(emitter, methodName, arguments);
+                return true;
+
+            case "rawListeners":
+                // Alias of listeners in the compiled emitter surface.
+                ProcessStaticEmitter.EmitProcessEventEmitterCall(emitter, "listeners", arguments);
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
@@ -44,21 +128,131 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        return propertyName switch
+        switch (propertyName)
         {
-            "platform" => EmitPlatform(emitter),
-            "arch" => EmitArch(emitter),
-            "pid" => EmitPid(emitter),
-            "version" => EmitVersion(emitter),
-            "env" => EmitEnv(emitter),
-            "argv" => EmitArgv(emitter),
-            "exitCode" => EmitExitCode(emitter),
-            "stdin" => EmitStdin(emitter),
-            "stdout" => EmitStdout(emitter),
-            "stderr" => EmitStderr(emitter),
-            "nextTick" => EmitNextTickProperty(emitter),
-            _ => false
-        };
+            case "platform": return EmitPlatform(emitter);
+            case "arch": return EmitArch(emitter);
+            case "pid": return EmitPid(emitter);
+            case "version": return EmitVersion(emitter);
+            case "env": return EmitEnv(emitter);
+            case "argv": return EmitArgv(emitter);
+            case "exitCode": return EmitExitCode(emitter);
+            case "stdin": return EmitStdin(emitter);
+            case "stdout": return EmitStdout(emitter);
+            case "stderr": return EmitStderr(emitter);
+            case "nextTick": return EmitNextTickProperty(emitter);
+
+            // The live process object — the module facade's default export.
+            case "processObject":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                return true;
+
+            case "ppid":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetPpid);
+                return true;
+
+            case "title":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetTitle);
+                return true;
+
+            case "versions":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetVersions);
+                return true;
+
+            case "execPath":
+                {
+                    var haveIt = il.DefineLabel();
+                    il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ProcessPath"));
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Brtrue, haveIt);
+                    il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
+                    il.Emit(OpCodes.Ldc_I4_0);
+                    il.Emit(OpCodes.Ldelem_Ref);
+                    il.MarkLabel(haveIt);
+                    return true;
+                }
+
+            case "execArgv":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetExecArgv);
+                return true;
+
+            case "argv0":
+                il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+                return true;
+
+            case "config":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetConfig);
+                return true;
+
+            case "release":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetRelease);
+                return true;
+
+            case "features":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetFeatures);
+                return true;
+
+            case "debugPort":
+                il.Emit(OpCodes.Ldc_R8, 9229.0);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                return true;
+
+            case "allowedNodeEnvironmentFlags":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetAllowedFlags);
+                return true;
+
+            case "report":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetReport);
+                return true;
+
+            // Function-with-members values (hrtime.bigint / memoryUsage.rss).
+            case "hrtime":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetHrtimeFn);
+                return true;
+
+            case "memoryUsage":
+                il.Emit(OpCodes.Call, ctx.Runtime!.ProcessGetMemoryUsageFn);
+                return true;
+
+            // Flags + IPC state through the live object's dynamic path.
+            case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
+                or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
+                il.Emit(OpCodes.Ldstr, propertyName);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
+                return true;
+
+            // POSIX identity: interpreter-only (undefined in compiled mode —
+            // Windows parity is exact; POSIX standalone is a documented ceiling).
+            case "getuid" or "geteuid" or "getgid" or "getegid"
+                or "getgroups" or "setuid" or "setgid":
+                il.Emit(OpCodes.Ldnull);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Emits arguments[index] boxed, or null when absent — the object-arg
+    /// convention of the $Runtime process helpers.
+    /// </summary>
+    private static void EmitBoxedArgument(IEmitterContext emitter, List<Expr> arguments, int index)
+    {
+        if (index < arguments.Count)
+        {
+            emitter.EmitExpression(arguments[index]);
+            emitter.EmitBoxIfNeeded(arguments[index]);
+        }
+        else
+        {
+            emitter.Context.IL.Emit(OpCodes.Ldnull);
+        }
     }
 
     #region Method Emitters
@@ -257,16 +451,9 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
     private static bool EmitVersion(IEmitterContext emitter)
     {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-        il.Emit(OpCodes.Ldstr, "v");
-        il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "Version"));
-        var versionLocal = il.DeclareLocal(ctx.Types.Version);
-        il.Emit(OpCodes.Stloc, versionLocal);
-        il.Emit(OpCodes.Ldloca, versionLocal);
-        il.Emit(OpCodes.Constrained, ctx.Types.Version);
-        il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.String, "Concat", ctx.Types.String, ctx.Types.String));
+        // The emulated Node version (see ProcessBuiltIns.NodeVersion).
+        emitter.Context.IL.Emit(OpCodes.Ldstr,
+            "v" + SharpTS.Runtime.BuiltIns.ProcessBuiltIns.NodeVersion);
         return true;
     }
 
@@ -346,5 +533,12 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
     public bool IsExportedProperty(string memberName) => memberName is
         "platform" or "arch" or "pid" or "version" or "env" or "argv" or "exitCode" or
-        "stdin" or "stdout" or "stderr";
+        "stdin" or "stdout" or "stderr" or
+        "processObject" or "ppid" or "title" or "versions" or "execPath" or
+        "execArgv" or "argv0" or "config" or "release" or "features" or
+        "debugPort" or "allowedNodeEnvironmentFlags" or "report" or
+        "throwDeprecation" or "traceDeprecation" or "noDeprecation" or
+        "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect" or
+        "getuid" or "geteuid" or "getgid" or "getegid" or "getgroups" or
+        "setuid" or "setgid" or "hrtime" or "memoryUsage";
 }

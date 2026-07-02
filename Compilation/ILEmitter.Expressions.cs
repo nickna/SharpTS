@@ -98,7 +98,12 @@ public partial class ILEmitter
 
         if (name == "process")
         {
-            EmitNullConstant(); // process is handled specially in property access
+            // Value-position process resolves to the live $Process singleton
+            // (epic #1078): `const p = process; p.on(...)` and the module
+            // facade's default export share one object. The syntactic
+            // `process.X` form still takes ProcessStaticEmitter's fast path.
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProcessObject);
+            SetStackUnknown();
             return;
         }
 
