@@ -361,6 +361,11 @@ public static class PromiseBuiltIns
         var onFulfilled = args.Count > 0 ? args[0] as ISharpTSCallable : null;
         var onRejected = args.Count > 1 ? args[1] as ISharpTSCallable : null;
 
+        // A rejection handler makes a previously-reported unhandled rejection
+        // handled — fire process 'rejectionHandled' (#1080).
+        if (onRejected != null)
+            interpreter.NotifyRejectionHandlerAttached(promise);
+
         // ECMA-262 §27.2.5.4: onRejected only handles rejection of the INPUT
         // promise. Guard only the input await with the rejection dispatch —
         // a throwing onFulfilled (or a rejecting thenable it returned) must
@@ -430,6 +435,10 @@ public static class PromiseBuiltIns
         Interpreter interpreter)
     {
         var onRejected = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+
+        // See ThenImpl: a rejection handler may fire 'rejectionHandled' (#1080).
+        if (onRejected != null)
+            interpreter.NotifyRejectionHandlerAttached(promise);
 
         try
         {

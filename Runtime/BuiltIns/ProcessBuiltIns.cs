@@ -16,15 +16,22 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </remarks>
 /// <seealso cref="SharpTSProcess"/>
 /// <seealso cref="BuiltInMethod"/>
-public static class ProcessBuiltIns
+public static partial class ProcessBuiltIns
 {
+    /// <summary>
+    /// The Node.js version SharpTS emulates. Surfaced as <c>process.version</c>
+    /// (with a leading "v") and <c>process.versions.node</c> so feature-detection
+    /// code sees the compatibility target rather than the CLR version.
+    /// </summary>
+    public const string NodeVersion = "24.15.0";
+
     // Cache static methods to avoid allocation on every access
     private static readonly BuiltInMethod _cwd = new("cwd", 0, Cwd);
     private static readonly BuiltInMethod _chdir = new("chdir", 1, Chdir);
     private static readonly BuiltInMethod _exit = new("exit", 0, 1, Exit);
-    private static readonly BuiltInMethod _hrtime = new("hrtime", 0, 1, Hrtime);
+    private static readonly BuiltInMethod _hrtime = CreateHrtimeMethod();
     private static readonly BuiltInMethod _uptime = new("uptime", 0, Uptime);
-    private static readonly BuiltInMethod _memoryUsage = new("memoryUsage", 0, MemoryUsage);
+    private static readonly BuiltInMethod _memoryUsage = CreateMemoryUsageMethod();
     private static readonly BuiltInMethod _nextTick = new("nextTick", 1, int.MaxValue, NextTick);
 
     // Lazily create env and argv objects
@@ -55,9 +62,24 @@ public static class ProcessBuiltIns
     private static long? _scriptStartTimestamp;
 
     /// <summary>
-    /// Gets a member of the process object by name.
+    /// Gets a member of the process object by name. Resolves process-specific
+    /// members first, then falls back to the EventEmitter surface of the
+    /// <see cref="SharpTSProcess"/> singleton.
     /// </summary>
     public static object? GetMember(string name)
+    {
+        // Core EventEmitter methods resolve against the singleton's raw
+        // EventEmitter surface (GetEventEmitterMember, NOT the virtual
+        // GetMember — SharpTSProcess.GetMember delegates back here).
+        return GetOwnMember(name)
+            ?? SharpTSProcess.Instance.GetEventEmitterMember(name);
+    }
+
+    /// <summary>
+    /// Resolves process-specific members (data props, methods, IPC), excluding
+    /// the inherited EventEmitter surface. Null means "not a process member".
+    /// </summary>
+    internal static object? GetOwnMember(string name)
     {
         return name switch
         {
@@ -65,7 +87,7 @@ public static class ProcessBuiltIns
             "platform" => GetPlatform(),
             "arch" => GetArch(),
             "pid" => (double)Environment.ProcessId,
-            "version" => "v" + Environment.Version.ToString(),
+            "version" => "v" + NodeVersion,
             "env" => GetEnv(),
             "argv" => GetArgv(),
             "exitCode" => (double)Environment.ExitCode,
@@ -113,13 +135,52 @@ public static class ProcessBuiltIns
                 return RuntimeValue.Null;
             }),
             "connected" when ForkIpcClient.IsForkedChild => ForkIpcClient.Instance?.Connected ?? false,
+            "channel" when ForkIpcClient.IsForkedChild || ClusterContext.IsWorker => GetIpcChannel(),
 
-            // EventEmitter methods - delegate to the process singleton
-            "on" or "addListener" or "once" or "off" or "removeListener"
-                or "emit" or "removeAllListeners" or "listeners" or "rawListeners"
-                or "listenerCount" or "eventNames" or "prependListener"
-                or "prependOnceListener" or "setMaxListeners" or "getMaxListeners"
-                => SharpTSProcess.Instance.GetMember(name),
+            // Identity / info properties (#1085)
+            "ppid" => (double)GetParentPid(),
+            "title" => GetTitle(),
+            "versions" => GetVersions(),
+            "execPath" => Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0],
+            "execArgv" => GetExecArgv(),
+            "argv0" => Environment.GetCommandLineArgs()[0],
+            "config" => GetConfig(),
+            "release" => GetRelease(),
+            "features" => GetFeatures(),
+            "debugPort" => 9229.0,
+            "allowedNodeEnvironmentFlags" => GetAllowedNodeEnvironmentFlags(),
+
+            // Diagnostics methods (#1082)
+            "cpuUsage" => _cpuUsage,
+            "resourceUsage" => _resourceUsage,
+            "availableMemory" => _availableMemory,
+            "constrainedMemory" => _constrainedMemory,
+            "getActiveResourcesInfo" => _getActiveResourcesInfo,
+
+            // Warnings / deprecation flags / abort / umask (#1083)
+            "emitWarning" => _emitWarning,
+            "abort" => _abort,
+            "umask" => _umask,
+            "throwDeprecation" => ThrowDeprecation,
+            "traceDeprecation" => TraceDeprecation,
+            "noDeprecation" => NoDeprecation,
+            "sourceMapsEnabled" => SourceMapsEnabled,
+            "setSourceMapsEnabled" => _setSourceMapsEnabled,
+
+            // Signals / kill (#1081)
+            "kill" => _kill,
+
+            // Diagnostic report (#1084)
+            "report" => GetReportObject(),
+
+            // POSIX identity (#1086) — undefined on Windows, matching Node
+            "getuid" when !OperatingSystem.IsWindows() => _getuid,
+            "geteuid" when !OperatingSystem.IsWindows() => _geteuid,
+            "getgid" when !OperatingSystem.IsWindows() => _getgid,
+            "getegid" when !OperatingSystem.IsWindows() => _getegid,
+            "getgroups" when !OperatingSystem.IsWindows() => _getgroups,
+            "setuid" when !OperatingSystem.IsWindows() => _setuid,
+            "setgid" when !OperatingSystem.IsWindows() => _setgid,
 
             _ => null
         };
@@ -272,13 +333,16 @@ public static class ProcessBuiltIns
 
     private static object? Exit(Interpreter i, object? r, List<object?> args)
     {
-        int exitCode = 0;
+        // process.exit() with no (or non-numeric) argument uses process.exitCode.
+        int exitCode = Environment.ExitCode;
         if (args.Count > 0 && args[0] is double d)
         {
             exitCode = (int)d;
         }
 
-        // Emit 'exit' event synchronously before exiting, matching Node.js behavior
+        // Publish the code first so 'exit' listeners reading process.exitCode
+        // observe the final value, then emit synchronously (Node semantics).
+        Environment.ExitCode = exitCode;
         EmitExitEvent(i, exitCode);
 
         Environment.Exit(exitCode);
@@ -487,22 +551,33 @@ public static class ProcessBuiltIns
     }
 
     /// <summary>
-    /// Sets a member of the process object by name.
-    /// Currently only supports setting exitCode.
+    /// Sets a member of the process object by name (exitCode, title, and the
+    /// deprecation flags). Returns false for names that are not process-managed
+    /// setters so callers can fall back to expando storage.
     /// </summary>
     public static bool SetMember(string name, object? value)
     {
-        return name switch
+        switch (name)
         {
-            "exitCode" when value is double d => SetExitCode((int)d),
-            _ => false
-        };
-    }
-
-    private static bool SetExitCode(int code)
-    {
-        Environment.ExitCode = code;
-        return true;
+            case "exitCode":
+                // Node accepts numbers (also null/undefined, meaning "unset" → 0).
+                Environment.ExitCode = value is double d ? (int)d : 0;
+                return true;
+            case "title":
+                SetTitle(value?.ToString() ?? "");
+                return true;
+            case "throwDeprecation":
+                ThrowDeprecation = value is true;
+                return true;
+            case "traceDeprecation":
+                TraceDeprecation = value is true;
+                return true;
+            case "noDeprecation":
+                NoDeprecation = value is true;
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

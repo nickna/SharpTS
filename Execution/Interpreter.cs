@@ -867,6 +867,12 @@ public partial class Interpreter : IDisposable
     }
 
     /// <summary>
+    /// Current count of active handles keeping the event loop alive. Surfaced
+    /// (approximately) through process.getActiveResourcesInfo().
+    /// </summary>
+    internal int ActiveHandleCount => Volatile.Read(ref _activeHandles);
+
+    /// <summary>
     /// Increments the active handles count. Used by servers, timers, etc. to keep the event loop alive.
     /// Thread-safe using lock-free atomic increment.
     /// </summary>
@@ -1039,47 +1045,14 @@ public partial class Interpreter : IDisposable
         {
             var shutdownToken = _shutdownCts.Token;
 
-            while (!_isDisposed)
-            {
-                // Exit immediately if there's no work keeping the loop alive
-                if (!HasActiveHandles && _callbackQueue.Count == 0)
-                {
-                    break;
-                }
+            RunEventLoopCore(shutdownToken);
 
-                // Calculate timeout until next timer fires
-                var timeout = GetNextTimerTimeout();
-
-                // Efficient wait: blocks until callback arrives, timeout expires,
-                // or shutdown is requested (via CancellationToken from Shutdown())
-                if (_callbackQueue.TryTake(out var action, (int)timeout.TotalMilliseconds, shutdownToken))
-                {
-                    // Execute the queued callback (HTTP request handler, async continuation, etc.)
-                    try
-                    {
-                        action();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log uncaught exceptions but don't crash the event loop
-                        Error.WriteLine($"Uncaught exception in event loop callback: {ex.Message}");
-                    }
-                }
-
-                // Process microtasks first (queueMicrotask, Promise callbacks)
-                // Microtasks always run before any macrotasks (timers)
-                ProcessMicrotasks();
-
-                // Process any due timers (setTimeout, setInterval callbacks)
-                ProcessPendingCallbacks();
-
-                // Exit condition: no active handles AND queue is empty
-                // This ensures all queued callbacks are processed before exiting (like Node.js)
-                if (!HasActiveHandles && _callbackQueue.Count == 0)
-                {
-                    break;
-                }
-            }
+            // Node lifecycle at natural drain: 'beforeExit' (re-entering the
+            // loop when a listener schedules new work), then a final 'exit'.
+            // Only the program's main interpreter opts in (see
+            // EmitProcessLifecycleEvents) — worker/vm/nested interpreters
+            // share the process singleton and must not fire process events.
+            EmitProcessLifecycleAtDrain(shutdownToken);
         }
         catch (OperationCanceledException)
         {
@@ -1104,6 +1077,113 @@ public partial class Interpreter : IDisposable
                 System.Diagnostics.Debug.WriteLine("RunEventLoop: Queue already disposed during cleanup.");
             }
         }
+    }
+
+    /// <summary>
+    /// The event loop's drain loop: runs callbacks/microtasks/timers until no
+    /// active handles remain and the queue is empty (or shutdown is requested).
+    /// </summary>
+    private void RunEventLoopCore(CancellationToken shutdownToken)
+    {
+        while (!_isDisposed)
+        {
+            // Exit immediately if there's no work keeping the loop alive
+            if (!HasActiveHandles && _callbackQueue.Count == 0)
+            {
+                break;
+            }
+
+            // Calculate timeout until next timer fires
+            var timeout = GetNextTimerTimeout();
+
+            // Efficient wait: blocks until callback arrives, timeout expires,
+            // or shutdown is requested (via CancellationToken from Shutdown())
+            if (_callbackQueue.TryTake(out var action, (int)timeout.TotalMilliseconds, shutdownToken))
+            {
+                // Execute the queued callback (HTTP request handler, async continuation, etc.)
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    // Log uncaught exceptions but don't crash the event loop
+                    Error.WriteLine($"Uncaught exception in event loop callback: {ex.Message}");
+                }
+            }
+
+            // Process microtasks first (queueMicrotask, Promise callbacks)
+            // Microtasks always run before any macrotasks (timers)
+            ProcessMicrotasks();
+
+            // Process any due timers (setTimeout, setInterval callbacks)
+            ProcessPendingCallbacks();
+
+            // Exit condition: no active handles AND queue is empty
+            // This ensures all queued callbacks are processed before exiting (like Node.js)
+            if (!HasActiveHandles && _callbackQueue.Count == 0)
+            {
+                break;
+            }
+        }
+    }
+
+    private bool _emitProcessLifecycleEvents;
+    private bool _exitEventEmitted;
+
+    /// <summary>
+    /// When true, this interpreter fires the Node process lifecycle events
+    /// ('beforeExit' at loop drain, 'exit' at the end) and receives process
+    /// events delivered from foreign threads (signals). Set by the CLI and the
+    /// test harness on the program's main interpreter only — workers, vm
+    /// contexts and nested interpreters share the process singleton and must
+    /// not fire process-level events.
+    /// </summary>
+    public bool EmitProcessLifecycleEvents
+    {
+        get => _emitProcessLifecycleEvents;
+        set
+        {
+            _emitProcessLifecycleEvents = value;
+            if (value) Runtime.BuiltIns.ProcessBuiltIns.DispatchInterpreter = this;
+        }
+    }
+
+    /// <summary>
+    /// Fires 'beforeExit' when the loop drains (re-entering the loop while
+    /// listeners schedule new work), then 'exit' exactly once. Mirrors Node:
+    /// beforeExit is skipped for explicit process.exit() (which never returns),
+    /// and 'exit' listeners can only do synchronous work.
+    /// </summary>
+    private void EmitProcessLifecycleAtDrain(CancellationToken shutdownToken)
+    {
+        if (!_emitProcessLifecycleEvents || _isDisposed || _exitEventEmitted)
+            return;
+
+        var process = Runtime.Types.SharpTSProcess.Instance;
+        while (!_isDisposed && !shutdownToken.IsCancellationRequested)
+        {
+            bool hadListeners;
+            try
+            {
+                hadListeners = process.EmitWith(this, "beforeExit", (double)System.Environment.ExitCode);
+            }
+            catch (Exception ex)
+            {
+                Error.WriteLine($"Uncaught exception in beforeExit listener: {ex.Message}");
+                break;
+            }
+
+            ProcessMicrotasks();
+            if (!hadListeners || (!HasActiveHandles && _callbackQueue.Count == 0))
+                break; // no listeners, or listeners scheduled nothing new
+
+            RunEventLoopCore(shutdownToken);
+        }
+
+        _exitEventEmitted = true;
+        Runtime.BuiltIns.ProcessBuiltIns.EmitExitEvent(
+            this, HadUnhandledRejection ? 1 : System.Environment.ExitCode);
     }
 
     /// <summary>

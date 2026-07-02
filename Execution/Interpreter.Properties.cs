@@ -1763,13 +1763,21 @@ public partial class Interpreter
 
     /// <summary>
     /// Fallback for property assignment on types without TypeCategory dispatch
-    /// (GlobalThis, Agent, AbortSignal).
+    /// (GlobalThis, process, Agent, AbortSignal).
     /// </summary>
     private static object? EvaluateSetFallback(object? obj, string memberName, object? value)
     {
         if (obj is SharpTSGlobalThis globalThis)
         {
             globalThis.SetProperty(memberName, value);
+            return value;
+        }
+
+        // process.exitCode = 5, process.title = "x", plus expando assignment —
+        // routed through the process-managed setters (Runtime/BuiltIns/ProcessBuiltIns.cs).
+        if (obj is SharpTSProcess process)
+        {
+            process.SetProcessMember(memberName, value);
             return value;
         }
 

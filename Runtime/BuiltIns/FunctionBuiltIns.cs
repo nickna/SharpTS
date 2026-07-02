@@ -32,6 +32,15 @@ public static class FunctionBuiltIns
     /// </summary>
     public static object? GetMember(ISharpTSCallable receiver, string name)
     {
+        // Own function-object properties win over the prototype surface —
+        // Node models process.hrtime.bigint / process.memoryUsage.rss as
+        // properties on the function itself (see BuiltInMethod.OwnProperties).
+        if (receiver is BuiltInMethod { OwnProperties: { } own }
+            && own.TryGetValue(name, out var ownValue))
+        {
+            return ownValue;
+        }
+
         switch (name)
         {
             case "bind": return _bind.Bind(receiver);
