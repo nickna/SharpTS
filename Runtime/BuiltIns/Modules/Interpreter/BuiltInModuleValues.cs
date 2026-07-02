@@ -63,6 +63,23 @@ public static class BuiltInModuleValues
     }
 
     /// <summary>
+    /// Builds a custom namespace/default-export object for built-in modules whose
+    /// namespace members need live accessor semantics instead of import-time value
+    /// snapshots. Returns null for modules where a plain snapshot object is correct.
+    /// </summary>
+    /// <remarks>
+    /// cluster (#1167/#1170): isPrimary/isWorker/worker/workers/settings resolve live,
+    /// and `cluster.schedulingPolicy = ...` writes through to the singleton so the
+    /// shared-listener dispatch honors it.
+    /// </remarks>
+    public static Types.SharpTSObject? TryCreateNamespaceOverride(string moduleName, Dictionary<string, object?> exports)
+    {
+        return moduleName == "cluster"
+            ? ClusterModuleInterpreter.CreateNamespaceObject(exports)
+            : null;
+    }
+
+    /// <summary>
     /// Checks if a module has interpreter support.
     /// </summary>
     public static bool HasInterpreterSupport(string moduleName)

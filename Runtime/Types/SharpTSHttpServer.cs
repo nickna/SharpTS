@@ -307,6 +307,9 @@ public class SharpTSHttpServer : SharpTSEventEmitter, IDisposable
         }
         EmitEvent("listening", new List<object?>());
 
+        // Notify the primary so cluster.on('listening', (worker, address)) fires (#1168).
+        ClusterContext.CurrentWorker?.NotifyListening("0.0.0.0", _port, 4);
+
         return this;
     }
 

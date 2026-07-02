@@ -217,10 +217,8 @@ public partial class RuntimeEmitter
         // (mirroring interp SharpTSTlsSocket : SharpTSSocket), so the base TypeBuilder must
         // exist first.
 
-        // Emit cluster types for standalone cluster support
-        // NOTE: Must come after EventEmitter ($ClusterWorker and $ClusterManager extend it)
-        if (features.UsesCluster)
-            EmitClusterTypes(moduleBuilder, runtime);
+        // cluster emits no module-level types: the compiled module late-binds into
+        // SharpTS.dll via $Runtime.ClusterFork/ClusterInvoke (RuntimeEmitter.RuntimeClass.cs).
 
         // FS-only types — gated on UsesFs together with the FS module methods.
         if (features.UsesFs)

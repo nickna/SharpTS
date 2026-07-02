@@ -2127,14 +2127,32 @@ public static class BuiltInModuleTypes
         var voidType = new TypeInfo.Void();
         var stringType = new TypeInfo.String();
         var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+        var stringArrayType = new TypeInfo.Array(stringType);
+
+        // worker.process — the ChildProcess-like handle (#1169; thread-model approximation)
+        var workerProcessType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["pid"] = numberType,
+            ["connected"] = boolType,
+            ["kill"] = new TypeInfo.Function([stringType], boolType, RequiredParams: 0),
+            ["send"] = new TypeInfo.Function([anyType], boolType),
+            ["disconnect"] = new TypeInfo.Function([], voidType),
+            ["stdout"] = anyType,
+            ["stderr"] = anyType,
+            ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["off"] = new TypeInfo.Function([stringType, anyType], anyType),
+        }.ToFrozenDictionary());
 
         // Worker type
         var workerType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
             ["id"] = numberType,
+            ["process"] = workerProcessType,
             ["send"] = new TypeInfo.Function([anyType], boolType),
             ["disconnect"] = new TypeInfo.Function([], voidType),
             ["kill"] = new TypeInfo.Function([stringType], voidType, RequiredParams: 0),
+            ["destroy"] = new TypeInfo.Function([stringType], voidType, RequiredParams: 0),
             ["isDead"] = new TypeInfo.Function([], boolType),
             ["isConnected"] = new TypeInfo.Function([], boolType),
             ["exitedAfterDisconnect"] = boolType,
@@ -2142,6 +2160,27 @@ public static class BuiltInModuleTypes
             ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["off"] = new TypeInfo.Function([stringType, anyType], anyType),
         }.ToFrozenDictionary());
+
+        // cluster.settings — normalized by setupPrimary/fork (#1170). Runtime-guaranteed
+        // fields (exec/args/execArgv/silent/serialization) plus the stored/echoed ones.
+        var settingsType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
+        {
+            ["exec"] = stringType,
+            ["args"] = stringArrayType,
+            ["execArgv"] = stringArrayType,
+            ["silent"] = boolType,
+            ["serialization"] = stringType,
+            ["cwd"] = stringType,
+            ["stdio"] = anyType,
+            ["env"] = anyType,
+            ["inspectPort"] = numberType,
+            ["windowsHide"] = boolType,
+        }.ToFrozenDictionary());
+
+        // cluster.workers — live id→Worker map (#1167)
+        var workersType = new TypeInfo.Record(
+            FrozenDictionary<string, TypeInfo>.Empty,
+            StringIndexType: workerType);
 
         return new Dictionary<string, TypeInfo>
         {
@@ -2157,14 +2196,21 @@ public static class BuiltInModuleTypes
             ["setupMaster"] = new TypeInfo.Function([anyType], voidType, RequiredParams: 0),
 
             // Properties
-            ["workers"] = anyType,
-            ["worker"] = anyType,
-            ["settings"] = anyType,
+            ["workers"] = workersType,
+            ["worker"] = workerType,
+            ["settings"] = settingsType,
+
+            // Scheduling policy (#1170)
+            ["schedulingPolicy"] = numberType,
+            ["SCHED_NONE"] = numberType,
+            ["SCHED_RR"] = numberType,
 
             // EventEmitter methods
             ["on"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["once"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["off"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["addListener"] = new TypeInfo.Function([stringType, anyType], anyType),
+            ["removeListener"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["emit"] = new TypeInfo.Function([stringType, anyType], boolType, HasRestParam: true),
             ["removeAllListeners"] = new TypeInfo.Function([stringType], anyType, RequiredParams: 0),
             ["listeners"] = new TypeInfo.Function([stringType], anyType),

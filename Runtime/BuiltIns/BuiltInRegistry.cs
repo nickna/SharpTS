@@ -1054,6 +1054,11 @@ public sealed class BuiltInRegistry
         registry.RegisterInstanceType(typeof(SharpTSClusterWorker), (instance, name) =>
             ((SharpTSClusterWorker)instance).GetMember(name));
 
+        // Register the worker.process handle (#1169). Instance lookup is exact-type,
+        // so this SharpTSEventEmitter subclass needs its own registration.
+        registry.RegisterInstanceType(typeof(ClusterWorkerProcess), (instance, name) =>
+            ((ClusterWorkerProcess)instance).GetMember(name));
+
         // Register MessagePort instance members
         registry.RegisterInstanceType(typeof(SharpTSMessagePort), (instance, name) =>
             ((SharpTSMessagePort)instance).GetMember(name));

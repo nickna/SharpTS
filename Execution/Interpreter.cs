@@ -1762,6 +1762,10 @@ public partial class Interpreter : IDisposable
                 {
                     moduleInstance.SetExport(name, value);
                 }
+                // Modules with live namespace semantics (cluster) install a stable
+                // accessor-backed namespace object; ExportsAsObject() then returns it
+                // for `import * as x` and the default export alike.
+                moduleInstance.NamespaceObject = BuiltInModuleValues.TryCreateNamespaceOverride(moduleName, exports);
                 // Set default export to all exports, enabling: import fs from 'fs'
                 moduleInstance.DefaultExport = moduleInstance.ExportsAsObject();
             }
@@ -2067,7 +2071,8 @@ public partial class Interpreter : IDisposable
         {
             // Get the built-in module exports and create a namespace object
             var exports = BuiltInModuleValues.GetModuleExports(builtInModuleName);
-            var builtInModule = new SharpTSObject(exports);
+            var builtInModule = BuiltInModuleValues.TryCreateNamespaceOverride(builtInModuleName, exports)
+                ?? new SharpTSObject(exports);
             _environment.Define(importReq.AliasName.Lexeme, builtInModule);
 
             // If this is a re-export, register the export

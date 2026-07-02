@@ -6,23 +6,68 @@ namespace SharpTS.Runtime.Types;
 
 /// <summary>
 /// Global cluster state manager. Acts as the cluster module's singleton that
-/// tracks all workers and emits cluster-level events (fork, online, disconnect, exit, message).
+/// tracks all workers and emits cluster-level events (fork, online, disconnect, exit,
+/// message, listening, setup).
 /// Extends EventEmitter so that cluster.on('exit', ...) etc. work.
 /// </summary>
 public class ClusterSingleton : SharpTSEventEmitter
 {
     public static readonly ClusterSingleton Instance = new();
 
+    /// <summary>cluster.SCHED_NONE — leave scheduling to the OS (approximated as arbitrary pick).</summary>
+    public const int SchedNone = 1;
+
+    /// <summary>cluster.SCHED_RR — round-robin connection distribution.</summary>
+    public const int SchedRR = 2;
+
     private readonly ConcurrentDictionary<double, SharpTSClusterWorker> _workers = new();
     private string? _entryScript;
-    private SharpTSObject? _settings;
+
+    // Live views (#1167): cluster.workers and cluster.settings are single stable objects
+    // mutated in place — exactly how Node's cluster module keeps them live across
+    // import-time snapshot bindings. The SharpTSObject wraps the dictionary by
+    // reference, so the same backing store serves interpreter property reads and the
+    // compiled bridge (which hands the raw dictionary to compiled code as its $Object shape).
+    private readonly Dictionary<string, object?> _workersDict = new();
+    private readonly SharpTSObject _workersObject;
+    private readonly Dictionary<string, object?> _settingsDict = new();
+    private readonly SharpTSObject _settingsObject;
+    private bool _settingsNormalized;
+
+    private int _schedulingPolicy = DefaultSchedulingPolicy();
 
     /// <summary>
     /// Registry for shared TCP/HTTP listeners used by cluster port sharing.
     /// </summary>
     public SharedListenerRegistry SharedListeners { get; } = new();
 
-    private ClusterSingleton() { }
+    private ClusterSingleton()
+    {
+        _workersObject = new SharpTSObject(_workersDict);
+        _settingsObject = new SharpTSObject(_settingsDict);
+    }
+
+    /// <summary>
+    /// cluster.schedulingPolicy — SCHED_RR or SCHED_NONE. Defaults from
+    /// NODE_CLUSTER_SCHED_POLICY ('rr'/'none'), else the Node platform default
+    /// (SCHED_NONE on Windows, SCHED_RR elsewhere). Read by the shared listeners
+    /// at dispatch time.
+    /// </summary>
+    public int SchedulingPolicy
+    {
+        get => _schedulingPolicy;
+        set => _schedulingPolicy = value == SchedNone ? SchedNone : SchedRR;
+    }
+
+    private static int DefaultSchedulingPolicy()
+    {
+        var env = Environment.GetEnvironmentVariable("NODE_CLUSTER_SCHED_POLICY");
+        if (string.Equals(env, "rr", StringComparison.OrdinalIgnoreCase))
+            return SchedRR;
+        if (string.Equals(env, "none", StringComparison.OrdinalIgnoreCase))
+            return SchedNone;
+        return OperatingSystem.IsWindows() ? SchedNone : SchedRR;
+    }
 
     /// <summary>
     /// Resets the singleton state. Used in tests to prevent cross-test interference.
@@ -35,8 +80,12 @@ public class ClusterSingleton : SharpTSEventEmitter
             try { kvp.Value.Dispose(); } catch { }
         }
         _workers.Clear();
+        _workersDict.Clear();
+        _settingsDict.Clear();
+        _settingsNormalized = false;
         _entryScript = null;
-        _settings = null;
+        _schedulingPolicy = DefaultSchedulingPolicy();
+        ClearAllListenersInternal();
     }
 
     /// <summary>
@@ -48,15 +97,43 @@ public class ClusterSingleton : SharpTSEventEmitter
     }
 
     /// <summary>
-    /// Forks a new worker that re-executes the entry script.
+    /// Forks a new worker that re-executes the entry script (or cluster.settings.exec).
     /// </summary>
     public SharpTSClusterWorker Fork(Dictionary<string, object?>? env, Interpreter? interpreter)
     {
-        if (_entryScript == null)
+        return Fork(env, interpreter, loopRef: null, loopUnref: null, loopSchedule: null);
+    }
+
+    /// <summary>
+    /// Forks a new worker. In compiled mode the parent has no interpreter, so the emitted
+    /// $EventLoop's Ref/Unref/Schedule are passed as delegates instead (the worker_threads
+    /// CreateForCompiledLoop pattern, #354).
+    /// </summary>
+    public SharpTSClusterWorker Fork(
+        Dictionary<string, object?>? env, Interpreter? interpreter,
+        Action? loopRef, Action? loopUnref, Action<Action>? loopSchedule)
+    {
+        // Node normalizes settings on the first fork if setupPrimary was never called.
+        NormalizeSettings(null);
+
+        var script = GetSettingValue("exec") as string;
+        if (string.IsNullOrEmpty(script))
+            script = _entryScript;
+        if (script == null)
             throw new Exception("Runtime Error: cluster.fork() called but no entry script is set");
 
-        var worker = new SharpTSClusterWorker(_entryScript, env, interpreter);
+        var argv = GetSettingValue("args") switch
+        {
+            SharpTSArray arr => new List<object?>(arr),
+            List<object?> list => list,
+            _ => null,
+        };
+        bool silent = GetSettingValue("silent") is bool b && b;
+
+        var worker = new SharpTSClusterWorker(script, env, interpreter, argv, silent,
+            loopRef, loopUnref, loopSchedule);
         _workers[worker.Id] = worker;
+        _workersDict[worker.Id.ToString("0")] = worker;
 
         // Emit 'fork' event on cluster
         EmitWorkerEvent("fork", worker);
@@ -64,10 +141,13 @@ public class ClusterSingleton : SharpTSEventEmitter
         return worker;
     }
 
+    private object? GetSettingValue(string name) =>
+        _settingsDict.TryGetValue(name, out var v) ? v : null;
+
     /// <summary>
     /// Disconnects all workers.
     /// </summary>
-    public void DisconnectAll(object? callback = null)
+    public void DisconnectAll(object? callback = null, Interpreter? interpreter = null)
     {
         foreach (var kvp in _workers)
         {
@@ -78,43 +158,80 @@ public class ClusterSingleton : SharpTSEventEmitter
         }
 
         // If callback provided, invoke it after disconnect
-        if (callback is ISharpTSCallable callable)
+        if (callback != null)
         {
-            callable.Call(null!, []);
+            RuntimeCallableDispatcher.Invoke(interpreter, callback, []);
         }
     }
 
     /// <summary>
-    /// Stores settings from setupPrimary/setupMaster.
+    /// Stores settings from setupPrimary/setupMaster and emits the 'setup' event.
     /// Accepts SharpTSObject (interpreter) or Dictionary (compiled).
     /// </summary>
-    public void SetupPrimary(object? settings)
+    public void SetupPrimary(object? settings, Interpreter? interpreter = null)
     {
-        if (settings is SharpTSObject obj)
-            _settings = obj;
-        else if (settings is Dictionary<string, object?> dict)
-            _settings = new SharpTSObject(dict);
-        else
-            _settings = new SharpTSObject(new Dictionary<string, object?>());
+        NormalizeSettings(settings);
+        EmitClusterEvent(interpreter, "setup", _settingsObject);
     }
 
     /// <summary>
-    /// Gets the workers dictionary as a SharpTSObject for TS access.
+    /// Merges <paramref name="settings"/> over the current cluster.settings, filling
+    /// Node's defaults on first normalization. Mutates the stable settings object in
+    /// place so import-time bindings observe the change (#1167/#1170).
     /// </summary>
-    public SharpTSObject GetWorkersObject()
+    private void NormalizeSettings(object? settings)
     {
-        var dict = new Dictionary<string, object?>();
-        foreach (var kvp in _workers)
+        if (!_settingsNormalized)
         {
-            dict[kvp.Key.ToString("0")] = kvp.Value;
+            _settingsNormalized = true;
+            // Node defaults: exec = process.argv[1], args = process.argv.slice(2),
+            // execArgv = process.execArgv, silent = false. In the thread model the
+            // entry script plays the role of argv[1] and there are no exec args.
+            _settingsDict["exec"] = _entryScript ?? "";
+            _settingsDict["args"] = new List<object?>();
+            _settingsDict["execArgv"] = new List<object?>();
+            _settingsDict["silent"] = false;
+            _settingsDict["serialization"] = "json";
         }
-        return new SharpTSObject(dict);
+        else if (_entryScript != null && _settingsDict.TryGetValue("exec", out var exec) && exec as string == "")
+        {
+            // The entry script became known after an early setupPrimary().
+            _settingsDict["exec"] = _entryScript;
+        }
+
+        switch (settings)
+        {
+            case SharpTSObject obj:
+                foreach (var key in obj.PropertyNames)
+                    _settingsDict[key] = obj.GetProperty(key);
+                break;
+            case Dictionary<string, object?> dict:
+                foreach (var (key, value) in dict)
+                    _settingsDict[key] = value;
+                break;
+        }
     }
 
     /// <summary>
-    /// Gets the current settings object.
+    /// Gets the live workers object (stable identity, mutated on fork/exit) for TS access.
     /// </summary>
-    public SharpTSObject? GetSettings() => _settings;
+    public SharpTSObject GetWorkersObject() => _workersObject;
+
+    /// <summary>
+    /// Gets the live workers dictionary — the compiled bridge hands this to compiled
+    /// code directly (a compiled $Object IS a Dictionary&lt;string, object?&gt;).
+    /// </summary>
+    public Dictionary<string, object?> GetWorkersDictionary() => _workersDict;
+
+    /// <summary>
+    /// Gets the live settings object (stable identity, repopulated by setupPrimary).
+    /// </summary>
+    public SharpTSObject GetSettings() => _settingsObject;
+
+    /// <summary>
+    /// Gets the live settings dictionary for the compiled bridge.
+    /// </summary>
+    public Dictionary<string, object?> GetSettingsDictionary() => _settingsDict;
 
     /// <summary>
     /// Removes a worker from the registry (called when a worker exits).
@@ -122,41 +239,34 @@ public class ClusterSingleton : SharpTSEventEmitter
     public void RemoveWorker(double id)
     {
         _workers.TryRemove(id, out _);
+        _workersDict.Remove(id.ToString("0"));
     }
 
     /// <summary>
     /// Emits an event on the cluster singleton from a specific worker.
-    /// Used internally by workers to bubble events up to the cluster.
+    /// Used internally by workers to bubble events up to the cluster. The worker's
+    /// parent interpreter (null for a compiled primary) drives listener invocation.
     /// </summary>
     internal void EmitWorkerEvent(string eventName, SharpTSClusterWorker worker, params object?[] extraArgs)
     {
-        var args = new List<object?> { eventName, worker };
-        args.AddRange(extraArgs);
+        var args = new object?[extraArgs.Length + 1];
+        args[0] = worker;
+        Array.Copy(extraArgs, 0, args, 1, extraArgs.Length);
+        EmitClusterEvent(worker.ParentInterpreter, eventName, args);
+    }
 
-        // Try interpreter-based emit first, fallback to direct
-        var emitMethod = GetMember("emit") as BuiltInMethod;
-        if (emitMethod != null)
-        {
-            try
-            {
-                emitMethod.Call(null!, args);
-            }
-            catch
-            {
-                // Fallback to direct emit if no interpreter available
-                var directArgs = new object?[extraArgs.Length + 1];
-                directArgs[0] = worker;
-                Array.Copy(extraArgs, 0, directArgs, 1, extraArgs.Length);
-                EmitDirect(eventName, directArgs);
-            }
-        }
+    /// <summary>
+    /// Emits a cluster-level event ('setup' has no worker argument, so this is the
+    /// general form). With an interpreter, uses the interpreter-aware emit so guest
+    /// listeners that need one (console.log) work; without one (compiled primary),
+    /// emits directly — RuntimeCallableDispatcher invokes compiled listeners.
+    /// </summary>
+    internal void EmitClusterEvent(Interpreter? interpreter, string eventName, params object?[] args)
+    {
+        if (interpreter != null)
+            EmitWith(interpreter, eventName, args);
         else
-        {
-            var directArgs = new object?[extraArgs.Length + 1];
-            directArgs[0] = worker;
-            Array.Copy(extraArgs, 0, directArgs, 1, extraArgs.Length);
-            EmitDirect(eventName, directArgs);
-        }
+            EmitDirect(eventName, args);
     }
 
     /// <summary>
@@ -169,6 +279,10 @@ public class ClusterSingleton : SharpTSEventEmitter
             "isPrimary" => ClusterContext.IsPrimary,
             "isWorker" => ClusterContext.IsWorker,
             "isMaster" => ClusterContext.IsPrimary,
+
+            "SCHED_NONE" => (double)SchedNone,
+            "SCHED_RR" => (double)SchedRR,
+            "schedulingPolicy" => (double)SchedulingPolicy,
 
             "fork" => BuiltInMethod.CreateV2("fork", 0, 1, (interp, _, args) =>
             {
@@ -184,27 +298,27 @@ public class ClusterSingleton : SharpTSEventEmitter
                 return RuntimeValue.FromBoxed(Fork(env, interp));
             }),
 
-            "disconnect" => BuiltInMethod.CreateV2("disconnect", 0, 1, (_, _, args) =>
+            "disconnect" => BuiltInMethod.CreateV2("disconnect", 0, 1, (interp, _, args) =>
             {
-                DisconnectAll(args.Length > 0 ? args[0].ToObject() : null);
+                DisconnectAll(args.Length > 0 ? args[0].ToObject() : null, interp);
                 return RuntimeValue.Null;
             }),
 
-            "setupPrimary" => BuiltInMethod.CreateV2("setupPrimary", 0, 1, (_, _, args) =>
+            "setupPrimary" => BuiltInMethod.CreateV2("setupPrimary", 0, 1, (interp, _, args) =>
             {
-                SetupPrimary(args.Length > 0 ? args[0].ToObject() as SharpTSObject : null);
+                SetupPrimary(args.Length > 0 ? args[0].ToObject() : null, interp);
                 return RuntimeValue.Null;
             }),
 
-            "setupMaster" => BuiltInMethod.CreateV2("setupMaster", 0, 1, (_, _, args) =>
+            "setupMaster" => BuiltInMethod.CreateV2("setupMaster", 0, 1, (interp, _, args) =>
             {
-                SetupPrimary(args.Length > 0 ? args[0].ToObject() as SharpTSObject : null);
+                SetupPrimary(args.Length > 0 ? args[0].ToObject() : null, interp);
                 return RuntimeValue.Null;
             }),
 
-            "workers" => GetWorkersObject(),
-            "worker" => null, // Only valid in worker context (handled by module interpreter)
-            "settings" => _settings,
+            "workers" => ClusterContext.IsWorker ? SharpTSUndefined.Instance : GetWorkersObject(),
+            "worker" => ClusterContext.CurrentWorker,
+            "settings" => _settingsObject,
 
             // Inherit EventEmitter methods
             _ => base.GetMember(name)

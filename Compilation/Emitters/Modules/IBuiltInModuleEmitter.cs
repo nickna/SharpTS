@@ -41,4 +41,18 @@ public interface IBuiltInModuleEmitter
     /// Used by typeof to distinguish properties from methods without emitting IL.
     /// </summary>
     bool IsExportedProperty(string memberName) => false;
+
+    /// <summary>
+    /// Members whose reads must be emitted inline at each access site (live) instead of
+    /// being read from the import-time namespace-dict snapshot. Opt-in: EmitGet consults
+    /// this before its dynamic fallback (cluster.schedulingPolicy, #1170).
+    /// </summary>
+    bool HasLivePropertyGet(string memberName) => false;
+
+    /// <summary>
+    /// Attempts to emit IL for a property assignment on this module
+    /// (cluster.schedulingPolicy = x, #1170). Implementations must leave the assigned
+    /// value on the stack (assignment-expression semantics).
+    /// </summary>
+    bool TryEmitPropertySet(IEmitterContext emitter, string propertyName, Expr value) => false;
 }

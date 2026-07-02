@@ -20,6 +20,11 @@ public partial class ILEmitter
         // CommonJS: `module.exports` reads → ldsfld $exports
         if (TryEmitCjsGet(g)) return;
 
+        // Built-in module live property reads (cluster.schedulingPolicy, #1170).
+        // Must precede the TypeInfo.Record fast path — the namespace object is
+        // Record-typed, but these members are live runtime state, not dict entries.
+        if (TryEmitBuiltInModuleLivePropertyGet(g)) return;
+
         // Promoted object-literal shape struct (#862): `o.KEY` reads the typed struct field directly
         // (ldloca + ldfld) — no Dictionary lookup, no string hash, no unbox. Keyed off the slot's CLR
         // type, so it is scope-correct and never misfires for a non-promoted local. The analyzer
@@ -537,6 +542,10 @@ public partial class ILEmitter
     {
         // CommonJS: `module.exports = X` writes → stsfld $exports
         if (TryEmitCjsSet(s)) return;
+
+        // Built-in module property writes (cluster.schedulingPolicy = x, #1170).
+        // Must precede the Record fast path (see EmitGet).
+        if (TryEmitBuiltInModulePropertySet(s)) return;
 
         // Handle globalThis.x = value
         if (s.Object is Expr.Variable gtVar && gtVar.Name.Lexeme == "globalThis")

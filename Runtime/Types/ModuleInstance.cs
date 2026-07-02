@@ -33,11 +33,18 @@ public class ModuleInstance
     public SharpTSObject? CommonJsModuleObject { get; set; }
 
     /// <summary>
+    /// When set, the namespace object returned by <see cref="ExportsAsObject"/> instead
+    /// of a per-call snapshot copy. Built-in modules whose namespace members need live
+    /// accessor semantics (cluster, #1167) install a stable accessor-backed object here.
+    /// </summary>
+    public SharpTSObject? NamespaceObject { get; set; }
+
+    /// <summary>
     /// Gets all exports as a SharpTSObject for namespace imports.
     /// </summary>
     public SharpTSObject ExportsAsObject()
     {
-        return new SharpTSObject(new Dictionary<string, object?>(Exports));
+        return NamespaceObject ?? new SharpTSObject(new Dictionary<string, object?>(Exports));
     }
 
     /// <summary>

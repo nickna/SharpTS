@@ -58,7 +58,8 @@ public partial class Interpreter
             if (builtInName != null && BuiltInModuleValues.HasInterpreterSupport(builtInName))
             {
                 var exports = BuiltInModuleValues.GetModuleExports(builtInName);
-                return new SharpTSObject(new Dictionary<string, object?>(exports));
+                return BuiltInModuleValues.TryCreateNamespaceOverride(builtInName, exports)
+                    ?? new SharpTSObject(new Dictionary<string, object?>(exports));
             }
             throw new InterpreterException($"Built-in module '{builtInName}' is not supported in interpreter mode.");
         }
