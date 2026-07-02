@@ -190,8 +190,7 @@ internal class SharedTcpListener
             return;
         }
 
-        var index = (uint)Interlocked.Increment(ref _roundRobinIndex) % (uint)workerArray.Length;
-        var worker = workerArray[index];
+        var worker = workerArray[SharedListenerDispatch.NextIndex(ref _roundRobinIndex, workerArray.Length)];
 
         // Schedule on the worker's interpreter thread
         worker.WorkerInterpreter.ScheduleTimer(0, 0, () =>
@@ -290,8 +289,7 @@ internal class SharedHttpListener
             return;
         }
 
-        var index = (uint)Interlocked.Increment(ref _roundRobinIndex) % (uint)workerArray.Length;
-        var worker = workerArray[index];
+        var worker = workerArray[SharedListenerDispatch.NextIndex(ref _roundRobinIndex, workerArray.Length)];
 
         worker.WorkerInterpreter.ScheduleTimer(0, 0, () =>
         {
@@ -302,3 +300,19 @@ internal class SharedHttpListener
 
 internal record WorkerRegistration(double WorkerId, Action<TcpClient> OnConnection, Interp WorkerInterpreter);
 internal record HttpWorkerRegistration(double WorkerId, Action<HttpListenerContext> OnRequest, Interp WorkerInterpreter);
+
+/// <summary>
+/// Worker-pick strategy for the shared listeners, honoring cluster.schedulingPolicy
+/// (#1170): SCHED_RR distributes round-robin; SCHED_NONE means "leave it to the OS",
+/// which the thread model approximates with an arbitrary (random) pick — the closest
+/// analog of Node's accept-race behavior.
+/// </summary>
+internal static class SharedListenerDispatch
+{
+    internal static int NextIndex(ref int roundRobinIndex, int workerCount)
+    {
+        if (ClusterSingleton.Instance.SchedulingPolicy == ClusterSingleton.SchedNone)
+            return Random.Shared.Next(workerCount);
+        return (int)((uint)Interlocked.Increment(ref roundRobinIndex) % (uint)workerCount);
+    }
+}

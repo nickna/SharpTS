@@ -11,27 +11,38 @@ public static class ClusterModuleInterpreter
     /// <summary>
     /// Gets all exports for the cluster module.
     /// </summary>
+    /// <remarks>
+    /// cluster.workers and cluster.settings are stable objects mutated in place by
+    /// <see cref="ClusterSingleton"/>, so import-time bindings stay live (#1167) — the
+    /// same trick Node's own cluster module uses. isPrimary/isWorker/worker are
+    /// thread-constant (a worker thread imports its own copy with ClusterContext already
+    /// established), so import-time values are correct; the namespace object built by
+    /// <see cref="CreateNamespaceObject"/> additionally resolves them through live accessors.
+    /// </remarks>
     public static Dictionary<string, object?> GetExports()
     {
         var singleton = ClusterSingleton.Instance;
 
         return new Dictionary<string, object?>
         {
-            // Static properties — evaluated at import time, correct for this thread
             ["isPrimary"] = ClusterContext.IsPrimary,
             ["isWorker"] = ClusterContext.IsWorker,
             ["isMaster"] = ClusterContext.IsPrimary,
 
-            // Dynamic properties — return fresh value each time via BuiltInMethod acting as getter
-            // The module export SharpTSObject doesn't support live getters, so we snapshot here.
-            // Tests that need live workers dict should access it via cluster.fork() return values.
-            ["workers"] = singleton.GetWorkersObject(),
+            // Live views (stable object identity, mutated in place). Node exposes
+            // cluster.workers only in the primary.
+            ["workers"] = ClusterContext.IsWorker ? SharpTSUndefined.Instance : singleton.GetWorkersObject(),
 
             // Current worker reference (non-null in worker context)
             ["worker"] = ClusterContext.CurrentWorker,
 
-            // Settings
+            // Settings (live; normalized by setupPrimary/fork)
             ["settings"] = singleton.GetSettings(),
+
+            // Scheduling policy (#1170)
+            ["SCHED_NONE"] = (double)ClusterSingleton.SchedNone,
+            ["SCHED_RR"] = (double)ClusterSingleton.SchedRR,
+            ["schedulingPolicy"] = (double)singleton.SchedulingPolicy,
 
             // Methods
             ["fork"] = BuiltInMethod.CreateV2("fork", 0, 1, Fork),
@@ -52,6 +63,42 @@ public static class ClusterModuleInterpreter
             ["eventNames"] = singleton.GetMember("eventNames")!,
         };
     }
+
+    /// <summary>
+    /// Builds the cluster module's namespace/default-export object: a SharpTSObject whose
+    /// isPrimary/isWorker/isMaster/worker/workers/settings/schedulingPolicy members are
+    /// live accessors over <see cref="ClusterSingleton"/>/<see cref="ClusterContext"/> —
+    /// so `cluster.schedulingPolicy = cluster.SCHED_NONE` reaches the singleton and is
+    /// honored by connection dispatch (#1170), and context resolves live (#1167).
+    /// </summary>
+    public static SharpTSObject CreateNamespaceObject(Dictionary<string, object?> exports)
+    {
+        var singleton = ClusterSingleton.Instance;
+
+        var fields = new Dictionary<string, object?>(exports);
+        foreach (var accessorBacked in (string[])["isPrimary", "isWorker", "isMaster", "worker", "workers", "settings", "schedulingPolicy"])
+            fields.Remove(accessorBacked);
+
+        var ns = new SharpTSObject(fields);
+        ns.DefineGetter("isPrimary", Getter("isPrimary", () => ClusterContext.IsPrimary));
+        ns.DefineGetter("isMaster", Getter("isMaster", () => ClusterContext.IsPrimary));
+        ns.DefineGetter("isWorker", Getter("isWorker", () => ClusterContext.IsWorker));
+        ns.DefineGetter("worker", Getter("worker", () => ClusterContext.CurrentWorker));
+        ns.DefineGetter("workers", Getter("workers", () =>
+            ClusterContext.IsWorker ? SharpTSUndefined.Instance : singleton.GetWorkersObject()));
+        ns.DefineGetter("settings", Getter("settings", () => singleton.GetSettings()));
+        ns.DefineGetter("schedulingPolicy", Getter("schedulingPolicy", () => (double)singleton.SchedulingPolicy));
+        ns.DefineSetter("schedulingPolicy", BuiltInMethod.CreateV2("schedulingPolicy", 1, (_, _, args) =>
+        {
+            if (args.Length > 0 && args[0].ToObject() is double policy)
+                singleton.SchedulingPolicy = (int)policy;
+            return RuntimeValue.Null;
+        }));
+        return ns;
+    }
+
+    private static BuiltInMethod Getter(string name, Func<object?> read) =>
+        BuiltInMethod.CreateV2(name, 0, (_, _, _) => RuntimeValue.FromBoxed(read()));
 
     /// <summary>
     /// cluster.fork(env?) — spawns a new worker that re-executes the entry script.
@@ -83,16 +130,16 @@ public static class ClusterModuleInterpreter
     /// </summary>
     private static RuntimeValue Disconnect(Execution.Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        ClusterSingleton.Instance.DisconnectAll(args.Length > 0 ? args[0].ToObject() : null);
+        ClusterSingleton.Instance.DisconnectAll(args.Length > 0 ? args[0].ToObject() : null, interpreter);
         return RuntimeValue.Null;
     }
 
     /// <summary>
-    /// cluster.setupPrimary(settings?) — stores settings object.
+    /// cluster.setupPrimary(settings?) — merges settings and emits 'setup'.
     /// </summary>
     private static RuntimeValue SetupPrimary(Execution.Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        ClusterSingleton.Instance.SetupPrimary(args.Length > 0 ? args[0].ToObject() as SharpTSObject : null);
+        ClusterSingleton.Instance.SetupPrimary(args.Length > 0 ? args[0].ToObject() : null, interpreter);
         return RuntimeValue.Null;
     }
 }

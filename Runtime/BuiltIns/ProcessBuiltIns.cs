@@ -31,6 +31,13 @@ public static class ProcessBuiltIns
     private static SharpTSObject? _envObject;
     private static SharpTSArray? _argvArray;
 
+    // Per-thread overrides for cluster workers (#1170): a worker thread's script sees
+    // its own process.argv (cluster.settings.args) and process.env (fork(env) merged
+    // over the parent environment). A worker's interpreter event loop is confined to
+    // its thread, so [ThreadStatic] is safe here (same contract as ClusterContext).
+    [ThreadStatic] internal static SharpTSArray? ThreadArgv;
+    [ThreadStatic] internal static SharpTSObject? ThreadEnv;
+
     // Script arguments set by the caller (for interpreted mode)
     private static string? _scriptPath;
     private static string[]? _scriptArgs;
@@ -186,6 +193,8 @@ public static class ProcessBuiltIns
     /// </summary>
     public static SharpTSObject GetEnv()
     {
+        if (ThreadEnv != null)
+            return ThreadEnv;
         if (_envObject != null)
             return _envObject;
 
@@ -205,6 +214,8 @@ public static class ProcessBuiltIns
     /// </summary>
     public static SharpTSArray GetArgv()
     {
+        if (ThreadArgv != null)
+            return ThreadArgv;
         if (_argvArray != null)
             return _argvArray;
 

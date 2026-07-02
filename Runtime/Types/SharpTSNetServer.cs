@@ -382,6 +382,9 @@ public class SharpTSNetServer : SharpTSEventEmitter, IDisposable
         callback?.Call(interpreter, []);
         EmitEvent(interpreter, "listening", []);
 
+        // Notify the primary so cluster.on('listening', (worker, address)) fires (#1168).
+        ClusterContext.CurrentWorker?.NotifyListening(_host, _port, _host.Contains(':') ? 6 : 4);
+
         return this;
     }
 
