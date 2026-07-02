@@ -484,9 +484,15 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types).EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
+        _runtime = new RuntimeEmitter(_types) { EntryModulePath = _entryModulePath }
+            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
         _typeMapper.SetRuntime(_runtime);
     }
+
+    // Absolute path of the entry module (last in dependency order), baked into the
+    // emitted ClusterFork helper so compiled cluster.fork() knows which script its
+    // interpreted workers re-execute. Null for single-script Compile().
+    private string? _entryModulePath;
 
     /// <summary>
     /// Phase 2: Analyze closures to detect captured variables.
@@ -957,6 +963,8 @@ public partial class ILCompiler
         _typeMap = typeMap;
         _deadCodeInfo = deadCodeInfo;
         _modules.Resolver = resolver;
+        // Entry module is last in dependency order (mirrors Interpreter.EntryModulePath).
+        _entryModulePath = modules.Count > 0 ? Path.GetFullPath(modules[^1].Path) : null;
 
         // Relocate non-capturing nested generator/async/state-machine-nested function declarations
         // to each module's top level (#470, #501). Compile-path only. The Statements property is

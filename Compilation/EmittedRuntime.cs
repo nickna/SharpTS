@@ -2692,26 +2692,11 @@ public class EmittedRuntime
     public MethodBuilder PDSGetPropertyDescriptor { get; set; } = null!;
     public MethodBuilder PDSGetStaticShadow { get; set; } = null!;
 
-    // cluster module — emitted types (no reflection to SharpTS.dll)
-    // $ClusterContext: static class with [ThreadStatic] fields for worker detection
-    public FieldBuilder ClusterContextIsWorkerField { get; set; } = null!;
-    public FieldBuilder ClusterContextCurrentWorkerField { get; set; } = null!;
-
-    // $ClusterWorker: extends $EventEmitter, manages a worker thread with IPC
-    public TypeBuilder ClusterWorkerType { get; set; } = null!;
-    public MethodBuilder ClusterWorkerDisconnect { get; set; } = null!;
-
-    // $ClusterManager: extends $EventEmitter, singleton managing all workers
-    public FieldBuilder ClusterManagerInstanceField { get; set; } = null!;
-    public MethodBuilder ClusterManagerFork { get; set; } = null!;
-    public MethodBuilder ClusterManagerDisconnectAll { get; set; } = null!;
-    public MethodBuilder ClusterManagerSetupPrimary { get; set; } = null!;
-    public MethodBuilder ClusterManagerGetWorkersObject { get; set; } = null!;
-    public MethodBuilder ClusterManagerGetSettings { get; set; } = null!;
-
-    // Convenience statics on $Runtime (delegate to emitted types)
-    public MethodBuilder ClusterIsPrimary { get; set; } = null!;
-    public MethodBuilder ClusterIsWorker { get; set; } = null!;
+    // cluster module — late-bound bridge into SharpTS.dll (#1171). Workers run the
+    // entry script interpreted in-process (the worker_threads pattern), so the whole
+    // module surface routes through ClusterCompiledBridge for coherent state.
+    public MethodBuilder ClusterFork { get; set; } = null!;
+    public MethodBuilder ClusterInvoke { get; set; } = null!;
 
     // ============================================================
     // $BroadcastChannel — emitted WHATWG/Node BroadcastChannel

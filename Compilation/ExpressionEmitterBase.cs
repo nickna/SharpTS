@@ -692,10 +692,53 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// then falls back to dynamic SetProperty.
     /// ILEmitter overrides (property descriptor, additional patterns).
     /// </summary>
+    /// <summary>
+    /// Built-in module live property reads (cluster.schedulingPolicy, #1170): opt-in
+    /// members route through the module emitter at each access site instead of the
+    /// import-time namespace-dict snapshot. Shared by EmitGet here and in ILEmitter
+    /// (which overrides EmitGet without calling base).
+    /// </summary>
+    protected bool TryEmitBuiltInModuleLivePropertyGet(Expr.Get g)
+    {
+        if (g.Object is Expr.Variable modVar &&
+            Ctx.BuiltInModuleNamespaces != null &&
+            Ctx.BuiltInModuleNamespaces.TryGetValue(modVar.Name.Lexeme, out var moduleName) &&
+            Ctx.BuiltInModuleEmitterRegistry?.GetEmitter(moduleName) is { } moduleEmitter &&
+            moduleEmitter.HasLivePropertyGet(g.Name.Lexeme) &&
+            moduleEmitter.TryEmitPropertyGet((IEmitterContext)this, g.Name.Lexeme))
+        {
+            SetStackUnknown();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Built-in module property writes (cluster.schedulingPolicy = x, #1170): route
+    /// through the module emitter so the write reaches the runtime singleton rather
+    /// than landing on the namespace-dict snapshot. The module emitter leaves the
+    /// assigned value on the stack.
+    /// </summary>
+    protected bool TryEmitBuiltInModulePropertySet(Expr.Set s)
+    {
+        if (s.Object is Expr.Variable modVar &&
+            Ctx.BuiltInModuleNamespaces != null &&
+            Ctx.BuiltInModuleNamespaces.TryGetValue(modVar.Name.Lexeme, out var moduleName) &&
+            Ctx.BuiltInModuleEmitterRegistry?.GetEmitter(moduleName) is { } moduleEmitter &&
+            moduleEmitter.TryEmitPropertySet((IEmitterContext)this, s.Name.Lexeme, s.Value))
+        {
+            SetStackUnknown();
+            return true;
+        }
+        return false;
+    }
+
     protected virtual void EmitSet(Expr.Set s)
     {
         // CommonJS: `module.exports = X` → stsfld $exports.
         if (TryEmitCjsSet(s)) return;
+
+        if (TryEmitBuiltInModulePropertySet(s)) return;
 
         // Handle globalThis.x = value
         if (s.Object is Expr.Variable gtVar && gtVar.Name.Lexeme == "globalThis")
@@ -2458,6 +2501,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 return;
             }
         }
+
+        if (TryEmitBuiltInModuleLivePropertyGet(g)) return;
 
         // Dynamic property access fallback
         EmitExpression(g.Object);

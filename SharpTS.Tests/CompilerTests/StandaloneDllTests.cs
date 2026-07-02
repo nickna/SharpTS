@@ -37,7 +37,7 @@ public class StandaloneDllTests
         // "Compilation/RuntimeEmitter.Net.cs" — now uses emitted $NetServer/$NetSocket directly (no reflection)
         "Compilation/RuntimeEmitter.ChildProcessHelpers.cs", // child_process.fork bridges to the interpreter's ForkForCompiledLoop (requires SharpTS.dll co-located; suppressed by --standalone) — #1017
         // ZlibHelpers.cs / DnsPromises.cs — pruned: now pure IL, no SharpTS late binding
-        // RuntimeEmitter.ClusterHelpers.cs — pure IL, no reflection needed
+        "Compilation/RuntimeEmitter.ClusterHelpers.cs", // cluster bridges to ClusterCompiledBridge — workers run interpreted (requires SharpTS.dll co-located; suppressed by --standalone) — #1171
         "Compilation/RuntimeEmitter.VmHelpers.cs",             // vm module delegation to interpreter via reflection
         "Compilation/RuntimeEmitter.DnsResolver.cs",           // dns.Resolver factory via RuntimeTypes
         "Compilation/ILEmitter.Calls.ExternalInterop.cs",      // @DotNetType delegate shim + event subscription via DotNetDelegateShim/DotNetEventBinder
