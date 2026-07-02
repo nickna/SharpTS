@@ -10,14 +10,19 @@ namespace SharpTS.Compilation;
 public class ILVerifier : IResolver, IDisposable
 {
     private readonly string? _sdkPath;
+    private readonly IReadOnlyList<string> _extraProbeDirectories;
     private readonly Dictionary<string, PEReader> _assemblyCache = new();
     private bool _disposed;
 
     /// <param name="sdkPath">Optional extra probe directory (e.g. an explicit --sdk-path).
     /// Probed after the shared-framework runtime directory.</param>
-    public ILVerifier(string? sdkPath = null)
+    /// <param name="extraProbeDirectories">Additional probe directories, e.g. the locations
+    /// of third-party reference assemblies (sharpts.json / -r) the emitted IL calls into.
+    /// Probed last.</param>
+    public ILVerifier(string? sdkPath = null, IEnumerable<string>? extraProbeDirectories = null)
     {
         _sdkPath = sdkPath;
+        _extraProbeDirectories = extraProbeDirectories?.Distinct().ToArray() ?? [];
     }
 
     /// <summary>
@@ -158,6 +163,14 @@ public class ILVerifier : IResolver, IDisposable
         if (_sdkPath != null)
         {
             var reader = TryLoad(name, _sdkPath);
+            if (reader != null)
+                return reader;
+        }
+
+        // Finally, third-party reference directories (sharpts.json / -r assemblies).
+        foreach (var dir in _extraProbeDirectories)
+        {
+            var reader = TryLoad(name, dir);
             if (reader != null)
                 return reader;
         }

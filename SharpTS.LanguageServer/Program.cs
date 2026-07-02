@@ -26,6 +26,21 @@ try
     if (projectFile != null && File.Exists(projectFile))
         paths.AddRange(CsprojParser.Parse(projectFile));
 
+    // sharpts.json (walked up from the workspace root = CWD, matching the CLI's
+    // discovery from the entry script) supplies more paths for the SAME loader:
+    // Resolve, not Load — the editor process inspects workspace assemblies through
+    // the MetadataLoadContext and never executes their code. Read once at startup,
+    // like --project. A broken manifest must not kill the server: log and continue.
+    try
+    {
+        var refSet = SharpTS.References.DotNetReferences.Resolve(Environment.CurrentDirectory, []);
+        paths.AddRange(refSet.References.Select(r => r.Path));
+    }
+    catch (Exception ex)
+    {
+        await Console.Error.WriteLineAsync($"[LSP] sharpts.json ignored: {ex.Message}");
+    }
+
     using var loader = new AssemblyReferenceLoader(paths, sdkPath);
     Func<IEnumerable<string>> typeNames = () => loader.GetAllPublicTypes()
         .Select(t => t.FullName)

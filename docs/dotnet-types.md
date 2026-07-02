@@ -93,21 +93,73 @@ import { SpecialFolder } from "dotnet:System.Environment";
   specific overload with `@DotNetOverload`, use a `@DotNetType` declaration for that type
   instead; the two binding styles compose freely in one program.
 
-### v1 scope and restrictions
+### Scope and restrictions
 
 - **Named imports only.** Default imports, `import * as ns`, `export … from "dotnet:…"`,
   `import x = require("dotnet:…")`, and dynamic `import("dotnet:…")` are rejected with a
   clear error — a .NET namespace is not an enumerable module object.
-- **Loaded assemblies only.** Types resolve from the BCL and any assembly already loaded in
-  the process (matching `@DotNetType`). A project-level assembly-reference story for
-  third-party DLLs is tracked separately.
 - **No generic types.** `dotnet:System.Collections.Generic.List<number>` is rejected; use an
   `@DotNetType` declaration with a closed-generic CLR name for those.
+- **No paths in specifiers.** `dotnet:./libs/MyLib.dll#MyLib.Widget` is rejected — specifiers
+  name types or namespaces. Point SharpTS at the assembly via `sharpts.json` or `-r`
+  (below), then import the type by name.
 - Missing-member accesses follow SharpTS's standard class-instance semantics (same as
   hand-written classes).
 
 Use `sharpts --gen-decl <Type|Namespace>` to discover what's available and copy the exact
 import line — see [Discovering .NET Types](#discovering-net-types---gen-decl).
+
+---
+
+## Third-Party Assemblies (`sharpts.json`)
+
+Out of the box, types resolve from the BCL and anything already loaded in the process. To
+use your own or third-party assemblies, add a `sharpts.json` manifest next to (or in any
+directory above) your entry script:
+
+```jsonc
+// sharpts.json — comments and trailing commas are allowed
+{
+  // Local assembly references. Relative paths resolve against THIS file's directory.
+  "references": ["./libs/MyLib.dll"],
+
+  // NuGet packages, restored on demand with `dotnet restore` (nuget.org by default;
+  // a nuget.config next to the manifest configures sources as usual).
+  "packages": { "Newtonsoft.Json": "13.0.3" }
+}
+```
+
+```typescript
+import { Widget } from "dotnet:MyLib.Widget";       // from ./libs/MyLib.dll
+import { JsonConvert } from "dotnet:Newtonsoft.Json.JsonConvert";  // from the package
+```
+
+The manifest applies uniformly to **every tool**: the interpreter, the compiler, the
+language server, and `--gen-decl`. A per-invocation `-r/--reference <asm.dll>` flag
+(available in all modes) augments the manifest and wins when both list the same assembly.
+
+How it behaves:
+
+- **Discovery** walks up from the entry script (the working directory for the REPL,
+  `--gen-decl`, and the language server), stopping at the temp and user-profile roots.
+- **Packages** restore into the global NuGet cache via `dotnet restore` on a generated
+  project under `.sharpts/` next to the manifest (add `.sharpts/` to `.gitignore`). The
+  restore is skipped entirely when the package set hasn't changed, so startup stays fast
+  and works offline once restored. Transitive dependencies are resolved and loaded.
+- **Compiled output** references these assemblies by metadata token (hard references).
+  The compiler co-locates the used assemblies — plus their dependency closure — next to
+  the output, so `dotnet out.dll` just works. `--standalone` suppresses the copy and
+  prints what your deployment must provide instead.
+- **The language server** reads the manifest once at startup (like `--project`) and
+  inspects the assemblies through a `MetadataLoadContext` — it never executes workspace
+  code. Restart the server after editing the manifest.
+
+Limitations: no RuntimeIdentifier-specific or native package assets (managed `lib/`
+assets only); package versions are exact or standard NuGet ranges.
+
+> **Security note:** referenced assemblies run with **full trust** the first time a member
+> is used. Listing a DLL or package in sharpts.json is an explicit opt-in, the same trust
+> decision as installing an npm dependency.
 
 ---
 

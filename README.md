@@ -54,8 +54,9 @@ SharpTS supports two execution modes:
 
 ### .NET Interop
 
-- **Use .NET types from TypeScript** via `@DotNetType` decorator
+- **Use .NET types from TypeScript** via `dotnet:` imports (or the `@DotNetType` decorator)
 - Access BCL classes like `StringBuilder`, `Guid`, `DateTime`, `TimeSpan`
+- **Third-party DLLs and NuGet packages** via a `sharpts.json` manifest (`references` + `packages`)
 - Automatic type conversion and overload resolution
 - **Compile TypeScript for C# consumption** with reflection or direct reference
 
@@ -217,13 +218,8 @@ $ dotnet functional.dll
 ### Use .NET Types from TypeScript
 
 ```typescript
-// Use BCL types directly in TypeScript
-@DotNetType("System.Text.StringBuilder")
-declare class StringBuilder {
-    constructor();
-    append(value: string): StringBuilder;
-    toString(): string;
-}
+// Import BCL types directly — the static type surface comes from reflection
+import { StringBuilder } from "dotnet:System.Text.StringBuilder";
 
 let sb = new StringBuilder();
 sb.append("Hello from .NET!");
@@ -235,6 +231,24 @@ $ sharpts --compile dotnet-example.ts
 $ dotnet dotnet-example.dll
 Hello from .NET!
 ```
+
+Third-party assemblies and NuGet packages plug in via a `sharpts.json` manifest next to
+your script (or a per-invocation `-r ./libs/MyLib.dll` flag):
+
+```jsonc
+{
+  "references": ["./libs/MyLib.dll"],
+  "packages": { "Newtonsoft.Json": "13.0.3" }
+}
+```
+
+```typescript
+import { Widget } from "dotnet:MyLib.Widget";
+import { JsonConvert } from "dotnet:Newtonsoft.Json.JsonConvert";
+```
+
+See [Using .NET Types](docs/dotnet-types.md) for the full guide (including the manual
+`@DotNetType` declaration style and the `--gen-decl` discovery tool).
 
 ### Access TypeScript classes from .NET (C#)
 

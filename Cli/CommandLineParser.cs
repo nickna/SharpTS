@@ -25,11 +25,18 @@ namespace SharpTS.Cli;
 /// <param name="DecoratorMode">Decorator parsing mode (None, Legacy, Stage3). Defaults to Stage3.</param>
 /// <param name="EmitDecoratorMetadata">Whether to emit design-time type metadata</param>
 /// <param name="CheckJs">When true, type-check `.js`/`.cjs`/`.mjs`/`.jsx` files like `.ts`. Mirrors tsc's `checkJs` tsconfig option. Defaults to false (matches tsc).</param>
+/// <param name="References">Assembly references from -r/--reference, applied in every mode
+/// (run, compile, --gen-decl, REPL) on top of any sharpts.json manifest. Paths resolve
+/// against the current working directory.</param>
 public record GlobalOptions(
     DecoratorMode DecoratorMode = DecoratorMode.Stage3,
     bool EmitDecoratorMetadata = false,
-    bool CheckJs = false
-);
+    bool CheckJs = false,
+    IReadOnlyList<string>? References = null
+)
+{
+    public IReadOnlyList<string> References { get; init; } = References ?? [];
+}
 
 /// <summary>
 /// Options specific to compilation mode.
@@ -115,7 +122,16 @@ public abstract record ParsedCommand
     /// <param name="TypeOrAssembly">Type name, namespace, or assembly path to inspect</param>
     /// <param name="OutputPath">Optional output file path</param>
     /// <param name="Json">Emit machine-readable JSON instead of human-readable text</param>
-    public sealed record GenDecl(string TypeOrAssembly, string? OutputPath, bool Json = false) : ParsedCommand;
+    /// <param name="References">Assembly references (-r) to load before discovery</param>
+    public sealed record GenDecl(
+        string TypeOrAssembly,
+        string? OutputPath,
+        bool Json = false,
+        IReadOnlyList<string>? References = null
+    ) : ParsedCommand
+    {
+        public IReadOnlyList<string> References { get; init; } = References ?? [];
+    }
 
     /// <summary>Parsing error with message and exit code.</summary>
     /// <param name="Message">Error message to display</param>
@@ -162,7 +178,7 @@ public class CommandLineParser
         // Handle --gen-decl
         if (remainingArgs[0] == "--gen-decl")
         {
-            return ParseGenDeclCommand(remainingArgs);
+            return ParseGenDeclCommand(remainingArgs, globalOptions);
         }
 
 
@@ -209,6 +225,7 @@ public class CommandLineParser
         var decoratorMode = DecoratorMode.Stage3;  // Stage3 decorators enabled by default
         var emitDecoratorMetadata = false;
         var checkJs = false;  // Match tsc default: don't type-check .js files unless asked
+        List<string> references = [];
         List<string> remaining = [];
         List<string> scriptArgs = [];
 
@@ -226,9 +243,9 @@ public class CommandLineParser
             args = args[..doubleDashIndex];
         }
 
-        foreach (var arg in args)
+        for (int i = 0; i < args.Length; i++)
         {
-            switch (arg)
+            switch (args[i])
             {
                 case "--experimentalDecorators":
                     decoratorMode = DecoratorMode.Legacy;
@@ -243,13 +260,16 @@ public class CommandLineParser
                 case "--checkJs":
                     checkJs = true;
                     break;
+                case "-r" or "--reference" when i + 1 < args.Length:
+                    references.Add(args[++i]);
+                    break;
                 default:
-                    remaining.Add(arg);
+                    remaining.Add(args[i]);
                     break;
             }
         }
 
-        return (new GlobalOptions(decoratorMode, emitDecoratorMetadata, checkJs), remaining.ToArray(), scriptArgs.ToArray());
+        return (new GlobalOptions(decoratorMode, emitDecoratorMetadata, checkJs, references), remaining.ToArray(), scriptArgs.ToArray());
     }
 
     private ParsedCommand ParseCompileCommand(string[] args, GlobalOptions globalOptions)
@@ -277,9 +297,6 @@ public class CommandLineParser
         string? apiKey = null;
         string? packageIdOverride = null;
         string? versionOverride = null;
-
-        // Assembly references
-        List<string> references = [];
 
         // Parse remaining arguments
         for (int i = 2; i < args.Length; i++)
@@ -392,10 +409,6 @@ public class CommandLineParser
             {
                 versionOverride = args[++i];
             }
-            else if ((args[i] is "-r" or "--reference") && i + 1 < args.Length)
-            {
-                references.Add(args[++i]);
-            }
         }
 
         // Determine output file: use explicit output if provided, otherwise derive from input + target
@@ -409,7 +422,7 @@ public class CommandLineParser
             VerifyIL: verifyIL,
             MsBuildErrors: msbuildErrors,
             QuietMode: quietMode,
-            References: references,
+            References: globalOptions.References,
             Bundler: bundlerMode,
             Standalone: standalone
         );
@@ -425,7 +438,7 @@ public class CommandLineParser
         return new ParsedCommand.Compile(inputFile, outputFile, compileOptions, packOptions, globalOptions);
     }
 
-    private ParsedCommand ParseGenDeclCommand(string[] args)
+    private ParsedCommand ParseGenDeclCommand(string[] args, GlobalOptions globalOptions)
     {
         if (args.Length < 2)
         {
@@ -460,7 +473,7 @@ public class CommandLineParser
             }
         }
 
-        return new ParsedCommand.GenDecl(typeOrAssembly, outputPath, json);
+        return new ParsedCommand.GenDecl(typeOrAssembly, outputPath, json, globalOptions.References);
     }
 
 }
