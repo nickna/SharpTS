@@ -76,7 +76,7 @@ public static class TestHarness
         return mode switch
         {
             ExecutionMode.Interpreted => RunModulesInterpreted(files, entryPoint, timeout),
-            ExecutionMode.Compiled => RunModulesCompiled(files, entryPoint),
+            ExecutionMode.Compiled => RunModulesCompiled(files, entryPoint, timeout),
             _ => throw new ArgumentOutOfRangeException(nameof(mode))
         };
     }
@@ -752,13 +752,13 @@ public static class TestHarness
     ///   - <c>process.cwd()</c> / <c>process.argv</c> read <see cref="Environment"/> directly
     ///     (see <c>RuntimeEmitter.ProcessHelpers</c>) and would return the testhost's view
     /// </summary>
-    public static string RunModulesCompiled(Dictionary<string, string> files, string entryPoint)
+    public static string RunModulesCompiled(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
     {
         if (RequiresSubprocess(files.Values))
             return RunModulesCompiledViaSubprocess(files, entryPoint);
         if (RequiresRealDisk(files.Values))
-            return RunModulesCompiledInProcessOnDisk(files, entryPoint);
-        return RunModulesCompiledInProcess(files, entryPoint);
+            return RunModulesCompiledInProcessOnDisk(files, entryPoint, timeout);
+        return RunModulesCompiledInProcess(files, entryPoint, timeout);
     }
 
     private static bool RequiresSubprocess(IEnumerable<string> sources)
@@ -870,8 +870,9 @@ public static class TestHarness
     /// Disk-backed in-process compiled path for tests that need real-disk paths
     /// (<c>__dirname</c>, <c>cluster.fork</c>) — see <see cref="RequiresRealDisk"/>.
     /// </summary>
-    private static string RunModulesCompiledInProcessOnDisk(Dictionary<string, string> files, string entryPoint)
+    private static string RunModulesCompiledInProcessOnDisk(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
     {
+        var effectiveTimeout = timeout ?? DefaultTimeout;
         var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_module_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(tempDir);
 
@@ -925,10 +926,10 @@ public static class TestHarness
 
             try
             {
-                if (task.Wait(DefaultTimeout))
+                if (task.Wait(effectiveTimeout))
                     return task.Result;
                 throw new TimeoutException(
-                    $"Compiled module execution exceeded {DefaultTimeout.TotalSeconds}s timeout.");
+                    $"Compiled module execution exceeded {effectiveTimeout.TotalSeconds}s timeout.");
             }
             catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
             {
@@ -942,8 +943,9 @@ public static class TestHarness
         }
     }
 
-    private static string RunModulesCompiledInProcess(Dictionary<string, string> files, string entryPoint)
+    private static string RunModulesCompiledInProcess(Dictionary<string, string> files, string entryPoint, TimeSpan? timeout = null)
     {
+        var effectiveTimeout = timeout ?? DefaultTimeout;
         // In-memory virtual file system — see BuildVirtualModuleFs and the comment on
         // RunModulesInterpreted for the rationale.
         var (virtualFiles, entryPath) = BuildVirtualModuleFs(files, entryPoint);
@@ -997,7 +999,7 @@ public static class TestHarness
 
             try
             {
-                if (task.Wait(DefaultTimeout))
+                if (task.Wait(effectiveTimeout))
                     return task.Result;
 
                 try
@@ -1011,7 +1013,7 @@ public static class TestHarness
                 try { task.Wait(TimeSpan.FromSeconds(2)); } catch { /* surfacing TimeoutException below */ }
 
                 throw new TimeoutException(
-                    $"Compiled module execution exceeded {DefaultTimeout.TotalSeconds}s timeout. " +
+                    $"Compiled module execution exceeded {effectiveTimeout.TotalSeconds}s timeout. " +
                     "This likely indicates an infinite loop bug.");
             }
             catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
