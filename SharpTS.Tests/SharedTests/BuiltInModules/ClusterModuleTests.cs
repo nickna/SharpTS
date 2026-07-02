@@ -420,9 +420,9 @@ public class ClusterModuleTests : IDisposable
         {
             // Mutable state and the per-connection helper live at module level:
             // closures created in a loop inside another closure hit a pre-existing
-            // compiled closure-capture bug (each inner closure sees a fresh copy of
-            // the enclosing block environment), so the test keeps captures out of
-            // that shape — it exercises cluster, not the closure bug.
+            // compiled closure-capture bug (#1201: each inner closure sees a fresh
+            // copy of the enclosing block environment), so the test keeps captures
+            // out of that shape — it exercises cluster, not the closure bug.
             ["main.ts"] = $$"""
                 import * as cluster from 'cluster';
                 import * as net from 'net';
@@ -894,7 +894,7 @@ public class ClusterModuleTests : IDisposable
         var port = GetFreePort();
         var files = new Dictionary<string, string>
         {
-            // Module-level mutable state + connection helper — see Fork_WorkersShareNetPort.
+            // Module-level mutable state + connection helper — see Fork_WorkersShareNetPort (#1201).
             ["main.ts"] = $$"""
                 import * as cluster from 'cluster';
                 import * as net from 'net';
