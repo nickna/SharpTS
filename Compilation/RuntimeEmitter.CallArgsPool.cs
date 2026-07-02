@@ -12,11 +12,11 @@ public partial class RuntimeEmitter
     /// allocating <c>new object[N]</c> on every invocation, we reuse a
     /// thread-static cached array of the right arity.
     ///
-    /// Why a separate class instead of fields on <c>$Runtime</c>: a
-    /// documented .NET 10 tier-0 QuickJit miscompilation triggers when
-    /// <c>$Runtime</c> has more than one <c>[ThreadStatic]</c> field
-    /// (see commit 696bdbc / IntlDateTimeFormatTests). Putting the pool
-    /// on a fresh class sidesteps that.
+    /// Why a separate class instead of fields on <c>$Runtime</c>: at the
+    /// time, a layout-sensitive .NET 10 tier-0 JIT bug (issue #39, since
+    /// fixed upstream in 10.0.x servicing) could re-trigger when
+    /// <c>[ThreadStatic]</c> fields were added to <c>$Runtime</c>, so the
+    /// pool went on a fresh class. Harmless to keep it here.
     ///
     /// Safety / aliasing: the call site fills the array, then dispatches
     /// through <c>$TSFunction.Invoke → MethodInvoker.Invoke(target, Span&lt;object?&gt;)</c>.

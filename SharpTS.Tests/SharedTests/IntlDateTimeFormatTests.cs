@@ -373,73 +373,24 @@ public class IntlDateTimeFormatTests
     }
 
     // ========================================================================
-    // KNOWN .NET 10 JIT BUG — DO NOT REMOVE THESE SKIPS WITHOUT UPSTREAM FIX
+    // HISTORICAL NOTE — .NET 10 tier-0 JIT miscompilation (issue #39, RESOLVED)
     // ========================================================================
-    // Both `_HasTypeAndValue` and `_ContainsLiterals` below trip a .NET 10
-    // tier-0 QuickJit miscompilation that causes `Array.prototype.includes`
-    // (string arg) on a freshly `.map()`-ed `List<object>` of boxed strings
-    // to return the wrong result for the FIRST 1-2 sequential calls
-    // (~90% of runs). Subsequent calls — and the same code re-run after the
-    // method has been re-jitted at tier 1 — produce the correct result.
-    //
-    // Symptom fingerprint (matches both tests):
-    //   const types = parts.map(p => p.type);  // List<object> of boxed strings
-    //   types.includes("year")    // returns false (WRONG) on first call
-    //   types.includes("month")   // returns true  (correct)
-    //   types.includes("day")     // returns true  (correct)
-    //
-    // Original Linux trigger: `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`
-    // (auto-enabled on GHA ubuntu-latest where libicu is absent) + xUnit
-    // testhost subprocess spawn. Confirmed via 20-run × 7-config matrix:
-    //   - Disabling QuickJit (DOTNET_TC_QuickJit=0):  10/10 pass
-    //   - Disabling tiered compilation entirely:      10/10 pass
-    //   - Default config + INVARIANT=1:                0/10 pass
-    //   - DLLs are byte-identical across environments
-    //   - Direct `dotnet DLL_PATH` always passes; only xUnit testhost reproduces
-    //
-    // 2026-05-01 update: bug now also reproducing on macos-latest (arm64,
-    // Apple Silicon) WITHOUT the invariant globalization env var, and now
-    // hits BOTH formatToParts tests (previously only `_HasTypeAndValue`).
-    // Consistent with the bug's documented JIT-timing flakiness — the
-    // platform/test boundary is incidental; the underlying tier-0 codegen
-    // bug is what matters. Skip widened to cover Linux + macOS in compiled
-    // mode for both tests.
-    //
-    // Why we don't use the broader workaround:
-    //   Commit 696bdbc set `DOTNET_TC_QuickJit=0` CI-wide. That fixed these
-    //   tests but exposed a separate latent compiled-mode rest-parameter
-    //   dispatch bug, regressing 5 Timers tests + 1 other Intl test.
-    //   Commit cfc667b reverted that workaround and switched to a narrow
-    //   in-test skip — net change: 6 failing → 0 failing, 1 skipped. We're
-    //   continuing the same strategy here; widening the skip is preferable
-    //   to re-introducing the broader workaround.
-    //
-    // To remove these skips:
-    //   - Wait for the .NET 10 runtime fix (tracked in memory file
-    //     `project_intl_ci_invariant_bug.md`; adjacent issues: dotnet/runtime
-    //     #127075, #123790, #119710, #126667)
-    //   - Or: refactor the tests to avoid the JIT-trigger pattern (e.g.
-    //     materialize `.map().includes()` through an interstitial array
-    //     allocation that forces the receiver onto a different IL path)
-    //
-    // See:
-    //   - memory/project_intl_ci_invariant_bug.md (root cause + repro matrix)
-    //   - commit 696bdbc (original Linux discovery + broad workaround)
-    //   - commit cfc667b (revert of broad workaround → narrow skip)
+    // From 2026-04-20 to 2026-07-01 the two formatToParts tests below were
+    // skipped in compiled mode on Linux/macOS: a .NET 10 runtime JIT bug made
+    // `parts.map(p => p.type).includes(...)` return a wrong boolean under
+    // DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 (~90% of runs, first calls only,
+    // interpreted mode unaffected). Root-caused 2026-07-01 with a local repro:
+    // the trigger was the April-era ArrayMap/ArrayIncludes emission shape
+    // (rewritten in ca9a6641) on early .NET 10 servicing — identical artifacts
+    // fail 9/10 on runtime 10.0.0 and pass 10/10 on 10.0.6/7/8/9, so the
+    // runtime fixed it, not us. Full repro matrix and history in issue #39;
+    // commits 696bdbc and cfc667b document the original workarounds.
     // ========================================================================
 
-    [SkippableTheory]
+    [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void IntlDateTimeFormat_FormatToParts_HasTypeAndValue(ExecutionMode mode)
     {
-        // See the block comment above. Skips compiled mode on Linux + macOS;
-        // Windows + interpreted mode on all platforms still run this test.
-        Skip.If(
-            mode == ExecutionMode.Compiled && (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()),
-            ".NET 10 tier-0 QuickJit miscompilation: Array.includes returns wrong result for first call after .map(). " +
-            "Reproduces on Linux (libicu-less GHA runners) and macOS arm64. See 696bdbc, cfc667b, " +
-            "and memory/project_intl_ci_invariant_bug.md.");
-
         var source = @"
             const d = new Date(2024, 0, 15, 14, 30, 45);
             const dtf = new Intl.DateTimeFormat(""en-US"", {year: ""numeric"", month: ""long"", day: ""numeric""});
@@ -453,21 +404,10 @@ public class IntlDateTimeFormatTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [SkippableTheory]
+    [Theory]
     [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void IntlDateTimeFormat_FormatToParts_ContainsLiterals(ExecutionMode mode)
     {
-        // See the block comment above. Same JIT bug as `_HasTypeAndValue`:
-        // `parts.map(p => p.type).includes("literal")` returns false on the
-        // first call under tier-0 QuickJit. Started reproducing on macOS arm64
-        // in CI run 25200546596 (2026-05-01); add to the skip set alongside
-        // its sibling test.
-        Skip.If(
-            mode == ExecutionMode.Compiled && (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()),
-            ".NET 10 tier-0 QuickJit miscompilation: Array.includes returns wrong result for first call after .map(). " +
-            "Reproduces on Linux (libicu-less GHA runners) and macOS arm64. See 696bdbc, cfc667b, " +
-            "and memory/project_intl_ci_invariant_bug.md.");
-
         var source = @"
             const d = new Date(2024, 0, 15, 14, 30, 45);
             const dtf = new Intl.DateTimeFormat(""en-US"", {year: ""numeric"", month: ""long"", day: ""numeric""});

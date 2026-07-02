@@ -114,8 +114,8 @@ public partial class RuntimeEmitter
 
         // Per-thread args[] pool used by method-call dispatch to skip
         // newarr per `obj.method(a, b)` invocation. Lives on a separate
-        // class because $Runtime can't host more than one [ThreadStatic]
-        // field without tripping a .NET 10 tier-0 QuickJit miscompilation.
+        // class — historically to avoid the layout-sensitive .NET 10
+        // tier-0 JIT bug behind issue #39 (since fixed upstream).
         EmitCallArgsPool(moduleBuilder, runtime);
 
         // Emit $Array class for standalone array support

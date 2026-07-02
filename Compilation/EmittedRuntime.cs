@@ -387,13 +387,13 @@ public class EmittedRuntime
     public FieldBuilder CurrentArrayLikeReceiverField { get; set; } = null!;
 
     // Aliases <see cref="CurrentArrayLikeReceiverField"/>. Originally a
-    // dedicated [ThreadStatic] field, but adding a second thread-static slot
-    // to $Runtime triggers a .NET 10 tier-0 QuickJit miscompilation (the
-    // same bug behind the existing IntlDateTimeFormatTests Linux skip /
-    // commit 696bdbc). Reusing the existing field works because the
-    // dispatch site already stores the original receiver there, and
-    // LoadArrayLikeElement disambiguates eager vs lazy by inspecting the
-    // receiver's type at load time (Dict / TSObject → lazy, otherwise eager).
+    // dedicated [ThreadStatic] field; the aliasing was forced by the
+    // layout-sensitive .NET 10 tier-0 JIT bug behind issue #39 (fixed
+    // upstream in 10.0.x servicing, so a dedicated field would be safe
+    // again). Kept because it works cleanly: the dispatch site already
+    // stores the original receiver there, and LoadArrayLikeElement
+    // disambiguates eager vs lazy by inspecting the receiver's type at
+    // load time (Dict / TSObject → lazy, otherwise eager).
     public FieldBuilder LazyArrayLikeReceiverField { get; set; } = null!;
 
     // Lazy-aware materializer used by Array.prototype.* iterator helpers.
