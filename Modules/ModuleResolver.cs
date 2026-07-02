@@ -127,6 +127,19 @@ public class ModuleResolver
     {
         string currentDir = Path.GetDirectoryName(currentModulePath) ?? _basePath;
 
+        // dotnet: scheme — .NET interop imports resolve via reflection, not the file system.
+        // The specifier itself is the virtual module path (and cache key).
+        if (DotNetImports.IsDotNetSpecifier(specifier))
+        {
+            if (kind == ResolutionKind.Cjs)
+            {
+                throw new Exception(
+                    $"Module Error: '{specifier}' is not available via require(). " +
+                    "Use a named ESM import instead: import { TypeName } from \"" + specifier + "\".");
+            }
+            return specifier;
+        }
+
         if (specifier.StartsWith("./") || specifier.StartsWith("../") ||
             specifier.StartsWith(".\\") || specifier.StartsWith("..\\"))
         {
@@ -601,6 +614,18 @@ public class ModuleResolver
             return LoadStdlibModule(absolutePath, decoratorMode);
         }
 
+        // dotnet: interop module — synthesized placeholder; exports are added per importing
+        // statement by DotNetImports.EnsureImports (see the import loop below).
+        if (DotNetImports.IsDotNetSpecifier(absolutePath))
+        {
+            if (!_moduleCache.TryGetValue(absolutePath, out var dotnetModule))
+            {
+                dotnetModule = DotNetImports.CreateModule(absolutePath);
+                _moduleCache[absolutePath] = dotnetModule;
+            }
+            return dotnetModule;
+        }
+
         // Primitive C# module — materialize a placeholder ParsedModule with types.
         // Origin-gating in ResolveModulePath has already ensured only stdlib-origin
         // modules resolve here, so no per-caller check is needed.
@@ -747,6 +772,12 @@ public class ModuleResolver
                 {
                     string importedPath = ResolveModulePath(import.ModulePath, absolutePath);
                     var importedModule = LoadModule(importedPath, decoratorMode);
+                    // dotnet: modules resolve their export surface from the importing
+                    // statements — each named import is resolved (and validated) here.
+                    if (importedModule.IsDotNetModule)
+                    {
+                        DotNetImports.EnsureImports(importedModule, import);
+                    }
                     // Files loaded via import are always modules, even if they have no exports
                     // (e.g., side-effect imports like `import './polyfill'`)
                     importedModule.IsScript = false;
@@ -759,6 +790,12 @@ public class ModuleResolver
                 {
                     // Re-export: export { x } from './foo' or export * from './foo'
                     string reexportPath = ResolveModulePath(export.FromModulePath, absolutePath);
+                    if (DotNetImports.IsDotNetSpecifier(reexportPath))
+                    {
+                        throw new Exception(
+                            $"Module Error: re-exporting from '{export.FromModulePath}' is not supported. " +
+                            "Import the type and re-export the local binding instead.");
+                    }
                     var reexportedModule = LoadModule(reexportPath, decoratorMode);
                     // Re-exported files are always modules
                     reexportedModule.IsScript = false;
@@ -774,6 +811,13 @@ public class ModuleResolver
                     if (BuiltInModuleRegistry.GetModuleName(importReq.ModulePath) != null)
                     {
                         continue;
+                    }
+
+                    if (DotNetImports.IsDotNetSpecifier(importReq.ModulePath))
+                    {
+                        throw new Exception(
+                            $"Module Error: '{importReq.ModulePath}' is not available via import-require. " +
+                            "Use a named ESM import instead: import { TypeName } from \"" + importReq.ModulePath + "\".");
                     }
 
                     string importedPath = ResolveModulePath(importReq.ModulePath, absolutePath);
@@ -987,10 +1031,11 @@ public class ModuleResolver
     /// </summary>
     public ParsedModule? GetCachedModule(string absolutePath)
     {
-        // Don't normalize virtual paths (builtin: sentinels, stdlib: TS sources,
-        // primitive: C# interop modules — none resolve to a real filesystem path).
+        // Don't normalize virtual paths (builtin: sentinels, stdlib: TS sources, dotnet:
+        // interop modules, primitive: C# interop modules — none resolve to a real filesystem path).
         if (!absolutePath.StartsWith(BuiltInModuleRegistry.BuiltInPrefix)
             && !absolutePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal)
+            && !DotNetImports.IsDotNetSpecifier(absolutePath)
             && !absolutePath.StartsWith(PrimitiveRegistry.Prefix, StringComparison.Ordinal))
         {
             absolutePath = Path.GetFullPath(absolutePath);

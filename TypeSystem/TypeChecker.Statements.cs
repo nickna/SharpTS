@@ -1145,11 +1145,53 @@ public partial class TypeChecker
     {
         if (_currentModule == null)
         {
+            // dotnet: imports need no module graph — they resolve via reflection, so
+            // single-file checking (and the language server, which checks buffers in
+            // isolation) can bind them here. Module mode binds them in BindModuleImports
+            // from the module's pre-resolved ExportedTypes instead.
+            if (Modules.DotNetImports.IsDotNetSpecifier(stmt.ModulePath))
+            {
+                BindStandaloneDotNetImport(stmt);
+                return VoidResult.Instance;
+            }
+
             // SharpTS-only: module-mode requirement (continued message)
             throw new TypeCheckException("Import statements require module mode. " +
                                "Use 'dotnet run -- --compile' with multi-file support", stmt.Keyword.Line);
         }
         return VoidResult.Instance;
+    }
+
+    /// <summary>
+    /// Binds a <c>dotnet:</c> import outside module mode by resolving each named import via
+    /// reflection and synthesizing its static type — the same resolution and synthesis the
+    /// module path uses (<c>DotNetImports.EnsureExport</c>), minus the module bookkeeping.
+    /// </summary>
+    private void BindStandaloneDotNetImport(Stmt.Import import)
+    {
+        if (import.DefaultImport != null || import.NamespaceImport != null)
+        {
+            throw new TypeCheckException(
+                $"'{import.ModulePath}' supports named imports only, e.g. import {{ TypeName }} from \"{import.ModulePath}\".",
+                import.Keyword.Line);
+        }
+
+        if (import.NamedImports == null) return;
+
+        string specifier = import.ModulePath[Modules.DotNetImports.Prefix.Length..];
+        foreach (var spec in import.NamedImports)
+        {
+            Type clrType;
+            try
+            {
+                clrType = Modules.DotNetImports.ResolveExportType(specifier, spec.Imported.Lexeme);
+            }
+            catch (Exception ex)
+            {
+                throw new TypeCheckException(ex.Message, spec.Imported.Line);
+            }
+            _environment.Define(spec.LocalName?.Lexeme ?? spec.Imported.Lexeme, DotNetTypeSynthesizer.Synthesize(clrType));
+        }
     }
 
     internal VoidResult VisitImportRequire(Stmt.ImportRequire stmt)

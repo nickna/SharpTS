@@ -11,7 +11,12 @@ SharpTS supports two forms of .NET interop:
 | **Outbound** | Compile TypeScript to .NET DLLs | Consume TS libraries from C# |
 | **Inbound** | Use .NET types from TypeScript | Access BCL and .NET libraries |
 
-This guide covers **inbound interop** - calling .NET code from TypeScript using the `@DotNetType` decorator.
+This guide covers **inbound interop** — calling .NET code from TypeScript. There are two ways to bind a .NET type:
+
+| Binding | Description | When to use |
+|---------|-------------|-------------|
+| **`dotnet:` imports** (recommended) | `import { StringBuilder } from "dotnet:System.Text.StringBuilder"` — the type surface is synthesized from reflection automatically | The default. No boilerplate; can't drift from the real CLR type |
+| **`@DotNetType` declarations** | Hand-written `declare class` bound to a CLR type | When you want a curated, hand-checked static surface, or need `@DotNetOverload` hints |
 
 ## Prerequisites
 
@@ -32,19 +37,14 @@ Use `@DotNetOverload(...)` when runtime resolution can't pick the overload you w
 ## Quick Start
 
 ```typescript
-// Declare an external .NET type
-@DotNetType("System.Text.StringBuilder")
-declare class StringBuilder {
-    constructor();
-    append(value: string): StringBuilder;
-    toString(): string;
-}
+// Import a .NET type directly — no declaration needed
+import { StringBuilder } from "dotnet:System.Text.StringBuilder";
 
 // Use it like a native TypeScript class
 let sb = new StringBuilder();
-sb.append("Hello, ");
-sb.append("World!");
+sb.append("Hello, ").append("World!");   // fluent chaining is statically typed
 console.log(sb.toString());  // Output: Hello, World!
+console.log(sb.length);      // .NET properties surface in camelCase: 13
 ```
 
 Compile and run:
@@ -52,6 +52,62 @@ Compile and run:
 sharpts --compile example.ts
 dotnet example.dll
 ```
+
+---
+
+## Importing .NET Types (`dotnet:` imports)
+
+A `dotnet:` import specifier binds .NET types as first-class module imports. The static type
+surface is synthesized directly from reflection metadata, so it always matches the real CLR
+type, and members the interop layer cannot marshal (the same four categories `--gen-decl`
+marks `[unsupported]`) are simply absent from the surface.
+
+### Two specifier forms
+
+```typescript
+// Single-type form: the specifier is a fully-qualified type name
+import { StringBuilder } from "dotnet:System.Text.StringBuilder";
+
+// Namespace form: each named import resolves as Namespace.Name
+import { Guid, DayOfWeek } from "dotnet:System";
+
+// Aliasing works like any ES import (useful to avoid collisions, e.g. with global Math)
+import { Math as SysMath } from "dotnet:System";
+
+// Nested types resolve through their declaring type's specifier
+import { SpecialFolder } from "dotnet:System.Environment";
+```
+
+### What you get
+
+- **Construction, instance/static members, fields, enums** — `new Guid()`, `Guid.newGuid()`,
+  `Guid.empty`, `DayOfWeek.Monday`. Member names follow the same camelCase convention as
+  `@DotNetType` (both `append` and `Append` resolve).
+- **Static typing** — primitives map to `number`/`string`/`boolean`, `void` maps to `void`,
+  methods returning the type itself keep fluent chains typed; other .NET types surface as
+  `any` (they still work — the runtime marshaller handles them dynamically).
+- **Both execution modes** — the interpreter binds the same runtime wrapper `@DotNetType`
+  uses; compiled mode resolves members at compile time and emits direct IL calls, so the
+  output DLL stays fully standalone (no SharpTS.dll dependency).
+- **Overload resolution** — cost-based, same as `@DotNetType`. If you need to force a
+  specific overload with `@DotNetOverload`, use a `@DotNetType` declaration for that type
+  instead; the two binding styles compose freely in one program.
+
+### v1 scope and restrictions
+
+- **Named imports only.** Default imports, `import * as ns`, `export … from "dotnet:…"`,
+  `import x = require("dotnet:…")`, and dynamic `import("dotnet:…")` are rejected with a
+  clear error — a .NET namespace is not an enumerable module object.
+- **Loaded assemblies only.** Types resolve from the BCL and any assembly already loaded in
+  the process (matching `@DotNetType`). A project-level assembly-reference story for
+  third-party DLLs is tracked separately.
+- **No generic types.** `dotnet:System.Collections.Generic.List<number>` is rejected; use an
+  `@DotNetType` declaration with a closed-generic CLR name for those.
+- Missing-member accesses follow SharpTS's standard class-instance semantics (same as
+  hand-written classes).
+
+Use `sharpts --gen-decl <Type|Namespace>` to discover what's available and copy the exact
+import line — see [Discovering .NET Types](#discovering-net-types---gen-decl).
 
 ---
 
@@ -458,8 +514,9 @@ four unsupported categories are by-ref (`ref`/`out`/`in`) parameters, pointer ty
 (`Span<T>`/`ReadOnlySpan<T>`), and open generics. Signatures are shown with faithful .NET types
 (`int`, `char[]`, `ReadOnlySpan<char>`, `out Guid`), not coerced into TypeScript.
 
-> The `import { … } from "dotnet:…";` line is a preview of the planned `dotnet:` import scheme
-> (issue #1195). Until it lands, consume the type with a hand-written `@DotNetType` declaration.
+> The `import { … } from "dotnet:…";` line is ready to copy into your program — see
+> [Importing .NET Types](#importing-net-types-dotnet-imports). It resolves with the exact same
+> usable/unsupported rules this tool reports.
 
 ### List a namespace or assembly
 

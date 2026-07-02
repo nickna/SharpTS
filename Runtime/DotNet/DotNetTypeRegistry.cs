@@ -11,6 +11,13 @@ public static class DotNetTypeRegistry
 {
     private static readonly ConcurrentDictionary<string, Type> _cache = new(StringComparer.Ordinal);
 
+    // Member lookups are pure functions of (type, jsName, isStatic); callers never mutate
+    // the returned arrays/infos, so results are cached process-wide. Interop member access
+    // resolves through here on every call, making uncached reflection queries a hot path.
+    private static readonly ConcurrentDictionary<(Type, string, bool), MethodInfo[]> _methodCache = new();
+    private static readonly ConcurrentDictionary<(Type, string, bool), MemberInfo?> _propertyOrFieldCache = new();
+    private static readonly ConcurrentDictionary<(Type, string, bool), EventInfo?> _eventCache = new();
+
     /// <summary>
     /// Resolves a fully-qualified .NET type name, searching all currently loaded assemblies.
     /// </summary>
@@ -36,9 +43,15 @@ public static class DotNetTypeRegistry
     }
 
     /// <summary>
-    /// Clears the type cache. Used by tests to ensure isolation.
+    /// Clears the type and member caches. Used by tests to ensure isolation.
     /// </summary>
-    public static void ClearCache() => _cache.Clear();
+    public static void ClearCache()
+    {
+        _cache.Clear();
+        _methodCache.Clear();
+        _propertyOrFieldCache.Clear();
+        _eventCache.Clear();
+    }
 
     /// <summary>
     /// Converts a friendly generic type name to CLR syntax.
@@ -61,11 +74,15 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MethodInfo[] GetMethods(Type type, string jsName, bool isStatic)
     {
-        string pascal = ToPascalCase(jsName);
-        var flags = BindingFlags.Public | (isStatic ? BindingFlags.Static : BindingFlags.Instance);
-        return type.GetMethods(flags)
-            .Where(m => m.Name == jsName || m.Name == pascal)
-            .ToArray();
+        return _methodCache.GetOrAdd((type, jsName, isStatic), static key =>
+        {
+            var (t, name, stat) = key;
+            string pascal = ToPascalCase(name);
+            var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
+            return t.GetMethods(flags)
+                .Where(m => m.Name == name || m.Name == pascal)
+                .ToArray();
+        });
     }
 
     /// <summary>
@@ -73,13 +90,17 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static MemberInfo? GetPropertyOrField(Type type, string jsName, bool isStatic)
     {
-        string pascal = ToPascalCase(jsName);
-        var flags = BindingFlags.Public | (isStatic ? BindingFlags.Static : BindingFlags.Instance);
+        return _propertyOrFieldCache.GetOrAdd((type, jsName, isStatic), static key =>
+        {
+            var (t, name, stat) = key;
+            string pascal = ToPascalCase(name);
+            var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
 
-        var property = type.GetProperty(pascal, flags) ?? type.GetProperty(jsName, flags);
-        if (property != null) return property;
+            var property = t.GetProperty(pascal, flags) ?? t.GetProperty(name, flags);
+            if (property != null) return property;
 
-        return type.GetField(pascal, flags) ?? type.GetField(jsName, flags);
+            return (MemberInfo?)t.GetField(pascal, flags) ?? t.GetField(name, flags);
+        });
     }
 
     /// <summary>
@@ -88,9 +109,13 @@ public static class DotNetTypeRegistry
     /// </summary>
     public static EventInfo? GetEvent(Type type, string jsName, bool isStatic)
     {
-        string pascal = ToPascalCase(jsName);
-        var flags = BindingFlags.Public | (isStatic ? BindingFlags.Static : BindingFlags.Instance);
-        return type.GetEvent(pascal, flags) ?? type.GetEvent(jsName, flags);
+        return _eventCache.GetOrAdd((type, jsName, isStatic), static key =>
+        {
+            var (t, name, stat) = key;
+            string pascal = ToPascalCase(name);
+            var flags = BindingFlags.Public | (stat ? BindingFlags.Static : BindingFlags.Instance);
+            return t.GetEvent(pascal, flags) ?? t.GetEvent(name, flags);
+        });
     }
 
     /// <summary>

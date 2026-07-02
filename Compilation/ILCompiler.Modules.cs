@@ -25,6 +25,15 @@ public partial class ILCompiler
             return;
         }
 
+        // dotnet: interop modules have no emitted module type — their imports compile to
+        // direct external-interop IL (RegisterDotNetImports), never to export-field reads.
+        // (Also avoids duplicate $Module_ names: distinct specifiers in one namespace share
+        // a filename-derived ModuleName.)
+        if (module.IsDotNetModule)
+        {
+            return;
+        }
+
         // Create module class: $Module_<name>
         string moduleTypeName = $"$Module_{CompilationContext.SanitizeModuleName(module.ModuleName)}";
         var moduleType = _moduleBuilder.DefineType(
@@ -246,6 +255,65 @@ public partial class ILCompiler
     };
 
     /// <summary>
+    /// Registers the external .NET types imported via <c>dotnet:</c> specifiers in this module,
+    /// routing them through the same <see cref="TypeMapper"/>/ExternalTypes registries an
+    /// <c>@DotNetType declare class</c> uses — so construction, member calls, and static access
+    /// compile to the identical direct-IL external-interop paths (fully standalone output).
+    /// Resolution happened at module-load time (<see cref="DotNetImports.EnsureImports"/>);
+    /// this only transfers the resolved types into the compilation registries.
+    /// </summary>
+    private void RegisterDotNetImports(ParsedModule module)
+    {
+        foreach (var stmt in module.Statements)
+        {
+            if (stmt is not Stmt.Import import || !DotNetImports.IsDotNetSpecifier(import.ModulePath))
+                continue;
+            if (import.NamedImports == null)
+                continue;
+
+            var dotnetModule = _modules.Resolver?.GetCachedModule(import.ModulePath);
+            if (dotnetModule?.DotNetExports == null)
+                continue;
+
+            foreach (var spec in import.NamedImports)
+            {
+                if (!dotnetModule.DotNetExports.TryGetValue(spec.Imported.Lexeme, out var externalType))
+                    continue;
+
+                string localName = spec.LocalName?.Lexeme ?? spec.Imported.Lexeme;
+                // The local binding name drives `new X()` / static-access dispatch; the CLR
+                // simple name drives receiver-typed instance dispatch (the checker's
+                // synthesized class is named after the CLR type).
+                RegisterDotNetImportedType(localName, externalType);
+                RegisterDotNetImportedType(externalType.Name, externalType);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Registers one name → external type mapping unless a user-defined class already claims
+    /// the name. ExternalTypes lookups run before user-class dispatch, so an unconditional
+    /// registration would hijack same-named user classes program-wide.
+    /// </summary>
+    private void RegisterDotNetImportedType(string name, Type externalType)
+    {
+        if (_modules.ClassToModule.ContainsKey(name))
+        {
+            if (!_classes.ExternalTypes.TryGetValue(name, out var existing) || existing != externalType)
+            {
+                Console.WriteLine(
+                    $"Warning: dotnet: import '{name}' ({externalType.FullName}) conflicts with a " +
+                    "user-defined class of the same name; the user class wins in compiled dispatch. " +
+                    "Rename the import (import { X as Alias }) to use the .NET type.");
+            }
+            return;
+        }
+
+        _classes.ExternalTypes.TryAdd(name, externalType);
+        _typeMapper.RegisterExternalType(name, externalType);
+    }
+
+    /// <summary>
     /// Creates static fields for imported values in this module.
     /// This allows functions in the module to access imported values.
     /// </summary>
@@ -260,6 +328,11 @@ public partial class ILCompiler
                 // Skip built-in modules - they have their own handling
                 string? builtInModuleName = Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(import.ModulePath);
                 if (builtInModuleName != null)
+                    continue;
+
+                // dotnet: imports need no import fields — every use site compiles to direct
+                // external-interop IL keyed off the ExternalTypes registry (RegisterDotNetImports).
+                if (DotNetImports.IsDotNetSpecifier(import.ModulePath))
                     continue;
 
                 // Default import: import x from './module'
@@ -421,6 +494,12 @@ public partial class ILCompiler
         if (module.IsScript)
         {
             EmitScriptInit(module);
+            return;
+        }
+
+        // dotnet: interop modules have no module type and nothing to initialize.
+        if (module.IsDotNetModule)
+        {
             return;
         }
 

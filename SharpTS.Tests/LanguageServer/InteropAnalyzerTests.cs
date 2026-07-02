@@ -125,4 +125,44 @@ public class InteropAnalyzerTests
         Assert.Equal(20, loc.Column);     // start of 'appendx' (1-based)
         Assert.Equal(27, loc.EndColumn);  // end of the 7-char token
     }
+
+    // --- dotnet: import specifiers (epic #1195) ---
+
+    [Fact]
+    public void DotNetImport_Valid_NoDiagnostics()
+        => Assert.Empty(Analyze(
+            "import { StringBuilder } from \"dotnet:System.Text.StringBuilder\";\n" +
+            "import { Guid, Math as SysMath } from \"dotnet:System\";\n" +
+            "const sb = new StringBuilder();"));
+
+    [Fact]
+    public void DotNetImport_UnresolvableName_Diagnostic()
+    {
+        var d = Analyze("import { Nope } from \"dotnet:System.NoSuchNs\";");
+        Assert.Single(d);
+        Assert.Contains("Nope", d[0].Message);
+        Assert.Contains("System.NoSuchNs", d[0].Message);
+    }
+
+    [Fact]
+    public void DotNetImport_DefaultAndStarForms_Diagnostics()
+    {
+        var d = Analyze(
+            "import SB from \"dotnet:System.Text.StringBuilder\";\n" +
+            "import * as Text from \"dotnet:System.Text\";");
+        Assert.Equal(2, d.Count);
+        Assert.Contains("named imports only", d[0].Message);
+        Assert.Contains("namespace imports", d[1].Message);
+    }
+
+    [Fact]
+    public void DotNetImport_BindingsFeedEventValidation()
+    {
+        // Imported types participate in Tier 3d exactly like @DotNetType bindings.
+        var d = Analyze(
+            "import { AppDomain } from \"dotnet:System\";\n" +
+            "AppDomain.currentDomain.addEventListener(\"Typo\", (s: any, a: any) => {});");
+        Assert.Single(d);
+        Assert.Contains("Event 'Typo' not found", d[0].Message);
+    }
 }

@@ -50,4 +50,36 @@ public class MemberHoverServiceTests
     [Fact]
     public void Hover_OnNonMember_ReturnsNull()
         => Assert.Null(_svc.Hover("const x: number = 1;", line: 0, character: 6));
+
+    [Fact]
+    public void UsageHover_ResolvesDotNetImportBinding()
+    {
+        // dotnet: imports carry no declare-class surface — the binding comes from the
+        // import statement, and the receiver resolves through the synthesized class type.
+        const string src =
+            "import { StringBuilder } from \"dotnet:System.Text.StringBuilder\";\n" +
+            "const sb = new StringBuilder();\n" +
+            "sb.append(\"x\");";
+        var (line, ch) = PosOf(src, "append");
+
+        var hover = _svc.Hover(src, line, ch);
+
+        Assert.NotNull(hover);
+        Assert.Contains("Append", hover!.Contents.MarkupContent!.Value);
+    }
+
+    [Fact]
+    public void UsageHover_ResolvesAliasedDotNetImport()
+    {
+        const string src =
+            "import { StringBuilder as SB } from \"dotnet:System.Text.StringBuilder\";\n" +
+            "const sb = new SB();\n" +
+            "sb.append(\"x\");";
+        var (line, ch) = PosOf(src, "append");
+
+        var hover = _svc.Hover(src, line, ch);
+
+        Assert.NotNull(hover);
+        Assert.Contains("Append", hover!.Contents.MarkupContent!.Value);
+    }
 }
