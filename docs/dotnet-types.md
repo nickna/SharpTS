@@ -421,43 +421,67 @@ console.log(sb.toString());  // Method call (parentheses required)
 
 ---
 
-## Generating Declarations
+## Discovering .NET Types (`--gen-decl`)
 
-SharpTS can auto-generate TypeScript declarations from .NET types using the `DeclarationGenerator`:
+`--gen-decl` is an **interop discovery/inspection tool**: point it at a .NET type, namespace, or
+assembly and it reports the real CLR signatures and which members SharpTS can actually use today.
+It does *not* emit pasteable TypeScript source — realistic BCL types have `Span<T>`, `ref`/`out`,
+and pointer members with no valid TypeScript spelling, so faithful description beats lossy codegen.
+To bind a type in your program, hand-write a `@DotNetType` declaration (below) using the usable
+members it reports.
 
-### From Individual Types
+### Inspect a type
 
-```csharp
-var generator = new DeclarationGenerator();
-string declaration = generator.GenerateForType("System.Text.StringBuilder");
-Console.WriteLine(declaration);
+```
+sharpts --gen-decl System.Text.StringBuilder
 ```
 
-Output:
-```typescript
-@DotNetType("System.Text.StringBuilder")
-export declare class StringBuilder {
-    constructor();
-    constructor(capacity: number);
-    constructor(value: string);
-    append(value: string): StringBuilder;
-    append(value: number): StringBuilder;
-    append(value: boolean): StringBuilder;
-    appendLine(): StringBuilder;
-    appendLine(value: string): StringBuilder;
-    insert(index: number, value: string): StringBuilder;
-    remove(startIndex: number, length: number): StringBuilder;
-    replace(oldValue: string, newValue: string): StringBuilder;
-    clear(): StringBuilder;
-    toString(): string;
-    readonly length: number;
-    readonly capacity: number;
-}
+```
+System.Text.StringBuilder — class
+
+  import { StringBuilder } from "dotnet:System.Text.StringBuilder";
+
+  Constructors:
+    [usable]      constructor()
+    [usable]      constructor(capacity: int)
+    [usable]      constructor(value: string)
+  ...
+  Instance methods:
+    [usable]      append(value: string): StringBuilder
+    [usable]      append(value: char[], startIndex: int, charCount: int): StringBuilder
+    [unsupported] copyTo(sourceIndex: int, destination: Span<char>, count: int): void   — ref struct (Span/ReadOnlySpan) cannot cross the interop boundary
 ```
 
-### Type Mapping in Generated Declarations
+Each member is marked `[usable]` or `[unsupported]` using the **same rules the runtime interop
+marshaller enforces**, so the tool and your program can never disagree about what's callable. The
+four unsupported categories are by-ref (`ref`/`out`/`in`) parameters, pointer types, ref structs
+(`Span<T>`/`ReadOnlySpan<T>`), and open generics. Signatures are shown with faithful .NET types
+(`int`, `char[]`, `ReadOnlySpan<char>`, `out Guid`), not coerced into TypeScript.
 
-The generator automatically maps .NET types to TypeScript:
+> The `import { … } from "dotnet:…";` line is a preview of the planned `dotnet:` import scheme
+> (issue #1195). Until it lands, consume the type with a hand-written `@DotNetType` declaration.
+
+### List a namespace or assembly
+
+Passing a namespace or an assembly path prints a table of contents instead of member detail:
+
+```
+sharpts --gen-decl System.Text            # every loaded type in the namespace
+sharpts --gen-decl ./MyLibrary.dll        # every public type in the assembly
+```
+
+### JSON output
+
+Add `--json` for machine-readable output (e.g. to feed editor tooling):
+
+```
+sharpts --gen-decl System.Guid --json
+sharpts --gen-decl System.Guid -o guid.txt   # or write to a file
+```
+
+### Type mapping for hand-written declarations
+
+When you hand-write a `@DotNetType` declaration, map .NET types to TypeScript as follows:
 
 | .NET Type | TypeScript Type |
 |-----------|-----------------|

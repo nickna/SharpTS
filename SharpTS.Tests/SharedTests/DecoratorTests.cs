@@ -386,4 +386,116 @@ public class DecoratorTests
     }
 
     #endregion
+
+    #region Decorators on exported classes (issue #1192)
+
+    // `@decorator` legally appears *before* `export` (the only valid decorator
+    // placement TypeScript allows on an exported class). Before the fix, Declaration()
+    // only checked EXPORT before parsing decorators, so `@dec export class` fell through
+    // to "Decorators are not valid here." These cover every export-class form.
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void LegacyClassDecorator_OnExportClass(ExecutionMode mode)
+    {
+        const string source = """
+            function logged(target: any): void {
+                console.log("Class decorated");
+            }
+
+            @logged
+            export class MyClass {
+                constructor() {}
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode, DecoratorMode.Legacy);
+        Assert.Equal("Class decorated\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void LegacyClassDecorator_OnExportDefaultClass(ExecutionMode mode)
+    {
+        const string source = """
+            function logged(target: any): void {
+                console.log("Class decorated");
+            }
+
+            @logged
+            export default class MyClass {
+                constructor() {}
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode, DecoratorMode.Legacy);
+        Assert.Equal("Class decorated\n", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void LegacyClassDecorator_OnExportAbstractClass(ExecutionMode mode)
+    {
+        const string source = """
+            function logged(target: any): void {
+                console.log("Class decorated");
+            }
+
+            @logged
+            export abstract class Shape {
+                abstract area(): number;
+            }
+
+            class Square extends Shape {
+                constructor(private side: number) { super(); }
+                area(): number { return this.side * this.side; }
+            }
+
+            console.log(new Square(3).area());
+            """;
+
+        var output = TestHarness.Run(source, mode, DecoratorMode.Legacy);
+        Assert.Equal("Class decorated\n9\n", output);
+    }
+
+    [Fact]
+    public void ClassDecorator_OnExportClass_PassesDecoratorArgument()
+    {
+        // Factory decorator on an exported class — the decorator arguments must still be
+        // threaded through, not dropped, when the class is exported.
+        const string source = """
+            function tag(name: string): any {
+                return function (target: any): void {
+                    console.log("Tagged: " + name);
+                };
+            }
+
+            @tag("widget")
+            export class Widget {
+                constructor() {}
+            }
+            """;
+
+        var output = TestHarness.RunInterpreted(source, DecoratorMode.Legacy);
+        Assert.Equal("Tagged: widget\n", output);
+    }
+
+    [Fact]
+    public void Decorator_OnExportFunction_IsRejected()
+    {
+        // Decorators are only valid on classes/class members — an exported *function*
+        // with a preceding decorator must still be a parse error.
+        const string source = """
+            function logged(target: any): void {}
+
+            @logged
+            export function foo(): void {}
+            """;
+
+        var exception = Assert.Throws<Exception>(() =>
+            TestHarness.RunInterpreted(source, DecoratorMode.Legacy));
+        Assert.Contains("Decorators are not valid here", exception.Message);
+    }
+
+    #endregion
 }

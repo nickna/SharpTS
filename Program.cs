@@ -99,7 +99,7 @@ switch (command)
         break;
 
     case ParsedCommand.GenDecl genDecl:
-        GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath);
+        GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json);
         break;
 }
 
@@ -809,35 +809,23 @@ static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, Pa
     }
 }
 
-static void GenerateDeclarations(string typeOrAssembly, string? outputPath)
+static void GenerateDeclarations(string typeOrAssembly, string? outputPath, bool json)
 {
     try
     {
-        var generator = new DeclarationGenerator();
-        string result;
-
-        // Check if this is an assembly file path
-        if (typeOrAssembly.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-            typeOrAssembly.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!File.Exists(typeOrAssembly))
-            {
-                Console.WriteLine($"Error: Assembly not found: {typeOrAssembly}");
-                Environment.Exit(1);
-            }
-            result = generator.GenerateForAssembly(typeOrAssembly);
-        }
-        else
-        {
-            // Treat as a type name
-            result = generator.GenerateForType(typeOrAssembly);
-        }
+        // --gen-decl is a .NET interop *discovery* tool (issue #1194): it inspects a type,
+        // namespace, or assembly and reports which members are usable from TypeScript interop,
+        // with the `dotnet:` import line for usable types. It no longer emits pasteable TS
+        // source (which was lossy for Span<T>/ref/pointer surfaces — see #1193).
+        var generator = new DiscoveryGenerator();
+        var report = generator.Generate(typeOrAssembly);
+        string result = json ? DiscoveryEmitter.EmitJson(report) : DiscoveryEmitter.EmitText(report);
 
         // Output to file or console
         if (outputPath != null)
         {
             File.WriteAllText(outputPath, result);
-            Console.WriteLine($"Generated declarations: {outputPath}");
+            Console.WriteLine($"Wrote discovery report: {outputPath}");
         }
         else
         {
@@ -885,7 +873,7 @@ static void PrintHelp()
     Console.WriteLine("  sharpts [options] [script.ts] [args...]");
     Console.WriteLine("  sharpts [options] script.ts -- [script-args...]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
-    Console.WriteLine("  sharpts --gen-decl <TypeName|AssemblyPath> [-o output.d.ts]");
+    Console.WriteLine("  sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]");
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  -h, --help                    Show this help message");
@@ -927,6 +915,8 @@ static void PrintHelp()
     Console.WriteLine("  sharpts --compile app.ts          Compile to app.dll");
     Console.WriteLine("  sharpts --compile app.ts -t exe   Compile to executable");
     Console.WriteLine("  sharpts --compile app.ts --pack   Compile and create NuGet package");
+    Console.WriteLine("  sharpts --gen-decl System.Text.StringBuilder   Inspect a .NET type for interop");
+    Console.WriteLine("  sharpts --gen-decl System.Text     List the interop-usable types in a namespace");
 }
 
 static void PrintCompileUsage()

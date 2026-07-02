@@ -184,6 +184,92 @@ public static class DotNetTypeMapper
     }
 
     /// <summary>
+    /// Renders a .NET type <em>faithfully</em> — the real CLR shape, including forms that have
+    /// no valid TypeScript spelling (<c>ReadOnlySpan&lt;char&gt;</c>, <c>int*</c>, <c>Guid&amp;</c>,
+    /// open generics). Used by the <c>--gen-decl</c> discovery tool, whose job is to describe a
+    /// type accurately rather than emit pasteable TypeScript — so it never mangles these into
+    /// invalid syntax the way <see cref="MapToTypeScript"/> (a lossy TS coercion) would.
+    /// </summary>
+    public static string Describe(Type type)
+    {
+        // by-ref (ref/out/in) — the caller prefixes the ref/out/in keyword; show the pointee.
+        if (type.IsByRef)
+            return Describe(type.GetElementType()!);
+
+        if (type.IsPointer)
+            return Describe(type.GetElementType()!) + "*";
+
+        if (type.IsArray)
+        {
+            int rank = type.GetArrayRank();
+            string commas = rank > 1 ? new string(',', rank - 1) : "";
+            return Describe(type.GetElementType()!) + "[" + commas + "]";
+        }
+
+        if (type == typeof(void))
+            return "void";
+
+        // An unbound generic parameter renders as its own name (T, TKey, …).
+        if (type.IsGenericParameter)
+            return type.Name;
+
+        // Nullable<T> → "T?".
+        var underlyingNullable = Nullable.GetUnderlyingType(type);
+        if (underlyingNullable != null)
+            return Describe(underlyingNullable) + "?";
+
+        if (type.IsGenericType)
+        {
+            string baseName = StripArity(type.Name);
+            var args = type.GetGenericArguments().Select(Describe);
+            return $"{baseName}<{string.Join(", ", args)}>";
+        }
+
+        // C# keyword aliases keep primitives readable (int, string, bool, …).
+        return CSharpAlias(type) ?? type.Name;
+    }
+
+    /// <summary>
+    /// Renders a parameter faithfully, including the <c>ref</c>/<c>out</c>/<c>in</c> modifier
+    /// (which lives on the parameter, not the type) and a trailing <c>?</c> for optional params.
+    /// </summary>
+    public static string DescribeParameter(ParameterMetadata param)
+    {
+        string modifier = param.IsByRef
+            ? (param.IsOut ? "out " : param.IsIn ? "in " : "ref ")
+            : "";
+        string name = ToTypeScriptPropertyName(param.Name);
+        string optional = param.IsOptional ? "?" : "";
+        return $"{name}{optional}: {modifier}{Describe(param.ParameterType)}";
+    }
+
+    private static string StripArity(string name)
+    {
+        int tick = name.IndexOf('`');
+        return tick >= 0 ? name[..tick] : name;
+    }
+
+    private static string? CSharpAlias(Type type)
+    {
+        if (type == typeof(bool)) return "bool";
+        if (type == typeof(byte)) return "byte";
+        if (type == typeof(sbyte)) return "sbyte";
+        if (type == typeof(char)) return "char";
+        if (type == typeof(short)) return "short";
+        if (type == typeof(ushort)) return "ushort";
+        if (type == typeof(int)) return "int";
+        if (type == typeof(uint)) return "uint";
+        if (type == typeof(long)) return "long";
+        if (type == typeof(ulong)) return "ulong";
+        if (type == typeof(float)) return "float";
+        if (type == typeof(double)) return "double";
+        if (type == typeof(decimal)) return "decimal";
+        if (type == typeof(string)) return "string";
+        if (type == typeof(object)) return "object";
+        return null;
+    }
+
+    /// <summary>
     /// Converts a .NET method name to TypeScript naming convention (camelCase).
     /// </summary>
     public static string ToTypeScriptMethodName(string dotNetName)

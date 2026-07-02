@@ -205,13 +205,31 @@ public partial class Parser
     /// - export default class {}                    (default class export)
     /// - export = expression;                       (CommonJS export assignment)
     /// </summary>
-    private Stmt ExportDeclaration()
+    /// <param name="classDecorators">
+    /// Decorators parsed before the `export` keyword (`@decorator export class …`). Only the
+    /// class-producing forms — `export [default|abstract] class` and `export declare [abstract]
+    /// class` — accept them; every other export form rejects them via <see cref="RejectDecorators"/>,
+    /// matching TypeScript's "decorators can only be applied to classes and class members" rule.
+    /// </param>
+    private Stmt ExportDeclaration(List<Decorator>? classDecorators = null)
     {
         Token keyword = Previous();
+
+        // Decorators are only valid on the class-producing export forms below. Every other
+        // branch calls this first so `@dec export function/const/{…}/…` reports the same
+        // "not valid here" error TypeScript does, instead of silently dropping the decorators.
+        void RejectDecorators()
+        {
+            if (classDecorators is { Count: > 0 })
+            {
+                throw new Exception($"Parse Error at line {classDecorators[0].AtToken.Line}: Decorators are not valid here. Decorators can only be applied to classes and class members.");
+            }
+        }
 
         // export = <expression> (CommonJS export assignment)
         if (Match(TokenType.EQUAL))
         {
+            RejectDecorators();
             Expr exportValue = Expression();
             ConsumeSemicolon("Expect ';' after export assignment.");
             return new Stmt.Export(keyword, null, null, null, null, false, exportValue);
@@ -228,13 +246,14 @@ public partial class Parser
             // export default async function name() { } / async function* name() { }
             if (Match(TokenType.CLASS))
             {
-                declaration = ClassDeclaration(isAbstract: false);
+                declaration = ClassDeclaration(isAbstract: false, classDecorators: classDecorators);
             }
             else if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.FUNCTION)
             {
                 // `export default async function ...` — only claim ASYNC here when a
                 // `function` follows, so `export default async () => {}` still parses
                 // as a default async-arrow expression below.
+                RejectDecorators();
                 Advance(); // consume 'async'
                 Advance(); // consume 'function'
                 bool isGenerator = Match(TokenType.STAR);
@@ -242,12 +261,14 @@ public partial class Parser
             }
             else if (Match(TokenType.FUNCTION))
             {
+                RejectDecorators();
                 bool isGenerator = Match(TokenType.STAR);
                 declaration = FunctionDeclaration("function", isAsync: false, isGenerator: isGenerator);
             }
             else
             {
                 // export default <expression>;
+                RejectDecorators();
                 defaultExpr = Expression();
                 ConsumeSemicolon("Expect ';' after export default expression.");
             }
@@ -258,6 +279,7 @@ public partial class Parser
         // export { x, y } or export { x } from './module'
         if (Match(TokenType.LEFT_BRACE))
         {
+            RejectDecorators();
             var namedExports = ParseExportSpecifiers();
 
             // Re-export: export { x } from './module'
@@ -274,6 +296,7 @@ public partial class Parser
         // export * from './module' (re-export all)
         if (Match(TokenType.STAR))
         {
+            RejectDecorators();
             Consume(TokenType.FROM, "Expect 'from' after '*'.");
             string fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
             ConsumeSemicolon("Expect ';' after export.");
@@ -286,6 +309,7 @@ public partial class Parser
         // export import X = require('path') (re-export require)
         if (Match(TokenType.IMPORT))
         {
+            RejectDecorators();
             if (Check(TokenType.IDENTIFIER) && PeekNext().Type == TokenType.EQUAL)
             {
                 return ParseImportWithEquals(isExported: true);
@@ -298,6 +322,7 @@ public partial class Parser
         if (Match(TokenType.ASYNC))
         {
             // export async function foo() {}  /  export async function* foo() {}
+            RejectDecorators();
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
             bool isGenerator = Match(TokenType.STAR);
             decl = FunctionDeclaration("function", isAsync: true, isGenerator: isGenerator);
@@ -305,20 +330,22 @@ public partial class Parser
         else if (Match(TokenType.FUNCTION))
         {
             // export function foo() {}  /  export function* foo() {}
+            RejectDecorators();
             bool isGenerator = Match(TokenType.STAR);
             decl = FunctionDeclaration("function", isAsync: false, isGenerator: isGenerator);
         }
         else if (Match(TokenType.CLASS))
         {
-            decl = ClassDeclaration(isAbstract: false);
+            decl = ClassDeclaration(isAbstract: false, classDecorators: classDecorators);
         }
         else if (Match(TokenType.ABSTRACT))
         {
             Consume(TokenType.CLASS, "Expect 'class' after 'abstract'.");
-            decl = ClassDeclaration(isAbstract: true);
+            decl = ClassDeclaration(isAbstract: true, classDecorators: classDecorators);
         }
         else if (Match(TokenType.CONST))
         {
+            RejectDecorators();
             if (Match(TokenType.ENUM))
             {
                 decl = EnumDeclaration(isConst: true);
@@ -334,33 +361,58 @@ public partial class Parser
         }
         else if (Match(TokenType.LET))
         {
+            RejectDecorators();
             decl = VarDeclaration();
         }
         else if (Match(TokenType.VAR))
         {
+            RejectDecorators();
             // IsVar so the declaration participates in var hoisting (VarHoister).
             decl = VarDeclaration(isConst: false, isVar: true);
         }
         else if (Match(TokenType.INTERFACE))
         {
+            RejectDecorators();
             decl = InterfaceDeclaration();
         }
         else if (Match(TokenType.TYPE))
         {
+            RejectDecorators();
             decl = TypeAliasDeclaration();
         }
         else if (Match(TokenType.ENUM))
         {
+            RejectDecorators();
             decl = EnumDeclaration(isConst: false);
         }
         else if (Match(TokenType.NAMESPACE))
         {
+            RejectDecorators();
             decl = NamespaceDeclaration(isExported: true);
         }
         else if (Match(TokenType.DECLARE))
         {
-            // `export declare function/const/…` — an exported ambient declaration.
-            decl = AmbientDeclaration();
+            // `export declare [abstract] class …` — an exported ambient class declaration
+            // (the form `--gen-decl` and docs/dotnet-types.md emit, e.g.
+            // `@DotNetType(...) export declare class X {}`). Handle the class forms here,
+            // mirroring the bare `declare class` path in Declaration(), so decorators reach
+            // the class body; other ambient forms go through AmbientDeclaration() and reject
+            // decorators.
+            if (Match(TokenType.ABSTRACT))
+            {
+                Consume(TokenType.CLASS, "Expect 'class' after 'declare abstract'.");
+                decl = ClassDeclaration(isAbstract: true, classDecorators: classDecorators, isDeclare: true);
+            }
+            else if (Match(TokenType.CLASS))
+            {
+                decl = ClassDeclaration(isAbstract: false, classDecorators: classDecorators, isDeclare: true);
+            }
+            else
+            {
+                // `export declare function/const/…` — a non-class exported ambient declaration.
+                RejectDecorators();
+                decl = AmbientDeclaration();
+            }
         }
         else
         {
