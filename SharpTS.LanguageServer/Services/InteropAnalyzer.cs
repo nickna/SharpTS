@@ -1,5 +1,6 @@
 using System.Reflection;
 using SharpTS.Diagnostics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
 using SharpTS.Runtime.DotNet;
@@ -61,10 +62,15 @@ public sealed class InteropAnalyzer
 
         var stmtList = statements as IReadOnlyList<Stmt> ?? statements.ToList();
 
-        // Pass 1 — validate each @DotNetType class and record name -> CLR type.
+        // Pass 1 — validate each @DotNetType class and dotnet: import, recording
+        // name -> CLR type bindings for the call-site pass.
         foreach (var stmt in stmtList)
+        {
             if (stmt is Stmt.Class cls)
                 AnalyzeClass(cls, diags, bindings, positions);
+            else if (stmt is Stmt.Import import && DotNetImports.IsDotNetSpecifier(import.ModulePath))
+                AnalyzeDotNetImport(import, diags, bindings, positions);
+        }
 
         // Pass 2 — Tier 3d: validate event-subscription call sites against the bindings.
         var visitor = new EventCallVisitor(bindings, diags, positions);
@@ -72,6 +78,49 @@ public sealed class InteropAnalyzer
             visitor.Visit(stmt);
 
         return diags;
+    }
+
+    /// <summary>
+    /// Validates a <c>dotnet:</c> import statement: unsupported forms (default / namespace-star)
+    /// and each named import's resolvability, via the same
+    /// <see cref="DotNetImports.ResolveExportType"/> algorithm module loading uses — so the
+    /// squiggle at edit time and the load-time error can never disagree. Resolved names are
+    /// recorded as bindings for the event-call pass, exactly like @DotNetType classes.
+    /// </summary>
+    private void AnalyzeDotNetImport(Stmt.Import import, List<Diagnostic> diags, Dictionary<string, Type> bindings, PositionMap? pos)
+    {
+        string specifier = import.ModulePath[DotNetImports.Prefix.Length..];
+
+        if (import.DefaultImport != null)
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"'{import.ModulePath}' has no default export — dotnet: modules support named imports only.",
+                Loc(import.DefaultImport, pos)));
+        }
+
+        if (import.NamespaceImport != null)
+        {
+            diags.Add(Diagnostic.TypeError(
+                $"namespace imports (import * as …) are not supported for '{import.ModulePath}' — import the types you need by name.",
+                Loc(import.NamespaceImport, pos)));
+        }
+
+        if (import.NamedImports == null) return;
+
+        foreach (var spec in import.NamedImports)
+        {
+            Type type;
+            try
+            {
+                type = DotNetImports.ResolveExportType(specifier, spec.Imported.Lexeme, _resolve);
+            }
+            catch (Exception ex)
+            {
+                diags.Add(Diagnostic.TypeError(ex.Message, Loc(spec.Imported, pos)));
+                continue;
+            }
+            bindings[spec.LocalName?.Lexeme ?? spec.Imported.Lexeme] = type;
+        }
     }
 
     private void AnalyzeClass(Stmt.Class cls, List<Diagnostic> diags, Dictionary<string, Type> bindings, PositionMap? pos)

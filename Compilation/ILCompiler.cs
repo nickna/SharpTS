@@ -1059,6 +1059,14 @@ public partial class ILCompiler
         _modules.CurrentPath = null;
         _modules.CurrentDotNetNamespace = null;
 
+        // dotnet: imports register external types AFTER all user declarations so that
+        // name-collision detection sees every class in the program (ClassToModule is
+        // complete only once the loop above finishes).
+        foreach (var module in modules)
+        {
+            RegisterDotNetImports(module);
+        }
+
         // Alias namespace function import aliases to their targets now that every namespace
         // member function is in the registry (#657).
         ResolveNamespaceImportAliasFunctions();

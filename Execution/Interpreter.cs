@@ -1712,6 +1712,19 @@ public partial class Interpreter : IDisposable
             return;
         }
 
+        // dotnet: interop modules export a DotNetClass wrapper per imported .NET type —
+        // the same runtime binding an @DotNetType declare class produces (Interpreter.DotNet.cs),
+        // registered at import-resolution time instead of class-declaration time.
+        if (module.IsDotNetModule)
+        {
+            foreach (var (name, clrType) in module.DotNetExports!)
+            {
+                moduleInstance.SetExport(name, new DotNetClass(name, clrType));
+            }
+            moduleInstance.IsExecuted = true;
+            return;
+        }
+
         // Handle built-in modules specially - populate exports from interpreter implementations
         if (module.IsBuiltIn)
         {
@@ -1820,6 +1833,14 @@ public partial class Interpreter : IDisposable
                     if (importedParsed?.IsCommonJs == true)
                     {
                         ExecuteCommonJsModule(importedParsed);
+                        importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
+                    }
+                    // dotnet: modules are dependency-free and idempotent — execute on demand.
+                    // Covers modules reached outside the static InterpretModules order
+                    // (e.g. a dynamically imported file that itself imports a dotnet: module).
+                    else if (importedParsed?.IsDotNetModule == true)
+                    {
+                        ExecuteModule(importedParsed);
                         importedModuleInstance = _loadedModules.GetValueOrDefault(importedPath);
                     }
                 }

@@ -463,12 +463,15 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 
 ---
 
-## 16. .NET INTEROP (`@DotNetType`)
+## 16. .NET INTEROP (`dotnet:` imports + `@DotNetType`)
 
-`@DotNetType` marks a declared class as a facade over a real .NET type, enabling TypeScript code to use BCL types directly. **Works in both interpreter and compiled modes** as of 2026-04-18.
+.NET types can be consumed two ways: **`dotnet:` import specifiers** (recommended — zero boilerplate, type surface synthesized from reflection; epic #1195) and **`@DotNetType` declare classes** (manual, curated surface, supports `@DotNetOverload` hints). **Both work in interpreter and compiled modes.**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
+| `import { X } from "dotnet:Ns.Type"` (single-type form) | ✅ | Static types synthesized from reflection via `DotNetTypeSynthesizer`; members filtered by `DotNetInteropClassifier`; fluent chains stay typed (epic #1195) |
+| `import { X, Y } from "dotnet:Namespace"` (namespace form) | ✅ | Each named import resolves as `Namespace.Name`; nested types resolve through their declaring type's specifier; aliasing supported |
+| `dotnet:` v1 scope | — | Named imports only (no default/star/re-export/require/dynamic import); loaded/BCL assemblies only; no generic types (use `@DotNetType` for closed generics) |
 | `@DotNetType("Namespace.Type")` on `declare class` | ✅ | Instance methods, static methods, constructors, properties, fields |
 | `@DotNetOverload("type1,type2,...")` overload hints | ✅ | Pin a specific overload when argument-based resolution is ambiguous |
 | Overload resolution | ✅ | Identity → widening → narrowing → object cost scale; same semantics in both modes |
@@ -482,7 +485,7 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 
 Compiled mode uses late-bound reflection to the shim (`DotNetDelegateShim` / `DotNetEventBinder`) so the output DLL stays standalone. See `docs/dotnet-types.md` for the full guide.
 
-`--gen-decl` (`DiscoveryGenerator` / `DiscoveryEmitter`) reports which members are usable from interop using `DotNetInteropClassifier` — the same by-ref/pointer/ref-struct/open-generic rules the runtime marshaller enforces, so the tool and the runtime never disagree. It reports faithfully rather than emitting pasteable TypeScript (realistic BCL surfaces have `Span<T>`/`ref`/pointer members with no valid TS spelling). Hand-written `@DotNetType(...) export declare class` declarations remain the consumption path.
+`--gen-decl` (`DiscoveryGenerator` / `DiscoveryEmitter`) reports which members are usable from interop using `DotNetInteropClassifier` — the same by-ref/pointer/ref-struct/open-generic rules the runtime marshaller and the `dotnet:` import resolver enforce, so the tool and the runtime never disagree. It reports faithfully rather than emitting pasteable TypeScript (realistic BCL surfaces have `Span<T>`/`ref`/pointer members with no valid TS spelling). The `dotnet:` import line it prints is the primary consumption path; hand-written `@DotNetType(...) export declare class` declarations remain the manual alternative.
 
 ---
 

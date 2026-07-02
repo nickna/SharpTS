@@ -42,6 +42,15 @@ public partial class ILEmitter
 
         if (field != null)
         {
+            // Literal (const) fields — enum members included — have no storage slot, so
+            // Ldsfld is invalid IL on them. Embed the compile-time constant instead.
+            if (field.IsLiteral)
+            {
+                EmitExternalLiteralField(field);
+                SetStackUnknown();
+                return true;
+            }
+
             IL.Emit(OpCodes.Ldsfld, field);
 
             if (field.FieldType.IsValueType)
@@ -53,6 +62,54 @@ public partial class ILEmitter
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Loads a literal (const) field's value as a boxed object. Enum members are boxed to the
+    /// enum type (so they round-trip into .NET parameters and ToString correctly); numeric
+    /// constants normalize to double, mirroring the interpreter's <c>DotNetMarshaller.WrapReturn</c>.
+    /// </summary>
+    private void EmitExternalLiteralField(System.Reflection.FieldInfo field)
+    {
+        object? raw = field.GetRawConstantValue();
+
+        if (field.FieldType.IsEnum && raw != null)
+        {
+            // Box expects the underlying integral on the stack when boxing an enum type.
+            var underlying = Enum.GetUnderlyingType(field.FieldType);
+            if (underlying == typeof(long) || underlying == typeof(ulong))
+            {
+                IL.Emit(OpCodes.Ldc_I8, raw is ulong ul ? unchecked((long)ul) : Convert.ToInt64(raw));
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldc_I4, raw is uint ui ? unchecked((int)ui) : Convert.ToInt32(raw));
+            }
+            IL.Emit(OpCodes.Box, field.FieldType);
+            return;
+        }
+
+        switch (raw)
+        {
+            case null:
+                IL.Emit(OpCodes.Ldnull);
+                break;
+            case string s:
+                IL.Emit(OpCodes.Ldstr, s);
+                break;
+            case bool b:
+                IL.Emit(b ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
+                break;
+            case char c:
+                // The interpreter's WrapReturn maps char to a one-character string; match it.
+                IL.Emit(OpCodes.Ldstr, c.ToString());
+                break;
+            default:
+                IL.Emit(OpCodes.Ldc_R8, Convert.ToDouble(raw));
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                break;
+        }
     }
 
     /// <summary>

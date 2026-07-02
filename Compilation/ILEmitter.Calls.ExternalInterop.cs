@@ -43,7 +43,20 @@ public partial class ILEmitter
         // Emit receiver and prepare for member access
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType;
+        if (externalType.IsValueType && !method.DeclaringType!.IsValueType)
+        {
+            // A method inherited from a reference base (Enum.ToString(), ValueType.Equals,
+            // Object.GetHashCode, …) takes the BOXED receiver as `this` — Ldloca/Call with an
+            // unboxed address would pass a managed pointer where an object reference is
+            // expected (NRE inside the callee).
+            IL.Emit(OpCodes.Castclass, method.DeclaringType);
+            isValueType = false;
+        }
+        else
+        {
+            isValueType = PrepareReceiverForMemberAccess(externalType);
+        }
 
         // Emit arguments with type conversion (handles params arrays)
         EmitExternalCallArguments(arguments, method, candidate);

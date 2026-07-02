@@ -42,13 +42,39 @@ public sealed class MemberHoverService
             ?? UsageHover(parsed.Statements, pos, line, character, bindings);
     }
 
-    // TS class name -> CLR type, for every @DotNetType declaration in the file.
+    // TS class name -> CLR type, for every @DotNetType declaration and dotnet: import
+    // in the file. Imports are keyed under both the local binding name (new SB()) and the
+    // CLR simple name — the checker's synthesized class carries the CLR name, so usage
+    // hovers on receivers resolve through it.
     private Dictionary<string, Type> CollectBindings(IReadOnlyList<Stmt> statements)
     {
         var map = new Dictionary<string, Type>(StringComparer.Ordinal);
         foreach (var s in statements)
+        {
             if (s is Stmt.Class cls && DotNetTypeOf(cls) is { } t)
                 map[cls.Name.Lexeme] = t;
+
+            if (s is Stmt.Import import
+                && SharpTS.Modules.DotNetImports.IsDotNetSpecifier(import.ModulePath)
+                && import.NamedImports != null)
+            {
+                string specifier = import.ModulePath[SharpTS.Modules.DotNetImports.Prefix.Length..];
+                foreach (var spec in import.NamedImports)
+                {
+                    try
+                    {
+                        var type = SharpTS.Modules.DotNetImports.ResolveExportType(
+                            specifier, spec.Imported.Lexeme, _resolve);
+                        map[spec.LocalName?.Lexeme ?? spec.Imported.Lexeme] = type;
+                        map.TryAdd(type.Name, type);
+                    }
+                    catch
+                    {
+                        // Unresolvable import — no hover; InteropAnalyzer reports the diagnostic.
+                    }
+                }
+            }
+        }
         return map;
     }
 

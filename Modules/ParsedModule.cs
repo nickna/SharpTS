@@ -92,6 +92,18 @@ public class ParsedModule
     public bool IsBuiltIn { get; set; }
 
     /// <summary>
+    /// For <c>dotnet:</c>-scheme modules only: exported names mapped to their resolved CLR
+    /// types. Null for every other module kind. Populated incrementally by
+    /// <see cref="DotNetImports.EnsureImports"/> as import statements naming this module are
+    /// discovered — the export surface of a <c>dotnet:</c> namespace module is defined by what
+    /// programs import from it, not by enumerating the namespace.
+    /// </summary>
+    public Dictionary<string, Type>? DotNetExports { get; set; }
+
+    /// <summary>True if this is a synthesized <c>dotnet:</c>-scheme interop module.</summary>
+    public bool IsDotNetModule => DotNetExports != null;
+
+    /// <summary>
     /// True if file has no import/export statements (is a "script" file).
     /// Scripts share global scope; modules have isolated scope.
     /// </summary>

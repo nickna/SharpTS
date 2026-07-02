@@ -1372,6 +1372,15 @@ public partial class Interpreter
         string currentPath = _currentModule?.Path ?? Directory.GetCurrentDirectory();
         string absolutePath = _moduleResolver.ResolveModulePath(specifier, currentPath);
 
+        // dotnet: modules have no enumerable namespace object — their export surface is
+        // defined by static named imports. Reject instead of returning a partial view.
+        if (DotNetImports.IsDotNetSpecifier(absolutePath))
+        {
+            throw new InterpreterException(
+                $"Dynamic import of '{specifier}' is not supported. " +
+                "Use a static named import: import { TypeName } from \"" + specifier + "\";");
+        }
+
         // Check if module is already loaded
         if (_loadedModules.TryGetValue(absolutePath, out var cached))
         {
