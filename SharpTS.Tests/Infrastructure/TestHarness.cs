@@ -253,7 +253,11 @@ public static class TestHarness
         //      which would surface the testhost's argv in-process, not the test's.
         //   2. copySharpTsRuntime == false — RunCompiledStandalone simulates a
         //      shipped DLL with no SharpTS.dll alongside; that only repros via spawn.
-        if (scriptArgs is not null || !copySharpTsRuntime)
+        // SHARPTS_FORCE_SUBPROCESS=1 forces the spawn path for every compiled
+        // test — a diagnostic knob for launch-path-sensitive investigations
+        // (the #39 JIT bug only reproduced through the subprocess path).
+        if (scriptArgs is not null || !copySharpTsRuntime ||
+            Environment.GetEnvironmentVariable("SHARPTS_FORCE_SUBPROCESS") == "1")
             return RunCompiledViaSubprocess(source, decoratorMode, timeout, scriptArgs, includeTestsAssembly, copySharpTsRuntime);
 
         return RunCompiledInProcess(source, decoratorMode, timeout);

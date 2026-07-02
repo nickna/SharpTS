@@ -66,12 +66,12 @@ public partial class RuntimeEmitter
         currentArrayLikeReceiverField.SetCustomAttribute(new CustomAttributeBuilder(threadStaticCtor, []));
         runtime.CurrentArrayLikeReceiverField = currentArrayLikeReceiverField;
         // Reuse `_currentArrayLikeReceiver` for the lazy iteration signal too.
-        // Adding a SECOND [ThreadStatic] field to $Runtime triggers a .NET 10
-        // tier-0 QuickJit miscompilation on `arr.map(...).includes(s)` — same
-        // bug already documented in IntlDateTimeFormatTests / commit 696bdbc.
-        // Reusing the existing field is also semantically clean: the dispatch
-        // site already sets it to the original receiver, and LoadArrayLikeElement
-        // can decide eager vs lazy by inspecting the receiver's type.
+        // (Historically forced by the layout-sensitive .NET 10 tier-0 JIT bug
+        // behind issue #39 — fixed upstream in 10.0.x servicing, so adding
+        // fields here is safe again.) The reuse is kept because it is also
+        // semantically clean: the dispatch site already sets the field to the
+        // original receiver, and LoadArrayLikeElement can decide eager vs lazy
+        // by inspecting the receiver's type.
         runtime.LazyArrayLikeReceiverField = currentArrayLikeReceiverField;
 
         // Thread-static "callback thisArg" for `arr.forEach(cb, thisArg)` and
