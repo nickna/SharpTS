@@ -154,6 +154,12 @@ public static class TestHarness
 
             using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
             interpreter.SetDecoratorMode(decoratorMode);
+            // Fire Node process lifecycle events (beforeExit/exit at drain) like
+            // the CLI does, so dual-mode tests can observe them. Tests that
+            // REGISTER lifecycle listeners share the process singleton and must
+            // run in a serialized collection + reset via
+            // ProcessBuiltIns.ResetProcessState() (see ProcessLifecycleTests).
+            interpreter.EmitProcessLifecycleEvents = true;
             interpreter.Interpret(statements, typeMap);
 
             // Normalize line endings for cross-platform test consistency
@@ -701,6 +707,8 @@ public static class TestHarness
             var typeMap = checker.CheckModules(allModules, resolver);
 
             using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
+            // Match the CLI: fire process lifecycle events at loop drain (#1080).
+            interpreter.EmitProcessLifecycleEvents = true;
             interpreter.InterpretModules(allModules, resolver, typeMap);
 
             return sw.ToString().Replace("\r\n", "\n");
