@@ -486,49 +486,88 @@ public static class BuiltInModuleTypes
     // via normal type inference.
 
     /// <summary>
-    /// Gets the exported types for the process module.
+    /// Gets the exported types for the process module (also the type surface of
+    /// <c>primitive:process</c> consumed by the stdlib facade). The
+    /// <c>processObject</c> entry is the full live process object exposed as the
+    /// module's default export (epic #1078).
     /// </summary>
     public static Dictionary<string, TypeInfo> GetProcessModuleTypes()
     {
         var numberType = new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
         var stringType = new TypeInfo.String();
+        var booleanType = new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN);
         var voidType = new TypeInfo.Void();
         var anyType = new TypeInfo.Any();
 
-        return new Dictionary<string, TypeInfo>
+        var surface = new Dictionary<string, TypeInfo>
         {
             // Properties
             ["platform"] = stringType,
             ["arch"] = stringType,
             ["pid"] = numberType,
+            ["ppid"] = numberType,
             ["version"] = stringType,
+            ["versions"] = anyType,
             ["env"] = new TypeInfo.Record(new Dictionary<string, TypeInfo>().ToFrozenDictionary()), // Record<string, string>
             ["argv"] = new TypeInfo.Array(stringType),
+            ["argv0"] = stringType,
+            ["execPath"] = stringType,
+            ["execArgv"] = new TypeInfo.Array(stringType),
             ["exitCode"] = numberType,
+            ["title"] = stringType,
+            ["config"] = anyType,
+            ["release"] = anyType,
+            ["features"] = anyType,
+            ["debugPort"] = numberType,
+            ["allowedNodeEnvironmentFlags"] = anyType,
             ["stdin"] = anyType,
             ["stdout"] = anyType,
             ["stderr"] = anyType,
+            ["report"] = anyType,
+            ["throwDeprecation"] = booleanType,
+            ["traceDeprecation"] = booleanType,
+            ["noDeprecation"] = booleanType,
+            ["sourceMapsEnabled"] = booleanType,
+            // IPC (present when forked / cluster worker)
+            ["connected"] = booleanType,
+            ["channel"] = anyType,
+            ["send"] = anyType,
+            ["disconnect"] = anyType,
+            // POSIX identity (undefined on Windows, like Node)
+            ["getuid"] = anyType,
+            ["geteuid"] = anyType,
+            ["getgid"] = anyType,
+            ["getegid"] = anyType,
+            ["getgroups"] = anyType,
+            ["setuid"] = anyType,
+            ["setgid"] = anyType,
 
             // Methods
             ["cwd"] = new TypeInfo.Function([], stringType),
             ["chdir"] = new TypeInfo.Function([stringType], voidType),
             ["exit"] = new TypeInfo.Function([numberType], voidType, RequiredParams: 0),
-            ["hrtime"] = new TypeInfo.Function(
-                [new TypeInfo.Array(numberType)],
-                new TypeInfo.Array(numberType),
-                RequiredParams: 0
-            ),
+            // hrtime / memoryUsage carry own members (hrtime.bigint(),
+            // memoryUsage.rss()) — typed any (function-with-members shape).
+            ["hrtime"] = anyType,
+            ["memoryUsage"] = anyType,
             ["uptime"] = new TypeInfo.Function([], numberType),
-            ["memoryUsage"] = new TypeInfo.Function([],
+            ["kill"] = new TypeInfo.Function([numberType, anyType], booleanType, RequiredParams: 1),
+            ["abort"] = new TypeInfo.Function([], voidType),
+            ["umask"] = new TypeInfo.Function([anyType], numberType, RequiredParams: 0),
+            ["cpuUsage"] = new TypeInfo.Function([anyType],
                 new TypeInfo.Record(new Dictionary<string, TypeInfo>
                 {
-                    ["rss"] = numberType,
-                    ["heapTotal"] = numberType,
-                    ["heapUsed"] = numberType,
-                    ["external"] = numberType,
-                    ["arrayBuffers"] = numberType
-                }.ToFrozenDictionary())
-            ),
+                    ["user"] = numberType,
+                    ["system"] = numberType
+                }.ToFrozenDictionary()),
+                RequiredParams: 0),
+            ["resourceUsage"] = new TypeInfo.Function([], anyType),
+            ["availableMemory"] = new TypeInfo.Function([], numberType),
+            ["constrainedMemory"] = new TypeInfo.Function([], numberType),
+            ["getActiveResourcesInfo"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
+            ["emitWarning"] = new TypeInfo.Function(
+                [anyType, anyType, anyType, anyType], voidType, RequiredParams: 1),
+            ["setSourceMapsEnabled"] = new TypeInfo.Function([booleanType], voidType),
             // nextTick(callback, ...args) - schedules callback for next tick
             // Use 'any' for callback to allow any function signature
             ["nextTick"] = new TypeInfo.Function(
@@ -546,19 +585,25 @@ public static class BuiltInModuleTypes
             ["removeListener"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["emit"] = new TypeInfo.Function(
                 [stringType, anyType],
-                new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN),
+                booleanType,
                 RequiredParams: 1,
                 HasRestParam: true
             ),
             ["removeAllListeners"] = new TypeInfo.Function([stringType], anyType, RequiredParams: 0),
             ["listenerCount"] = new TypeInfo.Function([stringType], numberType),
             ["listeners"] = new TypeInfo.Function([stringType], new TypeInfo.Array(anyType)),
+            ["rawListeners"] = new TypeInfo.Function([stringType], new TypeInfo.Array(anyType)),
             ["eventNames"] = new TypeInfo.Function([], new TypeInfo.Array(stringType)),
             ["prependListener"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["prependOnceListener"] = new TypeInfo.Function([stringType, anyType], anyType),
             ["setMaxListeners"] = new TypeInfo.Function([numberType], anyType),
             ["getMaxListeners"] = new TypeInfo.Function([], numberType)
         };
+
+        // The live process object itself (module default export / bare global):
+        // same surface as the named exports.
+        surface["processObject"] = new TypeInfo.Record(surface.ToFrozenDictionary());
+        return surface;
     }
 
     /// <summary>
