@@ -142,10 +142,10 @@ public class ClusterModuleTests : IDisposable
 
     #endregion
 
-    #region Fork and Worker Lifecycle (Interpreter Only)
+    #region Fork and Worker Lifecycle (dual-mode: compiled fork bridges to interpreted workers, #1171)
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_WorkerExitsSuccessfully(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -170,7 +170,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_WorkerSeesIsWorkerTrue(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -194,7 +194,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_WorkerToParentMessaging(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -221,7 +221,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_ParentToWorkerMessaging(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -253,7 +253,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_WorkerExitEvent(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -277,7 +277,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_ClusterWorkersDict(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -307,7 +307,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Worker_Disconnect(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -338,7 +338,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Worker_Kill(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -365,7 +365,7 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Cluster_DisconnectAll(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -412,42 +412,51 @@ public class ClusterModuleTests : IDisposable
     #region Cluster Port Sharing
 
     [Theory]
-    [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
     public void Fork_WorkersShareNetPort(ExecutionMode mode)
     {
         var port = GetFreePort();
         var files = new Dictionary<string, string>
         {
+            // Mutable state and the per-connection helper live at module level:
+            // closures created in a loop inside another closure hit a pre-existing
+            // compiled closure-capture bug (each inner closure sees a fresh copy of
+            // the enclosing block environment), so the test keeps captures out of
+            // that shape — it exercises cluster, not the closure bug.
             ["main.ts"] = $$"""
                 import * as cluster from 'cluster';
                 import * as net from 'net';
 
-                if (cluster.isPrimary) {
-                    const w1 = cluster.fork();
-                    const w2 = cluster.fork();
-                    let readyCount = 0;
-                    let responseCount = 0;
+                let readyCount = 0;
+                let responseCount = 0;
+                let w1: any = null;
+                let w2: any = null;
 
-                    const checkReady = () => {
-                        readyCount++;
-                        if (readyCount === 2) {
-                            // Both workers are listening, connect multiple times
-                            for (let i = 0; i < 4; i++) {
-                                const client = net.createConnection({ port: {{port}}, host: '127.0.0.1' });
-                                client.setEncoding('utf8');
-                                client.on('data', (data: string) => {
-                                    responseCount++;
-                                    client.destroy();
-                                    if (responseCount === 4) {
-                                        console.log('responses: ' + responseCount);
-                                        w1.kill();
-                                        w2.kill();
-                                    }
-                                });
-                            }
+                const connectOnce = () => {
+                    const client = net.createConnection({ port: {{port}}, host: '127.0.0.1' });
+                    client.setEncoding('utf8');
+                    client.on('data', (data: string) => {
+                        responseCount++;
+                        client.destroy();
+                        if (responseCount === 4) {
+                            console.log('responses: ' + responseCount);
+                            w1.kill();
+                            w2.kill();
                         }
-                    };
+                    });
+                };
 
+                const checkReady = () => {
+                    readyCount++;
+                    if (readyCount === 2) {
+                        // Both workers are listening, connect multiple times
+                        for (let i = 0; i < 4; i++) connectOnce();
+                    }
+                };
+
+                if (cluster.isPrimary) {
+                    w1 = cluster.fork();
+                    w2 = cluster.fork();
                     w1.on('message', (msg: any) => {
                         if (msg === 'ready') checkReady();
                     });
@@ -626,6 +635,327 @@ public class ClusterModuleTests : IDisposable
 
         var output = TestHarness.RunModules(files, "main.ts", mode, PortTestTimeout);
         Assert.Contains("http response: worker-", output);
+    }
+
+    #endregion
+
+    #region Live State, Events, Worker + Settings Completeness (#1166)
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void LiveWorkers_ReflectedThroughImportedBinding(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                if (cluster.isPrimary) {
+                    console.log('before: ' + Object.keys(cluster.workers).length);
+                    cluster.on('exit', () => {
+                        console.log('after exit: ' + Object.keys(cluster.workers).length);
+                    });
+                    cluster.fork();
+                    console.log('after fork: ' + Object.keys(cluster.workers).length);
+                } else {
+                    // Worker exits immediately
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("before: 0", output);
+        Assert.Contains("after fork: 1", output);
+        Assert.Contains("after exit: 0", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Setup_EventFiresOnSetupPrimary(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                cluster.on('setup', (settings: any) => {
+                    console.log('setup: silent=' + settings.silent);
+                });
+                cluster.setupPrimary({ silent: true });
+                console.log('done');
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("setup: silent=true", output);
+        Assert.Contains("done", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Listening_EventFiresWithAddress(ExecutionMode mode)
+    {
+        var port = GetFreePort();
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = $$"""
+                import * as cluster from 'cluster';
+                import * as net from 'net';
+
+                if (cluster.isPrimary) {
+                    cluster.on('listening', (worker: any, address: any) => {
+                        console.log('listening: port=' + address.port + ' type=' + address.addressType);
+                        worker.kill();
+                    });
+                    const w = cluster.fork();
+                    w.on('listening', (address: any) => {
+                        console.log('worker-level listening: ' + address.port);
+                    });
+                } else {
+                    const server = net.createServer((socket) => { socket.end(); });
+                    server.listen({{port}});
+                    setTimeout(() => {}, 10000);
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode, PortTestTimeout);
+        Assert.Contains($"listening: port={port} type=4", output);
+        Assert.Contains($"worker-level listening: {port}", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void WorkerProcess_PidConnectedAndMessageForwarding(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                if (cluster.isPrimary) {
+                    const w = cluster.fork();
+                    w.process.on('message', (msg: any) => {
+                        console.log('via process: ' + msg);
+                        console.log('pid number: ' + (typeof w.process.pid === 'number'));
+                        console.log('connected: ' + w.process.connected);
+                        w.kill();
+                    });
+                } else {
+                    process.send('hi');
+                    setTimeout(() => {}, 10000);
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("via process: hi", output);
+        Assert.Contains("pid number: true", output);
+        Assert.Contains("connected: true", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Worker_DestroyEmitsExitWithSignal(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                if (cluster.isPrimary) {
+                    const w = cluster.fork();
+                    w.on('online', () => {
+                        w.destroy();
+                    });
+                    w.on('exit', (code: any, signal: any) => {
+                        console.log('exit: code=' + code + ' signal=' + signal + ' ead=' + w.exitedAfterDisconnect);
+                    });
+                } else {
+                    setTimeout(() => {}, 10000);
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("exit: code=null signal=SIGTERM ead=true", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Settings_DefaultsAndMergeSemantics(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                cluster.setupPrimary({ args: ['x'], silent: true });
+                console.log('args: ' + cluster.settings.args[0]);
+                console.log('silent: ' + cluster.settings.silent);
+                console.log('serialization: ' + cluster.settings.serialization);
+                cluster.setupPrimary({ silent: false });
+                console.log('args after merge: ' + cluster.settings.args[0]);
+                console.log('silent after merge: ' + cluster.settings.silent);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("args: x", output);
+        Assert.Contains("silent: true", output);
+        Assert.Contains("serialization: json", output);
+        Assert.Contains("args after merge: x", output);
+        Assert.Contains("silent after merge: false", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void SchedulingPolicy_ConstantsAndRoundTrip(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                console.log('SCHED_NONE: ' + cluster.SCHED_NONE);
+                console.log('SCHED_RR: ' + cluster.SCHED_RR);
+                cluster.schedulingPolicy = cluster.SCHED_NONE;
+                console.log('none round-trips: ' + (cluster.schedulingPolicy === cluster.SCHED_NONE));
+                cluster.schedulingPolicy = cluster.SCHED_RR;
+                console.log('rr round-trips: ' + (cluster.schedulingPolicy === cluster.SCHED_RR));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("SCHED_NONE: 1", output);
+        Assert.Contains("SCHED_RR: 2", output);
+        Assert.Contains("none round-trips: true", output);
+        Assert.Contains("rr round-trips: true", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void WorkerArgv_HonorsSettingsArgs(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                if (cluster.isPrimary) {
+                    cluster.setupPrimary({ args: ['alpha'] });
+                    const w = cluster.fork();
+                    w.on('message', (msg: any) => {
+                        console.log('argv2: ' + msg);
+                        w.kill();
+                    });
+                } else {
+                    process.send(process.argv[2]);
+                    setTimeout(() => {}, 10000);
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("argv2: alpha", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void Silent_SuppressesWorkerConsoleOutput(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                if (cluster.isPrimary) {
+                    cluster.setupPrimary({ silent: true });
+                    const w = cluster.fork();
+                    w.on('message', (msg: any) => {
+                        console.log('signal: ' + msg);
+                    });
+                } else {
+                    console.log('WORKER_NOISE');
+                    process.send('done');
+                }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("signal: done", output);
+        Assert.DoesNotContain("WORKER_NOISE", output);
+    }
+
+    [Theory]
+    [MemberData(nameof(ExecutionModes.All), MemberType = typeof(ExecutionModes))]
+    public void RoundRobin_DistributesConnectionsAcrossWorkers(ExecutionMode mode)
+    {
+        var port = GetFreePort();
+        var files = new Dictionary<string, string>
+        {
+            // Module-level mutable state + connection helper — see Fork_WorkersShareNetPort.
+            ["main.ts"] = $$"""
+                import * as cluster from 'cluster';
+                import * as net from 'net';
+
+                let readyCount = 0;
+                let responses = 0;
+                let firstServer = '';
+                let distinct = 0;
+                let w1: any = null;
+                let w2: any = null;
+
+                const connectOnce = () => {
+                    const client = net.createConnection({ port: {{port}}, host: '127.0.0.1' });
+                    client.setEncoding('utf8');
+                    client.on('data', (data: string) => {
+                        if (firstServer === '') {
+                            firstServer = data;
+                            distinct = 1;
+                        } else if (data !== firstServer && distinct === 1) {
+                            distinct = 2;
+                        }
+                        responses++;
+                        client.destroy();
+                        if (responses === 4) {
+                            console.log('distinct servers: ' + distinct);
+                            w1.kill();
+                            w2.kill();
+                        }
+                    });
+                };
+
+                const checkReady = () => {
+                    readyCount++;
+                    if (readyCount === 2) {
+                        for (let i = 0; i < 4; i++) connectOnce();
+                    }
+                };
+
+                if (cluster.isPrimary) {
+                    cluster.schedulingPolicy = cluster.SCHED_RR;
+                    w1 = cluster.fork();
+                    w2 = cluster.fork();
+                    w1.on('message', (msg: any) => { if (msg === 'ready') checkReady(); });
+                    w2.on('message', (msg: any) => { if (msg === 'ready') checkReady(); });
+                } else {
+                    const server = net.createServer((socket) => {
+                        socket.write('worker-' + cluster.worker.id);
+                        socket.end();
+                    });
+                    server.listen({{port}}, () => {
+                        process.send('ready');
+                    });
+                    setTimeout(() => {}, 10000);
+                }
+                """
+        };
+
+        // With SCHED_RR and two registered workers, four connections split 2/2 —
+        // both workers must observably serve.
+        var output = TestHarness.RunModules(files, "main.ts", mode, PortTestTimeout);
+        Assert.Contains("distinct servers: 2", output);
     }
 
     #endregion

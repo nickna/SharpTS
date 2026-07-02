@@ -326,6 +326,73 @@ public class StandaloneDllTests
         }
     }
 
+    /// <summary>
+    /// cluster is a soft dependency (#1171): compiled cluster late-binds into
+    /// ClusterCompiledBridge (workers run interpreted), so a normal --compile co-locates
+    /// SharpTS.dll while --standalone must throw a clear error rather than silently
+    /// degrade (the tls lesson, #1033).
+    /// </summary>
+    [Fact]
+    public void Isolated_Cluster_ThrowsClearly_WhenSharpTsRuntimeAbsent()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+                if (cluster.isPrimary) {
+                    cluster.fork();
+                }
+                """
+        };
+
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            var ex = Assert.Throws<Exception>(() => ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+            Assert.Contains("cluster requires the SharpTS runtime", ex.Message);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    /// <summary>
+    /// A cluster program records the "cluster" soft-dependency reason so the CLI
+    /// co-locates SharpTS.dll next to non-standalone output (#1171).
+    /// </summary>
+    [Fact]
+    public void Cluster_RecordsSharpTsRuntimeDependency()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_cluster_dep_{Guid.NewGuid()}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var entryPath = Path.Combine(tempDir, "main.ts");
+            File.WriteAllText(entryPath, """
+                import * as cluster from 'cluster';
+                if (cluster.isPrimary) {
+                    cluster.fork();
+                }
+                """);
+
+            var resolver = new ModuleResolver(entryPath);
+            var entryModule = resolver.LoadModule(entryPath);
+            var modules = resolver.GetModulesInOrder(entryModule);
+            var typeMap = new TypeChecker().CheckModules(modules, resolver);
+            var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(modules.SelectMany(m => m.Statements).ToList());
+
+            var compiler = new ILCompiler("cluster_dep_test");
+            compiler.CompileModules(modules, resolver, typeMap, deadCodeInfo);
+
+            Assert.Contains("cluster", compiler.RequiredSharpTSRuntimeReasons);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     [Fact]
     public void Isolated_BroadcastChannel_ShouldExecuteWithoutSharpTsDll()
     {
