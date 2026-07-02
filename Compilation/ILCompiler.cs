@@ -91,6 +91,15 @@ public partial class ILCompiler
     public IReadOnlyCollection<string> RequiredSharpTSRuntimeReasons =>
         _runtime?.RequiredSharpTSRuntimeReasons ?? (IReadOnlyCollection<string>)Array.Empty<string>();
 
+    /// <summary>
+    /// The assemblies of every external .NET type the compilation bound (@DotNetType
+    /// classes and dotnet: imports). These are HARD metadata references in the emitted
+    /// IL; the CLI intersects them with the sharpts.json / -r reference set to decide
+    /// which third-party DLLs to co-locate with the output.
+    /// </summary>
+    public IReadOnlyCollection<System.Reflection.Assembly> ExternalInteropAssemblies =>
+        _typeMapper.ExternalTypes.Values.Select(t => t.Assembly).Distinct().ToArray();
+
     // Type information from static analysis
     private TypeMap _typeMap = null!;
 

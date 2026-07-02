@@ -10,12 +10,16 @@
 //   dotnet run -- --compile <file.ts>    - Compile to .NET IL assembly
 //   dotnet run -- -c <file.ts> -o out.dll - Compile with custom output path
 //
+// Global flags:
+//   -r, --reference <assembly.dll>       - Add .NET assembly reference (repeatable; all modes).
+//                                          sharpts.json next to/above the entry script supplies
+//                                          project-level references and NuGet packages.
+//
 // Compilation flags:
 //   --ref-asm                            - Emit reference-assembly-compatible output
 //   --sdk-path <path>                    - Explicit path to .NET SDK reference assemblies
 //   --preserveConstEnums                 - Preserve const enum declarations
 //   --verify                             - Verify emitted IL using Microsoft.ILVerification
-//   -r, --reference <assembly.dll>       - Add assembly reference (can be repeated)
 //
 // Decorator flags:
 //   --experimentalDecorators             - Enable Legacy (Stage 2) decorators
@@ -45,6 +49,7 @@ using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Packaging;
 using SharpTS.Parsing;
+using SharpTS.References;
 using SharpTS.TypeSystem;
 
 // Initialize fork IPC if this process was spawned via child_process.fork()
@@ -72,11 +77,14 @@ switch (command)
         break;
 
     case ParsedCommand.Repl repl:
+        var replRefs = LoadDotNetReferences(Environment.CurrentDirectory, repl.Options.References);
+        if (replRefs.ManifestPath != null)
+            Console.WriteLine($"Loaded {replRefs.ManifestPath}: {replRefs.References.Count} assembly reference(s)");
         RunPromptAsync(repl.Options.DecoratorMode).GetAwaiter().GetResult();
         break;
 
     case ParsedCommand.Script script:
-        RunFile(script.ScriptPath, script.Options.DecoratorMode, script.Options.EmitDecoratorMetadata, script.ScriptArgs, script.Options.CheckJs);
+        RunFile(script.ScriptPath, script.Options.DecoratorMode, script.Options.EmitDecoratorMetadata, script.ScriptArgs, script.Options.CheckJs, script.Options.References);
         break;
 
     case ParsedCommand.Compile compile:
@@ -99,14 +107,38 @@ switch (command)
         break;
 
     case ParsedCommand.GenDecl genDecl:
-        GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json);
+        GenerateDeclarations(genDecl.TypeOrAssembly, genDecl.OutputPath, genDecl.Json, genDecl.References);
         break;
 }
 
-static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null, bool checkJs = false)
+/// <summary>
+/// Resolves and loads third-party reference assemblies (sharpts.json manifest + -r flags)
+/// before any module loading or type checking, so every resolution seam sees the types.
+/// Reference errors are user-facing configuration problems: print and exit.
+/// </summary>
+static ReferenceSet LoadDotNetReferences(string startDirectory, IReadOnlyList<string> cliReferences)
+{
+    try
+    {
+        return DotNetReferences.Load(startDirectory, cliReferences);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.Message);
+        Environment.Exit(1);
+        throw; // unreachable
+    }
+}
+
+static void RunFile(string path, DecoratorMode decoratorMode, bool emitDecoratorMetadata, string[]? scriptArgs = null, bool checkJs = false, IReadOnlyList<string>? references = null)
 {
     string absolutePath = Path.GetFullPath(path);
     string source = File.ReadAllText(absolutePath);
+
+    // Third-party assembly references (sharpts.json walked up from the entry script,
+    // plus -r flags) load before any module resolution so dotnet: imports and
+    // @DotNetType declarations can see the types.
+    LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references ?? []);
 
     // Set script arguments for process.argv
     SharpTS.Runtime.BuiltIns.ProcessBuiltIns.SetScriptArguments(absolutePath, scriptArgs ?? []);
@@ -291,6 +323,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
         string absolutePath = Path.GetFullPath(inputPath);
         string source = File.ReadAllText(absolutePath);
 
+        // Third-party assembly references (sharpts.json + -r) load into this process
+        // before module resolution: dotnet: imports resolve at module-load time, and
+        // the returned set drives the post-Save co-location of referenced DLLs.
+        var externalRefs = LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references);
+
         // Load package.json if packaging is enabled
         PackageJson? packageJson = null;
         AssemblyMetadata? metadata = null;
@@ -376,11 +413,11 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
 
         if (hasModules)
         {
-            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode);
+            CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs);
         }
         else
         {
-            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas);
+            CompileSingleFile(statements, outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, absolutePath, lexer.Pragmas, externalRefs);
         }
 
         // Package if requested
@@ -410,7 +447,7 @@ static void CompileFile(string inputPath, string outputPath, bool preserveConstE
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs)
 {
     // Phase 1: Load all static dependencies via ModuleResolver
     var resolver = new ModuleResolver(absolutePath);
@@ -463,7 +500,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
             // Run IL verification on the DLL if requested
             if (verifyIL)
             {
-                VerifyCompiledAssembly(tempDllPath, sdkPath);
+                VerifyCompiledAssembly(tempDllPath, sdkPath, externalRefs);
             }
 
             // Bundle into single-file EXE
@@ -480,6 +517,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
                 // late-binds into the SharpTS runtime (eval, Proxy, Intl, vm, dns, @DotNetType
                 // dynamic events). Honors --standalone. Pure programs stay a single file.
                 CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
+                CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
             }
             catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
             {
@@ -505,6 +543,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
         GenerateRuntimeConfig(outputPath);
         CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
+        CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
         if (!outputOptions.QuietMode)
         {
             Console.WriteLine($"Compiled to {outputPath}");
@@ -513,13 +552,14 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         // Run IL verification if requested
         if (verifyIL)
         {
-            VerifyCompiledAssembly(outputPath, sdkPath);
+            VerifyCompiledAssembly(outputPath, sdkPath, externalRefs);
         }
     }
 }
 
-static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null)
+static void CompileSingleFile(List<Stmt> statements, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, string? sourcePath = null, TypeScriptPragmas? pragmas = null, ReferenceSet? externalRefs = null)
 {
+    externalRefs ??= ReferenceSet.Empty;
     // Set up diagnostic reporter
     var reporter = new DiagnosticReporter { MsBuildFormat = outputOptions.MsBuildErrors, QuietMode = outputOptions.QuietMode };
 
@@ -569,7 +609,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
             // Run IL verification on the DLL if requested
             if (verifyIL)
             {
-                VerifyCompiledAssembly(tempDllPath, sdkPath);
+                VerifyCompiledAssembly(tempDllPath, sdkPath, externalRefs);
             }
 
             // Bundle into single-file EXE
@@ -586,6 +626,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
                 // late-binds into the SharpTS runtime (eval, Proxy, Intl, vm, dns, @DotNetType
                 // dynamic events). Honors --standalone. Pure programs stay a single file.
                 CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
+                CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
             }
             catch (Exception ex) when (bundlerMode != BundlerMode.Auto)
             {
@@ -611,6 +652,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
 
         GenerateRuntimeConfig(outputPath);
         CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions);
+        CopyExternalReferencesIfNeeded(compiler, externalRefs, outputPath, outputOptions);
         if (!outputOptions.QuietMode)
         {
             Console.WriteLine($"Compiled to {outputPath}");
@@ -619,7 +661,7 @@ static void CompileSingleFile(List<Stmt> statements, string outputPath, bool pre
         // Run IL verification if requested
         if (verifyIL)
         {
-            VerifyCompiledAssembly(outputPath, sdkPath);
+            VerifyCompiledAssembly(outputPath, sdkPath, externalRefs);
         }
     }
 }
@@ -702,6 +744,129 @@ static void CopySharpTSRuntimeIfNeeded(ILCompiler compiler, string outputPath, O
     }
 }
 
+/// <summary>
+/// Co-locates third-party reference assemblies (sharpts.json / -r) with the compiled output.
+/// Unlike the SharpTS runtime soft-dependency, these are HARD metadata references — the
+/// emitted IL calls into them by token, and default host probing only searches the app
+/// directory. Copies only the assemblies whose types the program actually used, plus their
+/// transitive dependency closure (assets-graph subtree for NuGet packages, AssemblyName walk
+/// for local DLLs). <c>--standalone</c> suppresses the copy but lists what deployment needs.
+/// </summary>
+static void CopyExternalReferencesIfNeeded(ILCompiler compiler, ReferenceSet externalRefs, string outputPath, OutputOptions outputOptions)
+{
+    if (externalRefs.IsEmpty)
+        return;
+
+    // Which reference DLLs did the compilation actually bind types from?
+    var used = new List<ResolvedReference>();
+    foreach (var assembly in compiler.ExternalInteropAssemblies)
+    {
+        string location;
+        try { location = assembly.Location; } catch { continue; }
+        if (string.IsNullOrEmpty(location)) continue;
+        var match = externalRefs.FindByPath(Path.GetFullPath(location));
+        if (match != null && !used.Contains(match)) used.Add(match);
+    }
+    if (used.Count == 0)
+        return; // external types came only from the BCL / already-deployed assemblies
+
+    // Loaded assemblies by full path, for the local-DLL dependency walk.
+    var loadedByPath = new Dictionary<string, Assembly>(
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+    {
+        try
+        {
+            if (!assembly.IsDynamic && !string.IsNullOrEmpty(assembly.Location))
+                loadedByPath[Path.GetFullPath(assembly.Location)] = assembly;
+        }
+        catch { }
+    }
+
+    var copySet = new List<string>();
+    var seen = new HashSet<string>(loadedByPath.Comparer);
+
+    void AddLocalClosure(string dllPath)
+    {
+        if (!seen.Add(dllPath)) return;
+        copySet.Add(dllPath);
+
+        // Dependencies resolve from the reference set (recurse) or as siblings of the
+        // DLL that references them (copy). Shared-framework names match neither and
+        // fall out naturally.
+        if (!loadedByPath.TryGetValue(dllPath, out var assembly)) return;
+        foreach (var dependency in assembly.GetReferencedAssemblies())
+        {
+            string fileName = dependency.Name + ".dll";
+            var inSet = externalRefs.References.FirstOrDefault(r =>
+                string.Equals(Path.GetFileName(r.Path), fileName, StringComparison.OrdinalIgnoreCase));
+            if (inSet != null)
+            {
+                AddLocalClosure(inSet.Path);
+                continue;
+            }
+            string sibling = Path.Combine(Path.GetDirectoryName(dllPath)!, fileName);
+            if (File.Exists(sibling) && seen.Add(sibling))
+                copySet.Add(sibling);
+        }
+    }
+
+    foreach (var reference in used)
+    {
+        if (reference.Origin == ReferenceOrigin.Package)
+        {
+            foreach (var asset in externalRefs.RuntimeClosureFor(reference))
+            {
+                if (seen.Add(asset)) copySet.Add(asset);
+            }
+            // The closure always contains the package's own assets, but keep the used
+            // DLL itself even if the closure lookup came up empty.
+            if (seen.Add(reference.Path)) copySet.Add(reference.Path);
+        }
+        else
+        {
+            AddLocalClosure(reference.Path);
+        }
+    }
+
+    string usedNames = string.Join(", ", used.Select(r => Path.GetFileNameWithoutExtension(r.Path)));
+
+    if (outputOptions.Standalone)
+    {
+        if (!outputOptions.QuietMode)
+            Console.WriteLine(
+                $"Note: output references external .NET assemblies ({usedNames}); --standalone set, so they were " +
+                "not copied. The output will not run unless these assemblies are deployed next to it: " +
+                string.Join(", ", copySet.Select(Path.GetFileName)));
+        return;
+    }
+
+    var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath))!;
+    int copied = 0;
+    foreach (var source in copySet)
+    {
+        var destPath = Path.Combine(outDir, Path.GetFileName(source));
+        try
+        {
+            if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destPath), StringComparison.OrdinalIgnoreCase))
+            {
+                File.Copy(source, destPath, overwrite: true);
+                copied++;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!outputOptions.QuietMode)
+                Console.WriteLine($"Warning: failed to copy referenced assembly '{source}' next to output: {ex.Message}");
+        }
+    }
+
+    if (copied > 0 && !outputOptions.QuietMode)
+    {
+        Console.WriteLine($"Copied {copied} referenced assembl{(copied == 1 ? "y" : "ies")} next to output — required by external .NET types: {usedNames}");
+    }
+}
+
 static void GenerateRuntimeConfig(string outputPath)
 {
     string runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
@@ -719,11 +884,16 @@ static void GenerateRuntimeConfig(string outputPath)
     File.WriteAllText(runtimeConfigPath, runtimeConfig);
 }
 
-static void VerifyCompiledAssembly(string outputPath, string? sdkPath)
+static void VerifyCompiledAssembly(string outputPath, string? sdkPath, ReferenceSet? externalRefs = null)
 {
-    // The verifier resolves against the shared-framework runtime directory;
-    // an explicit --sdk-path is only an additional probe location.
-    using var verifier = new ILVerifier(sdkPath);
+    // The verifier resolves against the shared-framework runtime directory; an explicit
+    // --sdk-path and the directories of third-party reference assemblies (whose types the
+    // emitted IL references by token) are additional probe locations.
+    var probeDirs = externalRefs?.References
+        .Select(r => Path.GetDirectoryName(r.Path))
+        .Where(d => !string.IsNullOrEmpty(d))
+        .Cast<string>();
+    using var verifier = new ILVerifier(sdkPath, probeDirs);
     using var stream = File.OpenRead(outputPath);
     verifier.VerifyAndReport(stream);
 }
@@ -809,8 +979,12 @@ static void CreateNuGetPackage(string assemblyPath, PackageJson? packageJson, Pa
     }
 }
 
-static void GenerateDeclarations(string typeOrAssembly, string? outputPath, bool json)
+static void GenerateDeclarations(string typeOrAssembly, string? outputPath, bool json, IReadOnlyList<string> references)
 {
+    // Manifest (from CWD) + -r assemblies load first so type/namespace discovery
+    // sees third-party types, not just already-loaded ones.
+    LoadDotNetReferences(Environment.CurrentDirectory, references);
+
     try
     {
         // --gen-decl is a .NET interop *discovery* tool (issue #1194): it inspects a type,
@@ -881,6 +1055,14 @@ static void PrintHelp()
     Console.WriteLine("  --experimentalDecorators      Enable Legacy (Stage 2) decorators");
     Console.WriteLine("  --decorators                  Enable TC39 Stage 3 decorators");
     Console.WriteLine("  --emitDecoratorMetadata       Emit design-time type metadata");
+    Console.WriteLine("  -r, --reference <asm.dll>     Add a .NET assembly reference (repeatable; all modes)");
+    Console.WriteLine();
+    Console.WriteLine(".NET References:");
+    Console.WriteLine("  A sharpts.json next to (or above) the entry script supplies project-level");
+    Console.WriteLine("  references for dotnet: imports and @DotNetType:");
+    Console.WriteLine("    { \"references\": [\"./libs/MyLib.dll\"], \"packages\": { \"Some.Package\": \"1.2.3\" } }");
+    Console.WriteLine("  Packages restore via 'dotnet restore' into the global NuGet cache (.sharpts/");
+    Console.WriteLine("  holds the restore cache; add it to .gitignore).");
     Console.WriteLine();
     Console.WriteLine("Script Arguments:");
     Console.WriteLine("  Arguments after script.ts are passed to process.argv");
@@ -892,7 +1074,6 @@ static void PrintHelp()
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
-    Console.WriteLine("  -r, --reference <asm.dll>     Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --ref-asm                     Emit reference-assembly-compatible output");
     Console.WriteLine("  --sdk-path <path>             Path to .NET SDK reference assemblies");

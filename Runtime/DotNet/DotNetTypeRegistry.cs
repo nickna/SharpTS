@@ -30,7 +30,16 @@ public static class DotNetTypeRegistry
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                type = assembly.GetType(clrTypeName, throwOnError: false);
+                // A single broken assembly (e.g. a sharpts.json reference targeting a
+                // missing dependency) must not poison resolution of unrelated types.
+                try
+                {
+                    type = assembly.GetType(clrTypeName, throwOnError: false);
+                }
+                catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException)
+                {
+                    continue;
+                }
                 if (type != null) break;
             }
         }

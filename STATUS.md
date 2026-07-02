@@ -471,7 +471,9 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 |---------|--------|-------|
 | `import { X } from "dotnet:Ns.Type"` (single-type form) | ✅ | Static types synthesized from reflection via `DotNetTypeSynthesizer`; members filtered by `DotNetInteropClassifier`; fluent chains stay typed (epic #1195) |
 | `import { X, Y } from "dotnet:Namespace"` (namespace form) | ✅ | Each named import resolves as `Namespace.Name`; nested types resolve through their declaring type's specifier; aliasing supported |
-| `dotnet:` v1 scope | — | Named imports only (no default/star/re-export/require/dynamic import); loaded/BCL assemblies only; no generic types (use `@DotNetType` for closed generics) |
+| `dotnet:` scope | — | Named imports only (no default/star/re-export/require/dynamic import); no generic types (use `@DotNetType` for closed generics); no paths in specifiers (use `sharpts.json`) |
+| `sharpts.json` reference manifest | ✅ | `{ "references": [dll paths], "packages": { id: version } }` discovered by upward walk from the entry script; applies uniformly to interpreter, compiler, LSP, and `--gen-decl`; global `-r/--reference` flag augments per-invocation (issue #1197) |
+| NuGet packages in manifest | ✅ | Restored via `dotnet restore` on a generated project under `.sharpts/` (hash-gated — skipped when the package set is unchanged; offline after first restore); transitive dependencies resolved, loaded, and co-located with compiled output |
 | `@DotNetType("Namespace.Type")` on `declare class` | ✅ | Instance methods, static methods, constructors, properties, fields |
 | `@DotNetOverload("type1,type2,...")` overload hints | ✅ | Pin a specific overload when argument-based resolution is ambiguous |
 | Overload resolution | ✅ | Identity → widening → narrowing → object cost scale; same semantics in both modes |
@@ -480,7 +482,7 @@ SharpTS implements 20+ Node.js built-in modules accessible via `import ... from 
 | Event subscription (`+=` / `-=`) | ✅ | `obj.on(e)` / `obj.off(e)` style plus direct `+=` compound assignment in compiled mode; main-thread-only |
 | Exception mapping | ✅ | .NET exceptions surface as JS-catchable errors with message preservation (`DotNetExceptionMapper`) |
 | Value / reference type marshaling | ✅ | Primitives, strings, arrays, dictionaries; `DotNetMarshaller` centralizes conversion |
-| External assembly discovery | ✅ | `TryResolveExternalType` scans loaded AppDomain assemblies; no additional reference wiring needed |
+| External assembly discovery | ✅ | `TryResolveExternalType` scans loaded AppDomain assemblies; `sharpts.json`/`-r` assemblies load at startup so every seam sees them; compiled output co-locates used reference DLLs (+ closure) next to the output |
 | `--gen-decl` discovery tool | ✅ | Inspect a type/namespace/assembly: faithful CLR signatures + per-member usable/unsupported marker + `dotnet:` import line + `--json` (issue #1194) |
 
 Compiled mode uses late-bound reflection to the shim (`DotNetDelegateShim` / `DotNetEventBinder`) so the output DLL stays standalone. See `docs/dotnet-types.md` for the full guide.

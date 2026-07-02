@@ -111,6 +111,17 @@ public static class DotNetImports
     {
         resolve ??= DotNetTypeRegistry.Resolve;
 
+        if (specifier.Contains('/') || specifier.Contains('\\') || specifier.Contains('#') ||
+            specifier.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+            specifier.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new Exception(
+                $"Module Error: cannot import 'dotnet:{specifier}': dotnet: specifiers name types or " +
+                "namespaces, not assembly paths. Add the assembly to a sharpts.json manifest " +
+                "(\"references\": [\"./libs/MyLib.dll\"]) or pass -r ./libs/MyLib.dll, then import the " +
+                "type by name: import { Widget } from \"dotnet:MyLib.Widget\".");
+        }
+
         if (specifier.Contains('<') || specifier.Contains('`'))
         {
             throw new Exception(
