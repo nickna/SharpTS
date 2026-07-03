@@ -18,10 +18,20 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
         "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey",
-        "pbkdf2", "scrypt", "generateKeyPair", "hkdf"
+        "pbkdf2", "scrypt", "generateKeyPair", "hkdf",
+        // WebCrypto (#1063)
+        "webcrypto", "subtle", "getRandomValues"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
+
+    /// <summary>
+    /// webcrypto/subtle resolve to the $WebCrypto singleton at each access site (#1063)
+    /// — the import-time namespace-dict snapshot has no value form for them.
+    /// </summary>
+    public bool HasLivePropertyGet(string memberName) => memberName is "webcrypto" or "subtle";
+
+    public bool IsExportedProperty(string memberName) => memberName is "webcrypto" or "subtle";
 
     public bool TryEmitMethodCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {
@@ -60,8 +70,23 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // crypto module has no properties
-        return false;
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        switch (propertyName)
+        {
+            // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
+            case "webcrypto":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                return true;
+            case "subtle":
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetWebCryptoObject);
+                il.Emit(OpCodes.Ldstr, "subtle");
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static bool EmitCreateHash(IEmitterContext emitter, List<Expr> arguments)

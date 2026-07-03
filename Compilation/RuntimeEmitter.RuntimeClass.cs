@@ -1153,7 +1153,19 @@ public partial class RuntimeEmitter
         EmitConsoleExtensions(typeBuilder, runtime);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
+        {
             EmitCryptoMethods(typeBuilder, runtime);
+            // WebCrypto (#1063): byte-level $Runtime helpers, then the $CryptoKey/
+            // $SubtleCrypto/$WebCrypto types (which call into those helpers) and
+            // the GetWebCryptoObject singleton body.
+            EmitWebCryptoRuntimeHelpers(typeBuilder, runtime);
+            EmitWebCryptoTypes((System.Reflection.Emit.ModuleBuilder)typeBuilder.Module, runtime);
+        }
+        else
+        {
+            // The Phase1-reserved GetWebCryptoObject must still get a body.
+            EmitGetWebCryptoObjectStub(runtime);
+        }
         // Util module methods (util.types.* always emitted; promisify/callbackify/deprecate
         // gated inside EmitUtilMethods on _features.UsesUtilPromisify).
         EmitUtilMethods(typeBuilder, runtime);

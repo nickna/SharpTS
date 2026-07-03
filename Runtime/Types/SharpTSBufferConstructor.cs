@@ -110,6 +110,10 @@ public sealed class SharpTSBufferConstructor
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
+            // Buffer.from(arrayBuffer) / Buffer.from(typedArray) (#1063) — copies
+            // (Node copies for TypedArray; for ArrayBuffer Node shares memory — we copy).
+            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.AsSpan().ToArray()),
+            SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });
     }

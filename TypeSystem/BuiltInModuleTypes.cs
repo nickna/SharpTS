@@ -754,7 +754,13 @@ public static class BuiltInModuleTypes
             // hkdf(digest, ikm, salt, info, keylen, callback) -> void
             ["hkdf"] = new TypeInfo.Function(
                 [stringType, bufferOrStringType, bufferOrStringType, bufferOrStringType, numberType, anyType],
-                voidType)
+                voidType),
+
+            // WebCrypto (#1063): crypto.webcrypto / crypto.subtle / crypto.getRandomValues.
+            // Kept as `any` here; the full SubtleCrypto shape is #1065's type pass.
+            ["webcrypto"] = anyType,
+            ["subtle"] = anyType,
+            ["getRandomValues"] = new TypeInfo.Function([anyType], anyType)
         };
     }
 

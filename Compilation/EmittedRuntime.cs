@@ -2851,4 +2851,9 @@ public class EmittedRuntime
     public TypeBuilder TransformStreamType { get; set; } = null!;
     public ConstructorBuilder TransformStreamCtor { get; set; } = null!;
     public MethodBuilder BuildTransformSink { get; set; } = null!;
+
+    // WebCrypto (#1063) — GetWebCryptoObject() → the $WebCrypto singleton
+    // (globalThis.crypto / crypto.webcrypto). Reserved in DefineRuntimeClassPhase1;
+    // body filled by EmitWebCryptoTypes (or the null stub when crypto is unused).
+    public MethodBuilder GetWebCryptoObject { get; set; } = null!;
 }

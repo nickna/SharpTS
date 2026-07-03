@@ -87,7 +87,16 @@ public static class CryptoModuleInterpreter
             ["generatePrime"] = BuiltInMethod.CreateV2("generatePrime", 2, 3, GeneratePrimeAsync),
             ["generatePrimeSync"] = BuiltInMethod.CreateV2("generatePrimeSync", 1, 2, GeneratePrimeSync),
             ["checkPrime"] = BuiltInMethod.CreateV2("checkPrime", 2, 3, CheckPrimeAsync),
-            ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync)
+            ["checkPrimeSync"] = BuiltInMethod.CreateV2("checkPrimeSync", 1, 2, CheckPrimeSync),
+            // WebCrypto (#1063): module surface — same objects as globalThis.crypto
+            ["webcrypto"] = SharpTSWebCrypto.Instance,
+            ["subtle"] = SharpTSWebCrypto.Instance.Subtle,
+            ["getRandomValues"] = BuiltInMethod.CreateV2("getRandomValues", 1, (_, _, args) =>
+            {
+                if (args.Length == 0)
+                    throw new Exception("crypto.getRandomValues requires a typed array argument");
+                return RuntimeValue.FromBoxed(SharpTSWebCrypto.GetRandomValues(args[0].ToObject()));
+            })
         };
     }
 

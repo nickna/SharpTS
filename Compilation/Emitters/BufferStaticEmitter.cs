@@ -133,6 +133,35 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
 
                 il.MarkLabel(notBufferLabel2);
 
+                // Buffer.from(arrayBuffer) (#1063): wrap the $ArrayBuffer backing array
+                // (Node shares the memory; $Buffer wraps the same byte[]).
+                if (ctx.Runtime!.ArrayBufferType is not null)
+                {
+                    var notArrayBufferLabel = il.DefineLabel();
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Isinst, ctx.Runtime!.ArrayBufferType);
+                    il.Emit(OpCodes.Brfalse, notArrayBufferLabel);
+                    il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayBufferType);
+                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayBufferGetBuffer);
+                    il.Emit(OpCodes.Newobj, ctx.Runtime!.TSBufferCtor);
+                    il.Emit(OpCodes.Br, endLabel);
+                    il.MarkLabel(notArrayBufferLabel);
+                }
+
+                // Buffer.from(typedArray): copy the view window (Node copies here).
+                if (ctx.Runtime!.TypedArrayBaseType is not null && ctx.Runtime!.BufferCopyBytesFrom is not null)
+                {
+                    var notTypedArrayLabel = il.DefineLabel();
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Isinst, ctx.Runtime!.TypedArrayBaseType);
+                    il.Emit(OpCodes.Brfalse, notTypedArrayLabel);
+                    il.Emit(OpCodes.Ldnull); // offset
+                    il.Emit(OpCodes.Ldnull); // length
+                    il.Emit(OpCodes.Call, ctx.Runtime!.BufferCopyBytesFrom);
+                    il.Emit(OpCodes.Br, endLabel);
+                    il.MarkLabel(notTypedArrayLabel);
+                }
+
                 // Check if it's already a List<object?> (array literal)
                 var isListLabel = il.DefineLabel();
                 var afterListCheckLabel = il.DefineLabel();
