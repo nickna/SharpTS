@@ -7,7 +7,8 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
-    /// Emits: public static object CryptoCreateHash(string algorithm)
+    /// Emits: public static object CryptoCreateHash(string algorithm, object options)
+    /// options may carry { outputLength } for the XOF hashes (#1062).
     /// </summary>
     private void EmitCryptoCreateHash(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -15,13 +16,17 @@ public partial class RuntimeEmitter
             "CryptoCreateHash",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String]);
+            [_types.String, _types.Object]);
         runtime.CryptoCreateHash = method;
 
         var il = method.GetILGenerator();
 
-        // new $Hash(algorithm) - use emitted type for standalone compatibility
+        // new $Hash(algorithm, GetOptionInt(options, "outputLength", -1))
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "outputLength");
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Call, runtime.GetOptionInt);
         il.Emit(OpCodes.Newobj, runtime.TSHashCtor);
         il.Emit(OpCodes.Ret);
     }
@@ -311,20 +316,25 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Create List<object?> with hash names
-        string[] hashes = ["md5", "sha1", "sha256", "sha384", "sha512"];
-
         // new List<object?>()
         il.Emit(OpCodes.Newobj, _types.ListOfObject.GetConstructor(Type.EmptyTypes)!);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        // Add each hash name to the list
-        foreach (var hash in hashes)
+        // Static family, then the platform-gated SHA-3/SHAKE members (#1062).
+        // Mirrors CryptoAlgorithms.SupportedHashNames.
+        foreach (var (hash, impl, guarded, _) in _hashTable)
         {
+            var skipLabel = il.DefineLabel();
+            if (guarded)
+            {
+                il.Emit(OpCodes.Call, impl.GetProperty("IsSupported")!.GetGetMethod()!);
+                il.Emit(OpCodes.Brfalse, skipLabel);
+            }
             il.Emit(OpCodes.Ldloc, listLocal);
             il.Emit(OpCodes.Ldstr, hash);
             il.Emit(OpCodes.Callvirt, _types.ListOfObject.GetMethod("Add", [_types.Object])!);
+            il.MarkLabel(skipLabel);
         }
 
         // return new $Array(list)

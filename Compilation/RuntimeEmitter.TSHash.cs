@@ -1,7 +1,5 @@
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace SharpTS.Compilation;
 
@@ -9,9 +7,16 @@ namespace SharpTS.Compilation;
 /// Emits the $Hash class for standalone crypto hash support.
 /// NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSHash
 /// </summary>
+/// <remarks>
+/// $Hash buffers updated data in a MemoryStream and computes the digest one-shot
+/// via $CryptoPrimitives.CryptoHashData — that's what makes hash.copy() (#1058)
+/// and the XOF hashes with outputLength (#1062) expressible.
+/// </remarks>
 public partial class RuntimeEmitter
 {
-    private FieldBuilder _tsHashField = null!;
+    private FieldBuilder _tsHashAlgorithmField = null!;
+    private FieldBuilder _tsHashDataField = null!;
+    private FieldBuilder _tsHashOutputLengthField = null!;
     private FieldBuilder _tsHashFinalizedField = null!;
 
     private void EmitTSHashClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
@@ -22,10 +27,11 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object
         );
-        _ = typeBuilder;
 
         // Fields
-        _tsHashField = typeBuilder.DefineField("_hash", _types.IncrementalHash, FieldAttributes.Private);
+        _tsHashAlgorithmField = typeBuilder.DefineField("_algorithm", _types.String, FieldAttributes.Private);
+        _tsHashDataField = typeBuilder.DefineField("_data", typeof(MemoryStream), FieldAttributes.Private);
+        _tsHashOutputLengthField = typeBuilder.DefineField("_outputLength", _types.Int32, FieldAttributes.Private);
         _tsHashFinalizedField = typeBuilder.DefineField("_finalized", _types.Boolean, FieldAttributes.Private);
 
         // Constructor
@@ -34,125 +40,44 @@ public partial class RuntimeEmitter
         // Methods
         EmitTSHashUpdate(typeBuilder, runtime);
         EmitTSHashDigest(typeBuilder, runtime);
+        EmitTSHashCopy(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
 
     /// <summary>
-    /// Emits: public $Hash(string algorithm)
+    /// Emits: public $Hash(string algorithm, int outputLength)
     /// </summary>
     private void EmitTSHashCtor(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.String]
+            [_types.String, _types.Int32]
         );
         runtime.TSHashCtor = ctor;
 
         var il = ctor.GetILGenerator();
 
-        // Local for algorithm string (lowercased)
-        var lowerAlgorithmLocal = il.DeclareLocal(_types.String);
-        var hashNameLocal = il.DeclareLocal(_types.HashAlgorithmName);
-
         // Call base constructor
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
 
-        // lowerAlgorithm = algorithm.ToLowerInvariant()
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
-        il.Emit(OpCodes.Stloc, lowerAlgorithmLocal);
-
-        // Switch on algorithm name
-        var md5Label = il.DefineLabel();
-        var sha1Label = il.DefineLabel();
-        var sha256Label = il.DefineLabel();
-        var sha384Label = il.DefineLabel();
-        var sha512Label = il.DefineLabel();
-        var createHashLabel = il.DefineLabel();
-        var defaultLabel = il.DefineLabel();
-
-        // Check "md5"
-        il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
-        il.Emit(OpCodes.Ldstr, "md5");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, md5Label);
-
-        // Check "sha1"
-        il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
-        il.Emit(OpCodes.Ldstr, "sha1");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha1Label);
-
-        // Check "sha256"
-        il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
-        il.Emit(OpCodes.Ldstr, "sha256");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha256Label);
-
-        // Check "sha384"
-        il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
-        il.Emit(OpCodes.Ldstr, "sha384");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha384Label);
-
-        // Check "sha512"
-        il.Emit(OpCodes.Ldloc, lowerAlgorithmLocal);
-        il.Emit(OpCodes.Ldstr, "sha512");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, sha512Label);
-
-        // Default - throw exception
-        il.Emit(OpCodes.Br, defaultLabel);
-
-        // MD5
-        il.MarkLabel(md5Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("MD5")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, createHashLabel);
-
-        // SHA1
-        il.MarkLabel(sha1Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA1")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, createHashLabel);
-
-        // SHA256
-        il.MarkLabel(sha256Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA256")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, createHashLabel);
-
-        // SHA384
-        il.MarkLabel(sha384Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA384")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, createHashLabel);
-
-        // SHA512
-        il.MarkLabel(sha512Label);
-        il.Emit(OpCodes.Call, _types.HashAlgorithmName.GetProperty("SHA512")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, hashNameLocal);
-        il.Emit(OpCodes.Br, createHashLabel);
-
-        // Default - throw ArgumentException
-        il.MarkLabel(defaultLabel);
-        il.Emit(OpCodes.Ldstr, "Unsupported hash algorithm: ");
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.String.GetMethod("Concat", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Newobj, _types.ArgumentException.GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Throw);
-
-        // Create hash
-        il.MarkLabel(createHashLabel);
-
-        // _hash = IncrementalHash.CreateHash(hashName)
+        // _algorithm = CryptoValidateHashName(algorithm)  (throws on unknown/unsupported)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, hashNameLocal);
-        il.Emit(OpCodes.Call, _types.IncrementalHash.GetMethod("CreateHash", [_types.HashAlgorithmName])!);
-        il.Emit(OpCodes.Stfld, _tsHashField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.CryptoValidateHashName);
+        il.Emit(OpCodes.Stfld, _tsHashAlgorithmField);
+
+        // _outputLength = outputLength
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stfld, _tsHashOutputLengthField);
+
+        // _data = new MemoryStream()
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, typeof(MemoryStream).GetConstructor(Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stfld, _tsHashDataField);
 
         // _finalized = false
         il.Emit(OpCodes.Ldarg_0);
@@ -163,7 +88,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public $Hash Update(string data)
+    /// Emits: public $Hash Update(object data) — accepts string (UTF-8), $Buffer, or byte[].
     /// </summary>
     private void EmitTSHashUpdate(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -171,7 +96,7 @@ public partial class RuntimeEmitter
             "Update",
             MethodAttributes.Public,
             typeBuilder,
-            [_types.String]
+            [_types.Object]
         );
         _ = method;
 
@@ -189,18 +114,21 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notFinalizedLabel);
 
-        // var bytes = Encoding.UTF8.GetBytes(data)
-        var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        // var bytes = CryptoBytesFromAny(data)
+        var bytesLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // _hash.AppendData(bytes)
+        // _data.Write(bytes, 0, bytes.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHashField);
+        il.Emit(OpCodes.Ldfld, _tsHashDataField);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Callvirt, _types.IncrementalHash.GetMethod("AppendData", [_types.MakeArrayType(_types.Byte)])!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetMethod("Write", [typeof(byte[]), typeof(int), typeof(int)])!);
 
         // return this
         il.Emit(OpCodes.Ldarg_0);
@@ -239,62 +167,90 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, _tsHashFinalizedField);
 
-        // var hashBytes = _hash.GetHashAndReset()
-        var hashBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+        // return CryptoEncodeBytes(CryptoHashData(_algorithm, _data.ToArray(), _outputLength), encoding)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, _tsHashField);
-        il.Emit(OpCodes.Callvirt, _types.IncrementalHash.GetMethod("GetHashAndReset", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, hashBytesLocal);
-
-        // Check encoding
-        var checkHexLabel = il.DefineLabel();
-        var checkBase64Label = il.DefineLabel();
-        var returnArrayLabel = il.DefineLabel();
-        var lowerEncodingLocal = il.DeclareLocal(_types.String);
-
-        // if (encoding == null) goto returnArray
+        il.Emit(OpCodes.Ldfld, _tsHashAlgorithmField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashDataField);
+        il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetMethod("ToArray", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashOutputLengthField);
+        il.Emit(OpCodes.Call, runtime.CryptoHashData);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, returnArrayLabel);
+        il.Emit(OpCodes.Call, runtime.CryptoEncodeBytes);
+        il.Emit(OpCodes.Ret);
+    }
 
-        // lowerEncoding = encoding.ToLowerInvariant()
+    /// <summary>
+    /// Emits: public $Hash Copy(object options) — clones the mid-stream state (#1058).
+    /// options may carry { outputLength } (a $Object); -1 inherits this hash's.
+    /// </summary>
+    private void EmitTSHashCopy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "Copy",
+            MethodAttributes.Public,
+            typeBuilder,
+            [_types.Object]
+        );
+        _ = method;
+
+        var il = method.GetILGenerator();
+
+        // if (_finalized) throw InvalidOperationException
+        var notFinalizedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashFinalizedField);
+        il.Emit(OpCodes.Brfalse, notFinalizedLabel);
+
+        il.Emit(OpCodes.Ldstr, "Cannot copy hash after digest() has been called");
+        il.Emit(OpCodes.Newobj, _types.InvalidOperationException.GetConstructor([_types.String])!);
+        il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(notFinalizedLabel);
+
+        // int outputLength = _outputLength;
+        var outputLengthLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashOutputLengthField);
+        il.Emit(OpCodes.Stloc, outputLengthLocal);
+
+        // if (options is $Object o && o.GetProperty("outputLength") is double d) outputLength = (int)d;
+        var noOptionsLabel = il.DefineLabel();
+        var valueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
-        il.Emit(OpCodes.Stloc, lowerEncodingLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, noOptionsLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "outputLength");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, noOptionsLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, outputLengthLocal);
+        il.MarkLabel(noOptionsLabel);
 
-        // Check "hex"
-        il.Emit(OpCodes.Ldloc, lowerEncodingLocal);
-        il.Emit(OpCodes.Ldstr, "hex");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, checkHexLabel);
+        // var copy = new $Hash(_algorithm, outputLength)
+        var copyLocal = il.DeclareLocal(typeBuilder);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashAlgorithmField);
+        il.Emit(OpCodes.Ldloc, outputLengthLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSHashCtor);
+        il.Emit(OpCodes.Stloc, copyLocal);
 
-        // Check "base64"
-        il.Emit(OpCodes.Ldloc, lowerEncodingLocal);
-        il.Emit(OpCodes.Ldstr, "base64");
-        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brtrue, checkBase64Label);
+        // this._data.WriteTo(copy._data)  — same-class private field access is legal
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _tsHashDataField);
+        il.Emit(OpCodes.Ldloc, copyLocal);
+        il.Emit(OpCodes.Ldfld, _tsHashDataField);
+        il.Emit(OpCodes.Callvirt, typeof(MemoryStream).GetMethod("WriteTo", [typeof(Stream)])!);
 
-        // Default - return array
-        il.Emit(OpCodes.Br, returnArrayLabel);
-
-        // Return hex string: Convert.ToHexString(hashBytes).ToLowerInvariant()
-        il.MarkLabel(checkHexLabel);
-        il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Call, _types.ConvertToHexString);
-        il.Emit(OpCodes.Callvirt, _types.String.GetMethod("ToLowerInvariant")!);
-        il.Emit(OpCodes.Ret);
-
-        // Return base64 string: Convert.ToBase64String(hashBytes)
-        il.MarkLabel(checkBase64Label);
-        il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Call, _types.ConvertToBase64String);
-        il.Emit(OpCodes.Ret);
-
-        // Return Buffer: create $Buffer from bytes
-        il.MarkLabel(returnArrayLabel);
-
-        // Return new $Buffer(hashBytes)
-        il.Emit(OpCodes.Ldloc, hashBytesLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ldloc, copyLocal);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -2851,4 +2851,30 @@ public class EmittedRuntime
     public TypeBuilder TransformStreamType { get; set; } = null!;
     public ConstructorBuilder TransformStreamCtor { get; set; } = null!;
     public MethodBuilder BuildTransformSink { get; set; } = null!;
+
+    // ============================================================
+    // crypto epic #1054 — $CryptoPrimitives shared helpers and the
+    // options-aware sign/verify cores (#1055/#1056/#1057/#1058/#1062).
+    // Null when UsesCrypto is off; all consumers live in crypto emit files.
+    // ============================================================
+    public MethodBuilder CryptoValidateHashName { get; set; } = null!;
+    public MethodBuilder CryptoHashData { get; set; } = null!;
+    public MethodBuilder CryptoSignHashName { get; set; } = null!;
+    public MethodBuilder CryptoEncodeBytes { get; set; } = null!;
+    public MethodBuilder CryptoBytesFromAny { get; set; } = null!;
+    public MethodBuilder CryptoDecodeInput { get; set; } = null!;
+    // One-shot sign/verify/hash cores on $Runtime (#1055)
+    public MethodBuilder CryptoSignDataEx { get; set; } = null!;
+    public MethodBuilder CryptoVerifyDataEx { get; set; } = null!;
+    public MethodBuilder CryptoHashOneShot { get; set; } = null!;
+    public MethodBuilder CryptoKeyToPem { get; set; } = null!;
+    // crypto.constants / getCipherInfo / getCurves (#1056/#1057/#1058)
+    public MethodBuilder CryptoGetConstants { get; set; } = null!;
+    public MethodBuilder CryptoGetCipherInfo { get; set; } = null!;
+    public MethodBuilder CryptoGetCurves { get; set; } = null!;
+    // Primes (#1062) — Miller-Rabin over System.Numerics.BigInteger, pure IL
+    public MethodBuilder CryptoIsProbablyPrime { get; set; } = null!;
+    public MethodBuilder CryptoGeneratePrimeCore { get; set; } = null!;
+    public MethodBuilder CryptoGeneratePrimeSyncObj { get; set; } = null!;
+    public MethodBuilder CryptoCheckPrimeSyncObj { get; set; } = null!;
 }

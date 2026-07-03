@@ -18,7 +18,11 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "getHashes", "getCiphers", "generateKeyPairSync", "createDiffieHellman", "getDiffieHellman", "createECDH",
         "publicEncrypt", "privateDecrypt", "privateEncrypt", "publicDecrypt",
         "hkdfSync", "createSecretKey", "createPublicKey", "createPrivateKey",
-        "pbkdf2", "scrypt", "generateKeyPair", "hkdf"
+        "pbkdf2", "scrypt", "generateKeyPair", "hkdf",
+        // epic #1054 additions
+        "hash", "sign", "verify", "getCipherInfo", "getCurves",
+        "generatePrime", "generatePrimeSync", "checkPrime", "checkPrimeSync",
+        "randomFill", "constants"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -60,8 +64,15 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
 
     public bool TryEmitPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // crypto module has no properties
-        return false;
+        var ctx = emitter.Context;
+        switch (propertyName)
+        {
+            case "constants":  // crypto.constants (#1056)
+                ctx.IL.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.CryptoGetConstants);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static bool EmitCreateHash(IEmitterContext emitter, List<Expr> arguments)
@@ -79,6 +90,17 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(ctx.Types.Object, "ToString"));
+        }
+
+        // Optional options ({ outputLength } for XOF hashes, #1062)
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
         }
 
         // Call runtime helper to create hash

@@ -7,6 +7,177 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
+    /// Emits: public static string CryptoKeyToPem(object key, bool isPrivate)
+    /// Resolves a compiled key argument (PEM string / $Buffer PEM / $Object with a
+    /// 'key' field) to a PEM string for the one-shot sign/verify helpers (#1055).
+    /// $TSKeyObject keys are handled by the KeyObject completeness child (#1059).
+    /// </summary>
+    private void EmitCryptoKeyToPem(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoKeyToPem",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object, _types.Boolean]);
+        runtime.CryptoKeyToPem = method;
+
+        var il = method.GetILGenerator();
+        var notStringLabel = il.DefineLabel();
+        var notBufferLabel = il.DefineLabel();
+        var notObjLabel = il.DefineLabel();
+
+        // string → itself
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Ret);
+
+        // $Buffer → UTF8 string of its data
+        il.MarkLabel(notStringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSBufferType);
+        il.Emit(OpCodes.Brfalse, notObjLabel);
+        il.Emit(OpCodes.Call, _types.Encoding.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSBufferType);
+        il.Emit(OpCodes.Call, runtime.TSBufferGetData);
+        il.Emit(OpCodes.Callvirt, _types.Encoding.GetMethod("GetString", [typeof(byte[])])!);
+        il.Emit(OpCodes.Ret);
+
+        // $Object with a "key" field → recurse on that field
+        il.MarkLabel(notObjLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, notBufferLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "key");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, method); // recurse
+        il.Emit(OpCodes.Ret);
+
+        // otherwise: throw
+        il.MarkLabel(notBufferLabel);
+        il.Emit(OpCodes.Ldstr, "crypto: key must be a PEM string, Buffer, KeyObject, or object with a 'key' property");
+        il.Emit(OpCodes.Newobj, _types.ArgumentExceptionCtorString);
+        il.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoSignOneShot(string algorithm, object data, object key, string encoding)
+    /// One-shot crypto.sign wrapping SignDataBytes with KeyObject/PEM key resolution (#1055).
+    /// </summary>
+    private void EmitCryptoSignOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoSignOneShot",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.Object, _types.Object]);
+        runtime.CryptoSignDataEx = method;
+
+        var il = method.GetILGenerator();
+
+        // SignDataBytes(CryptoKeyToPem(key, true), CryptoBytesFromAny(data), CryptoSignHashName(algorithm))
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.CryptoKeyToPem);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.CryptoSignHashName);
+        il.Emit(OpCodes.Call, runtime.SignDataBytes);
+        // → $Buffer
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoVerifyOneShot(string algorithm, object data, object key, object signature)
+    /// One-shot crypto.verify → boxed bool (#1055).
+    /// </summary>
+    private void EmitCryptoVerifyOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoVerifyOneShot",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.Object, _types.Object, _types.Object]);
+        runtime.CryptoVerifyDataEx = method;
+
+        var il = method.GetILGenerator();
+
+        // VerifyDataBytes(CryptoKeyToPem(key, false), CryptoBytesFromAny(data), CryptoSignHashName(algorithm), CryptoBytesFromAny(signature))
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.CryptoKeyToPem);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.CryptoSignHashName);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Call, runtime.VerifyDataBytes);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static object CryptoHashOneShot(string algorithm, object data, string encoding)
+    /// One-shot crypto.hash — default encoding 'hex' unless 'buffer' (#1055).
+    /// </summary>
+    private void EmitCryptoHashOneShot(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoHashOneShot",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.String, _types.Object, _types.String]);
+        runtime.CryptoHashOneShot = method;
+
+        var il = method.GetILGenerator();
+        var digestLocal = il.DeclareLocal(_types.ByteArray);
+        var encLocal = il.DeclareLocal(_types.String);
+
+        // digest = CryptoHashData(algorithm, CryptoBytesFromAny(data), -1)
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.CryptoBytesFromAny);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Call, runtime.CryptoHashData);
+        il.Emit(OpCodes.Stloc, digestLocal);
+
+        // enc = encoding ?? "hex"
+        var haveEncLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, haveEncLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, "hex");
+        il.MarkLabel(haveEncLabel);
+        il.Emit(OpCodes.Stloc, encLocal);
+
+        // if (enc == "buffer") return new $Buffer(digest)
+        var notBufferLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, encLocal);
+        il.Emit(OpCodes.Ldstr, "buffer");
+        il.Emit(OpCodes.Call, _types.String.GetMethod("op_Equality", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Brfalse, notBufferLabel);
+        il.Emit(OpCodes.Ldloc, digestLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notBufferLabel);
+        il.Emit(OpCodes.Ldloc, digestLocal);
+        il.Emit(OpCodes.Ldloc, encLocal);
+        il.Emit(OpCodes.Call, runtime.CryptoEncodeBytes);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits: public static byte[] SignDataBytes(string privateKeyPem, byte[] data, HashAlgorithmName hashAlgorithm)
     /// Signs data using RSA or EC private key. Uses try/catch to detect key type.
     /// </summary>
