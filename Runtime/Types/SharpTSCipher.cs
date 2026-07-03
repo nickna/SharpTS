@@ -24,8 +24,9 @@ public class SharpTSCipher : SharpTSAesBase
     /// <param name="algorithm">Algorithm name: aes-128-cbc, aes-192-cbc, aes-256-cbc, aes-128-gcm, aes-192-gcm, aes-256-gcm</param>
     /// <param name="key">Encryption key as byte array</param>
     /// <param name="iv">Initialization vector as byte array</param>
-    public SharpTSCipher(string algorithm, byte[] key, byte[] iv)
-        : base(algorithm, key, iv, forEncryption: true)
+    /// <param name="authTagLength">GCM auth tag length in bytes (-1 = 16)</param>
+    public SharpTSCipher(string algorithm, byte[] key, byte[] iv, int authTagLength = -1)
+        : base(algorithm, key, iv, forEncryption: true, authTagLength)
     {
     }
 
@@ -41,7 +42,7 @@ public class SharpTSCipher : SharpTSAesBase
     {
         var plaintext = _gcmBuffer.ToArray();
         var ciphertext = new byte[plaintext.Length];
-        _authTag = new byte[AesGcm.TagByteSizes.MaxSize];
+        _authTag = new byte[_tagLength];
 
         if (_aad != null)
             _aesGcm!.Encrypt(_iv, plaintext, ciphertext, _authTag, _aad);

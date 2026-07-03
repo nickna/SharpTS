@@ -34,6 +34,8 @@ internal static class CryptoEncoding
                 return Convert.ToHexString(bytes).ToLowerInvariant();
             case "base64":
                 return Convert.ToBase64String(bytes);
+            case "base64url":
+                return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
             case "utf8" or "utf-8" when decodeUtf8:
                 return Encoding.UTF8.GetString(bytes);
             default:
@@ -54,6 +56,9 @@ internal static class CryptoEncoding
             {
                 "hex" => Convert.FromHexString(s),
                 "base64" => Convert.FromBase64String(s),
+                "base64url" => Convert.FromBase64String(
+                    s.Replace('-', '+').Replace('_', '/').PadRight(s.Length + (4 - s.Length % 4) % 4, '=')),
+                "latin1" or "binary" => Encoding.Latin1.GetBytes(s),
                 _ => Encoding.UTF8.GetBytes(s)
             },
             SharpTSBuffer buf => buf.Data,

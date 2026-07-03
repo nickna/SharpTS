@@ -24,8 +24,9 @@ public class SharpTSDecipher : SharpTSAesBase
     /// <param name="algorithm">Algorithm name: aes-128-cbc, aes-192-cbc, aes-256-cbc, aes-128-gcm, aes-192-gcm, aes-256-gcm</param>
     /// <param name="key">Decryption key as byte array</param>
     /// <param name="iv">Initialization vector as byte array</param>
-    public SharpTSDecipher(string algorithm, byte[] key, byte[] iv)
-        : base(algorithm, key, iv, forEncryption: false)
+    /// <param name="authTagLength">GCM auth tag length in bytes (-1 = 16)</param>
+    public SharpTSDecipher(string algorithm, byte[] key, byte[] iv, int authTagLength = -1)
+        : base(algorithm, key, iv, forEncryption: false, authTagLength)
     {
     }
 
@@ -84,6 +85,19 @@ public class SharpTSDecipher : SharpTSAesBase
             throw new InvalidOperationException("setAuthTag must be called before final()");
 
         _authTag = CryptoEncoding.FromEncoded(tag, null);
+
+        // Without an explicit authTagLength option, Node accepts any valid GCM tag
+        // length at setAuthTag time — recreate the AesGcm to match (BCL fixes the
+        // tag size at construction).
+        if (_authTag.Length != _tagLength)
+        {
+            if (_authTag.Length is < 12 or > 16)
+                throw new NotSupportedException(
+                    $"auth tag length {_authTag.Length} is not supported on this runtime (.NET AesGcm supports 12-16 bytes)");
+            _tagLength = _authTag.Length;
+            _aesGcm?.Dispose();
+            _aesGcm = new AesGcm(_key, _tagLength);
+        }
         return this;
     }
 
