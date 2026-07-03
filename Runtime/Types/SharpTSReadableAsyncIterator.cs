@@ -55,9 +55,18 @@ public class SharpTSReadableAsyncIterator : SharpTSObject
 
             var pull = _stream.IterNextAsync();
             // Observe a done:true result so subsequent next() calls short-circuit.
+            // No ConfigureAwait(false) on the parked pull: the resume must ride the
+            // interpreter's SynchronizationContext so the producer's TrySetResult
+            // posts it into the event loop's callback queue synchronously. A
+            // thread-pool resume is invisible to the loop's exit check, so a
+            // producer that settles the pull and drops its last timer handle in
+            // the same tick (setInterval's final push(null)+clearInterval) let the
+            // program exit before the loop body ran (#1211).
             async Task<object?> AwaitAndObserve()
             {
-                var result = await pull.ConfigureAwait(false);
+                bool parked = !pull.IsCompleted;
+                var result = await pull;
+                if (parked) EventLoopTestHooks.ParkedResumeDelay();
                 if (result is IDictionary<string, object?> dict &&
                     dict.TryGetValue("done", out var d) && d is bool db && db)
                 {

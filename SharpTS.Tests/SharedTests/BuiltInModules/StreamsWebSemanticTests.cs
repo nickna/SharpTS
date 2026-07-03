@@ -359,13 +359,18 @@ public class StreamsWebSemanticTests
     /// than being starved by the synchronous pump. The deterministic
     /// compiled-mode coverage for that fix is
     /// <see cref="ReadableStream_PipeTo_MidPipeAbortSignal_Compiled"/>; this
-    /// guest test stays InterpretedOnly only because its end-to-end assertion
-    /// flakes under CI load in interpreter mode (real thread-pool continuation
-    /// timing) — the compiled variant runs synchronously and is deterministic.
+    /// guest test stays InterpretedOnly because compiled mode has that separate
+    /// synchronous-pump variant.
     ///
-    /// This guest-level test asserts the end-to-end behavior but only flakes
-    /// under load; the deterministic regression guard for the interpreter fix
-    /// itself is <see cref="PipeTo_MidPipeAbort_RefsEventLoopAcrossTeardown"/>.
+    /// The residual "real thread-pool continuation timing" flake this remark
+    /// used to document (#1213) is gone: since #1215 the pump's awaits ride the
+    /// interpreter's SynchronizationContext instead of ConfigureAwait(false)
+    /// thread-pool hops, so the whole abort/cancel/reject teardown runs on the
+    /// event-loop thread and its output ordering is deterministic. The
+    /// white-box guards for the two product fixes are
+    /// <see cref="PipeTo_MidPipeAbort_RefsEventLoopAcrossTeardown"/> (teardown
+    /// Ref, #325) and <c>EventLoopParkedResumeTests</c> (visible parked-resume
+    /// handoff, #1211/#1212).
     /// </remarks>
     [Theory]
     [MemberData(nameof(ExecutionModes.InterpretedOnly), MemberType = typeof(ExecutionModes))]

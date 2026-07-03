@@ -148,22 +148,26 @@ internal static class WebStreamsHelpers
         async Task<object?> CallWrite(object chunk)
         {
             var task = (Task<object?>?)writeMethod.Invoke(dest, [chunk]);
-            if (task != null) await task.ConfigureAwait(false);
+            if (task != null) await task;
             return SharpTSUndefined.Instance;
         }
         async Task CallClose()
         {
             var task = (Task<object?>?)closeMethod.Invoke(dest, null);
-            if (task != null) await task.ConfigureAwait(false);
+            if (task != null) await task;
         }
         async Task CallAbort(object? reason)
         {
             var task = (Task<object?>?)abortMethod.Invoke(dest, [reason]);
-            if (task != null) await task.ConfigureAwait(false);
+            if (task != null) await task;
         }
 
         async Task<object?> PumpAsync()
         {
+            // No ConfigureAwait(false) in the pump — resumes must ride the
+            // interpreter's SynchronizationContext so they stay visible to the
+            // event loop's exit check (see PipeTo's pump, #1212).
+            //
             // Scope a Ref to the abort/cancel/reject teardown so the source
             // cancel() callback cannot be dropped by event-loop quiescence —
             // same liveness fix as PipeTo (#325/#320 doctrine). The steady-state
@@ -185,23 +189,26 @@ internal static class WebStreamsHelpers
                     if (signal != null && signal.Aborted)
                     {
                         RefTeardown();
-                        if (!preventAbort) await CallAbort(signal.Reason).ConfigureAwait(false);
-                        if (!preventCancel) await source.CancelInternal(signal.Reason).Task.ConfigureAwait(false);
+                        if (!preventAbort) await CallAbort(signal.Reason);
+                        if (!preventCancel) await source.CancelInternal(signal.Reason).Task;
                         throw new SharpTSPromiseRejectedException(signal.Reason);
                     }
 
-                    var readResult = await source.ReadInternal().ConfigureAwait(false);
+                    var readTask = source.ReadInternal();
+                    bool parked = !readTask.IsCompleted;
+                    var readResult = await readTask;
+                    if (parked) EventLoopTestHooks.ParkedResumeDelay();
                     if (readResult is not IDictionary<string, object?> resultObj) throw new InvalidOperationException("read() returned non-object");
                     var done = resultObj.TryGetValue("done", out var d) && d is bool db && db;
                     if (done)
                     {
-                        if (!preventClose) await CallClose().ConfigureAwait(false);
+                        if (!preventClose) await CallClose();
                         if (source.Reader == reader) source.Reader = null;
                         return SharpTSUndefined.Instance;
                     }
 
                     var chunk = resultObj.TryGetValue("value", out var v) ? v : SharpTSUndefined.Instance;
-                    await CallWrite(chunk!).ConfigureAwait(false);
+                    await CallWrite(chunk!);
                 }
             }
             catch (Exception ex)
@@ -210,11 +217,11 @@ internal static class WebStreamsHelpers
                 var reason = ex is SharpTSPromiseRejectedException pre ? pre.Reason : ex;
                 if (!preventAbort)
                 {
-                    try { await CallAbort(reason).ConfigureAwait(false); } catch { }
+                    try { await CallAbort(reason); } catch { }
                 }
                 if (!preventCancel && source.State == SharpTSReadableStream.StreamState.Readable)
                 {
-                    try { await source.CancelInternal(reason).Task.ConfigureAwait(false); } catch { }
+                    try { await source.CancelInternal(reason).Task; } catch { }
                 }
                 if (source.Reader == reader) source.Reader = null;
                 throw;
@@ -257,6 +264,16 @@ internal static class WebStreamsHelpers
 
         async Task<object?> PumpAsync()
         {
+            // No ConfigureAwait(false) anywhere in the pump: every resume of a
+            // parked await (read, write, teardown) must ride the interpreter's
+            // SynchronizationContext so the settling TrySetResult posts it into
+            // the event loop's callback queue synchronously — visible to the
+            // loop's exit check, and running guest callbacks (write/abort/
+            // cancel) on the loop thread rather than a pool thread. A pool-hop
+            // resume was invisible to the exit check, so a one-shot timer
+            // producer whose callback settled the parked read let the program
+            // exit before "wrote x" was ever printed (#1212).
+            //
             // The pipe promise itself is deliberately NOT Ref'd — an infinite
             // source must be allowed to never settle, so a blanket Ref would
             // hang the process (#319/#320 doctrine). But the abort/cancel/reject
@@ -292,19 +309,22 @@ internal static class WebStreamsHelpers
                     if (signal != null && signal.Aborted)
                     {
                         RefTeardown();
-                        if (!preventAbort) await dest.AbortInternal(signal.Reason).ConfigureAwait(false);
-                        if (!preventCancel) await source.CancelInternal(signal.Reason).Task.ConfigureAwait(false);
+                        if (!preventAbort) await dest.AbortInternal(signal.Reason);
+                        if (!preventCancel) await source.CancelInternal(signal.Reason).Task;
                         throw new SharpTSPromiseRejectedException(signal.Reason);
                     }
 
-                    var readResult = await source.ReadInternal().ConfigureAwait(false);
+                    var readTask = source.ReadInternal();
+                    bool parked = !readTask.IsCompleted;
+                    var readResult = await readTask;
+                    if (parked) EventLoopTestHooks.ParkedResumeDelay();
                     if (readResult is not IDictionary<string, object?> resultObj) throw new InvalidOperationException("read() returned non-object");
                     var done = resultObj.TryGetValue("done", out var d) && d is bool db && db;
                     if (done)
                     {
                         if (!preventClose && dest.State == SharpTSWritableStream.WritableState.Writable)
                         {
-                            await dest.CloseAsyncInternal().ConfigureAwait(false);
+                            await dest.CloseAsyncInternal();
                         }
                         if (source.Reader == reader) source.Reader = null;
                         if (dest.Writer == writer) dest.Writer = null;
@@ -312,7 +332,7 @@ internal static class WebStreamsHelpers
                     }
 
                     var chunk = resultObj.TryGetValue("value", out var v) ? v : SharpTSUndefined.Instance;
-                    await dest.EnqueueWrite(chunk).ConfigureAwait(false);
+                    await dest.EnqueueWrite(chunk);
                 }
             }
             catch (Exception ex)
@@ -324,11 +344,11 @@ internal static class WebStreamsHelpers
                 var reason = ex is SharpTSPromiseRejectedException pre ? pre.Reason : ex;
                 if (!preventAbort && dest.State == SharpTSWritableStream.WritableState.Writable)
                 {
-                    try { await dest.AbortInternal(reason).ConfigureAwait(false); } catch { }
+                    try { await dest.AbortInternal(reason); } catch { }
                 }
                 if (!preventCancel && source.State == SharpTSReadableStream.StreamState.Readable)
                 {
-                    try { await source.CancelInternal(reason).Task.ConfigureAwait(false); } catch { }
+                    try { await source.CancelInternal(reason).Task; } catch { }
                 }
                 if (source.Reader == reader) source.Reader = null;
                 if (dest.Writer == writer) dest.Writer = null;
