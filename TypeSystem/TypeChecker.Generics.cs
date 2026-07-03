@@ -8,9 +8,8 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 /// <remarks>
 /// Contains core generic type methods:
-/// ParseGenericTypeReference, ResolveGenericType, SplitTypeArguments, SubstituteTypeParamInString,
-/// InstantiateGenericClass, InstantiateGenericInterface, InstantiateGenericFunction,
-/// ResolveTypeArgumentsWithDefaults.
+/// ResolveGenericType, InstantiateGenericClass, InstantiateGenericInterface,
+/// InstantiateGenericFunction, ResolveTypeArgumentsWithDefaults.
 ///
 /// Related partial files:
 /// - TypeChecker.Generics.Substitution.cs: Type parameter substitution and tuple flattening
@@ -22,66 +21,14 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
-    /// Parses a generic type reference like "Box&lt;number&gt;" or "Map&lt;string, number&gt;".
-    /// Also handles array suffixes: "Partial&lt;T&gt;[]", "Box&lt;number&gt;[][]".
-    /// </summary>
-    private TypeInfo ParseGenericTypeReference(string typeName)
-    {
-        int openAngle = typeName.IndexOf('<');
-        string baseName = typeName[..openAngle];
-
-        // Find matching closing '>' respecting nested angle brackets
-        // Skip `>` that is part of `=>` (arrow function syntax)
-        int angleDepth = 0;
-        int closeAngle = -1;
-        for (int i = openAngle; i < typeName.Length; i++)
-        {
-            char c = typeName[i];
-            if (c == '<') angleDepth++;
-            else if (c == '>')
-            {
-                // Skip `>` that is part of `=>` (arrow function return type)
-                if (i > 0 && typeName[i - 1] == '=')
-                    continue;
-
-                angleDepth--;
-                if (angleDepth == 0)
-                {
-                    closeAngle = i;
-                    break;
-                }
-            }
-        }
-
-        string argsStr = typeName[(openAngle + 1)..closeAngle];
-        string suffix = typeName[(closeAngle + 1)..];
-
-        // Split type arguments respecting nesting
-        var typeArgStrings = SplitTypeArguments(argsStr);
-        var typeArgs = typeArgStrings.Select(ToTypeInfo).ToList();
-
-        return ResolveGenericType(baseName, typeArgs, typeArgStrings, suffix);
-    }
-
-    /// <summary>
-    /// Resolves a generic type with pre-parsed TypeInfo arguments.
-    /// Avoids string round-trip when TypeInfo objects are already available.
+    /// Resolves a generic type reference with pre-parsed TypeInfo arguments: built-in generics
+    /// (with their TS2314/TS2707 arity errors) ahead of generic-alias node expansion, then
+    /// generic classes/interfaces/functions.
     /// </summary>
     /// <param name="baseName">The generic type name (e.g., "Promise", "Box").</param>
     /// <param name="typeArgs">The type arguments as TypeInfo objects.</param>
-    /// <param name="suffix">Optional array suffix (e.g., "[][]").</param>
     /// <returns>The resolved type.</returns>
-    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, string suffix = "")
-    {
-        // Lazily compute string representations only when needed for type alias expansion
-        List<string>? typeArgStrings = null;
-        return ResolveGenericType(baseName, typeArgs, typeArgStrings, suffix);
-    }
-
-    /// <summary>
-    /// Core generic type resolution logic.
-    /// </summary>
-    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, List<string>? typeArgStrings, string suffix)
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs)
     {
         TypeInfo result;
 
@@ -345,116 +292,18 @@ public partial class TypeChecker
             var genericAlias = _environment.GetGenericTypeAlias(baseName);
             if (genericAlias != null)
             {
-                var (definition, typeParamNames, _) = genericAlias.Value;
-                if (typeArgs.Count != typeParamNames.Count)
-                {
-                    throw new TypeCheckException($" Type alias '{baseName}' requires {typeParamNames.Count} type argument(s), got {typeArgs.Count}.", tsCode: "TS2314");
-                }
-
-                // A type argument that mentions a still-open type variable (a mapped-type
-                // parameter mid-parse) cannot be instantiated yet — eager expansion would
-                // substitute an open term and derive a fresh instantiation key every round
-                // (Part[P], Part[P][P], … — the #185 regress), never converging. Defer:
-                // ExpandMappedType substitutes the concrete key into the arguments and
-                // ExpandRecursiveTypeAlias finishes the instantiation on demand.
-                if (typeArgs.Any(ContainsOpenTypeVariable))
-                {
-                    TypeInfo deferredAlias = new TypeInfo.RecursiveTypeAlias(baseName, typeArgs);
-                    while (suffix.StartsWith("[]"))
-                    {
-                        deferredAlias = new TypeInfo.Array(deferredAlias);
-                        suffix = suffix[2..];
-                    }
-                    return deferredAlias;
-                }
-
-                // Lazily compute string representations for type alias expansion
-                typeArgStrings ??= typeArgs.Select(TypeInfoToString).ToList();
-
-                // Create a unique key for this instantiation to detect recursive references
-                string aliasKey = $"{baseName}<{string.Join(",", typeArgStrings)}>";
-                _typeAliasExpansionStack ??= new HashSet<string>(StringComparer.Ordinal);
-
-                // tsc bounds instantiation with a hard depth limit (checker.ts instantiationDepth →
-                // TS2589). Without one, alias expansions whose instantiation key never repeats —
-                // e.g. DeepReadonly<T> over a self-referential interface, where the still-unbound
-                // mapped param accumulates: Part[P], Part[P][P], … — recurse until stack overflow
-                // instead of hitting the same-key guard below. See #185.
-                if (_typeAliasExpansionStack.Count >= MaxTypeAliasExpansionDepth)
-                {
-                    throw new TypeCheckException(
-                        " Type instantiation is excessively deep and possibly infinite.",
-                        tsCode: "TS2589");
-                }
-
-                // Recursive reference detected - return deferred placeholder
-                if (_typeAliasExpansionStack.Contains(aliasKey))
-                {
-                    // Handle array suffix before returning
-                    TypeInfo recursiveResult = new TypeInfo.RecursiveTypeAlias(baseName, typeArgs);
-                    while (suffix.StartsWith("[]"))
-                    {
-                        recursiveResult = new TypeInfo.Array(recursiveResult);
-                        suffix = suffix[2..];
-                    }
-                    return recursiveResult;
-                }
-
-                _typeAliasExpansionStack.Add(aliasKey);
-                try
-                {
-                    // Substitute type parameters in the definition string
-                    string expanded = definition;
-                    for (int i = 0; i < typeParamNames.Count; i++)
-                    {
-                        // Replace type parameter with actual type argument string
-                        expanded = SubstituteTypeParamInString(expanded, typeParamNames[i], typeArgStrings[i]);
-                    }
-
-                    // Parse the expanded definition
-                    result = ToTypeInfo(expanded);
-
-                    // The string pipeline substitutes arguments BEFORE parsing, so a distributive
-                    // alias (`type Check<T> = T extends ...` — naked-param check) instantiated
-                    // with a union parses as a union-checked conditional and would lose its
-                    // distributivity. Recover the flag from the DECLARED definition's check side.
-                    if (result is TypeInfo.ConditionalType parsedCond && !parsedCond.IsDistributive)
-                    {
-                        int declExtendsIdx = FindTopLevelKeyword(definition, " extends ");
-                        if (declExtendsIdx > 0 && typeParamNames.Contains(definition[..declExtendsIdx].Trim()))
-                            result = parsedCond with { IsDistributive = true };
-                    }
-
-                    // An instantiation whose arguments are fully concrete can apply its result
-                    // now — downstream consumers (property access in particular) operate on
-                    // the resolved type, not on a raw ConditionalType/MappedType node (#185).
-                    // EvaluateConditionalType itself defers when the check type is still a
-                    // naked type parameter, so generic-context instantiations stay deferred.
-                    if (result is TypeInfo.ConditionalType condResult && !ContainsOpenTypeVariable(condResult))
-                    {
-                        result = EvaluateConditionalType(condResult);
-                    }
-                    // A mapped type over a DEFERRED key domain (a generic key-filter such as
-                    // Pick<T, FunctionPropertyNames<T>>) must stay a MappedType node: enumerating
-                    // it now would yield an empty object and lose the key filter, so it has to
-                    // reach the relation rules deferred (#337 item 1, mirrors the conditional case
-                    // just above). Concrete domains still expand eagerly for downstream consumers.
-                    if (result is TypeInfo.MappedType mappedResult && !ContainsOpenTypeVariable(mappedResult)
-                        && !IsDeferredKeyDomain(ResolveMappedKeyDomain(mappedResult)))
-                    {
-                        result = ExpandMappedType(mappedResult);
-                    }
-
-                    // Flatten any spread elements that contain concrete tuples
-                    result = FlattenTupleSpreads(result);
-
-                    // Validate spread constraints after type alias instantiation
-                    ValidateSpreadConstraints(result);
-                }
-                finally
-                {
-                    _typeAliasExpansionStack.Remove(aliasKey);
-                }
+                // Node-based expansion is the ONLY generic-alias expander: the type parameters
+                // bind to the resolved arguments in a child scope and the stored definition node
+                // resolves directly — no argument-string substitution, no definition re-parse.
+                // TryExpandGenericAliasFromNode carries the string branch's guards (TS2314 arity,
+                // open-type-variable deferral, TS2589 depth, recursion placeholder, deferred-key
+                // mapped guard) and its post-expansion passes. Aliases without a definition node
+                // cannot exist once the parser produces nodes for every construct; if one slips
+                // through, resolve permissively rather than crash.
+                result = genericAlias.Value.DefinitionNode is { } definitionNode
+                    ? TryExpandGenericAliasFromNode(baseName, definitionNode, genericAlias.Value.TypeParams, typeArgs)
+                        ?? new TypeInfo.Any()
+                    : new TypeInfo.Any();
             }
             else
             {
@@ -469,13 +318,6 @@ public partial class TypeChecker
                     _ => new TypeInfo.Any() // Unknown generic type - fallback to any
                 };
             }
-        }
-
-        // Handle array suffix(es) after the generic type
-        while (suffix.StartsWith("[]"))
-        {
-            result = new TypeInfo.Array(result);
-            suffix = suffix[2..];
         }
 
         return result;
@@ -513,69 +355,6 @@ public partial class TypeChecker
             TypeInfo.TemplateLiteralType tlt => tlt.InterpolatedTypes.Any(Walk),
             _ => false
         };
-    }
-
-    /// <summary>
-    /// Splits type arguments respecting nested angle brackets.
-    /// </summary>
-    private List<string> SplitTypeArguments(string argsStr)
-    {
-        List<string> args = [];
-        int depth = 0;
-        int start = 0;
-
-        for (int i = 0; i < argsStr.Length; i++)
-        {
-            char c = argsStr[i];
-            // Track all bracket types to handle tuples and function types in type arguments
-            if (c == '<' || c == '[' || c == '(') depth++;
-            else if (c == '>' || c == ']' || c == ')') depth--;
-            else if (c == ',' && depth == 0)
-            {
-                args.Add(argsStr[start..i].Trim());
-                start = i + 1;
-            }
-        }
-
-        if (start < argsStr.Length)
-        {
-            args.Add(argsStr[start..].Trim());
-        }
-
-        return args;
-    }
-
-    /// <summary>
-    /// Substitutes a type parameter name with an actual type string in a type definition.
-    /// Handles word boundaries to avoid partial replacements (e.g., "T" shouldn't match "Type").
-    /// </summary>
-    private static string SubstituteTypeParamInString(string definition, string paramName, string replacement)
-    {
-        // Use word boundary matching to avoid partial replacements
-        var result = new System.Text.StringBuilder();
-        int i = 0;
-        while (i < definition.Length)
-        {
-            // Check if we're at the start of paramName
-            if (i + paramName.Length <= definition.Length &&
-                definition.Substring(i, paramName.Length) == paramName)
-            {
-                // Check word boundaries
-                bool startBoundary = i == 0 || !char.IsLetterOrDigit(definition[i - 1]);
-                bool endBoundary = i + paramName.Length >= definition.Length ||
-                                   !char.IsLetterOrDigit(definition[i + paramName.Length]);
-
-                if (startBoundary && endBoundary)
-                {
-                    result.Append(replacement);
-                    i += paramName.Length;
-                    continue;
-                }
-            }
-            result.Append(definition[i]);
-            i++;
-        }
-        return result.ToString();
     }
 
     /// <summary>

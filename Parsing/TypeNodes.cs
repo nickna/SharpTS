@@ -18,8 +18,14 @@ public abstract record TypeNode(int Line);
 /// …) — resolution treats them uniformly, exactly like the string path.</summary>
 public sealed record NamedTypeNode(string Name, List<TypeNode>? TypeArguments, int Line) : TypeNode(Line);
 
-/// <summary>A literal type: <c>"ok"</c>, <c>42</c>, <c>true</c>.</summary>
+/// <summary>A literal type: <c>"ok"</c>, <c>42</c>, <c>true</c>, <c>1n</c> (bigint literals carry
+/// their <c>System.Numerics.BigInteger</c> value).</summary>
 public sealed record LiteralTypeNode(object? Value, int Line) : TypeNode(Line);
+
+/// <summary>The <c>unique symbol</c> type. Only valid on <c>const</c> declarations initialized
+/// with <c>Symbol()</c> — the const-declaration checker special-cases the annotation BEFORE
+/// resolution; resolving this node anywhere else throws TS1331, exactly like the string path.</summary>
+public sealed record UniqueSymbolTypeNode(int Line) : TypeNode(Line);
 
 /// <summary>A <c>readonly</c> array/tuple modifier: <c>readonly T[]</c>, <c>readonly [A, B]</c>.
 /// Resolution marks the resolved array/tuple readonly (any other inner type ignores it), exactly
@@ -79,15 +85,18 @@ public sealed record ParameterTypeNode(string? Name, TypeNode Type, bool IsOptio
 /// <c>this: X</c> pseudo-parameter (carried separately — it does not count toward arity).</summary>
 public sealed record FunctionTypeNode(TypeNode? ThisType, List<ParameterTypeNode> Parameters, TypeNode ReturnType, int Line) : TypeNode(Line);
 
-/// <summary>A constructor type: <c>new (a: T) =&gt; R</c>. Resolves to an object type carrying a
-/// single construct signature, mirroring the string path's <c>{ new (…) =&gt; R }</c> rendering.
-/// Generic constructor types (<c>new &lt;T&gt;(…) =&gt; R</c>) have no node yet.</summary>
-public sealed record ConstructorTypeNode(List<ParameterTypeNode> Parameters, TypeNode ReturnType, int Line) : TypeNode(Line);
+/// <summary>A constructor type: <c>new (a: T) =&gt; R</c>, optionally with a leading <c>this: X</c>
+/// pseudo-parameter. Resolves to an object type carrying a single construct signature, mirroring
+/// the string path's <c>{ new (…) =&gt; R }</c> rendering. The this-type is resolved (so bad names
+/// fail identically) but not carried on the signature — <c>TypeInfo.ConstructorSignature</c> has
+/// no slot for it, exactly like the string path's <c>ConvertConstructSignatures</c>.</summary>
+public sealed record ConstructorTypeNode(List<ParameterTypeNode> Parameters, TypeNode ReturnType, int Line, TypeNode? ThisType = null) : TypeNode(Line);
 
 /// <summary>A generic constructor type: <c>new &lt;T&gt;(a: T) =&gt; R</c>. Resolves to an object type
 /// carrying a single GENERIC construct signature; the type parameters scope the body exactly like
 /// <see cref="GenericFunctionTypeNode"/> (and the string path's per-signature scoping). A <c>this</c>
-/// parameter has no slot on a construct signature, so such constructors fall back.</summary>
+/// pseudo-parameter rides on the body <see cref="FunctionTypeNode"/> and is dropped from the
+/// signature the same way as on <see cref="ConstructorTypeNode"/>.</summary>
 public sealed record GenericConstructorTypeNode(List<TypeParam> TypeParameters, FunctionTypeNode Body, int Line) : TypeNode(Line);
 
 /// <summary>A generic function type: <c>&lt;T&gt;(a: T) =&gt; R</c>. The type-parameter list is carried

@@ -97,7 +97,7 @@ public partial class TypeChecker
         }
         else
         {
-            _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition);
+            _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition, stmt.TypeDefinitionNode);
         }
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.
@@ -1260,7 +1260,7 @@ public partial class TypeChecker
             TypeInfo? declaredType = null;
             if (binding.TypeAnnotation != null)
             {
-                declaredType = ToTypeInfo(binding.TypeAnnotation);
+                declaredType = ResolveAnnotation(binding.TypeAnnotation, binding.TypeAnnotationNode);
                 if (!IsCompatible(declaredType, initType))
                 {
                     throw new TypeMismatchException(declaredType, initType, binding.Name!.Line, tsCode: "TS2322");

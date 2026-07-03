@@ -18,13 +18,13 @@ public partial class TypeChecker
     /// scope-aware) — same-named aliases in different scopes share an entry, acceptable for a
     /// best-effort validation that skips when in doubt.
     /// </summary>
-    private Dictionary<string, List<string?>>? _aliasParamConstraints;
+    private Dictionary<string, List<(string? Constraint, TypeNode? ConstraintNode)>>? _aliasParamConstraints;
 
     private void RecordAliasParamConstraints(Stmt.TypeAlias stmt)
     {
         if (stmt.TypeParameters is not { Count: > 0 } tps) return;
         _aliasParamConstraints ??= new(StringComparer.Ordinal);
-        _aliasParamConstraints[stmt.Name.Lexeme] = tps.Select(tp => tp.Constraint).ToList();
+        _aliasParamConstraints[stmt.Name.Lexeme] = tps.Select(tp => (tp.Constraint, tp.ConstraintNode)).ToList();
     }
 
     /// <summary>
@@ -215,16 +215,14 @@ public partial class TypeChecker
         {
             if (node is NamedTypeNode { TypeArguments: { } args } reference)
             {
-                var constraints = GetReferenceParamConstraintStrings(reference.Name);
+                var constraints = GetReferenceParamConstraints(reference.Name);
                 for (int i = 0; i < args.Count; i++)
                 {
                     if (args[i] is InferTypeNode { Constraint: null } infer &&
                         constraints is not null && i < constraints.Count &&
-                        constraints[i] is { } constraintStr)
+                        constraints[i] is { } constraint)
                     {
-                        TypeInfo? constraint = null;
-                        try { constraint = ToTypeInfo(constraintStr); } catch (TypeCheckException) { }
-                        if (constraint is not null && !IsGenericTypeShape(constraint))
+                        if (!IsGenericTypeShape(constraint))
                         {
                             result ??= new(StringComparer.Ordinal);
                             // An infer occupying multiple slots must satisfy ALL of them — the
@@ -244,15 +242,22 @@ public partial class TypeChecker
         }
     }
 
-    /// <summary>Declared constraint strings for a referenced generic's parameters, or null.</summary>
-    private List<string?>? GetReferenceParamConstraintStrings(string name)
+    /// <summary>Declared constraints for a referenced generic's parameters (resolved), or null.
+    /// Alias constraints resolve node-first from their declaration spelling (unresolvable ones
+    /// stay null and are skipped); class/interface type-parameter constraints are already
+    /// <see cref="TypeInfo"/> and are used directly — no rendered-string round-trip.</summary>
+    private List<TypeInfo?>? GetReferenceParamConstraints(string name)
     {
         if (_aliasParamConstraints is not null && _aliasParamConstraints.TryGetValue(name, out var fromAlias))
-            return fromAlias;
+            return fromAlias.Select(c =>
+            {
+                try { return ResolveAnnotation(c.Constraint, c.ConstraintNode); }
+                catch (TypeCheckException) { return null; }
+            }).ToList();
         return _environment.Get(name) switch
         {
-            TypeInfo.GenericClass gc => gc.TypeParams.Select(tp => tp.Constraint?.ToString()).ToList(),
-            TypeInfo.GenericInterface gi => gi.TypeParams.Select(tp => tp.Constraint?.ToString()).ToList(),
+            TypeInfo.GenericClass gc => gc.TypeParams.Select(tp => tp.Constraint).ToList(),
+            TypeInfo.GenericInterface gi => gi.TypeParams.Select(tp => tp.Constraint).ToList(),
             _ => null
         };
     }
@@ -277,16 +282,13 @@ public partial class TypeChecker
             return;
         }
 
-        var constraints = GetReferenceParamConstraintStrings(reference.Name);
+        var constraints = GetReferenceParamConstraints(reference.Name);
         if (constraints is null) return;
         for (int i = 0; i < argNodes.Count && i < constraints.Count; i++)
         {
-            if (constraints[i] is not { } constraintStr) continue;
-            TypeInfo? constraint = null;
-            try { constraint = ToTypeInfo(constraintStr); } catch (TypeCheckException) { }
             // A constraint that still references the target's own parameters (T76<T extends T[]>)
             // can't be judged against an outer-scope argument — skip.
-            if (constraint is null || IsGenericTypeShape(constraint)) continue;
+            if (constraints[i] is not { } constraint || IsGenericTypeShape(constraint)) continue;
 
             // Same `Function`-global discrimination as the built-in utilities: it satisfies no
             // concrete call signature, but resolves to a shape that would.

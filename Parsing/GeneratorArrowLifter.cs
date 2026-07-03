@@ -561,7 +561,7 @@ internal sealed class GeneratorArrowLifter
                 var callee = RewriteExpr(c.Callee);
                 var args = RewriteListIfChanged(c.Arguments, RewriteExpr);
                 return ReferenceEquals(callee, c.Callee) && ReferenceEquals(args, c.Arguments)
-                    ? c : new Expr.Call(callee, c.Paren, c.TypeArgs, args, c.Optional);
+                    ? c : new Expr.Call(callee, c.Paren, c.TypeArgs, args, c.Optional, c.TypeArgNodes);
             }
             case Expr.CallPrivate cp:
             {
@@ -575,7 +575,7 @@ internal sealed class GeneratorArrowLifter
                 var callee = RewriteExpr(n.Callee);
                 var args = RewriteListIfChanged(n.Arguments, RewriteExpr);
                 return ReferenceEquals(callee, n.Callee) && ReferenceEquals(args, n.Arguments)
-                    ? n : new Expr.New(callee, n.TypeArgs, args);
+                    ? n : new Expr.New(callee, n.TypeArgs, args, n.TypeArgNodes);
             }
             case Expr.Get g:
             {
@@ -821,7 +821,11 @@ internal sealed class GeneratorArrowLifter
             // #775: a HasOwnThis generator expression / object generator method binds its own
             // dynamic receiver. Carry that need onto the lifted declaration so both back ends can
             // thread the call receiver into the generator body's `this`.
-            HasDynamicThis: af.HasOwnThis);
+            HasDynamicThis: af.HasOwnThis,
+            // Carry the annotation node twins so the lifted declaration resolves node-first
+            // exactly like the original expression would have.
+            ThisTypeNode: af.ThisTypeNode,
+            ReturnTypeNode: af.ReturnTypeNode);
 
         // Lift into the nearest enclosing function if the body closes over one of the enclosing
         // functions' locals (#534); otherwise to the module body (#522). Lifting into the enclosing

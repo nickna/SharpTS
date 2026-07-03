@@ -46,8 +46,8 @@ public partial class TypeChecker
                     TypeInfo? defaultType = null;
                     try
                     {
-                        constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                        defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                        constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                        defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                     }
                     catch
                     {
@@ -126,11 +126,13 @@ public partial class TypeChecker
         if (interfaceStmt.Extends != null && interfaceStmt.Extends.Count > 0)
         {
             var extendsList = new HashSet<TypeInfo.Interface>();
-            foreach (var extendTypeName in interfaceStmt.Extends)
+            for (int i = 0; i < interfaceStmt.Extends.Count; i++)
             {
                 try
                 {
-                    var extendType = ToTypeInfo(extendTypeName);
+                    var extendType = ResolveAnnotation(
+                        interfaceStmt.Extends[i],
+                        interfaceStmt.ExtendsNodes != null && i < interfaceStmt.ExtendsNodes.Count ? interfaceStmt.ExtendsNodes[i] : null)!;
                     if (extendType is TypeInfo.Interface extendInterface)
                     {
                         extendsList.Add(extendInterface);
@@ -203,8 +205,8 @@ public partial class TypeChecker
             {
                 foreach (var tp in interfaceStmt.TypeParams)
                 {
-                    TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-                    TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+                    TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                    TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                     var typeParam = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance);
                     interfaceTypeParams.Add(typeParam);
                     // Redefine with the actual constraint
@@ -358,9 +360,12 @@ public partial class TypeChecker
             _extendsClauseConstraintLine = interfaceStmt.Name.Line;
             try
             {
-            foreach (var extendTypeName in interfaceStmt.Extends)
+            for (int i = 0; i < interfaceStmt.Extends.Count; i++)
             {
-                var extendType = ToTypeInfo(extendTypeName);
+                var extendTypeName = interfaceStmt.Extends[i];
+                var extendType = ResolveAnnotation(
+                    extendTypeName,
+                    interfaceStmt.ExtendsNodes != null && i < interfaceStmt.ExtendsNodes.Count ? interfaceStmt.ExtendsNodes[i] : null)!;
                 if (extendType is TypeInfo.Interface extendInterface)
                 {
                     extendsList.Add(extendInterface);
@@ -413,8 +418,8 @@ public partial class TypeChecker
                 var sigEnv = ScopedSignatureTypeParamEnv(interfaceTypeEnv, sig.TypeParams, out var sigTypeParams);
                 using (new EnvironmentScope(this, sigEnv))
                 {
-                    var paramTypes = sig.Parameters.Select(p => p.Type != null ? ToTypeInfo(p.Type) : new TypeInfo.Any()).ToList();
-                    var returnType = ToTypeInfo(sig.ReturnType);
+                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? new TypeInfo.Any()).ToList();
+                    var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
@@ -434,8 +439,8 @@ public partial class TypeChecker
                 var sigEnv = ScopedSignatureTypeParamEnv(interfaceTypeEnv, sig.TypeParams, out var sigTypeParams);
                 using (new EnvironmentScope(this, sigEnv))
                 {
-                    var paramTypes = sig.Parameters.Select(p => p.Type != null ? ToTypeInfo(p.Type) : new TypeInfo.Any()).ToList();
-                    var returnType = ToTypeInfo(sig.ReturnType);
+                    var paramTypes = sig.Parameters.Select(p => ResolveAnnotation(p.Type, p.TypeAnnotationNode) ?? new TypeInfo.Any()).ToList();
+                    var returnType = ResolveAnnotation(sig.ReturnType, sig.ReturnTypeNode)!;
                     int requiredParams = sig.Parameters.TakeWhile(p => !p.IsOptional && p.DefaultValue == null).Count();
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
@@ -591,8 +596,8 @@ public partial class TypeChecker
         List<TypeInfo.TypeParameter> result = [];
         foreach (var tp in typeParams)
         {
-            TypeInfo? constraint = tp.Constraint != null ? ToTypeInfo(tp.Constraint) : null;
-            TypeInfo? defaultType = tp.Default != null ? ToTypeInfo(tp.Default) : null;
+            TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+            TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
             result.Add(new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType, tp.IsConst, tp.Variance));
         }
         return result;

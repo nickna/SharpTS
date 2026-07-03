@@ -24,17 +24,17 @@ public partial class TypeChecker
     {
         switch (node)
         {
-            // A bare name resolves through the existing single-name path — type parameters,
-            // aliases, primitives, classes, interfaces, the hot lib globals: identical semantics
-            // by construction, with none of the scanning hazards strings have for COMPOSITE types.
+            // A bare name resolves through the shared single-name resolver — type parameters,
+            // aliases (node-first), primitives, classes, interfaces, the hot lib globals:
+            // identical semantics by construction, with none of the scanning hazards strings
+            // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
-                return ToTypeInfo(named.Name);
+                return ResolveTypeName(named.Name);
 
-            // Generic references resolve their argument nodes and reuse the SAME instantiation
-            // machinery as the string path (built-in generics, utility types, generic
-            // classes/interfaces/functions — including its TS2314 arity errors). Generic alias
-            // references expand from their stored definition NODE when one exists, binding the
-            // type parameters in a child scope instead of substituting argument strings.
+            // Generic references resolve their argument nodes and hand off to the shared
+            // instantiation machinery (built-in generics, utility types, generic alias node
+            // expansion, generic classes/interfaces/functions — including its TS2314 arity
+            // errors). ResolveGenericType owns the built-ins-before-aliases shadowing precedence.
             case NamedTypeNode { TypeArguments: { } argNodes } named:
             {
                 List<TypeInfo> typeArgs = new(argNodes.Count);
@@ -42,15 +42,6 @@ public partial class TypeChecker
                 {
                     if (TryToTypeInfo(argNode) is not { } arg) return null;
                     typeArgs.Add(arg);
-                }
-                // ResolveGenericType handles built-in names BEFORE its alias lookup — a user
-                // alias named e.g. `Partial` is shadowed. Mirror that precedence here.
-                if (!IsBuiltInGenericName(named.Name) &&
-                    _environment.GetGenericTypeAlias(named.Name) is { } alias)
-                {
-                    return alias.DefinitionNode is { } definitionNode
-                        ? TryExpandGenericAliasFromNode(named.Name, definitionNode, alias.TypeParams, typeArgs)
-                        : null;
                 }
                 return ResolveGenericType(named.Name, typeArgs);
             }
@@ -61,8 +52,20 @@ public partial class TypeChecker
                     string str => new TypeInfo.StringLiteral(str),
                     double num => new TypeInfo.NumberLiteral(num),
                     bool b => new TypeInfo.BooleanLiteral(b),
+                    // Bigint literal types (1n): parity with the string path, which has no bigint
+                    // handling and lets "1n" fall through its unknown-name tail to Any. Real
+                    // bigint literal types need TypeInfo.BigIntLiteral + compat rules (follow-up).
+                    System.Numerics.BigInteger => new TypeInfo.Any(),
                     _ => null,
                 };
+
+            // Standalone `unique symbol` is only valid on const declarations initialized with
+            // Symbol() — VisitConst special-cases that annotation BEFORE resolution ever runs.
+            // Reaching resolution therefore means an invalid position: same TS1331 as the string
+            // path's ToTypeInfoCore.
+            case UniqueSymbolTypeNode:
+                throw new TypeCheckException(
+                    "'unique symbol' type is only valid on const declarations initialized with Symbol().", tsCode: "TS1331");
 
             case ArrayTypeNode arr:
                 return TryToTypeInfo(arr.ElementType) is { } elem ? new TypeInfo.Array(elem) : null;
@@ -101,7 +104,11 @@ public partial class TypeChecker
                 if (TryToTypeInfo(indexed.IndexType) is not { } indexType) return null;
                 // Chained T[K][J] is already nested structurally by the parser, so a single
                 // IndexedAccess per node mirrors the string path's iterative suffix consumption.
-                return new TypeInfo.IndexedAccess(objectType, indexType);
+                // A fully concrete access (`Part[][number]`, `Foo["bar"]`) simplifies to the
+                // member type NOW, exactly like the string path (#365) — property access on a
+                // raw IndexedAccess reads as `any`. A generic-shaped side stays deferred
+                // (SimplifyConcreteIndexedAccess self-defers).
+                return SimplifyConcreteIndexedAccess(objectType, indexType);
             }
 
             // Deferred form — distribution and `infer` inference run later in
@@ -240,6 +247,11 @@ public partial class TypeChecker
             // the same shape the string path produces for its "{ new (…) => R }" rendering.
             case ConstructorTypeNode ctor:
             {
+                // A `this: X` pseudo-parameter resolves (bad names fail identically) but is not
+                // carried: ConstructorSignature has no this-type slot, and the string path's
+                // ConvertConstructSignatures drops it the same way.
+                if (ctor.ThisType is { } ctorThisNode && TryToTypeInfo(ctorThisNode) is null)
+                    return null;
                 if (!TryResolveParameters(ctor.Parameters, out var paramTypes, out int requiredParams, out bool hasRestParam))
                     return null;
                 if (TryToTypeInfo(ctor.ReturnType) is not { } returnType) return null;
@@ -446,8 +458,8 @@ public partial class TypeChecker
             // Second pass: resolve constraints/defaults now that all names are in scope.
             foreach (var tp in typeParameters)
             {
-                TypeInfo? constraint = tp.Constraint is not null ? ToTypeInfo(tp.Constraint) : null;
-                TypeInfo? defaultType = tp.Default is not null ? ToTypeInfo(tp.Default) : null;
+                TypeInfo? constraint = ResolveAnnotation(tp.Constraint, tp.ConstraintNode);
+                TypeInfo? defaultType = ResolveAnnotation(tp.Default, tp.DefaultNode);
                 var resolved = new TypeInfo.TypeParameter(tp.Name.Lexeme, constraint, defaultType);
                 typeParams.Add(resolved);
                 typeParamEnv.DefineTypeParameter(tp.Name.Lexeme, resolved);
@@ -495,29 +507,13 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// The generic names <see cref="ResolveGenericType"/> handles ahead of its alias lookup —
-    /// kept in its branch order. A user alias with one of these names is shadowed by the
-    /// built-in on BOTH paths.
-    /// </summary>
-    private static bool IsBuiltInGenericName(string name) => name is
-        "Array" or "ReadonlyArray" or "Promise" or "Generator" or "AsyncGenerator" or
-        "Map" or "Set" or "WeakMap" or "WeakSet" or
-        "Iterator" or "IterableIterator" or "Iterable" or
-        "AsyncIterator" or "AsyncIterableIterator" or "AsyncIterable" or
-        "IteratorResult" or "IteratorYieldResult" or "IteratorReturnResult" or
-        "WeakRef" or "FinalizationRegistry" or
-        "Partial" or "Required" or "Readonly" or "Record" or "Pick" or "Omit" or
-        "ReturnType" or "Parameters" or "ConstructorParameters" or "InstanceType" or
-        "ThisType" or "Awaited" or "NonNullable" or "Extract" or "Exclude" or
-        "Uppercase" or "Lowercase" or "Capitalize" or "Uncapitalize";
-
-    /// <summary>
     /// Expands a generic alias from its definition node: the type parameters are bound to the
     /// (already-resolved) arguments in a child scope and the definition resolves node-first —
-    /// no argument-string substitution, no definition re-parse. Mirrors the string path's
-    /// guards exactly: TS2314 arity, open-type-variable deferral, the TS2589 depth limit, the
-    /// recursion placeholder (same instantiation key derivation), and the same post-expansion
-    /// passes. Null (component without node support) falls back to the string path.
+    /// no argument-string substitution, no definition re-parse. Carries the retired string
+    /// branch's guards exactly: TS2314 arity, open-type-variable deferral, the TS2589 depth
+    /// limit, the recursion placeholder (same instantiation key derivation), the deferred-key
+    /// mapped guard, and the same post-expansion passes. Null (a definition component the node
+    /// path cannot resolve) makes the caller resolve permissively.
     /// </summary>
     private TypeInfo? TryExpandGenericAliasFromNode(
         string baseName, TypeNode definitionNode, List<string> typeParamNames, List<TypeInfo> typeArgs)
@@ -566,7 +562,13 @@ public partial class TypeChecker
             // conditional/mapped form — apply the same post-expansion passes as the string path.
             if (result is TypeInfo.ConditionalType condResult && !ContainsOpenTypeVariable(condResult))
                 result = EvaluateConditionalType(condResult);
-            if (result is TypeInfo.MappedType mappedResult && !ContainsOpenTypeVariable(mappedResult))
+            // A mapped type over a DEFERRED key domain (a generic key-filter such as
+            // Pick<T, FunctionPropertyNames<T>>) must stay a MappedType node: enumerating it now
+            // would yield an empty object and lose the key filter, so it has to reach the relation
+            // rules deferred (#337 item 1). Same guard as the string path's alias branch — without
+            // it, the conditionalTypes1 f7/f8 assignability verdicts flip.
+            if (result is TypeInfo.MappedType mappedResult && !ContainsOpenTypeVariable(mappedResult)
+                && !IsDeferredKeyDomain(ResolveMappedKeyDomain(mappedResult)))
                 result = ExpandMappedType(mappedResult);
 
             result = FlattenTupleSpreads(result);
@@ -656,4 +658,13 @@ public partial class TypeChecker
         TypeNodeStats.StringFallbacks++;
         return ToTypeInfo(annotation);
     }
+
+    /// <summary>
+    /// Resolves the i-th explicit type argument of a call/new/heritage clause node-first
+    /// (type-AST migration): the node twin when the parser produced one, string fallback
+    /// otherwise. The node list, when non-null, is index-aligned with the string list.
+    /// Callers only invoke inside count-guarded branches, so the string list is never null.
+    /// </summary>
+    private TypeInfo ResolveTypeArg(List<string>? typeArgs, List<TypeNode?>? typeArgNodes, int i) =>
+        ResolveAnnotation(typeArgs![i], typeArgNodes is { } nodes && i < nodes.Count ? nodes[i] : null)!;
 }

@@ -706,7 +706,7 @@ public partial class TypeChecker
 
         foreach (var param in parameters)
         {
-            TypeInfo paramType = param.Type != null ? ToTypeInfo(param.Type) : new TypeInfo.Any();
+            TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode) ?? new TypeInfo.Any();
             paramTypes.Add(paramType);
             paramNames.Add(param.Name.Lexeme);
 
@@ -1056,7 +1056,7 @@ public partial class TypeChecker
         }
         else
         {
-            _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+            _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeAlias.TypeDefinitionNode);
         }
         RecordAliasParamConstraints(typeAlias);
     }
@@ -1612,7 +1612,7 @@ public partial class TypeChecker
             // environment holds the narrowed literal type recorded by VisitConst.
             Stmt.Const c => _environment.Get(c.Name.Lexeme) ?? new TypeInfo.Any(),
             Stmt.Interface i => _environment.Get(i.Name.Lexeme) ?? new TypeInfo.Any(),
-            Stmt.TypeAlias t => ToTypeInfo(t.TypeDefinition),
+            Stmt.TypeAlias t => ResolveAnnotation(t.TypeDefinition, t.TypeDefinitionNode)!,
             Stmt.Enum e => _environment.Get(e.Name.Lexeme) ?? new TypeInfo.Any(),
             _ => new TypeInfo.Any()
         };

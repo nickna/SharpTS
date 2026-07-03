@@ -34,6 +34,30 @@ public partial class Parser
         return node;
     }
 
+    /// <summary>
+    /// Parses a standalone type-annotation fragment (<c>{ a: number }</c>, <c>A | B[]</c>,
+    /// <c>`a${string}`</c>) to its <see cref="TypeNode"/>. Null when the text is not a complete
+    /// type: lex/parse error, no node produced, or trailing tokens after the type. This is the
+    /// string entry for the checker's <c>ToTypeInfo(string)</c> (fallback + embedding surface) —
+    /// the same real lexer + type grammar as source annotations, replacing the retired
+    /// char-scanning re-parser. The try/catch covers lex/parse ONLY; resolution errors
+    /// (TS2456/TS2314/TS1331, …) happen in the checker and propagate there.
+    /// </summary>
+    internal static TypeNode? TryParseTypeFragment(string annotation)
+    {
+        try
+        {
+            var parser = new Parser(new Lexer(annotation).ScanTokens());
+            parser.ParseTypeAnnotation();          // rendered string result discarded
+            var node = parser.TakeTypeNode();
+            return parser.IsAtEnd() ? node : null; // reject partial parses ("number garbage")
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private string ParseTypeAnnotation()
     {
         _lastTypeNode = null;
@@ -440,12 +464,12 @@ public partial class Parser
             }
             Consume(TokenType.LEFT_PAREN, "Expect '(' in constructor type.");
             string ctorBody = ParseFunctionTypeBody(); // returns "(params) => ReturnType"
-            // A `this` parameter has no slot on a ConstructorSignature, so it falls back. Otherwise
-            // the construct signature (with or without type parameters) carries onto a node.
-            _lastTypeNode = TakeTypeNode() is FunctionTypeNode { ThisType: null } ctorFn
+            // The construct signature (with or without type parameters) carries onto a node; a
+            // `this` pseudo-parameter rides along and is dropped at resolution, string-path style.
+            _lastTypeNode = TakeTypeNode() is FunctionTypeNode ctorFn
                 ? (ctorTypeParams is { Count: > 0 }
                     ? new GenericConstructorTypeNode(ctorTypeParams, ctorFn, ctorLine)
-                    : new ConstructorTypeNode(ctorFn.Parameters, ctorFn.ReturnType, ctorFn.Line))
+                    : new ConstructorTypeNode(ctorFn.Parameters, ctorFn.ReturnType, ctorFn.Line, ctorFn.ThisType))
                 : null;
             return $"{{ new {genericPrefix}{ctorBody} }}";
         }
@@ -464,7 +488,7 @@ public partial class Parser
         {
             if (Match(TokenType.TYPE_SYMBOL))
             {
-                _lastTypeNode = null;
+                _lastTypeNode = new UniqueSymbolTypeNode(Previous().Line);
                 return "unique symbol";
             }
             // If "unique" is not followed by "symbol", it's an error in type context
@@ -651,6 +675,7 @@ public partial class Parser
         else if (Match(TokenType.BIGINT_LITERAL))
         {
             typeName = Previous().Literal!.ToString()! + "n";
+            typeNode = new LiteralTypeNode(Previous().Literal, Previous().Line); // BigInteger value
         }
         // Handle boolean literal types: true | false
         else if (Match(TokenType.TRUE))
@@ -1261,17 +1286,21 @@ public partial class Parser
             Token name = Consume(TokenType.IDENTIFIER, "Expect type parameter name.");
             string? constraint = null;
             string? defaultType = null;
+            TypeNode? constraintNode = null;
+            TypeNode? defaultNode = null;
 
             // Parse optional constraint: extends SomeType
             if (Match(TokenType.EXTENDS))
             {
                 constraint = ParseTypeAnnotation();
+                constraintNode = TakeTypeNode();
             }
 
             // Parse optional default: = SomeType
             if (Match(TokenType.EQUAL))
             {
                 defaultType = ParseTypeAnnotation();
+                defaultNode = TakeTypeNode();
                 sawDefault = true;
             }
             else if (sawDefault)
@@ -1280,7 +1309,7 @@ public partial class Parser
                 throw new Exception($"Parse Error: Required type parameter '{name.Lexeme}' cannot follow optional type parameter with default.");
             }
 
-            typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance));
+            typeParams.Add(new TypeParam(name, constraint, defaultType, isConst, variance, constraintNode, defaultNode));
         } while (Match(TokenType.COMMA));
 
         ConsumeGreaterInTypeContext("Expect '>' after type parameters.");
@@ -1310,9 +1339,13 @@ public partial class Parser
     /// Tries to parse type arguments like &lt;number, string&gt;.
     /// Returns null if not valid type arguments (backtracking safe).
     /// Uses CheckGreaterInTypeContext/MatchGreaterInTypeContext to handle nested generics.
+    /// <paramref name="argNodes"/> receives the per-argument node twins (type-AST migration),
+    /// always index-aligned with the returned strings; an argument without node support
+    /// contributes a null element. Null when the whole parse failed.
     /// </summary>
-    private List<string>? TryParseTypeArguments()
+    private List<string>? TryParseTypeArguments(out List<TypeNode?>? argNodes)
     {
+        argNodes = null;
         if (!Check(TokenType.LESS)) return null;
         int saved = _current;
 
@@ -1322,13 +1355,16 @@ public partial class Parser
             if (!IsTypeStart()) { _current = saved; return null; }
 
             List<string> args = [ParseTypeAnnotation()];
+            List<TypeNode?> nodes = [TakeTypeNode()];
             while (Match(TokenType.COMMA))
             {
                 args.Add(ParseTypeAnnotation());
+                nodes.Add(TakeTypeNode());
             }
 
             if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
             MatchGreaterInTypeContext(); // consume >
+            argNodes = nodes;
             return args;
         }
         catch
@@ -1342,9 +1378,11 @@ public partial class Parser
     /// Tries to parse type arguments for a function call (must be followed by '(').
     /// Returns null if not valid type arguments for a call (backtracking safe).
     /// Uses CheckGreaterInTypeContext/MatchGreaterInTypeContext to handle nested generics.
+    /// <paramref name="argNodes"/> mirrors <see cref="TryParseTypeArguments"/>.
     /// </summary>
-    private List<string>? TryParseTypeArgumentsForCall()
+    private List<string>? TryParseTypeArgumentsForCall(out List<TypeNode?>? argNodes)
     {
+        argNodes = null;
         if (!Check(TokenType.LESS)) return null;
         int saved = _current;
 
@@ -1354,9 +1392,11 @@ public partial class Parser
             if (!IsTypeStart()) { _current = saved; return null; }
 
             List<string> args = [ParseTypeAnnotation()];
+            List<TypeNode?> nodes = [TakeTypeNode()];
             while (Match(TokenType.COMMA))
             {
                 args.Add(ParseTypeAnnotation());
+                nodes.Add(TakeTypeNode());
             }
 
             if (!CheckGreaterInTypeContext()) { _current = saved; return null; }
@@ -1366,6 +1406,7 @@ public partial class Parser
             if (!Check(TokenType.LEFT_PAREN)) { _current = saved; return null; }
             Advance(); // consume (
 
+            argNodes = nodes;
             return args;
         }
         catch

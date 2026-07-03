@@ -5,15 +5,12 @@ using Xunit;
 namespace SharpTS.Tests.TypeCheckerTests;
 
 /// <summary>
-/// The string-based type resolver (<c>TypeChecker.TypeParsing.cs</c>) tracks bracket-nesting depth
-/// to find top-level operators. Several scanners treated <b>every</b> <c>&gt;</c> as a closing
-/// bracket — including the <c>&gt;</c> of an arrow <c>=&gt;</c>, which has no matching <c>&lt;</c> —
-/// so a single function type in a string-resolved composite drove the depth negative and subsequent
-/// top-level tokens were missed (#462). The fix applies the established <c>=&gt;</c> guard
-/// (<c>i == 0 || s[i - 1] != '='</c>) to the six previously-unguarded scanners
-/// (<c>SplitTupleElements</c>, <c>TryParseIndexedAccessType</c>, <c>FindTopLevelKeyword</c>,
-/// <c>FindTopLevelChar</c>, <c>FindConditionalElseColon</c>, <c>FindTopLevelAs</c>), matching the
-/// sibling scanners that already guarded it.
+/// Behavioral pins for the `&gt;`-of-`=&gt;` mis-scan family (#462): the retired string-based type
+/// resolver's depth scanners treated the <c>&gt;</c> of an arrow <c>=&gt;</c> as a closing bracket,
+/// driving nesting depth negative and losing top-level tokens in composites. The scanners are
+/// gone (type-AST slice 6 — annotations resolve from parser-built nodes, where the bug class is
+/// structurally impossible), but these composites stay pinned: they are exactly the shapes that
+/// kept regressing, and the verdicts must hold on the node path too.
 /// </summary>
 public class StringTypeResolverArrowScanTests
 {

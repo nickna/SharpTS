@@ -211,9 +211,8 @@ public partial class TypeChecker
 
             case Stmt.Var varStmt:
                 // Ambient variable - register with declared type
-                TypeInfo varType = varStmt.TypeAnnotation != null
-                    ? ToTypeInfo(varStmt.TypeAnnotation)
-                    : new TypeInfo.Any();
+                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
+                    ?? new TypeInfo.Any();
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
 
@@ -225,11 +224,11 @@ public partial class TypeChecker
                 if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
                 {
                     var typeParamNames = typeAlias.TypeParameters.Select(tp => tp.Name.Lexeme).ToList();
-                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames);
+                    _environment.DefineGenericTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeParamNames, typeAlias.TypeDefinitionNode);
                 }
                 else
                 {
-                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition);
+                    _environment.DefineTypeAlias(typeAlias.Name.Lexeme, typeAlias.TypeDefinition, typeAlias.TypeDefinitionNode);
                 }
                 break;
 
@@ -265,9 +264,8 @@ public partial class TypeChecker
                 break;
 
             case Stmt.Var varStmt:
-                TypeInfo varType = varStmt.TypeAnnotation != null
-                    ? ToTypeInfo(varStmt.TypeAnnotation)
-                    : new TypeInfo.Any();
+                TypeInfo varType = ResolveAnnotation(varStmt.TypeAnnotation, varStmt.TypeAnnotationNode)
+                    ?? new TypeInfo.Any();
                 _environment.Define(varStmt.Name.Lexeme, varType);
                 break;
 
@@ -297,7 +295,7 @@ public partial class TypeChecker
 
                 foreach (var member in interfaceStmt.Members)
                 {
-                    var memberType = ToTypeInfo(member.Type);
+                    var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
                     mergedMembers[member.Name.Lexeme] = memberType;
                     if (member.IsOptional)
                     {
