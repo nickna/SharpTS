@@ -525,6 +525,29 @@ public class SharpTSSocket : SharpTSEventEmitter
     }
 
     /// <summary>
+    /// Closes the socket once all queued writes (and any pending shutdown) on the
+    /// write chain have drained. Used when both directions are done but the write
+    /// chain may still be flushing — an immediate DestroyCore would close the
+    /// transport under the in-flight write and drop the peer's tail data.
+    /// </summary>
+    private void DestroyAfterFlush(Interp interpreter)
+    {
+        interpreter.Ref();
+        lock (_writeLock)
+        {
+            _writeChain = _writeChain.ContinueWith(_ =>
+            {
+                interpreter.ScheduleTimer(0, 0, () =>
+                {
+                    if (!_destroyed)
+                        DestroyCore(interpreter, null);
+                    interpreter.Unref();
+                }, isInterval: false);
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        }
+    }
+
+    /// <summary>
     /// Auto-finish after a received FIN when allowHalfOpen is off (#1070): flush
     /// queued writes, shut the writable side down, then close and emit 'close'.
     /// </summary>
@@ -777,8 +800,12 @@ public class SharpTSSocket : SharpTSEventEmitter
 
                             if (_ended)
                             {
-                                // Writable side already finished — both directions done.
-                                DestroyCore(interpreter, null);
+                                // Writable side finished (possibly by an end() call
+                                // inside the 'end' handler just now) — both directions
+                                // are done, but queued writes may still be flushing:
+                                // an immediate destroy would abort them and the peer
+                                // would lose the tail data. Close after the chain drains.
+                                DestroyAfterFlush(interpreter);
                             }
                             else if (!_allowHalfOpen)
                             {

@@ -43,9 +43,9 @@ public partial class RuntimeEmitter
     // _writeQueue holds object[]{byte[] bytes, object? callback}; _writeWorkerRunning
     // and _shutdownAfterFlush are guarded by Monitor on _writeQueue; _writableLength
     // is Interlocked; _needDrain and the pending-* fields are event-loop-thread state.
-    private FieldBuilder _netSocketWriteQueueField = null!;
-    private FieldBuilder _netSocketWriteWorkerRunningField = null!;
-    private FieldBuilder _netSocketShutdownAfterFlushField = null!;
+    internal FieldBuilder _netSocketWriteQueueField = null!;
+    internal FieldBuilder _netSocketWriteWorkerRunningField = null!;
+    internal FieldBuilder _netSocketShutdownAfterFlushField = null!;
     private FieldBuilder _netSocketWritableLengthField = null!;
     private FieldBuilder _netSocketWritableHwmField = null!;
     private FieldBuilder _netSocketNeedDrainField = null!;
@@ -120,11 +120,13 @@ public partial class RuntimeEmitter
         _netSocketConnectHostField = typeBuilder.DefineField("_connectHost", _types.String, FieldAttributes.Private);
         _netSocketConnectPortField = typeBuilder.DefineField("_connectPort", _types.Int32, FieldAttributes.Private);
 
-        // Write backpressure state (#1068). _writableHwm is Assembly so the server
-        // accept closures can apply createServer({highWaterMark}) to accepted sockets.
-        _netSocketWriteQueueField = typeBuilder.DefineField("_writeQueue", typeof(Queue<object[]>), FieldAttributes.Private);
-        _netSocketWriteWorkerRunningField = typeBuilder.DefineField("_writeWorkerRunning", _types.Boolean, FieldAttributes.Private);
-        _netSocketShutdownAfterFlushField = typeBuilder.DefineField("_shutdownAfterFlush", _types.Boolean, FieldAttributes.Private);
+        // Write backpressure state (#1068). Queue/worker/shutdown/hwm fields are
+        // Assembly: the server accept closures apply createServer options to
+        // accepted sockets, and $SocketReadEndClosure coordinates the flush-aware
+        // close through the worker flags.
+        _netSocketWriteQueueField = typeBuilder.DefineField("_writeQueue", typeof(Queue<object[]>), FieldAttributes.Assembly);
+        _netSocketWriteWorkerRunningField = typeBuilder.DefineField("_writeWorkerRunning", _types.Boolean, FieldAttributes.Assembly);
+        _netSocketShutdownAfterFlushField = typeBuilder.DefineField("_shutdownAfterFlush", _types.Boolean, FieldAttributes.Assembly);
         _netSocketWritableLengthField = typeBuilder.DefineField("_writableLength", _types.Int32, FieldAttributes.Private);
         _netSocketWritableHwmField = typeBuilder.DefineField("_writableHwm", _types.Int32, FieldAttributes.Assembly);
         _netSocketNeedDrainField = typeBuilder.DefineField("_needDrain", _types.Boolean, FieldAttributes.Private);

@@ -651,18 +651,62 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.TSEventEmitterEmit);
             il.Emit(OpCodes.Pop);
 
-            // if (_socket._ended) { _socket.Destroy(null); return; } — both sides done
+            // if (_socket._ended) — both sides done, but queued writes may still be
+            // flushing (end() may have run inside the 'end' handler just now, or
+            // the peer FIN'd while our writes were in flight): an immediate destroy
+            // would abort the write worker and the peer would lose the tail data.
+            // Worker running → flag flush-then-destroy (worker exit runs
+            // _ShutdownWritable and schedules _FireEndCallback, which destroys via
+            // _finishAfterEnd/_endReceived); worker idle → queue drained → safe now.
             var notEnded = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, socketField);
             il.Emit(OpCodes.Ldfld, _netSocketEndedField);
             il.Emit(OpCodes.Brfalse, notEnded);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, socketField);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, _netSocketDestroyMethod);
-            il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ret);
+            {
+                var destroyNowLocal = il.DeclareLocal(_types.Boolean);
+                var workerActive = il.DefineLabel();
+                var lockDone = il.DefineLabel();
+                var noDestroy = il.DefineLabel();
+
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+                il.Emit(OpCodes.Call, typeof(System.Threading.Monitor).GetMethod("Enter", [_types.Object])!);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldfld, _netSocketWriteWorkerRunningField);
+                il.Emit(OpCodes.Brtrue, workerActive);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Stloc, destroyNowLocal);
+                il.Emit(OpCodes.Br, lockDone);
+                il.MarkLabel(workerActive);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Stfld, _netSocketFinishAfterEndField);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Stfld, _netSocketShutdownAfterFlushField);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Stloc, destroyNowLocal);
+                il.MarkLabel(lockDone);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldfld, _netSocketWriteQueueField);
+                il.Emit(OpCodes.Call, typeof(System.Threading.Monitor).GetMethod("Exit", [_types.Object])!);
+
+                il.Emit(OpCodes.Ldloc, destroyNowLocal);
+                il.Emit(OpCodes.Brfalse, noDestroy);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, socketField);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Callvirt, _netSocketDestroyMethod);
+                il.Emit(OpCodes.Pop);
+                il.MarkLabel(noDestroy);
+                il.Emit(OpCodes.Ret);
+            }
             il.MarkLabel(notEnded);
 
             // if (_socket._allowHalfOpen) return; — stays writable, read Ref held
