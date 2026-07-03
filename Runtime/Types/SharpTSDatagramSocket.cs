@@ -378,7 +378,23 @@ public class SharpTSDatagramSocket : SharpTSEventEmitter
     {
         if (_client != null && args.Length > 0 && args[0].IsString)
         {
-            _client.DropMulticastGroup(IPAddress.Parse(args[0].AsStringUnsafe()));
+            var multicastAddress = IPAddress.Parse(args[0].AsStringUnsafe());
+            // Node: dropMembership(multicastAddress[, multicastInterface]). The
+            // interface matters: Linux requires IP_DROP_MEMBERSHIP to match the
+            // join's (group, interface) tuple — dropping a 127.0.0.1-scoped join
+            // with INADDR_ANY throws there (Windows matches by group alone).
+            var localAddress = args.Length > 1 && args[1].IsString
+                ? IPAddress.Parse(args[1].AsStringUnsafe())
+                : null;
+            if (localAddress != null && _family == AddressFamily.InterNetwork)
+            {
+                _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.DropMembership,
+                    new MulticastOption(multicastAddress, localAddress));
+            }
+            else
+            {
+                _client.DropMulticastGroup(multicastAddress);
+            }
         }
         return RuntimeValue.Null;
     }

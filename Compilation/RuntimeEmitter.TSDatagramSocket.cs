@@ -1617,8 +1617,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public object DropMembership(object multicastAddr)
-    /// UdpClient.DropMulticastGroup (#1071 — previously a silent no-op stub).
+    /// Emits: public object DropMembership(object multicastAddr, object localAddr)
+    /// UdpClient.DropMulticastGroup (#1071 — previously a silent no-op stub). The
+    /// optional interface matters: Linux requires IP_DROP_MEMBERSHIP to match the
+    /// join's (group, interface) tuple, so an interface-scoped join must be dropped
+    /// with the same interface (Windows matches by group alone).
     /// </summary>
     private void EmitDgramDropMembership(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1626,7 +1629,7 @@ public partial class RuntimeEmitter
             "DropMembership",
             MethodAttributes.Public,
             _types.Object,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
 
         var il = method.GetILGenerator();
@@ -1639,6 +1642,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, done);
 
+        // Interface-scoped IPv4 drop: SetSocketOption(IP, DropMembership, new MulticastOption(mcast, local))
+        var noLocal = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, noLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramFamilyField);
+        il.Emit(OpCodes.Ldc_I4, 23);
+        il.Emit(OpCodes.Beq, noLocal); // v6: interface form is an ifindex — fall through to the plain drop
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _dgramClientField);
+        il.Emit(OpCodes.Callvirt, typeof(UdpClient).GetProperty("Client")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionLevel.IP);
+        il.Emit(OpCodes.Ldc_I4, (int)SocketOptionName.DropMembership);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("Parse", [_types.String])!);
+        il.Emit(OpCodes.Newobj, typeof(MulticastOption).GetConstructor([typeof(IPAddress), typeof(IPAddress)])!);
+        il.Emit(OpCodes.Callvirt, typeof(Socket).GetMethod("SetSocketOption", [typeof(SocketOptionLevel), typeof(SocketOptionName), _types.Object])!);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(noLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _dgramClientField);
         il.Emit(OpCodes.Ldarg_1);

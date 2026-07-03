@@ -2181,7 +2181,7 @@ public static class BuiltInModuleTypes
             ["setTTL"] = new TypeInfo.Function([numberType], voidType),
             ["setMulticastTTL"] = new TypeInfo.Function([numberType], voidType),
             ["addMembership"] = new TypeInfo.Function([stringType, stringType], voidType, RequiredParams: 1),
-            ["dropMembership"] = new TypeInfo.Function([stringType], voidType),
+            ["dropMembership"] = new TypeInfo.Function([stringType, stringType], voidType, RequiredParams: 1),
             ["addSourceSpecificMembership"] = new TypeInfo.Function([stringType, stringType, stringType], voidType, RequiredParams: 2),
             ["dropSourceSpecificMembership"] = new TypeInfo.Function([stringType, stringType, stringType], voidType, RequiredParams: 2),
             ["setMulticastLoopback"] = new TypeInfo.Function([boolType], voidType),

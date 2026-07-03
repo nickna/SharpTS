@@ -28,7 +28,10 @@ public class DgramTransportParityTests
                     try {
                         sock.addMembership('224.0.0.114', '127.0.0.1');
                         console.log('joined');
-                        sock.dropMembership('224.0.0.114');
+                        // The drop must name the same interface as the join:
+                        // Linux matches IP_DROP_MEMBERSHIP by (group, interface)
+                        // and rejects an INADDR_ANY drop of a scoped join.
+                        sock.dropMembership('224.0.0.114', '127.0.0.1');
                         console.log('dropped');
                     } catch (e: any) { console.log('membership threw'); }
                     sock.close();
